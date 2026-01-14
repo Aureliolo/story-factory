@@ -5,11 +5,14 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  pull_request_target:
+    branches: [master, main]
 
-# Limit permissions for security
+# Workflow-level permissions for pull_request_target
 permissions:
   contents: read
   pull-requests: read
+  statuses: write
 
 jobs:
   test:
@@ -17,6 +20,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Always checkout PR head for testing
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
@@ -42,6 +48,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Always checkout PR head for testing
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
