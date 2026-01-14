@@ -87,35 +87,72 @@ class StoryFactoryUI:
         header = "| Model | Release | Quality | VRAM | Status |\n|-------|---------|---------|------|--------|\n"
         return header + "\n".join(lines)
 
-    def pull_model(self, model_id: str, progress=gr.Progress()):
+    def pull_model(self, model_id: str, progress=gr.Progress(track_tqdm=True)):
         """Pull a model from Ollama."""
         if not model_id:
+            logger.warning("Pull attempted with no model selected")
             return "Please select a model to pull."
 
-        progress(0, desc=f"Pulling {model_id}...")
+        logger.info(f"Starting pull of model: {model_id}")
 
         try:
+            # Update progress if available
+            if progress is not None:
+                try:
+                    progress(0, desc=f"Starting pull of {model_id}...")
+                except Exception:
+                    pass  # Progress callback might fail, continue anyway
+
+            # Use shell=True on Windows for proper command resolution
+            import platform
+            use_shell = platform.system() == "Windows"
+
             process = subprocess.Popen(
                 ["ollama", "pull", model_id],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True
+                shell=use_shell,
+                encoding='utf-8',
+                errors='replace',  # Handle non-UTF8 chars from progress bars
             )
 
             output_lines = []
             for line in process.stdout:
-                output_lines.append(line.strip())
-                if "pulling" in line.lower():
-                    progress(0.5, desc=line.strip()[:50])
+                line_stripped = line.strip()
+                if line_stripped:
+                    output_lines.append(line_stripped)
+                    # Update progress if available
+                    if progress is not None and "pulling" in line.lower():
+                        try:
+                            progress(0.5, desc=line_stripped[:50])
+                        except Exception:
+                            pass
 
             process.wait()
 
             if process.returncode == 0:
+                logger.info(f"Successfully pulled model: {model_id}")
+                # Refresh installed models list
+                self._refresh_models()
                 return f"Successfully pulled {model_id}"
             else:
-                return f"Error pulling model:\n" + "\n".join(output_lines[-10:])
+                error_output = "\n".join(output_lines[-10:]) if output_lines else "No output captured"
+                logger.error(f"Failed to pull {model_id} (exit {process.returncode}): {error_output}")
+                return f"Error pulling model (exit code {process.returncode}):\n{error_output}"
+        except FileNotFoundError:
+            logger.error("ollama command not found in PATH")
+            return "Error: 'ollama' command not found. Is Ollama installed and in PATH?"
         except Exception as e:
-            return f"Error: {str(e)}"
+            logger.exception(f"Exception pulling model {model_id}")
+            return f"Error: {type(e).__name__}: {str(e)}"
+
+    def _refresh_models(self):
+        """Refresh the list of installed models."""
+        try:
+            from settings import get_installed_models
+            self.installed_models = get_installed_models()
+        except Exception:
+            pass
 
     def save_settings(
         self,

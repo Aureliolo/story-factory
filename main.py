@@ -165,14 +165,15 @@ def main():
     parser.add_argument(
         "--log-file",
         type=str,
-        default=None,
-        help="Optional log file path",
+        default="default",
+        help="Log file path (default: logs/story_factory.log, use 'none' to disable)",
     )
 
     args = parser.parse_args()
 
     # Configure logging
-    setup_logging(level=args.log_level, log_file=args.log_file)
+    log_file = None if args.log_file.lower() == "none" else args.log_file
+    setup_logging(level=args.log_level, log_file=log_file)
 
     if args.cli or args.list_stories or args.load:
         run_cli(load_story=args.load, list_stories=args.list_stories)
