@@ -76,26 +76,32 @@ python main.py --cli
 
 ## Configuration
 
-Edit `config.py` to customize:
+Settings can be configured via the web UI or by editing `settings.json`:
 
-```python
-# Change the default model
-DEFAULT_MODEL = "vanilj/midnight-miqu-70b-v1.5:Q4_K_M"
-
-# Adjust creativity
-DEFAULT_TEMPERATURE = 0.8
-
-# Set interaction frequency
-DEFAULT_INTERACTION_MODE = InteractionMode.CHECKPOINT
-CHAPTERS_BETWEEN_CHECKPOINTS = 3
+```json
+{
+  "default_model": "huihui_ai/qwen3-abliterated:32b",
+  "context_size": 32768,
+  "interaction_mode": "checkpoint",
+  "chapters_between_checkpoints": 3,
+  "use_per_agent_models": true,
+  "agent_temperatures": {
+    "writer": 0.9,
+    "editor": 0.6
+  }
+}
 ```
+
+Copy `settings.example.json` to `settings.json` to get started.
 
 ## Project Structure
 
 ```
 story-factory/
 ├── main.py                 # Entry point
-├── config.py               # Configuration
+├── settings.py             # Settings management & model registry
+├── settings.json           # User settings (not in git)
+├── settings.example.json   # Example settings template
 ├── requirements.txt        # Python dependencies
 ├── agents/                 # AI agent implementations
 │   ├── base.py             # Base agent class
@@ -108,6 +114,8 @@ story-factory/
 │   └── orchestrator.py     # Agent coordination
 ├── memory/
 │   └── story_state.py      # Story state management
+├── utils/
+│   └── json_parser.py      # JSON extraction utilities
 ├── ui/
 │   └── gradio_app.py       # Web interface
 └── output/

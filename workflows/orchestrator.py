@@ -25,6 +25,10 @@ class WorkflowEvent:
     data: dict = None
 
 
+# Maximum events to keep in memory to prevent unbounded growth
+MAX_EVENTS = 100
+
+
 class StoryOrchestrator:
     """Orchestrates the story generation workflow."""
 
@@ -64,7 +68,14 @@ class StoryOrchestrator:
         """Emit a workflow event."""
         event = WorkflowEvent(event_type, agent, message, data or {})
         self.events.append(event)
+        # Trim old events to prevent memory leak
+        if len(self.events) > MAX_EVENTS:
+            self.events = self.events[-MAX_EVENTS:]
         return event
+
+    def clear_events(self):
+        """Clear all events (call after story completion if needed)."""
+        self.events.clear()
 
     # ========== INTERVIEW PHASE ==========
 

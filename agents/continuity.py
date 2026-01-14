@@ -1,10 +1,10 @@
 """Continuity Checker Agent - Detects plot holes and inconsistencies."""
 
+from dataclasses import dataclass
+
 from .base import BaseAgent
 from memory.story_state import StoryState
-import json
-import re
-from dataclasses import dataclass
+from utils.json_parser import extract_json_list
 
 
 @dataclass
@@ -225,15 +225,15 @@ Output as a simple list, one fact per line, starting with "- "."""
 
     def _parse_issues(self, response: str) -> list[ContinuityIssue]:
         """Parse continuity issues from agent response."""
-        issues = []
-        json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+        data = extract_json_list(response)
+        if not data:
+            return []
 
-        if json_match:
+        issues = []
+        for item in data:
             try:
-                data = json.loads(json_match.group(1))
-                for item in data:
-                    issues.append(ContinuityIssue(**item))
-            except (json.JSONDecodeError, ValueError, TypeError):
+                issues.append(ContinuityIssue(**item))
+            except (TypeError, KeyError):
                 pass
 
         return issues

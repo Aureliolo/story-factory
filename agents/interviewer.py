@@ -2,8 +2,7 @@
 
 from .base import BaseAgent
 from memory.story_state import StoryBrief
-import json
-import re
+from utils.json_parser import parse_json_to_model
 
 INTERVIEWER_SYSTEM_PROMPT = """You are the Interviewer, the first member of a creative writing team. Your job is to gather all the information needed to write a compelling story.
 
@@ -98,18 +97,9 @@ Make sure to explicitly ask about NSFW comfort level if not yet discussed."""
 
     def extract_brief(self, response: str) -> StoryBrief | None:
         """Try to extract a StoryBrief from the response if it contains JSON."""
-        json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
-        if not json_match:
-            json_match = re.search(r'\{[^{}]*"premise"[^{}]*\}', response, re.DOTALL)
-
-        if json_match:
-            try:
-                json_str = json_match.group(1) if '```' in response else json_match.group(0)
-                data = json.loads(json_str)
-                return StoryBrief(**data)
-            except (json.JSONDecodeError, ValueError):
-                pass
-        return None
+        # Fallback pattern for JSON without code block
+        fallback = r'\{[^{}]*"premise"[^{}]*\}'
+        return parse_json_to_model(response, StoryBrief, fallback_pattern=fallback)
 
     def finalize_brief(self, conversation_summary: str) -> StoryBrief:
         """Force generation of a final brief from the conversation."""
