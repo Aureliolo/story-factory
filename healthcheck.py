@@ -8,6 +8,8 @@ import logging
 import sys
 from pathlib import Path
 
+from settings import STORIES_DIR
+
 # Suppress logging during healthcheck unless there are errors
 logging.basicConfig(level=logging.ERROR)
 
@@ -63,7 +65,7 @@ def check_settings() -> tuple[bool, str]:
 
 def check_output_directory() -> tuple[bool, str]:
     """Check if output directory exists and is writable."""
-    output_dir = Path(__file__).parent / "output" / "stories"
+    output_dir = STORIES_DIR
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
         test_file = output_dir / ".write_test"

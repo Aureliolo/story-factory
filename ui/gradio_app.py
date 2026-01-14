@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.base import BaseAgent
 from settings import (
     AVAILABLE_MODELS,
+    STORIES_DIR,
     Settings,
     get_available_vram,
     get_installed_models,
@@ -31,7 +32,7 @@ class StoryFactoryUI:
     """Gradio UI for the Story Factory."""
 
     # Expected directory for story files (for path validation)
-    _STORIES_DIR: Path = Path(__file__).parent.parent / "output" / "stories"
+    _STORIES_DIR: Path = STORIES_DIR
 
     def __init__(self):
         logger.info("StoryFactoryUI initializing...")

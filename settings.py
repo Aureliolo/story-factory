@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 SETTINGS_FILE = Path(__file__).parent / "settings.json"
 
+# Centralized path for story output files - used by orchestrator and UI
+STORIES_DIR = Path(__file__).parent / "output" / "stories"
+
 
 class ModelInfo(TypedDict):
     """Type definition for model information."""

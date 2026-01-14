@@ -18,7 +18,7 @@ from agents import (
     WriterAgent,
 )
 from memory.story_state import Chapter, StoryBrief, StoryState
-from settings import Settings
+from settings import STORIES_DIR, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,9 @@ class StoryOrchestrator:
             project_name=default_name,
             status="interview",
         )
-        # Set correlation ID for event tracking (first 8 chars of story ID)
+        # Set correlation ID for event tracking.
+        # Use first 8 chars of the UUID story ID for readability while maintaining
+        # sufficient uniqueness within a single workflow/session.
         self._correlation_id = story_id[:8]
         # Autosave immediately so it appears in project list
         self.autosave()
@@ -841,7 +843,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Default export location
         output_path: Path
         if not filepath:
-            output_dir = Path(__file__).parent.parent / "output" / "stories"
+            output_dir = STORIES_DIR
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"{self.story_state.id}{ext}"
         else:
@@ -923,7 +925,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Default save location
         output_path: Path
         if not filepath:
-            output_dir = Path(__file__).parent.parent / "output" / "stories"
+            output_dir = STORIES_DIR
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"{self.story_state.id}.json"
         else:
@@ -968,7 +970,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         Returns:
             List of dicts with story metadata (id, path, created_at, status, etc.)
         """
-        output_dir = Path(__file__).parent.parent / "output" / "stories"
+        output_dir = STORIES_DIR
         stories: list[dict[str, str | None]] = []
 
         if not output_dir.exists():

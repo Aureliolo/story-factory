@@ -144,10 +144,14 @@ class TestWorkflowEvents:
         orchestrator.create_new_story()
 
         # Emit a test event
+        before = datetime.now()
         event = orchestrator._emit("test", "TestAgent", "Test message")
+        after = datetime.now()
 
         assert event.timestamp is not None
         assert isinstance(event.timestamp, datetime)
+        # Verify timestamp is approximately equal to current time
+        assert before <= event.timestamp <= after
 
     def test_workflow_events_include_correlation_id(self):
         """Should include correlation ID in workflow events."""
