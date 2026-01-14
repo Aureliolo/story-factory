@@ -1,9 +1,9 @@
 """Story Architect Agent - Creates story structure, characters, and outlines."""
 
+import re
 from .base import BaseAgent
 from memory.story_state import StoryState, Character, Chapter, PlotPoint
-import json
-import re
+from utils.json_parser import parse_json_list_to_models
 
 ARCHITECT_SYSTEM_PROMPT = """You are the Story Architect, a master storyteller who designs compelling narrative structures.
 
@@ -85,19 +85,7 @@ Create 2-4 main characters. For each, output JSON:
 Make them complex, with flaws and desires that create conflict."""
 
         response = self.generate(prompt)
-
-        # Parse characters from response
-        characters = []
-        json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
-        if json_match:
-            try:
-                char_data = json.loads(json_match.group(1))
-                for c in char_data:
-                    characters.append(Character(**c))
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-        return characters
+        return parse_json_list_to_models(response, Character)
 
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
@@ -142,15 +130,7 @@ For NSFW content at level '{brief.nsfw_level}', integrate intimate moments natur
         plot_summary = re.split(r'```json', response)[0].strip()
 
         # Extract plot points
-        plot_points = []
-        json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
-        if json_match:
-            try:
-                points_data = json.loads(json_match.group(1))
-                for p in points_data:
-                    plot_points.append(PlotPoint(**p))
-            except (json.JSONDecodeError, ValueError):
-                pass
+        plot_points = parse_json_list_to_models(response, PlotPoint)
 
         return plot_summary, plot_points
 
@@ -193,18 +173,7 @@ For each chapter, output JSON:
 Ensure good pacing - build tension, vary intensity, place climactic moments appropriately."""
 
         response = self.generate(prompt)
-
-        chapters = []
-        json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
-        if json_match:
-            try:
-                chapter_data = json.loads(json_match.group(1))
-                for c in chapter_data:
-                    chapters.append(Chapter(**c))
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-        return chapters
+        return parse_json_list_to_models(response, Chapter)
 
     def build_story_structure(self, story_state: StoryState) -> StoryState:
         """Complete story structure building process."""

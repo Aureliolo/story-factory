@@ -16,6 +16,8 @@ Usage:
 import argparse
 import sys
 
+from utils.logging_config import setup_logging
+
 
 def run_web_ui():
     """Launch the Gradio web interface."""
@@ -104,8 +106,23 @@ def main():
         default=7860,
         help="Port for web UI (default: 7860)",
     )
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="Optional log file path",
+    )
 
     args = parser.parse_args()
+
+    # Configure logging
+    setup_logging(level=args.log_level, log_file=args.log_file)
 
     if args.cli:
         run_cli()

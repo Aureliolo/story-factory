@@ -4,11 +4,15 @@ Settings are stored in settings.json and can be modified via the web UI.
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 import subprocess
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 
 SETTINGS_FILE = Path(__file__).parent / "settings.json"
@@ -177,8 +181,10 @@ class Settings:
                 with open(SETTINGS_FILE, 'r') as f:
                     data = json.load(f)
                 return cls(**data)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Invalid JSON in settings file, using defaults: {e}")
+            except TypeError as e:
+                logger.warning(f"Settings file has invalid structure, using defaults: {e}")
 
         # Create default settings
         settings = cls()
@@ -243,12 +249,19 @@ def get_installed_models() -> list[str]:
                 model_name = line.split()[0]
                 models.append(model_name)
         return models
-    except Exception:
+    except FileNotFoundError:
+        logger.warning("Ollama not found. Please ensure Ollama is installed and in PATH.")
+        return []
+    except subprocess.TimeoutExpired:
+        logger.warning("Ollama list command timed out.")
+        return []
+    except (OSError, ValueError) as e:
+        logger.warning(f"Error listing Ollama models: {e}")
         return []
 
 
 def get_available_vram() -> int:
-    """Detect available VRAM in GB."""
+    """Detect available VRAM in GB. Returns 8GB default if detection fails."""
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
@@ -258,8 +271,18 @@ def get_available_vram() -> int:
         )
         vram_mb = int(result.stdout.strip().split('\n')[0])
         return vram_mb // 1024
-    except Exception:
-        return 8  # Default assumption
+    except FileNotFoundError:
+        logger.info("nvidia-smi not found. Using default VRAM assumption of 8GB.")
+        return 8
+    except subprocess.TimeoutExpired:
+        logger.warning("nvidia-smi timed out. Using default VRAM assumption of 8GB.")
+        return 8
+    except (ValueError, IndexError) as e:
+        logger.warning(f"Could not parse VRAM from nvidia-smi output: {e}. Using default 8GB.")
+        return 8
+    except OSError as e:
+        logger.info(f"Could not detect VRAM: {e}. Using default 8GB.")
+        return 8
 
 
 def get_model_info(model_id: str) -> dict:
