@@ -30,13 +30,14 @@ Output the improved version of the text, not a critique."""
 class EditorAgent(BaseAgent):
     """Agent that refines and polishes prose."""
 
-    def __init__(self, model: str = None):
+    def __init__(self, model: str = None, settings=None):
         super().__init__(
             name="Editor",
             role="Prose Polisher",
             system_prompt=EDITOR_SYSTEM_PROMPT,
+            agent_role="editor",
             model=model,
-            temperature=0.6,  # Lower temperature for more consistent editing
+            settings=settings,
         )
 
     def edit_chapter(self, story_state: StoryState, chapter_content: str) -> str:

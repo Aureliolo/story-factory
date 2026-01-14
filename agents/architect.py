@@ -26,13 +26,14 @@ Output your plans in structured formats (JSON when requested) so other team memb
 class ArchitectAgent(BaseAgent):
     """Agent that designs story structure, characters, and outlines."""
 
-    def __init__(self, model: str = None):
+    def __init__(self, model: str = None, settings=None):
         super().__init__(
             name="Architect",
             role="Story Structure Designer",
             system_prompt=ARCHITECT_SYSTEM_PROMPT,
+            agent_role="architect",
             model=model,
-            temperature=0.85,  # Higher creativity for world-building
+            settings=settings,
         )
 
     def create_world(self, story_state: StoryState) -> str:

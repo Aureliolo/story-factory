@@ -32,13 +32,14 @@ Always be respectful and non-judgmental about content preferences."""
 class InterviewerAgent(BaseAgent):
     """Agent that interviews the user to gather story requirements."""
 
-    def __init__(self, model: str = None):
+    def __init__(self, model: str = None, settings=None):
         super().__init__(
             name="Interviewer",
             role="Story Requirements Gatherer",
             system_prompt=INTERVIEWER_SYSTEM_PROMPT,
+            agent_role="interviewer",
             model=model,
-            temperature=0.7,  # Slightly lower for more consistent questions
+            settings=settings,
         )
         self.conversation_history = []
 
