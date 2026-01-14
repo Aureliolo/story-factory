@@ -3,7 +3,7 @@
 import functools
 import logging
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def handle_ollama_errors(
                 )
                 if raise_on_error:
                     raise
-                return default_return
+                return cast(T, default_return)
             except Exception as e:
                 # Check for ollama-specific errors using hasattr for robustness
                 # Ollama errors typically have 'error' or 'status_code' attributes
@@ -56,7 +56,7 @@ def handle_ollama_errors(
 
                 if raise_on_error:
                     raise
-                return default_return
+                return cast(T, default_return)
 
         return wrapper
 
@@ -98,7 +98,7 @@ def retry_with_fallback(
                 f"Last error: {last_exception}",
                 exc_info=True,
             )
-            return fallback_value
+            return cast(T, fallback_value)
 
         return wrapper
 

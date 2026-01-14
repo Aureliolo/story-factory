@@ -57,6 +57,9 @@ strict_equality = true
 module = [
     "ollama.*",
     "gradio.*",
+    "ebooklib.*",
+    "reportlab.*",
+    "PIL.*",
 ]
 ignore_missing_imports = true
 

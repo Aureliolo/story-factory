@@ -30,7 +30,7 @@ Output your plans in structured formats (JSON when requested) so other team memb
 class ArchitectAgent(BaseAgent):
     """Agent that designs story structure, characters, and outlines."""
 
-    def __init__(self, model: str = None, settings=None):
+    def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Architect",
             role="Story Structure Designer",

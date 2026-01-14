@@ -37,7 +37,7 @@ Write complete, polished prose ready for the editor."""
 class WriterAgent(BaseAgent):
     """Agent that writes the actual prose."""
 
-    def __init__(self, model: str = None, settings=None):
+    def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Writer",
             role="Prose Craftsman",
@@ -51,7 +51,7 @@ class WriterAgent(BaseAgent):
         self,
         story_state: StoryState,
         chapter: Chapter,
-        revision_feedback: str = None,
+        revision_feedback: str | None = None,
     ) -> str:
         """Write or revise a single chapter."""
         brief = story_state.brief
@@ -103,7 +103,7 @@ IMPORTANT: Every word must be in {brief.language}!"""
     def write_short_story(
         self,
         story_state: StoryState,
-        revision_feedback: str = None,
+        revision_feedback: str | None = None,
     ) -> str:
         """Write a complete short story in one pass."""
         brief = story_state.brief
@@ -149,7 +149,7 @@ IMPORTANT: Every word must be in {brief.language}!"""
         self,
         story_state: StoryState,
         current_text: str,
-        direction: str = None,
+        direction: str | None = None,
     ) -> str:
         """Continue writing from where the text left off."""
         brief = story_state.brief

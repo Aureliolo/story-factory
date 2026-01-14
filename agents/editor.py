@@ -34,7 +34,7 @@ Output the improved version of the text, not a critique."""
 class EditorAgent(BaseAgent):
     """Agent that refines and polishes prose."""
 
-    def __init__(self, model: str = None, settings=None):
+    def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Editor",
             role="Prose Polisher",
@@ -78,7 +78,9 @@ Output ONLY the edited chapter text in {brief.language} - no commentary or notes
 
         return self.generate(prompt)
 
-    def edit_passage(self, passage: str, focus: str = None, language: str = "English") -> str:
+    def edit_passage(
+        self, passage: str, focus: str | None = None, language: str = "English"
+    ) -> str:
         """Edit a specific passage with optional focus area."""
         focus_instruction = f"\n\nFOCUS ESPECIALLY ON: {focus}" if focus else ""
 

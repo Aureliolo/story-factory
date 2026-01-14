@@ -33,7 +33,7 @@ Always be respectful and non-judgmental about content preferences."""
 class InterviewerAgent(BaseAgent):
     """Agent that interviews the user to gather story requirements."""
 
-    def __init__(self, model: str = None, settings=None):
+    def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Interviewer",
             role="Story Requirements Gatherer",
