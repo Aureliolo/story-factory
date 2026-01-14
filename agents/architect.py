@@ -43,6 +43,8 @@ class ArchitectAgent(BaseAgent):
     def create_world(self, story_state: StoryState) -> str:
         """Create the world-building document."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to create world")
         prompt = f"""Create detailed world-building for this story.
 
 LANGUAGE: {brief.language} - Write EVERYTHING in {brief.language}. All descriptions, names, and text must be in {brief.language}.
@@ -65,6 +67,8 @@ Make it immersive and specific to the genre. Remember: ALL text must be in {brie
     def create_characters(self, story_state: StoryState) -> list[Character]:
         """Design the main characters."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to create characters")
         prompt = f"""Design the main characters for this story.
 
 LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Names, descriptions, traits - everything in {brief.language}.
@@ -98,6 +102,8 @@ Make them complex, with flaws and desires that create conflict. ALL text must be
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to create plot outline")
         chars = "\n".join(f"- {c.name} ({c.role}): {c.description}" for c in story_state.characters)
 
         prompt = f"""Create a plot outline for this story.
@@ -148,6 +154,8 @@ ALL text must be in {brief.language}!"""
     def create_chapter_outline(self, story_state: StoryState) -> list[Chapter]:
         """Create detailed chapter outlines."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to create chapter outline")
         length_map = {
             "short_story": 1,
             "novella": 7,

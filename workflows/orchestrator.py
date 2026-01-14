@@ -30,7 +30,7 @@ class WorkflowEvent:
     event_type: str  # "agent_start", "agent_complete", "user_input_needed", "progress", "error"
     agent_name: str
     message: str
-    data: dict = None
+    data: dict | None = None
 
 
 # Maximum events to keep in memory to prevent unbounded growth
@@ -190,6 +190,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         Returns: (response_text, is_complete)
         """
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
         self._emit("agent_start", "Interviewer", "Processing your response...")
         response = self.interviewer.process_response(user_response)
 
@@ -206,6 +209,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def finalize_interview(self) -> StoryBrief:
         """Force finalize the interview with current information."""
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
         history = "\n".join(
             f"{h['role']}: {h['content']}" for h in self.interviewer.conversation_history
         )
@@ -218,6 +224,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def build_story_structure(self) -> StoryState:
         """Have the architect build the story structure."""
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
         logger.info("Building story structure...")
         self._emit("agent_start", "Architect", "Building world...")
 
@@ -242,6 +251,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def get_outline_summary(self) -> str:
         """Get a human-readable summary of the story outline."""
+        if not self.story_state:
+            raise ValueError("No story state available.")
+
         state = self.story_state
         summary_parts = [
             "=" * 50,
@@ -283,6 +295,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def write_short_story(self) -> Generator[WorkflowEvent, None, str]:
         """Write a short story with revision loop."""
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
         # Create a proper Chapter for the short story
         short_story_chapter = Chapter(
             number=1,
@@ -374,6 +389,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def write_chapter(self, chapter_number: int) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with the full pipeline."""
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
         chapter = next((c for c in self.story_state.chapters if c.number == chapter_number), None)
         if not chapter:
             raise ValueError(f"Chapter {chapter_number} not found")
@@ -512,6 +530,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         Args:
             on_checkpoint: Callback at checkpoints. Returns True to continue, False to pause.
         """
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
         for chapter in self.story_state.chapters:
             # Write the chapter
             yield from self.write_chapter(chapter.number)
@@ -540,6 +561,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def get_full_story(self) -> str:
         """Get the complete story text."""
+        if not self.story_state:
+            raise ValueError("No story state available.")
+
         parts = []
         for chapter in self.story_state.chapters:
             if chapter.content:
@@ -548,6 +572,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def export_to_markdown(self) -> str:
         """Export the story as markdown."""
+        if not self.story_state:
+            raise ValueError("No story state available.")
+
         brief = self.story_state.brief
         md_parts = []
 
@@ -572,6 +599,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def export_to_text(self) -> str:
         """Export the story as plain text."""
+        if not self.story_state:
+            raise ValueError("No story state available.")
+
         brief = self.story_state.brief
         text_parts = []
 
@@ -601,6 +631,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def export_to_epub(self) -> bytes:
         """Export the story as EPUB e-book format."""
+        if not self.story_state:
+            raise ValueError("No story state available.")
+
         from ebooklib import epub
 
         book = epub.EpubBook()
@@ -666,6 +699,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def export_to_pdf(self) -> bytes:
         """Export the story as PDF format."""
+        if not self.story_state:
+            raise ValueError("No story state available.")
+
         from io import BytesIO
 
         from reportlab.lib.pagesizes import letter
@@ -780,22 +816,27 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             raise ValueError(f"Unsupported export format: {format}")
 
         # Default export location
+        output_path: Path
         if not filepath:
             output_dir = Path(__file__).parent.parent / "output" / "stories"
             output_dir.mkdir(parents=True, exist_ok=True)
-            filepath = output_dir / f"{self.story_state.id}{ext}"
+            output_path = output_dir / f"{self.story_state.id}{ext}"
+        else:
+            output_path = Path(filepath)
 
-        filepath = Path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, "w", encoding="utf-8") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        logger.info(f"Story exported to {filepath} ({format} format)")
-        return str(filepath)
+        logger.info(f"Story exported to {output_path} ({format} format)")
+        return str(output_path)
 
-    def get_statistics(self) -> dict:
+    def get_statistics(self) -> dict[str, int | float]:
         """Get story statistics including reading time estimate."""
+        if not self.story_state:
+            raise ValueError("No story state available.")
+
         total_words = sum(ch.word_count for ch in self.story_state.chapters)
         completed_chapters = sum(1 for ch in self.story_state.chapters if ch.status == "final")
         completed_plot_points = sum(1 for p in self.story_state.plot_points if p.completed)
@@ -853,21 +894,22 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             self.story_state.last_saved = datetime.now()
 
         # Default save location
+        output_path: Path
         if not filepath:
             output_dir = Path(__file__).parent.parent / "output" / "stories"
             output_dir.mkdir(parents=True, exist_ok=True)
-            filepath = output_dir / f"{self.story_state.id}.json"
-
-        filepath = Path(filepath)
+            output_path = output_dir / f"{self.story_state.id}.json"
+        else:
+            output_path = Path(filepath)
 
         # Convert to dict for JSON serialization
         story_data = self.story_state.model_dump(mode="json")
 
-        with open(filepath, "w", encoding="utf-8") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(story_data, f, indent=2, default=str)
 
-        logger.info(f"Story saved to {filepath}")
-        return str(filepath)
+        logger.info(f"Story saved to {output_path}")
+        return str(output_path)
 
     def load_story(self, filepath: str) -> StoryState:
         """Load a story state from a JSON file.
@@ -878,27 +920,27 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         Returns:
             The loaded StoryState.
         """
-        filepath = Path(filepath)
+        path = Path(filepath)
 
-        if not filepath.exists():
-            raise FileNotFoundError(f"Story file not found: {filepath}")
+        if not path.exists():
+            raise FileNotFoundError(f"Story file not found: {path}")
 
-        with open(filepath, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             story_data = json.load(f)
 
         self.story_state = StoryState.model_validate(story_data)
-        logger.info(f"Story loaded from {filepath}")
+        logger.info(f"Story loaded from {path}")
         return self.story_state
 
     @staticmethod
-    def list_saved_stories() -> list[dict]:
+    def list_saved_stories() -> list[dict[str, str | None]]:
         """List all saved stories in the output directory.
 
         Returns:
             List of dicts with story metadata (id, path, created_at, status, etc.)
         """
         output_dir = Path(__file__).parent.parent / "output" / "stories"
-        stories = []
+        stories: list[dict[str, str | None]] = []
 
         if not output_dir.exists():
             return stories
@@ -923,7 +965,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(f"Could not read story file {filepath}: {e}")
 
-        return sorted(stories, key=lambda x: x.get("created_at", ""), reverse=True)
+        return sorted(stories, key=lambda x: x.get("created_at") or "", reverse=True)
 
     def reset_state(self):
         """Reset the orchestrator state for a new story."""

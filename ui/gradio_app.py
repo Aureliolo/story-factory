@@ -33,7 +33,7 @@ class StoryFactoryUI:
         logger.info("StoryFactoryUI initializing...")
         self.settings = Settings.load()
         logger.info(f"Settings loaded: default_model={self.settings.default_model}")
-        self.orchestrator: StoryOrchestrator = None
+        self.orchestrator: StoryOrchestrator | None = None
         self.interview_complete = False
         self.detected_vram = get_available_vram()
         self.ollama_status = self._check_ollama()
@@ -157,17 +157,18 @@ class StoryFactoryUI:
                 errors="replace",  # Handle non-UTF8 chars from progress bars
             )
 
-            output_lines = []
-            for line in process.stdout:
-                line_stripped = line.strip()
-                if line_stripped:
-                    output_lines.append(line_stripped)
-                    # Update progress if available
-                    if progress is not None and "pulling" in line.lower():
-                        try:
-                            progress(0.5, desc=line_stripped[:50])
-                        except Exception:
-                            pass
+            output_lines: list[str] = []
+            if process.stdout:
+                for line in process.stdout:
+                    line_stripped = line.strip()
+                    if line_stripped:
+                        output_lines.append(line_stripped)
+                        # Update progress if available
+                        if progress is not None and "pulling" in line.lower():
+                            try:
+                                progress(0.5, desc=line_stripped[:50])
+                            except Exception:
+                                pass
 
             process.wait()
 
@@ -300,26 +301,27 @@ class StoryFactoryUI:
             output_dir = Path(tempfile.gettempdir())
             story_id = self.orchestrator.story_state.id[:8]
 
+            filepath: Path
             if format_type == "text":
-                content = self.orchestrator.export_to_text()
+                text_content = self.orchestrator.export_to_text()
                 filepath = output_dir / f"story_{story_id}.txt"
                 with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(content)
+                    f.write(text_content)
             elif format_type == "epub":
-                content = self.orchestrator.export_to_epub()
+                binary_content = self.orchestrator.export_to_epub()
                 filepath = output_dir / f"story_{story_id}.epub"
                 with open(filepath, "wb") as f:
-                    f.write(content)
+                    f.write(binary_content)
             elif format_type == "pdf":
-                content = self.orchestrator.export_to_pdf()
+                binary_content = self.orchestrator.export_to_pdf()
                 filepath = output_dir / f"story_{story_id}.pdf"
                 with open(filepath, "wb") as f:
-                    f.write(content)
+                    f.write(binary_content)
             else:  # markdown (default)
-                content = self.orchestrator.export_to_markdown()
+                text_content = self.orchestrator.export_to_markdown()
                 filepath = output_dir / f"story_{story_id}.md"
                 with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(content)
+                    f.write(text_content)
 
             logger.info(f"Export successful: {filepath}")
             return str(filepath), f"Story exported as {format_type}!"
@@ -346,10 +348,13 @@ class StoryFactoryUI:
     def get_saved_stories(self):
         """Get list of saved stories for dropdown."""
         stories = StoryOrchestrator.list_saved_stories()
-        choices = []
+        choices: list[tuple[str, str]] = []
         for s in stories:
-            label = f"{s.get('premise', 'Untitled')[:40]}... ({s.get('status', '?')})"
-            choices.append((label, s.get("path", "")))
+            premise = (s.get("premise") or "Untitled")[:40]
+            status = s.get("status") or "?"
+            path = s.get("path") or ""
+            label = f"{premise}... ({status})"
+            choices.append((label, path))
         return choices
 
     # ============ Project Management Functions ============
@@ -359,8 +364,9 @@ class StoryFactoryUI:
         stories = StoryOrchestrator.list_saved_stories()
         choices = []
         for s in stories:
+            path = s.get("path") or ""
             try:
-                with open(s.get("path", ""), encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     import json
 
                     story_data = json.load(f)
@@ -370,12 +376,12 @@ class StoryFactoryUI:
                     project_name = story_data.get("project_name", "") or premise or "Untitled"
                     last_saved = story_data.get("last_saved", story_data.get("created_at", ""))
                     words = sum(ch.get("word_count", 0) for ch in story_data.get("chapters", []))
-                    status = s.get("status", "?")
+                    status = s.get("status") or "?"
             except Exception:
-                project_name = s.get("premise", "Untitled")[:40] or "Untitled"
-                last_saved = s.get("created_at", "")
+                project_name = (s.get("premise") or "Untitled")[:40]
+                last_saved = s.get("created_at") or ""
                 words = 0
-                status = s.get("status", "?")
+                status = s.get("status") or "?"
 
             # Create display label with key info
             date_str = last_saved[:10] if last_saved else "?"
@@ -565,15 +571,15 @@ class StoryFactoryUI:
                 self.settings = Settings.load()
                 self.orchestrator = StoryOrchestrator(settings=self.settings)
 
-            self.orchestrator.load_story(filepath)
+            state = self.orchestrator.load_story(filepath)
             self.interview_complete = True  # Skip interview for loaded stories
 
             story_content = self.orchestrator.get_full_story()
             outline = self.orchestrator.get_outline_summary()
 
-            logger.info(f"Story loaded successfully: {self.orchestrator.story_state.id}")
+            logger.info(f"Story loaded successfully: {state.id}")
             return (
-                f"Story loaded! Status: {self.orchestrator.story_state.status}",
+                f"Story loaded! Status: {state.status}",
                 outline,
                 story_content,
             )
@@ -785,8 +791,10 @@ class StoryFactoryUI:
             yield "Please select at least 2 models to compare.", ""
             return
 
-        results = {}
-        output_parts = []
+        from typing import Any
+
+        results: dict[str, dict[str, Any]] = {}
+        output_parts: list[str] = []
 
         for i, model in enumerate(selected_models):
             model_info = get_model_info(model)

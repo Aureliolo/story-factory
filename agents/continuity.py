@@ -75,6 +75,8 @@ class ContinuityAgent(BaseAgent):
         )
 
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to check chapter continuity")
         prompt = f"""Analyze this chapter for continuity issues:
 
 REQUIRED LANGUAGE: {brief.language} - ALL story text MUST be in {brief.language}. Flag any text in wrong language as CRITICAL.
@@ -134,12 +136,14 @@ If no issues found, output: ```json
             return []
 
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to check full story continuity")
         prompt = f"""Analyze this complete story for continuity issues:
 
 REQUIRED LANGUAGE: {brief.language} - ALL story text MUST be in {brief.language}. Flag any text in wrong language as CRITICAL.
 
 STORY PREMISE:
-{brief.premise if brief else 'N/A'}
+{brief.premise}
 
 CHARACTERS:
 {chr(10).join(f"- {c.name} ({c.role})" for c in story_state.characters)}

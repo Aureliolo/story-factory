@@ -42,7 +42,7 @@ class InterviewerAgent(BaseAgent):
             model=model,
             settings=settings,
         )
-        self.conversation_history = []
+        self.conversation_history: list[dict[str, str]] = []
 
     def get_initial_questions(self) -> str:
         """Generate the initial interview questions."""

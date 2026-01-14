@@ -47,6 +47,8 @@ class EditorAgent(BaseAgent):
     def edit_chapter(self, story_state: StoryState, chapter_content: str) -> str:
         """Edit and polish a chapter."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to edit a chapter")
 
         prompt = f"""Edit and polish this chapter.
 
@@ -125,6 +127,8 @@ Be specific - quote the problematic text and suggest improvements."""
     ) -> str:
         """Edit new content to ensure consistency with previous content."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to ensure consistency")
         prompt = f"""Review this new content for consistency with what came before.
 
 LANGUAGE: {brief.language} - Keep ALL text in {brief.language}. Do not translate.
