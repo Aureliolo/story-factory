@@ -13,6 +13,8 @@ from agents import (
     ContinuityAgent,
     EditorAgent,
     InterviewerAgent,
+    ResponseValidationError,
+    ValidatorAgent,
     WriterAgent,
 )
 from memory.story_state import Chapter, StoryBrief, StoryState
@@ -52,10 +54,35 @@ class StoryOrchestrator:
         self.writer = WriterAgent(model=model_override, settings=self.settings)
         self.editor = EditorAgent(model=model_override, settings=self.settings)
         self.continuity = ContinuityAgent(model=model_override, settings=self.settings)
+        self.validator = ValidatorAgent(settings=self.settings)  # Uses small model
 
         # State
         self.story_state: StoryState | None = None
         self.events: list[WorkflowEvent] = []
+
+    def _validate_response(self, response: str, task: str = "") -> str:
+        """Validate an AI response for language and basic correctness.
+
+        Args:
+            response: The AI-generated response
+            task: Description of what the response should contain
+
+        Returns:
+            The response if valid
+
+        Raises:
+            ResponseValidationError: If validation fails
+        """
+        if not self.story_state or not self.story_state.brief:
+            return response  # Can't validate without knowing expected language
+
+        language = self.story_state.brief.language
+        try:
+            self.validator.validate_response(response, language, task)
+            return response
+        except ResponseValidationError as e:
+            logger.error(f"Response validation failed: {e}")
+            raise
 
     @property
     def interaction_mode(self):
@@ -185,6 +212,16 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         logger.info(f"Calling architect with model: {self.architect.model}")
         self.story_state = self.architect.build_story_structure(self.story_state)
 
+        # Validate key outputs for language correctness
+        try:
+            if self.story_state.world_description:
+                self._validate_response(self.story_state.world_description, "World description")
+            if self.story_state.plot_summary:
+                self._validate_response(self.story_state.plot_summary, "Plot summary")
+        except ResponseValidationError as e:
+            logger.warning(f"Validation warning during structure build: {e}")
+            # Don't block on validation errors, just log them
+
         logger.info(
             f"Structure built: {len(self.story_state.chapters)} chapters, {len(self.story_state.characters)} characters"
         )
@@ -248,6 +285,13 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         yield self.events[-1]
 
         content = self.writer.write_short_story(self.story_state)
+
+        # Validate language/correctness
+        try:
+            self._validate_response(content, "Short story content")
+        except ResponseValidationError as e:
+            logger.warning(f"Validation warning for short story: {e}")
+
         short_story_chapter.content = content
 
         # Edit
@@ -329,6 +373,13 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         yield self.events[-1]
 
         content = self.writer.write_chapter(self.story_state, chapter)
+
+        # Validate language/correctness
+        try:
+            self._validate_response(content, f"Chapter {chapter_number} content")
+        except ResponseValidationError as e:
+            logger.warning(f"Validation warning for chapter {chapter_number}: {e}")
+
         chapter.content = content
 
         # Edit
@@ -545,9 +596,16 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Set metadata
         brief = self.story_state.brief
         title = self.story_state.project_name or (brief.premise[:50] if brief else "Untitled Story")
+        # Map common language names to ISO 639-1 codes
+        lang_map = {
+            "English": "en", "German": "de", "Spanish": "es", "French": "fr",
+            "Italian": "it", "Portuguese": "pt", "Dutch": "nl", "Russian": "ru",
+            "Japanese": "ja", "Chinese": "zh", "Korean": "ko", "Arabic": "ar",
+        }
+        lang_code = lang_map.get(brief.language, "en") if brief else "en"
         book.set_identifier(self.story_state.id)
         book.set_title(title)
-        book.set_language("en")
+        book.set_language(lang_code)
 
         if brief:
             book.add_metadata("DC", "description", brief.premise)
@@ -560,7 +618,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
                 epub_chapter = epub.EpubHtml(
                     title=f"Chapter {ch.number}: {ch.title}",
                     file_name=f"chapter_{ch.number}.xhtml",
-                    lang="en",
+                    lang=lang_code,
                 )
                 # Convert content to HTML (simple paragraph wrapping)
                 html_content = "<br/><br/>".join(
@@ -659,6 +717,20 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         doc.build(story_elements)
         return buffer.getvalue()
+
+    def export_to_mobi(self) -> bytes:
+        """Export the story as MOBI format (Kindle).
+
+        Note: Amazon discontinued MOBI support in March 2025. EPUB is now the
+        recommended format for Kindle devices.
+        """
+        raise RuntimeError(
+            "MOBI format is no longer supported.\n\n"
+            "Amazon discontinued MOBI in March 2025. Use EPUB instead:\n"
+            "• Send EPUB to your Kindle via 'Send to Kindle' email (yourname@kindle.com)\n"
+            "• Use the Kindle app on your phone/tablet - it supports EPUB directly\n"
+            "• Use Calibre to convert EPUB to AZW3 if needed"
+        )
 
     def export_story_to_file(self, format: str = "markdown", filepath: str | None = None) -> str:
         """Export the story to a file.

@@ -16,7 +16,7 @@ class ContinuityIssue:
     """A detected continuity issue."""
 
     severity: str  # "critical", "moderate", "minor"
-    category: str  # "plot_hole", "character", "timeline", "setting", "logic"
+    category: str  # "language", "plot_hole", "character", "timeline", "setting", "logic"
     description: str
     location: str  # Where in the text
     suggestion: str  # How to fix
@@ -24,12 +24,15 @@ class ContinuityIssue:
 
 CONTINUITY_SYSTEM_PROMPT = """You are the Continuity Checker, the guardian of story consistency.
 
+CRITICAL: The story must be in the specified language. Flag ANY text that is in the wrong language as a critical issue.
+
 Your job is to catch:
-1. PLOT HOLES - Events that contradict earlier events, unresolved setups, impossible occurrences
-2. CHARACTER INCONSISTENCIES - Out-of-character behavior, personality shifts, forgotten traits
-3. TIMELINE ERRORS - Impossible chronology, contradictory timeframes
-4. SETTING MISTAKES - Location inconsistencies, world rule violations
-5. LOGIC PROBLEMS - Things that don't make sense within the story's rules
+1. LANGUAGE VIOLATIONS - Any text not in the specified language (ALWAYS check this first!)
+2. PLOT HOLES - Events that contradict earlier events, unresolved setups, impossible occurrences
+3. CHARACTER INCONSISTENCIES - Out-of-character behavior, personality shifts, forgotten traits
+4. TIMELINE ERRORS - Impossible chronology, contradictory timeframes
+5. SETTING MISTAKES - Location inconsistencies, world rule violations
+6. LOGIC PROBLEMS - Things that don't make sense within the story's rules
 
 You read carefully and cross-reference with established facts.
 You flag issues with specific quotes and clear explanations.
@@ -71,7 +74,10 @@ class ContinuityAgent(BaseAgent):
             for c in story_state.characters
         )
 
+        brief = story_state.brief
         prompt = f"""Analyze this chapter for continuity issues:
+
+REQUIRED LANGUAGE: {brief.language} - ALL story text MUST be in {brief.language}. Flag any text in wrong language as CRITICAL.
 
 ESTABLISHED CHARACTERS:
 {chars_summary}
@@ -89,6 +95,7 @@ CURRENT CHAPTER (#{chapter_number}):
 {chapter_content}
 
 Find any:
+- LANGUAGE VIOLATIONS (text not in {brief.language}) - mark as CRITICAL
 - Plot holes or contradictions
 - Character inconsistencies
 - Timeline errors
@@ -100,7 +107,7 @@ Output as JSON:
 [
     {{
         "severity": "critical|moderate|minor",
-        "category": "plot_hole|character|timeline|setting|logic",
+        "category": "language|plot_hole|character|timeline|setting|logic",
         "description": "What the issue is",
         "location": "Quote the problematic text",
         "suggestion": "How to fix it"
@@ -126,10 +133,13 @@ If no issues found, output: ```json
         if not full_content:
             return []
 
+        brief = story_state.brief
         prompt = f"""Analyze this complete story for continuity issues:
 
+REQUIRED LANGUAGE: {brief.language} - ALL story text MUST be in {brief.language}. Flag any text in wrong language as CRITICAL.
+
 STORY PREMISE:
-{story_state.brief.premise if story_state.brief else 'N/A'}
+{brief.premise if brief else 'N/A'}
 
 CHARACTERS:
 {chr(10).join(f"- {c.name} ({c.role})" for c in story_state.characters)}
@@ -138,6 +148,7 @@ FULL STORY:
 {full_content[:8000]}  # Truncate for context limits
 
 Check for:
+- LANGUAGE VIOLATIONS (text not in {brief.language}) - mark as CRITICAL
 - Unresolved plot threads
 - Character arcs that don't complete
 - Foreshadowing that never pays off
@@ -149,7 +160,7 @@ Output as JSON:
 [
     {{
         "severity": "critical|moderate|minor",
-        "category": "plot_hole|character|timeline|setting|logic",
+        "category": "language|plot_hole|character|timeline|setting|logic",
         "description": "What the issue is",
         "location": "Which chapter(s) / quote",
         "suggestion": "How to fix it"

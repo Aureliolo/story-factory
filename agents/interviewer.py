@@ -8,6 +8,7 @@ from .base import BaseAgent
 INTERVIEWER_SYSTEM_PROMPT = """You are the Interviewer, the first member of a creative writing team. Your job is to gather all the information needed to write a compelling story.
 
 You ask thoughtful, specific questions to understand:
+- The language the story should be written in (ALWAYS ask this first!)
 - The core premise and concept
 - Genre and tone preferences
 - Setting (time and place)
@@ -46,13 +47,14 @@ class InterviewerAgent(BaseAgent):
     def get_initial_questions(self) -> str:
         """Generate the initial interview questions."""
         prompt = """Start the interview by warmly greeting the user and asking about their story idea.
-Ask 3-4 initial questions covering:
-1. What's the basic premise or concept they have in mind?
-2. What genre are they interested in?
-3. Any specific setting or time period?
-4. How long should the story be (short story, novella, or novel)?
+Ask 4-5 initial questions covering:
+1. What language should the story be written in? (English, German, Spanish, etc.)
+2. What's the basic premise or concept they have in mind?
+3. What genre are they interested in?
+4. Any specific setting or time period?
+5. How long should the story be (short story, novella, or novel)?
 
-Keep it friendly and conversational."""
+Keep it friendly and conversational. The language question is important - always ask it first!"""
 
         return self.generate(prompt)
 
@@ -70,7 +72,7 @@ Keep it friendly and conversational."""
 {history_text}
 
 Either:
-1. Ask follow-up questions if you need more information about characters, themes, tone, NSFW comfort level, or content preferences
+1. Ask follow-up questions if you need more information about language, characters, themes, tone, NSFW comfort level, or content preferences
 2. If you have enough information, output a complete story brief in this exact JSON format:
 
 ```json
@@ -83,6 +85,7 @@ Either:
     "setting_time": "...",
     "setting_place": "...",
     "target_length": "short_story|novella|novel",
+    "language": "English|German|Spanish|French|etc.",
     "nsfw_level": "none|mild|moderate|explicit",
     "content_preferences": ["things to include..."],
     "content_avoid": ["things to avoid..."],
@@ -90,7 +93,7 @@ Either:
 }}
 ```
 
-Make sure to explicitly ask about NSFW comfort level if not yet discussed."""
+Make sure to explicitly ask about NSFW comfort level and language if not yet discussed."""
 
         response = self.generate(prompt, context)
         self.conversation_history.append({"role": "assistant", "content": response})
@@ -119,6 +122,7 @@ Output ONLY a JSON object in this exact format (no other text):
     "setting_time": "...",
     "setting_place": "...",
     "target_length": "short_story|novella|novel",
+    "language": "English|German|Spanish|French|etc.",
     "nsfw_level": "none|mild|moderate|explicit",
     "content_preferences": ["..."],
     "content_avoid": ["..."],
@@ -138,6 +142,7 @@ Output ONLY a JSON object in this exact format (no other text):
                 setting_time="Contemporary",
                 setting_place="Unspecified",
                 target_length="short_story",
+                language="English",
                 nsfw_level="moderate",
             )
 
