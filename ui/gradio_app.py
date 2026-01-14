@@ -1,22 +1,27 @@
 """Gradio-based UI for Story Factory with web-based configuration."""
 
-import gradio as gr
 import logging
-import sys
 import os
 import subprocess
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import gradio as gr
+
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from workflows.orchestrator import StoryOrchestrator
 from agents.base import BaseAgent
 from settings import (
-    Settings, AVAILABLE_MODELS, get_installed_models, get_available_vram, get_model_info
+    AVAILABLE_MODELS,
+    Settings,
+    get_available_vram,
+    get_installed_models,
+    get_model_info,
 )
+from workflows.orchestrator import StoryOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +95,10 @@ class StoryFactoryUI:
             # Try to get info with normalized name
             normalized = self._normalize_model_name(model)
             info = get_model_info(normalized)
-            if info.get('name') == normalized:
+            if info.get("name") == normalized:
                 # Fallback didn't find it, try original
                 info = get_model_info(model)
-            display_name = info.get('name', model)
+            display_name = info.get("name", model)
             lines.append(f"- **{display_name}** (`{model}`) - Ready")
         return "\n".join(lines)
 
@@ -138,6 +143,7 @@ class StoryFactoryUI:
 
             # Use shell=True on Windows for proper command resolution
             import platform
+
             use_shell = platform.system() == "Windows"
 
             process = subprocess.Popen(
@@ -145,8 +151,8 @@ class StoryFactoryUI:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 shell=use_shell,
-                encoding='utf-8',
-                errors='replace',  # Handle non-UTF8 chars from progress bars
+                encoding="utf-8",
+                errors="replace",  # Handle non-UTF8 chars from progress bars
             )
 
             output_lines = []
@@ -169,8 +175,12 @@ class StoryFactoryUI:
                 self._refresh_models()
                 return f"Successfully pulled {model_id}"
             else:
-                error_output = "\n".join(output_lines[-10:]) if output_lines else "No output captured"
-                logger.error(f"Failed to pull {model_id} (exit {process.returncode}): {error_output}")
+                error_output = (
+                    "\n".join(output_lines[-10:]) if output_lines else "No output captured"
+                )
+                logger.error(
+                    f"Failed to pull {model_id} (exit {process.returncode}): {error_output}"
+                )
                 return f"Error pulling model (exit code {process.returncode}):\n{error_output}"
         except FileNotFoundError:
             logger.error("ollama command not found in PATH")
@@ -183,6 +193,7 @@ class StoryFactoryUI:
         """Refresh the list of installed models."""
         try:
             from settings import get_installed_models
+
             self.installed_models = get_installed_models()
         except Exception as e:
             logger.warning(f"Failed to refresh models list: {e}")
@@ -321,7 +332,7 @@ class StoryFactoryUI:
         choices = []
         for s in stories:
             label = f"{s.get('premise', 'Untitled')[:40]}... ({s.get('status', '?')})"
-            choices.append((label, s.get('path', '')))
+            choices.append((label, s.get("path", "")))
         return choices
 
     def load_saved_story(self, filepath: str):
@@ -344,7 +355,11 @@ class StoryFactoryUI:
             outline = self.orchestrator.get_outline_summary()
 
             logger.info(f"Story loaded successfully: {self.orchestrator.story_state.id}")
-            return f"Story loaded! Status: {self.orchestrator.story_state.status}", outline, story_content
+            return (
+                f"Story loaded! Status: {self.orchestrator.story_state.status}",
+                outline,
+                story_content,
+            )
         except Exception as e:
             logger.exception("Load story failed")
             return f"Load failed: {e}", "", ""
@@ -353,10 +368,15 @@ class StoryFactoryUI:
         """Handle chat messages during interview."""
         try:
             if not self.orchestrator:
-                return history + [
-                    {"role": "user", "content": message},
-                    {"role": "assistant", "content": "Please start a new story first."}
-                ], "", gr.update(interactive=False)
+                return (
+                    history
+                    + [
+                        {"role": "user", "content": message},
+                        {"role": "assistant", "content": "Please start a new story first."},
+                    ],
+                    "",
+                    gr.update(interactive=False),
+                )
 
             if not self.interview_complete:
                 response, is_complete = self.orchestrator.process_interview_response(message)
@@ -365,26 +385,46 @@ class StoryFactoryUI:
                 if is_complete:
                     response += "\n\n---\n**Interview complete!** Click 'Build Story Structure' to continue."
                     # Enable Build button when interview is complete
-                    return history + [
+                    return (
+                        history
+                        + [
+                            {"role": "user", "content": message},
+                            {"role": "assistant", "content": response},
+                        ],
+                        "",
+                        gr.update(interactive=True, variant="primary"),
+                    )
+
+                return (
+                    history
+                    + [
                         {"role": "user", "content": message},
-                        {"role": "assistant", "content": response}
-                    ], "", gr.update(interactive=True, variant="primary")
+                        {"role": "assistant", "content": response},
+                    ],
+                    "",
+                    gr.update(),
+                )
 
-                return history + [
+            return (
+                history
+                + [
                     {"role": "user", "content": message},
-                    {"role": "assistant", "content": response}
-                ], "", gr.update()
-
-            return history + [
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": "Use the action buttons to continue."}
-            ], "", gr.update()
+                    {"role": "assistant", "content": "Use the action buttons to continue."},
+                ],
+                "",
+                gr.update(),
+            )
         except Exception as e:
             logger.exception("chat_response failed")
-            return history + [
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": f"Error: {e}"}
-            ], "", gr.update()
+            return (
+                history
+                + [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": f"Error: {e}"},
+                ],
+                "",
+                gr.update(),
+            )
 
     def build_structure(self):
         """Build the story structure."""
@@ -408,7 +448,9 @@ class StoryFactoryUI:
             outline = self.orchestrator.get_outline_summary()
             logger.info("Structure built successfully")
             # Enable Write button when structure is complete
-            yield outline, "Structure complete! Review and click 'Write Story' to begin.", gr.update(interactive=True, variant="primary")
+            yield outline, "Structure complete! Review and click 'Write Story' to begin.", gr.update(
+                interactive=True, variant="primary"
+            )
         except Exception as e:
             logger.exception("Build structure failed")
             yield f"Error building structure: {e}", f"Error: {e}", gr.update()
@@ -471,7 +513,9 @@ class StoryFactoryUI:
                     f"~{stats['reading_time_minutes']} min read | "
                     f"Plot: {stats['plot_points_completed']}/{stats['plot_points_total']} points"
                 )
-                logger.info(f"Multi-chapter story complete: {stats['total_words']} words, {stats['total_chapters']} chapters")
+                logger.info(
+                    f"Multi-chapter story complete: {stats['total_words']} words, {stats['total_chapters']} chapters"
+                )
                 yield full_story, stats_msg, "All chapters complete!"
 
         except Exception as e:
@@ -482,7 +526,9 @@ class StoryFactoryUI:
 
     def run_comparison(self, prompt: str, selected_models: list):
         """Run the same prompt through multiple models for comparison."""
-        logger.info(f"Model comparison requested: {len(selected_models) if selected_models else 0} models")
+        logger.info(
+            f"Model comparison requested: {len(selected_models) if selected_models else 0} models"
+        )
 
         if not prompt:
             logger.warning("Comparison failed: No prompt provided")
@@ -503,10 +549,7 @@ class StoryFactoryUI:
 
             try:
                 # Create a fresh orchestrator with this model
-                test_orchestrator = StoryOrchestrator(
-                    settings=self.settings,
-                    model_override=model
-                )
+                test_orchestrator = StoryOrchestrator(settings=self.settings, model_override=model)
 
                 # Generate a short sample
                 start_time = datetime.now()
@@ -525,7 +568,8 @@ class StoryFactoryUI:
                     "model_info": model_info,
                 }
 
-                output_parts.append(f"""
+                output_parts.append(
+                    f"""
 ## {model_info.get('name', model)}
 **Model:** `{model}`
 **Time:** {elapsed:.1f}s | **Words:** {word_count} | **Speed:** {words_per_sec:.1f} words/sec
@@ -535,19 +579,26 @@ class StoryFactoryUI:
 {response}
 
 ---
-""")
+"""
+                )
 
             except Exception as e:
-                output_parts.append(f"""
+                output_parts.append(
+                    f"""
 ## {model_info.get('name', model)}
 **Error:** {str(e)}
 
 ---
-""")
+"""
+                )
                 results[model] = {"error": str(e)}
 
         # Add summary table at the end
-        summary_lines = ["\n## Summary\n", "| Model | Time | Words | Speed | Quality |", "|-------|------|-------|-------|---------|"]
+        summary_lines = [
+            "\n## Summary\n",
+            "| Model | Time | Words | Speed | Quality |",
+            "|-------|------|-------|-------|---------|",
+        ]
         for model, data in results.items():
             if "error" in data:
                 summary_lines.append(f"| {model} | ERROR | - | - | - |")
@@ -559,7 +610,9 @@ class StoryFactoryUI:
                     f"{data['model_info'].get('quality', '?')}/10 |"
                 )
 
-        final_output = "# Model Comparison Results\n\n" + "\n".join(output_parts) + "\n".join(summary_lines)
+        final_output = (
+            "# Model Comparison Results\n\n" + "\n".join(output_parts) + "\n".join(summary_lines)
+        )
         logger.info(f"Model comparison complete: {len(results)} models tested")
         yield final_output, "Comparison complete!"
 
@@ -598,7 +651,9 @@ class StoryFactoryUI:
                             start_btn = gr.Button("Start New Story", variant="primary", size="lg")
 
                             gr.Markdown("### 2. Build (after interview)")
-                            build_btn = gr.Button("Build Story Structure", size="lg", interactive=False)
+                            build_btn = gr.Button(
+                                "Build Story Structure", size="lg", interactive=False
+                            )
 
                             gr.Markdown("### 3. Write (after build)")
                             write_btn = gr.Button("Write Story", size="lg", interactive=False)
@@ -653,7 +708,9 @@ class StoryFactoryUI:
                                     autofocus=True,
                                     scale=4,
                                 )
-                                send_btn = gr.Button("Send", variant="primary", scale=1, interactive=False)
+                                send_btn = gr.Button(
+                                    "Send", variant="primary", scale=1, interactive=False
+                                )
 
                     with gr.Row():
                         with gr.Column(scale=1):
@@ -683,10 +740,12 @@ class StoryFactoryUI:
 
                 # ============ COMPARE TAB ============
                 with gr.Tab("Compare Models", id="compare"):
-                    gr.Markdown("""
+                    gr.Markdown(
+                        """
                     ### Model Comparison
                     Test the same story prompt across different models to compare output quality.
-                    """)
+                    """
+                    )
 
                     compare_prompt = gr.Textbox(
                         label="Story Prompt",
@@ -695,7 +754,11 @@ class StoryFactoryUI:
                     )
 
                     compare_models = gr.CheckboxGroup(
-                        choices=[(get_model_info(m).get('name', m), m) for m in installed_models] if installed_models else [],
+                        choices=(
+                            [(get_model_info(m).get("name", m), m) for m in installed_models]
+                            if installed_models
+                            else []
+                        ),
                         label="Select Models to Compare (choose 2+)",
                     )
 
@@ -727,7 +790,11 @@ class StoryFactoryUI:
                         with gr.Column():
                             interaction_mode = gr.Radio(
                                 choices=["minimal", "checkpoint"],
-                                value=self.settings.interaction_mode if self.settings.interaction_mode in ["minimal", "checkpoint"] else "checkpoint",
+                                value=(
+                                    self.settings.interaction_mode
+                                    if self.settings.interaction_mode in ["minimal", "checkpoint"]
+                                    else "checkpoint"
+                                ),
                                 label="Interaction Mode",
                                 info="minimal: auto-generate | checkpoint: pause for review",
                             )
@@ -869,9 +936,16 @@ class StoryFactoryUI:
             save_btn.click(
                 self.save_settings,
                 inputs=[
-                    default_model, context_size, interaction_mode, chapters_between,
-                    use_per_agent, interviewer_model, architect_model, writer_model,
-                    editor_model, continuity_model,
+                    default_model,
+                    context_size,
+                    interaction_mode,
+                    chapters_between,
+                    use_per_agent,
+                    interviewer_model,
+                    architect_model,
+                    writer_model,
+                    editor_model,
+                    continuity_model,
                 ],
                 outputs=[settings_status],
             )
@@ -946,7 +1020,7 @@ class StoryFactoryUI:
                         });
                     }, 300);
                 }
-                """
+                """,
             )
 
         return app

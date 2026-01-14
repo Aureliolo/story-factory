@@ -1,8 +1,9 @@
 """Interviewer Agent - Gathers story requirements from the user."""
 
-from .base import BaseAgent
 from memory.story_state import StoryBrief
 from utils.json_parser import parse_json_to_model
+
+from .base import BaseAgent
 
 INTERVIEWER_SYSTEM_PROMPT = """You are the Interviewer, the first member of a creative writing team. Your job is to gather all the information needed to write a compelling story.
 

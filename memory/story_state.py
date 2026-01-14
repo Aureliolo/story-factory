@@ -1,12 +1,13 @@
 """Story state management - maintains context across the generation process."""
 
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class Character(BaseModel):
     """A character in the story."""
+
     name: str
     role: str  # protagonist, antagonist, supporting, etc.
     description: str
@@ -33,14 +34,16 @@ class Character(BaseModel):
 
 class PlotPoint(BaseModel):
     """A key plot point in the story."""
+
     description: str
-    chapter: Optional[int] = None
+    chapter: int | None = None
     completed: bool = False
     foreshadowing_planted: bool = False
 
 
 class Chapter(BaseModel):
     """A chapter in the story."""
+
     number: int
     title: str
     outline: str
@@ -52,6 +55,7 @@ class Chapter(BaseModel):
 
 class StoryBrief(BaseModel):
     """The initial story brief from the interviewer."""
+
     premise: str
     genre: str
     subgenres: list[str] = Field(default_factory=list)
@@ -68,12 +72,13 @@ class StoryBrief(BaseModel):
 
 class StoryState(BaseModel):
     """Complete state of a story in progress."""
+
     id: str
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
     # Story brief
-    brief: Optional[StoryBrief] = None
+    brief: StoryBrief | None = None
 
     # World building
     world_description: str = ""
@@ -131,7 +136,7 @@ class StoryState(BaseModel):
         self.established_facts.append(fact)
         self.updated_at = datetime.now()
 
-    def get_character_by_name(self, name: str) -> Optional[Character]:
+    def get_character_by_name(self, name: str) -> Character | None:
         """Find a character by name."""
         for char in self.characters:
             if char.name.lower() == name.lower():

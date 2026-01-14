@@ -3,9 +3,10 @@
 import logging
 from dataclasses import dataclass
 
-from .base import BaseAgent
 from memory.story_state import StoryState
 from utils.json_parser import extract_json_list
+
+from .base import BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ContinuityIssue:
     """A detected continuity issue."""
+
     severity: str  # "critical", "moderate", "minor"
     category: str  # "plot_hole", "character", "timeline", "setting", "logic"
     description: str
@@ -219,9 +221,9 @@ Output as a simple list, one fact per line, starting with "- "."""
         response = self.generate(prompt)
 
         facts = []
-        for line in response.split('\n'):
+        for line in response.split("\n"):
             line = line.strip()
-            if line.startswith('-'):
+            if line.startswith("-"):
                 facts.append(line[1:].strip())
 
         return facts
@@ -298,10 +300,10 @@ Only include characters who actually appear in this chapter."""
         response = self.generate(prompt, temperature=0.3)
 
         arcs = {}
-        for line in response.split('\n'):
+        for line in response.split("\n"):
             line = line.strip()
-            if ':' in line:
-                parts = line.split(':', 1)
+            if ":" in line:
+                parts = line.split(":", 1)
                 name = parts[0].strip()
                 state = parts[1].strip() if len(parts) > 1 else ""
                 # Match to actual character names (case-insensitive)
@@ -324,16 +326,15 @@ Only include characters who actually appear in this chapter."""
             List of indices of completed plot points.
         """
         pending_points = [
-            (i, p) for i, p in enumerate(story_state.plot_points)
+            (i, p)
+            for i, p in enumerate(story_state.plot_points)
             if not p.completed and (p.chapter is None or p.chapter == chapter_number)
         ]
 
         if not pending_points:
             return []
 
-        points_text = "\n".join(
-            f"{i}. {p.description}" for i, p in pending_points
-        )
+        points_text = "\n".join(f"{i}. {p.description}" for i, p in pending_points)
 
         prompt = f"""Check which plot points were addressed in this chapter:
 
@@ -356,7 +357,8 @@ Output format: Just the numbers separated by commas (e.g., "0, 2, 5") or "none" 
 
         # Parse numbers from response
         import re
-        numbers = re.findall(r'\d+', response)
+
+        numbers = re.findall(r"\d+", response)
         for num_str in numbers:
             idx = int(num_str)
             # Verify it's a valid pending point index
