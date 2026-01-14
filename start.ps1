@@ -14,8 +14,9 @@ function Write-Header {
 function Show-Menu {
     Write-Host "[1] Start Story Factory" -ForegroundColor Green
     Write-Host "[2] Stop Story Factory" -ForegroundColor Red
-    Write-Host "[3] View Logs (live)" -ForegroundColor Yellow
-    Write-Host "[4] Open in Browser" -ForegroundColor Magenta
+    Write-Host "[3] Restart Story Factory" -ForegroundColor Yellow
+    Write-Host "[4] View Logs (live)" -ForegroundColor Yellow
+    Write-Host "[5] Open in Browser" -ForegroundColor Magenta
     Write-Host "[Q] Quit" -ForegroundColor Gray
     Write-Host ""
 }
@@ -50,9 +51,26 @@ function Stop-StoryFactory {
         Write-Host "Stopping Story Factory..." -ForegroundColor Red
         $processes | Stop-Process -Force
         Write-Host "Story Factory stopped." -ForegroundColor Red
+        return $true
     } else {
         Write-Host "No Python process found." -ForegroundColor Yellow
+        return $false
     }
+}
+
+function Restart-StoryFactory {
+    Write-Host "Restarting Story Factory..." -ForegroundColor Yellow
+    $wasRunning = Stop-StoryFactory
+    Start-Sleep -Seconds 1
+
+    $scriptDir = Split-Path -Parent $MyInvocation.ScriptName
+    if (-not $scriptDir) { $scriptDir = Get-Location }
+
+    Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory $scriptDir -WindowStyle Hidden
+    Start-Sleep -Seconds 2
+
+    Write-Host "Story Factory restarted!" -ForegroundColor Green
+    Write-Host "Web UI available at: http://localhost:7860" -ForegroundColor Cyan
 }
 
 function Show-Logs {
@@ -97,8 +115,9 @@ while ($true) {
     switch ($choice.ToUpper()) {
         "1" { Start-StoryFactory; Start-Sleep -Seconds 2 }
         "2" { Stop-StoryFactory; Start-Sleep -Seconds 1 }
-        "3" { Show-Logs }
-        "4" { Open-Browser; Start-Sleep -Seconds 1 }
+        "3" { Restart-StoryFactory; Start-Sleep -Seconds 2 }
+        "4" { Show-Logs }
+        "5" { Open-Browser; Start-Sleep -Seconds 1 }
         "Q" {
             Write-Host "Goodbye!" -ForegroundColor Cyan
             exit
