@@ -111,7 +111,10 @@ class StoryOrchestrator:
 
     def generate_title_suggestions(self) -> list[str]:
         """Generate AI-powered title suggestions based on the story content."""
+        logger.info("Generating title suggestions...")
+
         if not self.story_state:
+            logger.warning("No story state for title generation")
             return []
 
         # Build context for title generation
@@ -125,9 +128,11 @@ class StoryOrchestrator:
                 context_parts.append(f"Themes: {', '.join(brief.themes)}")
 
         if not context_parts:
-            return ["Untitled Story", "My Story", "New Project"]
+            logger.warning("No brief data for title generation, using fallbacks")
+            return []
 
         context = "\n".join(context_parts)
+        logger.debug(f"Title generation context: {context[:200]}...")
 
         prompt = f"""Based on this story concept, generate exactly 5 creative and evocative title suggestions.
 Each title should be 2-6 words, memorable, and capture the essence of the story.
@@ -139,17 +144,24 @@ Return ONLY a JSON array of 5 title strings, nothing else.
 Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title Five"]"""
 
         try:
-            from utils.json_parser import extract_json_array
+            from utils.json_parser import extract_json_list
 
+            logger.info("Calling AI for title suggestions...")
             response = self.interviewer.generate(prompt, "", temperature=0.9)
-            titles = extract_json_array(response)
-            if titles and isinstance(titles, list):
-                return [str(t) for t in titles[:5]]
-        except Exception as e:
-            logger.warning(f"Failed to generate title suggestions: {e}")
+            logger.debug(f"Title generation response: {response[:200]}...")
 
-        # Fallback titles
-        return ["Untitled Story", "My Story", "New Project"]
+            titles = extract_json_list(response)
+            if titles and isinstance(titles, list):
+                result = [str(t) for t in titles[:5]]
+                logger.info(f"Generated {len(result)} title suggestions: {result}")
+                return result
+            else:
+                logger.warning(f"Failed to parse titles from response: {response[:100]}...")
+        except Exception as e:
+            logger.exception(f"Failed to generate title suggestions: {e}")
+
+        # Return empty list on failure - UI will handle fallback message
+        return []
 
     def _emit(self, event_type: str, agent: str, message: str, data: dict = None):
         """Emit a workflow event."""
