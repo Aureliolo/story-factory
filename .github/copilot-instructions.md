@@ -78,22 +78,22 @@ This ensures code quality and prevents broken builds.
 
 5. **Configuration**: Settings are managed through dataclasses in `settings.py`. Use `settings.json` for user configuration.
 
-6. **Dependencies**: 
+6. **Dependencies**:
    - Minimize external dependencies
    - When adding new dependencies, add them to `requirements.txt` or `requirements-dev.txt` as appropriate
    - Pin dependency versions with ranges (e.g., `>=4.0.0,<7.0.0`)
 
-7. **Testing**: 
+7. **Testing**:
    - Write tests for new utility functions and critical logic
    - Mock Ollama API calls in tests to avoid requiring a running Ollama instance
    - Use pytest fixtures for test setup
 
-8. **Documentation**: 
+8. **Documentation**:
    - Update README.md for significant feature changes
    - Update MODELS.md when adding model recommendations
    - Keep docstrings up to date with code changes
 
-9. **Logging**: 
+9. **Logging**:
    - Logs are written to `logs/story_factory.log`
    - Use Python's `logging` module with `logger = logging.getLogger(__name__)`
    - Follow existing logging patterns for consistency

@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -10,8 +11,8 @@ logger = logging.getLogger(__name__)
 def extract_json(
     response: str,
     fallback_pattern: str | None = None,
-) -> dict | None:
-    """Extract a JSON object from an LLM response.
+) -> dict[str, Any] | list[Any] | None:
+    """Extract a JSON object or array from an LLM response.
 
     Looks for JSON in markdown code blocks first, then tries fallback pattern.
 
@@ -20,7 +21,7 @@ def extract_json(
         fallback_pattern: Optional regex pattern to try if no code block found
 
     Returns:
-        Parsed JSON dict or None if extraction/parsing fails
+        Parsed JSON (dict or list) or None if extraction/parsing fails
     """
     # Try markdown code block first
     json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
@@ -40,20 +41,21 @@ def extract_json(
         return None
 
     try:
-        return json.loads(json_str)
+        parsed: dict[str, Any] | list[Any] = json.loads(json_str)
+        return parsed
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse JSON: {e}. Content: {json_str[:200]}...")
         return None
 
 
-def extract_json_list(response: str) -> list[dict] | None:
+def extract_json_list(response: str) -> list[Any] | None:
     """Extract a JSON array from an LLM response.
 
     Args:
         response: The LLM response text
 
     Returns:
-        Parsed list of dicts or None if extraction/parsing fails
+        Parsed list or None if extraction/parsing fails
     """
     result = extract_json(response)
     if result is None:
@@ -66,11 +68,9 @@ def extract_json_list(response: str) -> list[dict] | None:
     return None
 
 
-def parse_json_to_model[T](
-    response: str,
-    model_class: type[T],
-    fallback_pattern: str | None = None,
-) -> T | None:
+def parse_json_to_model[
+    T
+](response: str, model_class: type[T], fallback_pattern: str | None = None,) -> T | None:
     """Extract JSON and parse into a Pydantic model.
 
     Args:
@@ -82,7 +82,9 @@ def parse_json_to_model[T](
         Instance of model_class or None if extraction/parsing fails
     """
     data = extract_json(response, fallback_pattern)
-    if data is None:
+    if data is None or not isinstance(data, dict):
+        if data is not None:
+            logger.warning(f"Expected JSON object but got {type(data).__name__}")
         return None
 
     try:
@@ -92,10 +94,9 @@ def parse_json_to_model[T](
         return None
 
 
-def parse_json_list_to_models[T](
-    response: str,
-    model_class: type[T],
-) -> list[T]:
+def parse_json_list_to_models[
+    T
+](response: str, model_class: type[T],) -> list[T]:
     """Extract JSON array and parse into a list of Pydantic models.
 
     Args:
