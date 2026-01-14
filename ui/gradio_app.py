@@ -289,8 +289,9 @@ class StoryFactoryUI:
             logger.warning("Export failed: No story to export")
             return None, "No story to export. Please write a story first."
 
-        if not self.orchestrator.story_state.brief:
-            logger.warning("Export failed: Story has no brief/content")
+        # Allow export even without brief (for partial exports)
+        if not self.orchestrator.story_state.chapters:
+            logger.warning("Export failed: Story has no chapters")
             return None, "No story content to export. Please write a story first."
 
         try:
@@ -300,12 +301,23 @@ class StoryFactoryUI:
             if format_type == "text":
                 content = self.orchestrator.export_to_text()
                 filepath = output_dir / f"story_{story_id}.txt"
-            else:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+            elif format_type == "epub":
+                content = self.orchestrator.export_to_epub()
+                filepath = output_dir / f"story_{story_id}.epub"
+                with open(filepath, "wb") as f:
+                    f.write(content)
+            elif format_type == "pdf":
+                content = self.orchestrator.export_to_pdf()
+                filepath = output_dir / f"story_{story_id}.pdf"
+                with open(filepath, "wb") as f:
+                    f.write(content)
+            else:  # markdown (default)
                 content = self.orchestrator.export_to_markdown()
                 filepath = output_dir / f"story_{story_id}.md"
-
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(content)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
 
             logger.info(f"Export successful: {filepath}")
             return str(filepath), f"Story exported as {format_type}!"
@@ -337,6 +349,140 @@ class StoryFactoryUI:
             label = f"{s.get('premise', 'Untitled')[:40]}... ({s.get('status', '?')})"
             choices.append((label, s.get("path", "")))
         return choices
+
+    # ============ Project Management Functions ============
+
+    def get_projects_data(self):
+        """Get project data for the projects table."""
+        stories = StoryOrchestrator.list_saved_stories()
+        data = []
+        for s in stories:
+            # Load full story to get project_name
+            try:
+                with open(s.get("path", ""), encoding="utf-8") as f:
+                    import json
+
+                    story_data = json.load(f)
+                    project_name = (
+                        story_data.get("project_name", "") or s.get("premise", "Untitled")[:40]
+                    )
+                    last_saved = story_data.get("last_saved", story_data.get("created_at", ""))
+                    # Calculate word count
+                    words = sum(ch.get("word_count", 0) for ch in story_data.get("chapters", []))
+            except Exception:
+                project_name = s.get("premise", "Untitled")[:40]
+                last_saved = s.get("created_at", "")
+                words = 0
+
+            data.append(
+                [
+                    project_name,
+                    s.get("status", "unknown"),
+                    last_saved[:16] if last_saved else "",  # Trim to date+time
+                    words,
+                    s.get("path", ""),  # Hidden column for selection
+                ]
+            )
+        return data
+
+    def delete_project(self, selected_data, confirm: bool):
+        """Delete a project with confirmation."""
+        if not confirm:
+            return self.get_projects_data(), "Please check 'Confirm delete' to delete."
+
+        if not selected_data or len(selected_data) == 0:
+            return self.get_projects_data(), "No project selected."
+
+        try:
+            # Get the path from the selected row (last column)
+            filepath = selected_data[0][-1] if selected_data else None
+            if filepath:
+                import os
+
+                os.remove(filepath)
+                logger.info(f"Deleted project: {filepath}")
+                return self.get_projects_data(), "Project deleted successfully."
+            return self.get_projects_data(), "Could not find project file."
+        except Exception as e:
+            logger.exception("Delete project failed")
+            return self.get_projects_data(), f"Delete failed: {e}"
+
+    def rename_project(self, selected_data, new_name: str):
+        """Rename a project."""
+        if not new_name or not new_name.strip():
+            return self.get_projects_data(), "Please enter a name."
+
+        if not selected_data or len(selected_data) == 0:
+            return self.get_projects_data(), "No project selected."
+
+        try:
+            filepath = selected_data[0][-1] if selected_data else None
+            if filepath:
+                import json
+
+                with open(filepath, encoding="utf-8") as f:
+                    story_data = json.load(f)
+                story_data["project_name"] = new_name.strip()
+                with open(filepath, "w", encoding="utf-8") as f:
+                    json.dump(story_data, f, indent=2, default=str)
+                logger.info(f"Renamed project to: {new_name}")
+                return self.get_projects_data(), f"Project renamed to '{new_name}'."
+            return self.get_projects_data(), "Could not find project file."
+        except Exception as e:
+            logger.exception("Rename project failed")
+            return self.get_projects_data(), f"Rename failed: {e}"
+
+    def generate_title_ideas(self, selected_data):
+        """Generate AI title suggestions for a project."""
+        if not selected_data or len(selected_data) == 0:
+            return gr.update(choices=["Select a project first"]), "No project selected."
+
+        try:
+            filepath = selected_data[0][-1] if selected_data else None
+            if not filepath:
+                return gr.update(choices=["No project selected"]), "No project selected."
+
+            # Load the story and generate titles
+            temp_orchestrator = StoryOrchestrator(settings=self.settings)
+            temp_orchestrator.load_story(filepath)
+            titles = temp_orchestrator.generate_title_suggestions()
+
+            if titles:
+                return gr.update(choices=titles, value=titles[0]), "Generated 5 title ideas!"
+            return gr.update(choices=["No suggestions available"]), "Could not generate titles."
+        except Exception as e:
+            logger.exception("Generate titles failed")
+            return gr.update(choices=["Error generating titles"]), f"Error: {e}"
+
+    def apply_suggested_title(self, selected_data, selected_title: str):
+        """Apply a suggested title to the project."""
+        if not selected_title or selected_title in [
+            "Select a project first",
+            "No project selected",
+            "Error generating titles",
+        ]:
+            return self.get_projects_data(), "Please select a valid title."
+        return self.rename_project(selected_data, selected_title)
+
+    def get_current_project_info(self):
+        """Get info about the currently loaded project."""
+        if not self.orchestrator or not self.orchestrator.story_state:
+            return "No project loaded."
+
+        state = self.orchestrator.story_state
+        info_parts = [
+            f"**Project:** {state.project_name or 'Untitled'}",
+            f"**Status:** {state.status}",
+            f"**Created:** {state.created_at.strftime('%Y-%m-%d %H:%M') if state.created_at else 'Unknown'}",
+        ]
+        if state.last_saved:
+            info_parts.append(f"**Last Saved:** {state.last_saved.strftime('%Y-%m-%d %H:%M')}")
+        if state.chapters:
+            total_words = sum(ch.word_count for ch in state.chapters)
+            info_parts.append(f"**Words:** {total_words}")
+            info_parts.append(f"**Chapters:** {len(state.chapters)}")
+
+        return "\n".join(info_parts)
 
     def load_saved_story(self, filepath: str):
         """Load a saved story."""
@@ -384,6 +530,9 @@ class StoryFactoryUI:
             if not self.interview_complete:
                 response, is_complete = self.orchestrator.process_interview_response(message)
                 self.interview_complete = is_complete
+
+                # Autosave after each interview response
+                self.orchestrator.autosave()
 
                 if is_complete:
                     response += "\n\n---\n**Interview complete!** Click 'Build Story Structure' to continue."
@@ -447,6 +596,9 @@ class StoryFactoryUI:
             yield "Building story structure...\n\nCreating world and characters...", "Architect is working...", gr.update()
 
             self.orchestrator.build_story_structure()
+
+            # Autosave after structure is built
+            self.orchestrator.autosave()
 
             outline = self.orchestrator.get_outline_summary()
             logger.info("Structure built successfully")
@@ -667,17 +819,15 @@ class StoryFactoryUI:
                             write_btn = gr.Button("Write Story", size="lg", interactive=False)
 
                             gr.Markdown("---")
-                            gr.Markdown("### Save/Export")
-                            with gr.Row():
-                                save_story_btn = gr.Button("Save", size="sm")
-                                export_btn = gr.Button("Export", size="sm")
+                            gr.Markdown("### Export Story")
                             export_format = gr.Radio(
-                                choices=["markdown", "text"],
+                                choices=["markdown", "text", "epub", "pdf"],
                                 value="markdown",
                                 label="Format",
-                                scale=0,
                             )
+                            export_btn = gr.Button("Export & Download", size="sm")
                             export_file = gr.File(label="Download", visible=False)
+                            gr.Markdown("*Stories auto-save after each step*", elem_classes="hint")
 
                             gr.Markdown("---")
                             gr.Markdown("### Load Previous Story")
@@ -745,6 +895,57 @@ class StoryFactoryUI:
                                 interactive=False,
                                 container=False,
                             )
+
+                # ============ PROJECTS TAB ============
+                with gr.Tab("Projects", id="projects"):
+                    gr.Markdown("### Manage Your Story Projects")
+
+                    # Projects table
+                    projects_table = gr.Dataframe(
+                        headers=["Title", "Status", "Last Saved", "Words", "Path"],
+                        value=self.get_projects_data(),
+                        col_count=(5, "fixed"),
+                        datatype=["str", "str", "str", "number", "str"],
+                        interactive=False,
+                        wrap=True,
+                    )
+
+                    with gr.Row():
+                        refresh_projects_btn = gr.Button("Refresh", size="sm")
+                        load_project_btn = gr.Button("Load Selected", variant="primary", size="sm")
+
+                    gr.Markdown("---")
+                    gr.Markdown("### Rename Project")
+                    with gr.Row():
+                        custom_title_input = gr.Textbox(
+                            label="Custom Title",
+                            placeholder="Enter a new title...",
+                            scale=3,
+                        )
+                        apply_title_btn = gr.Button("Set Title", size="sm", scale=1)
+
+                    gr.Markdown("### AI Title Suggestions")
+                    with gr.Row():
+                        generate_titles_btn = gr.Button("Generate Ideas", size="sm", scale=1)
+                        suggested_titles_radio = gr.Radio(
+                            choices=[],
+                            label="Suggested Titles",
+                            scale=3,
+                        )
+                        apply_suggestion_btn = gr.Button("Use This", size="sm", scale=1)
+
+                    gr.Markdown("---")
+                    gr.Markdown("### Delete Project")
+                    with gr.Row():
+                        delete_confirm_check = gr.Checkbox(label="Confirm delete", value=False)
+                        delete_project_btn = gr.Button("Delete Selected", variant="stop", size="sm")
+
+                    projects_status = gr.Textbox(label="Status", interactive=False)
+
+                    # Current project info
+                    gr.Markdown("---")
+                    gr.Markdown("### Current Session")
+                    gr.Markdown(value=self.get_current_project_info())
 
                 # ============ COMPARE TAB ============
                 with gr.Tab("Compare Models", id="compare"):
@@ -906,12 +1107,7 @@ class StoryFactoryUI:
                 outputs=[story_display, progress_display, status_box],
             )
 
-            # Save/Load/Export handlers
-            save_story_btn.click(
-                self.save_story,
-                outputs=[status_box],
-            )
-
+            # Export/Load handlers (autosave removes need for manual save)
             export_btn.click(
                 self.export_story,
                 inputs=[export_format],
@@ -931,6 +1127,48 @@ class StoryFactoryUI:
                 self.load_saved_story,
                 inputs=[saved_stories_dropdown],
                 outputs=[status_box, outline_display, story_display],
+            )
+
+            # Projects tab handlers
+            refresh_projects_btn.click(
+                self.get_projects_data,
+                outputs=[projects_table],
+            )
+
+            def load_selected_project(selected_rows):
+                if not selected_rows or len(selected_rows) == 0:
+                    return "No project selected.", "", ""
+                filepath = selected_rows[0][-1]  # Path is last column
+                return self.load_saved_story(filepath)
+
+            load_project_btn.click(
+                load_selected_project,
+                inputs=[projects_table],
+                outputs=[projects_status, outline_display, story_display],
+            )
+
+            apply_title_btn.click(
+                self.rename_project,
+                inputs=[projects_table, custom_title_input],
+                outputs=[projects_table, projects_status],
+            )
+
+            generate_titles_btn.click(
+                self.generate_title_ideas,
+                inputs=[projects_table],
+                outputs=[suggested_titles_radio, projects_status],
+            )
+
+            apply_suggestion_btn.click(
+                self.apply_suggested_title,
+                inputs=[projects_table, suggested_titles_radio],
+                outputs=[projects_table, projects_status],
+            )
+
+            delete_project_btn.click(
+                self.delete_project,
+                inputs=[projects_table, delete_confirm_check],
+                outputs=[projects_table, projects_status],
             )
 
             # Compare tab
