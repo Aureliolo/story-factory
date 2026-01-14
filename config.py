@@ -2,11 +2,23 @@
 
 # Ollama settings
 OLLAMA_BASE_URL = "http://localhost:11434"
+
+# Model options (uncomment your preferred model):
+# Starter model (8B) - fast, good for testing
 DEFAULT_MODEL = "tohur/natsumura-storytelling-rp-llama-3.1"
+
+# Best quality for RTX 4090 (70B) - uncomment to use:
+# DEFAULT_MODEL = "vanilj/midnight-miqu-70b-v1.5:Q4_K_M"  # Best prose quality
+# DEFAULT_MODEL = "huihui_ai/llama3.3-abliterated"  # Newest, excellent
 
 # Generation settings
 DEFAULT_TEMPERATURE = 0.8
 MAX_TOKENS = 4096
+
+# Context window - CRITICAL for story continuity
+# Ollama defaults to 2048 which is way too low!
+# Set based on your VRAM: 8GB=8192, 16GB=16384, 24GB=32768
+CONTEXT_SIZE = 32768  # 32K tokens for RTX 4090
 
 # Interaction modes
 class InteractionMode:

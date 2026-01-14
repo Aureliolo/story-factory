@@ -2,7 +2,7 @@
 
 import ollama
 from typing import Optional
-from config import OLLAMA_BASE_URL, DEFAULT_MODEL, DEFAULT_TEMPERATURE, MAX_TOKENS
+from config import OLLAMA_BASE_URL, DEFAULT_MODEL, DEFAULT_TEMPERATURE, MAX_TOKENS, CONTEXT_SIZE
 
 
 class BaseAgent:
@@ -46,6 +46,7 @@ class BaseAgent:
             options={
                 "temperature": temperature or self.temperature,
                 "num_predict": MAX_TOKENS,
+                "num_ctx": CONTEXT_SIZE,  # Critical: set context window size
             },
         )
 
