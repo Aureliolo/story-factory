@@ -34,13 +34,14 @@ Write complete, polished prose ready for the editor."""
 class WriterAgent(BaseAgent):
     """Agent that writes the actual prose."""
 
-    def __init__(self, model: str = None):
+    def __init__(self, model: str = None, settings=None):
         super().__init__(
             name="Writer",
             role="Prose Craftsman",
             system_prompt=WRITER_SYSTEM_PROMPT,
+            agent_role="writer",
             model=model,
-            temperature=0.9,  # High creativity for prose
+            settings=settings,
         )
 
     def write_chapter(

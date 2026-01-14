@@ -13,12 +13,7 @@ from agents import (
     EditorAgent,
     ContinuityAgent,
 )
-from config import (
-    InteractionMode,
-    DEFAULT_INTERACTION_MODE,
-    CHAPTERS_BETWEEN_CHECKPOINTS,
-    MAX_REVISION_ITERATIONS,
-)
+from settings import Settings
 
 
 @dataclass
@@ -35,22 +30,26 @@ class StoryOrchestrator:
 
     def __init__(
         self,
-        model: str = None,
-        interaction_mode: str = DEFAULT_INTERACTION_MODE,
+        settings: Settings = None,
+        model_override: str = None,  # Force specific model for all agents
     ):
-        self.model = model
-        self.interaction_mode = interaction_mode
+        self.settings = settings or Settings.load()
+        self.model_override = model_override
 
-        # Initialize agents
-        self.interviewer = InterviewerAgent(model)
-        self.architect = ArchitectAgent(model)
-        self.writer = WriterAgent(model)
-        self.editor = EditorAgent(model)
-        self.continuity = ContinuityAgent(model)
+        # Initialize agents with settings
+        self.interviewer = InterviewerAgent(model=model_override, settings=self.settings)
+        self.architect = ArchitectAgent(model=model_override, settings=self.settings)
+        self.writer = WriterAgent(model=model_override, settings=self.settings)
+        self.editor = EditorAgent(model=model_override, settings=self.settings)
+        self.continuity = ContinuityAgent(model=model_override, settings=self.settings)
 
         # State
         self.story_state: Optional[StoryState] = None
         self.events: list[WorkflowEvent] = []
+
+    @property
+    def interaction_mode(self):
+        return self.settings.interaction_mode
 
     def create_new_story(self) -> StoryState:
         """Initialize a new story."""
@@ -215,7 +214,7 @@ class StoryOrchestrator:
         yield self.events[-1]
 
         revision_count = 0
-        while revision_count < MAX_REVISION_ITERATIONS:
+        while revision_count < self.settings.max_revision_iterations:
             issues = self.continuity.check_chapter(
                 self.story_state, chapter.content, chapter_number
             )
@@ -272,8 +271,8 @@ class StoryOrchestrator:
 
             # Check if we need a checkpoint
             if (
-                self.interaction_mode in [InteractionMode.CHECKPOINT, InteractionMode.INTERACTIVE]
-                and chapter.number % CHAPTERS_BETWEEN_CHECKPOINTS == 0
+                self.interaction_mode in ["checkpoint", "interactive"]
+                and chapter.number % self.settings.chapters_between_checkpoints == 0
                 and on_checkpoint
             ):
                 self._emit(
