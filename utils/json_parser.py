@@ -57,7 +57,8 @@ def extract_json_list(response: str) -> list[Any] | None:
     Returns:
         Parsed list or None if extraction/parsing fails
     """
-    result = extract_json(response)
+    # Try code block first, then fall back to raw JSON array
+    result = extract_json(response, fallback_pattern=r"\[[\s\S]*\]")
     if result is None:
         return None
 
