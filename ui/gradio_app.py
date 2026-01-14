@@ -54,8 +54,8 @@ class StoryFactoryUI:
             path = Path(filepath).resolve()
             stories_dir = self._STORIES_DIR.resolve()
 
-            # Ensure the file is within the stories directory
-            if not str(path).startswith(str(stories_dir)):
+            # Ensure the file is within the stories directory using secure path comparison
+            if not path.is_relative_to(stories_dir):
                 logger.warning(f"Path traversal attempt blocked: {filepath}")
                 return None
 
