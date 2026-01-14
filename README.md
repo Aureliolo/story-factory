@@ -21,7 +21,7 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 
 - **GPU**: NVIDIA GPU with 8GB+ VRAM (24GB recommended for 70B models)
 - **CUDA**: 11.x or higher
-- **Python**: 3.10+
+- **Python**: 3.13+
 - **Ollama**: For local LLM serving
 
 ## Installation
