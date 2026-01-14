@@ -237,6 +237,13 @@ class StoryOrchestrator:
         short_story_chapter.word_count = len(short_story_chapter.content.split())
         self.story_state.status = "complete"
 
+        # Auto-save completed story
+        try:
+            self.save_story()
+            logger.debug("Auto-saved completed short story")
+        except Exception as e:
+            logger.warning(f"Auto-save failed for short story: {e}")
+
         self._emit(
             "agent_complete",
             "System",
@@ -346,9 +353,25 @@ class StoryOrchestrator:
             if char:
                 char.update_arc(chapter_number, arc_state)
 
+        # Mark completed plot points
+        completed_indices = self.continuity.check_plot_points_completed(
+            chapter.content, self.story_state, chapter_number
+        )
+        for idx in completed_indices:
+            if idx < len(self.story_state.plot_points):
+                self.story_state.plot_points[idx].completed = True
+                logger.debug(f"Plot point {idx} marked complete")
+
         chapter.status = "final"
         chapter.word_count = len(chapter.content.split())
         self.story_state.current_chapter = chapter_number
+
+        # Auto-save after each chapter to prevent data loss
+        try:
+            self.save_story()
+            logger.debug(f"Auto-saved after chapter {chapter_number}")
+        except Exception as e:
+            logger.warning(f"Auto-save failed after chapter {chapter_number}: {e}")
 
         self._emit(
             "agent_complete",
@@ -420,10 +443,36 @@ class StoryOrchestrator:
 
         return "\n".join(md_parts)
 
+    def export_to_text(self) -> str:
+        """Export the story as plain text."""
+        brief = self.story_state.brief
+        text_parts = [
+            brief.premise[:80],
+            f"Genre: {brief.genre} | Tone: {brief.tone}",
+            f"Setting: {brief.setting_place}, {brief.setting_time}",
+            "=" * 60,
+            "",
+        ]
+
+        for chapter in self.story_state.chapters:
+            if chapter.content:
+                text_parts.append(f"CHAPTER {chapter.number}: {chapter.title.upper()}")
+                text_parts.append("")
+                text_parts.append(chapter.content)
+                text_parts.append("")
+                text_parts.append("-" * 40)
+                text_parts.append("")
+
+        return "\n".join(text_parts)
+
     def get_statistics(self) -> dict:
-        """Get story statistics."""
+        """Get story statistics including reading time estimate."""
         total_words = sum(ch.word_count for ch in self.story_state.chapters)
         completed_chapters = sum(1 for ch in self.story_state.chapters if ch.status == "final")
+        completed_plot_points = sum(1 for p in self.story_state.plot_points if p.completed)
+
+        # Average reading speed: 200-250 words per minute
+        reading_time_min = total_words / 225
 
         return {
             "total_words": total_words,
@@ -431,6 +480,9 @@ class StoryOrchestrator:
             "completed_chapters": completed_chapters,
             "characters": len(self.story_state.characters),
             "established_facts": len(self.story_state.established_facts),
+            "plot_points_total": len(self.story_state.plot_points),
+            "plot_points_completed": completed_plot_points,
+            "reading_time_minutes": round(reading_time_min, 1),
         }
 
     # ========== PERSISTENCE ==========
