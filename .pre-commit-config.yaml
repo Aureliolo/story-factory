@@ -1,0 +1,31 @@
+# Pre-commit hooks for Story Factory
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Use black for formatting (matches CI)
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        language_version: python3.13
+
+  # Use ruff for linting only (not formatting to avoid conflicts with black)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  # mypy disabled in pre-commit - too many pre-existing type issues
+  # Run manually with: mypy . --ignore-missing-imports
+  # TODO: Fix type hints and re-enable
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files

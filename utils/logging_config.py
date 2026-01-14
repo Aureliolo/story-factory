@@ -88,7 +88,10 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
         # Use rotating handler with immediate flush
         # Max 10MB per file, keep 5 backup files (50MB total)
         file_handler = FlushingRotatingFileHandler(
-            log_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"  # 10MB
+            log_path,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",  # 10MB
         )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)

@@ -661,7 +661,11 @@ class StoryFactoryUI:
             return
 
         try:
-            yield "Building story structure...\n\nCreating world and characters...", "Architect is working...", gr.update()
+            yield (
+                "Building story structure...\n\nCreating world and characters...",
+                "Architect is working...",
+                gr.update(),
+            )
 
             self.orchestrator.build_story_structure()
 
@@ -671,8 +675,10 @@ class StoryFactoryUI:
             outline = self.orchestrator.get_outline_summary()
             logger.info("Structure built successfully")
             # Enable Write button when structure is complete
-            yield outline, "Structure complete! Review and click 'Write Story' to begin.", gr.update(
-                interactive=True, variant="primary"
+            yield (
+                outline,
+                "Structure complete! Review and click 'Write Story' to begin.",
+                gr.update(interactive=True, variant="primary"),
             )
         except Exception as e:
             logger.exception("Build structure failed")
@@ -690,7 +696,11 @@ class StoryFactoryUI:
         state = self.orchestrator.story_state
         if not state or not state.brief:
             logger.warning("Write story failed: No brief/structure")
-            yield "Please complete the interview and build structure first.", "", "Error: Story structure not built"
+            yield (
+                "Please complete the interview and build structure first.",
+                "",
+                "Error: Story structure not built",
+            )
             return
 
         brief = state.brief
@@ -721,14 +731,26 @@ class StoryFactoryUI:
                 full_story = ""
 
                 for chapter in state.chapters:
-                    yield full_story, f"Writing chapter {chapter.number}/{total_chapters}...", f"Working on: {chapter.title}"
+                    yield (
+                        full_story,
+                        f"Writing chapter {chapter.number}/{total_chapters}...",
+                        f"Working on: {chapter.title}",
+                    )
 
                     for event in self.orchestrator.write_chapter(chapter.number):
-                        yield full_story, f"Chapter {chapter.number}: {event.message}", f"{event.agent_name}: {event.message}"
+                        yield (
+                            full_story,
+                            f"Chapter {chapter.number}: {event.message}",
+                            f"{event.agent_name}: {event.message}",
+                        )
 
                     full_story = self.orchestrator.get_full_story()
                     logger.info(f"Chapter {chapter.number} complete")
-                    yield full_story, f"Chapter {chapter.number} complete", f"Finished: {chapter.title}"
+                    yield (
+                        full_story,
+                        f"Chapter {chapter.number} complete",
+                        f"Finished: {chapter.title}",
+                    )
 
                 stats = self.orchestrator.get_statistics()
                 stats_msg = (
@@ -768,7 +790,10 @@ class StoryFactoryUI:
 
         for i, model in enumerate(selected_models):
             model_info = get_model_info(model)
-            yield f"Running model {i+1}/{len(selected_models)}: {model_info.get('name', model)}...", ""
+            yield (
+                f"Running model {i+1}/{len(selected_models)}: {model_info.get('name', model)}...",
+                "",
+            )
 
             try:
                 # Create a fresh orchestrator with this model

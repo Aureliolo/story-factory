@@ -92,7 +92,7 @@ def test_export_to_markdown_file(sample_story_state):
     """Should export story to markdown file."""
     orchestrator = StoryOrchestrator()
     orchestrator.story_state = sample_story_state
-    
+
     result = orchestrator.export_story_to_file(format="markdown")
     assert Path(result).exists()
 ```
