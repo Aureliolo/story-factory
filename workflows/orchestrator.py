@@ -142,13 +142,23 @@ class StoryOrchestrator:
             "=" * 50,
             "STORY OUTLINE",
             "=" * 50,
-            f"\nPREMISE: {state.brief.premise}",
-            f"GENRE: {state.brief.genre}",
-            f"TONE: {state.brief.tone}",
-            f"NSFW LEVEL: {state.brief.nsfw_level}",
-            f"\nWORLD:\n{state.world_description[:500]}...",
-            "\nCHARACTERS:",
         ]
+
+        # Handle missing brief (old saved stories may not have it)
+        if state.brief:
+            summary_parts.extend([
+                f"\nPREMISE: {state.brief.premise}",
+                f"GENRE: {state.brief.genre}",
+                f"TONE: {state.brief.tone}",
+                f"NSFW LEVEL: {state.brief.nsfw_level}",
+            ])
+        else:
+            summary_parts.append("\n(No brief available)")
+
+        if state.world_description:
+            summary_parts.append(f"\nWORLD:\n{state.world_description[:500]}...")
+
+        summary_parts.append("\nCHARACTERS:")
 
         for char in state.characters:
             summary_parts.append(f"  - {char.name} ({char.role}): {char.description}")

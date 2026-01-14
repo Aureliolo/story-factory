@@ -1,10 +1,13 @@
 """Continuity Checker Agent - Detects plot holes and inconsistencies."""
 
+import logging
 from dataclasses import dataclass
 
 from .base import BaseAgent
 from memory.story_state import StoryState
 from utils.json_parser import extract_json_list
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -233,8 +236,8 @@ Output as a simple list, one fact per line, starting with "- "."""
         for item in data:
             try:
                 issues.append(ContinuityIssue(**item))
-            except (TypeError, KeyError):
-                pass
+            except (TypeError, KeyError) as e:
+                logger.debug(f"Skipping malformed continuity issue item: {e}")
 
         return issues
 

@@ -3,7 +3,7 @@
 import json
 import logging
 import re
-from typing import Any, TypeVar, Type
+from typing import TypeVar, Type
 
 logger = logging.getLogger(__name__)
 

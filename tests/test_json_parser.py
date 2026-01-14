@@ -1,6 +1,5 @@
 """Tests for the JSON parsing utility."""
 
-import pytest
 from utils.json_parser import extract_json, extract_json_list, parse_json_to_model
 from pydantic import BaseModel
 
