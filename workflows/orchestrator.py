@@ -18,7 +18,7 @@ from agents import (
     WriterAgent,
 )
 from memory.story_state import Chapter, StoryBrief, StoryState
-from settings import Settings
+from settings import STORIES_DIR, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,8 @@ class WorkflowEvent:
     agent_name: str
     message: str
     data: dict | None = None
+    timestamp: datetime | None = None  # When the event occurred
+    correlation_id: str | None = None  # For tracking related events
 
 
 # Maximum events to keep in memory to prevent unbounded growth
@@ -59,6 +61,7 @@ class StoryOrchestrator:
         # State
         self.story_state: StoryState | None = None
         self.events: list[WorkflowEvent] = []
+        self._correlation_id: str | None = None  # Current workflow correlation ID
 
     def _validate_response(self, response: str, task: str = "") -> str:
         """Validate an AI response for language and basic correctness.
@@ -93,12 +96,17 @@ class StoryOrchestrator:
         now = datetime.now()
         default_name = f"New Story - {now.strftime('%b %d, %Y %I:%M %p')}"
 
+        story_id = str(uuid.uuid4())
         self.story_state = StoryState(
-            id=str(uuid.uuid4()),
+            id=story_id,
             created_at=now,
             project_name=default_name,
             status="interview",
         )
+        # Set correlation ID for event tracking.
+        # Use first 8 chars of the UUID story ID for readability while maintaining
+        # sufficient uniqueness within a single workflow/session.
+        self._correlation_id = story_id[:8]
         # Autosave immediately so it appears in project list
         self.autosave()
         return self.story_state
@@ -164,8 +172,15 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         return []
 
     def _emit(self, event_type: str, agent: str, message: str, data: dict | None = None):
-        """Emit a workflow event."""
-        event = WorkflowEvent(event_type, agent, message, data or {})
+        """Emit a workflow event with timestamp and correlation ID."""
+        event = WorkflowEvent(
+            event_type=event_type,
+            agent_name=agent,
+            message=message,
+            data=data or {},
+            timestamp=datetime.now(),
+            correlation_id=self._correlation_id,
+        )
         self.events.append(event)
         # Trim old events to prevent memory leak
         if len(self.events) > MAX_EVENTS:
@@ -793,7 +808,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         """Export the story to a file.
 
         Args:
-            format: Export format ('markdown', 'text', 'json')
+            format: Export format ('markdown', 'text', 'json', 'epub', 'pdf')
             filepath: Optional custom path. Defaults to output/stories/<story_id>.<ext>
 
         Returns:
@@ -803,6 +818,8 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             raise ValueError("No story to export")
 
         # Determine file extension and content
+        content: str | bytes
+        is_binary = False
         if format == "markdown":
             ext = ".md"
             content = self.export_to_markdown()
@@ -812,13 +829,21 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         elif format == "json":
             # JSON export is handled by save_story
             return self.save_story(filepath)
+        elif format == "epub":
+            ext = ".epub"
+            content = self.export_to_epub()
+            is_binary = True
+        elif format == "pdf":
+            ext = ".pdf"
+            content = self.export_to_pdf()
+            is_binary = True
         else:
             raise ValueError(f"Unsupported export format: {format}")
 
         # Default export location
         output_path: Path
         if not filepath:
-            output_dir = Path(__file__).parent.parent / "output" / "stories"
+            output_dir = STORIES_DIR
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"{self.story_state.id}{ext}"
         else:
@@ -826,8 +851,12 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(content)
+        if is_binary:
+            with open(output_path, "wb") as f:
+                f.write(content)  # type: ignore[arg-type]
+        else:
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(content)  # type: ignore[arg-type]
 
         logger.info(f"Story exported to {output_path} ({format} format)")
         return str(output_path)
@@ -896,7 +925,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Default save location
         output_path: Path
         if not filepath:
-            output_dir = Path(__file__).parent.parent / "output" / "stories"
+            output_dir = STORIES_DIR
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"{self.story_state.id}.json"
         else:
@@ -929,6 +958,8 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             story_data = json.load(f)
 
         self.story_state = StoryState.model_validate(story_data)
+        # Set correlation ID for event tracking
+        self._correlation_id = self.story_state.id[:8]
         logger.info(f"Story loaded from {path}")
         return self.story_state
 
@@ -939,7 +970,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         Returns:
             List of dicts with story metadata (id, path, created_at, status, etc.)
         """
-        output_dir = Path(__file__).parent.parent / "output" / "stories"
+        output_dir = STORIES_DIR
         stories: list[dict[str, str | None]] = []
 
         if not output_dir.exists():
