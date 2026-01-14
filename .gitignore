@@ -57,6 +57,7 @@ flagged/
 # Test artifacts
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # Claude Code

@@ -5,21 +5,27 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  pull_request_target:
+    branches: [master, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -32,7 +38,6 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        if: matrix.python-version == '3.11'
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -41,11 +46,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Set up Python
+      - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Check syntax errors
         run: |
