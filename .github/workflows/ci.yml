@@ -5,8 +5,6 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
-  pull_request_target:
-    branches: [master, main]
 
 # Limit permissions for security
 permissions:
@@ -19,8 +17,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
@@ -46,8 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
