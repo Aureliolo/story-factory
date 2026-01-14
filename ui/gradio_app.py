@@ -617,7 +617,6 @@ class StoryFactoryUI:
                                 label="Conversation",
                                 height=450,
                                 autoscroll=True,
-                                show_copy_button=True,
                                 placeholder="Click 'Start New Story' to begin the interview...",
                                 layout="bubble",
                             )
@@ -638,7 +637,6 @@ class StoryFactoryUI:
                                 lines=12,
                                 max_lines=20,
                                 interactive=False,
-                                show_copy_button=True,
                             )
 
                         with gr.Column(scale=2):
@@ -648,7 +646,6 @@ class StoryFactoryUI:
                                 lines=18,
                                 max_lines=40,
                                 interactive=False,
-                                show_copy_button=True,
                                 autoscroll=True,
                             )
                             progress_display = gr.Textbox(
