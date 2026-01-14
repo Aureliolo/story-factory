@@ -87,6 +87,16 @@ class StoryFactoryUI:
         header = "| Model | Release | Quality | VRAM | Status |\n|-------|---------|---------|------|--------|\n"
         return header + "\n".join(lines)
 
+    def refresh_models_tab(self):
+        """Refresh all model-related displays. Returns (installed_md, available_md, dropdown_choices)."""
+        logger.debug("Refreshing models tab data")
+        installed_md = self.get_installed_models_list()
+        available_md = self.get_available_models_list()
+        # Return updated dropdown choices
+        installed = get_installed_models()
+        dropdown_choices = list(AVAILABLE_MODELS.keys())
+        return installed_md, available_md, gr.update(choices=dropdown_choices)
+
     def pull_model(self, model_id: str, progress=gr.Progress(track_tqdm=True)):
         """Pull a model from Ollama."""
         if not model_id:
@@ -618,7 +628,7 @@ class StoryFactoryUI:
                     settings_status = gr.Textbox(label="Status", interactive=False)
 
                 # ============ MODELS TAB ============
-                with gr.Tab("Manage Models"):
+                with gr.Tab("Manage Models") as models_tab:
                     gr.Markdown("### Installed Models")
                     installed_display = gr.Markdown(self.get_installed_models_list())
 
@@ -706,16 +716,26 @@ class StoryFactoryUI:
                 outputs=[settings_status],
             )
 
-            # Models tab
+            # Models tab - refresh all displays
             refresh_btn.click(
-                self.get_installed_models_list,
-                outputs=[installed_display],
+                self.refresh_models_tab,
+                outputs=[installed_display, available_display, model_to_pull],
+            )
+
+            # Auto-refresh when switching to Models tab
+            models_tab.select(
+                self.refresh_models_tab,
+                outputs=[installed_display, available_display, model_to_pull],
             )
 
             pull_btn.click(
                 self.pull_model,
                 inputs=[model_to_pull],
                 outputs=[pull_status],
+            ).then(
+                # Refresh displays after pull completes
+                self.refresh_models_tab,
+                outputs=[installed_display, available_display, model_to_pull],
             )
 
         return app
