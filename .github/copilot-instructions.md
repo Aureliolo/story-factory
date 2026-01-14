@@ -30,6 +30,8 @@ This is a Python-based multi-agent system for generating stories using local AI 
 - `settings.json`: User configuration file (not in git, copy from `settings.example.json`)
 - `requirements.txt`: Production Python dependencies
 - `requirements-dev.txt`: Development and testing dependencies
+- `MODELS.md`: Model recommendations and usage guidelines
+- `MODELS_ANALYSIS.md`: Detailed model analysis and comparisons
 - `agents/`: AI agent implementations
   - `base.py`: Base agent class with common functionality
   - `interviewer.py`: Gathers story requirements from users
@@ -47,6 +49,8 @@ This is a Python-based multi-agent system for generating stories using local AI 
   - `gradio_app.py`: Gradio-based web interface
 - `output/stories/`: Generated story outputs (gitignored)
 - `tests/`: Test suite using pytest
+- `logs/`: Application logs (logs written to `logs/story_factory.log`)
+- `.github/workflows/`: CI/CD workflows
 
 ## Key Guidelines
 
@@ -78,9 +82,14 @@ This is a Python-based multi-agent system for generating stories using local AI 
    - Update MODELS.md when adding model recommendations
    - Keep docstrings up to date with code changes
 
-9. **Web UI**: The Gradio interface should remain simple and user-friendly. Test UI changes by running the application.
+9. **Logging**: 
+   - Logs are written to `logs/story_factory.log`
+   - Use Python's `logging` module with `logger = logging.getLogger(__name__)`
+   - Follow existing logging patterns for consistency
 
-10. **JSON Parsing**: Use the utilities in `utils/json_parser.py` for extracting and parsing JSON from LLM responses. LLMs may include JSON in markdown code blocks or with surrounding text.
+10. **Web UI**: The Gradio interface should remain simple and user-friendly. Test UI changes by running the application.
+
+11. **JSON Parsing**: Use the utilities in `utils/json_parser.py` for extracting and parsing JSON from LLM responses. LLMs may include JSON in markdown code blocks or with surrounding text.
 
 ## Workflow Overview
 
