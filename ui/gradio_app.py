@@ -184,8 +184,8 @@ class StoryFactoryUI:
         try:
             from settings import get_installed_models
             self.installed_models = get_installed_models()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to refresh models list: {e}")
 
     def save_settings(
         self,
@@ -201,23 +201,29 @@ class StoryFactoryUI:
         continuity_model,
     ):
         """Save settings from the UI."""
-        self.settings.default_model = default_model
-        self.settings.context_size = int(context_size)
-        self.settings.interaction_mode = interaction_mode
-        self.settings.chapters_between_checkpoints = int(chapters_between)
-        self.settings.use_per_agent_models = use_per_agent
+        logger.info("Saving settings")
+        try:
+            self.settings.default_model = default_model
+            self.settings.context_size = int(context_size)
+            self.settings.interaction_mode = interaction_mode
+            self.settings.chapters_between_checkpoints = int(chapters_between)
+            self.settings.use_per_agent_models = use_per_agent
 
-        if use_per_agent:
-            self.settings.agent_models = {
-                "interviewer": interviewer_model,
-                "architect": architect_model,
-                "writer": writer_model,
-                "editor": editor_model,
-                "continuity": continuity_model,
-            }
+            if use_per_agent:
+                self.settings.agent_models = {
+                    "interviewer": interviewer_model,
+                    "architect": architect_model,
+                    "writer": writer_model,
+                    "editor": editor_model,
+                    "continuity": continuity_model,
+                }
 
-        self.settings.save()
-        return "Settings saved successfully!"
+            self.settings.save()
+            logger.info("Settings saved successfully")
+            return "Settings saved successfully!"
+        except Exception as e:
+            logger.exception("Failed to save settings")
+            return f"Error saving settings: {e}"
 
     # ============ Story Generation Functions ============
 
@@ -249,6 +255,7 @@ class StoryFactoryUI:
                 "",
                 models_info,
                 gr.update(interactive=True),
+                gr.update(interactive=True),
             )
         except Exception as e:
             logger.exception("start_new_story failed")
@@ -256,6 +263,7 @@ class StoryFactoryUI:
                 [{"role": "assistant", "content": f"Error starting story: {e}"}],
                 "",
                 f"Error: {e}",
+                gr.update(interactive=False),
                 gr.update(interactive=False),
             )
 
@@ -348,7 +356,7 @@ class StoryFactoryUI:
                 return history + [
                     {"role": "user", "content": message},
                     {"role": "assistant", "content": "Please start a new story first."}
-                ], ""
+                ], "", gr.update(interactive=False)
 
             if not self.interview_complete:
                 response, is_complete = self.orchestrator.process_interview_response(message)
@@ -356,22 +364,27 @@ class StoryFactoryUI:
 
                 if is_complete:
                     response += "\n\n---\n**Interview complete!** Click 'Build Story Structure' to continue."
+                    # Enable Build button when interview is complete
+                    return history + [
+                        {"role": "user", "content": message},
+                        {"role": "assistant", "content": response}
+                    ], "", gr.update(interactive=True, variant="primary")
 
                 return history + [
                     {"role": "user", "content": message},
                     {"role": "assistant", "content": response}
-                ], ""
+                ], "", gr.update()
 
             return history + [
                 {"role": "user", "content": message},
                 {"role": "assistant", "content": "Use the action buttons to continue."}
-            ], ""
+            ], "", gr.update()
         except Exception as e:
             logger.exception("chat_response failed")
             return history + [
                 {"role": "user", "content": message},
                 {"role": "assistant", "content": f"Error: {e}"}
-            ], ""
+            ], "", gr.update()
 
     def build_structure(self):
         """Build the story structure."""
@@ -379,25 +392,26 @@ class StoryFactoryUI:
 
         if not self.orchestrator:
             logger.warning("Build structure failed: No orchestrator")
-            yield "Please start a new story first.", "Error: No story started"
+            yield "Please start a new story first.", "Error: No story started", gr.update()
             return
 
         if not self.interview_complete:
             logger.warning("Build structure failed: Interview not complete")
-            yield "Please complete the interview first.", "Error: Interview incomplete"
+            yield "Please complete the interview first.", "Error: Interview incomplete", gr.update()
             return
 
         try:
-            yield "Building story structure...\n\nCreating world and characters...", "Architect is working..."
+            yield "Building story structure...\n\nCreating world and characters...", "Architect is working...", gr.update()
 
             self.orchestrator.build_story_structure()
 
             outline = self.orchestrator.get_outline_summary()
             logger.info("Structure built successfully")
-            yield outline, "Structure complete! Review and click 'Write Story' to begin."
+            # Enable Write button when structure is complete
+            yield outline, "Structure complete! Review and click 'Write Story' to begin.", gr.update(interactive=True, variant="primary")
         except Exception as e:
             logger.exception("Build structure failed")
-            yield f"Error building structure: {e}", f"Error: {e}"
+            yield f"Error building structure: {e}", f"Error: {e}", gr.update()
 
     def write_story(self):
         """Write the story."""
@@ -468,11 +482,15 @@ class StoryFactoryUI:
 
     def run_comparison(self, prompt: str, selected_models: list):
         """Run the same prompt through multiple models for comparison."""
+        logger.info(f"Model comparison requested: {len(selected_models) if selected_models else 0} models")
+
         if not prompt:
+            logger.warning("Comparison failed: No prompt provided")
             yield "Please enter a story prompt.", ""
             return
 
         if not selected_models or len(selected_models) < 2:
+            logger.warning("Comparison failed: Not enough models selected")
             yield "Please select at least 2 models to compare.", ""
             return
 
@@ -542,6 +560,7 @@ class StoryFactoryUI:
                 )
 
         final_output = "# Model Comparison Results\n\n" + "\n".join(output_parts) + "\n".join(summary_lines)
+        logger.info(f"Model comparison complete: {len(results)} models tested")
         yield final_output, "Comparison complete!"
 
     # ============ Build UI ============
@@ -575,10 +594,14 @@ class StoryFactoryUI:
                 with gr.Tab("Write Story", id="write"):
                     with gr.Row():
                         with gr.Column(scale=1, min_width=280):
-                            gr.Markdown("### Controls")
+                            gr.Markdown("### 1. Start")
                             start_btn = gr.Button("Start New Story", variant="primary", size="lg")
-                            build_btn = gr.Button("Build Story Structure", size="lg")
-                            write_btn = gr.Button("Write Story", variant="primary", size="lg")
+
+                            gr.Markdown("### 2. Build (after interview)")
+                            build_btn = gr.Button("Build Story Structure", size="lg", interactive=False)
+
+                            gr.Markdown("### 3. Write (after build)")
+                            write_btn = gr.Button("Write Story", size="lg", interactive=False)
 
                             gr.Markdown("---")
                             gr.Markdown("### Save/Export")
@@ -594,10 +617,10 @@ class StoryFactoryUI:
                             export_file = gr.File(label="Download", visible=False)
 
                             gr.Markdown("---")
-                            gr.Markdown("### Load Saved")
+                            gr.Markdown("### Load Previous Story")
                             saved_stories_dropdown = gr.Dropdown(
                                 choices=self.get_saved_stories(),
-                                label="Select Story",
+                                label="Saved Stories",
                                 interactive=True,
                             )
                             with gr.Row():
@@ -620,14 +643,17 @@ class StoryFactoryUI:
                                 placeholder="Click 'Start New Story' to begin the interview...",
                                 layout="bubble",
                             )
-                            chat_input = gr.Textbox(
-                                label="Your response",
-                                placeholder="Type your answer and press Enter...",
-                                interactive=False,
-                                lines=2,
-                                max_lines=4,
-                                autofocus=True,
-                            )
+                            with gr.Row():
+                                chat_input = gr.Textbox(
+                                    label="Your response",
+                                    placeholder="Type your answer and press Enter, or click Send...",
+                                    interactive=False,
+                                    lines=2,
+                                    max_lines=4,
+                                    autofocus=True,
+                                    scale=4,
+                                )
+                                send_btn = gr.Button("Send", variant="primary", scale=1, interactive=False)
 
                     with gr.Row():
                         with gr.Column(scale=1):
@@ -779,18 +805,25 @@ class StoryFactoryUI:
             # Write tab
             start_btn.click(
                 self.start_new_story,
-                outputs=[chatbot, story_display, status_box, chat_input],
+                outputs=[chatbot, story_display, status_box, chat_input, send_btn],
             )
 
+            # Chat submission - both Enter key and Send button
             chat_input.submit(
                 self.chat_response,
                 inputs=[chat_input, chatbot],
-                outputs=[chatbot, chat_input],
+                outputs=[chatbot, chat_input, build_btn],
+            ).then(lambda: "", outputs=[chat_input])
+
+            send_btn.click(
+                self.chat_response,
+                inputs=[chat_input, chatbot],
+                outputs=[chatbot, chat_input, build_btn],
             ).then(lambda: "", outputs=[chat_input])
 
             build_btn.click(
                 self.build_structure,
-                outputs=[outline_display, status_box],
+                outputs=[outline_display, status_box, write_btn],
             )
 
             write_btn.click(
@@ -898,6 +931,20 @@ class StoryFactoryUI:
                             });
                         });
                     }, 200);
+
+                    // Ctrl+Enter to send chat message
+                    setTimeout(() => {
+                        document.addEventListener('keydown', (e) => {
+                            if (e.ctrlKey && e.key === 'Enter') {
+                                // Find the Send button and click it
+                                const sendBtn = document.querySelector('button.primary');
+                                if (sendBtn && sendBtn.textContent.trim() === 'Send') {
+                                    e.preventDefault();
+                                    sendBtn.click();
+                                }
+                            }
+                        });
+                    }, 300);
                 }
                 """
             )

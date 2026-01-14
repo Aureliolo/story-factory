@@ -5,10 +5,8 @@ Settings are stored in settings.json and can be modified via the web UI.
 
 import json
 import logging
-import os
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
-from typing import Optional
 import subprocess
 
 # Configure module logger

@@ -1,10 +1,5 @@
 """Tests for the settings module."""
 
-import pytest
-import json
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
 
 from settings import Settings, get_model_info, AVAILABLE_MODELS, AGENT_ROLES
 

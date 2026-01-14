@@ -14,7 +14,6 @@ Usage:
 """
 
 import argparse
-import sys
 
 from utils.logging_config import setup_logging
 
