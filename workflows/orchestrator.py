@@ -62,13 +62,67 @@ class StoryOrchestrator:
         return self.settings.interaction_mode
 
     def create_new_story(self) -> StoryState:
-        """Initialize a new story."""
+        """Initialize a new story with a default project name."""
+        now = datetime.now()
+        default_name = f"New Story - {now.strftime('%b %d, %Y %I:%M %p')}"
+
         self.story_state = StoryState(
             id=str(uuid.uuid4()),
-            created_at=datetime.now(),
+            created_at=now,
+            project_name=default_name,
             status="interview",
         )
+        # Autosave immediately so it appears in project list
+        self.autosave()
         return self.story_state
+
+    def update_project_name(self, name: str) -> None:
+        """Update the project name."""
+        if self.story_state:
+            self.story_state.project_name = name
+            self.autosave()
+
+    def generate_title_suggestions(self) -> list[str]:
+        """Generate AI-powered title suggestions based on the story content."""
+        if not self.story_state:
+            return []
+
+        # Build context for title generation
+        context_parts = []
+        if self.story_state.brief:
+            brief = self.story_state.brief
+            context_parts.append(f"Premise: {brief.premise}")
+            context_parts.append(f"Genre: {brief.genre}")
+            context_parts.append(f"Tone: {brief.tone}")
+            if brief.themes:
+                context_parts.append(f"Themes: {', '.join(brief.themes)}")
+
+        if not context_parts:
+            return ["Untitled Story", "My Story", "New Project"]
+
+        context = "\n".join(context_parts)
+
+        prompt = f"""Based on this story concept, generate exactly 5 creative and evocative title suggestions.
+Each title should be 2-6 words, memorable, and capture the essence of the story.
+
+Story concept:
+{context}
+
+Return ONLY a JSON array of 5 title strings, nothing else.
+Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title Five"]"""
+
+        try:
+            from utils.json_parser import extract_json_array
+
+            response = self.interviewer.generate(prompt, "", temperature=0.9)
+            titles = extract_json_array(response)
+            if titles and isinstance(titles, list):
+                return [str(t) for t in titles[:5]]
+        except Exception as e:
+            logger.warning(f"Failed to generate title suggestions: {e}")
+
+        # Fallback titles
+        return ["Untitled Story", "My Story", "New Project"]
 
     def _emit(self, event_type: str, agent: str, message: str, data: dict = None):
         """Emit a workflow event."""
@@ -482,6 +536,130 @@ class StoryOrchestrator:
 
         return "\n".join(text_parts)
 
+    def export_to_epub(self) -> bytes:
+        """Export the story as EPUB e-book format."""
+        from ebooklib import epub
+
+        book = epub.EpubBook()
+
+        # Set metadata
+        brief = self.story_state.brief
+        title = self.story_state.project_name or (brief.premise[:50] if brief else "Untitled Story")
+        book.set_identifier(self.story_state.id)
+        book.set_title(title)
+        book.set_language("en")
+
+        if brief:
+            book.add_metadata("DC", "description", brief.premise)
+            book.add_metadata("DC", "subject", brief.genre)
+
+        # Create chapters
+        chapters = []
+        for ch in self.story_state.chapters:
+            if ch.content:
+                epub_chapter = epub.EpubHtml(
+                    title=f"Chapter {ch.number}: {ch.title}",
+                    file_name=f"chapter_{ch.number}.xhtml",
+                    lang="en",
+                )
+                # Convert content to HTML (simple paragraph wrapping)
+                html_content = "<br/><br/>".join(
+                    f"<p>{para}</p>" for para in ch.content.split("\n\n") if para.strip()
+                )
+                epub_chapter.content = f"<h1>Chapter {ch.number}: {ch.title}</h1>{html_content}"
+                book.add_item(epub_chapter)
+                chapters.append(epub_chapter)
+
+        # Add navigation
+        book.toc = tuple(chapters)
+        book.add_item(epub.EpubNcx())
+        book.add_item(epub.EpubNav())
+
+        # Define spine
+        book.spine = ["nav"] + chapters
+
+        # Write to bytes
+        from io import BytesIO
+
+        output = BytesIO()
+        epub.write_epub(output, book)
+        return output.getvalue()
+
+    def export_to_pdf(self) -> bytes:
+        """Export the story as PDF format."""
+        from io import BytesIO
+
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import inch
+        from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=inch,
+            leftMargin=inch,
+            topMargin=inch,
+            bottomMargin=inch,
+        )
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            "CustomTitle",
+            parent=styles["Heading1"],
+            fontSize=24,
+            spaceAfter=30,
+        )
+        chapter_style = ParagraphStyle(
+            "ChapterTitle",
+            parent=styles["Heading2"],
+            fontSize=18,
+            spaceAfter=20,
+            spaceBefore=30,
+        )
+        body_style = ParagraphStyle(
+            "Body",
+            parent=styles["Normal"],
+            fontSize=11,
+            leading=16,
+            spaceAfter=12,
+        )
+
+        story_elements = []
+
+        # Title page
+        brief = self.story_state.brief
+        title = self.story_state.project_name or (brief.premise[:50] if brief else "Untitled Story")
+        story_elements.append(Paragraph(title, title_style))
+
+        if brief:
+            story_elements.append(
+                Paragraph(f"<i>{brief.genre} | {brief.tone}</i>", styles["Normal"])
+            )
+            story_elements.append(Spacer(1, 0.5 * inch))
+
+        story_elements.append(PageBreak())
+
+        # Chapters
+        for ch in self.story_state.chapters:
+            if ch.content:
+                story_elements.append(Paragraph(f"Chapter {ch.number}: {ch.title}", chapter_style))
+
+                # Split content into paragraphs
+                for para in ch.content.split("\n\n"):
+                    if para.strip():
+                        # Escape special characters for reportlab
+                        safe_para = (
+                            para.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        )
+                        story_elements.append(Paragraph(safe_para, body_style))
+
+                story_elements.append(PageBreak())
+
+        doc.build(story_elements)
+        return buffer.getvalue()
+
     def export_story_to_file(self, format: str = "markdown", filepath: str | None = None) -> str:
         """Export the story to a file.
 
@@ -545,7 +723,26 @@ class StoryOrchestrator:
 
     # ========== PERSISTENCE ==========
 
-    def save_story(self, filepath: str = None) -> str:
+    def autosave(self) -> str | None:
+        """Auto-save current state with timestamp update.
+
+        Returns:
+            The path where saved, or None if no story to save.
+        """
+        if not self.story_state:
+            return None
+
+        try:
+            self.story_state.last_saved = datetime.now()
+            self.story_state.updated_at = datetime.now()
+            path = self.save_story()
+            logger.debug(f"Autosaved story to {path}")
+            return path
+        except Exception as e:
+            logger.warning(f"Autosave failed: {e}")
+            return None
+
+    def save_story(self, filepath: str | None = None) -> str:
         """Save the current story state to a JSON file.
 
         Args:
@@ -556,6 +753,11 @@ class StoryOrchestrator:
         """
         if not self.story_state:
             raise ValueError("No story to save")
+
+        # Update timestamps
+        self.story_state.updated_at = datetime.now()
+        if not self.story_state.last_saved:
+            self.story_state.last_saved = datetime.now()
 
         # Default save location
         if not filepath:

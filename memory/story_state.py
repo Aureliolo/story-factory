@@ -77,6 +77,11 @@ class StoryState(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
+    # Project metadata
+    project_name: str = ""  # User-editable title
+    project_description: str = ""  # Optional notes
+    last_saved: datetime | None = None  # Track last save time
+
     # Story brief
     brief: StoryBrief | None = None
 
