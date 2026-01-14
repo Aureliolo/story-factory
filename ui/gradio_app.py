@@ -60,6 +60,26 @@ class StoryFactoryUI:
 
     # ============ Settings Tab Functions ============
 
+    def _normalize_model_name(self, model: str) -> str:
+        """Normalize model name by removing :latest tag for comparison."""
+        if model.endswith(":latest"):
+            return model[:-7]  # Remove ':latest'
+        return model
+
+    def _is_model_installed(self, model_id: str, installed_set: set) -> bool:
+        """Check if a model is installed, handling :latest tag variations."""
+        # Direct match
+        if model_id in installed_set:
+            return True
+        # Check with :latest suffix
+        if f"{model_id}:latest" in installed_set:
+            return True
+        # Check without tag if model_id has a tag
+        base_name = self._normalize_model_name(model_id)
+        if base_name in installed_set or f"{base_name}:latest" in installed_set:
+            return True
+        return False
+
     def get_installed_models_list(self):
         """Get formatted list of installed models."""
         installed = get_installed_models()
@@ -68,9 +88,14 @@ class StoryFactoryUI:
 
         lines = []
         for model in installed:
-            info = get_model_info(model)
-            status = "Ready"
-            lines.append(f"- **{info.get('name', model)}** ({model}) - {status}")
+            # Try to get info with normalized name
+            normalized = self._normalize_model_name(model)
+            info = get_model_info(normalized)
+            if info.get('name') == normalized:
+                # Fallback didn't find it, try original
+                info = get_model_info(model)
+            display_name = info.get('name', model)
+            lines.append(f"- **{display_name}** (`{model}`) - Ready")
         return "\n".join(lines)
 
     def get_available_models_list(self):
@@ -78,8 +103,8 @@ class StoryFactoryUI:
         installed = set(get_installed_models())
         lines = []
         for model_id, info in AVAILABLE_MODELS.items():
-            status = "Installed" if model_id in installed else f"~{info['size_gb']}GB download"
-            vram_ok = "Yes" if info['vram_required'] <= self.detected_vram else "No"
+            is_installed = self._is_model_installed(model_id, installed)
+            status = "Installed" if is_installed else f"~{info['size_gb']}GB download"
             lines.append(
                 f"| {info['name']} | {info['release']} | {info['quality']}/10 | "
                 f"{info['vram_required']}GB | {status} |"
@@ -469,9 +494,9 @@ class StoryFactoryUI:
                 """
             )
 
-            with gr.Tabs():
+            with gr.Tabs() as tabs:
                 # ============ WRITE TAB ============
-                with gr.Tab("Write Story"):
+                with gr.Tab("Write Story", id="write"):
                     with gr.Row():
                         with gr.Column(scale=1):
                             gr.Markdown("### Controls")
@@ -529,7 +554,7 @@ class StoryFactoryUI:
                             progress_display = gr.Textbox(label="Progress", lines=2, interactive=False)
 
                 # ============ COMPARE TAB ============
-                with gr.Tab("Compare Models"):
+                with gr.Tab("Compare Models", id="compare"):
                     gr.Markdown("""
                     ### Model Comparison
                     Test the same story prompt across different models to compare output quality.
@@ -552,7 +577,7 @@ class StoryFactoryUI:
                     compare_status = gr.Textbox(label="Status", interactive=False)
 
                 # ============ SETTINGS TAB ============
-                with gr.Tab("Settings"):
+                with gr.Tab("Settings", id="settings"):
                     gr.Markdown("### Model Settings")
 
                     with gr.Row():
@@ -628,7 +653,7 @@ class StoryFactoryUI:
                     settings_status = gr.Textbox(label="Status", interactive=False)
 
                 # ============ MODELS TAB ============
-                with gr.Tab("Manage Models") as models_tab:
+                with gr.Tab("Manage Models", id="models") as models_tab:
                     gr.Markdown("### Installed Models")
                     installed_display = gr.Markdown(self.get_installed_models_list())
 
@@ -736,6 +761,43 @@ class StoryFactoryUI:
                 # Refresh displays after pull completes
                 self.refresh_models_tab,
                 outputs=[installed_display, available_display, model_to_pull],
+            )
+
+            # JavaScript for tab persistence via URL hash
+            app.load(
+                None,
+                None,
+                None,
+                js="""
+                () => {
+                    // Tab persistence via URL hash
+                    const tabMap = {'write': 0, 'compare': 1, 'settings': 2, 'models': 3};
+                    const reverseMap = ['write', 'compare', 'settings', 'models'];
+
+                    // Restore tab from URL hash on load
+                    const hash = window.location.hash.slice(1);
+                    if (hash && tabMap[hash] !== undefined) {
+                        setTimeout(() => {
+                            const tabs = document.querySelectorAll('button[role="tab"]');
+                            if (tabs[tabMap[hash]]) {
+                                tabs[tabMap[hash]].click();
+                            }
+                        }, 100);
+                    }
+
+                    // Save tab to URL hash on click
+                    setTimeout(() => {
+                        const tabs = document.querySelectorAll('button[role="tab"]');
+                        tabs.forEach((tab, index) => {
+                            tab.addEventListener('click', () => {
+                                if (reverseMap[index]) {
+                                    history.replaceState(null, '', '#' + reverseMap[index]);
+                                }
+                            });
+                        });
+                    }, 200);
+                }
+                """
             )
 
         return app
