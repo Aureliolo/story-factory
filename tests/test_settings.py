@@ -45,7 +45,7 @@ class TestSettings:
         """Should raise ValueError for invalid Ollama URL."""
         settings = Settings()
         settings.ollama_url = "not-a-url"
-        with pytest.raises(ValueError, match="Invalid ollama_url"):
+        with pytest.raises(ValueError, match="Invalid URL scheme"):
             settings.validate()
 
     def test_validate_raises_on_invalid_context_size(self):
@@ -74,6 +74,13 @@ class TestSettings:
         settings = Settings()
         settings.agent_temperatures["writer"] = 3.0  # Too high
         with pytest.raises(ValueError, match="Temperature for writer must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_unknown_agent_in_temperatures(self):
+        """Should raise ValueError for unknown agent in agent_temperatures."""
+        settings = Settings()
+        settings.agent_temperatures["unknown_agent"] = 0.7
+        with pytest.raises(ValueError, match="Unknown agent\\(s\\) in agent_temperatures"):
             settings.validate()
 
     def test_validate_passes_for_valid_settings(self):

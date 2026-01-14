@@ -489,7 +489,6 @@ class StoryOrchestrator:
             ext = ".txt"
             content = self.export_to_text()
         elif format == "json":
-            ext = ".json"
             # JSON export is handled by save_story
             return self.save_story(filepath)
         else:

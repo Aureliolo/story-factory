@@ -193,7 +193,7 @@ class Settings:
                 raise ValueError(f"Invalid URL scheme in ollama_url: {self.ollama_url}")
             if not parsed.netloc:
                 raise ValueError(f"Invalid URL (missing host) in ollama_url: {self.ollama_url}")
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             raise ValueError(f"Invalid ollama_url: {self.ollama_url} - {e}") from e
 
         # Validate numeric ranges
@@ -223,6 +223,15 @@ class Settings:
             )
 
         # Validate temperatures
+        expected_agents = set(AGENT_ROLES)
+
+        unknown_temp_agents = set(self.agent_temperatures) - expected_agents
+        if unknown_temp_agents:
+            raise ValueError(
+                f"Unknown agent(s) in agent_temperatures: {sorted(unknown_temp_agents)}; "
+                f"expected only: {sorted(expected_agents)}"
+            )
+
         for agent, temp in self.agent_temperatures.items():
             if not 0.0 <= temp <= 2.0:
                 raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")

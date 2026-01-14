@@ -109,7 +109,7 @@ class TestErrorBoundary:
         boundary = ErrorBoundary(fallback="fallback_value")
         with boundary:
             raise ValueError("Test error")
-
+        # fallback is accessible after context exit
         assert boundary.fallback == "fallback_value"
 
     def test_stores_exception(self):
@@ -117,7 +117,7 @@ class TestErrorBoundary:
         boundary = ErrorBoundary()
         with boundary:
             raise ValueError("Test error")
-
+        # exception is accessible after context exit
         assert isinstance(boundary.exception, ValueError)
         assert str(boundary.exception) == "Test error"
 
