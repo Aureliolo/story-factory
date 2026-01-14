@@ -68,9 +68,11 @@ def extract_json_list(response: str) -> list[Any] | None:
     return None
 
 
-def parse_json_to_model[
-    T
-](response: str, model_class: type[T], fallback_pattern: str | None = None,) -> T | None:
+def parse_json_to_model[T](
+    response: str,
+    model_class: type[T],
+    fallback_pattern: str | None = None,
+) -> T | None:
     """Extract JSON and parse into a Pydantic model.
 
     Args:
@@ -94,9 +96,10 @@ def parse_json_to_model[
         return None
 
 
-def parse_json_list_to_models[
-    T
-](response: str, model_class: type[T],) -> list[T]:
+def parse_json_list_to_models[T](
+    response: str,
+    model_class: type[T],
+) -> list[T]:
     """Extract JSON array and parse into a list of Pydantic models.
 
     Args:
