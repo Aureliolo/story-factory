@@ -308,3 +308,57 @@ Only include characters who actually appear in this chapter."""
                         break
 
         return arcs
+
+    def check_plot_points_completed(
+        self,
+        chapter_content: str,
+        story_state: StoryState,
+        chapter_number: int,
+    ) -> list[int]:
+        """Check which plot points were completed in this chapter.
+
+        Returns:
+            List of indices of completed plot points.
+        """
+        pending_points = [
+            (i, p) for i, p in enumerate(story_state.plot_points)
+            if not p.completed and (p.chapter is None or p.chapter == chapter_number)
+        ]
+
+        if not pending_points:
+            return []
+
+        points_text = "\n".join(
+            f"{i}. {p.description}" for i, p in pending_points
+        )
+
+        prompt = f"""Check which plot points were addressed in this chapter:
+
+CHAPTER CONTENT:
+{chapter_content[:4000]}
+
+PENDING PLOT POINTS:
+{points_text}
+
+List ONLY the numbers of plot points that were CLEARLY addressed or completed in this chapter.
+Output format: Just the numbers separated by commas (e.g., "0, 2, 5") or "none" if no plot points were addressed."""
+
+        response = self.generate(prompt, temperature=0.2)
+
+        completed_indices = []
+        response_clean = response.lower().strip()
+
+        if response_clean == "none" or not response_clean:
+            return []
+
+        # Parse numbers from response
+        import re
+        numbers = re.findall(r'\d+', response)
+        for num_str in numbers:
+            idx = int(num_str)
+            # Verify it's a valid pending point index
+            valid_indices = [i for i, _ in pending_points]
+            if idx in valid_indices:
+                completed_indices.append(idx)
+
+        return completed_indices

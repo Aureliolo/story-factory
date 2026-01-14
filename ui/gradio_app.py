@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from workflows.orchestrator import StoryOrchestrator
+from agents.base import BaseAgent, LLMError
 from settings import (
     Settings, AVAILABLE_MODELS, AGENT_ROLES,
     get_installed_models, get_available_vram, get_model_info
@@ -29,7 +30,12 @@ class StoryFactoryUI:
         self.orchestrator: StoryOrchestrator = None
         self.interview_complete = False
         self.detected_vram = get_available_vram()
+        self.ollama_status = self._check_ollama()
         self.model_warnings = self._validate_models()
+
+    def _check_ollama(self) -> tuple[bool, str]:
+        """Check Ollama connectivity at startup."""
+        return BaseAgent.check_ollama_health(self.settings.ollama_url)
 
     def _validate_models(self) -> list[str]:
         """Validate that configured models are installed."""
@@ -174,23 +180,26 @@ class StoryFactoryUI:
             gr.update(interactive=True),
         )
 
-    def export_story(self):
-        """Export the current story to a downloadable markdown file."""
+    def export_story(self, format_type: str = "markdown"):
+        """Export the current story to a downloadable file."""
         if not self.orchestrator or not self.orchestrator.story_state:
             return None, "No story to export. Please write a story first."
 
         try:
-            markdown_content = self.orchestrator.export_to_markdown()
-
-            # Create a temporary file for download
             output_dir = Path(tempfile.gettempdir())
             story_id = self.orchestrator.story_state.id[:8]
-            filepath = output_dir / f"story_{story_id}.md"
+
+            if format_type == "text":
+                content = self.orchestrator.export_to_text()
+                filepath = output_dir / f"story_{story_id}.txt"
+            else:
+                content = self.orchestrator.export_to_markdown()
+                filepath = output_dir / f"story_{story_id}.md"
 
             with open(filepath, "w", encoding="utf-8") as f:
-                f.write(markdown_content)
+                f.write(content)
 
-            return str(filepath), "Story exported successfully!"
+            return str(filepath), f"Story exported as {format_type}!"
         except Exception as e:
             logger.error(f"Export failed: {e}")
             return None, f"Export failed: {e}"
@@ -283,7 +292,8 @@ class StoryFactoryUI:
 
             story = self.orchestrator.get_full_story()
             stats = self.orchestrator.get_statistics()
-            yield story, f"Complete! {stats['total_words']} words", "Story complete!"
+            stats_msg = f"Complete! {stats['total_words']} words | ~{stats['reading_time_minutes']} min read"
+            yield story, stats_msg, "Story complete!"
 
         else:
             total_chapters = len(state.chapters)
@@ -299,7 +309,12 @@ class StoryFactoryUI:
                 yield full_story, f"Chapter {chapter.number} complete", f"Finished: {chapter.title}"
 
             stats = self.orchestrator.get_statistics()
-            yield full_story, f"Complete! {stats['total_words']} words across {stats['total_chapters']} chapters", "All chapters complete!"
+            stats_msg = (
+                f"Complete! {stats['total_words']} words across {stats['total_chapters']} chapters | "
+                f"~{stats['reading_time_minutes']} min read | "
+                f"Plot: {stats['plot_points_completed']}/{stats['plot_points_total']} points"
+            )
+            yield full_story, stats_msg, "All chapters complete!"
 
     # ============ Comparison Functions ============
 
@@ -389,15 +404,21 @@ class StoryFactoryUI:
         model_choices = list(AVAILABLE_MODELS.keys())
 
         with gr.Blocks(title="Story Factory") as app:
+            # Build status line
+            ollama_ok, ollama_msg = self.ollama_status
+            ollama_status = "Connected" if ollama_ok else f"ERROR: {ollama_msg}"
+
             warning_text = ""
             if self.model_warnings:
                 warning_text = "\n**Warnings:** " + " | ".join(self.model_warnings)
+            if not ollama_ok:
+                warning_text += f"\n**Ollama Error:** {ollama_msg}"
 
             gr.Markdown(
                 f"""
                 # Story Factory
                 ### AI-Powered Story Production Team
-                **Detected VRAM:** {self.detected_vram}GB | **Installed Models:** {len(installed_models)}{warning_text}
+                **Ollama:** {ollama_status} | **VRAM:** {self.detected_vram}GB | **Models:** {len(installed_models)}{warning_text}
                 """
             )
 
@@ -414,7 +435,13 @@ class StoryFactoryUI:
                             gr.Markdown("---")
                             gr.Markdown("### Save/Export")
                             save_story_btn = gr.Button("Save Story")
-                            export_btn = gr.Button("Export to Markdown")
+                            export_format = gr.Radio(
+                                choices=["markdown", "text"],
+                                value="markdown",
+                                label="Export Format",
+                                scale=0,
+                            )
+                            export_btn = gr.Button("Export Story")
                             export_file = gr.File(label="Download", visible=False)
 
                             gr.Markdown("---")
@@ -605,6 +632,7 @@ class StoryFactoryUI:
 
             export_btn.click(
                 self.export_story,
+                inputs=[export_format],
                 outputs=[export_file, status_box],
             ).then(
                 lambda f: gr.update(visible=f is not None, value=f),
