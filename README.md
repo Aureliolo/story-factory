@@ -162,9 +162,10 @@ Files are saved to `output/stories/` by default.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development setup and guidelines.
 
-Quick start for developers:
+### Quick Start for Developers
+
 ```bash
 # Install dev dependencies
 pip install -r requirements-dev.txt
@@ -172,10 +173,47 @@ pip install -r requirements-dev.txt
 # Run tests
 make test
 
+# Run tests with coverage
+make test-cov
+
 # Format and lint code
 make format
 make lint
+
+# Run all checks (lint + test)
+make check
 ```
+
+### Testing
+
+The project has comprehensive test coverage for core functionality:
+
+- **Unit Tests**: Test individual components (settings, JSON parsing, error handling, export)
+- **Test Coverage**: 41 tests covering validation, error handling, and file operations
+- **CI Integration**: Automated testing on every push and PR
+
+Run tests:
+```bash
+# All tests
+pytest
+
+# With coverage report
+pytest --cov=. --cov-report=term --cov-report=html
+
+# Specific test file
+pytest tests/test_settings.py
+
+# Using Makefile
+make test
+make test-cov
+```
+
+### Code Quality Tools
+
+- **Black**: Code formatting (line length: 100)
+- **Ruff**: Fast Python linter
+- **Pytest**: Testing framework with coverage
+- **MyPy**: Type checking (planned)
 
 ## License
 

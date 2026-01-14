@@ -1,10 +1,13 @@
 # Makefile for Story Factory development tasks
 
-.PHONY: help install test lint format check clean run
+.PHONY: help install test lint format check clean run healthcheck
 
 help:  ## Show this help message
 	@echo "Available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+healthcheck:  ## Run system health check
+	python healthcheck.py
 
 install:  ## Install dependencies
 	pip install -r requirements.txt
