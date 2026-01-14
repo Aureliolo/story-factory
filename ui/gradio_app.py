@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.base import BaseAgent
 from settings import (
     AVAILABLE_MODELS,
+    STORIES_DIR,
     Settings,
     get_available_vram,
     get_installed_models,
@@ -30,6 +31,9 @@ logger = logging.getLogger(__name__)
 class StoryFactoryUI:
     """Gradio UI for the Story Factory."""
 
+    # Expected directory for story files (for path validation)
+    _STORIES_DIR: Path = STORIES_DIR
+
     def __init__(self):
         logger.info("StoryFactoryUI initializing...")
         self.settings = Settings.load()
@@ -39,6 +43,28 @@ class StoryFactoryUI:
         self.detected_vram = get_available_vram()
         self.ollama_status = self._check_ollama()
         self.model_warnings = self._validate_models()
+
+    def _validate_story_filepath(self, filepath: str) -> Path | None:
+        """Validate that a filepath is within the expected stories directory.
+
+        Returns the resolved Path if valid, None if invalid.
+        """
+        if not filepath:
+            return None
+
+        try:
+            path = Path(filepath).resolve()
+            stories_dir = self._STORIES_DIR.resolve()
+
+            # Ensure the file is within the stories directory using secure path comparison
+            if not path.is_relative_to(stories_dir):
+                logger.warning(f"Path traversal attempt blocked: {filepath}")
+                return None
+
+            return path
+        except (ValueError, OSError) as e:
+            logger.warning(f"Invalid filepath: {filepath} - {e}")
+            return None
 
     def _check_ollama(self) -> tuple[bool, str]:
         """Check Ollama connectivity at startup."""
@@ -398,11 +424,16 @@ class StoryFactoryUI:
             logger.debug("No filepath provided for project details")
             return "Select a project to view details."
 
+        # Validate filepath is within expected directory
+        valid_path = self._validate_story_filepath(filepath)
+        if not valid_path:
+            return "Invalid project path."
+
         try:
             import json
 
-            logger.debug(f"Loading project details from: {filepath}")
-            with open(filepath, encoding="utf-8") as f:
+            logger.debug(f"Loading project details from: {valid_path}")
+            with open(valid_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Get premise from brief (nested structure)
@@ -446,11 +477,14 @@ class StoryFactoryUI:
         if not filepath:
             return gr.update(choices=self.get_projects_choices()), "No project selected."
 
-        try:
-            import os
+        # Validate filepath is within expected directory
+        valid_path = self._validate_story_filepath(filepath)
+        if not valid_path:
+            return gr.update(choices=self.get_projects_choices()), "Invalid project path."
 
-            os.remove(filepath)
-            logger.info(f"Deleted project: {filepath}")
+        try:
+            valid_path.unlink()
+            logger.info(f"Deleted project: {valid_path}")
             return gr.update(choices=self.get_projects_choices(), value=None), "Project deleted."
         except Exception as e:
             logger.exception("Delete project failed")
@@ -472,13 +506,22 @@ class StoryFactoryUI:
                 "No project selected.",
             )
 
+        # Validate filepath is within expected directory
+        valid_path = self._validate_story_filepath(filepath)
+        if not valid_path:
+            return (
+                gr.update(choices=self.get_projects_choices()),
+                "",
+                "Invalid project path.",
+            )
+
         try:
             import json
 
-            with open(filepath, encoding="utf-8") as f:
+            with open(valid_path, encoding="utf-8") as f:
                 story_data = json.load(f)
             story_data["project_name"] = new_name.strip()
-            with open(filepath, "w", encoding="utf-8") as f:
+            with open(valid_path, "w", encoding="utf-8") as f:
                 json.dump(story_data, f, indent=2, default=str)
             logger.info(f"Renamed project to: {new_name}")
             return (
@@ -502,10 +545,15 @@ class StoryFactoryUI:
             logger.warning("Generate titles: No filepath provided")
             return gr.update(choices=["Select a project first"]), "No project selected."
 
+        # Validate filepath is within expected directory
+        valid_path = self._validate_story_filepath(filepath)
+        if not valid_path:
+            return gr.update(choices=["Invalid path"]), "Invalid project path."
+
         try:
-            logger.info(f"Loading story for title generation: {filepath}")
+            logger.info(f"Loading story for title generation: {valid_path}")
             temp_orchestrator = StoryOrchestrator(settings=self.settings)
-            temp_orchestrator.load_story(filepath)
+            temp_orchestrator.load_story(str(valid_path))
             titles = temp_orchestrator.generate_title_suggestions()
 
             if titles and len(titles) > 0:
@@ -567,12 +615,17 @@ class StoryFactoryUI:
             logger.warning("Load failed: No filepath provided")
             return "Please select a story to load.", "", []
 
+        # Validate filepath is within expected directory
+        valid_path = self._validate_story_filepath(filepath)
+        if not valid_path:
+            return "Invalid story path.", "", ""
+
         try:
             if not self.orchestrator:
                 self.settings = Settings.load()
                 self.orchestrator = StoryOrchestrator(settings=self.settings)
 
-            state = self.orchestrator.load_story(filepath)
+            state = self.orchestrator.load_story(str(valid_path))
             self.interview_complete = True  # Skip interview for loaded stories
 
             story_content = self.orchestrator.get_full_story()
