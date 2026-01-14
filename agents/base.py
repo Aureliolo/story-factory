@@ -105,7 +105,7 @@ class BaseAgent:
 
         for attempt in range(self.MAX_RETRIES):
             try:
-                logger.debug(f"{self.name}: Generating response (attempt {attempt + 1}/{self.MAX_RETRIES})")
+                logger.info(f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}")
 
                 response = self.client.chat(
                     model=use_model,
@@ -118,7 +118,7 @@ class BaseAgent:
                 )
 
                 content = response["message"]["content"]
-                logger.debug(f"{self.name}: Generated {len(content)} chars")
+                logger.info(f"{self.name}: LLM response received ({len(content)} chars)")
                 return content
 
             except ConnectionError as e:

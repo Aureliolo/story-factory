@@ -13,10 +13,9 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from workflows.orchestrator import StoryOrchestrator
-from agents.base import BaseAgent, LLMError
+from agents.base import BaseAgent
 from settings import (
-    Settings, AVAILABLE_MODELS, AGENT_ROLES,
-    get_installed_models, get_available_vram, get_model_info
+    Settings, AVAILABLE_MODELS, get_installed_models, get_available_vram, get_model_info
 )
 
 logger = logging.getLogger(__name__)
@@ -118,7 +117,6 @@ class StoryFactoryUI:
         installed_md = self.get_installed_models_list()
         available_md = self.get_available_models_list()
         # Return updated dropdown choices
-        installed = get_installed_models()
         dropdown_choices = list(AVAILABLE_MODELS.keys())
         return installed_md, available_md, gr.update(choices=dropdown_choices)
 
@@ -290,7 +288,7 @@ class StoryFactoryUI:
             logger.info(f"Export successful: {filepath}")
             return str(filepath), f"Story exported as {format_type}!"
         except Exception as e:
-            logger.exception(f"Export failed")
+            logger.exception("Export failed")
             return None, f"Export failed: {e}"
 
     def save_story(self):
@@ -417,6 +415,12 @@ class StoryFactoryUI:
             return
 
         brief = state.brief
+
+        # Validate chapters exist for multi-chapter stories
+        if brief.target_length != "short_story" and len(state.chapters) == 0:
+            logger.warning("Write story failed: No chapters defined")
+            yield "Please build story structure first.", "", "Error: No chapters defined"
+            return
 
         try:
             if brief.target_length == "short_story":
@@ -566,64 +570,93 @@ class StoryFactoryUI:
                 """
             )
 
-            with gr.Tabs() as tabs:
+            with gr.Tabs():
                 # ============ WRITE TAB ============
                 with gr.Tab("Write Story", id="write"):
                     with gr.Row():
-                        with gr.Column(scale=1):
+                        with gr.Column(scale=1, min_width=280):
                             gr.Markdown("### Controls")
-                            start_btn = gr.Button("Start New Story", variant="primary")
-                            build_btn = gr.Button("Build Story Structure")
-                            write_btn = gr.Button("Write Story", variant="primary")
+                            start_btn = gr.Button("Start New Story", variant="primary", size="lg")
+                            build_btn = gr.Button("Build Story Structure", size="lg")
+                            write_btn = gr.Button("Write Story", variant="primary", size="lg")
 
                             gr.Markdown("---")
                             gr.Markdown("### Save/Export")
-                            save_story_btn = gr.Button("Save Story")
+                            with gr.Row():
+                                save_story_btn = gr.Button("Save", size="sm")
+                                export_btn = gr.Button("Export", size="sm")
                             export_format = gr.Radio(
                                 choices=["markdown", "text"],
                                 value="markdown",
-                                label="Export Format",
+                                label="Format",
                                 scale=0,
                             )
-                            export_btn = gr.Button("Export Story")
                             export_file = gr.File(label="Download", visible=False)
 
                             gr.Markdown("---")
-                            gr.Markdown("### Load Saved Story")
+                            gr.Markdown("### Load Saved")
                             saved_stories_dropdown = gr.Dropdown(
                                 choices=self.get_saved_stories(),
                                 label="Select Story",
                                 interactive=True,
                             )
-                            refresh_saved_btn = gr.Button("Refresh List", size="sm")
-                            load_btn = gr.Button("Load Story")
+                            with gr.Row():
+                                refresh_saved_btn = gr.Button("Refresh", size="sm")
+                                load_btn = gr.Button("Load", size="sm")
 
                             status_box = gr.Textbox(
                                 label="Status",
                                 value="Click 'Start New Story' to begin",
                                 interactive=False,
-                                lines=6,
+                                lines=4,
+                            )
+
+                        with gr.Column(scale=3):
+                            gr.Markdown("### Interview with the Story Architect")
+                            chatbot = gr.Chatbot(
+                                label="Conversation",
+                                height=450,
+                                autoscroll=True,
+                                show_copy_button=True,
+                                placeholder="Click 'Start New Story' to begin the interview...",
+                                layout="bubble",
+                            )
+                            chat_input = gr.Textbox(
+                                label="Your response",
+                                placeholder="Type your answer and press Enter...",
+                                interactive=False,
+                                lines=2,
+                                max_lines=4,
+                                autofocus=True,
+                            )
+
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.Markdown("### Story Outline")
+                            outline_display = gr.Textbox(
+                                label="Outline",
+                                lines=12,
+                                max_lines=20,
+                                interactive=False,
+                                show_copy_button=True,
                             )
 
                         with gr.Column(scale=2):
-                            gr.Markdown("### Interview")
-                            chatbot = gr.Chatbot(label="Chat with the Interviewer", height=300)
-                            chat_input = gr.Textbox(
-                                label="Your response",
-                                placeholder="Type your answer here...",
-                                interactive=False,
-                            )
-
-                    with gr.Row():
-                        with gr.Column():
-                            gr.Markdown("### Story Outline")
-                            outline_display = gr.Textbox(label="Outline", lines=10, interactive=False)
-
-                    with gr.Row():
-                        with gr.Column():
                             gr.Markdown("### Story Output")
-                            story_display = gr.Textbox(label="Your Story", lines=15, interactive=False)
-                            progress_display = gr.Textbox(label="Progress", lines=2, interactive=False)
+                            story_display = gr.Textbox(
+                                label="Your Story",
+                                lines=18,
+                                max_lines=40,
+                                interactive=False,
+                                show_copy_button=True,
+                                autoscroll=True,
+                            )
+                            progress_display = gr.Textbox(
+                                label="Progress",
+                                lines=1,
+                                interactive=False,
+                                container=False,
+                            )
 
                 # ============ COMPARE TAB ============
                 with gr.Tab("Compare Models", id="compare"):
