@@ -44,6 +44,8 @@ settings.json
 
 # Logs
 *.log
+logs/*
+!logs/.gitkeep
 
 # Environment variables
 .env
