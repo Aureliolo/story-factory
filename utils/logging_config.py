@@ -94,7 +94,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
 
 
 @contextmanager
-def log_context(correlation_id: str = None) -> Generator[str, None, None]:
+def log_context(correlation_id: str | None = None) -> Generator[str, None, None]:
     """Context manager for setting correlation ID in logs.
 
     Args:

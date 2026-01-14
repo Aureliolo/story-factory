@@ -8,6 +8,7 @@ import logging
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -186,8 +187,14 @@ class Settings:
             ValueError: If any setting value is invalid.
         """
         # Validate URL format
-        if not self.ollama_url.startswith(("http://", "https://")):
-            raise ValueError(f"Invalid ollama_url: {self.ollama_url}")
+        try:
+            parsed = urlparse(self.ollama_url)
+            if parsed.scheme not in ("http", "https"):
+                raise ValueError(f"Invalid URL scheme in ollama_url: {self.ollama_url}")
+            if not parsed.netloc:
+                raise ValueError(f"Invalid URL (missing host) in ollama_url: {self.ollama_url}")
+        except Exception as e:
+            raise ValueError(f"Invalid ollama_url: {self.ollama_url} - {e}") from e
 
         # Validate numeric ranges
         if not 1024 <= self.context_size <= 128000:

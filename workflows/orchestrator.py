@@ -388,8 +388,8 @@ class StoryOrchestrator:
 
     def write_all_chapters(
         self,
-        on_checkpoint: Callable[[int, str], bool] = None,
-    ) -> Generator[WorkflowEvent]:
+        on_checkpoint: Callable[[int, str], bool] | None = None,
+    ) -> Generator[WorkflowEvent, None, None]:
         """Write all chapters, with optional checkpoints for user feedback.
 
         Args:
@@ -468,7 +468,7 @@ class StoryOrchestrator:
 
         return "\n".join(text_parts)
 
-    def export_story_to_file(self, format: str = "markdown", filepath: str = None) -> str:
+    def export_story_to_file(self, format: str = "markdown", filepath: str | None = None) -> str:
         """Export the story to a file.
 
         Args:
