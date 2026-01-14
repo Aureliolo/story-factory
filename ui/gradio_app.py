@@ -991,16 +991,12 @@ class StoryFactoryUI:
                                     "Delete", variant="stop", size="sm", scale=1
                                 )
 
-                            projects_status = gr.Textbox(
-                                label="Status", interactive=False, lines=1
-                            )
+                            projects_status = gr.Textbox(label="Status", interactive=False, lines=1)
 
                         # Right column: Project details
                         with gr.Column(scale=1):
                             gr.Markdown("**Project Details**")
-                            project_details = gr.Markdown(
-                                value="Select a project to view details."
-                            )
+                            project_details = gr.Markdown(value="Select a project to view details.")
 
                 # ============ COMPARE TAB ============
                 with gr.Tab("Compare Models", id="compare"):

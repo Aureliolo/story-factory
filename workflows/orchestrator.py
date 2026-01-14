@@ -598,9 +598,18 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         title = self.story_state.project_name or (brief.premise[:50] if brief else "Untitled Story")
         # Map common language names to ISO 639-1 codes
         lang_map = {
-            "English": "en", "German": "de", "Spanish": "es", "French": "fr",
-            "Italian": "it", "Portuguese": "pt", "Dutch": "nl", "Russian": "ru",
-            "Japanese": "ja", "Chinese": "zh", "Korean": "ko", "Arabic": "ar",
+            "English": "en",
+            "German": "de",
+            "Spanish": "es",
+            "French": "fr",
+            "Italian": "it",
+            "Portuguese": "pt",
+            "Dutch": "nl",
+            "Russian": "ru",
+            "Japanese": "ja",
+            "Chinese": "zh",
+            "Korean": "ko",
+            "Arabic": "ar",
         }
         lang_code = lang_map.get(brief.language, "en") if brief else "en"
         book.set_identifier(self.story_state.id)

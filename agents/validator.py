@@ -78,9 +78,7 @@ class ValidatorAgent(BaseAgent):
                 )
 
         # Check for excessive non-printable characters
-        printable_ratio = sum(1 for c in response if c.isprintable() or c.isspace()) / len(
-            response
-        )
+        printable_ratio = sum(1 for c in response if c.isprintable() or c.isspace()) / len(response)
         if printable_ratio < 0.9:
             raise ResponseValidationError(
                 f"Response contains too many non-printable characters ({1-printable_ratio:.0%})"
