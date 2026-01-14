@@ -40,6 +40,7 @@ Thumbs.db
 # Project specific
 output/stories/*
 !output/stories/.gitkeep
+output/stories/metrics/*
 settings.json
 
 # Logs

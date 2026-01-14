@@ -19,6 +19,7 @@ from agents import (
 from agents.base import LLMError, LLMConnectionError, LLMGenerationError
 from settings import Settings
 from utils.validators import validate_story_id, validate_file_path, validate_chapter_number, sanitize_filename
+from utils.metrics import StoryMetrics, PerformanceTracker, format_duration
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ class StoryOrchestrator:
         # State
         self.story_state: Optional[StoryState] = None
         self.events: list[WorkflowEvent] = []
+        
+        # Performance tracking
+        self.metrics: Optional[StoryMetrics] = None
 
     @property
     def interaction_mode(self):
@@ -69,6 +73,8 @@ class StoryOrchestrator:
             created_at=datetime.now(),
             status="interview",
         )
+        # Initialize metrics tracking
+        self.metrics = StoryMetrics(story_id=self.story_state.id)
         return self.story_state
 
     def _emit(self, event_type: str, agent: str, message: str, data: dict = None):
@@ -281,18 +287,34 @@ class StoryOrchestrator:
 
         chapter.status = "drafting"
 
-        # Write
+        # Write with performance tracking
         self._emit("agent_start", "Writer", f"Writing Chapter {chapter_number}...")
         yield self.events[-1]
 
-        content = self.writer.write_chapter(self.story_state, chapter)
+        with PerformanceTracker(
+            self.metrics,
+            "chapter_write",
+            "Writer",
+            self.writer.model
+        ) as metric:
+            content = self.writer.write_chapter(self.story_state, chapter)
+            metric.output_length = len(content)
+        
         chapter.content = content
 
         # Edit
         self._emit("agent_start", "Editor", f"Editing Chapter {chapter_number}...")
         yield self.events[-1]
 
-        edited_content = self.editor.edit_chapter(self.story_state, content)
+        with PerformanceTracker(
+            self.metrics,
+            "chapter_edit",
+            "Editor",
+            self.editor.model,
+            input_length=len(content)
+        ) as metric:
+            edited_content = self.editor.edit_chapter(self.story_state, content)
+            metric.output_length = len(edited_content)
 
         # Ensure consistency with previous chapter
         if chapter_number > 1:
@@ -315,13 +337,20 @@ class StoryOrchestrator:
         revision_count = 0
         while revision_count < self.settings.max_revision_iterations:
             # Check for continuity issues
-            issues = self.continuity.check_chapter(
-                self.story_state, chapter.content, chapter_number
-            )
+            with PerformanceTracker(
+                self.metrics,
+                "chapter_continuity_check",
+                "Continuity",
+                self.continuity.model,
+                input_length=len(chapter.content)
+            ):
+                issues = self.continuity.check_chapter(
+                    self.story_state, chapter.content, chapter_number
+                )
 
-            # Also validate against outline
-            outline_issues = self.continuity.validate_against_outline(
-                self.story_state, chapter.content, chapter.outline
+                # Also validate against outline
+                outline_issues = self.continuity.validate_against_outline(
+                    self.story_state, chapter.content, chapter.outline
             )
             issues.extend(outline_issues)
 
@@ -490,8 +519,8 @@ class StoryOrchestrator:
 
         # Average reading speed: 200-250 words per minute
         reading_time_min = total_words / 225
-
-        return {
+        
+        stats = {
             "total_words": total_words,
             "total_chapters": len(self.story_state.chapters),
             "completed_chapters": completed_chapters,
@@ -501,6 +530,23 @@ class StoryOrchestrator:
             "plot_points_completed": completed_plot_points,
             "reading_time_minutes": round(reading_time_min, 1),
         }
+        
+        # Add performance metrics if available
+        if self.metrics:
+            stats["performance"] = self.metrics.get_summary()
+            
+            # Add time estimate for remaining work
+            if completed_chapters > 0 and completed_chapters < len(self.story_state.chapters):
+                estimated_remaining = self.metrics.estimate_remaining_time(
+                    len(self.story_state.chapters),
+                    completed_chapters
+                )
+                if estimated_remaining:
+                    stats["estimated_time_remaining"] = format_duration(
+                        estimated_remaining.total_seconds()
+                    )
+        
+        return stats
 
     # ========== PERSISTENCE ==========
 
@@ -562,6 +608,14 @@ class StoryOrchestrator:
         except IOError as e:
             logger.error(f"Failed to write story file: {e}")
             raise IOError(f"Cannot write to {filepath}: {e}")
+        
+        # Save metrics alongside the story
+        if self.metrics:
+            metrics_dir = filepath.parent / "metrics"
+            try:
+                self.metrics.save_to_file(metrics_dir)
+            except Exception as e:
+                logger.warning(f"Failed to save metrics: {e}")
 
         logger.info(f"Story saved to {filepath}")
         return str(filepath)
@@ -600,6 +654,10 @@ class StoryOrchestrator:
             raise IOError(f"Cannot read {filepath}: {e}")
 
         self.story_state = StoryState.model_validate(story_data)
+        
+        # Reinitialize metrics for continued work
+        self.metrics = StoryMetrics(story_id=self.story_state.id)
+        
         logger.info(f"Story loaded from {filepath}")
         return self.story_state
 
