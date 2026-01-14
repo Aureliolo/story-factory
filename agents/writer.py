@@ -6,6 +6,8 @@ from .base import BaseAgent
 
 WRITER_SYSTEM_PROMPT = """You are the Writer, a skilled prose craftsman who brings stories to life.
 
+CRITICAL: Always write ALL content in the specified language. Every word of prose, dialogue, and narration must be in that language.
+
 Your strengths:
 - Vivid, sensory descriptions that immerse readers
 - Natural, character-distinct dialogue
@@ -68,6 +70,8 @@ class WriterAgent(BaseAgent):
 
         prompt = f"""Write Chapter {chapter.number}: "{chapter.title}"
 
+LANGUAGE: {brief.language} - Write the ENTIRE chapter in {brief.language}. All prose, dialogue, and narration must be in {brief.language}.
+
 CHAPTER OUTLINE:
 {chapter.outline}
 
@@ -80,7 +84,7 @@ TONE: {brief.tone}
 NSFW LEVEL: {brief.nsfw_level}
 {revision_note}
 
-Write the complete chapter. Include:
+Write the complete chapter in {brief.language}. Include:
 - Scene-setting description
 - Character actions and dialogue
 - Internal thoughts/feelings where appropriate
@@ -89,7 +93,8 @@ Write the complete chapter. Include:
 
 Target length: 1500-2500 words for this chapter.
 Write in third person past tense unless the outline specifies otherwise.
-Do not include the chapter title or number in your output - just the prose."""
+Do not include the chapter title or number in your output - just the prose.
+IMPORTANT: Every word must be in {brief.language}!"""
 
         # Use lower temperature for revisions (more focused output)
         temp = 0.7 if revision_feedback else None
@@ -112,6 +117,8 @@ Do not include the chapter title or number in your output - just the prose."""
 
         prompt = f"""Write a complete short story based on this premise:
 
+LANGUAGE: {brief.language} - Write the ENTIRE story in {brief.language}. All prose, dialogue, and narration must be in {brief.language}.
+
 {brief.premise}
 
 GENRE: {brief.genre}
@@ -127,11 +134,12 @@ PLOT OUTLINE:
 {story_state.plot_summary}
 {revision_note}
 
-Write a complete, polished short story (2000-4000 words).
+Write a complete, polished short story in {brief.language} (2000-4000 words).
 Include a strong opening hook, rising tension, a satisfying climax, and resolution.
 Show character growth and explore the themes naturally through the narrative.
 
-Write only the story prose - no titles, headers, or meta-commentary."""
+Write only the story prose - no titles, headers, or meta-commentary.
+IMPORTANT: Every word must be in {brief.language}!"""
 
         # Use lower temperature for revisions (more focused output)
         temp = 0.7 if revision_feedback else None
@@ -149,6 +157,8 @@ Write only the story prose - no titles, headers, or meta-commentary."""
 
         prompt = f"""Continue this scene:
 
+LANGUAGE: {brief.language} - Continue writing in {brief.language}. All prose must be in {brief.language}.
+
 {current_text[-1500:]}
 
 {"DIRECTION: " + direction if direction else "Continue naturally to the next beat."}
@@ -157,7 +167,7 @@ GENRE: {brief.genre}
 TONE: {brief.tone}
 NSFW LEVEL: {brief.nsfw_level}
 
-Continue seamlessly from where the text ends. Write 500-1000 more words.
+Continue seamlessly from where the text ends. Write 500-1000 more words in {brief.language}.
 Maintain the same voice, tense, and style."""
 
         return self.generate(prompt, context)

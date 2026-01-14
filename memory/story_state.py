@@ -64,6 +64,7 @@ class StoryBrief(BaseModel):
     setting_time: str
     setting_place: str
     target_length: str  # short_story, novella, novel
+    language: str = "English"  # Output language for all content
     nsfw_level: str  # none, mild, moderate, explicit
     content_preferences: list[str] = Field(default_factory=list)  # What to include
     content_avoid: list[str] = Field(default_factory=list)  # What to avoid

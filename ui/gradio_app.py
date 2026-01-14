@@ -30,7 +30,9 @@ class StoryFactoryUI:
     """Gradio UI for the Story Factory."""
 
     def __init__(self):
+        logger.info("StoryFactoryUI initializing...")
         self.settings = Settings.load()
+        logger.info(f"Settings loaded: default_model={self.settings.default_model}")
         self.orchestrator: StoryOrchestrator = None
         self.interview_complete = False
         self.detected_vram = get_available_vram()
@@ -1328,8 +1330,11 @@ class StoryFactoryUI:
 
 def main():
     """Run the Gradio app."""
+    logger.info("Starting Story Factory web UI...")
     ui = StoryFactoryUI()
+    logger.info("Building UI...")
     app = ui.build_ui()
+    logger.info("Launching Gradio server on http://127.0.0.1:7860")
     app.launch(
         server_name="127.0.0.1",
         server_port=7860,

@@ -6,6 +6,8 @@ from .base import BaseAgent
 
 EDITOR_SYSTEM_PROMPT = """You are the Editor, a meticulous craftsman who polishes prose to perfection.
 
+CRITICAL: Keep ALL content in the original language. Do not translate or change the language.
+
 Your responsibilities:
 1. Improve clarity and flow
 2. Strengthen weak sentences
@@ -23,6 +25,7 @@ You do NOT:
 - Remove content (including NSFW content) - only improve how it's written
 - Add new scenes or characters
 - Change the fundamental meaning
+- Change the language of the text
 
 You preserve the writer's voice while making it shine.
 Output the improved version of the text, not a critique."""
@@ -45,7 +48,9 @@ class EditorAgent(BaseAgent):
         """Edit and polish a chapter."""
         brief = story_state.brief
 
-        prompt = f"""Edit and polish this chapter:
+        prompt = f"""Edit and polish this chapter.
+
+LANGUAGE: {brief.language} - Keep ALL text in {brief.language}. Do not translate.
 
 ---
 {chapter_content}
@@ -67,23 +72,26 @@ Preserve:
 - Character voices
 - The overall story content
 - NSFW content (improve writing quality, don't remove)
+- The language ({brief.language})
 
-Output ONLY the edited chapter text - no commentary or notes."""
+Output ONLY the edited chapter text in {brief.language} - no commentary or notes."""
 
         return self.generate(prompt)
 
-    def edit_passage(self, passage: str, focus: str = None) -> str:
+    def edit_passage(self, passage: str, focus: str = None, language: str = "English") -> str:
         """Edit a specific passage with optional focus area."""
         focus_instruction = f"\n\nFOCUS ESPECIALLY ON: {focus}" if focus else ""
 
-        prompt = f"""Edit and polish this passage:
+        prompt = f"""Edit and polish this passage.
+
+LANGUAGE: {language} - Keep ALL text in {language}. Do not translate.
 
 ---
 {passage}
 ---
 {focus_instruction}
 
-Output ONLY the edited text - no commentary."""
+Output ONLY the edited text in {language} - no commentary."""
 
         return self.generate(prompt)
 
@@ -114,7 +122,10 @@ Be specific - quote the problematic text and suggest improvements."""
         story_state: StoryState,
     ) -> str:
         """Edit new content to ensure consistency with previous content."""
-        prompt = f"""Review this new content for consistency with what came before:
+        brief = story_state.brief
+        prompt = f"""Review this new content for consistency with what came before.
+
+LANGUAGE: {brief.language} - Keep ALL text in {brief.language}. Do not translate.
 
 PREVIOUS CONTENT (ending):
 ...{previous_content[-1000:]}
@@ -130,7 +141,8 @@ Check for and fix:
 - Tense inconsistencies
 - Character voice changes
 - Contradictions with established facts
+- Language consistency (must be in {brief.language})
 
-Output the corrected version of the NEW CONTENT only."""
+Output the corrected version of the NEW CONTENT only, in {brief.language}."""
 
         return self.generate(prompt)

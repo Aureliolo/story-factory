@@ -16,6 +16,8 @@ Your responsibilities:
 4. Plan chapter/scene structures appropriate for the story length
 5. Plant seeds for foreshadowing and payoffs
 
+CRITICAL: Always write ALL content in the specified language. Every word, name, description, and dialogue must be in that language.
+
 You understand genre conventions and know when to follow or subvert them.
 You create characters with depth - flaws, desires, fears, and growth potential.
 You think about themes and how they manifest through plot and character.
@@ -41,7 +43,9 @@ class ArchitectAgent(BaseAgent):
     def create_world(self, story_state: StoryState) -> str:
         """Create the world-building document."""
         brief = story_state.brief
-        prompt = f"""Create detailed world-building for this story:
+        prompt = f"""Create detailed world-building for this story.
+
+LANGUAGE: {brief.language} - Write EVERYTHING in {brief.language}. All descriptions, names, and text must be in {brief.language}.
 
 PREMISE: {brief.premise}
 GENRE: {brief.genre} (subgenres: {', '.join(brief.subgenres)})
@@ -54,14 +58,16 @@ Create:
 2. Key rules or facts about this world (5-10 bullet points)
 3. The atmosphere and mood that should permeate the story
 
-Make it immersive and specific to the genre."""
+Make it immersive and specific to the genre. Remember: ALL text must be in {brief.language}!"""
 
         return self.generate(prompt)
 
     def create_characters(self, story_state: StoryState) -> list[Character]:
         """Design the main characters."""
         brief = story_state.brief
-        prompt = f"""Design the main characters for this story:
+        prompt = f"""Design the main characters for this story.
+
+LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Names, descriptions, traits - everything in {brief.language}.
 
 PREMISE: {brief.premise}
 GENRE: {brief.genre}
@@ -69,7 +75,7 @@ THEMES: {', '.join(brief.themes)}
 NSFW LEVEL: {brief.nsfw_level}
 CONTENT NOTES: Include {', '.join(brief.content_preferences) if brief.content_preferences else 'nothing specific'}
 
-Create 2-4 main characters. For each, output JSON:
+Create 2-4 main characters. For each, output JSON (all text values in {brief.language}):
 ```json
 [
     {{
@@ -84,7 +90,7 @@ Create 2-4 main characters. For each, output JSON:
 ]
 ```
 
-Make them complex, with flaws and desires that create conflict."""
+Make them complex, with flaws and desires that create conflict. ALL text must be in {brief.language}!"""
 
         response = self.generate(prompt)
         return parse_json_list_to_models(response, Character)
@@ -94,7 +100,9 @@ Make them complex, with flaws and desires that create conflict."""
         brief = story_state.brief
         chars = "\n".join(f"- {c.name} ({c.role}): {c.description}" for c in story_state.characters)
 
-        prompt = f"""Create a plot outline for this story:
+        prompt = f"""Create a plot outline for this story.
+
+LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Plot summary and descriptions must be in {brief.language}.
 
 PREMISE: {brief.premise}
 GENRE: {brief.genre}
@@ -110,8 +118,8 @@ WORLD:
 {story_state.world_description[:500]}...
 
 Create:
-1. A compelling plot summary (1-2 paragraphs)
-2. Key plot points as JSON:
+1. A compelling plot summary (1-2 paragraphs) in {brief.language}
+2. Key plot points as JSON (descriptions in {brief.language}):
 ```json
 [
     {{"description": "Inciting incident - ...", "chapter": 1}},
@@ -124,7 +132,8 @@ Create:
 ```
 
 Make sure the plot serves the themes and gives characters room to grow.
-For NSFW content at level '{brief.nsfw_level}', integrate intimate moments naturally into the arc."""
+For NSFW content at level '{brief.nsfw_level}', integrate intimate moments naturally into the arc.
+ALL text must be in {brief.language}!"""
 
         response = self.generate(prompt)
 
@@ -148,7 +157,9 @@ For NSFW content at level '{brief.nsfw_level}', integrate intimate moments natur
 
         plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
 
-        prompt = f"""Create a {num_chapters}-chapter outline for this story:
+        prompt = f"""Create a {num_chapters}-chapter outline for this story.
+
+LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Titles and outlines must be in {brief.language}.
 
 PLOT SUMMARY:
 {story_state.plot_summary}
@@ -159,7 +170,7 @@ KEY PLOT POINTS:
 CHARACTERS:
 {', '.join(c.name for c in story_state.characters)}
 
-For each chapter, output JSON:
+For each chapter, output JSON (all text in {brief.language}):
 ```json
 [
     {{
@@ -170,7 +181,8 @@ For each chapter, output JSON:
 ]
 ```
 
-Ensure good pacing - build tension, vary intensity, place climactic moments appropriately."""
+Ensure good pacing - build tension, vary intensity, place climactic moments appropriately.
+ALL text must be in {brief.language}!"""
 
         response = self.generate(prompt)
         return parse_json_list_to_models(response, Chapter)
