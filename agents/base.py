@@ -6,7 +6,7 @@ import time
 import ollama
 
 from settings import Settings, get_model_info
-from utils.error_handling import handle_ollama_errors, retry_with_fallback
+from utils.error_handling import handle_ollama_errors
 from utils.logging_config import log_performance
 
 logger = logging.getLogger(__name__)
@@ -82,9 +82,6 @@ class BaseAgent:
         model_count = len(models.get("models", []))
         return True, f"Ollama connected. {model_count} models available."
 
-    @retry_with_fallback(
-        max_retries=3, fallback_value=(False, "Model validation failed after retries")
-    )
     def validate_model(self, model_name: str) -> tuple[bool, str]:
         """Validate that a model is available.
 
@@ -94,20 +91,24 @@ class BaseAgent:
         Returns:
             Tuple of (is_valid, message)
         """
-        models = self.client.list()
-        available_models = [m["name"] for m in models.get("models", [])]
+        try:
+            models = self.client.list()
+            available_models = [m["name"] for m in models.get("models", [])]
 
-        # Check direct match or with :latest suffix
-        if model_name in available_models:
-            return True, f"Model '{model_name}' is available"
+            # Check direct match or with :latest suffix
+            if model_name in available_models:
+                return True, f"Model '{model_name}' is available"
 
-        if f"{model_name}:latest" in available_models:
-            return True, f"Model '{model_name}:latest' is available"
+            if f"{model_name}:latest" in available_models:
+                return True, f"Model '{model_name}:latest' is available"
 
-        # Model not found
-        return False, (
-            f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
-        )
+            # Model not found
+            return False, (
+                f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
+            )
+        except Exception as e:
+            logger.warning(f"Error checking model availability: {e}")
+            return False, f"Error checking model availability: {e}"
 
     def generate(
         self,
