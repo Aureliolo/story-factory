@@ -2,7 +2,7 @@
 
 import pytest
 
-from agents.base import LLMConnectionError
+from agents.base import BaseAgent, LLMConnectionError
 from utils.error_handling import ErrorBoundary, handle_ollama_errors, retry_with_fallback
 
 
@@ -134,3 +134,15 @@ class TestErrorBoundary:
             _ = 1 + 1  # Some operation
 
         assert boundary.exception is None
+
+
+class TestDecoratorIntegration:
+    """Tests for decorator integration with BaseAgent methods."""
+
+    def test_check_ollama_health_returns_error_on_failure(self):
+        """check_ollama_health should gracefully handle connection errors."""
+        # Use an invalid URL to trigger connection error
+        is_healthy, message = BaseAgent.check_ollama_health("http://invalid-host:99999")
+
+        assert is_healthy is False
+        assert "Ollama connection failed" in message

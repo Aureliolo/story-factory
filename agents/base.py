@@ -6,6 +6,7 @@ import time
 import ollama
 
 from settings import Settings, get_model_info
+from utils.error_handling import handle_ollama_errors, retry_with_fallback
 from utils.logging_config import log_performance
 
 logger = logging.getLogger(__name__)
@@ -69,20 +70,21 @@ class BaseAgent:
         self.client = ollama.Client(host=self.settings.ollama_url)
 
     @classmethod
+    @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)
     def check_ollama_health(cls, ollama_url: str = "http://localhost:11434") -> tuple[bool, str]:
         """Check if Ollama is running and accessible.
 
         Returns:
             Tuple of (is_healthy, message)
         """
-        try:
-            client = ollama.Client(host=ollama_url)
-            models = client.list()
-            model_count = len(models.get("models", []))
-            return True, f"Ollama connected. {model_count} models available."
-        except Exception as e:
-            return False, f"Ollama not accessible: {e}"
+        client = ollama.Client(host=ollama_url)
+        models = client.list()
+        model_count = len(models.get("models", []))
+        return True, f"Ollama connected. {model_count} models available."
 
+    @retry_with_fallback(
+        max_retries=3, fallback_value=(False, "Model validation failed after retries")
+    )
     def validate_model(self, model_name: str) -> tuple[bool, str]:
         """Validate that a model is available.
 
@@ -92,23 +94,20 @@ class BaseAgent:
         Returns:
             Tuple of (is_valid, message)
         """
-        try:
-            models = self.client.list()
-            available_models = [m["name"] for m in models.get("models", [])]
+        models = self.client.list()
+        available_models = [m["name"] for m in models.get("models", [])]
 
-            # Check direct match or with :latest suffix
-            if model_name in available_models:
-                return True, f"Model '{model_name}' is available"
+        # Check direct match or with :latest suffix
+        if model_name in available_models:
+            return True, f"Model '{model_name}' is available"
 
-            if f"{model_name}:latest" in available_models:
-                return True, f"Model '{model_name}:latest' is available"
+        if f"{model_name}:latest" in available_models:
+            return True, f"Model '{model_name}:latest' is available"
 
-            # Model not found
-            return False, (
-                f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
-            )
-        except Exception as e:
-            return False, f"Error checking model availability: {e}"
+        # Model not found
+        return False, (
+            f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
+        )
 
     def generate(
         self,

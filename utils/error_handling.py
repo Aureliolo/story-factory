@@ -5,8 +5,6 @@ import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from agents.base import LLMConnectionError
-
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -33,16 +31,17 @@ def handle_ollama_errors(
         def wrapper(*args: Any, **kwargs: Any) -> T:
             try:
                 return func(*args, **kwargs)
-            except LLMConnectionError as e:
-                logger.error(
-                    f"Ollama connection error in {func.__name__}: {e}. "
-                    "Please ensure Ollama is running and accessible."
-                )
-                if raise_on_error:
-                    raise
-                return default_return
             except Exception as e:
-                logger.error(f"Unexpected error in {func.__name__}: {e}", exc_info=True)
+                # Check if it's a connection-related error
+                error_type = type(e).__name__
+                if "Connection" in error_type or "LLM" in error_type:
+                    logger.error(
+                        f"Ollama connection error in {func.__name__}: {e}. "
+                        "Please ensure Ollama is running and accessible."
+                    )
+                else:
+                    logger.error(f"Unexpected error in {func.__name__}: {e}", exc_info=True)
+
                 if raise_on_error:
                     raise
                 return default_return
