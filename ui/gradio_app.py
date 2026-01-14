@@ -21,6 +21,7 @@ from settings import (
     get_installed_models,
     get_model_info,
 )
+from utils.logging_config import setup_logging
 from workflows.orchestrator import StoryOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -1386,6 +1387,8 @@ class StoryFactoryUI:
 
 def main():
     """Run the Gradio app."""
+    # Set up logging first (idempotent - safe to call multiple times)
+    setup_logging()
     logger.info("Starting Story Factory web UI...")
     ui = StoryFactoryUI()
     logger.info("Building UI...")

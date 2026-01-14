@@ -25,6 +25,8 @@ repos:
         additional_dependencies:
           - pydantic
           - types-requests
+          - pytest
+          - gradio
         args: [--config-file=pyproject.toml]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
