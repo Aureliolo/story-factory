@@ -64,10 +64,11 @@ class ContinuityAgent(BaseAgent):
     ) -> list[ContinuityIssue]:
         """Check a chapter for continuity issues."""
         # Build context from previous chapters
+        ctx_chars = self.settings.previous_chapter_context_chars
         previous_content = ""
         for ch in story_state.chapters:
             if ch.number < chapter_number and ch.content:
-                previous_content += f"\n[Chapter {ch.number}]\n{ch.content[-1500:]}\n"
+                previous_content += f"\n[Chapter {ch.number}]\n{ch.content[-ctx_chars:]}\n"
 
         chars_summary = "\n".join(
             f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
@@ -300,7 +301,7 @@ Output as a simple list, one fact per line, starting with "- "."""
         prompt = f"""Analyze how each character develops in this chapter:
 
 CHAPTER CONTENT:
-{chapter_content[:4000]}
+{chapter_content[:self.settings.chapter_analysis_chars]}
 
 CHARACTERS TO ANALYZE:
 {chr(10).join(f"- {c.name}: {c.arc_notes}" for c in story_state.characters)}
@@ -354,7 +355,7 @@ Only include characters who actually appear in this chapter."""
         prompt = f"""Check which plot points were addressed in this chapter:
 
 CHAPTER CONTENT:
-{chapter_content[:4000]}
+{chapter_content[:self.settings.chapter_analysis_chars]}
 
 PENDING PLOT POINTS:
 {points_text}

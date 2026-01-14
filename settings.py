@@ -188,6 +188,15 @@ class Settings:
         }
     )
 
+    # Revision settings
+    revision_temperature: float = 0.7  # Lower temperature for more focused revisions
+
+    # Context truncation limits (characters)
+    # These control how much context is sent to the LLM to stay within limits
+    previous_chapter_context_chars: int = 2000  # End of previous chapter for continuity
+    chapter_analysis_chars: int = 4000  # Chapter content for analysis
+    full_text_preview_chars: int = 3000  # Text preview for editing suggestions
+
     # Interaction settings
     interaction_mode: str = "checkpoint"
     chapters_between_checkpoints: int = 3

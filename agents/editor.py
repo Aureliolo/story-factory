@@ -104,7 +104,7 @@ Output ONLY the edited text in {language} - no commentary."""
         prompt = f"""Review this text and provide specific editing suggestions:
 
 ---
-{text[:3000]}
+{text[:self.settings.full_text_preview_chars]}
 ---
 
 Identify:
