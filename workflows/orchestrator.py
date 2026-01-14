@@ -432,12 +432,19 @@ class StoryOrchestrator:
     def export_to_markdown(self) -> str:
         """Export the story as markdown."""
         brief = self.story_state.brief
-        md_parts = [
-            f"# {brief.premise[:50]}...\n",
-            f"*Genre: {brief.genre} | Tone: {brief.tone}*\n",
-            f"*Setting: {brief.setting_place}, {brief.setting_time}*\n",
-            "---\n",
-        ]
+        md_parts = []
+
+        if brief:
+            md_parts.extend(
+                [
+                    f"# {brief.premise[:50]}...\n",
+                    f"*Genre: {brief.genre} | Tone: {brief.tone}*\n",
+                    f"*Setting: {brief.setting_place}, {brief.setting_time}*\n",
+                    "---\n",
+                ]
+            )
+        else:
+            md_parts.append("# Untitled Story\n\n---\n")
 
         for chapter in self.story_state.chapters:
             if chapter.content:
@@ -449,13 +456,20 @@ class StoryOrchestrator:
     def export_to_text(self) -> str:
         """Export the story as plain text."""
         brief = self.story_state.brief
-        text_parts = [
-            brief.premise[:80],
-            f"Genre: {brief.genre} | Tone: {brief.tone}",
-            f"Setting: {brief.setting_place}, {brief.setting_time}",
-            "=" * 60,
-            "",
-        ]
+        text_parts = []
+
+        if brief:
+            text_parts.extend(
+                [
+                    brief.premise[:80],
+                    f"Genre: {brief.genre} | Tone: {brief.tone}",
+                    f"Setting: {brief.setting_place}, {brief.setting_time}",
+                    "=" * 60,
+                    "",
+                ]
+            )
+        else:
+            text_parts.extend(["Untitled Story", "=" * 60, ""])
 
         for chapter in self.story_state.chapters:
             if chapter.content:
