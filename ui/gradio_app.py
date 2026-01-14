@@ -212,7 +212,10 @@ class StoryFactoryUI:
         continuity_model,
     ):
         """Save settings from the UI."""
-        logger.info("Saving settings")
+        logger.info(
+            f"Saving settings: default_model={default_model}, use_per_agent={use_per_agent}, "
+            f"agent_models=[{interviewer_model}, {architect_model}, {writer_model}, {editor_model}, {continuity_model}]"
+        )
         try:
             self.settings.default_model = default_model
             self.settings.context_size = int(context_size)
@@ -220,17 +223,17 @@ class StoryFactoryUI:
             self.settings.chapters_between_checkpoints = int(chapters_between)
             self.settings.use_per_agent_models = use_per_agent
 
-            if use_per_agent:
-                self.settings.agent_models = {
-                    "interviewer": interviewer_model,
-                    "architect": architect_model,
-                    "writer": writer_model,
-                    "editor": editor_model,
-                    "continuity": continuity_model,
-                }
+            # Always save agent_models regardless of use_per_agent
+            self.settings.agent_models = {
+                "interviewer": interviewer_model,
+                "architect": architect_model,
+                "writer": writer_model,
+                "editor": editor_model,
+                "continuity": continuity_model,
+            }
 
             self.settings.save()
-            logger.info("Settings saved successfully")
+            logger.info(f"Settings saved to {self.settings.__class__.__name__}")
             return "Settings saved successfully!"
         except Exception as e:
             logger.exception("Failed to save settings")
@@ -621,7 +624,12 @@ class StoryFactoryUI:
     def build_ui(self):
         """Build and return the Gradio interface."""
         installed_models = get_installed_models()
+        # Combine AVAILABLE_MODELS with installed models for complete dropdown
         model_choices = list(AVAILABLE_MODELS.keys())
+        for model in installed_models:
+            normalized = self._normalize_model_name(model)
+            if normalized not in model_choices and model not in model_choices:
+                model_choices.append(model)
 
         with gr.Blocks(title="Story Factory") as app:
             # Build status line
