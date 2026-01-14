@@ -5,7 +5,7 @@ import time
 
 import ollama
 
-from settings import Settings, get_model_info
+from settings import ModelInfo, Settings, get_model_info
 from utils.error_handling import handle_ollama_errors
 from utils.logging_config import log_performance
 
@@ -129,7 +129,7 @@ class BaseAgent:
         use_model = model or self.model
         use_temp = temperature or self.temperature
 
-        last_error = None
+        last_error: Exception | None = None
         delay = self.RETRY_DELAY
 
         with log_performance(logger, f"{self.name} generation"):
@@ -151,7 +151,7 @@ class BaseAgent:
                     )
                     duration = time.time() - start_time
 
-                    content = response["message"]["content"]
+                    content: str = response["message"]["content"]
                     logger.info(
                         f"{self.name}: LLM response received ({len(content)} chars, {duration:.2f}s)"
                     )
@@ -184,7 +184,7 @@ class BaseAgent:
                 f"Failed to generate after {self.MAX_RETRIES} attempts: {last_error}"
             ) from last_error
 
-    def get_model_info(self) -> dict:
+    def get_model_info(self) -> ModelInfo:
         """Get information about the current model."""
         return get_model_info(self.model)
 

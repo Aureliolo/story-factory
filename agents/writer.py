@@ -55,6 +55,8 @@ class WriterAgent(BaseAgent):
     ) -> str:
         """Write or revise a single chapter."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to write a chapter")
         context = story_state.get_context_summary()
 
         # Get previous chapter summary if exists
@@ -107,6 +109,8 @@ IMPORTANT: Every word must be in {brief.language}!"""
     ) -> str:
         """Write a complete short story in one pass."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to write a short story")
         context = story_state.get_context_summary()
 
         chars = "\n".join(f"- {c.name}: {c.description}" for c in story_state.characters)
@@ -153,6 +157,8 @@ IMPORTANT: Every word must be in {brief.language}!"""
     ) -> str:
         """Continue writing from where the text left off."""
         brief = story_state.brief
+        if not brief:
+            raise ValueError("Story brief is required to continue scene")
         context = story_state.get_context_summary()
 
         prompt = f"""Continue this scene:

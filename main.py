@@ -43,8 +43,11 @@ def run_cli(load_story: str | None = None, list_stories: bool = False):
             print("Saved Stories:")
             print("-" * 40)
             for i, s in enumerate(stories, 1):
-                print(f"{i}. {s.get('premise', 'Untitled')[:50]}...")
-                print(f"   Status: {s.get('status', '?')} | Path: {s.get('path', '?')}")
+                premise = (s.get("premise") or "Untitled")[:50]
+                status = s.get("status") or "?"
+                path = s.get("path") or "?"
+                print(f"{i}. {premise}...")
+                print(f"   Status: {status} | Path: {path}")
                 print()
         return
 
@@ -53,9 +56,9 @@ def run_cli(load_story: str | None = None, list_stories: bool = False):
     # Load existing story
     if load_story:
         try:
-            orchestrator.load_story(load_story)
-            print(f"Loaded story: {orchestrator.story_state.id}")
-            print(f"Status: {orchestrator.story_state.status}")
+            state = orchestrator.load_story(load_story)
+            print(f"Loaded story: {state.id}")
+            print(f"Status: {state.status}")
             print()
             print(orchestrator.get_outline_summary())
             print()
@@ -105,8 +108,12 @@ def run_cli(load_story: str | None = None, list_stories: bool = False):
     print("\n" + "=" * 60)
     print("Writing story...")
 
-    state = orchestrator.story_state
-    if state.brief.target_length == "short_story":
+    if not orchestrator.story_state or not orchestrator.story_state.brief:
+        print("Error: No story state or brief available.")
+        return
+
+    is_short_story = orchestrator.story_state.brief.target_length == "short_story"
+    if is_short_story:
         for event in orchestrator.write_short_story():
             print(f"  [{event.agent_name}] {event.message}")
     else:
