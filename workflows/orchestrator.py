@@ -16,7 +16,9 @@ from agents import (
     EditorAgent,
     ContinuityAgent,
 )
+from agents.base import LLMError, LLMConnectionError, LLMGenerationError
 from settings import Settings
+from utils.validators import validate_story_id, validate_file_path, validate_chapter_number, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -510,23 +512,56 @@ class StoryOrchestrator:
 
         Returns:
             The path where the story was saved.
+            
+        Raises:
+            ValueError: If no story exists to save
+            ValidationError: If the provided filepath is invalid
         """
         if not self.story_state:
             raise ValueError("No story to save")
+        
+        # Validate story ID
+        try:
+            validate_story_id(self.story_state.id)
+        except Exception as e:
+            logger.error(f"Invalid story ID: {e}")
+            raise ValueError(f"Cannot save story with invalid ID: {e}")
 
         # Default save location
         if not filepath:
             output_dir = Path(__file__).parent.parent / "output" / "stories"
             output_dir.mkdir(parents=True, exist_ok=True)
             filepath = output_dir / f"{self.story_state.id}.json"
+        else:
+            # Validate custom filepath
+            output_dir = Path(__file__).parent.parent / "output" / "stories"
+            try:
+                filepath = validate_file_path(filepath, output_dir)
+            except Exception as e:
+                logger.error(f"Invalid file path: {e}")
+                raise ValueError(f"Invalid save path: {e}")
 
         filepath = Path(filepath)
+        
+        # Ensure parent directory exists
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        # Update timestamp
+        self.story_state.updated_at = datetime.now()
 
         # Convert to dict for JSON serialization
-        story_data = self.story_state.model_dump(mode="json")
+        try:
+            story_data = self.story_state.model_dump(mode="json")
+        except Exception as e:
+            logger.error(f"Failed to serialize story state: {e}")
+            raise ValueError(f"Cannot serialize story: {e}")
 
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(story_data, f, indent=2, default=str)
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(story_data, f, indent=2, default=str)
+        except IOError as e:
+            logger.error(f"Failed to write story file: {e}")
+            raise IOError(f"Cannot write to {filepath}: {e}")
 
         logger.info(f"Story saved to {filepath}")
         return str(filepath)
@@ -539,14 +574,30 @@ class StoryOrchestrator:
 
         Returns:
             The loaded StoryState.
+            
+        Raises:
+            FileNotFoundError: If the story file doesn't exist
+            ValueError: If the story file is invalid
         """
         filepath = Path(filepath)
 
         if not filepath.exists():
+            logger.error(f"Story file not found: {filepath}")
             raise FileNotFoundError(f"Story file not found: {filepath}")
+        
+        if not filepath.is_file():
+            logger.error(f"Path is not a file: {filepath}")
+            raise ValueError(f"Path is not a file: {filepath}")
 
-        with open(filepath, "r", encoding="utf-8") as f:
-            story_data = json.load(f)
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                story_data = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in story file: {e}")
+            raise ValueError(f"Story file contains invalid JSON: {e}")
+        except IOError as e:
+            logger.error(f"Cannot read story file: {e}")
+            raise IOError(f"Cannot read {filepath}: {e}")
 
         self.story_state = StoryState.model_validate(story_data)
         logger.info(f"Story loaded from {filepath}")

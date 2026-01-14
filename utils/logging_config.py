@@ -3,9 +3,30 @@
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
+import json
+from datetime import datetime
 
 # Default log file location
 DEFAULT_LOG_FILE = Path(__file__).parent.parent / "logs" / "story_factory.log"
+
+
+class StructuredFormatter(logging.Formatter):
+    """Custom formatter that adds structured context to log messages."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Add timestamp
+        record.timestamp = datetime.now().isoformat()
+        
+        # Add structured context if available
+        if hasattr(record, 'story_id'):
+            record.context = f"[story:{record.story_id}]"
+        elif hasattr(record, 'agent_name'):
+            record.context = f"[agent:{record.agent_name}]"
+        else:
+            record.context = ""
+        
+        return super().format(record)
 
 
 def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None:
@@ -18,10 +39,14 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
 
-    # Create formatter
-    formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    # Create formatters
+    console_formatter = StructuredFormatter(
+        fmt="%(asctime)s [%(levelname)s] %(context)s%(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    
+    file_formatter = StructuredFormatter(
+        fmt="%(timestamp)s [%(levelname)s] %(context)s%(name)s:%(funcName)s:%(lineno)d - %(message)s"
     )
 
     # Configure root logger
@@ -35,7 +60,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
-    console_handler.setFormatter(formatter)
+    console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
 
     # File handler - always enabled by default
@@ -50,7 +75,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
         log_path.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_path, encoding="utf-8")
         file_handler.setLevel(log_level)
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
         # Log the log file location
         root_logger.info(f"Logging to file: {log_path}")
@@ -59,3 +84,31 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("gradio").setLevel(logging.WARNING)
+
+
+def get_logger_with_context(name: str, story_id: Optional[str] = None, agent_name: Optional[str] = None) -> logging.Logger:
+    """Get a logger with structured context.
+    
+    Args:
+        name: Logger name (usually __name__)
+        story_id: Optional story ID for context
+        agent_name: Optional agent name for context
+        
+    Returns:
+        Configured logger
+    """
+    logger = logging.getLogger(name)
+    
+    # Create adapter that adds context
+    class ContextAdapter(logging.LoggerAdapter):
+        def process(self, msg, kwargs):
+            # Add context to extra
+            extra = kwargs.get('extra', {})
+            if story_id:
+                extra['story_id'] = story_id
+            if agent_name:
+                extra['agent_name'] = agent_name
+            kwargs['extra'] = extra
+            return msg, kwargs
+    
+    return ContextAdapter(logger, {})

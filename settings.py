@@ -178,16 +178,94 @@ class Settings:
             try:
                 with open(SETTINGS_FILE, 'r') as f:
                     data = json.load(f)
-                return cls(**data)
+                
+                # Create settings instance
+                settings = cls(**data)
+                
+                # Validate settings
+                settings.validate()
+                
+                return settings
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid JSON in settings file, using defaults: {e}")
             except TypeError as e:
                 logger.warning(f"Settings file has invalid structure, using defaults: {e}")
+            except ValueError as e:
+                logger.warning(f"Settings validation failed, using defaults: {e}")
 
         # Create default settings
         settings = cls()
         settings.save()
         return settings
+    
+    def validate(self) -> None:
+        """Validate settings values.
+        
+        Raises:
+            ValueError: If any setting is invalid
+        """
+        from utils.validators import validate_model_name, validate_temperature
+        
+        # Validate context size
+        if self.context_size < 2048:
+            raise ValueError(f"context_size must be at least 2048, got {self.context_size}")
+        if self.context_size > 128000:
+            logger.warning(f"context_size {self.context_size} is very large, may cause issues")
+        
+        # Validate max_tokens
+        if self.max_tokens < 512:
+            raise ValueError(f"max_tokens must be at least 512, got {self.max_tokens}")
+        if self.max_tokens > self.context_size:
+            raise ValueError(f"max_tokens ({self.max_tokens}) cannot exceed context_size ({self.context_size})")
+        
+        # Validate default model
+        try:
+            validate_model_name(self.default_model)
+        except Exception as e:
+            raise ValueError(f"Invalid default_model: {e}")
+        
+        # Validate agent models
+        if self.use_per_agent_models:
+            for role, model in self.agent_models.items():
+                if role not in AGENT_ROLES:
+                    logger.warning(f"Unknown agent role in settings: {role}")
+                if model and model != "auto":
+                    try:
+                        validate_model_name(model)
+                    except Exception as e:
+                        raise ValueError(f"Invalid model for {role}: {e}")
+        
+        # Validate temperatures
+        for role, temp in self.agent_temperatures.items():
+            if role not in AGENT_ROLES:
+                logger.warning(f"Unknown agent role in temperature settings: {role}")
+            try:
+                validate_temperature(temp)
+            except Exception as e:
+                raise ValueError(f"Invalid temperature for {role}: {e}")
+        
+        # Validate interaction mode
+        valid_modes = ["minimal", "checkpoint", "interactive", "collaborative"]
+        if self.interaction_mode not in valid_modes:
+            raise ValueError(
+                f"interaction_mode must be one of {valid_modes}, got {self.interaction_mode}"
+            )
+        
+        # Validate chapters_between_checkpoints
+        if self.chapters_between_checkpoints < 1:
+            raise ValueError(
+                f"chapters_between_checkpoints must be at least 1, got {self.chapters_between_checkpoints}"
+            )
+        
+        # Validate max_revision_iterations
+        if self.max_revision_iterations < 0:
+            raise ValueError(
+                f"max_revision_iterations cannot be negative, got {self.max_revision_iterations}"
+            )
+        if self.max_revision_iterations > 10:
+            logger.warning(
+                f"max_revision_iterations {self.max_revision_iterations} is very high, may slow generation"
+            )
 
     def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
         """Get the appropriate model for an agent role.
