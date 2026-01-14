@@ -225,37 +225,53 @@ class StoryFactoryUI:
 
     def start_new_story(self):
         """Initialize a new story session."""
-        self.settings = Settings.load()  # Reload settings
+        try:
+            self.settings = Settings.load()  # Reload settings
 
-        # Reset existing orchestrator state if any
-        if self.orchestrator:
-            self.orchestrator.reset_state()
+            # Reset existing orchestrator state if any
+            if self.orchestrator:
+                self.orchestrator.reset_state()
 
-        self.orchestrator = StoryOrchestrator(settings=self.settings)
-        self.orchestrator.create_new_story()
-        self.interview_complete = False
+            self.orchestrator = StoryOrchestrator(settings=self.settings)
+            self.orchestrator.create_new_story()
+            self.interview_complete = False
 
-        initial_questions = self.orchestrator.start_interview()
+            initial_questions = self.orchestrator.start_interview()
 
-        # Show which models are being used
-        models_info = f"""**Models in use:**
+            # Show which models are being used
+            models_info = f"""**Models in use:**
 - Interviewer: {self.orchestrator.interviewer.model}
 - Architect: {self.orchestrator.architect.model}
 - Writer: {self.orchestrator.writer.model}
 - Editor: {self.orchestrator.editor.model}
 - Continuity: {self.orchestrator.continuity.model}
 """
-        return (
-            [[None, initial_questions]],
-            "",
-            models_info,
-            gr.update(interactive=True),
-        )
+            return (
+                [{"role": "assistant", "content": initial_questions}],
+                "",
+                models_info,
+                gr.update(interactive=True),
+            )
+        except Exception as e:
+            logger.exception("start_new_story failed")
+            return (
+                [{"role": "assistant", "content": f"Error starting story: {e}"}],
+                "",
+                f"Error: {e}",
+                gr.update(interactive=False),
+            )
 
     def export_story(self, format_type: str = "markdown"):
         """Export the current story to a downloadable file."""
+        logger.info(f"Export requested: format={format_type}")
+
         if not self.orchestrator or not self.orchestrator.story_state:
+            logger.warning("Export failed: No story to export")
             return None, "No story to export. Please write a story first."
+
+        if not self.orchestrator.story_state.brief:
+            logger.warning("Export failed: Story has no brief/content")
+            return None, "No story content to export. Please write a story first."
 
         try:
             output_dir = Path(tempfile.gettempdir())
@@ -271,21 +287,26 @@ class StoryFactoryUI:
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
 
+            logger.info(f"Export successful: {filepath}")
             return str(filepath), f"Story exported as {format_type}!"
         except Exception as e:
-            logger.error(f"Export failed: {e}")
+            logger.exception(f"Export failed")
             return None, f"Export failed: {e}"
 
     def save_story(self):
         """Save the current story to disk."""
+        logger.info("Save story requested")
+
         if not self.orchestrator or not self.orchestrator.story_state:
+            logger.warning("Save failed: No story to save")
             return "No story to save. Please create a story first."
 
         try:
             filepath = self.orchestrator.save_story()
+            logger.info(f"Story saved: {filepath}")
             return f"Story saved to: {filepath}"
         except Exception as e:
-            logger.error(f"Save failed: {e}")
+            logger.exception("Save failed")
             return f"Save failed: {e}"
 
     def get_saved_stories(self):
@@ -299,7 +320,10 @@ class StoryFactoryUI:
 
     def load_saved_story(self, filepath: str):
         """Load a saved story."""
+        logger.info(f"Load story requested: {filepath}")
+
         if not filepath:
+            logger.warning("Load failed: No filepath provided")
             return "Please select a story to load.", "", []
 
         try:
@@ -313,80 +337,128 @@ class StoryFactoryUI:
             story_content = self.orchestrator.get_full_story()
             outline = self.orchestrator.get_outline_summary()
 
+            logger.info(f"Story loaded successfully: {self.orchestrator.story_state.id}")
             return f"Story loaded! Status: {self.orchestrator.story_state.status}", outline, story_content
         except Exception as e:
-            logger.error(f"Load failed: {e}")
+            logger.exception("Load story failed")
             return f"Load failed: {e}", "", ""
 
     def chat_response(self, message: str, history: list):
         """Handle chat messages during interview."""
-        if not self.orchestrator:
-            return history + [[message, "Please start a new story first."]], ""
+        try:
+            if not self.orchestrator:
+                return history + [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": "Please start a new story first."}
+                ], ""
 
-        if not self.interview_complete:
-            response, is_complete = self.orchestrator.process_interview_response(message)
-            self.interview_complete = is_complete
+            if not self.interview_complete:
+                response, is_complete = self.orchestrator.process_interview_response(message)
+                self.interview_complete = is_complete
 
-            if is_complete:
-                response += "\n\n---\n**Interview complete!** Click 'Build Story Structure' to continue."
+                if is_complete:
+                    response += "\n\n---\n**Interview complete!** Click 'Build Story Structure' to continue."
 
-            return history + [[message, response]], ""
+                return history + [
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": response}
+                ], ""
 
-        return history + [[message, "Use the action buttons to continue."]], ""
+            return history + [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": "Use the action buttons to continue."}
+            ], ""
+        except Exception as e:
+            logger.exception("chat_response failed")
+            return history + [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": f"Error: {e}"}
+            ], ""
 
     def build_structure(self):
         """Build the story structure."""
-        if not self.orchestrator or not self.interview_complete:
-            yield "Please complete the interview first.", ""
+        logger.info("Build structure requested")
+
+        if not self.orchestrator:
+            logger.warning("Build structure failed: No orchestrator")
+            yield "Please start a new story first.", "Error: No story started"
             return
 
-        yield "Building story structure...\n\nCreating world and characters...", "Architect is working..."
+        if not self.interview_complete:
+            logger.warning("Build structure failed: Interview not complete")
+            yield "Please complete the interview first.", "Error: Interview incomplete"
+            return
 
-        self.orchestrator.build_story_structure()
+        try:
+            yield "Building story structure...\n\nCreating world and characters...", "Architect is working..."
 
-        outline = self.orchestrator.get_outline_summary()
-        yield outline, "Structure complete! Review and click 'Write Story' to begin."
+            self.orchestrator.build_story_structure()
+
+            outline = self.orchestrator.get_outline_summary()
+            logger.info("Structure built successfully")
+            yield outline, "Structure complete! Review and click 'Write Story' to begin."
+        except Exception as e:
+            logger.exception("Build structure failed")
+            yield f"Error building structure: {e}", f"Error: {e}"
 
     def write_story(self):
         """Write the story."""
+        logger.info("Write story requested")
+
         if not self.orchestrator:
-            yield "Please start a new story first.", "", ""
+            logger.warning("Write story failed: No orchestrator")
+            yield "Please start a new story first.", "", "Error: No story started"
             return
 
         state = self.orchestrator.story_state
+        if not state or not state.brief:
+            logger.warning("Write story failed: No brief/structure")
+            yield "Please complete the interview and build structure first.", "", "Error: Story structure not built"
+            return
+
         brief = state.brief
 
-        if brief.target_length == "short_story":
-            yield "Writing short story...", "", "Writer is working..."
+        try:
+            if brief.target_length == "short_story":
+                logger.info("Writing short story")
+                yield "Writing short story...", "", "Writer is working..."
 
-            for event in self.orchestrator.write_short_story():
-                yield "", "", f"{event.agent_name}: {event.message}"
+                for event in self.orchestrator.write_short_story():
+                    yield "", "", f"{event.agent_name}: {event.message}"
 
-            story = self.orchestrator.get_full_story()
-            stats = self.orchestrator.get_statistics()
-            stats_msg = f"Complete! {stats['total_words']} words | ~{stats['reading_time_minutes']} min read"
-            yield story, stats_msg, "Story complete!"
+                story = self.orchestrator.get_full_story()
+                stats = self.orchestrator.get_statistics()
+                stats_msg = f"Complete! {stats['total_words']} words | ~{stats['reading_time_minutes']} min read"
+                logger.info(f"Short story complete: {stats['total_words']} words")
+                yield story, stats_msg, "Story complete!"
 
-        else:
-            total_chapters = len(state.chapters)
-            full_story = ""
+            else:
+                logger.info(f"Writing multi-chapter story: {len(state.chapters)} chapters")
+                total_chapters = len(state.chapters)
+                full_story = ""
 
-            for chapter in state.chapters:
-                yield full_story, f"Writing chapter {chapter.number}/{total_chapters}...", f"Working on: {chapter.title}"
+                for chapter in state.chapters:
+                    yield full_story, f"Writing chapter {chapter.number}/{total_chapters}...", f"Working on: {chapter.title}"
 
-                for event in self.orchestrator.write_chapter(chapter.number):
-                    yield full_story, f"Chapter {chapter.number}: {event.message}", f"{event.agent_name}: {event.message}"
+                    for event in self.orchestrator.write_chapter(chapter.number):
+                        yield full_story, f"Chapter {chapter.number}: {event.message}", f"{event.agent_name}: {event.message}"
 
-                full_story = self.orchestrator.get_full_story()
-                yield full_story, f"Chapter {chapter.number} complete", f"Finished: {chapter.title}"
+                    full_story = self.orchestrator.get_full_story()
+                    logger.info(f"Chapter {chapter.number} complete")
+                    yield full_story, f"Chapter {chapter.number} complete", f"Finished: {chapter.title}"
 
-            stats = self.orchestrator.get_statistics()
-            stats_msg = (
-                f"Complete! {stats['total_words']} words across {stats['total_chapters']} chapters | "
-                f"~{stats['reading_time_minutes']} min read | "
-                f"Plot: {stats['plot_points_completed']}/{stats['plot_points_total']} points"
-            )
-            yield full_story, stats_msg, "All chapters complete!"
+                stats = self.orchestrator.get_statistics()
+                stats_msg = (
+                    f"Complete! {stats['total_words']} words across {stats['total_chapters']} chapters | "
+                    f"~{stats['reading_time_minutes']} min read | "
+                    f"Plot: {stats['plot_points_completed']}/{stats['plot_points_total']} points"
+                )
+                logger.info(f"Multi-chapter story complete: {stats['total_words']} words, {stats['total_chapters']} chapters")
+                yield full_story, stats_msg, "All chapters complete!"
+
+        except Exception as e:
+            logger.exception("Write story failed")
+            yield f"Error writing story: {e}", "", f"Error: {e}"
 
     # ============ Comparison Functions ============
 
@@ -535,7 +607,7 @@ class StoryFactoryUI:
 
                         with gr.Column(scale=2):
                             gr.Markdown("### Interview")
-                            chatbot = gr.Chatbot(label="Chat with the Interviewer", height=300)
+                            chatbot = gr.Chatbot(label="Chat with the Interviewer", height=300, type="messages")
                             chat_input = gr.Textbox(
                                 label="Your response",
                                 placeholder="Type your answer here...",
