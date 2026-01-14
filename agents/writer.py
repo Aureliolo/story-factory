@@ -64,7 +64,10 @@ class WriterAgent(BaseAgent):
         if chapter.number > 1:
             prev = next((c for c in story_state.chapters if c.number == chapter.number - 1), None)
             if prev and prev.content:
-                prev_chapter_summary = f"\nPREVIOUS CHAPTER ENDED WITH:\n...{prev.content[-2000:]}"
+                ctx_chars = self.settings.previous_chapter_context_chars
+                prev_chapter_summary = (
+                    f"\nPREVIOUS CHAPTER ENDED WITH:\n...{prev.content[-ctx_chars:]}"
+                )
 
         revision_note = ""
         if revision_feedback:
@@ -99,7 +102,7 @@ Do not include the chapter title or number in your output - just the prose.
 IMPORTANT: Every word must be in {brief.language}!"""
 
         # Use lower temperature for revisions (more focused output)
-        temp = 0.7 if revision_feedback else None
+        temp = self.settings.revision_temperature if revision_feedback else None
         return self.generate(prompt, context, temperature=temp)
 
     def write_short_story(
@@ -146,7 +149,7 @@ Write only the story prose - no titles, headers, or meta-commentary.
 IMPORTANT: Every word must be in {brief.language}!"""
 
         # Use lower temperature for revisions (more focused output)
-        temp = 0.7 if revision_feedback else None
+        temp = self.settings.revision_temperature if revision_feedback else None
         return self.generate(prompt, context, temperature=temp)
 
     def continue_scene(
