@@ -385,12 +385,16 @@ class StoryFactoryUI:
 
     def get_project_details(self, filepath: str):
         """Get detailed info for a selected project."""
+        logger.debug(f"get_project_details called with: {filepath!r}")
+
         if not filepath:
+            logger.debug("No filepath provided for project details")
             return "Select a project to view details."
 
         try:
             import json
 
+            logger.debug(f"Loading project details from: {filepath}")
             with open(filepath, encoding="utf-8") as f:
                 data = json.load(f)
 
@@ -485,19 +489,26 @@ class StoryFactoryUI:
 
     def generate_title_ideas(self, filepath: str):
         """Generate AI title suggestions for a project."""
+        logger.info(f"Generate title ideas requested for: {filepath}")
+
         if not filepath:
+            logger.warning("Generate titles: No filepath provided")
             return gr.update(choices=["Select a project first"]), "No project selected."
 
         try:
+            logger.info(f"Loading story for title generation: {filepath}")
             temp_orchestrator = StoryOrchestrator(settings=self.settings)
             temp_orchestrator.load_story(filepath)
             titles = temp_orchestrator.generate_title_suggestions()
 
-            if titles:
-                return gr.update(choices=titles, value=titles[0]), "Generated 5 title ideas!"
-            return gr.update(choices=["No suggestions available"]), "Could not generate titles."
+            if titles and len(titles) > 0:
+                logger.info(f"Generated {len(titles)} title suggestions: {titles}")
+                return gr.update(choices=titles, value=titles[0]), f"Generated {len(titles)} title ideas!"
+            else:
+                logger.warning("Title generation returned empty list")
+                return gr.update(choices=["No suggestions available"]), "Could not generate titles - check logs for details."
         except Exception as e:
-            logger.exception("Generate titles failed")
+            logger.exception(f"Generate titles failed: {e}")
             return gr.update(choices=["Error generating titles"]), f"Error: {e}"
 
     def apply_suggested_title(self, filepath: str, selected_title: str):
