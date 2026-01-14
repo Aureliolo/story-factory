@@ -57,13 +57,12 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Add context filter
-    root_logger.addFilter(_context_filter)
-
-    # Console handler
+    # Console handler with context filter
+    # Note: Filter must be on HANDLERS, not logger, for child logger records
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
+    console_handler.addFilter(_context_filter)
     root_logger.addHandler(console_handler)
 
     # File handler - always enabled by default with rotation
@@ -95,6 +94,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
         )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
+        file_handler.addFilter(_context_filter)
         root_logger.addHandler(file_handler)
 
         # Log the log file location
