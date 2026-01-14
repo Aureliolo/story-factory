@@ -8,7 +8,6 @@ on:
   pull_request_target:
     branches: [master, main]
 
-# Workflow-level permissions for pull_request_target
 permissions:
   contents: read
   pull-requests: read
@@ -21,7 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Always checkout PR head for testing
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.13
@@ -49,7 +47,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Always checkout PR head for testing
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.13
