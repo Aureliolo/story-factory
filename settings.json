@@ -1,6 +1,6 @@
 {
   "ollama_url": "http://localhost:11434",
-  "context_size": 22528,
+  "context_size": 33792,
   "max_tokens": 4096,
   "default_model": "huihui_ai/qwen3-abliterated:32b",
   "use_per_agent_models": true,

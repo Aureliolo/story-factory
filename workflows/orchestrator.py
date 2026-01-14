@@ -8,8 +8,6 @@ from pathlib import Path
 from typing import Generator, Callable, Optional
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
-
 from memory.story_state import StoryState, StoryBrief, Chapter
 from agents import (
     InterviewerAgent,
@@ -19,6 +17,8 @@ from agents import (
     ContinuityAgent,
 )
 from settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -125,8 +125,13 @@ class StoryOrchestrator:
 
     def build_story_structure(self) -> StoryState:
         """Have the architect build the story structure."""
+        logger.info("Building story structure...")
         self._emit("agent_start", "Architect", "Building world...")
+
+        logger.info(f"Calling architect with model: {self.architect.model}")
         self.story_state = self.architect.build_story_structure(self.story_state)
+
+        logger.info(f"Structure built: {len(self.story_state.chapters)} chapters, {len(self.story_state.characters)} characters")
         self._emit("agent_complete", "Architect", "Story structure complete!")
         return self.story_state
 
@@ -142,7 +147,7 @@ class StoryOrchestrator:
             f"TONE: {state.brief.tone}",
             f"NSFW LEVEL: {state.brief.nsfw_level}",
             f"\nWORLD:\n{state.world_description[:500]}...",
-            f"\nCHARACTERS:",
+            "\nCHARACTERS:",
         ]
 
         for char in state.characters:
