@@ -1,9 +1,11 @@
 """Story Architect Agent - Creates story structure, characters, and outlines."""
 
 import re
-from .base import BaseAgent
-from memory.story_state import StoryState, Character, Chapter, PlotPoint
+
+from memory.story_state import Chapter, Character, PlotPoint, StoryState
 from utils.json_parser import parse_json_list_to_models
+
+from .base import BaseAgent
 
 ARCHITECT_SYSTEM_PROMPT = """You are the Story Architect, a master storyteller who designs compelling narrative structures.
 
@@ -127,7 +129,7 @@ For NSFW content at level '{brief.nsfw_level}', integrate intimate moments natur
         response = self.generate(prompt)
 
         # Extract plot summary (everything before JSON)
-        plot_summary = re.split(r'```json', response)[0].strip()
+        plot_summary = re.split(r"```json", response)[0].strip()
 
         # Extract plot points
         plot_points = parse_json_list_to_models(response, PlotPoint)
@@ -144,9 +146,7 @@ For NSFW content at level '{brief.nsfw_level}', integrate intimate moments natur
         }
         num_chapters = length_map.get(brief.target_length, 5)
 
-        plot_points_text = "\n".join(
-            f"- {p.description}" for p in story_state.plot_points
-        )
+        plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
 
         prompt = f"""Create a {num_chapters}-chapter outline for this story:
 
@@ -183,9 +183,9 @@ Ensure good pacing - build tension, vary intensity, place climactic moments appr
 
         # Extract world rules (simple heuristic)
         rules = []
-        for line in world_response.split('\n'):
-            if line.strip().startswith(('-', '*', '•')):
-                rules.append(line.strip().lstrip('-*• '))
+        for line in world_response.split("\n"):
+            if line.strip().startswith(("-", "*", "•")):
+                rules.append(line.strip().lstrip("-*• "))
         story_state.world_rules = rules[:10]
 
         # Create characters

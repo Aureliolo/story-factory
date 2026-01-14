@@ -5,16 +5,10 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
-  pull_request_target:
-    branches: [master, main]
-
-permissions:
-  contents: read
-  pull-requests: read
-  statuses: write
 
 jobs:
-  test:
+  tests:
+    name: Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -42,7 +36,8 @@ jobs:
           files: ./coverage.xml
           fail_ci_if_error: false
 
-  lint:
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -54,9 +49,16 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Check syntax errors
+      - name: Install linting dependencies
         run: |
-          python -m py_compile main.py settings.py
-          python -m py_compile agents/*.py
-          python -m py_compile workflows/*.py
-          python -m py_compile utils/*.py
+          python -m pip install --upgrade pip
+          pip install ruff black mypy
+
+      - name: Run ruff
+        run: ruff check .
+
+      - name: Run black
+        run: black --check .
+
+      - name: Run mypy
+        run: mypy . --ignore-missing-imports || true  # Don't fail on type errors initially

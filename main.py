@@ -21,6 +21,7 @@ from utils.logging_config import setup_logging
 def run_web_ui():
     """Launch the Gradio web interface."""
     from ui.gradio_app import main
+
     main()
 
 
@@ -78,7 +79,7 @@ def run_cli(load_story: str = None, list_stories: bool = False):
 
     while True:
         response = input("\nYour response (or 'done' to finish interview): ").strip()
-        if response.lower() == 'done':
+        if response.lower() == "done":
             orchestrator.finalize_interview()
             break
 
@@ -97,7 +98,7 @@ def run_cli(load_story: str = None, list_stories: bool = False):
     print(orchestrator.get_outline_summary())
 
     proceed = input("\n\nProceed with writing? (yes/no): ").strip().lower()
-    if proceed != 'yes':
+    if proceed != "yes":
         print("Aborted.")
         return
 
@@ -123,16 +124,14 @@ def run_cli(load_story: str = None, list_stories: bool = False):
 
     # Offer to save
     save = input("\nSave story? (yes/no): ").strip().lower()
-    if save == 'yes':
+    if save == "yes":
         filepath = orchestrator.save_story()
         print(f"Story saved to: {filepath}")
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Story Factory - AI-Powered Story Production Team"
-    )
+    parser = argparse.ArgumentParser(description="Story Factory - AI-Powered Story Production Team")
     parser.add_argument(
         "--cli",
         action="store_true",

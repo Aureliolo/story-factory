@@ -2,10 +2,35 @@
 
 import logging
 import sys
+import time
+import uuid
+from collections.abc import Generator
+from contextlib import contextmanager
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # Default log file location
 DEFAULT_LOG_FILE = Path(__file__).parent.parent / "logs" / "story_factory.log"
+
+
+class ContextFilter(logging.Filter):
+    """Add context information to log records."""
+
+    def __init__(self):
+        super().__init__()
+        self.correlation_id = None
+
+    def filter(self, record):
+        """Add correlation ID to log record if available."""
+        if self.correlation_id:
+            record.correlation_id = self.correlation_id
+        else:
+            record.correlation_id = "-"
+        return True
+
+
+# Global context filter instance
+_context_filter = ContextFilter()
 
 
 def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None:
@@ -18,10 +43,10 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
 
-    # Create formatter
+    # Create formatter with correlation ID
     formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        fmt="%(asctime)s [%(levelname)s] [%(correlation_id)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     # Configure root logger
@@ -32,13 +57,16 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
+    # Add context filter
+    root_logger.addFilter(_context_filter)
+
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    # File handler - always enabled by default
+    # File handler - always enabled by default with rotation
     if log_file == "default":
         log_path = DEFAULT_LOG_FILE
     elif log_file:
@@ -48,14 +76,68 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
 
     if log_path:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        # Use RotatingFileHandler to prevent log files from growing too large
+        # Max 10MB per file, keep 5 backup files (50MB total)
+        file_handler = RotatingFileHandler(
+            log_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"  # 10MB
+        )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
         # Log the log file location
-        root_logger.info(f"Logging to file: {log_path}")
+        root_logger.info(f"Logging to file: {log_path} (max 10MB, 5 backups)")
 
     # Set third-party loggers to WARNING to reduce noise
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("gradio").setLevel(logging.WARNING)
+
+
+@contextmanager
+def log_context(correlation_id: str | None = None) -> Generator[str]:
+    """Context manager for setting correlation ID in logs.
+
+    Args:
+        correlation_id: Optional correlation ID. If not provided, generates a new UUID.
+
+    Yields:
+        The correlation ID being used.
+
+    Example:
+        with log_context("request-123"):
+            logger.info("Processing request")  # Will include correlation_id in log
+    """
+    if correlation_id is None:
+        correlation_id = str(uuid.uuid4())[:8]
+
+    old_id = _context_filter.correlation_id
+    _context_filter.correlation_id = correlation_id
+    try:
+        yield correlation_id
+    finally:
+        _context_filter.correlation_id = old_id
+
+
+@contextmanager
+def log_performance(logger: logging.Logger, operation: str) -> Generator[None]:
+    """Context manager for logging operation performance.
+
+    Args:
+        logger: Logger instance to use
+        operation: Name of the operation being timed
+
+    Example:
+        with log_performance(logger, "story_generation"):
+            generate_story()  # Will log duration after completion
+    """
+    start_time = time.time()
+    logger.info(f"{operation}: Starting")
+    try:
+        yield
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error(f"{operation}: Failed after {duration:.2f}s - {e}")
+        raise
+    else:
+        duration = time.time() - start_time
+        logger.info(f"{operation}: Completed in {duration:.2f}s")

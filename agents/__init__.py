@@ -1,11 +1,11 @@
 """Story Factory Agents."""
 
-from .base import BaseAgent
-from .interviewer import InterviewerAgent
 from .architect import ArchitectAgent
-from .writer import WriterAgent
-from .editor import EditorAgent
+from .base import BaseAgent
 from .continuity import ContinuityAgent
+from .editor import EditorAgent
+from .interviewer import InterviewerAgent
+from .writer import WriterAgent
 
 __all__ = [
     "BaseAgent",
