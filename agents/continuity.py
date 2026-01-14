@@ -59,7 +59,7 @@ class ContinuityAgent(BaseAgent):
         previous_content = ""
         for ch in story_state.chapters:
             if ch.number < chapter_number and ch.content:
-                previous_content += f"\n[Chapter {ch.number}]\n{ch.content[-500:]}\n"
+                previous_content += f"\n[Chapter {ch.number}]\n{ch.content[-1500:]}\n"
 
         chars_summary = "\n".join(
             f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
@@ -72,7 +72,7 @@ ESTABLISHED CHARACTERS:
 {chars_summary}
 
 ESTABLISHED FACTS:
-{chr(10).join(story_state.established_facts[-20:])}
+{chr(10).join(story_state.established_facts[-30:])}
 
 WORLD RULES:
 {chr(10).join(story_state.world_rules)}
@@ -203,7 +203,7 @@ Output as JSON (only issues, not confirmations):
 {chapter_content}
 
 ALREADY KNOWN:
-{chr(10).join(story_state.established_facts[-10:])}
+{chr(10).join(story_state.established_facts[-30:])}
 
 List NEW facts only - things that are now canon:
 - Character revelations
@@ -261,3 +261,50 @@ Output as a simple list, one fact per line, starting with "- "."""
             )
 
         return "\n".join(feedback_parts)
+
+    def extract_character_arcs(
+        self,
+        chapter_content: str,
+        story_state: StoryState,
+        chapter_number: int,
+    ) -> dict[str, str]:
+        """Extract character arc updates from a chapter.
+
+        Returns:
+            Dict mapping character names to their arc state in this chapter.
+        """
+        char_names = [c.name for c in story_state.characters]
+        if not char_names:
+            return {}
+
+        prompt = f"""Analyze how each character develops in this chapter:
+
+CHAPTER CONTENT:
+{chapter_content[:4000]}
+
+CHARACTERS TO ANALYZE:
+{chr(10).join(f"- {c.name}: {c.arc_notes}" for c in story_state.characters)}
+
+For each character who appears in this chapter, describe their current emotional/psychological state and any development or change they undergo.
+
+Output as simple lines:
+CHARACTER_NAME: Brief description of their state/development in this chapter
+
+Only include characters who actually appear in this chapter."""
+
+        response = self.generate(prompt, temperature=0.3)
+
+        arcs = {}
+        for line in response.split('\n'):
+            line = line.strip()
+            if ':' in line:
+                parts = line.split(':', 1)
+                name = parts[0].strip()
+                state = parts[1].strip() if len(parts) > 1 else ""
+                # Match to actual character names (case-insensitive)
+                for char_name in char_names:
+                    if name.lower() == char_name.lower() or name.lower() in char_name.lower():
+                        arcs[char_name] = state
+                        break
+
+        return arcs

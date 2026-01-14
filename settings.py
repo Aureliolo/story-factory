@@ -136,7 +136,7 @@ class Settings:
     # General
     ollama_url: str = "http://localhost:11434"
     context_size: int = 32768
-    max_tokens: int = 4096
+    max_tokens: int = 8192  # Increased to support longer chapters (2000+ words)
 
     # Default model for all agents (if not using per-agent)
     default_model: str = "huihui_ai/qwen3-abliterated:32b"

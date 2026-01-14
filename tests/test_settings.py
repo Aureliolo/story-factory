@@ -17,7 +17,7 @@ class TestSettings:
         settings = Settings()
         assert settings.ollama_url == "http://localhost:11434"
         assert settings.context_size == 32768
-        assert settings.max_tokens == 4096
+        assert settings.max_tokens == 8192
         assert settings.use_per_agent_models is True
         assert settings.interaction_mode == "checkpoint"
 
