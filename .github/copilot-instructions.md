@@ -6,7 +6,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 
 ### Python Best Practices
 - Follow PEP 8 style guidelines for Python code
-- Use type hints where appropriate (Pydantic models are used extensively)
+- Use type hints where appropriate (Pydantic models for data validation in `memory/story_state.py`, dataclasses in `settings.py`)
 - Write clear, descriptive variable and function names
 - Keep functions focused and single-purpose
 - Use docstrings for classes and complex functions
@@ -45,6 +45,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
   - `story_state.py`: Maintains story context across agents
 - `utils/`: Utility modules
   - `json_parser.py`: JSON extraction and parsing utilities
+  - `logging_config.py`: Logging configuration and setup
 - `ui/`: User interface components
   - `gradio_app.py`: Gradio-based web interface
 - `output/stories/`: Generated story outputs (gitignored)
@@ -65,7 +66,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 
 4. **Error Handling**: Handle Ollama connection errors and model loading failures gracefully with informative error messages.
 
-5. **Configuration**: Settings are managed through Pydantic models in `settings.py`. Use `settings.json` for user configuration.
+5. **Configuration**: Settings are managed through dataclasses in `settings.py`. Use `settings.json` for user configuration.
 
 6. **Dependencies**: 
    - Minimize external dependencies
