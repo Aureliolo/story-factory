@@ -32,7 +32,7 @@ def handle_ollama_errors(
             try:
                 return func(*args, **kwargs)
             except (ConnectionError, OSError, TimeoutError) as e:
-                # Connection-related errors
+                # Standard connection-related errors
                 logger.error(
                     f"Ollama connection error in {func.__name__}: {e}. "
                     "Please ensure Ollama is running and accessible."
@@ -41,8 +41,17 @@ def handle_ollama_errors(
                     raise
                 return default_return
             except Exception as e:
-                # Other errors
-                logger.error(f"Unexpected error in {func.__name__}: {e}", exc_info=True)
+                # Ollama-specific errors and other exceptions
+                # Check for ollama library errors without importing (avoid circular deps)
+                error_type = type(e).__name__
+                if error_type in ("RequestError", "ResponseError"):
+                    logger.error(
+                        f"Ollama error in {func.__name__}: {e}. "
+                        "Please ensure Ollama is running and accessible."
+                    )
+                else:
+                    logger.error(f"Unexpected error in {func.__name__}: {e}", exc_info=True)
+
                 if raise_on_error:
                     raise
                 return default_return

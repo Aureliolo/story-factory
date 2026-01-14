@@ -107,8 +107,9 @@ class BaseAgent:
                 f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
             )
         except Exception as e:
-            logger.warning(f"Error checking model availability: {e}")
-            return False, f"Error checking model availability: {e}"
+            error_msg = f"Error checking model availability: {e}"
+            logger.warning(error_msg)
+            return False, error_msg
 
     def generate(
         self,
