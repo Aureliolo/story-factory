@@ -42,20 +42,56 @@ class StoryFactoryUI:
         installed = set(get_installed_models())
 
         if not installed:
-            warnings.append("No models installed. Please pull a model first.")
+            warnings.append("⚠️ No models installed. Please pull a model first.")
             return warnings
 
         # Check default model
         if self.settings.default_model not in installed:
-            warnings.append(f"Default model '{self.settings.default_model}' not installed.")
+            warnings.append(f"⚠️ Default model '{self.settings.default_model}' not installed.")
 
         # Check agent models
         if self.settings.use_per_agent_models:
             for role, model in self.settings.agent_models.items():
                 if model != "auto" and model not in installed:
-                    warnings.append(f"{role.title()} model '{model}' not installed.")
+                    warnings.append(f"⚠️ {role.title()} model '{model}' not installed.")
 
         return warnings
+    
+    def get_system_status(self) -> str:
+        """Get a formatted system status message."""
+        status_lines = ["# System Status\n"]
+        
+        # Ollama status
+        ollama_ok, ollama_msg = self.ollama_status
+        status_icon = "✅" if ollama_ok else "❌"
+        status_lines.append(f"{status_icon} **Ollama**: {ollama_msg}\n")
+        
+        # VRAM
+        status_lines.append(f"💾 **Detected VRAM**: {self.detected_vram}GB\n")
+        
+        # Models
+        installed_count = len(get_installed_models())
+        if installed_count > 0:
+            status_lines.append(f"✅ **Models Installed**: {installed_count}\n")
+        else:
+            status_lines.append(f"❌ **Models Installed**: None - please pull a model\n")
+        
+        # Warnings
+        if self.model_warnings:
+            status_lines.append("\n## Configuration Warnings\n")
+            for warning in self.model_warnings:
+                status_lines.append(f"- {warning}\n")
+        else:
+            status_lines.append("\n✅ **Configuration**: All models available\n")
+        
+        # Settings validation
+        try:
+            self.settings.validate()
+            status_lines.append("✅ **Settings**: Valid\n")
+        except ValueError as e:
+            status_lines.append(f"❌ **Settings**: {e}\n")
+        
+        return "".join(status_lines)
 
     # ============ Settings Tab Functions ============
 
@@ -230,11 +266,56 @@ class StoryFactoryUI:
     def start_new_story(self):
         """Initialize a new story session."""
         try:
-            self.settings = Settings.load()  # Reload settings
+            # Validate settings first
+            self.settings = Settings.load()
+            
+            # Check Ollama is running
+            ollama_ok, ollama_msg = BaseAgent.check_ollama_health(self.settings.ollama_url)
+            if not ollama_ok:
+                error_msg = f"""❌ **Cannot start story: Ollama not accessible**
+
+{ollama_msg}
+
+**Troubleshooting:**
+1. Ensure Ollama is installed and running
+2. Check that Ollama is listening on {self.settings.ollama_url}
+3. Try running `ollama list` in a terminal to verify
+4. See TROUBLESHOOTING.md for more help
+"""
+                return (
+                    [{"role": "assistant", "content": error_msg}],
+                    "",
+                    error_msg,
+                    gr.update(interactive=False),
+                    gr.update(interactive=False),
+                )
+            
+            # Check models are installed
+            installed = set(get_installed_models())
+            if not installed:
+                error_msg = """❌ **Cannot start story: No models installed**
+
+You need to install at least one model before generating stories.
+
+**Quick start:**
+1. Go to the Settings tab
+2. Click on "Models" section
+3. Select a model from the "Available Models" list
+4. Click "Pull Selected Model"
+
+**Recommended starter model:** `huihui_ai/qwen3-abliterated:8b` (8GB VRAM, ~5GB download)
+"""
+                return (
+                    [{"role": "assistant", "content": error_msg}],
+                    "",
+                    error_msg,
+                    gr.update(interactive=False),
+                    gr.update(interactive=False),
+                )
 
             # Reset existing orchestrator state if any
             if self.orchestrator:
-                self.orchestrator.reset_state()
+                self.orchestrator.clear_events()
 
             self.orchestrator = StoryOrchestrator(settings=self.settings)
             self.orchestrator.create_new_story()
@@ -243,7 +324,9 @@ class StoryFactoryUI:
             initial_questions = self.orchestrator.start_interview()
 
             # Show which models are being used
-            models_info = f"""**Models in use:**
+            models_info = f"""✅ **Story initialized successfully!**
+
+**Models in use:**
 - Interviewer: {self.orchestrator.interviewer.model}
 - Architect: {self.orchestrator.architect.model}
 - Writer: {self.orchestrator.writer.model}
@@ -257,12 +340,34 @@ class StoryFactoryUI:
                 gr.update(interactive=True),
                 gr.update(interactive=True),
             )
+        except ValueError as e:
+            # Settings validation error
+            logger.error(f"Settings validation failed: {e}")
+            error_msg = f"""❌ **Configuration Error**
+
+{e}
+
+Please check your settings in the Settings tab or see TROUBLESHOOTING.md.
+"""
+            return (
+                [{"role": "assistant", "content": error_msg}],
+                "",
+                error_msg,
+                gr.update(interactive=False),
+                gr.update(interactive=False),
+            )
         except Exception as e:
             logger.exception("start_new_story failed")
+            error_msg = f"""❌ **Unexpected Error**
+
+{type(e).__name__}: {e}
+
+Check logs/story_factory.log for details or see TROUBLESHOOTING.md.
+"""
             return (
-                [{"role": "assistant", "content": f"Error starting story: {e}"}],
+                [{"role": "assistant", "content": error_msg}],
                 "",
-                f"Error: {e}",
+                error_msg,
                 gr.update(interactive=False),
                 gr.update(interactive=False),
             )
