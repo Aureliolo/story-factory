@@ -1,10 +1,13 @@
 """Gradio-based UI for Story Factory with web-based configuration."""
 
 import gradio as gr
+import logging
 import sys
 import os
 import subprocess
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,6 +18,8 @@ from settings import (
     get_installed_models, get_available_vram, get_model_info
 )
 
+logger = logging.getLogger(__name__)
+
 
 class StoryFactoryUI:
     """Gradio UI for the Story Factory."""
@@ -24,6 +29,28 @@ class StoryFactoryUI:
         self.orchestrator: StoryOrchestrator = None
         self.interview_complete = False
         self.detected_vram = get_available_vram()
+        self.model_warnings = self._validate_models()
+
+    def _validate_models(self) -> list[str]:
+        """Validate that configured models are installed."""
+        warnings = []
+        installed = set(get_installed_models())
+
+        if not installed:
+            warnings.append("No models installed. Please pull a model first.")
+            return warnings
+
+        # Check default model
+        if self.settings.default_model not in installed:
+            warnings.append(f"Default model '{self.settings.default_model}' not installed.")
+
+        # Check agent models
+        if self.settings.use_per_agent_models:
+            for role, model in self.settings.agent_models.items():
+                if model != "auto" and model not in installed:
+                    warnings.append(f"{role.title()} model '{model}' not installed.")
+
+        return warnings
 
     # ============ Settings Tab Functions ============
 
@@ -121,6 +148,11 @@ class StoryFactoryUI:
     def start_new_story(self):
         """Initialize a new story session."""
         self.settings = Settings.load()  # Reload settings
+
+        # Reset existing orchestrator state if any
+        if self.orchestrator:
+            self.orchestrator.reset_state()
+
         self.orchestrator = StoryOrchestrator(settings=self.settings)
         self.orchestrator.create_new_story()
         self.interview_complete = False
@@ -141,6 +173,69 @@ class StoryFactoryUI:
             models_info,
             gr.update(interactive=True),
         )
+
+    def export_story(self):
+        """Export the current story to a downloadable markdown file."""
+        if not self.orchestrator or not self.orchestrator.story_state:
+            return None, "No story to export. Please write a story first."
+
+        try:
+            markdown_content = self.orchestrator.export_to_markdown()
+
+            # Create a temporary file for download
+            output_dir = Path(tempfile.gettempdir())
+            story_id = self.orchestrator.story_state.id[:8]
+            filepath = output_dir / f"story_{story_id}.md"
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(markdown_content)
+
+            return str(filepath), "Story exported successfully!"
+        except Exception as e:
+            logger.error(f"Export failed: {e}")
+            return None, f"Export failed: {e}"
+
+    def save_story(self):
+        """Save the current story to disk."""
+        if not self.orchestrator or not self.orchestrator.story_state:
+            return "No story to save. Please create a story first."
+
+        try:
+            filepath = self.orchestrator.save_story()
+            return f"Story saved to: {filepath}"
+        except Exception as e:
+            logger.error(f"Save failed: {e}")
+            return f"Save failed: {e}"
+
+    def get_saved_stories(self):
+        """Get list of saved stories for dropdown."""
+        stories = StoryOrchestrator.list_saved_stories()
+        choices = []
+        for s in stories:
+            label = f"{s.get('premise', 'Untitled')[:40]}... ({s.get('status', '?')})"
+            choices.append((label, s.get('path', '')))
+        return choices
+
+    def load_saved_story(self, filepath: str):
+        """Load a saved story."""
+        if not filepath:
+            return "Please select a story to load.", "", []
+
+        try:
+            if not self.orchestrator:
+                self.settings = Settings.load()
+                self.orchestrator = StoryOrchestrator(settings=self.settings)
+
+            self.orchestrator.load_story(filepath)
+            self.interview_complete = True  # Skip interview for loaded stories
+
+            story_content = self.orchestrator.get_full_story()
+            outline = self.orchestrator.get_outline_summary()
+
+            return f"Story loaded! Status: {self.orchestrator.story_state.status}", outline, story_content
+        except Exception as e:
+            logger.error(f"Load failed: {e}")
+            return f"Load failed: {e}", "", ""
 
     def chat_response(self, message: str, history: list):
         """Handle chat messages during interview."""
@@ -238,17 +333,21 @@ class StoryFactoryUI:
                     f"Write a single compelling paragraph (100-150 words) for this story concept:\n\n{prompt}\n\nWrite only the story paragraph, nothing else."
                 )
                 elapsed = (datetime.now() - start_time).total_seconds()
+                word_count = len(response.split())
+                words_per_sec = word_count / elapsed if elapsed > 0 else 0
 
                 results[model] = {
                     "output": response,
                     "time": elapsed,
+                    "word_count": word_count,
+                    "words_per_sec": words_per_sec,
                     "model_info": model_info,
                 }
 
                 output_parts.append(f"""
 ## {model_info.get('name', model)}
 **Model:** `{model}`
-**Time:** {elapsed:.1f}s
+**Time:** {elapsed:.1f}s | **Words:** {word_count} | **Speed:** {words_per_sec:.1f} words/sec
 **Quality Rating:** {model_info.get('quality', '?')}/10
 
 ### Output:
@@ -264,8 +363,22 @@ class StoryFactoryUI:
 
 ---
 """)
+                results[model] = {"error": str(e)}
 
-        final_output = "# Model Comparison Results\n\n" + "\n".join(output_parts)
+        # Add summary table at the end
+        summary_lines = ["\n## Summary\n", "| Model | Time | Words | Speed | Quality |", "|-------|------|-------|-------|---------|"]
+        for model, data in results.items():
+            if "error" in data:
+                summary_lines.append(f"| {model} | ERROR | - | - | - |")
+            else:
+                summary_lines.append(
+                    f"| {data['model_info'].get('name', model)[:20]} | "
+                    f"{data['time']:.1f}s | {data['word_count']} | "
+                    f"{data['words_per_sec']:.1f} w/s | "
+                    f"{data['model_info'].get('quality', '?')}/10 |"
+                )
+
+        final_output = "# Model Comparison Results\n\n" + "\n".join(output_parts) + "\n".join(summary_lines)
         yield final_output, "Comparison complete!"
 
     # ============ Build UI ============
@@ -276,11 +389,15 @@ class StoryFactoryUI:
         model_choices = list(AVAILABLE_MODELS.keys())
 
         with gr.Blocks(title="Story Factory") as app:
+            warning_text = ""
+            if self.model_warnings:
+                warning_text = "\n**Warnings:** " + " | ".join(self.model_warnings)
+
             gr.Markdown(
                 f"""
                 # Story Factory
                 ### AI-Powered Story Production Team
-                **Detected VRAM:** {self.detected_vram}GB | **Installed Models:** {len(installed_models)}
+                **Detected VRAM:** {self.detected_vram}GB | **Installed Models:** {len(installed_models)}{warning_text}
                 """
             )
 
@@ -294,11 +411,27 @@ class StoryFactoryUI:
                             build_btn = gr.Button("Build Story Structure")
                             write_btn = gr.Button("Write Story", variant="primary")
 
+                            gr.Markdown("---")
+                            gr.Markdown("### Save/Export")
+                            save_story_btn = gr.Button("Save Story")
+                            export_btn = gr.Button("Export to Markdown")
+                            export_file = gr.File(label="Download", visible=False)
+
+                            gr.Markdown("---")
+                            gr.Markdown("### Load Saved Story")
+                            saved_stories_dropdown = gr.Dropdown(
+                                choices=self.get_saved_stories(),
+                                label="Select Story",
+                                interactive=True,
+                            )
+                            refresh_saved_btn = gr.Button("Refresh List", size="sm")
+                            load_btn = gr.Button("Load Story")
+
                             status_box = gr.Textbox(
                                 label="Status",
                                 value="Click 'Start New Story' to begin",
                                 interactive=False,
-                                lines=8,
+                                lines=6,
                             )
 
                         with gr.Column(scale=2):
@@ -366,9 +499,10 @@ class StoryFactoryUI:
 
                         with gr.Column():
                             interaction_mode = gr.Radio(
-                                choices=["minimal", "checkpoint", "interactive", "collaborative"],
-                                value=self.settings.interaction_mode,
+                                choices=["minimal", "checkpoint"],
+                                value=self.settings.interaction_mode if self.settings.interaction_mode in ["minimal", "checkpoint"] else "checkpoint",
                                 label="Interaction Mode",
+                                info="minimal: auto-generate | checkpoint: pause for review",
                             )
 
                             chapters_between = gr.Slider(
@@ -461,6 +595,32 @@ class StoryFactoryUI:
             write_btn.click(
                 self.write_story,
                 outputs=[story_display, progress_display, status_box],
+            )
+
+            # Save/Load/Export handlers
+            save_story_btn.click(
+                self.save_story,
+                outputs=[status_box],
+            )
+
+            export_btn.click(
+                self.export_story,
+                outputs=[export_file, status_box],
+            ).then(
+                lambda f: gr.update(visible=f is not None, value=f),
+                inputs=[export_file],
+                outputs=[export_file],
+            )
+
+            refresh_saved_btn.click(
+                lambda: gr.update(choices=self.get_saved_stories()),
+                outputs=[saved_stories_dropdown],
+            )
+
+            load_btn.click(
+                self.load_saved_story,
+                inputs=[saved_stories_dropdown],
+                outputs=[status_box, outline_display, story_display],
             )
 
             # Compare tab

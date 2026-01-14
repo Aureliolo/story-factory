@@ -122,7 +122,7 @@ NEW CONTENT:
 {new_content}
 
 ESTABLISHED FACTS:
-{chr(10).join(story_state.established_facts[-10:])}
+{chr(10).join(story_state.established_facts[-30:])}
 
 Check for and fix:
 - Tone/voice shifts

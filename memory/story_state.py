@@ -14,6 +14,21 @@ class Character(BaseModel):
     goals: list[str] = Field(default_factory=list)
     relationships: dict[str, str] = Field(default_factory=dict)  # character_name -> relationship
     arc_notes: str = ""  # How the character should develop
+    arc_progress: dict[int, str] = Field(default_factory=dict)  # chapter_number -> arc state
+
+    def update_arc(self, chapter_number: int, state: str):
+        """Update character arc progress for a chapter."""
+        self.arc_progress[chapter_number] = state
+
+    def get_arc_summary(self) -> str:
+        """Get a summary of character arc progression."""
+        if not self.arc_progress:
+            return f"Arc: {self.arc_notes}" if self.arc_notes else ""
+
+        summary_parts = [f"Arc plan: {self.arc_notes}"] if self.arc_notes else []
+        for chapter, state in sorted(self.arc_progress.items()):
+            summary_parts.append(f"  Ch{chapter}: {state}")
+        return "\n".join(summary_parts)
 
 
 class PlotPoint(BaseModel):
@@ -106,7 +121,7 @@ class StoryState(BaseModel):
                 summary_parts.append(f"UPCOMING: {pending[0].description if pending else 'None'}")
 
         if self.established_facts:
-            recent_facts = self.established_facts[-5:]  # Last 5 facts
+            recent_facts = self.established_facts[-30:]  # Last 30 facts for better context
             summary_parts.append(f"RECENT FACTS: {'; '.join(recent_facts)}")
 
         return "\n".join(summary_parts)

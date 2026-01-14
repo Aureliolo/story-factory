@@ -62,7 +62,7 @@ class WriterAgent(BaseAgent):
                 None
             )
             if prev and prev.content:
-                prev_chapter_summary = f"\nPREVIOUS CHAPTER ENDED WITH:\n...{prev.content[-500:]}"
+                prev_chapter_summary = f"\nPREVIOUS CHAPTER ENDED WITH:\n...{prev.content[-2000:]}"
 
         revision_note = ""
         if revision_feedback:
@@ -93,9 +93,15 @@ Target length: 1500-2500 words for this chapter.
 Write in third person past tense unless the outline specifies otherwise.
 Do not include the chapter title or number in your output - just the prose."""
 
-        return self.generate(prompt, context)
+        # Use lower temperature for revisions (more focused output)
+        temp = 0.7 if revision_feedback else None
+        return self.generate(prompt, context, temperature=temp)
 
-    def write_short_story(self, story_state: StoryState) -> str:
+    def write_short_story(
+        self,
+        story_state: StoryState,
+        revision_feedback: str = None,
+    ) -> str:
         """Write a complete short story in one pass."""
         brief = story_state.brief
         context = story_state.get_context_summary()
@@ -103,6 +109,10 @@ Do not include the chapter title or number in your output - just the prose."""
         chars = "\n".join(
             f"- {c.name}: {c.description}" for c in story_state.characters
         )
+
+        revision_note = ""
+        if revision_feedback:
+            revision_note = f"\n\nREVISION REQUESTED:\n{revision_feedback}\n\nAddress these issues while rewriting."
 
         prompt = f"""Write a complete short story based on this premise:
 
@@ -119,6 +129,7 @@ CHARACTERS:
 
 PLOT OUTLINE:
 {story_state.plot_summary}
+{revision_note}
 
 Write a complete, polished short story (2000-4000 words).
 Include a strong opening hook, rising tension, a satisfying climax, and resolution.
@@ -126,7 +137,9 @@ Show character growth and explore the themes naturally through the narrative.
 
 Write only the story prose - no titles, headers, or meta-commentary."""
 
-        return self.generate(prompt, context)
+        # Use lower temperature for revisions (more focused output)
+        temp = 0.7 if revision_feedback else None
+        return self.generate(prompt, context, temperature=temp)
 
     def continue_scene(
         self,

@@ -1,11 +1,16 @@
 """Main orchestrator that coordinates all agents."""
 
+import json
+import logging
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Generator, Callable, Optional
 from dataclasses import dataclass
 
-from memory.story_state import StoryState, StoryBrief
+logger = logging.getLogger(__name__)
+
+from memory.story_state import StoryState, StoryBrief, Chapter
 from agents import (
     InterviewerAgent,
     ArchitectAgent,
@@ -155,44 +160,91 @@ class StoryOrchestrator:
     # ========== WRITING PHASE ==========
 
     def write_short_story(self) -> Generator[WorkflowEvent, None, str]:
-        """Write a short story (single pass)."""
+        """Write a short story with revision loop."""
+        # Create a proper Chapter for the short story
+        short_story_chapter = Chapter(
+            number=1,
+            title="Complete Story",
+            outline="Short story",
+            status="drafting",
+        )
+        self.story_state.chapters = [short_story_chapter]
+
+        # Write initial draft
         self._emit("agent_start", "Writer", "Writing story...")
         yield self.events[-1]
 
         content = self.writer.write_short_story(self.story_state)
+        short_story_chapter.content = content
 
+        # Edit
         self._emit("agent_start", "Editor", "Editing story...")
         yield self.events[-1]
 
         edited_content = self.editor.edit_chapter(self.story_state, content)
+        short_story_chapter.content = edited_content
+        short_story_chapter.status = "edited"
 
+        # Revision loop (matching write_chapter pattern)
         self._emit("agent_start", "Continuity", "Checking for issues...")
         yield self.events[-1]
 
-        # Create a temporary chapter for checking
-        self.story_state.chapters = [
-            type(self.story_state.chapters[0] if self.story_state.chapters else object)(
-                number=1, title="Complete Story", outline="", content=edited_content
+        revision_count = 0
+        while revision_count < self.settings.max_revision_iterations:
+            # Check for continuity issues
+            issues = self.continuity.check_chapter(
+                self.story_state, short_story_chapter.content, 1
             )
-        ]
 
-        issues = self.continuity.check_chapter(self.story_state, edited_content, 1)
+            # Also validate against plot outline
+            outline_issues = self.continuity.validate_against_outline(
+                self.story_state,
+                short_story_chapter.content,
+                self.story_state.plot_summary,
+            )
+            issues.extend(outline_issues)
 
-        if issues and self.continuity.should_revise(issues):
+            if not issues or not self.continuity.should_revise(issues):
+                break
+
+            revision_count += 1
             feedback = self.continuity.format_revision_feedback(issues)
-            self._emit("progress", "Writer", f"Revising based on {len(issues)} issues...")
+            short_story_chapter.revision_notes.append(feedback)
+
+            self._emit(
+                "progress",
+                "Writer",
+                f"Revision {revision_count}: Addressing {len(issues)} issues..."
+            )
             yield self.events[-1]
 
-            revised = self.writer.write_short_story(self.story_state)
-            edited_content = self.editor.edit_chapter(self.story_state, revised)
+            # Pass revision feedback to writer
+            revised = self.writer.write_short_story(
+                self.story_state, revision_feedback=feedback
+            )
+            short_story_chapter.content = self.editor.edit_chapter(
+                self.story_state, revised
+            )
 
-        self.story_state.chapters[0].content = edited_content
+        # Extract new facts from the story
+        new_facts = self.continuity.extract_new_facts(
+            short_story_chapter.content, self.story_state
+        )
+        self.story_state.established_facts.extend(new_facts)
+
+        # Finalize
+        short_story_chapter.status = "final"
+        short_story_chapter.word_count = len(short_story_chapter.content.split())
         self.story_state.status = "complete"
 
-        self._emit("agent_complete", "System", "Story complete!")
+        self._emit(
+            "agent_complete",
+            "System",
+            f"Story complete! ({short_story_chapter.word_count} words)"
+        )
         yield self.events[-1]
 
-        return edited_content
+        return short_story_chapter.content
 
     def write_chapter(self, chapter_number: int) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with the full pipeline."""
@@ -217,6 +269,18 @@ class StoryOrchestrator:
         yield self.events[-1]
 
         edited_content = self.editor.edit_chapter(self.story_state, content)
+
+        # Ensure consistency with previous chapter
+        if chapter_number > 1:
+            prev_chapter = next(
+                (c for c in self.story_state.chapters if c.number == chapter_number - 1),
+                None
+            )
+            if prev_chapter and prev_chapter.content:
+                edited_content = self.editor.ensure_consistency(
+                    edited_content, prev_chapter.content, self.story_state
+                )
+
         chapter.content = edited_content
         chapter.status = "edited"
 
@@ -226,9 +290,16 @@ class StoryOrchestrator:
 
         revision_count = 0
         while revision_count < self.settings.max_revision_iterations:
+            # Check for continuity issues
             issues = self.continuity.check_chapter(
                 self.story_state, chapter.content, chapter_number
             )
+
+            # Also validate against outline
+            outline_issues = self.continuity.validate_against_outline(
+                self.story_state, chapter.content, chapter.outline
+            )
+            issues.extend(outline_issues)
 
             if not issues or not self.continuity.should_revise(issues):
                 break
@@ -247,11 +318,33 @@ class StoryOrchestrator:
             content = self.writer.write_chapter(
                 self.story_state, chapter, revision_feedback=feedback
             )
-            chapter.content = self.editor.edit_chapter(self.story_state, content)
+            edited_content = self.editor.edit_chapter(self.story_state, content)
+
+            # Ensure consistency in revisions too
+            if chapter_number > 1:
+                prev_chapter = next(
+                    (c for c in self.story_state.chapters if c.number == chapter_number - 1),
+                    None
+                )
+                if prev_chapter and prev_chapter.content:
+                    edited_content = self.editor.ensure_consistency(
+                        edited_content, prev_chapter.content, self.story_state
+                    )
+
+            chapter.content = edited_content
 
         # Extract new facts
         new_facts = self.continuity.extract_new_facts(chapter.content, self.story_state)
         self.story_state.established_facts.extend(new_facts)
+
+        # Track character arc progression
+        arc_updates = self.continuity.extract_character_arcs(
+            chapter.content, self.story_state, chapter_number
+        )
+        for char_name, arc_state in arc_updates.items():
+            char = self.story_state.get_character_by_name(char_name)
+            if char:
+                char.update_arc(chapter_number, arc_state)
 
         chapter.status = "final"
         chapter.word_count = len(chapter.content.split())
@@ -339,3 +432,92 @@ class StoryOrchestrator:
             "characters": len(self.story_state.characters),
             "established_facts": len(self.story_state.established_facts),
         }
+
+    # ========== PERSISTENCE ==========
+
+    def save_story(self, filepath: str = None) -> str:
+        """Save the current story state to a JSON file.
+
+        Args:
+            filepath: Optional custom path. Defaults to output/stories/<story_id>.json
+
+        Returns:
+            The path where the story was saved.
+        """
+        if not self.story_state:
+            raise ValueError("No story to save")
+
+        # Default save location
+        if not filepath:
+            output_dir = Path(__file__).parent.parent / "output" / "stories"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            filepath = output_dir / f"{self.story_state.id}.json"
+
+        filepath = Path(filepath)
+
+        # Convert to dict for JSON serialization
+        story_data = self.story_state.model_dump(mode="json")
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(story_data, f, indent=2, default=str)
+
+        logger.info(f"Story saved to {filepath}")
+        return str(filepath)
+
+    def load_story(self, filepath: str) -> StoryState:
+        """Load a story state from a JSON file.
+
+        Args:
+            filepath: Path to the story JSON file.
+
+        Returns:
+            The loaded StoryState.
+        """
+        filepath = Path(filepath)
+
+        if not filepath.exists():
+            raise FileNotFoundError(f"Story file not found: {filepath}")
+
+        with open(filepath, "r", encoding="utf-8") as f:
+            story_data = json.load(f)
+
+        self.story_state = StoryState.model_validate(story_data)
+        logger.info(f"Story loaded from {filepath}")
+        return self.story_state
+
+    @staticmethod
+    def list_saved_stories() -> list[dict]:
+        """List all saved stories in the output directory.
+
+        Returns:
+            List of dicts with story metadata (id, path, created_at, status, etc.)
+        """
+        output_dir = Path(__file__).parent.parent / "output" / "stories"
+        stories = []
+
+        if not output_dir.exists():
+            return stories
+
+        for filepath in output_dir.glob("*.json"):
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                stories.append({
+                    "id": data.get("id"),
+                    "path": str(filepath),
+                    "created_at": data.get("created_at"),
+                    "status": data.get("status"),
+                    "premise": data.get("brief", {}).get("premise", "")[:100] if data.get("brief") else "",
+                })
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Could not read story file {filepath}: {e}")
+
+        return sorted(stories, key=lambda x: x.get("created_at", ""), reverse=True)
+
+    def reset_state(self):
+        """Reset the orchestrator state for a new story."""
+        self.story_state = None
+        self.events.clear()
+        # Reset agent conversation histories
+        self.interviewer.conversation_history = []
+        logger.info("Orchestrator state reset")
