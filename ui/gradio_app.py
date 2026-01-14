@@ -503,10 +503,16 @@ class StoryFactoryUI:
 
             if titles and len(titles) > 0:
                 logger.info(f"Generated {len(titles)} title suggestions: {titles}")
-                return gr.update(choices=titles, value=titles[0]), f"Generated {len(titles)} title ideas!"
+                return (
+                    gr.update(choices=titles, value=titles[0]),
+                    f"Generated {len(titles)} title ideas!",
+                )
             else:
                 logger.warning("Title generation returned empty list")
-                return gr.update(choices=["No suggestions available"]), "Could not generate titles - check logs for details."
+                return (
+                    gr.update(choices=["No suggestions available"]),
+                    "Could not generate titles - check logs for details.",
+                )
         except Exception as e:
             logger.exception(f"Generate titles failed: {e}")
             return gr.update(choices=["Error generating titles"]), f"Error: {e}"
