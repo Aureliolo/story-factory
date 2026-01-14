@@ -364,14 +364,15 @@ class StoryFactoryUI:
                     import json
 
                     story_data = json.load(f)
-                    project_name = (
-                        story_data.get("project_name", "") or s.get("premise", "Untitled")[:40]
-                    )
+                    # Get premise from brief (nested structure)
+                    brief = story_data.get("brief") or {}
+                    premise = brief.get("premise", "")[:40] if brief else ""
+                    project_name = story_data.get("project_name", "") or premise or "Untitled"
                     last_saved = story_data.get("last_saved", story_data.get("created_at", ""))
                     words = sum(ch.get("word_count", 0) for ch in story_data.get("chapters", []))
                     status = s.get("status", "?")
             except Exception:
-                project_name = s.get("premise", "Untitled")[:40]
+                project_name = s.get("premise", "Untitled")[:40] or "Untitled"
                 last_saved = s.get("created_at", "")
                 words = 0
                 status = s.get("status", "?")
@@ -393,7 +394,11 @@ class StoryFactoryUI:
             with open(filepath, encoding="utf-8") as f:
                 data = json.load(f)
 
-            name = data.get("project_name", "") or data.get("premise", "Untitled")[:50]
+            # Get premise from brief (nested structure)
+            brief = data.get("brief") or {}
+            premise = brief.get("premise", "No premise") if brief else "No premise"
+            name = data.get("project_name", "") or premise[:50] or "Untitled"
+
             status = data.get("status", "unknown")
             created = data.get("created_at", "?")[:16]
             last_saved = data.get("last_saved", "Never")
@@ -401,18 +406,23 @@ class StoryFactoryUI:
                 last_saved = last_saved[:16]
             chapters = data.get("chapters", [])
             words = sum(ch.get("word_count", 0) for ch in chapters)
-            premise = data.get("premise", "No premise")
+
+            # Get additional info from brief
+            genre = brief.get("genre", "Unknown") if brief else "Unknown"
+            tone = brief.get("tone", "Unknown") if brief else "Unknown"
+            language = brief.get("language", "English") if brief else "English"
 
             return f"""**{name}**
 
 **Status:** {status}
+**Genre:** {genre} | **Tone:** {tone} | **Language:** {language}
 **Created:** {created}
 **Last Saved:** {last_saved}
 **Chapters:** {len(chapters)}
 **Words:** {words:,}
 
 **Premise:**
-{premise[:200]}{"..." if len(premise) > 200 else ""}
+{premise[:300]}{"..." if len(premise) > 300 else ""}
 """
         except Exception as e:
             return f"Error loading project: {e}"
