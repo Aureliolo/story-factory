@@ -1,7 +1,8 @@
 """Editor Agent - Refines and polishes prose."""
 
-from .base import BaseAgent
 from memory.story_state import StoryState
+
+from .base import BaseAgent
 
 EDITOR_SYSTEM_PROMPT = """You are the Editor, a meticulous craftsman who polishes prose to perfection.
 

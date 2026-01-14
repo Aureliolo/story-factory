@@ -1,7 +1,8 @@
 """Tests for the settings module."""
 
+import pytest
 
-from settings import Settings, get_model_info, AVAILABLE_MODELS, AGENT_ROLES
+from settings import AGENT_ROLES, AVAILABLE_MODELS, Settings, get_model_info
 
 
 class TestSettings:
@@ -39,6 +40,46 @@ class TestSettings:
         settings.default_model = "test-model:8b"
         result = settings.get_model_for_agent("writer")
         assert result == "test-model:8b"
+
+    def test_validate_raises_on_invalid_url(self):
+        """Should raise ValueError for invalid Ollama URL."""
+        settings = Settings()
+        settings.ollama_url = "not-a-url"
+        with pytest.raises(ValueError, match="Invalid ollama_url"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_context_size(self):
+        """Should raise ValueError for context_size out of range."""
+        settings = Settings()
+        settings.context_size = 500  # Too small
+        with pytest.raises(ValueError, match="context_size must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_max_tokens(self):
+        """Should raise ValueError for max_tokens out of range."""
+        settings = Settings()
+        settings.max_tokens = 100000  # Too large
+        with pytest.raises(ValueError, match="max_tokens must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_interaction_mode(self):
+        """Should raise ValueError for invalid interaction mode."""
+        settings = Settings()
+        settings.interaction_mode = "invalid_mode"
+        with pytest.raises(ValueError, match="interaction_mode must be one of"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_temperature(self):
+        """Should raise ValueError for temperature out of range."""
+        settings = Settings()
+        settings.agent_temperatures["writer"] = 3.0  # Too high
+        with pytest.raises(ValueError, match="Temperature for writer must be between"):
+            settings.validate()
+
+    def test_validate_passes_for_valid_settings(self):
+        """Should not raise for valid default settings."""
+        settings = Settings()
+        settings.validate()  # Should not raise
 
 
 class TestGetModelInfo:

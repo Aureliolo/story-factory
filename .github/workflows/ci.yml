@@ -54,9 +54,16 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Check syntax errors
+      - name: Install linting dependencies
         run: |
-          python -m py_compile main.py settings.py
-          python -m py_compile agents/*.py
-          python -m py_compile workflows/*.py
-          python -m py_compile utils/*.py
+          python -m pip install --upgrade pip
+          pip install ruff black mypy
+
+      - name: Run ruff
+        run: ruff check .
+
+      - name: Run black
+        run: black --check .
+
+      - name: Run mypy
+        run: mypy . --ignore-missing-imports || true  # Don't fail on type errors initially

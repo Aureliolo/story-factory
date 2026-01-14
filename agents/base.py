@@ -2,8 +2,8 @@
 
 import logging
 import time
+
 import ollama
-from typing import Optional
 
 from settings import Settings, get_model_info
 
@@ -12,16 +12,19 @@ logger = logging.getLogger(__name__)
 
 class LLMError(Exception):
     """Base exception for LLM-related errors."""
+
     pass
 
 
 class LLMConnectionError(LLMError):
     """Raised when unable to connect to Ollama."""
+
     pass
 
 
 class LLMGenerationError(LLMError):
     """Raised when generation fails after retries."""
+
     pass
 
 
@@ -79,21 +82,45 @@ class BaseAgent:
         except Exception as e:
             return False, f"Ollama not accessible: {e}"
 
+    def validate_model(self, model_name: str) -> tuple[bool, str]:
+        """Validate that a model is available.
+
+        Args:
+            model_name: The model name to validate
+
+        Returns:
+            Tuple of (is_valid, message)
+        """
+        try:
+            models = self.client.list()
+            available_models = [m["name"] for m in models.get("models", [])]
+
+            # Check direct match or with :latest suffix
+            if model_name in available_models:
+                return True, f"Model '{model_name}' is available"
+
+            if f"{model_name}:latest" in available_models:
+                return True, f"Model '{model_name}:latest' is available"
+
+            # Model not found
+            return False, (
+                f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
+            )
+        except Exception as e:
+            return False, f"Error checking model availability: {e}"
+
     def generate(
         self,
         prompt: str,
-        context: Optional[str] = None,
-        temperature: Optional[float] = None,
-        model: Optional[str] = None,
+        context: str | None = None,
+        temperature: float | None = None,
+        model: str | None = None,
     ) -> str:
         """Generate a response from the agent with retry logic."""
         messages = [{"role": "system", "content": self.system_prompt}]
 
         if context:
-            messages.append({
-                "role": "system",
-                "content": f"CURRENT STORY CONTEXT:\n{context}"
-            })
+            messages.append({"role": "system", "content": f"CURRENT STORY CONTEXT:\n{context}"})
 
         messages.append({"role": "user", "content": prompt})
 
@@ -105,7 +132,9 @@ class BaseAgent:
 
         for attempt in range(self.MAX_RETRIES):
             try:
-                logger.info(f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}")
+                logger.info(
+                    f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}"
+                )
 
                 response = self.client.chat(
                     model=use_model,

@@ -3,7 +3,7 @@
 import json
 import logging
 import re
-from typing import TypeVar, Type
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ def extract_json(
         Parsed JSON dict or None if extraction/parsing fails
     """
     # Try markdown code block first
-    json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+    json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
 
     if json_match:
         json_str = json_match.group(1)
@@ -71,7 +71,7 @@ def extract_json_list(response: str) -> list[dict] | None:
 
 def parse_json_to_model(
     response: str,
-    model_class: Type[T],
+    model_class: type[T],
     fallback_pattern: str | None = None,
 ) -> T | None:
     """Extract JSON and parse into a Pydantic model.
@@ -97,7 +97,7 @@ def parse_json_to_model(
 
 def parse_json_list_to_models(
     response: str,
-    model_class: Type[T],
+    model_class: type[T],
 ) -> list[T]:
     """Extract JSON array and parse into a list of Pydantic models.
 

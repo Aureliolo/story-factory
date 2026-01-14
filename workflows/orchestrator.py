@@ -3,19 +3,19 @@
 import json
 import logging
 import uuid
+from collections.abc import Callable, Generator
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, Callable, Optional
-from dataclasses import dataclass
 
-from memory.story_state import StoryState, StoryBrief, Chapter
 from agents import (
-    InterviewerAgent,
     ArchitectAgent,
-    WriterAgent,
-    EditorAgent,
     ContinuityAgent,
+    EditorAgent,
+    InterviewerAgent,
+    WriterAgent,
 )
+from memory.story_state import Chapter, StoryBrief, StoryState
 from settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WorkflowEvent:
     """An event in the workflow for UI updates."""
+
     event_type: str  # "agent_start", "agent_complete", "user_input_needed", "progress", "error"
     agent_name: str
     message: str
@@ -53,7 +54,7 @@ class StoryOrchestrator:
         self.continuity = ContinuityAgent(model=model_override, settings=self.settings)
 
         # State
-        self.story_state: Optional[StoryState] = None
+        self.story_state: StoryState | None = None
         self.events: list[WorkflowEvent] = []
 
     @property
@@ -113,8 +114,7 @@ class StoryOrchestrator:
     def finalize_interview(self) -> StoryBrief:
         """Force finalize the interview with current information."""
         history = "\n".join(
-            f"{h['role']}: {h['content']}"
-            for h in self.interviewer.conversation_history
+            f"{h['role']}: {h['content']}" for h in self.interviewer.conversation_history
         )
         brief = self.interviewer.finalize_brief(history)
         self.story_state.brief = brief
@@ -131,7 +131,9 @@ class StoryOrchestrator:
         logger.info(f"Calling architect with model: {self.architect.model}")
         self.story_state = self.architect.build_story_structure(self.story_state)
 
-        logger.info(f"Structure built: {len(self.story_state.chapters)} chapters, {len(self.story_state.characters)} characters")
+        logger.info(
+            f"Structure built: {len(self.story_state.chapters)} chapters, {len(self.story_state.characters)} characters"
+        )
         self._emit("agent_complete", "Architect", "Story structure complete!")
         return self.story_state
 
@@ -146,12 +148,14 @@ class StoryOrchestrator:
 
         # Handle missing brief (old saved stories may not have it)
         if state.brief:
-            summary_parts.extend([
-                f"\nPREMISE: {state.brief.premise}",
-                f"GENRE: {state.brief.genre}",
-                f"TONE: {state.brief.tone}",
-                f"NSFW LEVEL: {state.brief.nsfw_level}",
-            ])
+            summary_parts.extend(
+                [
+                    f"\nPREMISE: {state.brief.premise}",
+                    f"GENRE: {state.brief.genre}",
+                    f"TONE: {state.brief.tone}",
+                    f"NSFW LEVEL: {state.brief.nsfw_level}",
+                ]
+            )
         else:
             summary_parts.append("\n(No brief available)")
 
@@ -207,9 +211,7 @@ class StoryOrchestrator:
         revision_count = 0
         while revision_count < self.settings.max_revision_iterations:
             # Check for continuity issues
-            issues = self.continuity.check_chapter(
-                self.story_state, short_story_chapter.content, 1
-            )
+            issues = self.continuity.check_chapter(self.story_state, short_story_chapter.content, 1)
 
             # Also validate against plot outline
             outline_issues = self.continuity.validate_against_outline(
@@ -229,22 +231,16 @@ class StoryOrchestrator:
             self._emit(
                 "progress",
                 "Writer",
-                f"Revision {revision_count}: Addressing {len(issues)} issues..."
+                f"Revision {revision_count}: Addressing {len(issues)} issues...",
             )
             yield self.events[-1]
 
             # Pass revision feedback to writer
-            revised = self.writer.write_short_story(
-                self.story_state, revision_feedback=feedback
-            )
-            short_story_chapter.content = self.editor.edit_chapter(
-                self.story_state, revised
-            )
+            revised = self.writer.write_short_story(self.story_state, revision_feedback=feedback)
+            short_story_chapter.content = self.editor.edit_chapter(self.story_state, revised)
 
         # Extract new facts from the story
-        new_facts = self.continuity.extract_new_facts(
-            short_story_chapter.content, self.story_state
-        )
+        new_facts = self.continuity.extract_new_facts(short_story_chapter.content, self.story_state)
         self.story_state.established_facts.extend(new_facts)
 
         # Finalize
@@ -260,9 +256,7 @@ class StoryOrchestrator:
             logger.warning(f"Auto-save failed for short story: {e}")
 
         self._emit(
-            "agent_complete",
-            "System",
-            f"Story complete! ({short_story_chapter.word_count} words)"
+            "agent_complete", "System", f"Story complete! ({short_story_chapter.word_count} words)"
         )
         yield self.events[-1]
 
@@ -270,10 +264,7 @@ class StoryOrchestrator:
 
     def write_chapter(self, chapter_number: int) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with the full pipeline."""
-        chapter = next(
-            (c for c in self.story_state.chapters if c.number == chapter_number),
-            None
-        )
+        chapter = next((c for c in self.story_state.chapters if c.number == chapter_number), None)
         if not chapter:
             raise ValueError(f"Chapter {chapter_number} not found")
 
@@ -295,8 +286,7 @@ class StoryOrchestrator:
         # Ensure consistency with previous chapter
         if chapter_number > 1:
             prev_chapter = next(
-                (c for c in self.story_state.chapters if c.number == chapter_number - 1),
-                None
+                (c for c in self.story_state.chapters if c.number == chapter_number - 1), None
             )
             if prev_chapter and prev_chapter.content:
                 edited_content = self.editor.ensure_consistency(
@@ -333,7 +323,7 @@ class StoryOrchestrator:
             self._emit(
                 "progress",
                 "Writer",
-                f"Revision {revision_count}: Addressing {len(issues)} issues..."
+                f"Revision {revision_count}: Addressing {len(issues)} issues...",
             )
             yield self.events[-1]
 
@@ -345,8 +335,7 @@ class StoryOrchestrator:
             # Ensure consistency in revisions too
             if chapter_number > 1:
                 prev_chapter = next(
-                    (c for c in self.story_state.chapters if c.number == chapter_number - 1),
-                    None
+                    (c for c in self.story_state.chapters if c.number == chapter_number - 1), None
                 )
                 if prev_chapter and prev_chapter.content:
                     edited_content = self.editor.ensure_consistency(
@@ -391,7 +380,7 @@ class StoryOrchestrator:
         self._emit(
             "agent_complete",
             "System",
-            f"Chapter {chapter_number} complete ({chapter.word_count} words)"
+            f"Chapter {chapter_number} complete ({chapter.word_count} words)",
         )
         yield self.events[-1]
 
@@ -400,7 +389,7 @@ class StoryOrchestrator:
     def write_all_chapters(
         self,
         on_checkpoint: Callable[[int, str], bool] = None,
-    ) -> Generator[WorkflowEvent, None, None]:
+    ) -> Generator[WorkflowEvent]:
         """Write all chapters, with optional checkpoints for user feedback.
 
         Args:
@@ -408,8 +397,7 @@ class StoryOrchestrator:
         """
         for chapter in self.story_state.chapters:
             # Write the chapter
-            for event in self.write_chapter(chapter.number):
-                yield event
+            yield from self.write_chapter(chapter.number)
 
             # Check if we need a checkpoint
             if (
@@ -421,7 +409,7 @@ class StoryOrchestrator:
                     "user_input_needed",
                     "System",
                     f"Checkpoint: Chapter {chapter.number} complete. Review and continue?",
-                    {"chapter": chapter.number, "content": chapter.content}
+                    {"chapter": chapter.number, "content": chapter.content},
                 )
                 yield self.events[-1]
 
@@ -479,6 +467,48 @@ class StoryOrchestrator:
                 text_parts.append("")
 
         return "\n".join(text_parts)
+
+    def export_story_to_file(self, format: str = "markdown", filepath: str = None) -> str:
+        """Export the story to a file.
+
+        Args:
+            format: Export format ('markdown', 'text', 'json')
+            filepath: Optional custom path. Defaults to output/stories/<story_id>.<ext>
+
+        Returns:
+            The path where the story was exported.
+        """
+        if not self.story_state:
+            raise ValueError("No story to export")
+
+        # Determine file extension and content
+        if format == "markdown":
+            ext = ".md"
+            content = self.export_to_markdown()
+        elif format == "text":
+            ext = ".txt"
+            content = self.export_to_text()
+        elif format == "json":
+            ext = ".json"
+            # JSON export is handled by save_story
+            return self.save_story(filepath)
+        else:
+            raise ValueError(f"Unsupported export format: {format}")
+
+        # Default export location
+        if not filepath:
+            output_dir = Path(__file__).parent.parent / "output" / "stories"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            filepath = output_dir / f"{self.story_state.id}{ext}"
+
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info(f"Story exported to {filepath} ({format} format)")
+        return str(filepath)
 
     def get_statistics(self) -> dict:
         """Get story statistics including reading time estimate."""
@@ -545,7 +575,7 @@ class StoryOrchestrator:
         if not filepath.exists():
             raise FileNotFoundError(f"Story file not found: {filepath}")
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             story_data = json.load(f)
 
         self.story_state = StoryState.model_validate(story_data)
@@ -567,15 +597,21 @@ class StoryOrchestrator:
 
         for filepath in output_dir.glob("*.json"):
             try:
-                with open(filepath, "r", encoding="utf-8") as f:
+                with open(filepath, encoding="utf-8") as f:
                     data = json.load(f)
-                stories.append({
-                    "id": data.get("id"),
-                    "path": str(filepath),
-                    "created_at": data.get("created_at"),
-                    "status": data.get("status"),
-                    "premise": data.get("brief", {}).get("premise", "")[:100] if data.get("brief") else "",
-                })
+                stories.append(
+                    {
+                        "id": data.get("id"),
+                        "path": str(filepath),
+                        "created_at": data.get("created_at"),
+                        "status": data.get("status"),
+                        "premise": (
+                            data.get("brief", {}).get("premise", "")[:100]
+                            if data.get("brief")
+                            else ""
+                        ),
+                    }
+                )
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(f"Could not read story file {filepath}: {e}")
 

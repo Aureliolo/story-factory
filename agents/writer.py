@@ -1,7 +1,8 @@
 """Writer Agent - Writes the actual prose."""
 
+from memory.story_state import Chapter, StoryState
+
 from .base import BaseAgent
-from memory.story_state import StoryState, Chapter
 
 WRITER_SYSTEM_PROMPT = """You are the Writer, a skilled prose craftsman who brings stories to life.
 
@@ -57,10 +58,7 @@ class WriterAgent(BaseAgent):
         # Get previous chapter summary if exists
         prev_chapter_summary = ""
         if chapter.number > 1:
-            prev = next(
-                (c for c in story_state.chapters if c.number == chapter.number - 1),
-                None
-            )
+            prev = next((c for c in story_state.chapters if c.number == chapter.number - 1), None)
             if prev and prev.content:
                 prev_chapter_summary = f"\nPREVIOUS CHAPTER ENDED WITH:\n...{prev.content[-2000:]}"
 
@@ -106,9 +104,7 @@ Do not include the chapter title or number in your output - just the prose."""
         brief = story_state.brief
         context = story_state.get_context_summary()
 
-        chars = "\n".join(
-            f"- {c.name}: {c.description}" for c in story_state.characters
-        )
+        chars = "\n".join(f"- {c.name}: {c.description}" for c in story_state.characters)
 
         revision_note = ""
         if revision_feedback:

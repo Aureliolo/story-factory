@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # Default log file location
@@ -20,8 +21,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
 
     # Create formatter
     formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
 
     # Configure root logger
@@ -38,7 +38,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    # File handler - always enabled by default
+    # File handler - always enabled by default with rotation
     if log_file == "default":
         log_path = DEFAULT_LOG_FILE
     elif log_file:
@@ -48,12 +48,16 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
 
     if log_path:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        # Use RotatingFileHandler to prevent log files from growing too large
+        # Max 10MB per file, keep 5 backup files (50MB total)
+        file_handler = RotatingFileHandler(
+            log_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"  # 10MB
+        )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
         # Log the log file location
-        root_logger.info(f"Logging to file: {log_path}")
+        root_logger.info(f"Logging to file: {log_path} (max 10MB, 5 backups)")
 
     # Set third-party loggers to WARNING to reduce noise
     logging.getLogger("httpx").setLevel(logging.WARNING)

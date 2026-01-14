@@ -5,9 +5,9 @@ Settings are stored in settings.json and can be modified via the web UI.
 
 import json
 import logging
-from pathlib import Path
-from dataclasses import dataclass, field, asdict
 import subprocess
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -124,6 +124,7 @@ AGENT_ROLES = {
 @dataclass
 class AgentSettings:
     """Settings for a single agent."""
+
     model: str = "auto"  # "auto" means auto-select based on role
     temperature: float = 0.8
 
@@ -131,6 +132,7 @@ class AgentSettings:
 @dataclass
 class Settings:
     """Application settings, stored as JSON."""
+
     # General
     ollama_url: str = "http://localhost:11434"
     context_size: int = 32768
@@ -141,22 +143,26 @@ class Settings:
 
     # Per-agent model settings
     use_per_agent_models: bool = True
-    agent_models: dict = field(default_factory=lambda: {
-        "interviewer": "auto",
-        "architect": "auto",
-        "writer": "auto",
-        "editor": "auto",
-        "continuity": "auto",
-    })
+    agent_models: dict = field(
+        default_factory=lambda: {
+            "interviewer": "auto",
+            "architect": "auto",
+            "writer": "auto",
+            "editor": "auto",
+            "continuity": "auto",
+        }
+    )
 
     # Agent temperatures
-    agent_temperatures: dict = field(default_factory=lambda: {
-        "interviewer": 0.7,
-        "architect": 0.85,
-        "writer": 0.9,
-        "editor": 0.6,
-        "continuity": 0.3,
-    })
+    agent_temperatures: dict = field(
+        default_factory=lambda: {
+            "interviewer": 0.7,
+            "architect": 0.85,
+            "writer": 0.9,
+            "editor": 0.6,
+            "continuity": 0.3,
+        }
+    )
 
     # Interaction settings
     interaction_mode: str = "checkpoint"
@@ -168,21 +174,67 @@ class Settings:
 
     def save(self):
         """Save settings to JSON file."""
-        with open(SETTINGS_FILE, 'w') as f:
+        # Validate before saving
+        self.validate()
+        with open(SETTINGS_FILE, "w") as f:
             json.dump(asdict(self), f, indent=2)
 
+    def validate(self) -> None:
+        """Validate settings values.
+
+        Raises:
+            ValueError: If any setting value is invalid.
+        """
+        # Validate URL format
+        if not self.ollama_url.startswith(("http://", "https://")):
+            raise ValueError(f"Invalid ollama_url: {self.ollama_url}")
+
+        # Validate numeric ranges
+        if not 1024 <= self.context_size <= 128000:
+            raise ValueError(
+                f"context_size must be between 1024 and 128000, got {self.context_size}"
+            )
+
+        if not 256 <= self.max_tokens <= 32000:
+            raise ValueError(f"max_tokens must be between 256 and 32000, got {self.max_tokens}")
+
+        if not 1 <= self.chapters_between_checkpoints <= 20:
+            raise ValueError(
+                f"chapters_between_checkpoints must be between 1 and 20, got {self.chapters_between_checkpoints}"
+            )
+
+        if not 0 <= self.max_revision_iterations <= 10:
+            raise ValueError(
+                f"max_revision_iterations must be between 0 and 10, got {self.max_revision_iterations}"
+            )
+
+        # Validate interaction mode
+        valid_modes = ["minimal", "checkpoint", "interactive", "collaborative"]
+        if self.interaction_mode not in valid_modes:
+            raise ValueError(
+                f"interaction_mode must be one of {valid_modes}, got {self.interaction_mode}"
+            )
+
+        # Validate temperatures
+        for agent, temp in self.agent_temperatures.items():
+            if not 0.0 <= temp <= 2.0:
+                raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
+
     @classmethod
-    def load(cls) -> 'Settings':
+    def load(cls) -> "Settings":
         """Load settings from JSON file, or create defaults."""
         if SETTINGS_FILE.exists():
             try:
-                with open(SETTINGS_FILE, 'r') as f:
+                with open(SETTINGS_FILE) as f:
                     data = json.load(f)
-                return cls(**data)
+                settings = cls(**data)
+                # Validate loaded settings
+                settings.validate()
+                return settings
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid JSON in settings file, using defaults: {e}")
-            except TypeError as e:
-                logger.warning(f"Settings file has invalid structure, using defaults: {e}")
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Settings file has invalid values, using defaults: {e}")
 
         # Create default settings
         settings = cls()
@@ -235,14 +287,9 @@ class Settings:
 def get_installed_models() -> list[str]:
     """Get list of models currently installed in Ollama."""
     try:
-        result = subprocess.run(
-            ["ollama", "list"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=10)
         models = []
-        for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
             if line.strip():
                 model_name = line.split()[0]
                 models.append(model_name)
@@ -265,9 +312,9 @@ def get_available_vram() -> int:
             ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
-        vram_mb = int(result.stdout.strip().split('\n')[0])
+        vram_mb = int(result.stdout.strip().split("\n")[0])
         return vram_mb // 1024
     except FileNotFoundError:
         logger.info("nvidia-smi not found. Using default VRAM assumption of 8GB.")
@@ -285,11 +332,14 @@ def get_available_vram() -> int:
 
 def get_model_info(model_id: str) -> dict:
     """Get information about a model."""
-    return AVAILABLE_MODELS.get(model_id, {
-        "name": model_id,
-        "release": "Unknown",
-        "quality": 5,
-        "speed": 5,
-        "nsfw": True,
-        "description": "Unknown model",
-    })
+    return AVAILABLE_MODELS.get(
+        model_id,
+        {
+            "name": model_id,
+            "release": "Unknown",
+            "quality": 5,
+            "speed": 5,
+            "nsfw": True,
+            "description": "Unknown model",
+        },
+    )
