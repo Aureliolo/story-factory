@@ -607,7 +607,7 @@ class StoryFactoryUI:
 
                         with gr.Column(scale=2):
                             gr.Markdown("### Interview")
-                            chatbot = gr.Chatbot(label="Chat with the Interviewer", height=300, type="messages")
+                            chatbot = gr.Chatbot(label="Chat with the Interviewer", height=300)
                             chat_input = gr.Textbox(
                                 label="Your response",
                                 placeholder="Type your answer here...",
