@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# Error message constants
+OLLAMA_UNAVAILABLE_MSG = "Please ensure Ollama is running and accessible."
+
 
 def handle_ollama_errors(
     default_return: Any = None, raise_on_error: bool = False
@@ -34,21 +37,20 @@ def handle_ollama_errors(
             except (ConnectionError, OSError, TimeoutError) as e:
                 # Standard connection-related errors
                 logger.error(
-                    f"Ollama connection error in {func.__name__}: {e}. "
-                    "Please ensure Ollama is running and accessible."
+                    f"Ollama connection error in {func.__name__}: {e}. {OLLAMA_UNAVAILABLE_MSG}"
                 )
                 if raise_on_error:
                     raise
                 return default_return
             except Exception as e:
-                # Ollama-specific errors and other exceptions
-                # Check for ollama library errors without importing (avoid circular deps)
-                error_type = type(e).__name__
-                if error_type in ("RequestError", "ResponseError"):
-                    logger.error(
-                        f"Ollama error in {func.__name__}: {e}. "
-                        "Please ensure Ollama is running and accessible."
-                    )
+                # Check for ollama-specific errors using hasattr for robustness
+                # Ollama errors typically have 'error' or 'status_code' attributes
+                is_ollama_error = hasattr(e, "status_code") or (
+                    hasattr(e, "__module__") and "ollama" in e.__module__
+                )
+
+                if is_ollama_error:
+                    logger.error(f"Ollama error in {func.__name__}: {e}. {OLLAMA_UNAVAILABLE_MSG}")
                 else:
                     logger.error(f"Unexpected error in {func.__name__}: {e}", exc_info=True)
 
