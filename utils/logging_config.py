@@ -76,14 +76,24 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
 
     if log_path:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        # Use RotatingFileHandler to prevent log files from growing too large
+
+        # Custom handler that flushes after every write
+        class FlushingRotatingFileHandler(RotatingFileHandler):
+            """RotatingFileHandler that flushes immediately after each log."""
+
+            def emit(self, record):
+                super().emit(record)
+                self.flush()
+
+        # Use rotating handler with immediate flush
         # Max 10MB per file, keep 5 backup files (50MB total)
-        file_handler = RotatingFileHandler(
+        file_handler = FlushingRotatingFileHandler(
             log_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"  # 10MB
         )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
+
         # Log the log file location
         root_logger.info(f"Logging to file: {log_path} (max 10MB, 5 backups)")
 
