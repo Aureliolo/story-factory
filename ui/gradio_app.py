@@ -352,12 +352,11 @@ class StoryFactoryUI:
 
     # ============ Project Management Functions ============
 
-    def get_projects_data(self):
-        """Get project data for the projects table."""
+    def get_projects_choices(self):
+        """Get project choices for dropdown (label, path)."""
         stories = StoryOrchestrator.list_saved_stories()
-        data = []
+        choices = []
         for s in stories:
-            # Load full story to get project_name
             try:
                 with open(s.get("path", ""), encoding="utf-8") as f:
                     import json
@@ -367,82 +366,117 @@ class StoryFactoryUI:
                         story_data.get("project_name", "") or s.get("premise", "Untitled")[:40]
                     )
                     last_saved = story_data.get("last_saved", story_data.get("created_at", ""))
-                    # Calculate word count
                     words = sum(ch.get("word_count", 0) for ch in story_data.get("chapters", []))
+                    status = s.get("status", "?")
             except Exception:
                 project_name = s.get("premise", "Untitled")[:40]
                 last_saved = s.get("created_at", "")
                 words = 0
+                status = s.get("status", "?")
 
-            data.append(
-                [
-                    project_name,
-                    s.get("status", "unknown"),
-                    last_saved[:16] if last_saved else "",  # Trim to date+time
-                    words,
-                    s.get("path", ""),  # Hidden column for selection
-                ]
-            )
-        return data
+            # Create display label with key info
+            date_str = last_saved[:10] if last_saved else "?"
+            label = f"{project_name} | {status} | {words} words | {date_str}"
+            choices.append((label, s.get("path", "")))
+        return choices
 
-    def delete_project(self, selected_data, confirm: bool):
+    def get_project_details(self, filepath: str):
+        """Get detailed info for a selected project."""
+        if not filepath:
+            return "Select a project to view details."
+
+        try:
+            import json
+
+            with open(filepath, encoding="utf-8") as f:
+                data = json.load(f)
+
+            name = data.get("project_name", "") or data.get("premise", "Untitled")[:50]
+            status = data.get("status", "unknown")
+            created = data.get("created_at", "?")[:16]
+            last_saved = data.get("last_saved", "Never")
+            if isinstance(last_saved, str) and len(last_saved) > 16:
+                last_saved = last_saved[:16]
+            chapters = data.get("chapters", [])
+            words = sum(ch.get("word_count", 0) for ch in chapters)
+            premise = data.get("premise", "No premise")
+
+            return f"""**{name}**
+
+**Status:** {status}
+**Created:** {created}
+**Last Saved:** {last_saved}
+**Chapters:** {len(chapters)}
+**Words:** {words:,}
+
+**Premise:**
+{premise[:200]}{"..." if len(premise) > 200 else ""}
+"""
+        except Exception as e:
+            return f"Error loading project: {e}"
+
+    def delete_project(self, filepath: str, confirm: bool):
         """Delete a project with confirmation."""
         if not confirm:
-            return self.get_projects_data(), "Please check 'Confirm delete' to delete."
+            return gr.update(choices=self.get_projects_choices()), "Check 'Confirm delete' first."
 
-        if not selected_data or len(selected_data) == 0:
-            return self.get_projects_data(), "No project selected."
+        if not filepath:
+            return gr.update(choices=self.get_projects_choices()), "No project selected."
 
         try:
-            # Get the path from the selected row (last column)
-            filepath = selected_data[0][-1] if selected_data else None
-            if filepath:
-                import os
+            import os
 
-                os.remove(filepath)
-                logger.info(f"Deleted project: {filepath}")
-                return self.get_projects_data(), "Project deleted successfully."
-            return self.get_projects_data(), "Could not find project file."
+            os.remove(filepath)
+            logger.info(f"Deleted project: {filepath}")
+            return gr.update(choices=self.get_projects_choices(), value=None), "Project deleted."
         except Exception as e:
             logger.exception("Delete project failed")
-            return self.get_projects_data(), f"Delete failed: {e}"
+            return gr.update(choices=self.get_projects_choices()), f"Delete failed: {e}"
 
-    def rename_project(self, selected_data, new_name: str):
+    def rename_project(self, filepath: str, new_name: str):
         """Rename a project."""
         if not new_name or not new_name.strip():
-            return self.get_projects_data(), "Please enter a name."
+            return (
+                gr.update(choices=self.get_projects_choices()),
+                self.get_project_details(filepath),
+                "Enter a name first.",
+            )
 
-        if not selected_data or len(selected_data) == 0:
-            return self.get_projects_data(), "No project selected."
+        if not filepath:
+            return (
+                gr.update(choices=self.get_projects_choices()),
+                "",
+                "No project selected.",
+            )
 
         try:
-            filepath = selected_data[0][-1] if selected_data else None
-            if filepath:
-                import json
+            import json
 
-                with open(filepath, encoding="utf-8") as f:
-                    story_data = json.load(f)
-                story_data["project_name"] = new_name.strip()
-                with open(filepath, "w", encoding="utf-8") as f:
-                    json.dump(story_data, f, indent=2, default=str)
-                logger.info(f"Renamed project to: {new_name}")
-                return self.get_projects_data(), f"Project renamed to '{new_name}'."
-            return self.get_projects_data(), "Could not find project file."
+            with open(filepath, encoding="utf-8") as f:
+                story_data = json.load(f)
+            story_data["project_name"] = new_name.strip()
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(story_data, f, indent=2, default=str)
+            logger.info(f"Renamed project to: {new_name}")
+            return (
+                gr.update(choices=self.get_projects_choices()),
+                self.get_project_details(filepath),
+                f"Renamed to '{new_name}'.",
+            )
         except Exception as e:
             logger.exception("Rename project failed")
-            return self.get_projects_data(), f"Rename failed: {e}"
+            return (
+                gr.update(choices=self.get_projects_choices()),
+                self.get_project_details(filepath),
+                f"Rename failed: {e}",
+            )
 
-    def generate_title_ideas(self, selected_data):
+    def generate_title_ideas(self, filepath: str):
         """Generate AI title suggestions for a project."""
-        if not selected_data or len(selected_data) == 0:
+        if not filepath:
             return gr.update(choices=["Select a project first"]), "No project selected."
 
         try:
-            filepath = selected_data[0][-1] if selected_data else None
-            if not filepath:
-                return gr.update(choices=["No project selected"]), "No project selected."
-
-            # Load the story and generate titles
             temp_orchestrator = StoryOrchestrator(settings=self.settings)
             temp_orchestrator.load_story(filepath)
             titles = temp_orchestrator.generate_title_suggestions()
@@ -454,15 +488,20 @@ class StoryFactoryUI:
             logger.exception("Generate titles failed")
             return gr.update(choices=["Error generating titles"]), f"Error: {e}"
 
-    def apply_suggested_title(self, selected_data, selected_title: str):
+    def apply_suggested_title(self, filepath: str, selected_title: str):
         """Apply a suggested title to the project."""
         if not selected_title or selected_title in [
             "Select a project first",
             "No project selected",
             "Error generating titles",
+            "No suggestions available",
         ]:
-            return self.get_projects_data(), "Please select a valid title."
-        return self.rename_project(selected_data, selected_title)
+            return (
+                gr.update(choices=self.get_projects_choices()),
+                self.get_project_details(filepath),
+                "Select a valid title first.",
+            )
+        return self.rename_project(filepath, selected_title)
 
     def get_current_project_info(self):
         """Get info about the currently loaded project."""
@@ -900,52 +939,66 @@ class StoryFactoryUI:
                 with gr.Tab("Projects", id="projects"):
                     gr.Markdown("### Manage Your Story Projects")
 
-                    # Projects table
-                    projects_table = gr.Dataframe(
-                        headers=["Title", "Status", "Last Saved", "Words", "Path"],
-                        value=self.get_projects_data(),
-                        col_count=(5, "fixed"),
-                        datatype=["str", "str", "str", "number", "str"],
-                        interactive=False,
-                        wrap=True,
-                    )
-
                     with gr.Row():
-                        refresh_projects_btn = gr.Button("Refresh", size="sm")
-                        load_project_btn = gr.Button("Load Selected", variant="primary", size="sm")
+                        # Left column: Project selection
+                        with gr.Column(scale=2):
+                            project_dropdown = gr.Dropdown(
+                                choices=self.get_projects_choices(),
+                                label="Select Project",
+                                interactive=True,
+                            )
+                            with gr.Row():
+                                refresh_projects_btn = gr.Button("Refresh", size="sm")
+                                load_project_btn = gr.Button(
+                                    "Load Selected", variant="primary", size="sm"
+                                )
 
-                    gr.Markdown("---")
-                    gr.Markdown("### Rename Project")
-                    with gr.Row():
-                        custom_title_input = gr.Textbox(
-                            label="Custom Title",
-                            placeholder="Enter a new title...",
-                            scale=3,
-                        )
-                        apply_title_btn = gr.Button("Set Title", size="sm", scale=1)
+                            gr.Markdown("---")
 
-                    gr.Markdown("### AI Title Suggestions")
-                    with gr.Row():
-                        generate_titles_btn = gr.Button("Generate Ideas", size="sm", scale=1)
-                        suggested_titles_radio = gr.Radio(
-                            choices=[],
-                            label="Suggested Titles",
-                            scale=3,
-                        )
-                        apply_suggestion_btn = gr.Button("Use This", size="sm", scale=1)
+                            # Rename section
+                            gr.Markdown("**Rename Project**")
+                            with gr.Row():
+                                custom_title_input = gr.Textbox(
+                                    label="New Title",
+                                    placeholder="Enter a new title...",
+                                    scale=3,
+                                    container=False,
+                                )
+                                apply_title_btn = gr.Button("Rename", size="sm", scale=1)
 
-                    gr.Markdown("---")
-                    gr.Markdown("### Delete Project")
-                    with gr.Row():
-                        delete_confirm_check = gr.Checkbox(label="Confirm delete", value=False)
-                        delete_project_btn = gr.Button("Delete Selected", variant="stop", size="sm")
+                            # AI titles section
+                            gr.Markdown("**AI Title Suggestions**")
+                            with gr.Row():
+                                generate_titles_btn = gr.Button("Generate Ideas", size="sm")
+                            suggested_titles_radio = gr.Radio(
+                                choices=[],
+                                label="",
+                                container=False,
+                            )
+                            apply_suggestion_btn = gr.Button("Apply Selected Title", size="sm")
 
-                    projects_status = gr.Textbox(label="Status", interactive=False)
+                            gr.Markdown("---")
 
-                    # Current project info
-                    gr.Markdown("---")
-                    gr.Markdown("### Current Session")
-                    gr.Markdown(value=self.get_current_project_info())
+                            # Delete section
+                            gr.Markdown("**Delete Project**")
+                            with gr.Row():
+                                delete_confirm_check = gr.Checkbox(
+                                    label="Confirm delete", value=False, scale=2
+                                )
+                                delete_project_btn = gr.Button(
+                                    "Delete", variant="stop", size="sm", scale=1
+                                )
+
+                            projects_status = gr.Textbox(
+                                label="Status", interactive=False, lines=1
+                            )
+
+                        # Right column: Project details
+                        with gr.Column(scale=1):
+                            gr.Markdown("**Project Details**")
+                            project_details = gr.Markdown(
+                                value="Select a project to view details."
+                            )
 
                 # ============ COMPARE TAB ============
                 with gr.Tab("Compare Models", id="compare"):
@@ -1131,44 +1184,45 @@ class StoryFactoryUI:
 
             # Projects tab handlers
             refresh_projects_btn.click(
-                self.get_projects_data,
-                outputs=[projects_table],
+                lambda: gr.update(choices=self.get_projects_choices()),
+                outputs=[project_dropdown],
             )
 
-            def load_selected_project(selected_rows):
-                if not selected_rows or len(selected_rows) == 0:
-                    return "No project selected.", "", ""
-                filepath = selected_rows[0][-1]  # Path is last column
-                return self.load_saved_story(filepath)
+            # Show details when project selected
+            project_dropdown.change(
+                self.get_project_details,
+                inputs=[project_dropdown],
+                outputs=[project_details],
+            )
 
             load_project_btn.click(
-                load_selected_project,
-                inputs=[projects_table],
+                self.load_saved_story,
+                inputs=[project_dropdown],
                 outputs=[projects_status, outline_display, story_display],
             )
 
             apply_title_btn.click(
                 self.rename_project,
-                inputs=[projects_table, custom_title_input],
-                outputs=[projects_table, projects_status],
+                inputs=[project_dropdown, custom_title_input],
+                outputs=[project_dropdown, project_details, projects_status],
             )
 
             generate_titles_btn.click(
                 self.generate_title_ideas,
-                inputs=[projects_table],
+                inputs=[project_dropdown],
                 outputs=[suggested_titles_radio, projects_status],
             )
 
             apply_suggestion_btn.click(
                 self.apply_suggested_title,
-                inputs=[projects_table, suggested_titles_radio],
-                outputs=[projects_table, projects_status],
+                inputs=[project_dropdown, suggested_titles_radio],
+                outputs=[project_dropdown, project_details, projects_status],
             )
 
             delete_project_btn.click(
                 self.delete_project,
-                inputs=[projects_table, delete_confirm_check],
-                outputs=[projects_table, projects_status],
+                inputs=[project_dropdown, delete_confirm_check],
+                outputs=[project_dropdown, projects_status],
             )
 
             # Compare tab
@@ -1226,8 +1280,8 @@ class StoryFactoryUI:
                 js="""
                 () => {
                     // Tab persistence via URL hash
-                    const tabMap = {'write': 0, 'compare': 1, 'settings': 2, 'models': 3};
-                    const reverseMap = ['write', 'compare', 'settings', 'models'];
+                    const tabMap = {'write': 0, 'projects': 1, 'compare': 2, 'settings': 3, 'models': 4};
+                    const reverseMap = ['write', 'projects', 'compare', 'settings', 'models'];
 
                     // Restore tab from URL hash on load
                     const hash = window.location.hash.slice(1);
