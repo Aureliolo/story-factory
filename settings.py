@@ -8,6 +8,7 @@ import logging
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TypedDict
 from urllib.parse import urlparse
 
 # Configure module logger
@@ -16,8 +17,30 @@ logger = logging.getLogger(__name__)
 
 SETTINGS_FILE = Path(__file__).parent / "settings.json"
 
+
+class ModelInfo(TypedDict):
+    """Type definition for model information."""
+
+    name: str
+    release: str
+    size_gb: int
+    vram_required: int
+    quality: int | float
+    speed: int
+    nsfw: bool
+    description: str
+
+
+class AgentRoleInfo(TypedDict):
+    """Type definition for agent role information."""
+
+    name: str
+    description: str
+    recommended_quality: int
+
+
 # Available models registry - models released in 2025 or late 2024
-AVAILABLE_MODELS = {
+AVAILABLE_MODELS: dict[str, ModelInfo] = {
     # === 2025 Models (Newest) ===
     "huihui_ai/qwen3-abliterated:32b": {
         "name": "Qwen3 32B Abliterated",
@@ -93,7 +116,7 @@ AVAILABLE_MODELS = {
 }
 
 # Agent role definitions
-AGENT_ROLES = {
+AGENT_ROLES: dict[str, AgentRoleInfo] = {
     "interviewer": {
         "name": "Interviewer",
         "description": "Gathers story requirements",
@@ -265,14 +288,14 @@ class Settings:
         if not self.use_per_agent_models:
             return self.default_model
 
-        model_setting = self.agent_models.get(agent_role, "auto")
+        model_setting: str = self.agent_models.get(agent_role, "auto")
 
         if model_setting != "auto":
             return model_setting
 
         # Auto-select based on agent role and VRAM
-        role_info = AGENT_ROLES.get(agent_role, {})
-        required_quality = role_info.get("recommended_quality", 7)
+        role_info: AgentRoleInfo | None = AGENT_ROLES.get(agent_role)
+        required_quality: int = role_info["recommended_quality"] if role_info else 7
 
         # Filter models that fit VRAM and meet quality requirement
         candidates = []
@@ -297,7 +320,8 @@ class Settings:
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
         """Get temperature setting for an agent."""
-        return self.agent_temperatures.get(agent_role, 0.8)
+        temp: float = self.agent_temperatures.get(agent_role, 0.8)
+        return temp
 
 
 def get_installed_models() -> list[str]:
@@ -346,16 +370,18 @@ def get_available_vram() -> int:
         return 8
 
 
-def get_model_info(model_id: str) -> dict:
+def get_model_info(model_id: str) -> ModelInfo:
     """Get information about a model."""
     return AVAILABLE_MODELS.get(
         model_id,
-        {
-            "name": model_id,
-            "release": "Unknown",
-            "quality": 5,
-            "speed": 5,
-            "nsfw": True,
-            "description": "Unknown model",
-        },
+        ModelInfo(
+            name=model_id,
+            release="Unknown",
+            size_gb=0,
+            vram_required=0,
+            quality=5,
+            speed=5,
+            nsfw=True,
+            description="Unknown model",
+        ),
     )

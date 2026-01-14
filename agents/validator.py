@@ -33,7 +33,7 @@ class ValidatorAgent(BaseAgent):
     # Use a small, fast model for validation
     DEFAULT_VALIDATOR_MODEL = "qwen2.5:0.5b"  # Small but capable
 
-    def __init__(self, model: str = None, settings=None):
+    def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Validator",
             role="Response Validator",

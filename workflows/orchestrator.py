@@ -42,8 +42,8 @@ class StoryOrchestrator:
 
     def __init__(
         self,
-        settings: Settings = None,
-        model_override: str = None,  # Force specific model for all agents
+        settings: Settings | None = None,
+        model_override: str | None = None,  # Force specific model for all agents
     ):
         self.settings = settings or Settings.load()
         self.model_override = model_override
@@ -163,7 +163,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Return empty list on failure - UI will handle fallback message
         return []
 
-    def _emit(self, event_type: str, agent: str, message: str, data: dict = None):
+    def _emit(self, event_type: str, agent: str, message: str, data: dict | None = None):
         """Emit a workflow event."""
         event = WorkflowEvent(event_type, agent, message, data or {})
         self.events.append(event)

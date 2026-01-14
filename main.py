@@ -25,7 +25,7 @@ def run_web_ui():
     main()
 
 
-def run_cli(load_story: str = None, list_stories: bool = False):
+def run_cli(load_story: str | None = None, list_stories: bool = False):
     """Run a simple CLI version."""
     from workflows.orchestrator import StoryOrchestrator
 

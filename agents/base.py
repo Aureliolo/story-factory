@@ -43,10 +43,10 @@ class BaseAgent:
         name: str,
         role: str,
         system_prompt: str,
-        agent_role: str = None,  # For auto model selection
-        model: str = None,
-        temperature: float = None,
-        settings: Settings = None,
+        agent_role: str | None = None,  # For auto model selection
+        model: str | None = None,
+        temperature: float | None = None,
+        settings: Settings | None = None,
     ):
         self.name = name
         self.role = role

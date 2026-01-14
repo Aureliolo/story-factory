@@ -46,7 +46,7 @@ Understand that some genre conventions (like coincidences in romance) are accept
 class ContinuityAgent(BaseAgent):
     """Agent that checks for plot holes and inconsistencies."""
 
-    def __init__(self, model: str = None, settings=None):
+    def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Continuity Checker",
             role="Consistency Guardian",
