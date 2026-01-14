@@ -389,7 +389,7 @@ class StoryOrchestrator:
     def write_all_chapters(
         self,
         on_checkpoint: Callable[[int, str], bool] | None = None,
-    ) -> Generator[WorkflowEvent, None, None]:
+    ) -> Generator[WorkflowEvent]:
         """Write all chapters, with optional checkpoints for user feedback.
 
         Args:

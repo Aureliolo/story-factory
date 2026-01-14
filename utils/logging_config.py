@@ -4,10 +4,10 @@ import logging
 import sys
 import time
 import uuid
+from collections.abc import Generator
 from contextlib import contextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Generator
 
 # Default log file location
 DEFAULT_LOG_FILE = Path(__file__).parent.parent / "logs" / "story_factory.log"
@@ -94,7 +94,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
 
 
 @contextmanager
-def log_context(correlation_id: str | None = None) -> Generator[str, None, None]:
+def log_context(correlation_id: str | None = None) -> Generator[str]:
     """Context manager for setting correlation ID in logs.
 
     Args:
@@ -119,7 +119,7 @@ def log_context(correlation_id: str | None = None) -> Generator[str, None, None]
 
 
 @contextmanager
-def log_performance(logger: logging.Logger, operation: str) -> Generator[None, None, None]:
+def log_performance(logger: logging.Logger, operation: str) -> Generator[None]:
     """Context manager for logging operation performance.
 
     Args:

@@ -3,11 +3,8 @@
 import json
 import logging
 import re
-from typing import TypeVar
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 
 def extract_json(
@@ -69,7 +66,7 @@ def extract_json_list(response: str) -> list[dict] | None:
     return None
 
 
-def parse_json_to_model(
+def parse_json_to_model[T](
     response: str,
     model_class: type[T],
     fallback_pattern: str | None = None,
@@ -95,7 +92,7 @@ def parse_json_to_model(
         return None
 
 
-def parse_json_list_to_models(
+def parse_json_list_to_models[T](
     response: str,
     model_class: type[T],
 ) -> list[T]:
