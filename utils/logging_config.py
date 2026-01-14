@@ -2,11 +2,35 @@
 
 import logging
 import sys
+import time
+import uuid
+from contextlib import contextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Generator
 
 # Default log file location
 DEFAULT_LOG_FILE = Path(__file__).parent.parent / "logs" / "story_factory.log"
+
+
+class ContextFilter(logging.Filter):
+    """Add context information to log records."""
+
+    def __init__(self):
+        super().__init__()
+        self.correlation_id = None
+
+    def filter(self, record):
+        """Add correlation ID to log record if available."""
+        if self.correlation_id:
+            record.correlation_id = self.correlation_id
+        else:
+            record.correlation_id = "-"
+        return True
+
+
+# Global context filter instance
+_context_filter = ContextFilter()
 
 
 def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None:
@@ -19,9 +43,10 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
 
-    # Create formatter
+    # Create formatter with correlation ID
     formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        fmt="%(asctime)s [%(levelname)s] [%(correlation_id)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     # Configure root logger
@@ -31,6 +56,9 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     # Remove existing handlers to avoid duplicates
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
+
+    # Add context filter
+    root_logger.addFilter(_context_filter)
 
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -63,3 +91,53 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("gradio").setLevel(logging.WARNING)
+
+
+@contextmanager
+def log_context(correlation_id: str = None) -> Generator[str, None, None]:
+    """Context manager for setting correlation ID in logs.
+
+    Args:
+        correlation_id: Optional correlation ID. If not provided, generates a new UUID.
+
+    Yields:
+        The correlation ID being used.
+
+    Example:
+        with log_context("request-123"):
+            logger.info("Processing request")  # Will include correlation_id in log
+    """
+    if correlation_id is None:
+        correlation_id = str(uuid.uuid4())[:8]
+
+    old_id = _context_filter.correlation_id
+    _context_filter.correlation_id = correlation_id
+    try:
+        yield correlation_id
+    finally:
+        _context_filter.correlation_id = old_id
+
+
+@contextmanager
+def log_performance(logger: logging.Logger, operation: str) -> Generator[None, None, None]:
+    """Context manager for logging operation performance.
+
+    Args:
+        logger: Logger instance to use
+        operation: Name of the operation being timed
+
+    Example:
+        with log_performance(logger, "story_generation"):
+            generate_story()  # Will log duration after completion
+    """
+    start_time = time.time()
+    logger.info(f"{operation}: Starting")
+    try:
+        yield
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error(f"{operation}: Failed after {duration:.2f}s - {e}")
+        raise
+    else:
+        duration = time.time() - start_time
+        logger.info(f"{operation}: Completed in {duration:.2f}s")

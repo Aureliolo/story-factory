@@ -147,6 +147,36 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 | **Interactive** | Reviews each chapter |
 | **Collaborative** | Frequent interaction, steer mid-scene |
 
+## Exporting Stories
+
+Stories can be exported in multiple formats:
+
+```python
+# Via Python API
+orchestrator.export_story_to_file(format="markdown")  # .md file
+orchestrator.export_story_to_file(format="text")      # .txt file
+orchestrator.save_story()                             # .json file (for resuming)
+```
+
+Files are saved to `output/stories/` by default.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+
+Quick start for developers:
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+make test
+
+# Format and lint code
+make format
+make lint
+```
+
 ## License
 
 MIT License - See LICENSE file for details.

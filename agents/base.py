@@ -6,6 +6,7 @@ import time
 import ollama
 
 from settings import Settings, get_model_info
+from utils.logging_config import log_performance
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ class BaseAgent:
         temperature: float | None = None,
         model: str | None = None,
     ) -> str:
-        """Generate a response from the agent with retry logic."""
+        """Generate a response from the agent with retry logic and performance tracking."""
         messages = [{"role": "system", "content": self.system_prompt}]
 
         if context:
@@ -130,52 +131,57 @@ class BaseAgent:
         last_error = None
         delay = self.RETRY_DELAY
 
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                logger.info(
-                    f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}"
-                )
+        with log_performance(logger, f"{self.name} generation"):
+            for attempt in range(self.MAX_RETRIES):
+                try:
+                    logger.info(
+                        f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}"
+                    )
 
-                response = self.client.chat(
-                    model=use_model,
-                    messages=messages,
-                    options={
-                        "temperature": use_temp,
-                        "num_predict": self.settings.max_tokens,
-                        "num_ctx": self.settings.context_size,
-                    },
-                )
+                    start_time = time.time()
+                    response = self.client.chat(
+                        model=use_model,
+                        messages=messages,
+                        options={
+                            "temperature": use_temp,
+                            "num_predict": self.settings.max_tokens,
+                            "num_ctx": self.settings.context_size,
+                        },
+                    )
+                    duration = time.time() - start_time
 
-                content = response["message"]["content"]
-                logger.info(f"{self.name}: LLM response received ({len(content)} chars)")
-                return content
+                    content = response["message"]["content"]
+                    logger.info(
+                        f"{self.name}: LLM response received ({len(content)} chars, {duration:.2f}s)"
+                    )
+                    return content
 
-            except ConnectionError as e:
-                last_error = e
-                logger.warning(f"{self.name}: Connection error on attempt {attempt + 1}: {e}")
-                if attempt < self.MAX_RETRIES - 1:
-                    logger.info(f"{self.name}: Retrying in {delay}s...")
-                    time.sleep(delay)
-                    delay *= self.RETRY_BACKOFF
+                except ConnectionError as e:
+                    last_error = e
+                    logger.warning(f"{self.name}: Connection error on attempt {attempt + 1}: {e}")
+                    if attempt < self.MAX_RETRIES - 1:
+                        logger.info(f"{self.name}: Retrying in {delay}s...")
+                        time.sleep(delay)
+                        delay *= self.RETRY_BACKOFF
 
-            except ollama.ResponseError as e:
-                # Model-specific errors (model not found, etc.) - don't retry
-                logger.error(f"{self.name}: Ollama response error: {e}")
-                raise LLMGenerationError(f"Model error: {e}") from e
+                except ollama.ResponseError as e:
+                    # Model-specific errors (model not found, etc.) - don't retry
+                    logger.error(f"{self.name}: Ollama response error: {e}")
+                    raise LLMGenerationError(f"Model error: {e}") from e
 
-            except Exception as e:
-                last_error = e
-                logger.warning(f"{self.name}: Error on attempt {attempt + 1}: {e}")
-                if attempt < self.MAX_RETRIES - 1:
-                    logger.info(f"{self.name}: Retrying in {delay}s...")
-                    time.sleep(delay)
-                    delay *= self.RETRY_BACKOFF
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"{self.name}: Error on attempt {attempt + 1}: {e}")
+                    if attempt < self.MAX_RETRIES - 1:
+                        logger.info(f"{self.name}: Retrying in {delay}s...")
+                        time.sleep(delay)
+                        delay *= self.RETRY_BACKOFF
 
-        # All retries failed
-        logger.error(f"{self.name}: All {self.MAX_RETRIES} attempts failed")
-        raise LLMGenerationError(
-            f"Failed to generate after {self.MAX_RETRIES} attempts: {last_error}"
-        ) from last_error
+            # All retries failed
+            logger.error(f"{self.name}: All {self.MAX_RETRIES} attempts failed")
+            raise LLMGenerationError(
+                f"Failed to generate after {self.MAX_RETRIES} attempts: {last_error}"
+            ) from last_error
 
     def get_model_info(self) -> dict:
         """Get information about the current model."""
