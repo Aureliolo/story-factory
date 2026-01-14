@@ -1,0 +1,56 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug
+      placeholder: A clear description of the issue...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Run '...'
+        2. Enter '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model used
+      description: Which Ollama model were you using?
+      placeholder: e.g., huihui_ai/qwen3-abliterated:32b
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Interface mode
+      options:
+        - Web UI
+        - CLI
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error logs
+      description: Paste any error messages or logs
+      render: shell
