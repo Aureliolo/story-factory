@@ -23,6 +23,16 @@ This is a Python-based multi-agent system for generating stories using local AI 
 - Run the application: `python main.py` (starts web UI on http://localhost:7860)
 - Run in CLI mode: `python main.py --cli`
 
+### After Every Change
+**IMPORTANT**: After making code changes, always:
+1. Run `black .` to format code
+2. Run `ruff check .` to lint
+3. Run `pytest` to verify tests pass
+4. Commit and push changes
+5. Verify CI passes on GitHub (check Actions tab)
+
+This ensures code quality and prevents broken builds.
+
 ## Repository Structure
 
 - `main.py`: Entry point for the application (supports both web UI and CLI modes)
