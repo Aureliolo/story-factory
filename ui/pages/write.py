@@ -501,8 +501,38 @@ class WritePage:
         if not self.state.project:
             return
 
-        # Show confirmation dialog
-        with ui.dialog() as dialog, ui.card().classes("w-96"):
+        # Create dialog reference for the async handler
+        dialog = ui.dialog()
+
+        async def do_finalize():
+            """Handle the actual finalization."""
+            dialog.close()
+            if not self.state.project:
+                return
+            try:
+                self._notify("Finalizing interview...", type="info")
+                brief = await run.io_bound(
+                    self.services.story.finalize_interview, self.state.project
+                )
+                self.state.interview_complete = True
+                if self._chat:
+                    self._chat.set_disabled(True)
+                    brief_summary = (
+                        f"**Story Brief Generated:**\n\n"
+                        f"- **Premise:** {brief.premise}\n"
+                        f"- **Genre:** {brief.genre}\n"
+                        f"- **Tone:** {brief.tone}\n"
+                        f"- **Setting:** {brief.setting_place}, {brief.setting_time}"
+                    )
+                    self._chat.add_message("assistant", brief_summary)
+                self._update_interview_buttons()
+                self.services.project.save_project(self.state.project)
+                self._notify("Interview finalized!", type="positive")
+            except Exception as e:
+                logger.exception("Failed to finalize interview")
+                self._notify(f"Error: {e}", type="negative")
+
+        with dialog, ui.card().classes("w-96"):
             ui.label("Finalize Interview?").classes("text-xl font-bold mb-2")
             ui.label(
                 "This will generate a story brief based on the conversation so far. "
@@ -511,41 +541,9 @@ class WritePage:
 
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
-                ui.button(
-                    "Finalize",
-                    on_click=lambda: self._do_finalize_interview(dialog),
-                ).props("color=primary")
+                ui.button("Finalize", on_click=do_finalize).props("color=primary")
 
         dialog.open()
-
-    async def _do_finalize_interview(self, dialog) -> None:
-        """Actually perform the interview finalization."""
-        dialog.close()
-
-        if not self.state.project:
-            return
-
-        try:
-            self._notify("Finalizing interview...", type="info")
-            brief = await run.io_bound(self.services.story.finalize_interview, self.state.project)
-            self.state.interview_complete = True
-            if self._chat:
-                self._chat.set_disabled(True)
-                # Show the generated brief in chat
-                brief_summary = (
-                    f"**Story Brief Generated:**\n\n"
-                    f"- **Premise:** {brief.premise}\n"
-                    f"- **Genre:** {brief.genre}\n"
-                    f"- **Tone:** {brief.tone}\n"
-                    f"- **Setting:** {brief.setting_place}, {brief.setting_time}"
-                )
-                self._chat.add_message("assistant", brief_summary)
-            self._update_interview_buttons()
-            self.services.project.save_project(self.state.project)
-            self._notify("Interview finalized!", type="positive")
-        except Exception as e:
-            logger.exception("Failed to finalize interview")
-            self._notify(f"Error: {e}", type="negative")
 
     def _enable_continue_interview(self) -> None:
         """Enable continuing the interview."""
