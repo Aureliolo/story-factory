@@ -5,17 +5,9 @@ import logging
 from typing import Any
 
 from memory.world_database import WorldDatabase
+from ui.theme import ENTITY_COLORS, RELATION_COLORS
 
 logger = logging.getLogger(__name__)
-
-# Entity type colors for visualization
-ENTITY_COLORS = {
-    "character": "#4CAF50",  # Green
-    "location": "#2196F3",  # Blue
-    "item": "#FF9800",  # Orange
-    "faction": "#9C27B0",  # Purple
-    "concept": "#607D8B",  # Grey
-}
 
 # Entity type shapes
 ENTITY_SHAPES = {
@@ -24,20 +16,6 @@ ENTITY_SHAPES = {
     "item": "diamond",
     "faction": "triangle",
     "concept": "star",
-}
-
-# Relationship type colors
-RELATION_COLORS = {
-    "knows": "#90A4AE",
-    "loves": "#E91E63",
-    "hates": "#F44336",
-    "located_in": "#2196F3",
-    "owns": "#FF9800",
-    "member_of": "#9C27B0",
-    "enemy_of": "#F44336",
-    "ally_of": "#4CAF50",
-    "parent_of": "#795548",
-    "child_of": "#795548",
 }
 
 
