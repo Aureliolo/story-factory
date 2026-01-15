@@ -107,10 +107,13 @@ class StoryFactoryApp:
             valid_tabs = ["write", "world", "projects", "settings", "models"]
 
             async def read_hash():
-                """Read URL hash and set initial tab."""
-                result = await ui.run_javascript("window.location.hash.slice(1)")
-                if result in valid_tabs:
-                    tabs.value = result
+                """Read URL hash and set tab (works on initial load and reconnect)."""
+                try:
+                    result = await ui.run_javascript("window.location.hash.slice(1)")
+                    if result in valid_tabs:
+                        tabs.value = result
+                except Exception:
+                    pass  # Ignore if JS not ready
 
             def update_hash(e):
                 """Update URL hash when tab changes."""
@@ -118,7 +121,10 @@ class StoryFactoryApp:
                     ui.run_javascript(f"window.location.hash = '{e.value}'")
 
             tabs.on_value_change(update_hash)
-            ui.timer(0.1, read_hash, once=True)
+
+            # Read hash on page load and on reconnect
+            ui.timer(0.3, read_hash, once=True)
+            app.on_connect(lambda: ui.timer(0.3, read_hash, once=True))
 
             # Tab panels
             with ui.tab_panels(tabs, value="write").classes("w-full flex-grow"):

@@ -36,7 +36,7 @@ class SettingsPage:
         with ui.column().classes("w-full gap-6 p-4"):
             ui.label("Settings").classes("text-2xl font-bold")
 
-            # Row 1: Small/medium cards - same height via align-items-stretch
+            # All cards in flex container - same height, different widths
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch"):
                 with ui.element("div").style("flex: 1 1 260px; min-width: 260px;"):
                     self._build_connection_section()
@@ -47,11 +47,11 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
                     self._build_context_section()
 
-                with ui.element("div").style("flex: 1.5 1 380px; min-width: 380px;"):
+                with ui.element("div").style("flex: 1.2 1 380px; min-width: 380px;"):
                     self._build_model_section()
 
-            # Row 2: Temperature sliders (own row since it's wide)
-            self._build_temperature_section()
+                with ui.element("div").style("flex: 1.5 1 480px; min-width: 480px;"):
+                    self._build_temperature_section()
 
             # Save button
             ui.button(
