@@ -1,6 +1,8 @@
 """Main NiceGUI application for Story Factory."""
 
 import logging
+from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol
 
 from nicegui import app, ui
@@ -26,149 +28,137 @@ class Page(Protocol):
         ...
 
 
+# Navigation items: (path, label, icon)
+NAV_ITEMS = [
+    ("/", "Write Story", "edit"),
+    ("/world", "World Builder", "public"),
+    ("/projects", "Projects", "folder"),
+    ("/settings", "Settings", "settings"),
+    ("/models", "Models", "smart_toy"),
+]
+
+
 class StoryFactoryApp:
     """Main Story Factory application.
 
-    This class builds and runs the NiceGUI-based web interface,
-    coordinating between the UI components, pages, and services.
+    Uses path-based routing for proper browser navigation support.
+    Each page is a separate route with shared layout.
     """
 
     def __init__(self, services: ServiceContainer):
-        """Initialize the application.
-
-        Args:
-            services: Service container with all services.
-        """
+        """Initialize the application."""
         self.services = services
         self.state = AppState()
-
-        # Load dark mode preference from settings
         self.state.dark_mode = services.settings.dark_mode
 
-        # Page instances (created on build)
-        self._header: Header | None = None
-        self._pages: dict[str, Page] = {}
-        self._shortcuts: KeyboardShortcuts | None = None
-
-    def build(self) -> None:
-        """Build the application routes and pages."""
-
-        @ui.page("/")
-        def main_page():
-            """Main application page."""
-            # Add custom styles (inside page function)
-            from pathlib import Path
-
-            css_path = Path(__file__).parent / "styles.css"
-            if css_path.exists():
-                with open(css_path) as f:
-                    ui.add_head_html(f"<style>{f.read()}</style>")
-
-            # Register keyboard shortcuts (inside page function)
-            shortcuts = KeyboardShortcuts(self.state, self.services)
-            shortcuts.register()
-
-            self._build_main_page()
-
-        # Store app reference for cleanup
-        app.on_shutdown(self._on_shutdown)
-
-        logger.info("Story Factory app built successfully")
-
-    def _build_main_page(self) -> None:
-        """Build the main page UI."""
+    def _apply_theme(self) -> None:
+        """Apply theme settings to the page."""
         from ui.theme import get_background_class
 
-        # Apply theme-based background
         bg_class = get_background_class(self.state.dark_mode)
         ui.query("body").classes(bg_class)
 
-        # Apply NiceGUI dark mode
         if self.state.dark_mode:
             ui.dark_mode().enable()
         else:
             ui.dark_mode().disable()
 
+    def _add_styles(self) -> None:
+        """Add custom CSS styles."""
+        css_path = Path(__file__).parent / "styles.css"
+        if css_path.exists():
+            with open(css_path) as f:
+                ui.add_head_html(f"<style>{f.read()}</style>")
+
+    def _build_navigation(self, current_path: str) -> None:
+        """Build the navigation bar."""
+        with ui.row().classes(
+            "w-full justify-center bg-gray-100 dark:bg-gray-800 shadow-sm py-2 gap-1"
+        ):
+            for path, label, icon in NAV_ITEMS:
+                is_active = current_path == path
+                btn_classes = "px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                if is_active:
+                    btn_classes += " bg-blue-500 text-white"
+                else:
+                    btn_classes += (
+                        " text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    )
+
+                with ui.link(target=path).classes(btn_classes):
+                    ui.icon(icon, size="sm")
+                    ui.label(label)
+
+    def _page_layout(self, current_path: str, build_content: Callable[[], None]) -> None:
+        """Shared page layout with header and navigation."""
+        self._add_styles()
+        self._apply_theme()
+
+        # Register keyboard shortcuts
+        shortcuts = KeyboardShortcuts(self.state, self.services)
+        shortcuts.register()
+
         # Header with project selector
-        self._header = Header(self.state, self.services)
-        self._header.build()
+        header = Header(self.state, self.services)
+        header.build()
 
-        # Main content area
-        with ui.column().classes("w-full flex-grow"):
-            # Tab navigation - using Tailwind dark: variants for proper theming
-            with ui.tabs().classes("w-full bg-gray-100 dark:bg-gray-800 shadow-sm") as tabs:
-                ui.tab("write", label="Write Story", icon="edit")
-                ui.tab("world", label="World Builder", icon="public")
-                ui.tab("projects", label="Projects", icon="folder")
-                ui.tab("settings", label="Settings", icon="settings")
-                ui.tab("models", label="Models", icon="smart_toy")
+        # Navigation bar
+        self._build_navigation(current_path)
 
-            # URL hash persistence for tabs
-            valid_tabs = ["write", "world", "projects", "settings", "models"]
+        # Page content
+        with ui.column().classes("w-full flex-grow p-0"):
+            build_content()
 
-            async def read_hash():
-                """Read URL hash and set tab."""
-                try:
-                    result = await ui.run_javascript("window.location.hash.slice(1)")
-                    if result in valid_tabs:
-                        tabs.value = result
-                except Exception:
-                    pass
+    def build(self) -> None:
+        """Build the application routes."""
 
-            def update_hash(e):
-                """Update URL hash when tab changes."""
-                if e.value in valid_tabs:
-                    ui.run_javascript(f"window.location.hash = '{e.value}'")
+        @ui.page("/")
+        def write_page():
+            def content():
+                page = WritePage(self.state, self.services)
+                page.build()
 
-            tabs.on_value_change(update_hash)
+            self._page_layout("/", content)
 
-            # Read hash after page is ready
-            async def init_tab():
-                await ui.context.client.connected()
-                await read_hash()
+        @ui.page("/world")
+        def world_page():
+            def content():
+                page = WorldPage(self.state, self.services)
+                page.build()
 
-            ui.timer(0, init_tab, once=True)
+            self._page_layout("/world", content)
 
-            # Tab panels
-            with ui.tab_panels(tabs, value="write").classes("w-full flex-grow"):
-                with ui.tab_panel("write").classes("p-0"):
-                    self._pages["write"] = WritePage(self.state, self.services)
-                    self._pages["write"].build()
+        @ui.page("/projects")
+        def projects_page():
+            def content():
+                page = ProjectsPage(self.state, self.services)
+                page.build()
 
-                with ui.tab_panel("world").classes("p-0"):
-                    self._pages["world"] = WorldPage(self.state, self.services)
-                    self._pages["world"].build()
+            self._page_layout("/projects", content)
 
-                with ui.tab_panel("projects").classes("p-0"):
-                    self._pages["projects"] = ProjectsPage(self.state, self.services)
-                    self._pages["projects"].build()
+        @ui.page("/settings")
+        def settings_page():
+            def content():
+                page = SettingsPage(self.state, self.services)
+                page.build()
 
-                with ui.tab_panel("settings").classes("p-0"):
-                    self._pages["settings"] = SettingsPage(self.state, self.services)
-                    self._pages["settings"].build()
+            self._page_layout("/settings", content)
 
-                with ui.tab_panel("models").classes("p-0"):
-                    self._pages["models"] = ModelsPage(self.state, self.services)
-                    self._pages["models"].build()
+        @ui.page("/models")
+        def models_page():
+            def content():
+                page = ModelsPage(self.state, self.services)
+                page.build()
 
-        # Register state change handlers
-        self._setup_state_handlers()
+            self._page_layout("/models", content)
 
-    def _setup_state_handlers(self) -> None:
-        """Set up handlers for state changes."""
-
-        def on_project_change():
-            """Handle project change - refresh relevant pages."""
-            logger.debug(f"Project changed to: {self.state.project_id}")
-            # Pages will refresh on next view
-
-        self.state.on_project_change(on_project_change)
+        # Cleanup on shutdown
+        app.on_shutdown(self._on_shutdown)
+        logger.info("Story Factory app built with path-based routing")
 
     def _on_shutdown(self) -> None:
         """Handle application shutdown."""
         logger.info("Story Factory shutting down")
-
-        # Save current project if any
         if self.state.project and self.state.project_id:
             try:
                 self.services.project.save_project(self.state.project)
@@ -183,40 +173,23 @@ class StoryFactoryApp:
         title: str = "Story Factory",
         reload: bool = False,
     ) -> None:
-        """Run the application.
-
-        Args:
-            host: Host to bind to.
-            port: Port to listen on.
-            title: Browser tab title.
-            reload: Enable auto-reload for development.
-        """
+        """Run the application."""
         logger.info(f"Starting Story Factory on http://{host}:{port}")
-
         ui.run(
             host=host,
             port=port,
             title=title,
             reload=reload,
             favicon="📚",
-            show=False,  # Don't auto-open browser
+            show=False,
         )
 
 
 def create_app(services: ServiceContainer | None = None) -> StoryFactoryApp:
-    """Create and configure the Story Factory application.
-
-    Args:
-        services: Optional service container. If not provided,
-                  creates one with default settings.
-
-    Returns:
-        Configured StoryFactoryApp instance.
-    """
+    """Create and configure the Story Factory application."""
     if services is None:
         services = ServiceContainer()
 
     app_instance = StoryFactoryApp(services)
     app_instance.build()
-
     return app_instance
