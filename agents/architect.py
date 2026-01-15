@@ -4,6 +4,7 @@ import re
 
 from memory.story_state import Chapter, Character, PlotPoint, StoryState
 from utils.json_parser import parse_json_list_to_models
+from utils.prompt_builder import PromptBuilder
 
 from .base import BaseAgent
 
@@ -30,6 +31,36 @@ Output your plans in structured formats (JSON when requested) so other team memb
 class ArchitectAgent(BaseAgent):
     """Agent that designs story structure, characters, and outlines."""
 
+    # JSON schema constants for structured outputs
+    CHARACTER_SCHEMA = """[
+    {
+        "name": "Full Name",
+        "role": "protagonist|antagonist|love_interest|supporting",
+        "description": "Physical and personality description (2-3 sentences)",
+        "personality_traits": ["trait1", "trait2", "trait3"],
+        "goals": ["what they want", "what they need"],
+        "relationships": {"other_character": "relationship description"},
+        "arc_notes": "How this character should change through the story"
+    }
+]"""
+
+    PLOT_POINT_SCHEMA = """[
+    {"description": "Inciting incident - ...", "chapter": 1},
+    {"description": "First plot point - ...", "chapter": 2},
+    {"description": "Midpoint twist - ...", "chapter": null},
+    {"description": "Crisis - ...", "chapter": null},
+    {"description": "Climax - ...", "chapter": null},
+    {"description": "Resolution - ...", "chapter": null}
+]"""
+
+    CHAPTER_SCHEMA = """[
+    {
+        "number": 1,
+        "title": "Chapter Title",
+        "outline": "Detailed outline of what happens in this chapter (3-5 sentences). Include key scenes, character moments, and how it advances the plot."
+    }
+]"""
+
     def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Architect",
@@ -42,105 +73,83 @@ class ArchitectAgent(BaseAgent):
 
     def create_world(self, story_state: StoryState) -> str:
         """Create the world-building document."""
-        brief = story_state.brief
-        if not brief:
-            raise ValueError("Story brief is required to create world")
-        prompt = f"""Create detailed world-building for this story.
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
 
-LANGUAGE: {brief.language} - Write EVERYTHING in {brief.language}. All descriptions, names, and text must be in {brief.language}.
+        # Build prompt using PromptBuilder
+        builder = PromptBuilder()
+        builder.add_text("Create detailed world-building for this story.")
+        builder.add_language_requirement(brief.language)
+        builder.add_text(f"PREMISE: {brief.premise}")
+        builder.add_text(
+            f"GENRE: {brief.genre} (subgenres: {', '.join(brief.subgenres)})\n"
+            f"SETTING: {brief.setting_place}, {brief.setting_time}"
+        )
+        builder.add_text(f"TONE: {brief.tone}")
+        builder.add_text(f"THEMES: {', '.join(brief.themes)}")
 
-PREMISE: {brief.premise}
-GENRE: {brief.genre} (subgenres: {", ".join(brief.subgenres)})
-SETTING: {brief.setting_place}, {brief.setting_time}
-TONE: {brief.tone}
-THEMES: {", ".join(brief.themes)}
+        builder.add_text(
+            "Create:\n"
+            "1. A vivid description of the world/setting (2-3 paragraphs)\n"
+            "2. Key rules or facts about this world (5-10 bullet points)\n"
+            "3. The atmosphere and mood that should permeate the story\n\n"
+            "Make it immersive and specific to the genre."
+        )
 
-Create:
-1. A vivid description of the world/setting (2-3 paragraphs)
-2. Key rules or facts about this world (5-10 bullet points)
-3. The atmosphere and mood that should permeate the story
-
-Make it immersive and specific to the genre. Remember: ALL text must be in {brief.language}!"""
-
+        prompt = builder.build()
         return self.generate(prompt)
 
     def create_characters(self, story_state: StoryState) -> list[Character]:
         """Design the main characters."""
-        brief = story_state.brief
-        if not brief:
-            raise ValueError("Story brief is required to create characters")
-        prompt = f"""Design the main characters for this story.
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
 
-LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Names, descriptions, traits - everything in {brief.language}.
+        # Build prompt using PromptBuilder
+        builder = PromptBuilder()
+        builder.add_text("Design the main characters for this story.")
+        builder.add_language_requirement(brief.language)
+        builder.add_text(f"PREMISE: {brief.premise}")
+        builder.add_brief_requirements(brief)
 
-PREMISE: {brief.premise}
-GENRE: {brief.genre}
-THEMES: {", ".join(brief.themes)}
-CONTENT RATING: {brief.content_rating}
-CONTENT NOTES: Include {", ".join(brief.content_preferences) if brief.content_preferences else "nothing specific"}
+        builder.add_text(
+            f"Create 2-4 main characters. For each, output JSON (all text values in {brief.language}):"
+        )
+        builder.add_json_output_format(self.CHARACTER_SCHEMA)
+        builder.add_text("Make them complex, with flaws and desires that create conflict.")
 
-Create 2-4 main characters. For each, output JSON (all text values in {brief.language}):
-```json
-[
-    {{
-        "name": "Full Name",
-        "role": "protagonist|antagonist|love_interest|supporting",
-        "description": "Physical and personality description (2-3 sentences)",
-        "personality_traits": ["trait1", "trait2", "trait3"],
-        "goals": ["what they want", "what they need"],
-        "relationships": {{"other_character": "relationship description"}},
-        "arc_notes": "How this character should change through the story"
-    }}
-]
-```
-
-Make them complex, with flaws and desires that create conflict. ALL text must be in {brief.language}!"""
-
+        prompt = builder.build()
         response = self.generate(prompt)
         return parse_json_list_to_models(response, Character)
 
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
-        brief = story_state.brief
-        if not brief:
-            raise ValueError("Story brief is required to create plot outline")
-        chars = "\n".join(f"- {c.name} ({c.role}): {c.description}" for c in story_state.characters)
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
 
-        prompt = f"""Create a plot outline for this story.
+        # Build prompt using PromptBuilder
+        builder = PromptBuilder()
+        builder.add_text("Create a plot outline for this story.")
+        builder.add_language_requirement(brief.language)
+        builder.add_text(f"PREMISE: {brief.premise}")
+        builder.add_text(f"LENGTH: {brief.target_length}")
+        builder.add_brief_requirements(brief)
+        builder.add_character_summary(story_state.characters)
 
-LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Plot summary and descriptions must be in {brief.language}.
+        if story_state.world_description:
+            world_preview = story_state.world_description[:500]
+            if len(story_state.world_description) > 500:
+                world_preview += "..."
+            builder.add_section("WORLD", world_preview)
 
-PREMISE: {brief.premise}
-GENRE: {brief.genre}
-TONE: {brief.tone}
-LENGTH: {brief.target_length}
-CONTENT RATING: {brief.content_rating}
-THEMES: {", ".join(brief.themes)}
+        builder.add_text(
+            f"Create:\n"
+            f"1. A compelling plot summary (1-2 paragraphs) in {brief.language}\n"
+            f"2. Key plot points as JSON (descriptions in {brief.language}):"
+        )
+        builder.add_json_output_format(self.PLOT_POINT_SCHEMA)
+        builder.add_text(
+            "Make sure the plot serves the themes and gives characters room to grow.\n"
+            f"For mature content at level '{brief.content_rating}', integrate intimate moments naturally into the arc."
+        )
 
-CHARACTERS:
-{chars}
-
-WORLD:
-{story_state.world_description[:500]}...
-
-Create:
-1. A compelling plot summary (1-2 paragraphs) in {brief.language}
-2. Key plot points as JSON (descriptions in {brief.language}):
-```json
-[
-    {{"description": "Inciting incident - ...", "chapter": 1}},
-    {{"description": "First plot point - ...", "chapter": 2}},
-    {{"description": "Midpoint twist - ...", "chapter": null}},
-    {{"description": "Crisis - ...", "chapter": null}},
-    {{"description": "Climax - ...", "chapter": null}},
-    {{"description": "Resolution - ...", "chapter": null}}
-]
-```
-
-Make sure the plot serves the themes and gives characters room to grow.
-For mature content at level '{brief.content_rating}', integrate intimate moments naturally into the arc.
-ALL text must be in {brief.language}!"""
-
+        prompt = builder.build()
         response = self.generate(prompt)
 
         # Extract plot summary (everything before JSON)
@@ -153,9 +162,7 @@ ALL text must be in {brief.language}!"""
 
     def create_chapter_outline(self, story_state: StoryState) -> list[Chapter]:
         """Create detailed chapter outlines."""
-        brief = story_state.brief
-        if not brief:
-            raise ValueError("Story brief is required to create chapter outline")
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
         length_map = {
             "short_story": 1,
             "novella": 7,
@@ -165,33 +172,21 @@ ALL text must be in {brief.language}!"""
 
         plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
 
-        prompt = f"""Create a {num_chapters}-chapter outline for this story.
+        # Build prompt using PromptBuilder
+        builder = PromptBuilder()
+        builder.add_text(f"Create a {num_chapters}-chapter outline for this story.")
+        builder.add_language_requirement(brief.language)
+        builder.add_section("PLOT SUMMARY", story_state.plot_summary)
+        builder.add_section("KEY PLOT POINTS", plot_points_text)
+        builder.add_text(f"CHARACTERS: {', '.join(c.name for c in story_state.characters)}")
 
-LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Titles and outlines must be in {brief.language}.
+        builder.add_text(f"For each chapter, output JSON (all text in {brief.language}):")
+        builder.add_json_output_format(self.CHAPTER_SCHEMA)
+        builder.add_text(
+            "Ensure good pacing - build tension, vary intensity, place climactic moments appropriately."
+        )
 
-PLOT SUMMARY:
-{story_state.plot_summary}
-
-KEY PLOT POINTS:
-{plot_points_text}
-
-CHARACTERS:
-{", ".join(c.name for c in story_state.characters)}
-
-For each chapter, output JSON (all text in {brief.language}):
-```json
-[
-    {{
-        "number": 1,
-        "title": "Chapter Title",
-        "outline": "Detailed outline of what happens in this chapter (3-5 sentences). Include key scenes, character moments, and how it advances the plot."
-    }}
-]
-```
-
-Ensure good pacing - build tension, vary intensity, place climactic moments appropriately.
-ALL text must be in {brief.language}!"""
-
+        prompt = builder.build()
         response = self.generate(prompt)
         return parse_json_list_to_models(response, Chapter)
 
