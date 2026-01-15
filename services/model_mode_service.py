@@ -1,0 +1,639 @@
+"""Model mode service - manages generation modes, scoring, and adaptive learning.
+
+This service handles:
+- Mode management (presets and custom modes)
+- VRAM-aware model loading strategies
+- Score recording and aggregation
+- Learning/tuning recommendations
+"""
+
+import hashlib
+import logging
+from pathlib import Path
+
+import ollama
+
+from memory.mode_database import ModeDatabase
+from memory.mode_models import (
+    PRESET_MODES,
+    AutonomyLevel,
+    GenerationMode,
+    LearningSettings,
+    LearningTrigger,
+    QualityScores,
+    RecommendationType,
+    TuningRecommendation,
+    VramStrategy,
+    get_preset_mode,
+    list_preset_modes,
+)
+from settings import AVAILABLE_MODELS, Settings, get_available_vram
+
+logger = logging.getLogger(__name__)
+
+
+class ModelModeService:
+    """Service for managing generation modes and adaptive learning.
+
+    This service coordinates:
+    - Mode selection and customization
+    - VRAM-aware model loading/unloading
+    - Quality scoring via LLM judge
+    - Performance tracking and aggregation
+    - Tuning recommendations based on historical data
+    """
+
+    def __init__(
+        self,
+        settings: Settings,
+        db_path: Path | str | None = None,
+    ):
+        """Initialize model mode service.
+
+        Args:
+            settings: Application settings.
+            db_path: Path to scoring database. Defaults to output/model_scores.db
+        """
+        self.settings = settings
+        self._db_path = Path(db_path) if db_path else Path("output/model_scores.db")
+        self._db = ModeDatabase(self._db_path)
+
+        # Current mode
+        self._current_mode: GenerationMode | None = None
+
+        # Learning settings
+        self._learning_settings = LearningSettings()
+
+        # Track chapters for periodic triggers
+        self._chapters_since_analysis = 0
+
+        # Loaded model tracking (for VRAM management)
+        self._loaded_models: set[str] = set()
+
+    # === Mode Management ===
+
+    def get_current_mode(self) -> GenerationMode:
+        """Get the current generation mode.
+
+        Returns preset 'balanced' if no mode is set.
+        """
+        if self._current_mode is None:
+            self._current_mode = get_preset_mode("balanced") or list_preset_modes()[0]
+        return self._current_mode
+
+    def set_mode(self, mode_id: str) -> GenerationMode:
+        """Set the current generation mode.
+
+        Args:
+            mode_id: ID of preset or custom mode.
+
+        Returns:
+            The activated mode.
+
+        Raises:
+            ValueError: If mode_id is not found.
+        """
+        # Check presets first
+        mode = get_preset_mode(mode_id)
+        if mode:
+            self._current_mode = mode
+            logger.info(f"Activated preset mode: {mode.name}")
+            return mode
+
+        # Check custom modes
+        custom = self._db.get_custom_mode(mode_id)
+        if custom:
+            mode = GenerationMode(
+                id=custom["id"],
+                name=custom["name"],
+                description=custom.get("description", ""),
+                agent_models=custom["agent_models"],
+                agent_temperatures=custom["agent_temperatures"],
+                vram_strategy=VramStrategy(custom["vram_strategy"]),
+                is_preset=False,
+                is_experimental=bool(custom.get("is_experimental", False)),
+            )
+            self._current_mode = mode
+            logger.info(f"Activated custom mode: {mode.name}")
+            return mode
+
+        raise ValueError(f"Mode not found: {mode_id}")
+
+    def list_modes(self) -> list[GenerationMode]:
+        """List all available modes (presets + custom)."""
+        modes = list_preset_modes()
+
+        # Add custom modes
+        for custom in self._db.list_custom_modes():
+            modes.append(
+                GenerationMode(
+                    id=custom["id"],
+                    name=custom["name"],
+                    description=custom.get("description", ""),
+                    agent_models=custom["agent_models"],
+                    agent_temperatures=custom["agent_temperatures"],
+                    vram_strategy=VramStrategy(custom["vram_strategy"]),
+                    is_preset=False,
+                    is_experimental=bool(custom.get("is_experimental", False)),
+                )
+            )
+
+        return modes
+
+    def save_custom_mode(self, mode: GenerationMode) -> None:
+        """Save a custom generation mode."""
+        self._db.save_custom_mode(
+            mode_id=mode.id,
+            name=mode.name,
+            agent_models=mode.agent_models,
+            agent_temperatures=mode.agent_temperatures,
+            vram_strategy=mode.vram_strategy.value
+            if isinstance(mode.vram_strategy, VramStrategy)
+            else mode.vram_strategy,
+            description=mode.description,
+            is_experimental=mode.is_experimental,
+        )
+        logger.info(f"Saved custom mode: {mode.name}")
+
+    def delete_custom_mode(self, mode_id: str) -> bool:
+        """Delete a custom mode.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        # Can't delete presets
+        if mode_id in PRESET_MODES:
+            logger.warning(f"Cannot delete preset mode: {mode_id}")
+            return False
+
+        return self._db.delete_custom_mode(mode_id)
+
+    def get_model_for_agent(self, agent_role: str) -> str:
+        """Get the model ID for an agent based on current mode.
+
+        Falls back to settings auto-selection if mode doesn't specify.
+        """
+        mode = self.get_current_mode()
+        model_id = mode.agent_models.get(agent_role)
+
+        if model_id:
+            return model_id
+
+        # Fallback to settings-based selection
+        vram = get_available_vram()
+        return self.settings.get_model_for_agent(agent_role, vram)
+
+    def get_temperature_for_agent(self, agent_role: str) -> float:
+        """Get the temperature for an agent based on current mode."""
+        mode = self.get_current_mode()
+        temp = mode.agent_temperatures.get(agent_role)
+        if temp is not None:
+            return float(temp)
+        settings_temp = self.settings.agent_temperatures.get(agent_role, 0.7)
+        return float(settings_temp)
+
+    # === VRAM Management ===
+
+    def prepare_model(self, model_id: str) -> None:
+        """Prepare a model for use, respecting VRAM strategy.
+
+        For sequential strategy, unloads other models first.
+        For parallel, keeps models loaded.
+        For adaptive, unloads if VRAM is constrained.
+        """
+        mode = self.get_current_mode()
+        strategy = mode.vram_strategy
+
+        if strategy == VramStrategy.SEQUENTIAL:
+            # Unload all other models
+            self._unload_all_except(model_id)
+        elif strategy == VramStrategy.ADAPTIVE:
+            # Check if we need to free VRAM
+            available = get_available_vram()
+            model_info = AVAILABLE_MODELS.get(model_id)
+            required = model_info["vram_required"] if model_info else 8
+
+            if available < required:
+                # Need to free up space
+                self._unload_all_except(model_id)
+
+        # Model will be loaded on first use by Ollama
+        self._loaded_models.add(model_id)
+
+    def _unload_all_except(self, keep_model: str) -> None:
+        """Unload all models except the specified one.
+
+        Note: Ollama handles model lifecycle automatically, but we can
+        hint by not keeping references and letting it manage the cache.
+        """
+        # For now, just clear our tracking
+        # Ollama will unload based on its own LRU cache
+        models_to_remove = self._loaded_models - {keep_model}
+        if models_to_remove:
+            logger.debug(f"Marking models for unload: {models_to_remove}")
+            self._loaded_models = {keep_model}
+
+    # === Score Recording ===
+
+    def record_generation(
+        self,
+        project_id: str,
+        agent_role: str,
+        model_id: str,
+        *,
+        chapter_id: str | None = None,
+        genre: str | None = None,
+        tokens_generated: int | None = None,
+        time_seconds: float | None = None,
+        prompt_text: str | None = None,
+    ) -> int:
+        """Record a generation event.
+
+        Returns:
+            The score ID for later updates.
+        """
+        mode = self.get_current_mode()
+
+        # Calculate tokens/second
+        tokens_per_second = None
+        if tokens_generated and time_seconds and time_seconds > 0:
+            tokens_per_second = tokens_generated / time_seconds
+
+        # Generate prompt hash for A/B comparisons
+        prompt_hash = None
+        if prompt_text:
+            prompt_hash = hashlib.md5(prompt_text.encode()).hexdigest()[:16]
+
+        score_id = self._db.record_score(
+            project_id=project_id,
+            agent_role=agent_role,
+            model_id=model_id,
+            mode_name=mode.id,
+            chapter_id=chapter_id,
+            genre=genre,
+            tokens_generated=tokens_generated,
+            time_seconds=time_seconds,
+            tokens_per_second=tokens_per_second,
+            prompt_hash=prompt_hash,
+        )
+
+        logger.debug(
+            f"Recorded generation: {agent_role}/{model_id} "
+            f"({tokens_generated} tokens in {time_seconds:.1f}s)"
+        )
+
+        return score_id
+
+    def update_quality_scores(
+        self,
+        score_id: int,
+        quality: QualityScores,
+    ) -> None:
+        """Update a score record with quality scores."""
+        self._db.update_score(
+            score_id,
+            prose_quality=quality.prose_quality,
+            instruction_following=quality.instruction_following,
+            consistency_score=quality.consistency_score,
+        )
+
+    def record_implicit_signal(
+        self,
+        score_id: int,
+        *,
+        was_regenerated: bool | None = None,
+        edit_distance: int | None = None,
+        user_rating: int | None = None,
+    ) -> None:
+        """Record an implicit quality signal."""
+        self._db.update_score(
+            score_id,
+            was_regenerated=was_regenerated,
+            edit_distance=edit_distance,
+            user_rating=user_rating,
+        )
+
+    # === LLM Quality Judge ===
+
+    def judge_quality(
+        self,
+        content: str,
+        genre: str,
+        tone: str,
+        themes: list[str],
+    ) -> QualityScores:
+        """Use LLM to judge content quality.
+
+        Args:
+            content: The generated content to evaluate.
+            genre: Story genre.
+            tone: Story tone.
+            themes: Story themes.
+
+        Returns:
+            QualityScores with prose_quality and instruction_following.
+        """
+        # Use validator model or smallest available
+        judge_model = self.get_model_for_agent("validator")
+
+        prompt = f"""You are evaluating the quality of AI-generated story content.
+
+**Story Brief:**
+Genre: {genre}
+Tone: {tone}
+Themes: {", ".join(themes)}
+
+**Content to evaluate:**
+{content[:3000]}  # Truncate for speed
+
+Rate each dimension from 0-10:
+
+1. PROSE_QUALITY: Creativity, flow, engagement, vocabulary variety
+2. INSTRUCTION_FOLLOWING: Adherence to genre, tone, themes
+
+Respond ONLY with JSON:
+{{"prose_quality": X.X, "instruction_following": X.X}}"""
+
+        try:
+            client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
+            response = client.generate(
+                model=judge_model,
+                prompt=prompt,
+                options={"num_predict": 100, "temperature": 0.1},
+            )
+
+            # Parse response
+            import json
+            import re
+
+            text = response.response
+            # Find JSON in response
+            match = re.search(r"\{[^}]+\}", text)
+            if match:
+                data = json.loads(match.group())
+                return QualityScores(
+                    prose_quality=float(data.get("prose_quality", 5)),
+                    instruction_following=float(data.get("instruction_following", 5)),
+                )
+
+        except Exception as e:
+            logger.warning(f"Quality judgment failed: {e}")
+
+        # Return neutral scores on failure
+        return QualityScores(prose_quality=5.0, instruction_following=5.0)
+
+    def calculate_consistency_score(self, issues: list[dict]) -> float:
+        """Calculate consistency score from continuity issues.
+
+        Args:
+            issues: List of ContinuityIssue-like dicts with 'severity'.
+
+        Returns:
+            Score from 0-10 (10 = no issues).
+        """
+        if not issues:
+            return 10.0
+
+        # Weight by severity
+        penalty = 0.0
+        for issue in issues:
+            severity = issue.get("severity", "minor")
+            if severity == "critical":
+                penalty += 3.0
+            elif severity == "moderate":
+                penalty += 1.5
+            else:  # minor
+                penalty += 0.5
+
+        return max(0.0, 10.0 - penalty)
+
+    # === Learning/Tuning ===
+
+    def set_learning_settings(self, settings: LearningSettings) -> None:
+        """Update learning settings."""
+        self._learning_settings = settings
+
+    def get_learning_settings(self) -> LearningSettings:
+        """Get current learning settings."""
+        return self._learning_settings
+
+    def should_tune(self) -> bool:
+        """Check if tuning analysis should run based on triggers."""
+        triggers = self._learning_settings.triggers
+
+        if LearningTrigger.OFF in triggers:
+            return False
+
+        if LearningTrigger.CONTINUOUS in triggers:
+            return True
+
+        if LearningTrigger.PERIODIC in triggers:
+            if self._chapters_since_analysis >= self._learning_settings.periodic_interval:
+                return True
+
+        return False
+
+    def on_chapter_complete(self) -> None:
+        """Called when a chapter is completed."""
+        self._chapters_since_analysis += 1
+
+    def on_project_complete(self) -> list[TuningRecommendation]:
+        """Called when a project is completed.
+
+        Returns recommendations if after_project trigger is enabled.
+        """
+        self._chapters_since_analysis = 0
+
+        if LearningTrigger.AFTER_PROJECT in self._learning_settings.triggers:
+            return self.get_recommendations()
+
+        return []
+
+    def get_recommendations(self) -> list[TuningRecommendation]:
+        """Generate tuning recommendations based on historical data.
+
+        Returns:
+            List of recommendations, may be empty if insufficient data.
+        """
+        recommendations: list[TuningRecommendation] = []
+        min_samples = self._learning_settings.min_samples_for_recommendation
+
+        # Check if we have enough data
+        total_scores = self._db.get_score_count()
+        if total_scores < min_samples:
+            logger.debug(f"Not enough samples for recommendations: {total_scores}")
+            return []
+
+        # Get current mode
+        mode = self.get_current_mode()
+
+        # Analyze each agent role
+        for role in ["writer", "architect", "editor", "continuity"]:
+            current_model = mode.agent_models.get(role)
+            if not current_model:
+                continue
+
+            # Get top performers for this role
+            top_models = self._db.get_top_models_for_role(role, limit=3, min_samples=min_samples)
+
+            if not top_models:
+                continue
+
+            # Check if there's a better option
+            best = top_models[0]
+            if best["model_id"] != current_model:
+                # Get current model's performance
+                current_perf = self._db.get_model_performance(
+                    model_id=current_model, agent_role=role
+                )
+
+                if current_perf:
+                    current_quality = current_perf[0].get("avg_prose_quality", 0) or 0
+                    best_quality = best.get("avg_prose_quality", 0) or 0
+
+                    if best_quality > current_quality:
+                        improvement = (
+                            (best_quality - current_quality) / current_quality * 100
+                            if current_quality > 0
+                            else 0
+                        )
+                        confidence = min(
+                            0.95,
+                            best["sample_count"] / (min_samples * 3),
+                        )
+
+                        rec = TuningRecommendation(
+                            recommendation_type=RecommendationType.MODEL_SWAP,
+                            current_value=current_model,
+                            suggested_value=best["model_id"],
+                            affected_role=role,
+                            reason=(
+                                f"{best['model_id']} scores {best_quality:.1f} avg "
+                                f"vs {current_quality:.1f} for {role}"
+                            ),
+                            confidence=confidence,
+                            evidence={
+                                "current_quality": current_quality,
+                                "suggested_quality": best_quality,
+                                "sample_count": best["sample_count"],
+                            },
+                            expected_improvement=f"+{improvement:.0f}% quality",
+                        )
+                        recommendations.append(rec)
+
+        self._chapters_since_analysis = 0
+        return recommendations
+
+    def apply_recommendation(self, recommendation: TuningRecommendation) -> bool:
+        """Apply a tuning recommendation.
+
+        Returns:
+            True if successfully applied.
+        """
+        try:
+            if recommendation.recommendation_type == "model_swap":
+                if recommendation.affected_role and self._current_mode:
+                    self._current_mode.agent_models[recommendation.affected_role] = (
+                        recommendation.suggested_value
+                    )
+                    logger.info(
+                        f"Applied recommendation: {recommendation.affected_role} "
+                        f"now uses {recommendation.suggested_value}"
+                    )
+
+                    # Record outcome
+                    if recommendation.id:
+                        self._db.update_recommendation_outcome(
+                            recommendation.id,
+                            was_applied=True,
+                            user_feedback="accepted",
+                        )
+                    return True
+
+            elif recommendation.recommendation_type == "temp_adjust":
+                if recommendation.affected_role and self._current_mode:
+                    self._current_mode.agent_temperatures[recommendation.affected_role] = float(
+                        recommendation.suggested_value
+                    )
+                    return True
+
+        except Exception as e:
+            logger.error(f"Failed to apply recommendation: {e}")
+
+        return False
+
+    def handle_recommendations(
+        self,
+        recommendations: list[TuningRecommendation],
+    ) -> list[TuningRecommendation]:
+        """Handle recommendations based on autonomy level.
+
+        Returns:
+            Recommendations that were not auto-applied (need user approval).
+        """
+        autonomy = self._learning_settings.autonomy
+        pending = []
+
+        for rec in recommendations:
+            # Save to database
+            rec_id = self._db.record_recommendation(
+                recommendation_type=rec.recommendation_type.value
+                if hasattr(rec.recommendation_type, "value")
+                else rec.recommendation_type,
+                current_value=rec.current_value,
+                suggested_value=rec.suggested_value,
+                reason=rec.reason,
+                confidence=rec.confidence,
+                evidence=rec.evidence,
+                affected_role=rec.affected_role,
+                expected_improvement=rec.expected_improvement,
+            )
+            rec.id = rec_id
+
+            # Decide whether to auto-apply
+            should_apply = False
+
+            if autonomy == AutonomyLevel.MANUAL:
+                should_apply = False
+            elif autonomy == AutonomyLevel.CAUTIOUS:
+                should_apply = rec.recommendation_type == "temp_adjust"
+            elif autonomy == AutonomyLevel.BALANCED:
+                should_apply = rec.confidence >= self._learning_settings.confidence_threshold
+            elif autonomy in (AutonomyLevel.AGGRESSIVE, AutonomyLevel.EXPERIMENTAL):
+                should_apply = True
+
+            if should_apply:
+                self.apply_recommendation(rec)
+            else:
+                pending.append(rec)
+
+        return pending
+
+    # === Analytics ===
+
+    def get_quality_vs_speed_data(
+        self,
+        agent_role: str | None = None,
+    ) -> list[dict]:
+        """Get data for quality vs speed scatter plot."""
+        return self._db.get_quality_vs_speed_data(agent_role)
+
+    def get_model_performance(
+        self,
+        model_id: str | None = None,
+        agent_role: str | None = None,
+    ) -> list[dict]:
+        """Get aggregated model performance."""
+        return self._db.get_model_performance(model_id, agent_role)
+
+    def get_recommendation_history(self, limit: int = 50) -> list[dict]:
+        """Get recommendation history."""
+        return self._db.get_recommendation_history(limit)
+
+    def export_scores_csv(self, output_path: Path | str) -> int:
+        """Export all scores to CSV."""
+        return self._db.export_scores_csv(output_path)
+
+    def get_pending_recommendations(self) -> list[dict]:
+        """Get recommendations awaiting user action."""
+        return self._db.get_pending_recommendations()

@@ -1,0 +1,300 @@
+"""Scoring service - collects and aggregates quality signals.
+
+This service provides a simple interface for recording implicit quality signals
+from user interactions (regenerate, edit, rating) and coordinating with the
+ModelModeService for LLM-based quality judgment.
+"""
+
+import logging
+from difflib import SequenceMatcher
+
+from memory.mode_models import QualityScores
+from services.model_mode_service import ModelModeService
+
+logger = logging.getLogger(__name__)
+
+
+class ScoringService:
+    """Service for collecting quality signals during story generation.
+
+    This service tracks:
+    - Implicit signals from user behavior (regenerate, edit, accept)
+    - LLM-judged quality scores
+    - Performance metrics from generation
+
+    It works with ModelModeService for score persistence and analysis.
+    """
+
+    def __init__(self, mode_service: ModelModeService):
+        """Initialize scoring service.
+
+        Args:
+            mode_service: The ModelModeService for score persistence.
+        """
+        self._mode_service = mode_service
+
+        # Track active score IDs for updates
+        self._active_scores: dict[str, int] = {}  # chapter_id -> score_id
+
+        # Track original content for edit distance calculation
+        self._original_content: dict[str, str] = {}  # chapter_id -> content
+
+    def start_tracking(
+        self,
+        project_id: str,
+        agent_role: str,
+        model_id: str,
+        chapter_id: str | None = None,
+        genre: str | None = None,
+    ) -> int:
+        """Start tracking a generation.
+
+        Call this before generation starts. Returns a score ID that can be
+        used for subsequent updates.
+
+        Args:
+            project_id: The project ID.
+            agent_role: The agent role (writer, editor, etc.).
+            model_id: The model being used.
+            chapter_id: Optional chapter ID.
+            genre: Optional story genre.
+
+        Returns:
+            Score ID for this generation.
+        """
+        score_id = self._mode_service.record_generation(
+            project_id=project_id,
+            agent_role=agent_role,
+            model_id=model_id,
+            chapter_id=chapter_id,
+            genre=genre,
+        )
+
+        if chapter_id:
+            self._active_scores[f"{chapter_id}:{agent_role}"] = score_id
+
+        return score_id
+
+    def finish_tracking(
+        self,
+        score_id: int,
+        content: str,
+        tokens_generated: int,
+        time_seconds: float,
+        chapter_id: str | None = None,
+    ) -> None:
+        """Finish tracking a generation with final metrics.
+
+        Args:
+            score_id: The score ID from start_tracking.
+            content: The generated content.
+            tokens_generated: Number of tokens generated.
+            time_seconds: Generation time.
+            chapter_id: Optional chapter ID for edit tracking.
+        """
+        # Store original content for later edit distance calculation
+        if chapter_id:
+            self._original_content[chapter_id] = content
+
+        # Update the score with performance metrics
+        # Note: ModelModeService.record_generation handles the initial record,
+        # we'd need to add an update method for performance metrics
+        # For now, we log it
+        logger.debug(
+            f"Generation complete: score_id={score_id}, "
+            f"tokens={tokens_generated}, time={time_seconds:.1f}s"
+        )
+
+    def on_regenerate(
+        self,
+        chapter_id: str,
+        agent_role: str = "writer",
+    ) -> None:
+        """Record that user clicked regenerate (negative signal).
+
+        Args:
+            chapter_id: The chapter that was regenerated.
+            agent_role: The agent role being regenerated.
+        """
+        key = f"{chapter_id}:{agent_role}"
+        score_id = self._active_scores.get(key)
+
+        if score_id:
+            self._mode_service.record_implicit_signal(score_id, was_regenerated=True)
+            logger.debug(f"Recorded regenerate signal for score {score_id}")
+
+    def on_edit(
+        self,
+        chapter_id: str,
+        edited_content: str,
+    ) -> None:
+        """Record that user manually edited content.
+
+        Calculates edit distance from original to measure how much
+        the user changed the output.
+
+        Args:
+            chapter_id: The chapter that was edited.
+            edited_content: The content after user edits.
+        """
+        original = self._original_content.get(chapter_id)
+        if not original:
+            return
+
+        # Calculate edit distance (character-level)
+        edit_distance = self._calculate_edit_distance(original, edited_content)
+
+        # Find the most recent score for this chapter
+        for key, score_id in self._active_scores.items():
+            if key.startswith(f"{chapter_id}:"):
+                self._mode_service.record_implicit_signal(score_id, edit_distance=edit_distance)
+                logger.debug(f"Recorded edit signal for score {score_id}: distance={edit_distance}")
+                break
+
+        # Update stored original
+        self._original_content[chapter_id] = edited_content
+
+    def on_accept(
+        self,
+        chapter_id: str,
+    ) -> None:
+        """Record that user accepted content without changes (positive signal).
+
+        Args:
+            chapter_id: The chapter that was accepted.
+        """
+        # Find scores for this chapter and mark edit_distance as 0
+        for key, score_id in self._active_scores.items():
+            if key.startswith(f"{chapter_id}:"):
+                self._mode_service.record_implicit_signal(score_id, edit_distance=0)
+                logger.debug(f"Recorded accept signal for score {score_id}")
+
+    def on_rate(
+        self,
+        chapter_id: str,
+        rating: int,
+    ) -> None:
+        """Record user's explicit rating for a chapter.
+
+        Args:
+            chapter_id: The chapter being rated.
+            rating: Rating from 1-5 stars.
+        """
+        if not 1 <= rating <= 5:
+            logger.warning(f"Invalid rating {rating}, must be 1-5")
+            return
+
+        # Update all scores for this chapter
+        for key, score_id in self._active_scores.items():
+            if key.startswith(f"{chapter_id}:"):
+                self._mode_service.record_implicit_signal(score_id, user_rating=rating)
+                logger.debug(f"Recorded rating {rating} for score {score_id}")
+
+    def judge_chapter_quality(
+        self,
+        content: str,
+        genre: str,
+        tone: str,
+        themes: list[str],
+        score_id: int | None = None,
+    ) -> QualityScores:
+        """Run LLM quality judgment on chapter content.
+
+        Args:
+            content: The chapter content to evaluate.
+            genre: Story genre.
+            tone: Story tone.
+            themes: Story themes.
+            score_id: Optional score ID to update with results.
+
+        Returns:
+            QualityScores from the judgment.
+        """
+        scores = self._mode_service.judge_quality(
+            content=content,
+            genre=genre,
+            tone=tone,
+            themes=themes,
+        )
+
+        if score_id:
+            self._mode_service.update_quality_scores(score_id, scores)
+
+        return scores
+
+    def calculate_consistency_score(
+        self,
+        issues: list[dict],
+        score_id: int | None = None,
+    ) -> float:
+        """Calculate consistency score from continuity issues.
+
+        Args:
+            issues: List of continuity issues with 'severity' field.
+            score_id: Optional score ID to update.
+
+        Returns:
+            Score from 0-10 (10 = perfect consistency).
+        """
+        score = self._mode_service.calculate_consistency_score(issues)
+
+        if score_id:
+            self._mode_service.update_quality_scores(
+                score_id,
+                QualityScores(consistency_score=score),
+            )
+
+        return score
+
+    def _calculate_edit_distance(self, original: str, edited: str) -> int:
+        """Calculate edit distance between two strings.
+
+        Uses a simplified character-level difference count rather than
+        full Levenshtein for performance.
+
+        Args:
+            original: Original content.
+            edited: Edited content.
+
+        Returns:
+            Number of characters changed.
+        """
+        # Use SequenceMatcher for a quick similarity ratio
+        matcher = SequenceMatcher(None, original, edited)
+        ratio = matcher.ratio()
+
+        # Convert to edit distance (roughly)
+        max_len = max(len(original), len(edited))
+        changes = int(max_len * (1 - ratio))
+
+        return changes
+
+    def get_active_score_id(
+        self,
+        chapter_id: str,
+        agent_role: str = "writer",
+    ) -> int | None:
+        """Get the active score ID for a chapter/role combination.
+
+        Args:
+            chapter_id: The chapter ID.
+            agent_role: The agent role.
+
+        Returns:
+            Score ID or None if not found.
+        """
+        return self._active_scores.get(f"{chapter_id}:{agent_role}")
+
+    def clear_chapter_tracking(self, chapter_id: str) -> None:
+        """Clear tracking data for a completed chapter.
+
+        Args:
+            chapter_id: The chapter ID to clear.
+        """
+        # Remove from active scores
+        keys_to_remove = [k for k in self._active_scores if k.startswith(f"{chapter_id}:")]
+        for key in keys_to_remove:
+            del self._active_scores[key]
+
+        # Remove original content
+        self._original_content.pop(chapter_id, None)
