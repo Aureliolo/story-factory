@@ -91,12 +91,12 @@ class TestModelFiltering:
     def test_vram_requirements_are_positive(self):
         """Test that all VRAM requirements are positive numbers."""
         for model_id, info in AVAILABLE_MODELS.items():
-            assert (
-                info["vram_required"] > 0
-            ), f"Model {model_id} has invalid VRAM requirement: {info['vram_required']}"
-            assert isinstance(
-                info["vram_required"], (int, float)
-            ), f"Model {model_id} VRAM is not a number"
+            assert info["vram_required"] > 0, (
+                f"Model {model_id} has invalid VRAM requirement: {info['vram_required']}"
+            )
+            assert isinstance(info["vram_required"], (int, float)), (
+                f"Model {model_id} VRAM is not a number"
+            )
 
 
 class TestModelInstallationTracking:

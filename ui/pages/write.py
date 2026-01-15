@@ -154,7 +154,7 @@ class WritePage:
             return
 
         # Entity summary cards
-        self._entity_summary = ui.html()
+        self._entity_summary = ui.html(sanitize=False)
         self._entity_summary.content = render_entity_summary_html(self.state.world_db)
 
         # Mini graph preview

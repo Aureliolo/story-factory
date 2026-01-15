@@ -288,7 +288,7 @@ class WorldPage:
                     )
 
             # Analysis result display
-            self._analysis_result = ui.html().classes("w-full mt-4")
+            self._analysis_result = ui.html(sanitize=False).classes("w-full mt-4")
 
     # ========== Helper Methods ==========
 
