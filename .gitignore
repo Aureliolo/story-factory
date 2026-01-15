@@ -40,7 +40,12 @@ Thumbs.db
 # Project specific
 output/stories/*
 !output/stories/.gitkeep
+output/worlds/*
+!output/worlds/.gitkeep
 settings.json
+
+# Windows artifacts (from bash commands using /dev/null)
+nul
 
 # Logs
 *.log
