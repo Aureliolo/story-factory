@@ -83,10 +83,10 @@ function Write-Screen {
     Write-Host "  [1] Start    [2] Stop    [3] Restart" -ForegroundColor White
     Write-Host "  [4] Logs     [5] Browser [6] Clear Logs" -ForegroundColor White
     Write-Host "  [Q] Quit" -ForegroundColor DarkGray
+
+    # Logs section - visible while waiting for input
     Write-Host ""
     Write-Host "--------------------------------------------" -ForegroundColor DarkGray
-
-    # Logs section
     Write-Host "  Recent Logs:" -ForegroundColor DarkCyan
     $logs = Get-RecentLogLines -Lines 6
     if ($logs.Count -eq 0) {
@@ -97,7 +97,6 @@ function Write-Screen {
             Write-LogLine $line
         }
     }
-
     Write-Host "--------------------------------------------" -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -110,7 +109,6 @@ function Start-StoryFactory {
     }
 
     Set-ActionMessage "Starting..." "Green"
-    Write-Screen
 
     Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory $projectRoot -WindowStyle Hidden
     Start-Sleep -Seconds 2
@@ -132,7 +130,6 @@ function Stop-StoryFactory {
 
 function Restart-StoryFactory {
     Set-ActionMessage "Restarting..." "Yellow"
-    Write-Screen
 
     $processes = Get-Process -Name python -ErrorAction SilentlyContinue
     if ($processes) {
@@ -190,9 +187,7 @@ while ($true) {
         "5" { Open-Browser }
         "6" { Clear-LogFile }
         "Q" {
-            Write-Host ""
-            Write-Host "  Goodbye!" -ForegroundColor Cyan
-            exit
+            exit 0
         }
         default {
             if ($choice) {

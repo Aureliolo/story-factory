@@ -36,26 +36,17 @@ class SettingsPage:
         with ui.column().classes("w-full gap-6 p-4"):
             ui.label("Settings").classes("text-2xl font-bold")
 
-            # Responsive grid: 1 col on mobile, 2 cols on lg screens
-            # Small cards go side-by-side, large cards span full width
-            with ui.element("div").classes("grid grid-cols-1 lg:grid-cols-2 gap-6 w-full"):
-                # Connection settings (small)
+            # Flexible grid - all cards flow and wrap based on content and screen size
+            with (
+                ui.element("div")
+                .classes("grid gap-4 w-full")
+                .style("grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));")
+            ):
                 self._build_connection_section()
-
-                # Interaction settings (small)
                 self._build_interaction_section()
-
-                # Context limits (small - spans 2 cols on lg)
-                with ui.element("div").classes("lg:col-span-2"):
-                    self._build_context_section()
-
-                # Model settings (large - spans 2 cols on lg)
-                with ui.element("div").classes("lg:col-span-2"):
-                    self._build_model_section()
-
-                # Agent temperatures (large - spans 2 cols on lg)
-                with ui.element("div").classes("lg:col-span-2"):
-                    self._build_temperature_section()
+                self._build_context_section()
+                self._build_model_section()
+                self._build_temperature_section()
 
             # Save button
             ui.button(
@@ -75,7 +66,7 @@ class SettingsPage:
 
     def _build_connection_section(self) -> None:
         """Build Ollama connection settings."""
-        with ui.card().classes("w-full h-full"):
+        with ui.card().classes("w-full"):
             self._section_header(
                 "Connection",
                 "link",
@@ -88,10 +79,11 @@ class SettingsPage:
                     value=self.settings.ollama_url,
                 )
                 .classes("w-full")
+                .props("outlined dense")
                 .tooltip("Usually http://localhost:11434 for local Ollama")
             )
 
-            with ui.row().classes("w-full items-center gap-4 mt-4"):
+            with ui.row().classes("w-full items-center gap-4 mt-3"):
                 ui.button(
                     "Test",
                     on_click=self._test_connection,
@@ -139,6 +131,7 @@ class SettingsPage:
                         value=default_model_value,
                     )
                     .classes("flex-grow")
+                    .props("outlined")
                     .tooltip("The model used for all agents unless overridden below")
                 )
 
@@ -173,6 +166,7 @@ class SettingsPage:
                                 value=agent_model_value,
                             )
                             .classes("w-full")
+                            .props("outlined dense")
                             .tooltip(info["description"])
                         )
 
@@ -234,49 +228,52 @@ class SettingsPage:
 
     def _build_interaction_section(self) -> None:
         """Build interaction mode settings."""
-        with ui.card().classes("w-full h-full"):
+        with ui.card().classes("w-full"):
             self._section_header(
                 "Workflow",
                 "tune",
                 "Control how much the AI asks for your input during story generation",
             )
 
-            self._interaction_mode_select = (
-                ui.select(
-                    label="Interaction Mode",
-                    options={
-                        "minimal": "Minimal - Fewest interruptions",
-                        "checkpoint": "Checkpoint - Review every N chapters",
-                        "interactive": "Interactive - More control points",
-                        "collaborative": "Collaborative - Maximum interaction",
-                    },
-                    value=self.settings.interaction_mode,
+            with ui.column().classes("w-full gap-3"):
+                self._interaction_mode_select = (
+                    ui.select(
+                        label="Interaction Mode",
+                        options={
+                            "minimal": "Minimal - Fewest interruptions",
+                            "checkpoint": "Checkpoint - Review every N chapters",
+                            "interactive": "Interactive - More control points",
+                            "collaborative": "Collaborative - Maximum interaction",
+                        },
+                        value=self.settings.interaction_mode,
+                    )
+                    .classes("w-full")
+                    .props("outlined dense")
+                    .tooltip("How often the AI pauses for your feedback")
                 )
-                .classes("w-full")
-                .tooltip("How often the AI pauses for your feedback")
-            )
 
-            with ui.element("div").classes("grid grid-cols-2 gap-4 mt-4"):
                 self._checkpoint_input = (
                     ui.number(
-                        label="Checkpoint interval",
+                        label="Chapters between checkpoints",
                         value=self.settings.chapters_between_checkpoints,
                         min=1,
                         max=20,
                     )
                     .classes("w-full")
-                    .tooltip("Chapters between review pauses")
+                    .props("outlined dense")
+                    .tooltip("How many chapters to write before pausing for review")
                 )
 
                 self._revision_input = (
                     ui.number(
-                        label="Max revisions",
+                        label="Max revision iterations",
                         value=self.settings.max_revision_iterations,
                         min=0,
                         max=10,
                     )
                     .classes("w-full")
-                    .tooltip("Maximum edit passes per chapter (0 = unlimited)")
+                    .props("outlined dense")
+                    .tooltip("Max edit passes per chapter (0 = unlimited)")
                 )
 
     def _build_context_section(self) -> None:
@@ -288,51 +285,55 @@ class SettingsPage:
                 "Control how much information the AI remembers. Higher values use more VRAM but improve coherence.",
             )
 
-            # Responsive 2x2 grid for context inputs
-            with ui.element("div").classes("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"):
+            # Single column with proper spacing for readable labels
+            with ui.column().classes("w-full gap-3"):
                 self._context_size_input = (
                     ui.number(
-                        label="Context window",
+                        label="Context window (tokens)",
                         value=self.settings.context_size,
                         min=1024,
                         max=128000,
                         step=1024,
                     )
                     .classes("w-full")
+                    .props("outlined dense")
                     .tooltip("Total tokens the AI can 'see' at once (default: 32768)")
                 )
 
                 self._max_tokens_input = (
                     ui.number(
-                        label="Max output",
+                        label="Max output (tokens)",
                         value=self.settings.max_tokens,
                         min=256,
                         max=32000,
                         step=256,
                     )
                     .classes("w-full")
+                    .props("outlined dense")
                     .tooltip("Maximum tokens per AI response (default: 4096)")
                 )
 
                 self._prev_chapter_chars = (
                     ui.number(
-                        label="Chapter memory",
+                        label="Chapter memory (chars)",
                         value=self.settings.previous_chapter_context_chars,
                         min=500,
                         max=10000,
                     )
                     .classes("w-full")
+                    .props("outlined dense")
                     .tooltip("Characters from previous chapter to include for continuity")
                 )
 
                 self._chapter_analysis_chars = (
                     ui.number(
-                        label="Analysis context",
+                        label="Analysis context (chars)",
                         value=self.settings.chapter_analysis_chars,
                         min=1000,
                         max=20000,
                     )
                     .classes("w-full")
+                    .props("outlined dense")
                     .tooltip("Characters to analyze when reviewing chapter quality")
                 )
 
