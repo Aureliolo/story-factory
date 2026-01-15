@@ -43,7 +43,13 @@ module = [
     "reportlab.*",
     "PIL.*",
     "networkx.*",
+    "playwright.*",
+    "pytest_playwright.*",
 ]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.e2e.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -52,3 +58,8 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short"
+markers = [
+    "e2e: End-to-end browser tests (require playwright)",
+    "smoke: Quick startup validation tests",
+    "integration: Integration tests for component interactions",
+]

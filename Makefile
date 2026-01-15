@@ -1,6 +1,6 @@
 # Makefile for Story Factory development tasks
 
-.PHONY: help install test lint format check clean run healthcheck
+.PHONY: help install test test-unit test-smoke test-integration test-e2e test-all lint format check clean run healthcheck
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -12,8 +12,23 @@ healthcheck:  ## Run system health check
 install:  ## Install dependencies
 	pip install -r requirements.txt
 
-test:  ## Run tests
-	pytest
+test:  ## Run unit tests (default)
+	pytest tests/unit
+
+test-unit:  ## Run unit tests only
+	pytest tests/unit
+
+test-smoke:  ## Run smoke tests (quick startup validation)
+	pytest tests/smoke
+
+test-integration:  ## Run integration tests
+	pytest tests/integration
+
+test-e2e:  ## Run E2E browser tests (requires: playwright install chromium)
+	pytest tests/e2e
+
+test-all:  ## Run all tests (unit + smoke + integration, excludes e2e)
+	pytest tests/unit tests/smoke tests/integration
 
 test-cov:  ## Run tests with coverage
 	pytest --cov=. --cov-report=term --cov-report=html
