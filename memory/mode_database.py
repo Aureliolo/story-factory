@@ -199,7 +199,7 @@ class ModeDatabase:
                 conn.commit()
                 return cursor.lastrowid or 0
         except sqlite3.Error as e:
-            logger.error(f"Failed to record score: {e}")
+            logger.error(f"Failed to record score: {e}", exc_info=True)
             raise
 
     def update_score(
@@ -465,7 +465,7 @@ class ModeDatabase:
                 conn.commit()
                 return cursor.lastrowid or 0
         except sqlite3.Error as e:
-            logger.error(f"Failed to record recommendation: {e}")
+            logger.error(f"Failed to record recommendation: {e}", exc_info=True)
             raise
 
     def update_recommendation_outcome(
@@ -552,7 +552,7 @@ class ModeDatabase:
                 )
                 conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"Failed to save custom mode {mode_id}: {e}")
+            logger.error(f"Failed to save custom mode {mode_id}: {e}", exc_info=True)
             raise
 
     def get_custom_mode(self, mode_id: str) -> dict | None:

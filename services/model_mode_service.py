@@ -297,10 +297,12 @@ class ModelModeService:
                 prompt_hash=prompt_hash,
             )
 
+            speed_display = f"{tokens_per_second:.1f}" if tokens_per_second else "N/A"
+
             logger.info(
                 f"Recorded generation score {score_id}: {agent_role}/{model_id} "
                 f"(mode={mode.id}, tokens={tokens_generated}, time={time_seconds:.1f}s, "
-                f"speed={tokens_per_second:.1f if tokens_per_second else 'N/A'} t/s)"
+                f"speed={speed_display} t/s)"
             )
             return score_id
 
@@ -420,9 +422,8 @@ Respond ONLY with JSON:
             text = response["response"]
             logger.debug(f"LLM judge raw response: {text[:200]}")
 
-            json_str = extract_json(text)
-            if json_str:
-                data = json.loads(json_str)
+            data = extract_json(text)
+            if data:
                 scores = QualityScores(
                     prose_quality=float(data.get("prose_quality", 5)),
                     instruction_following=float(data.get("instruction_following", 5)),

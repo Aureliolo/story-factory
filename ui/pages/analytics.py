@@ -159,10 +159,12 @@ class AnalyticsPage:
                 agent_role=self._filter_agent_role,
                 genre=self._filter_genre,
             )
+            quality_str = f"{avg_quality:.1f}" if avg_quality else "N/A"
+            speed_str = f"{avg_speed:.1f}" if avg_speed else "N/A"
             logger.debug(
                 f"Analytics summary: {total_scores} scores, "
-                f"quality={avg_quality:.1f if avg_quality else 'N/A'}, "
-                f"speed={avg_speed:.1f if avg_speed else 'N/A'} t/s"
+                f"quality={quality_str}, "
+                f"speed={speed_str} t/s"
             )
         except Exception as e:
             logger.error(f"Failed to load analytics summary: {e}", exc_info=True)

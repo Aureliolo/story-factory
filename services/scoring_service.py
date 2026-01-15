@@ -318,15 +318,20 @@ class ScoringService:
         """
         # Check active scores
         if len(self._active_scores) > self.MAX_TRACKED_CHAPTERS:
-            # Get list of chapter IDs (before the colon)
-            chapter_ids = {key.split(":")[0] for key in self._active_scores}
-            excess_count = len(chapter_ids) - self.MAX_TRACKED_CHAPTERS
+            # Build an ordered list of unique chapter IDs based on first appearance
+            chapter_ids_in_order: list[str] = []
+            seen_chapters: set[str] = set()
+            for key in self._active_scores:
+                chapter_id = key.split(":", 1)[0]
+                if chapter_id not in seen_chapters:
+                    seen_chapters.add(chapter_id)
+                    chapter_ids_in_order.append(chapter_id)
+
+            excess_count = len(chapter_ids_in_order) - self.MAX_TRACKED_CHAPTERS
 
             if excess_count > 0:
-                # Sort by insertion order (Python 3.7+ dicts maintain order)
-                # Remove oldest chapters
-                sorted_chapter_ids = sorted(chapter_ids)
-                for chapter_id in sorted_chapter_ids[:excess_count]:
+                # Remove oldest chapters based on insertion order of _active_scores
+                for chapter_id in chapter_ids_in_order[:excess_count]:
                     self.clear_chapter_tracking(chapter_id)
                     logger.warning(
                         f"Cleared tracking for old chapter {chapter_id} "
