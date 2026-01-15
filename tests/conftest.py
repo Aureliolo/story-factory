@@ -8,6 +8,9 @@ from memory.story_state import StoryBrief, StoryState
 from memory.world_database import WorldDatabase
 from settings import Settings
 
+# Enable NiceGUI testing plugin for component tests
+pytest_plugins = ["nicegui.testing.user_plugin"]
+
 
 @pytest.fixture
 def tmp_settings(tmp_path: Path) -> Settings:
