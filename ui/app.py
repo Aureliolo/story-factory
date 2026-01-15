@@ -52,21 +52,22 @@ class StoryFactoryApp:
 
     def build(self) -> None:
         """Build the application routes and pages."""
-        # Add custom styles
-        from pathlib import Path
-
-        css_path = Path(__file__).parent / "styles.css"
-        if css_path.exists():
-            with open(css_path) as f:
-                ui.add_head_html(f"<style>{f.read()}</style>")
-
-        # Register keyboard shortcuts
-        self._shortcuts = KeyboardShortcuts(self.state, self.services)
-        self._shortcuts.register()
 
         @ui.page("/")
         def main_page():
             """Main application page."""
+            # Add custom styles (inside page function)
+            from pathlib import Path
+
+            css_path = Path(__file__).parent / "styles.css"
+            if css_path.exists():
+                with open(css_path) as f:
+                    ui.add_head_html(f"<style>{f.read()}</style>")
+
+            # Register keyboard shortcuts (inside page function)
+            shortcuts = KeyboardShortcuts(self.state, self.services)
+            shortcuts.register()
+
             self._build_main_page()
 
         # Store app reference for cleanup
