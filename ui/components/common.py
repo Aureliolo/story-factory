@@ -129,7 +129,6 @@ def empty_state(
     description: str,
     action_text: str | None = None,
     on_action=None,
-    dark_mode: bool = False,
 ) -> None:
     """Create an empty state display.
 
@@ -139,13 +138,12 @@ def empty_state(
         description: Empty state description.
         action_text: Optional action button text.
         on_action: Optional action callback.
-        dark_mode: Whether to use dark mode styling.
     """
     from ui.theme import get_text_class
 
     icon_class = "text-gray-400 dark:text-gray-500"
-    title_class = get_text_class(dark_mode, variant="secondary")
-    desc_class = get_text_class(dark_mode, variant="muted")
+    title_class = get_text_class(variant="secondary")
+    desc_class = get_text_class(variant="muted")
 
     with ui.column().classes("w-full items-center justify-center gap-4 py-12"):
         ui.icon(icon, size="xl").classes(icon_class)
@@ -183,16 +181,13 @@ def loading_skeleton(width: str = "100%", height: str = "20px") -> None:
     )
 
 
-def section_header(
-    title: str, icon: str | None = None, actions: list | None = None, dark_mode: bool = False
-) -> None:
+def section_header(title: str, icon: str | None = None, actions: list | None = None) -> None:
     """Create a consistent section header.
 
     Args:
         title: Section title.
         icon: Optional icon name.
         actions: Optional list of button configs [{"text": "...", "on_click": ...}, ...]
-        dark_mode: Deprecated, ignored. Uses Tailwind dark: variants.
     """
     with ui.row().classes("w-full items-center mb-4"):
         if icon:

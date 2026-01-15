@@ -45,7 +45,7 @@ class StoryFactoryApp:
         """Apply theme settings to the page."""
         from ui.theme import get_background_class
 
-        bg_class = get_background_class(self.state.dark_mode)
+        bg_class = get_background_class()
         ui.query("body").classes(bg_class)
 
         if self.state.dark_mode:
