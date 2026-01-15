@@ -154,7 +154,7 @@ class WritePage:
             return
 
         # Entity summary cards
-        self._entity_summary = ui.html(sanitize=False)
+        self._entity_summary = ui.html()
         self._entity_summary.content = render_entity_summary_html(self.state.world_db)
 
         # Mini graph preview
@@ -548,13 +548,25 @@ class WritePage:
             ui.notify(f"Error: {e}", type="negative")
 
     def _apply_feedback(self) -> None:
-        """Apply instant feedback."""
+        """Apply instant feedback to current chapter."""
         if not self._feedback_input or not self._feedback_input.value:
+            return
+        if not self.state.project or self.state.current_chapter is None:
+            ui.notify("No chapter selected", type="warning")
             return
 
         feedback = self._feedback_input.value
-        ui.notify(f"Feedback noted: {feedback[:50]}...", type="info")
-        # TODO: Integrate with story service for feedback application
+
+        # Add as a review note for tracking and future revision
+        self.services.story.add_review(
+            self.state.project,
+            review_type="user_feedback",
+            content=feedback,
+            chapter_num=self.state.current_chapter,
+        )
+
+        self.services.project.save_project(self.state.project)
+        ui.notify(f"Feedback saved for chapter {self.state.current_chapter}", type="positive")
         self._feedback_input.value = ""
 
     def _add_note(self, content: str) -> None:

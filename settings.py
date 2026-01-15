@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 
 SETTINGS_FILE = Path(__file__).parent / "settings.json"
 
-# Centralized path for story output files - used by orchestrator and UI
+# Centralized paths for story and world output files
 STORIES_DIR = Path(__file__).parent / "output" / "stories"
+WORLDS_DIR = Path(__file__).parent / "output" / "worlds"
 
 
 class ModelInfo(TypedDict):
@@ -145,6 +146,11 @@ AGENT_ROLES: dict[str, AgentRoleInfo] = {
         "description": "Checks for plot holes",
         "recommended_quality": 7,
     },
+    "validator": {
+        "name": "Validator",
+        "description": "Validates AI responses",
+        "recommended_quality": 3,  # Small, fast model sufficient
+    },
 }
 
 
@@ -177,6 +183,7 @@ class Settings:
             "writer": "auto",
             "editor": "auto",
             "continuity": "auto",
+            "validator": "qwen2.5:0.5b",  # Small, fast model for validation
         }
     )
 
@@ -188,6 +195,7 @@ class Settings:
             "writer": 0.9,
             "editor": 0.6,
             "continuity": 0.3,
+            "validator": 0.1,  # Very low for consistent validation
         }
     )
 

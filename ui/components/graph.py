@@ -89,7 +89,7 @@ class GraphComponent:
 
             # Graph container
             self._container = (
-                ui.html(sanitize=False)
+                ui.html()
                 .classes("w-full border rounded-lg bg-white")
                 .style(f"height: {self.height}px;")
             )
@@ -225,4 +225,4 @@ def mini_graph(
         height=height,
     )
 
-    ui.html(html, sanitize=False).classes("w-full border rounded").style(f"height: {height}px;")
+    ui.html(html).classes("w-full border rounded").style(f"height: {height}px;")

@@ -15,10 +15,6 @@ class ExportService:
     Supports markdown, plain text, EPUB, and PDF export.
     """
 
-    def __init__(self):
-        """Initialize export service."""
-        pass
-
     def to_markdown(self, state: StoryState) -> str:
         """Export story as markdown.
 

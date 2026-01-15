@@ -18,10 +18,6 @@ class WorldService:
     entity CRUD operations, and relationship management.
     """
 
-    def __init__(self):
-        """Initialize world service."""
-        pass
-
     # ========== ENTITY EXTRACTION ==========
 
     def extract_entities_from_structure(self, state: StoryState, world_db: WorldDatabase) -> int:
