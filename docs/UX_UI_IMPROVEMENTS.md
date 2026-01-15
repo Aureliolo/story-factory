@@ -246,10 +246,10 @@ No new dependencies added - all improvements use existing NiceGUI and Tailwind C
 ```python
 from ui.theme import get_background_class, get_surface_class, get_text_class
 
-# Get theme-appropriate classes
-bg_class = get_background_class(dark_mode)
-surface_class = get_surface_class(dark_mode)
-text_class = get_text_class(dark_mode, variant="primary")
+# Get theme-appropriate classes (automatically includes dark mode variants)
+bg_class = get_background_class()
+surface_class = get_surface_class()
+text_class = get_text_class(variant="primary")
 ```
 
 #### Adding New Components
