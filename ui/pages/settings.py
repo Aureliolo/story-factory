@@ -33,23 +33,29 @@ class SettingsPage:
 
     def build(self) -> None:
         """Build the settings page UI."""
-        with ui.column().classes("w-full gap-6 p-4 max-w-4xl mx-auto"):
+        with ui.column().classes("w-full gap-6 p-4"):
             ui.label("Settings").classes("text-2xl font-bold")
 
-            # Connection settings
-            self._build_connection_section()
+            # Responsive grid: 1 col on mobile, 2 cols on lg screens
+            # Small cards go side-by-side, large cards span full width
+            with ui.element("div").classes("grid grid-cols-1 lg:grid-cols-2 gap-6 w-full"):
+                # Connection settings (small)
+                self._build_connection_section()
 
-            # Model settings
-            self._build_model_section()
+                # Interaction settings (small)
+                self._build_interaction_section()
 
-            # Agent temperatures
-            self._build_temperature_section()
+                # Context limits (small - spans 2 cols on lg)
+                with ui.element("div").classes("lg:col-span-2"):
+                    self._build_context_section()
 
-            # Interaction settings
-            self._build_interaction_section()
+                # Model settings (large - spans 2 cols on lg)
+                with ui.element("div").classes("lg:col-span-2"):
+                    self._build_model_section()
 
-            # Context limits
-            self._build_context_section()
+                # Agent temperatures (large - spans 2 cols on lg)
+                with ui.element("div").classes("lg:col-span-2"):
+                    self._build_temperature_section()
 
             # Save button
             ui.button(
@@ -58,175 +64,270 @@ class SettingsPage:
                 icon="save",
             ).props("color=primary").classes("mt-4")
 
+    def _section_header(self, title: str, icon: str, tooltip: str) -> None:
+        """Build a section header with help icon."""
+        with ui.row().classes("items-center gap-2 mb-4"):
+            ui.icon(icon).classes("text-blue-500")
+            ui.label(title).classes("text-lg font-semibold")
+            ui.icon("help_outline", size="xs").classes(
+                "text-gray-400 dark:text-gray-500 cursor-help"
+            ).tooltip(tooltip)
+
     def _build_connection_section(self) -> None:
         """Build Ollama connection settings."""
-        with ui.card().classes("w-full"):
-            ui.label("Ollama Connection").classes("text-lg font-semibold mb-4")
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Connection",
+                "link",
+                "Configure how Story Factory connects to your local Ollama instance",
+            )
 
-            with ui.row().classes("w-full gap-4"):
-                self._ollama_url_input = ui.input(
+            self._ollama_url_input = (
+                ui.input(
                     label="Ollama URL",
                     value=self.settings.ollama_url,
-                ).classes("flex-grow")
+                )
+                .classes("w-full")
+                .tooltip("Usually http://localhost:11434 for local Ollama")
+            )
 
+            with ui.row().classes("w-full items-center gap-4 mt-4"):
                 ui.button(
-                    "Test Connection",
+                    "Test",
                     on_click=self._test_connection,
-                ).props("outline")
+                    icon="play_arrow",
+                ).props("outline dense")
 
-            # Connection status
-            health = self.services.model.check_health()
-            if health.is_healthy:
-                ui.label(f"Connected - {health.available_vram} GB VRAM available").classes(
-                    "text-sm text-green-600 dark:text-green-400 mt-2"
-                )
-            else:
-                ui.label(f"Not connected: {health.message}").classes(
-                    "text-sm text-red-600 dark:text-red-400 mt-2"
-                )
+                # Connection status
+                health = self.services.model.check_health()
+                if health.is_healthy:
+                    with ui.row().classes("items-center gap-1"):
+                        ui.icon("check_circle", size="sm").classes("text-green-500")
+                        ui.label(f"{health.available_vram} GB VRAM").classes(
+                            "text-sm text-green-600 dark:text-green-400"
+                        )
+                else:
+                    with ui.row().classes("items-center gap-1"):
+                        ui.icon("error", size="sm").classes("text-red-500")
+                        ui.label("Offline").classes(
+                            "text-sm text-red-600 dark:text-red-400"
+                        ).tooltip(health.message)
 
     def _build_model_section(self) -> None:
         """Build model selection settings."""
         with ui.card().classes("w-full"):
-            ui.label("Model Settings").classes("text-lg font-semibold mb-4")
+            self._section_header(
+                "Model Selection",
+                "smart_toy",
+                "Choose which AI models to use. 'Auto' picks the best available model.",
+            )
 
             # Get installed models
             installed_models = self.services.model.list_installed()
-            model_options = {"auto": "Auto-select"} | {m: m for m in installed_models}
+            model_options = {"auto": "Auto-select (recommended)"} | {m: m for m in installed_models}
 
             # Default model (fall back to "auto" if saved model not installed)
             default_model_value = self.settings.default_model
             if default_model_value not in model_options:
                 default_model_value = "auto"
 
-            self._default_model_select = ui.select(
-                label="Default Model",
-                options=model_options,
-                value=default_model_value,
-            ).classes("w-full mb-4")
+            with ui.row().classes("w-full items-end gap-4"):
+                self._default_model_select = (
+                    ui.select(
+                        label="Default Model",
+                        options=model_options,
+                        value=default_model_value,
+                    )
+                    .classes("flex-grow")
+                    .tooltip("The model used for all agents unless overridden below")
+                )
 
-            # Per-agent toggle
-            self._use_per_agent = ui.switch(
-                "Use per-agent models",
-                value=self.settings.use_per_agent_models,
-            )
+                # Per-agent toggle
+                self._use_per_agent = ui.switch(
+                    "Per-agent",
+                    value=self.settings.use_per_agent_models,
+                ).tooltip("Use different models for each agent type")
 
             # Per-agent model selects
             with (
-                ui.column()
-                .classes("w-full gap-2 mt-4")
+                ui.element("div")
+                .classes("w-full mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg")
                 .bind_visibility_from(self._use_per_agent, "value")
             ):
-                ui.label("Per-Agent Models").classes("font-medium")
+                ui.label("Per-Agent Model Overrides").classes(
+                    "font-medium text-sm text-gray-600 dark:text-gray-400 mb-3"
+                )
 
                 self._agent_model_selects = {}
-                for role, info in AGENT_ROLES.items():
-                    # Fall back to "auto" if saved model not installed
-                    agent_model_value = self.settings.agent_models.get(role, "auto")
-                    if agent_model_value not in model_options:
-                        agent_model_value = "auto"
+                with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-3"):
+                    for role, info in AGENT_ROLES.items():
+                        # Fall back to "auto" if saved model not installed
+                        agent_model_value = self.settings.agent_models.get(role, "auto")
+                        if agent_model_value not in model_options:
+                            agent_model_value = "auto"
 
-                    with ui.row().classes("w-full items-center gap-4"):
-                        ui.label(info["name"]).classes("w-32")
-                        self._agent_model_selects[role] = ui.select(
-                            options=model_options,
-                            value=agent_model_value,
-                        ).classes("flex-grow")
-                        ui.label(info["description"]).classes(
-                            "text-sm text-gray-500 dark:text-gray-400"
+                        self._agent_model_selects[role] = (
+                            ui.select(
+                                label=info["name"],
+                                options=model_options,
+                                value=agent_model_value,
+                            )
+                            .classes("w-full")
+                            .tooltip(info["description"])
                         )
 
     def _build_temperature_section(self) -> None:
         """Build temperature settings."""
         with ui.card().classes("w-full"):
-            ui.label("Agent Temperatures").classes("text-lg font-semibold mb-4")
-            ui.label("Higher values = more creative, lower = more focused").classes(
-                "text-sm text-gray-500 dark:text-gray-400 mb-4"
+            self._section_header(
+                "Creativity (Temperature)",
+                "thermostat",
+                "Controls randomness in AI responses. Higher = more creative/varied, Lower = more focused/consistent",
             )
 
-            self._temp_sliders = {}
-            for role, info in AGENT_ROLES.items():
-                with ui.row().classes("w-full items-center gap-4"):
-                    ui.label(info["name"]).classes("w-32")
-                    self._temp_sliders[role] = ui.slider(
-                        min=0.0,
-                        max=2.0,
-                        step=0.1,
-                        value=self.settings.agent_temperatures.get(role, 0.8),
-                    ).classes("flex-grow")
-                    ui.label().bind_text_from(
-                        self._temp_sliders[role], "value", lambda v: f"{v:.1f}"
-                    ).classes("w-12 text-right")
+            # Temperature presets legend
+            with ui.row().classes("w-full justify-center gap-6 mb-4 text-xs"):
+                with ui.row().classes("items-center gap-1"):
+                    ui.element("div").classes("w-3 h-3 rounded bg-blue-500")
+                    ui.label("Focused (0.3)").classes("text-gray-500 dark:text-gray-400")
+                with ui.row().classes("items-center gap-1"):
+                    ui.element("div").classes("w-3 h-3 rounded bg-green-500")
+                    ui.label("Balanced (0.7)").classes("text-gray-500 dark:text-gray-400")
+                with ui.row().classes("items-center gap-1"):
+                    ui.element("div").classes("w-3 h-3 rounded bg-orange-500")
+                    ui.label("Creative (1.2+)").classes("text-gray-500 dark:text-gray-400")
+
+            self._temp_sliders: dict = {}
+            with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-4"):
+                for role, info in AGENT_ROLES.items():
+                    default_temp = self.settings.agent_temperatures.get(role, 0.8)
+                    with (
+                        ui.card()
+                        .classes("p-3 bg-gray-50 dark:bg-gray-800")
+                        .tooltip(info["description"])
+                    ):
+                        with ui.row().classes("w-full items-center justify-between mb-2"):
+                            ui.label(info["name"]).classes("font-medium text-sm")
+                            ui.label().bind_text_from(
+                                lambda r=role: self._temp_sliders.get(r),
+                                "value",
+                                backward=lambda v: f"{v:.1f}" if v else "0.8",
+                            ).classes(
+                                "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
+                            )
+                        self._temp_sliders[role] = (
+                            ui.slider(
+                                min=0.0,
+                                max=2.0,
+                                step=0.1,
+                                value=default_temp,
+                            )
+                            .classes("w-full")
+                            .props("label-always")
+                        )
 
     def _build_interaction_section(self) -> None:
         """Build interaction mode settings."""
-        with ui.card().classes("w-full"):
-            ui.label("Interaction Mode").classes("text-lg font-semibold mb-4")
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Workflow",
+                "tune",
+                "Control how much the AI asks for your input during story generation",
+            )
 
-            self._interaction_mode_select = ui.select(
-                label="Mode",
-                options={
-                    "minimal": "Minimal - Fewest interruptions",
-                    "checkpoint": "Checkpoint - Review every N chapters",
-                    "interactive": "Interactive - More control points",
-                    "collaborative": "Collaborative - Maximum interaction",
-                },
-                value=self.settings.interaction_mode,
-            ).classes("w-full")
+            self._interaction_mode_select = (
+                ui.select(
+                    label="Interaction Mode",
+                    options={
+                        "minimal": "Minimal - Fewest interruptions",
+                        "checkpoint": "Checkpoint - Review every N chapters",
+                        "interactive": "Interactive - More control points",
+                        "collaborative": "Collaborative - Maximum interaction",
+                    },
+                    value=self.settings.interaction_mode,
+                )
+                .classes("w-full")
+                .tooltip("How often the AI pauses for your feedback")
+            )
 
-            with ui.row().classes("w-full gap-4 mt-4"):
-                self._checkpoint_input = ui.number(
-                    label="Chapters between checkpoints",
-                    value=self.settings.chapters_between_checkpoints,
-                    min=1,
-                    max=20,
+            with ui.element("div").classes("grid grid-cols-2 gap-4 mt-4"):
+                self._checkpoint_input = (
+                    ui.number(
+                        label="Checkpoint interval",
+                        value=self.settings.chapters_between_checkpoints,
+                        min=1,
+                        max=20,
+                    )
+                    .classes("w-full")
+                    .tooltip("Chapters between review pauses")
                 )
 
-                self._revision_input = ui.number(
-                    label="Max revision iterations",
-                    value=self.settings.max_revision_iterations,
-                    min=0,
-                    max=10,
+                self._revision_input = (
+                    ui.number(
+                        label="Max revisions",
+                        value=self.settings.max_revision_iterations,
+                        min=0,
+                        max=10,
+                    )
+                    .classes("w-full")
+                    .tooltip("Maximum edit passes per chapter (0 = unlimited)")
                 )
 
     def _build_context_section(self) -> None:
         """Build context limit settings."""
         with ui.card().classes("w-full"):
-            ui.label("Context Limits").classes("text-lg font-semibold mb-4")
-            ui.label("Control how much context is sent to the AI").classes(
-                "text-sm text-gray-500 dark:text-gray-400 mb-4"
+            self._section_header(
+                "Memory & Context",
+                "memory",
+                "Control how much information the AI remembers. Higher values use more VRAM but improve coherence.",
             )
 
-            with ui.row().classes("w-full gap-4"):
-                self._context_size_input = ui.number(
-                    label="Context window size",
-                    value=self.settings.context_size,
-                    min=1024,
-                    max=128000,
-                    step=1024,
+            # Responsive 2x2 grid for context inputs
+            with ui.element("div").classes("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"):
+                self._context_size_input = (
+                    ui.number(
+                        label="Context window",
+                        value=self.settings.context_size,
+                        min=1024,
+                        max=128000,
+                        step=1024,
+                    )
+                    .classes("w-full")
+                    .tooltip("Total tokens the AI can 'see' at once (default: 32768)")
                 )
 
-                self._max_tokens_input = ui.number(
-                    label="Max output tokens",
-                    value=self.settings.max_tokens,
-                    min=256,
-                    max=32000,
-                    step=256,
+                self._max_tokens_input = (
+                    ui.number(
+                        label="Max output",
+                        value=self.settings.max_tokens,
+                        min=256,
+                        max=32000,
+                        step=256,
+                    )
+                    .classes("w-full")
+                    .tooltip("Maximum tokens per AI response (default: 4096)")
                 )
 
-            with ui.row().classes("w-full gap-4 mt-4"):
-                self._prev_chapter_chars = ui.number(
-                    label="Previous chapter context (chars)",
-                    value=self.settings.previous_chapter_context_chars,
-                    min=500,
-                    max=10000,
+                self._prev_chapter_chars = (
+                    ui.number(
+                        label="Chapter memory",
+                        value=self.settings.previous_chapter_context_chars,
+                        min=500,
+                        max=10000,
+                    )
+                    .classes("w-full")
+                    .tooltip("Characters from previous chapter to include for continuity")
                 )
 
-                self._chapter_analysis_chars = ui.number(
-                    label="Chapter analysis context (chars)",
-                    value=self.settings.chapter_analysis_chars,
-                    min=1000,
-                    max=20000,
+                self._chapter_analysis_chars = (
+                    ui.number(
+                        label="Analysis context",
+                        value=self.settings.chapter_analysis_chars,
+                        min=1000,
+                        max=20000,
+                    )
+                    .classes("w-full")
+                    .tooltip("Characters to analyze when reviewing chapter quality")
                 )
 
     async def _test_connection(self) -> None:
