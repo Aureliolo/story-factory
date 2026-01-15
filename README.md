@@ -1,5 +1,10 @@
 # Story Factory
 
+[![CI](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 > **DISCLAIMER**: This is a personal holiday/hobby project created primarily as an experimentation playground for testing AI coding assistants (Claude Code, GitHub Copilot, Cursor, etc.) and exploring local LLM capabilities with Ollama. It's built for my own learning and enjoyment. Feel free to explore, but note that this is not production-grade software and comes with no guarantees. Use at your own risk!
 
 A local AI-powered multi-agent system for generating short stories, novellas, and novels with iterative refinement, self-critique, and plot-hole detection. Everything runs locally on your machine using Ollama.

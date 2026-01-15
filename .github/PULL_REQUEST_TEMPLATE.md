@@ -24,9 +24,9 @@ Fixes #
 
 <!-- List the main changes in bullet points -->
 
-- 
-- 
-- 
+-
+-
+-
 
 ## Testing
 
@@ -39,17 +39,17 @@ Fixes #
 
 ### Test Configuration
 
-- Python version: 
-- Ollama version: 
-- Model tested with: 
-- OS: 
+- Python version:
+- Ollama version:
+- Model tested with:
+- OS:
 
 ## Checklist
 
 <!-- Check all that apply -->
 
-- [ ] My code follows the project's style guidelines (black, ruff)
-- [ ] I have run `black .` to format my code
+- [ ] My code follows the project's style guidelines (ruff)
+- [ ] I have run `ruff format .` to format my code
 - [ ] I have run `ruff check .` and fixed any issues
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] I have updated the documentation as needed
