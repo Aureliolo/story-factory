@@ -42,6 +42,7 @@ output/stories/*
 !output/stories/.gitkeep
 output/worlds/*
 !output/worlds/.gitkeep
+output/*.db
 settings.json
 
 # Windows artifacts (from bash commands using /dev/null)

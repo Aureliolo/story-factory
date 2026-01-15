@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TypedDict
 from urllib.parse import urlparse
 
+from memory.mode_models import LearningTrigger
+
 # Configure module logger
 logger = logging.getLogger(__name__)
 
@@ -226,6 +228,21 @@ class Settings:
     dark_mode: bool = True
     last_project_id: str | None = None  # Remember last opened project
 
+    # Generation mode settings
+    current_mode: str = "balanced"  # ID of active generation mode
+    use_mode_system: bool = True  # Whether to use mode-based model selection
+
+    # Learning/tuning settings
+    learning_triggers: list = field(
+        default_factory=lambda: [
+            LearningTrigger.AFTER_PROJECT.value
+        ]  # off, after_project, periodic, continuous
+    )
+    learning_autonomy: str = "balanced"  # manual, cautious, balanced, aggressive, experimental
+    learning_periodic_interval: int = 5  # Chapters between periodic analysis
+    learning_min_samples: int = 5  # Minimum samples before making recommendations
+    learning_confidence_threshold: float = 0.8  # For auto-applying in balanced mode
+
     def save(self):
         """Save settings to JSON file."""
         # Validate before saving
@@ -288,6 +305,30 @@ class Settings:
         for agent, temp in self.agent_temperatures.items():
             if not 0.0 <= temp <= 2.0:
                 raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
+
+        # Validate learning settings
+        valid_autonomy = ["manual", "cautious", "balanced", "aggressive", "experimental"]
+        if self.learning_autonomy not in valid_autonomy:
+            raise ValueError(
+                f"learning_autonomy must be one of {valid_autonomy}, got {self.learning_autonomy}"
+            )
+
+        valid_triggers = ["off", "after_project", "periodic", "continuous"]
+        for trigger in self.learning_triggers:
+            if trigger not in valid_triggers:
+                raise ValueError(
+                    f"Invalid learning trigger: {trigger}; must be one of {valid_triggers}"
+                )
+
+        if not 1 <= self.learning_periodic_interval <= 20:
+            raise ValueError(
+                f"learning_periodic_interval must be between 1 and 20, got {self.learning_periodic_interval}"
+            )
+
+        if not 0.0 <= self.learning_confidence_threshold <= 1.0:
+            raise ValueError(
+                f"learning_confidence_threshold must be between 0.0 and 1.0, got {self.learning_confidence_threshold}"
+            )
 
     @classmethod
     def load(cls) -> "Settings":

@@ -4,9 +4,16 @@ import logging
 
 from nicegui import ui
 
+from memory.mode_models import (
+    PRESET_MODES,
+    AutonomyLevel,
+    LearningTrigger,
+    VramStrategy,
+)
 from services import ServiceContainer
 from settings import AGENT_ROLES
 from ui.state import AppState
+from utils import extract_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +27,8 @@ class SettingsPage:
     - Temperature settings
     - Interaction mode
     - Context limits
+    - Generation modes (presets for model combinations)
+    - Adaptive learning settings (autonomy, triggers, thresholds)
     """
 
     def __init__(self, state: AppState, services: ServiceContainer):
@@ -56,6 +65,12 @@ class SettingsPage:
 
                 with ui.element("div").style("flex: 2 1 550px; min-width: 550px;"):
                     self._build_temperature_section()
+
+                with ui.element("div").style("flex: 1.5 1 400px; min-width: 400px;"):
+                    self._build_mode_section()
+
+                with ui.element("div").style("flex: 1.5 1 400px; min-width: 400px;"):
+                    self._build_learning_section()
 
             # Save button
             ui.button(
@@ -342,6 +357,178 @@ class SettingsPage:
                     .tooltip("Characters to analyze when reviewing chapter quality")
                 )
 
+    def _build_mode_section(self) -> None:
+        """Build generation mode settings."""
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Generation Mode",
+                "tune",
+                "Select model combinations optimized for different use cases",
+            )
+
+            # Mode options from presets
+            mode_options = {
+                mode_id: f"{mode.name} - {mode.description}"
+                for mode_id, mode in PRESET_MODES.items()
+            }
+
+            with ui.column().classes("w-full gap-3"):
+                # Use mode system toggle
+                self._use_mode_system = ui.switch(
+                    "Use Generation Modes",
+                    value=self.settings.use_mode_system,
+                ).tooltip("When enabled, uses preset model combinations per agent")
+
+                # Mode selector
+                with (
+                    ui.element("div")
+                    .classes("w-full")
+                    .bind_visibility_from(self._use_mode_system, "value")
+                ):
+                    self._mode_select = (
+                        ui.select(
+                            label="Active Mode",
+                            options=mode_options,
+                            value=self.settings.current_mode,
+                        )
+                        .classes("w-full")
+                        .props("outlined dense")
+                        .tooltip("Choose a preset mode for model assignments")
+                    )
+
+                    # Show current mode details
+                    current_mode = PRESET_MODES.get(self.settings.current_mode)
+                    if current_mode:
+                        with ui.expansion("Mode Details", icon="info").classes("w-full mt-2"):
+                            with ui.column().classes("gap-1 text-sm"):
+                                for role, model in current_mode.agent_models.items():
+                                    temp = current_mode.agent_temperatures.get(role, 0.8)
+                                    with ui.row().classes("items-center gap-2"):
+                                        ui.label(f"{role.title()}:").classes("font-medium w-24")
+                                        ui.label(extract_model_name(model)).classes(
+                                            "text-gray-600 dark:text-gray-400"
+                                        )
+                                        ui.label(f"({temp})").classes("text-xs text-gray-500")
+
+                    # VRAM strategy
+                    vram_options = {
+                        VramStrategy.SEQUENTIAL.value: "Sequential - Full unload between agents",
+                        VramStrategy.PARALLEL.value: "Parallel - Keep models loaded",
+                        VramStrategy.ADAPTIVE.value: "Adaptive - Smart loading (recommended)",
+                    }
+                    current_vram = (
+                        current_mode.vram_strategy if current_mode else VramStrategy.ADAPTIVE.value
+                    )
+                    self._vram_strategy_select = (
+                        ui.select(
+                            label="VRAM Strategy",
+                            options=vram_options,
+                            value=current_vram,
+                        )
+                        .classes("w-full mt-3")
+                        .props("outlined dense")
+                        .tooltip("How to manage GPU memory when switching models")
+                    )
+
+    def _build_learning_section(self) -> None:
+        """Build learning/tuning settings."""
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Adaptive Learning",
+                "psychology",
+                "Configure how the system learns from generation quality",
+            )
+
+            with ui.column().classes("w-full gap-4"):
+                # Autonomy level
+                autonomy_options = {
+                    AutonomyLevel.MANUAL.value: "Manual - All changes require approval",
+                    AutonomyLevel.CAUTIOUS.value: "Cautious - Auto-apply minor changes",
+                    AutonomyLevel.BALANCED.value: "Balanced - Auto-apply high confidence",
+                    AutonomyLevel.AGGRESSIVE.value: "Aggressive - Auto-apply all, notify",
+                    AutonomyLevel.EXPERIMENTAL.value: "Experimental - Try variations",
+                }
+                self._autonomy_select = (
+                    ui.select(
+                        label="Autonomy Level",
+                        options=autonomy_options,
+                        value=self.settings.learning_autonomy,
+                    )
+                    .classes("w-full")
+                    .props("outlined dense")
+                    .tooltip("How autonomous the tuning system should be")
+                )
+
+                # Learning triggers
+                ui.label("Learning Triggers").classes(
+                    "text-sm font-medium text-gray-600 dark:text-gray-400"
+                )
+                trigger_labels = {
+                    LearningTrigger.OFF.value: "Off (disabled)",
+                    LearningTrigger.AFTER_PROJECT.value: "After completing a story",
+                    LearningTrigger.PERIODIC.value: "Every N chapters",
+                    LearningTrigger.CONTINUOUS.value: "Continuous background analysis",
+                }
+
+                self._trigger_checkboxes = {}
+                with ui.column().classes("gap-1 pl-2"):
+                    for trigger_value, label in trigger_labels.items():
+                        if trigger_value == LearningTrigger.OFF.value:
+                            continue  # Skip OFF, use others as toggles
+                        is_enabled = trigger_value in self.settings.learning_triggers
+                        self._trigger_checkboxes[trigger_value] = ui.checkbox(
+                            label, value=is_enabled
+                        ).classes("text-sm")
+
+                # Periodic interval (show when periodic is checked)
+                with ui.row().classes("w-full items-end gap-2"):
+                    self._periodic_interval = (
+                        ui.number(
+                            label="Periodic interval (chapters)",
+                            value=self.settings.learning_periodic_interval,
+                            min=1,
+                            max=20,
+                        )
+                        .classes("flex-grow")
+                        .props("outlined dense")
+                        .tooltip("Analyze every N chapters when periodic trigger is enabled")
+                    )
+
+                    self._min_samples = (
+                        ui.number(
+                            label="Min samples",
+                            value=self.settings.learning_min_samples,
+                            min=1,
+                            max=50,
+                        )
+                        .classes("w-24")
+                        .props("outlined dense")
+                        .tooltip("Minimum samples before making recommendations")
+                    )
+
+                # Confidence threshold slider
+                with ui.column().classes("w-full"):
+                    with ui.row().classes("w-full items-center justify-between"):
+                        ui.label("Auto-apply Confidence").classes("text-sm")
+                        self._confidence_label = ui.label(
+                            f"{self.settings.learning_confidence_threshold:.0%}"
+                        ).classes(
+                            "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
+                        )
+
+                    self._confidence_slider = ui.slider(
+                        min=0.5,
+                        max=1.0,
+                        step=0.05,
+                        value=self.settings.learning_confidence_threshold,
+                    ).classes("w-full")
+
+                    self._confidence_label.bind_text_from(
+                        self._confidence_slider,
+                        "value",
+                        backward=lambda v: f"{v:.0%}",
+                    )
+
     async def _test_connection(self) -> None:
         """Test Ollama connection."""
         # Update URL first
@@ -382,6 +569,27 @@ class SettingsPage:
             self.settings.max_tokens = int(self._max_tokens_input.value)
             self.settings.previous_chapter_context_chars = int(self._prev_chapter_chars.value)
             self.settings.chapter_analysis_chars = int(self._chapter_analysis_chars.value)
+
+            # Generation mode
+            self.settings.use_mode_system = self._use_mode_system.value
+            if hasattr(self, "_mode_select"):
+                self.settings.current_mode = self._mode_select.value
+
+            # Learning settings
+            self.settings.learning_autonomy = self._autonomy_select.value
+
+            # Collect enabled triggers
+            enabled_triggers = []
+            for trigger_value, checkbox in self._trigger_checkboxes.items():
+                if checkbox.value:
+                    enabled_triggers.append(trigger_value)
+            if not enabled_triggers:
+                enabled_triggers = ["off"]
+            self.settings.learning_triggers = enabled_triggers
+
+            self.settings.learning_periodic_interval = int(self._periodic_interval.value)
+            self.settings.learning_min_samples = int(self._min_samples.value)
+            self.settings.learning_confidence_threshold = self._confidence_slider.value
 
             # Validate and save
             self.settings.validate()
