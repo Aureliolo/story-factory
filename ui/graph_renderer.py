@@ -47,8 +47,9 @@ def render_graph_html(
     layout: str = "force-directed",
     height: int = 500,
     selected_entity_id: str | None = None,
-) -> str:
-    """Generate vis.js graph HTML.
+    container_id: str = "graph-container",
+) -> tuple[str, str]:
+    """Generate vis.js graph HTML and JavaScript separately.
 
     Args:
         world_db: WorldDatabase instance
@@ -56,9 +57,10 @@ def render_graph_html(
         layout: Layout algorithm ("force-directed", "hierarchical", "circular", "grid")
         height: Graph container height in pixels
         selected_entity_id: ID of selected entity to highlight
+        container_id: Unique ID for the graph container
 
     Returns:
-        HTML string with embedded vis.js graph
+        Tuple of (HTML string for container, JavaScript string for initialization)
     """
     graph = world_db.get_graph()
 
@@ -117,11 +119,8 @@ def render_graph_html(
     # Build layout options
     layout_options = _get_layout_options(layout)
 
-    # Generate unique container ID
-    container_id = "graph-container"
-
-    # Use CSS variables for dark mode support - NiceGUI adds .dark class to body
-    return f"""
+    # HTML container only (no scripts)
+    html = f"""
     <style>
         #{container_id} {{
             border: 1px solid #e5e7eb;
@@ -132,83 +131,97 @@ def render_graph_html(
         }}
     </style>
     <div id="{container_id}" style="height: {height}px;"></div>
-    <!-- vis-network version tracked in /package.json for Dependabot -->
-    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
-    <script>
-    (function() {{
-        var isDarkMode = document.body.classList.contains('dark') ||
-                         document.documentElement.classList.contains('dark') ||
-                         window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var fontColor = isDarkMode ? '#e5e7eb' : '#374151';
-
-        var nodes = new vis.DataSet({json.dumps(nodes)});
-        var edges = new vis.DataSet({json.dumps(edges)});
-
-        var container = document.getElementById('{container_id}');
-        var data = {{ nodes: nodes, edges: edges }};
-
-        var options = {{
-            physics: {{
-                enabled: true,
-                stabilization: {{ iterations: 100 }},
-                barnesHut: {{
-                    gravitationalConstant: -2000,
-                    centralGravity: 0.3,
-                    springLength: 150,
-                    springConstant: 0.04
-                }}
-            }},
-            nodes: {{
-                font: {{ size: 14, color: fontColor }},
-                scaling: {{ min: 10, max: 30 }}
-            }},
-            edges: {{
-                font: {{ size: 10, align: 'middle', color: fontColor }},
-                smooth: {{ type: 'continuous' }}
-            }},
-            interaction: {{
-                hover: true,
-                tooltipDelay: 200,
-                navigationButtons: true,
-                keyboard: true
-            }},
-            {layout_options}
-        }};
-
-        var network = new vis.Network(container, data, options);
-
-        // Handle node click - update hidden input for NiceGUI
-        network.on('click', function(params) {{
-            if (params.nodes.length > 0) {{
-                var selectedId = params.nodes[0];
-                // Try to find and update the entity selection input
-                var inputs = document.querySelectorAll('input[data-testid="textbox"]');
-                inputs.forEach(function(input) {{
-                    if (input.closest('[id*="selected_entity"]')) {{
-                        input.value = selectedId;
-                        input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    }}
-                }});
-                // Also store in window for other handlers
-                window.selectedEntityId = selectedId;
-            }}
-        }});
-
-        // Handle double-click to focus on node
-        network.on('doubleClick', function(params) {{
-            if (params.nodes.length > 0) {{
-                network.focus(params.nodes[0], {{
-                    scale: 1.5,
-                    animation: {{ duration: 500, easingFunction: 'easeInOutQuad' }}
-                }});
-            }}
-        }});
-
-        // Store network reference for external control
-        window.graphNetwork = network;
-    }})();
-    </script>
     """
+
+    # JavaScript initialization (to be run via ui.run_javascript)
+    js = f"""
+    (function() {{
+        // Wait for vis-network to be available
+        function initGraph() {{
+            if (typeof vis === 'undefined') {{
+                setTimeout(initGraph, 100);
+                return;
+            }}
+
+            var isDarkMode = document.body.classList.contains('dark') ||
+                             document.documentElement.classList.contains('dark') ||
+                             window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var fontColor = isDarkMode ? '#e5e7eb' : '#374151';
+
+            var nodes = new vis.DataSet({json.dumps(nodes)});
+            var edges = new vis.DataSet({json.dumps(edges)});
+
+            var container = document.getElementById('{container_id}');
+            if (!container) return;
+
+            var data = {{ nodes: nodes, edges: edges }};
+
+            var options = {{
+                physics: {{
+                    enabled: true,
+                    stabilization: {{ iterations: 100 }},
+                    barnesHut: {{
+                        gravitationalConstant: -2000,
+                        centralGravity: 0.3,
+                        springLength: 150,
+                        springConstant: 0.04
+                    }}
+                }},
+                nodes: {{
+                    font: {{ size: 14, color: fontColor }},
+                    scaling: {{ min: 10, max: 30 }}
+                }},
+                edges: {{
+                    font: {{ size: 10, align: 'middle', color: fontColor }},
+                    smooth: {{ type: 'continuous' }}
+                }},
+                interaction: {{
+                    hover: true,
+                    tooltipDelay: 200,
+                    navigationButtons: true,
+                    keyboard: true
+                }},
+                {layout_options}
+            }};
+
+            var network = new vis.Network(container, data, options);
+
+            // Handle node click - update hidden input for NiceGUI
+            network.on('click', function(params) {{
+                if (params.nodes.length > 0) {{
+                    var selectedId = params.nodes[0];
+                    // Try to find and update the entity selection input
+                    var inputs = document.querySelectorAll('input[data-testid="textbox"]');
+                    inputs.forEach(function(input) {{
+                        if (input.closest('[id*="selected_entity"]')) {{
+                            input.value = selectedId;
+                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        }}
+                    }});
+                    // Also store in window for other handlers
+                    window.selectedEntityId = selectedId;
+                }}
+            }});
+
+            // Handle double-click to focus on node
+            network.on('doubleClick', function(params) {{
+                if (params.nodes.length > 0) {{
+                    network.focus(params.nodes[0], {{
+                        scale: 1.5,
+                        animation: {{ duration: 500, easingFunction: 'easeInOutQuad' }}
+                    }});
+                }}
+            }});
+
+            // Store network reference for external control
+            window.graphNetwork = network;
+        }}
+
+        initGraph();
+    }})();
+    """
+
+    return html, js
 
 
 def _build_tooltip(data: dict[str, Any]) -> str:

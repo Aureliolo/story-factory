@@ -29,36 +29,33 @@ class TestAppLoads:
         assert len(errors) == 0, f"Console errors: {errors}"
 
 
-class TestTabNavigation:
-    """Test tab navigation works correctly."""
+class TestNavigation:
+    """Test path-based navigation works correctly."""
 
-    def test_all_tabs_accessible(self, page: Page, base_url: str):
-        """All main tabs are accessible."""
+    def test_all_nav_links_accessible(self, page: Page, base_url: str):
+        """All main navigation links are accessible in the header."""
         page.goto(base_url)
         page.wait_for_load_state("networkidle")
 
-        tabs = ["Write", "World", "Projects", "Settings", "Models"]
+        nav_items = ["Write", "World", "Projects", "Settings", "Models"]
 
-        for tab_name in tabs:
-            tab = page.get_by_role("tab", name=tab_name)
-            expect(tab).to_be_visible()
+        for nav_name in nav_items:
+            # Navigation links are in the header
+            link = page.get_by_role("link", name=nav_name)
+            expect(link).to_be_visible()
 
-    def test_settings_tab_loads(self, page: Page, base_url: str):
-        """Settings tab loads without errors."""
-        page.goto(base_url)
+    def test_settings_page_loads(self, page: Page, base_url: str):
+        """Settings page loads via direct URL."""
+        page.goto(f"{base_url}/settings")
         page.wait_for_load_state("networkidle")
+        # Playwright's expect has auto-waiting
+        expect(page.get_by_text("Connection")).to_be_visible()
 
-        page.get_by_role("tab", name="Settings").click()
-        # Playwright's expect has auto-waiting, no need for fixed timeout
-        expect(page.get_by_text("Ollama Connection")).to_be_visible()
-
-    def test_models_tab_loads(self, page: Page, base_url: str):
-        """Models tab loads without errors."""
-        page.goto(base_url)
+    def test_models_page_loads(self, page: Page, base_url: str):
+        """Models page loads via direct URL."""
+        page.goto(f"{base_url}/models")
         page.wait_for_load_state("networkidle")
-
-        page.get_by_role("tab", name="Models").click()
-        # Playwright's expect has auto-waiting, no need for fixed timeout
+        # Playwright's expect has auto-waiting
         expect(page.get_by_text("Installed Models")).to_be_visible()
 
 
@@ -67,15 +64,15 @@ class TestSettingsPage:
 
     def test_settings_form_visible(self, page: Page, base_url: str):
         """Settings form elements are visible."""
-        page.goto(base_url)
-        page.get_by_role("tab", name="Settings").click()
+        page.goto(f"{base_url}/settings")
+        page.wait_for_load_state("networkidle")
         # Playwright's expect has auto-waiting
         expect(page.get_by_label("Ollama URL")).to_be_visible()
 
     def test_model_selection_visible(self, page: Page, base_url: str):
         """Model selection section is visible on settings page."""
-        page.goto(base_url)
-        page.get_by_role("tab", name="Settings").click()
+        page.goto(f"{base_url}/settings")
+        page.wait_for_load_state("networkidle")
         # NiceGUI uses Quasar's q-select, not native select elements
         # Just verify the model selection section is present
         expect(page.get_by_text("Default Model")).to_be_visible()

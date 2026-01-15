@@ -9,6 +9,21 @@ from nicegui.elements.html import Html
 from memory.world_database import WorldDatabase
 from ui.graph_renderer import render_graph_html
 
+# Flag to track if vis-network script has been added
+_vis_network_loaded = False
+
+
+def _ensure_vis_network_loaded() -> None:
+    """Ensure vis-network library is loaded (once per app)."""
+    global _vis_network_loaded
+    if not _vis_network_loaded:
+        # Add vis-network script to body (allows script tags)
+        ui.add_body_html(
+            "<!-- vis-network version tracked in /package.json for Dependabot -->"
+            '<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>'
+        )
+        _vis_network_loaded = True
+
 
 class GraphComponent:
     """Interactive graph visualization for world entities.
@@ -45,6 +60,9 @@ class GraphComponent:
 
     def build(self) -> None:
         """Build the graph UI."""
+        # Ensure vis-network library is loaded
+        _ensure_vis_network_loaded()
+
         with ui.column().classes("w-full"):
             # Controls
             with ui.row().classes("w-full items-center gap-4 mb-2"):
@@ -87,9 +105,9 @@ class GraphComponent:
                     on_click=self.refresh,
                 ).props("flat round")
 
-            # Graph container
+            # Graph container (no script tags allowed here)
             self._container = (
-                ui.html(sanitize=False)
+                ui.html("", sanitize=False)
                 .classes("w-full border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800")
                 .style(f"height: {self.height}px;")
             )
@@ -150,16 +168,21 @@ class GraphComponent:
             """
             return
 
-        # Generate vis.js HTML
-        html = render_graph_html(
+        # Generate vis.js HTML and JavaScript separately
+        html, js = render_graph_html(
             world_db=self.world_db,
             filter_types=self._filter_types if self._filter_types else None,
             layout=self._layout,
             height=self.height - 20,  # Account for border
             selected_entity_id=self._selected_entity_id,
+            container_id="graph-container-main",
         )
 
+        # Set HTML content (no script tags)
         self._container.content = html
+
+        # Run JavaScript initialization
+        ui.run_javascript(js)
 
         # Add JavaScript handler for node selection
         if self.on_node_select:
@@ -221,13 +244,26 @@ def mini_graph(
         ui.label("No world data").classes("text-gray-500 dark:text-gray-400 text-sm")
         return
 
-    html = render_graph_html(
+    # Ensure vis-network library is loaded
+    _ensure_vis_network_loaded()
+
+    # Use unique container ID for mini graphs
+    import uuid
+
+    container_id = f"mini-graph-{uuid.uuid4().hex[:8]}"
+
+    html, js = render_graph_html(
         world_db=world_db,
         filter_types=filter_types or ["character", "location"],
         layout="force-directed",
         height=height,
+        container_id=container_id,
     )
 
+    # Add HTML container (no script tags)
     ui.html(html, sanitize=False).classes(
         "w-full border dark:border-gray-700 rounded bg-white dark:bg-gray-800"
     ).style(f"height: {height}px;")
+
+    # Run JavaScript initialization
+    ui.run_javascript(js)

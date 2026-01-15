@@ -157,8 +157,9 @@ class ProjectsPage:
         try:
             project, world_db = self.services.project.create_project()
             self.state.set_project(project.id, project, world_db)
-            self._refresh_project_list()
             ui.notify("Project created!", type="positive")
+            # Reload to update header dropdown
+            ui.navigate.reload()
         except Exception as e:
             ui.notify(f"Error: {e}", type="negative")
 
@@ -167,8 +168,8 @@ class ProjectsPage:
         try:
             project, world_db = self.services.project.load_project(project_id)
             self.state.set_project(project_id, project, world_db)
-            self._refresh_project_list()
             ui.notify(f"Opened: {project.project_name}", type="positive")
+            self._refresh_project_list()
         except Exception as e:
             ui.notify(f"Error: {e}", type="negative")
 
@@ -176,8 +177,8 @@ class ProjectsPage:
         """Duplicate a project."""
         try:
             project, world_db = self.services.project.duplicate_project(project_id)
-            self._refresh_project_list()
             ui.notify(f"Duplicated as: {project.project_name}", type="positive")
+            self._refresh_project_list()
         except Exception as e:
             ui.notify(f"Error: {e}", type="negative")
 
