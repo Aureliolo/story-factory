@@ -10,6 +10,7 @@ from nicegui import app, ui
 from services import ServiceContainer
 from ui.components.header import Header
 from ui.keyboard_shortcuts import KeyboardShortcuts
+from ui.pages.analytics import AnalyticsPage
 from ui.pages.models import ModelsPage
 from ui.pages.projects import ProjectsPage
 from ui.pages.settings import SettingsPage
@@ -143,6 +144,14 @@ class StoryFactoryApp:
                 page.build()
 
             self._page_layout("/models", content)
+
+        @ui.page("/analytics")
+        def analytics_page():
+            def content():
+                page = AnalyticsPage(self.state, self.services)
+                page.build()
+
+            self._page_layout("/analytics", content)
 
         # Cleanup on shutdown
         app.on_shutdown(self._on_shutdown)

@@ -9,8 +9,10 @@ from dataclasses import dataclass
 from settings import Settings
 
 from .export_service import ExportService
+from .model_mode_service import ModelModeService
 from .model_service import ModelService
 from .project_service import ProjectService
+from .scoring_service import ScoringService
 from .story_service import StoryService
 from .world_service import WorldService
 
@@ -34,6 +36,8 @@ class ServiceContainer:
     world: WorldService
     model: ModelService
     export: ExportService
+    mode: ModelModeService
+    scoring: ScoringService
 
     def __init__(self, settings: Settings | None = None):
         """Initialize all services with shared settings.
@@ -47,6 +51,8 @@ class ServiceContainer:
         self.world = WorldService(self.settings)
         self.model = ModelService(self.settings)
         self.export = ExportService(self.settings)
+        self.mode = ModelModeService(self.settings)
+        self.scoring = ScoringService(self.mode)
 
 
 __all__ = [
@@ -56,4 +62,6 @@ __all__ = [
     "WorldService",
     "ModelService",
     "ExportService",
+    "ModelModeService",
+    "ScoringService",
 ]
