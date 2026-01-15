@@ -67,7 +67,8 @@ class BaseAgent:
         else:
             self.temperature = self.settings.get_temperature_for_agent(self.agent_role)
 
-        self.client = ollama.Client(host=self.settings.ollama_url)
+        # Create Ollama client with timeout to prevent hanging
+        self.client = ollama.Client(host=self.settings.ollama_url, timeout=120.0)
 
     @classmethod
     @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)
@@ -77,7 +78,7 @@ class BaseAgent:
         Returns:
             Tuple of (is_healthy, message)
         """
-        client = ollama.Client(host=ollama_url)
+        client = ollama.Client(host=ollama_url, timeout=30.0)
         models = client.list()
         model_count = len(models.get("models", []))
         return True, f"Ollama connected. {model_count} models available."
@@ -106,7 +107,7 @@ class BaseAgent:
             return False, (
                 f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
             )
-        except Exception as e:
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             error_msg = f"Error checking model availability: {e}"
             logger.warning(error_msg)
             return False, error_msg
@@ -170,9 +171,9 @@ class BaseAgent:
                     logger.error(f"{self.name}: Ollama response error: {e}")
                     raise LLMGenerationError(f"Model error: {e}") from e
 
-                except Exception as e:
+                except TimeoutError as e:
                     last_error = e
-                    logger.warning(f"{self.name}: Error on attempt {attempt + 1}: {e}")
+                    logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
                     if attempt < self.MAX_RETRIES - 1:
                         logger.info(f"{self.name}: Retrying in {delay}s...")
                         time.sleep(delay)

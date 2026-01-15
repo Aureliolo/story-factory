@@ -1,5 +1,7 @@
 """Tests for WorldDatabase."""
 
+import pytest
+
 from memory.world_database import WorldDatabase
 
 
@@ -178,3 +180,88 @@ class TestWorldDatabase:
         char_names = [c["name"] for c in context["characters"]]
         assert "Alice" in char_names
         assert "Bob" in char_names
+
+    def test_add_entity_validation_empty_name(self, tmp_path):
+        """Test that empty entity names are rejected."""
+        db = WorldDatabase(tmp_path / "test.db")
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            db.add_entity("character", "")
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            db.add_entity("character", "   ")
+
+    def test_add_entity_validation_long_name(self, tmp_path):
+        """Test that overly long entity names are rejected."""
+        db = WorldDatabase(tmp_path / "test.db")
+
+        with pytest.raises(ValueError, match="cannot exceed 200 characters"):
+            db.add_entity("character", "x" * 201)
+
+    def test_add_entity_validation_long_description(self, tmp_path):
+        """Test that overly long descriptions are rejected."""
+        db = WorldDatabase(tmp_path / "test.db")
+
+        with pytest.raises(ValueError, match="cannot exceed 5000 characters"):
+            db.add_entity("character", "Test", "x" * 5001)
+
+    def test_update_entity_validation_empty_name(self, tmp_path):
+        """Test that empty names are rejected in updates."""
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "Valid Name")
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            db.update_entity(entity_id, name="")
+
+    def test_update_entity_validation_strips_whitespace(self, tmp_path):
+        """Test that entity names are trimmed."""
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "  Spaced Name  ")
+
+        entity = db.get_entity(entity_id)
+        assert entity is not None
+        assert entity.name == "Spaced Name"
+
+    def test_context_manager_closes_connection(self, tmp_path):
+        """Test that context manager properly closes the database connection."""
+        db_path = tmp_path / "context_test.db"
+
+        # Use context manager
+        with WorldDatabase(db_path) as db:
+            entity_id = db.add_entity("character", "Test Character")
+            assert entity_id is not None
+            assert db.count_entities() == 1
+
+        # After exiting context, connection should be closed
+        # Verify by opening a new connection and checking data persisted
+        db2 = WorldDatabase(db_path)
+        assert db2.count_entities() == 1
+        db2.close()
+
+    def test_context_manager_does_not_suppress_exceptions(self, tmp_path):
+        """Test that context manager does not suppress exceptions."""
+        db_path = tmp_path / "exception_test.db"
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            with WorldDatabase(db_path) as db:
+                db.add_entity("character", "")  # Should raise ValueError
+
+    def test_description_whitespace_stripped_on_add(self, tmp_path):
+        """Test that description whitespace is stripped when adding entity."""
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "Test", "  Spaced description  ")
+
+        entity = db.get_entity(entity_id)
+        assert entity is not None
+        assert entity.description == "Spaced description"
+
+    def test_description_whitespace_stripped_on_update(self, tmp_path):
+        """Test that description whitespace is stripped when updating entity."""
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "Test", "Original")
+
+        db.update_entity(entity_id, description="  Updated description  ")
+
+        entity = db.get_entity(entity_id)
+        assert entity is not None
+        assert entity.description == "Updated description"
