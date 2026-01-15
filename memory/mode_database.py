@@ -13,6 +13,9 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_DB_PATH = Path(__file__).parent.parent / "output" / "model_scores.db"
+
+
 class ModeDatabase:
     """SQLite database for model scoring and learning data.
 
@@ -23,13 +26,13 @@ class ModeDatabase:
     - custom_modes: User-defined generation modes
     """
 
-    def __init__(self, db_path: Path | str):
+    def __init__(self, db_path: Path | str | None = None):
         """Initialize database.
 
         Args:
-            db_path: Path to SQLite database file.
+            db_path: Path to SQLite database file. Defaults to output/model_scores.db.
         """
-        self.db_path = Path(db_path)
+        self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
@@ -81,7 +84,7 @@ class ModeDatabase:
                 CREATE TABLE IF NOT EXISTS model_performance (
                     model_id TEXT NOT NULL,
                     agent_role TEXT NOT NULL,
-                    genre TEXT,
+                    genre TEXT NOT NULL DEFAULT '',
 
                     avg_prose_quality REAL,
                     avg_instruction_following REAL,
@@ -91,7 +94,7 @@ class ModeDatabase:
                     sample_count INTEGER DEFAULT 0,
                     last_updated TEXT,
 
-                    PRIMARY KEY (model_id, agent_role, COALESCE(genre, ''))
+                    PRIMARY KEY (model_id, agent_role, genre)
                 );
 
                 -- Tuning recommendations history
@@ -277,14 +280,25 @@ class ModeDatabase:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_score_count(self, model_id: str | None = None) -> int:
-        """Get total number of scores, optionally filtered by model."""
-        query = "SELECT COUNT(*) FROM generation_scores"
+    def get_score_count(
+        self,
+        model_id: str | None = None,
+        agent_role: str | None = None,
+        genre: str | None = None,
+    ) -> int:
+        """Get total number of scores, optionally filtered."""
+        query = "SELECT COUNT(*) FROM generation_scores WHERE 1=1"
         params: list = []
 
         if model_id:
-            query += " WHERE model_id = ?"
+            query += " AND model_id = ?"
             params.append(model_id)
+        if agent_role:
+            query += " AND agent_role = ?"
+            params.append(agent_role)
+        if genre:
+            query += " AND genre = ?"
+            params.append(genre)
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(query, params)
@@ -300,8 +314,8 @@ class ModeDatabase:
         genre: str | None = None,
     ) -> None:
         """Recalculate aggregated performance for a model/role/genre combo."""
-        genre_condition = "genre = ?" if genre else "genre IS NULL"
         genre_value = genre or ""
+        genre_condition = "genre = ?" if genre else "(genre IS NULL OR genre = '')"
 
         with sqlite3.connect(self.db_path) as conn:
             # Calculate aggregates
@@ -316,7 +330,7 @@ class ModeDatabase:
                 FROM generation_scores
                 WHERE model_id = ? AND agent_role = ? AND {genre_condition}
                 """,
-                (model_id, agent_role, genre) if genre else (model_id, agent_role),
+                (model_id, agent_role, genre_value) if genre else (model_id, agent_role),
             )
             row = cursor.fetchone()
 
@@ -594,6 +608,203 @@ class ModeDatabase:
                 (model_id,),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_unique_genres(self) -> list[str]:
+        """Get list of unique genres from scores."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT DISTINCT genre FROM generation_scores WHERE genre IS NOT NULL"
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def get_average_score(
+        self,
+        metric: str,
+        agent_role: str | None = None,
+        genre: str | None = None,
+    ) -> float | None:
+        """Get average of a specific metric.
+
+        Args:
+            metric: Column name (prose_quality, instruction_following, etc.)
+            agent_role: Optional filter.
+            genre: Optional filter.
+
+        Returns:
+            Average value or None if no data.
+        """
+        valid_metrics = {
+            "prose_quality",
+            "instruction_following",
+            "consistency_score",
+            "tokens_per_second",
+        }
+        if metric not in valid_metrics:
+            return None
+
+        query = f"SELECT AVG({metric}) FROM generation_scores WHERE 1=1"
+        params: list = []
+
+        if agent_role:
+            query += " AND agent_role = ?"
+            params.append(agent_role)
+        if genre:
+            query += " AND genre = ?"
+            params.append(genre)
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(query, params)
+            result = cursor.fetchone()[0]
+            return float(result) if result is not None else None
+
+    def get_model_summaries(
+        self,
+        agent_role: str | None = None,
+        genre: str | None = None,
+    ) -> list:
+        """Get model performance summaries.
+
+        Returns list of ModelPerformanceSummary-like objects.
+        """
+        from memory.mode_models import ModelPerformanceSummary
+
+        query = "SELECT * FROM model_performance WHERE 1=1"
+        params: list = []
+
+        if agent_role:
+            query += " AND agent_role = ?"
+            params.append(agent_role)
+        if genre:
+            query += " AND genre = ?"
+            params.append(genre)
+
+        query += " ORDER BY avg_prose_quality DESC"
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            results = []
+            for row in cursor.fetchall():
+                results.append(
+                    ModelPerformanceSummary(
+                        model_id=row["model_id"],
+                        agent_role=row["agent_role"],
+                        genre=row["genre"] if row["genre"] else None,
+                        avg_prose_quality=row["avg_prose_quality"],
+                        avg_instruction_following=row["avg_instruction_following"],
+                        avg_consistency=row["avg_consistency"],
+                        avg_tokens_per_second=row["avg_tokens_per_second"],
+                        sample_count=row["sample_count"],
+                        last_updated=datetime.fromisoformat(row["last_updated"])
+                        if row["last_updated"]
+                        else None,
+                    )
+                )
+            return results
+
+    def get_recent_recommendations(self, limit: int = 10) -> list:
+        """Get recent recommendations as TuningRecommendation objects."""
+        from memory.mode_models import RecommendationType, TuningRecommendation
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM recommendations
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            results = []
+            for row in cursor.fetchall():
+                evidence = json.loads(row["evidence_json"]) if row["evidence_json"] else None
+                try:
+                    rec_type = RecommendationType(row["recommendation_type"])
+                except ValueError:
+                    rec_type = RecommendationType.MODEL_SWAP
+
+                results.append(
+                    TuningRecommendation(
+                        id=row["id"],
+                        timestamp=datetime.fromisoformat(row["timestamp"]),
+                        recommendation_type=rec_type,
+                        current_value=row["current_value"],
+                        suggested_value=row["suggested_value"],
+                        affected_role=row["affected_role"],
+                        reason=row["reason"],
+                        confidence=row["confidence"],
+                        evidence=evidence,
+                        expected_improvement=row["expected_improvement"],
+                        was_applied=bool(row["was_applied"]),
+                        user_feedback=row["user_feedback"],
+                    )
+                )
+            return results
+
+    def get_all_scores(
+        self,
+        agent_role: str | None = None,
+        genre: str | None = None,
+        limit: int = 1000,
+    ) -> list:
+        """Get all scores as GenerationScore objects."""
+        from memory.mode_models import (
+            GenerationScore,
+            ImplicitSignals,
+            PerformanceMetrics,
+            QualityScores,
+        )
+
+        query = "SELECT * FROM generation_scores WHERE 1=1"
+        params: list = []
+
+        if agent_role:
+            query += " AND agent_role = ?"
+            params.append(agent_role)
+        if genre:
+            query += " AND genre = ?"
+            params.append(genre)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            results = []
+            for row in cursor.fetchall():
+                results.append(
+                    GenerationScore(
+                        project_id=row["project_id"],
+                        chapter_id=row["chapter_id"],
+                        agent_role=row["agent_role"],
+                        model_id=row["model_id"],
+                        mode_name=row["mode_name"],
+                        genre=row["genre"],
+                        quality=QualityScores(
+                            prose_quality=row["prose_quality"],
+                            instruction_following=row["instruction_following"],
+                            consistency_score=row["consistency_score"],
+                        ),
+                        performance=PerformanceMetrics(
+                            tokens_generated=row["tokens_generated"],
+                            time_seconds=row["time_seconds"],
+                            tokens_per_second=row["tokens_per_second"],
+                            vram_used_gb=row["vram_used_gb"],
+                        ),
+                        signals=ImplicitSignals(
+                            was_regenerated=bool(row["was_regenerated"]),
+                            edit_distance=row["edit_distance"],
+                            user_rating=row["user_rating"],
+                        ),
+                        prompt_hash=row["prompt_hash"],
+                        timestamp=datetime.fromisoformat(row["timestamp"])
+                        if row["timestamp"]
+                        else datetime.now(),
+                    )
+                )
+            return results
 
     def export_scores_csv(self, output_path: Path | str) -> int:
         """Export all scores to CSV.

@@ -12,6 +12,7 @@ from nicegui.elements.markdown import Markdown
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
+from memory.mode_models import PRESET_MODES
 from services import ServiceContainer
 from ui.components.chat import ChatComponent
 from ui.components.graph import mini_graph
@@ -387,6 +388,22 @@ class WritePage:
     def _build_writing_controls(self) -> None:
         """Build the writing controls panel."""
         ui.label("Controls").classes("text-lg font-semibold")
+
+        # Mode indicator
+        if self.services.settings.use_mode_system:
+            mode_id = self.services.settings.current_mode
+            mode = PRESET_MODES.get(mode_id)
+            if mode:
+                with ui.row().classes("w-full items-center gap-2 mb-2"):
+                    ui.icon("tune", size="xs").classes("text-blue-500")
+                    ui.label(mode.name).classes("text-sm font-medium")
+                    ui.space()
+                    with (
+                        ui.link(target="/settings")
+                        .classes("text-xs text-gray-500 hover:text-blue-500")
+                        .tooltip("Change mode in Settings")
+                    ):
+                        ui.icon("settings", size="xs")
 
         # Write button
         ui.button(
