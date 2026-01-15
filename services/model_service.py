@@ -252,6 +252,68 @@ class ModelService:
             logger.error(f"Failed to delete model {model_id}: {e}")
             return False
 
+    def check_model_update(self, model_id: str) -> dict:
+        """Check if a model has an update available.
+
+        This works by attempting a pull - if Ollama reports 'already exists'
+        or shows no download progress, the model is up to date.
+
+        Args:
+            model_id: The model ID to check.
+
+        Returns:
+            Dict with 'has_update' (bool), 'message' (str), 'error' (bool optional).
+        """
+        try:
+            client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
+
+            # Pull with stream to check status without full download
+            for progress in client.pull(model_id, stream=True):
+                status = progress.get("status", "").lower()
+
+                # If we see actual downloading, there's an update
+                if "pulling" in status and progress.get("total", 0) > 0:
+                    # Cancel by not consuming more - Ollama will continue in background
+                    # but we got the info we need
+                    return {
+                        "has_update": True,
+                        "message": "Update available",
+                    }
+
+                # If already up to date
+                if "up to date" in status or "already exists" in status:
+                    return {
+                        "has_update": False,
+                        "message": "Already up to date",
+                    }
+
+                # Success without download means up to date
+                if "success" in status:
+                    return {
+                        "has_update": False,
+                        "message": "Already up to date",
+                    }
+
+            return {
+                "has_update": False,
+                "message": "Already up to date",
+            }
+
+        except ollama.ResponseError as e:
+            logger.warning(f"Error checking update for {model_id}: {e}")
+            return {
+                "has_update": False,
+                "message": f"Check failed: {e}",
+                "error": True,
+            }
+        except (ConnectionError, TimeoutError) as e:
+            logger.warning(f"Connection error checking update for {model_id}: {e}")
+            return {
+                "has_update": False,
+                "message": f"Connection failed: {e}",
+                "error": True,
+            }
+
     def get_vram(self) -> int:
         """Get available VRAM in GB.
 

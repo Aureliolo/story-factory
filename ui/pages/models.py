@@ -115,6 +115,11 @@ class ModelsPage:
             with ui.row().classes("w-full items-center mb-4"):
                 ui.label("Installed Models").classes("text-lg font-semibold")
                 ui.space()
+                ui.button(
+                    "Check for Updates",
+                    icon="system_update",
+                    on_click=self._check_all_updates,
+                ).props("flat dense").tooltip("Check all models for updates")
                 ui.button(icon="refresh", on_click=self._refresh_all).props(
                     "flat dense round"
                 ).tooltip("Refresh model list")
@@ -144,6 +149,10 @@ class ModelsPage:
                                 icon="play_arrow",
                                 on_click=lambda m=model_id: self._test_model(m),
                             ).props("flat dense round").tooltip("Test model")
+                            ui.button(
+                                icon="update",
+                                on_click=lambda m=model_id: self._update_model(m),
+                            ).props("flat dense round").tooltip("Update model")
                             ui.button(
                                 icon="delete",
                                 on_click=lambda m=model_id: self._delete_model(m),
@@ -527,6 +536,68 @@ class ModelsPage:
             ui.notify("Delete failed", type="negative")
 
         dialog.close()
+
+    async def _check_all_updates(self) -> None:
+        """Check all installed models for updates."""
+        installed = self.services.model.list_installed()
+        if not installed:
+            ui.notify("No models installed", type="info")
+            return
+
+        ui.notify(f"Checking {len(installed)} models for updates...", type="info")
+
+        updates_available = []
+        for model_id in installed:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, self.services.model.check_model_update, model_id
+            )
+            if result.get("has_update"):
+                updates_available.append(model_id)
+
+        if updates_available:
+            ui.notify(
+                f"Updates available for: {', '.join(updates_available)}",
+                type="positive",
+            )
+        else:
+            ui.notify("All models are up to date", type="positive")
+
+    async def _update_model(self, model_id: str) -> None:
+        """Update a specific model by re-pulling it."""
+        ui.notify(f"Updating {model_id}...", type="info")
+
+        # Show progress in pull progress area
+        if self._pull_progress:
+            self._pull_progress.set_visibility(True)
+            self._pull_progress.clear()
+
+            with self._pull_progress:
+                status_label = ui.label(f"Updating {model_id}...")
+                progress_bar = ui.linear_progress(value=0).classes("w-full")
+
+            success = False
+            async for progress in self._async_pull(model_id):
+                if "error" in progress:
+                    status_label.text = progress["status"]
+                    ui.notify(progress["status"], type="negative")
+                    break
+
+                status = progress.get("status", "")
+                status_label.text = status
+                total = progress.get("total") or 0
+                completed = progress.get("completed") or 0
+                if total > 0:
+                    pct = completed / total
+                    progress_bar.value = pct
+
+                if "success" in status.lower() or "up to date" in status.lower():
+                    success = True
+
+            if success:
+                ui.notify(f"Model {model_id} is up to date!", type="positive")
+                self._refresh_all()
+
+            self._pull_progress.set_visibility(False)
 
     async def _run_comparison(self) -> None:
         """Run model comparison."""
