@@ -272,3 +272,20 @@ select:disabled {
 .dark .graph-container {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+
+/* vis.js navigation button styling for dark mode */
+.dark .vis-navigation .vis-button {
+    filter: invert(0.85) hue-rotate(180deg);
+    background-color: #374151 !important;
+    border: 1px solid #4b5563 !important;
+    border-radius: 4px;
+}
+
+.dark .vis-navigation .vis-button:hover {
+    background-color: #4b5563 !important;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.4) !important;
+}
+
+.dark .vis-navigation .vis-button:active {
+    background-color: #1f2937 !important;
+}
