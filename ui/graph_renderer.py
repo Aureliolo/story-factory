@@ -215,6 +215,19 @@ def render_graph_html(
 
             // Store network reference for external control
             window.graphNetwork = network;
+
+            // Style navigation buttons for dark mode
+            if (isDarkMode) {{
+                setTimeout(function() {{
+                    var navButtons = container.querySelectorAll('.vis-button');
+                    navButtons.forEach(function(btn) {{
+                        btn.style.filter = 'invert(0.85) hue-rotate(180deg)';
+                        btn.style.backgroundColor = '#374151';
+                        btn.style.border = '1px solid #4b5563';
+                        btn.style.borderRadius = '4px';
+                    }});
+                }}, 100);
+            }}
         }}
 
         initGraph();
