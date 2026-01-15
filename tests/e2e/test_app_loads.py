@@ -48,8 +48,8 @@ class TestNavigation:
         """Settings page loads via direct URL."""
         page.goto(f"{base_url}/settings")
         page.wait_for_load_state("networkidle")
-        # Playwright's expect has auto-waiting
-        expect(page.get_by_text("Connection")).to_be_visible()
+        # Playwright's expect has auto-waiting - use exact match to avoid "Connection lost" conflict
+        expect(page.get_by_text("Connection", exact=True)).to_be_visible()
 
     def test_models_page_loads(self, page: Page, base_url: str):
         """Models page loads via direct URL."""

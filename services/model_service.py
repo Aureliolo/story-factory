@@ -276,11 +276,11 @@ class ModelService:
 
         # General recommendation based on VRAM
         if vram >= 24:
-            return "huihui_ai/qwen3-abliterated:32b"
-        elif vram >= 12:
-            return "huihui_ai/qwen3-abliterated:14b"
+            return "huihui_ai/llama3.3-abliterated:70b-q4_K_M"
+        elif vram >= 14:
+            return "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
         else:
-            return "huihui_ai/qwen3-abliterated:8b"
+            return "huihui_ai/dolphin3-abliterated:8b"
 
     def get_models_for_vram(self, min_vram: int | None = None) -> list[ModelStatus]:
         """Get models that fit within available VRAM.

@@ -4,7 +4,9 @@ import asyncio
 import logging
 
 from nicegui import ui
+from nicegui.elements.card import Card
 from nicegui.elements.column import Column
+from nicegui.elements.input import Input
 
 from services import ServiceContainer
 from settings import AVAILABLE_MODELS, ModelInfo
@@ -41,6 +43,8 @@ class ModelsPage:
         self._model_list: Column | None = None
         self._pull_progress: Column | None = None
         self._comparison_result: Column | None = None
+        self._installed_section: Card | None = None
+        self._custom_model_input: Input | None = None
 
         # Filter state
         self._filter_fits_vram = True
@@ -97,39 +101,53 @@ class ModelsPage:
 
     def _build_installed_section(self) -> None:
         """Build the installed models section."""
-        with ui.card().classes("w-full"):
-            ui.label("Installed Models").classes("text-lg font-semibold mb-4")
+        self._installed_section = ui.card().classes("w-full")
+        self._refresh_installed_section()
 
-            installed = self.services.model.list_installed()
+    def _refresh_installed_section(self) -> None:
+        """Refresh the installed models section."""
+        if self._installed_section is None:
+            return
 
-            if not installed:
+        self._installed_section.clear()
+
+        with self._installed_section:
+            with ui.row().classes("w-full items-center mb-4"):
+                ui.label("Installed Models").classes("text-lg font-semibold")
+                ui.space()
+                ui.button(icon="refresh", on_click=self._refresh_all).props(
+                    "flat dense round"
+                ).tooltip("Refresh model list")
+
+            installed_with_sizes = self.services.model.list_installed_with_sizes()
+
+            if not installed_with_sizes:
                 ui.label("No models installed").classes("text-gray-500 dark:text-gray-400")
+                ui.label("Download models below to get started").classes(
+                    "text-sm text-gray-400 dark:text-gray-500"
+                )
                 return
 
-            # Model table
-            columns = [
-                {"name": "name", "label": "Model", "field": "name", "align": "left"},
-                {"name": "size", "label": "Size", "field": "size", "align": "center"},
-                {"name": "quality", "label": "Quality", "field": "quality", "align": "center"},
-                {"name": "actions", "label": "", "field": "actions", "align": "right"},
-            ]
-
-            rows = []
-            for model_id in installed:
+            # Model cards for installed
+            for model_id, size_gb in installed_with_sizes.items():
                 info = self.services.model.get_model_info(model_id)
-                rows.append(
-                    {
-                        "id": model_id,
-                        "name": info["name"],
-                        "size": f"{info['size_gb']} GB",
-                        "quality": info["quality"],
-                    }
-                )
-
-            ui.table(columns=columns, rows=rows).classes("w-full")
-
-            # Note: Delete buttons would need custom cell rendering
-            # For now, users can delete from the Available Models section
+                with ui.card().classes("w-full mb-2").props("flat bordered"):
+                    with ui.row().classes("w-full items-center"):
+                        with ui.column().classes("flex-grow gap-0"):
+                            ui.label(info["name"]).classes("font-medium")
+                            ui.label(model_id).classes("text-xs text-gray-500 dark:text-gray-400")
+                        ui.label(f"{size_gb} GB").classes(
+                            "text-sm text-gray-600 dark:text-gray-400"
+                        )
+                        with ui.row().classes("gap-1"):
+                            ui.button(
+                                icon="play_arrow",
+                                on_click=lambda m=model_id: self._test_model(m),
+                            ).props("flat dense round").tooltip("Test model")
+                            ui.button(
+                                icon="delete",
+                                on_click=lambda m=model_id: self._delete_model(m),
+                            ).props("flat dense round color=negative").tooltip("Delete")
 
     def _build_available_section(self) -> None:
         """Build the available models section."""
@@ -174,13 +192,30 @@ class ModelsPage:
                         on_change=lambda e: self._apply_filters(uncensored=e.value),
                     ).tooltip("Only show models without content filters")
 
-            # Model cards
-            self._model_list = ui.column().classes("w-full gap-4")
-            self._refresh_model_list()
+            # Custom model pull
+            with ui.expansion("Pull Custom Model", icon="add_circle").classes("w-full"):
+                ui.label("Enter any Ollama model name to download").classes(
+                    "text-sm text-gray-500 dark:text-gray-400 mb-2"
+                )
+                with ui.row().classes("w-full gap-2"):
+                    self._custom_model_input = (
+                        ui.input(placeholder="e.g., llama3.2:8b or vanilj/model-name:tag")
+                        .classes("flex-grow")
+                        .props("dense")
+                    )
+                    ui.button(
+                        "Pull",
+                        on_click=self._pull_custom_model,
+                        icon="download",
+                    ).props("color=primary dense")
 
             # Pull progress
             self._pull_progress = ui.column().classes("w-full mt-4")
             self._pull_progress.set_visibility(False)
+
+            # Model cards
+            self._model_list = ui.column().classes("w-full gap-4")
+            self._refresh_model_list()
 
     def _apply_filters(
         self,
@@ -379,6 +414,24 @@ class ModelsPage:
             # Results
             self._comparison_result = ui.column().classes("w-full mt-4")
 
+    def _refresh_all(self) -> None:
+        """Refresh all model lists."""
+        self._refresh_installed_section()
+        self._refresh_model_list()
+
+    async def _pull_custom_model(self) -> None:
+        """Pull a custom model from user input."""
+        if self._custom_model_input is None:
+            return
+
+        model_id = self._custom_model_input.value.strip()
+        if not model_id:
+            ui.notify("Enter a model name", type="warning")
+            return
+
+        self._custom_model_input.value = ""
+        await self._pull_model(model_id)
+
     async def _pull_model(self, model_id: str) -> None:
         """Pull a model from Ollama."""
         if not self._pull_progress:
@@ -388,12 +441,16 @@ class ModelsPage:
         self._pull_progress.set_visibility(True)
 
         with self._pull_progress:
-            ui.label(f"Pulling {model_id}...").classes("font-medium")
-            progress_bar = ui.linear_progress(value=0).classes("w-full")
-            status_label = ui.label("Starting...").classes(
-                "text-sm text-gray-500 dark:text-gray-400"
-            )
+            with ui.card().classes("w-full").props("flat bordered"):
+                with ui.row().classes("items-center gap-2 mb-2"):
+                    ui.spinner(size="sm")
+                    ui.label(f"Pulling {model_id}...").classes("font-medium")
+                progress_bar = ui.linear_progress(value=0).classes("w-full")
+                status_label = ui.label("Starting download...").classes(
+                    "text-sm text-gray-500 dark:text-gray-400"
+                )
 
+        success = False
         try:
             async for progress in self._async_pull(model_id):
                 if "error" in progress:
@@ -401,20 +458,31 @@ class ModelsPage:
                     ui.notify(progress["status"], type="negative")
                     break
 
-                status_label.text = progress.get("status", "")
+                status = progress.get("status", "")
+                status_label.text = status
                 if progress.get("total", 0) > 0:
                     pct = progress.get("completed", 0) / progress["total"]
                     progress_bar.value = pct
 
-            ui.notify(f"Model {model_id} pulled successfully!", type="positive")
-            # Refresh would be needed
+                # Check for completion
+                if (
+                    "success" in status.lower()
+                    or progress.get("completed") == progress.get("total", 0)
+                    and progress.get("total", 0) > 0
+                ):
+                    success = True
+
+            if success:
+                ui.notify(f"Model {model_id} downloaded successfully!", type="positive")
+                # Refresh lists to show new model
+                self._refresh_all()
 
         except Exception as e:
             logger.exception(f"Failed to pull model {model_id}")
             ui.notify(f"Error: {e}", type="negative")
 
         finally:
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
             self._pull_progress.set_visibility(False)
 
     async def _async_pull(self, model_id: str):
@@ -455,6 +523,8 @@ class ModelsPage:
         """Confirm model deletion."""
         if self.services.model.delete_model(model_id):
             ui.notify(f"Deleted {model_id}", type="positive")
+            # Refresh lists to reflect deletion
+            self._refresh_all()
         else:
             ui.notify("Delete failed", type="negative")
 

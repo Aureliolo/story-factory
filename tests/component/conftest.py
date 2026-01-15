@@ -15,8 +15,9 @@ import pytest
 class MockOllamaClient:
     """Mock Ollama client that returns realistic responses."""
 
-    def __init__(self, host=None):
+    def __init__(self, host=None, timeout=None):
         self.host = host
+        self.timeout = timeout
 
     def list(self):
         """Return a list of mock models."""
@@ -165,8 +166,9 @@ def mock_ollama_client(monkeypatch):
     """Mock Ollama client to prevent actual LLM calls."""
 
     class MockClient:
-        def __init__(self, host=None):
+        def __init__(self, host=None, timeout=None):
             self.host = host
+            self.timeout = timeout
 
         def list(self):
             class Models:
