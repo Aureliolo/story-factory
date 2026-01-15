@@ -557,23 +557,101 @@ class WritePage:
             )
 
     async def _build_structure(self) -> None:
-        """Build the story structure."""
+        """Build the story structure with progress dialog."""
         if not self.state.project or not self.state.world_db:
             return
 
-        try:
-            self._notify("Building story structure...", type="info")
-            # Run LLM call in thread pool to avoid blocking event loop
-            await run.io_bound(
-                self.services.story.build_structure, self.state.project, self.state.world_db
+        brief = self.state.project.brief
+        if not brief:
+            self._notify("No story brief found. Complete the interview first.", type="warning")
+            return
+
+        # Create progress dialog
+        dialog = ui.dialog().props("persistent")
+        progress_label: Label
+        progress_bar: ui.linear_progress
+
+        async def do_build():
+            """Execute the build with progress updates."""
+            if not self.state.project or not self.state.world_db:
+                dialog.close()
+                return
+
+            try:
+                # Update progress
+                progress_label.text = "Building world and characters..."
+                progress_bar.value = 0.25
+                await asyncio.sleep(0.1)  # Let UI update
+
+                # Run the actual build
+                await run.io_bound(
+                    self.services.story.build_structure,
+                    self.state.project,
+                    self.state.world_db,
+                )
+
+                progress_label.text = "Saving project..."
+                progress_bar.value = 0.9
+
+                self.services.project.save_project(self.state.project)
+
+                progress_bar.value = 1.0
+                await asyncio.sleep(0.3)  # Show completion briefly
+
+                dialog.close()
+
+                # Update UI without full page reload
+                self._update_interview_buttons()
+
+                # Show completion with summary
+                chapters = len(self.state.project.chapters)
+                chars = len(self.state.project.characters)
+                self._notify(
+                    f"Story structure built! {chapters} chapters, {chars} characters. "
+                    "Expand 'Story Structure' section to view.",
+                    type="positive",
+                )
+
+            except Exception as e:
+                logger.exception("Failed to build story structure")
+                dialog.close()
+                self._notify(f"Error: {e}", type="negative")
+
+        with dialog, ui.card().classes("w-[500px]"):
+            ui.label("Building Story Structure").classes("text-xl font-bold mb-4")
+
+            # Show what we're building
+            with ui.card().classes("w-full bg-gray-50 dark:bg-gray-800 mb-4"):
+                ui.label("Story Overview:").classes("font-medium mb-2")
+                ui.label(f"Genre: {brief.genre} • Tone: {brief.tone}").classes(
+                    "text-sm text-gray-600 dark:text-gray-400"
+                )
+                ui.label(f"Length: {brief.target_length.replace('_', ' ').title()}").classes(
+                    "text-sm text-gray-600 dark:text-gray-400"
+                )
+                ui.label(f"Premise: {brief.premise[:150]}...").classes(
+                    "text-sm text-gray-600 dark:text-gray-400 mt-2"
+                ) if len(brief.premise) > 150 else ui.label(f"Premise: {brief.premise}").classes(
+                    "text-sm text-gray-600 dark:text-gray-400 mt-2"
+                )
+
+            ui.label("The AI will now:").classes("font-medium mb-2")
+            with ui.column().classes("gap-1 mb-4"):
+                ui.label("• Create detailed world description").classes("text-sm")
+                ui.label("• Design main characters with backstories").classes("text-sm")
+                ui.label("• Outline chapter structure and plot points").classes("text-sm")
+                ui.label("• Establish story rules and timeline").classes("text-sm")
+
+            progress_label = ui.label("Ready to build...").classes(
+                "text-sm text-gray-500 dark:text-gray-400 mb-2"
             )
-            self.services.project.save_project(self.state.project)
-            self._notify("Story structure built!", type="positive")
-            # Refresh the page
-            ui.navigate.reload()
-        except Exception as e:
-            logger.exception("Failed to build story structure")
-            self._notify(f"Error building structure: {e}", type="negative")
+            progress_bar = ui.linear_progress(value=0, show_value=False).classes("w-full mb-4")
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button("Build Structure", on_click=do_build).props("color=primary")
+
+        dialog.open()
 
     def _on_chapter_select(self, e) -> None:
         """Handle chapter selection change."""
