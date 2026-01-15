@@ -1,0 +1,60 @@
+name: Sync CDN Versions
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-cdn:
+    runs-on: ubuntu-latest
+    # Only run on Dependabot PRs
+    if: github.actor == 'dependabot[bot]'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract vis-network version from package.json
+        id: extract
+        run: |
+          VIS_VERSION=$(jq -r '.dependencies["vis-network"]' package.json)
+          echo "vis_version=$VIS_VERSION" >> $GITHUB_OUTPUT
+          echo "Found vis-network version: $VIS_VERSION"
+
+      - name: Update CDN URL in graph.py
+        run: |
+          VIS_VERSION="${{ steps.extract.outputs.vis_version }}"
+
+          # Update the CDN URL in ui/components/graph.py
+          sed -i "s|unpkg.com/vis-network@[0-9.]*|unpkg.com/vis-network@${VIS_VERSION}|g" ui/components/graph.py
+
+          echo "Updated CDN URL to vis-network@${VIS_VERSION}"
+
+          # Show the change
+          grep -n "vis-network" ui/components/graph.py || true
+
+      - name: Check for changes
+        id: check
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit changes
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add ui/components/graph.py
+          git commit -m "chore: sync vis-network CDN URL to ${{ steps.extract.outputs.vis_version }}"
+          git push
