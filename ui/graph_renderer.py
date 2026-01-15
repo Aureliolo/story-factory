@@ -217,13 +217,17 @@ def render_graph_html(
             var options = {{
                 physics: {{
                     enabled: true,
-                    stabilization: {{ iterations: 100 }},
+                    stabilization: {{ iterations: 100, fit: true }},
                     barnesHut: {{
                         gravitationalConstant: -2000,
                         centralGravity: 0.3,
                         springLength: 150,
-                        springConstant: 0.04
-                    }}
+                        springConstant: 0.04,
+                        damping: 0.5,
+                        avoidOverlap: 0.5
+                    }},
+                    minVelocity: 0.75,
+                    maxVelocity: 30
                 }},
                 nodes: {{
                     font: {{ size: 14, color: fontColor }},
@@ -237,7 +241,10 @@ def render_graph_html(
                     hover: true,
                     tooltipDelay: 200,
                     navigationButtons: true,
-                    keyboard: true
+                    keyboard: true,
+                    dragNodes: true,
+                    dragView: true,
+                    zoomView: true
                 }},
                 {layout_options}
             }};
@@ -268,6 +275,41 @@ def render_graph_html(
                         scale: 1.5,
                         animation: {{ duration: 500, easingFunction: 'easeInOutQuad' }}
                     }});
+                }}
+            }});
+
+            // Smooth dragging: pause physics during drag, resume after
+            network.on('dragStart', function(params) {{
+                if (params.nodes.length > 0) {{
+                    // Pause physics while dragging for precise control
+                    network.setOptions({{ physics: {{ enabled: false }} }});
+                }}
+            }});
+
+            network.on('dragEnd', function(params) {{
+                if (params.nodes.length > 0) {{
+                    // Re-enable physics with gentle settling
+                    network.setOptions({{
+                        physics: {{
+                            enabled: true,
+                            stabilization: {{ enabled: false }},
+                            barnesHut: {{
+                                damping: 0.9,
+                                springConstant: 0.02
+                            }}
+                        }}
+                    }});
+                    // After brief settling, restore normal physics
+                    setTimeout(function() {{
+                        network.setOptions({{
+                            physics: {{
+                                barnesHut: {{
+                                    damping: 0.5,
+                                    springConstant: 0.04
+                                }}
+                            }}
+                        }});
+                    }}, 500);
                 }}
             }});
 
