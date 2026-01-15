@@ -248,3 +248,67 @@ class TestScoringService:
         similar_distance = service._calculate_edit_distance("hello world", "hello worlds")
         different_distance = service._calculate_edit_distance("hello", "goodbye completely")
         assert different_distance > similar_distance
+
+    def test_enforce_tracking_limits(
+        self, service: ScoringService, mock_mode_service: MagicMock
+    ) -> None:
+        """Test that tracking limits are enforced to prevent memory leaks."""
+        # Set a low MAX_TRACKED_CHAPTERS for testing
+        service.MAX_TRACKED_CHAPTERS = 3
+
+        # Track more chapters than the limit
+        for i in range(5):
+            chapter_id = f"ch-{i}"
+            service.start_tracking(
+                project_id="test-project",
+                agent_role="writer",
+                model_id="test-model",
+                chapter_id=chapter_id,
+            )
+            service._original_content[chapter_id] = f"Content {i}"
+
+        # Trigger the limit enforcement
+        service._enforce_tracking_limits()
+
+        # Should only have 3 chapters left (the most recent ones)
+        remaining_chapters = {key.split(":")[0] for key in service._active_scores}
+        assert len(remaining_chapters) <= service.MAX_TRACKED_CHAPTERS
+
+        # Oldest chapters should be removed (ch-0, ch-1)
+        assert "ch-0" not in service._original_content
+        assert "ch-1" not in service._original_content
+
+        # Most recent chapters should still be present
+        assert (
+            "ch-4" in service._original_content
+            or len(service._active_scores) <= service.MAX_TRACKED_CHAPTERS
+        )
+
+    def test_finish_tracking_enforces_limits(
+        self, service: ScoringService, mock_mode_service: MagicMock
+    ) -> None:
+        """Test that finish_tracking calls _enforce_tracking_limits."""
+        # Set a low MAX_TRACKED_CHAPTERS for testing
+        service.MAX_TRACKED_CHAPTERS = 2
+
+        # Track multiple chapters
+        for i in range(3):
+            chapter_id = f"ch-{i}"
+            service.start_tracking(
+                project_id="test-project",
+                agent_role="writer",
+                model_id="test-model",
+                chapter_id=chapter_id,
+            )
+            # finish_tracking should enforce limits
+            service.finish_tracking(
+                score_id=i + 1,
+                content=f"Content {i}",
+                tokens_generated=100,
+                time_seconds=1.0,
+                chapter_id=chapter_id,
+            )
+
+        # Should only have MAX_TRACKED_CHAPTERS chapters
+        remaining_chapters = {key.split(":")[0] for key in service._active_scores}
+        assert len(remaining_chapters) <= service.MAX_TRACKED_CHAPTERS

@@ -25,6 +25,9 @@ class ScoringService:
     It works with ModelModeService for score persistence and analysis.
     """
 
+    # Maximum number of chapters to track simultaneously
+    MAX_TRACKED_CHAPTERS = 50
+
     def __init__(self, mode_service: ModelModeService):
         """Initialize scoring service.
 
@@ -34,9 +37,11 @@ class ScoringService:
         self._mode_service = mode_service
 
         # Track active score IDs for updates
+        # Note: Use clear_chapter_tracking() when chapters are complete to prevent memory leaks
         self._active_scores: dict[str, int] = {}  # chapter_id -> score_id
 
         # Track original content for edit distance calculation
+        # Note: Use clear_chapter_tracking() when chapters are complete to prevent memory leaks
         self._original_content: dict[str, str] = {}  # chapter_id -> content
 
     def start_tracking(
@@ -95,6 +100,8 @@ class ScoringService:
         # Store original content for later edit distance calculation
         if chapter_id:
             self._original_content[chapter_id] = content
+            # Enforce maximum tracking limit to prevent unbounded memory growth
+            self._enforce_tracking_limits()
 
         # Update the score with performance metrics
         # Note: ModelModeService.record_generation handles the initial record,
@@ -288,6 +295,8 @@ class ScoringService:
     def clear_chapter_tracking(self, chapter_id: str) -> None:
         """Clear tracking data for a completed chapter.
 
+        This should be called when a chapter is finalized to prevent memory leaks.
+
         Args:
             chapter_id: The chapter ID to clear.
         """
@@ -298,3 +307,33 @@ class ScoringService:
 
         # Remove original content
         self._original_content.pop(chapter_id, None)
+
+        logger.debug(f"Cleared tracking data for chapter {chapter_id}")
+
+    def _enforce_tracking_limits(self) -> None:
+        """Enforce maximum tracking limits to prevent unbounded memory growth.
+
+        This is a safety mechanism that keeps the most recent chapters and
+        removes older ones when limits are exceeded.
+        """
+        # Check active scores
+        if len(self._active_scores) > self.MAX_TRACKED_CHAPTERS:
+            # Build an ordered list of unique chapter IDs based on first appearance
+            chapter_ids_in_order: list[str] = []
+            seen_chapters: set[str] = set()
+            for key in self._active_scores:
+                chapter_id = key.split(":", 1)[0]
+                if chapter_id not in seen_chapters:
+                    seen_chapters.add(chapter_id)
+                    chapter_ids_in_order.append(chapter_id)
+
+            excess_count = len(chapter_ids_in_order) - self.MAX_TRACKED_CHAPTERS
+
+            if excess_count > 0:
+                # Remove oldest chapters based on insertion order of _active_scores
+                for chapter_id in chapter_ids_in_order[:excess_count]:
+                    self.clear_chapter_tracking(chapter_id)
+                    logger.warning(
+                        f"Cleared tracking for old chapter {chapter_id} "
+                        f"(exceeded MAX_TRACKED_CHAPTERS={self.MAX_TRACKED_CHAPTERS})"
+                    )
