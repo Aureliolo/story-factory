@@ -2,7 +2,7 @@
 
 import pytest
 
-from services.project_service import ProjectService
+from services.project_service import ProjectService, _validate_path
 
 
 class TestProjectService:
@@ -131,3 +131,65 @@ class TestProjectService:
         assert duplicate.id != original.id
         assert duplicate.project_name == "Copy of Original"
         assert len(service.list_projects()) == 2
+
+
+class TestValidatePath:
+    """Tests for _validate_path function (path traversal prevention)."""
+
+    def test_valid_path_within_base(self, tmp_path):
+        """Test that valid paths within base directory are accepted."""
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        valid_path = base_dir / "file.txt"
+
+        result = _validate_path(valid_path, base_dir)
+        assert result == valid_path.resolve()
+
+    def test_valid_nested_path(self, tmp_path):
+        """Test that nested paths within base are accepted."""
+        base_dir = tmp_path / "base"
+        nested = base_dir / "sub" / "nested"
+        nested.mkdir(parents=True)
+        valid_path = nested / "file.txt"
+
+        result = _validate_path(valid_path, base_dir)
+        assert result == valid_path.resolve()
+
+    def test_rejects_path_traversal_unix(self, tmp_path):
+        """Test that Unix-style path traversal is rejected."""
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        malicious_path = base_dir / ".." / ".." / "etc" / "passwd"
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_path(malicious_path, base_dir)
+
+    def test_rejects_path_traversal_windows(self, tmp_path):
+        """Test that Windows-style path traversal is rejected."""
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        # Even on Unix, this tests the traversal logic
+        malicious_path = base_dir / ".." / ".." / ".." / "windows" / "system32"
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_path(malicious_path, base_dir)
+
+    def test_rejects_absolute_path_outside(self, tmp_path):
+        """Test that absolute paths outside base are rejected."""
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        outside_path = tmp_path / "outside" / "file.txt"
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_path(outside_path, base_dir)
+
+    def test_returns_resolved_path(self, tmp_path):
+        """Test that the function returns resolved absolute paths."""
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        relative_path = base_dir / "." / "sub" / ".." / "file.txt"
+
+        result = _validate_path(relative_path, base_dir)
+        assert result.is_absolute()
+        assert ".." not in str(result)
+        assert result == (base_dir / "file.txt").resolve()

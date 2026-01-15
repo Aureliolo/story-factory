@@ -1,19 +1,56 @@
 """Export service - handles exporting stories to various formats."""
 
+import html
 import logging
+import tempfile
 from io import BytesIO
 from pathlib import Path
 
 from memory.story_state import StoryState
-from settings import Settings
+from settings import STORIES_DIR, Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Path:
+    """Validate that an export path is safe to write to.
+
+    Args:
+        path: Path to validate
+        base_dir: Base directory to constrain exports to (default: output/)
+
+    Returns:
+        Resolved absolute path
+
+    Raises:
+        ValueError: If path escapes base directory or is otherwise unsafe
+    """
+    try:
+        resolved = path.resolve()
+        base_resolved = base_dir.resolve()
+
+        # Allow system temp directory for testing (cross-platform)
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        if resolved.is_relative_to(temp_dir):
+            return resolved
+
+        # Check if path is within base directory
+        try:
+            resolved.relative_to(base_resolved)
+        except ValueError:
+            raise ValueError(
+                f"Export path {resolved} is outside allowed directory {base_resolved}"
+            ) from None
+
+        return resolved
+    except (OSError, RuntimeError) as e:
+        raise ValueError(f"Invalid export path: {path}") from e
 
 
 class ExportService:
     """Export stories to various formats.
 
-    Supports markdown, plain text, EPUB, and PDF export.
+    Supports markdown, plain text, HTML, EPUB, PDF, and DOCX export.
     """
 
     def __init__(self, settings: Settings | None = None):
@@ -248,10 +285,8 @@ class ExportService:
                 # Split into paragraphs
                 for para in ch.content.split("\n\n"):
                     if para.strip():
-                        # Escape special characters
-                        safe_para = (
-                            para.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                        )
+                        # Escape special characters using standard library
+                        safe_para = html.escape(para.strip())
                         story_elements.append(Paragraph(safe_para, body_style))
 
                 story_elements.append(PageBreak())
@@ -275,7 +310,7 @@ class ExportService:
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
-            f"<title>{title}</title>",
+            f"<title>{html.escape(title)}</title>",
             "<meta charset='utf-8'>",
             "<style>",
             "body { font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }",
@@ -286,27 +321,98 @@ class ExportService:
             "</style>",
             "</head>",
             "<body>",
-            f"<h1>{title}</h1>",
+            f"<h1>{html.escape(title)}</h1>",
         ]
 
         if brief:
             html_parts.append(
-                f"<p class='meta'>Genre: {brief.genre} | Tone: {brief.tone}<br>"
-                f"Setting: {brief.setting_place}, {brief.setting_time}</p>"
+                f"<p class='meta'>Genre: {html.escape(brief.genre)} | Tone: {html.escape(brief.tone)}<br>"
+                f"Setting: {html.escape(brief.setting_place)}, {html.escape(brief.setting_time)}</p>"
             )
 
         for chapter in state.chapters:
             if chapter.content:
-                html_parts.append(f"<h2>Chapter {chapter.number}: {chapter.title}</h2>")
+                html_parts.append(
+                    f"<h2>Chapter {chapter.number}: {html.escape(chapter.title)}</h2>"
+                )
                 for para in chapter.content.split("\n\n"):
                     if para.strip():
-                        safe_para = (
-                            para.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                        )
+                        safe_para = html.escape(para.strip())
                         html_parts.append(f"<p>{safe_para}</p>")
 
         html_parts.extend(["</body>", "</html>"])
         return "\n".join(html_parts)
+
+    def to_docx(self, state: StoryState) -> bytes:
+        """Export story as DOCX (Microsoft Word).
+
+        Args:
+            state: The story state to export.
+
+        Returns:
+            DOCX file as bytes.
+        """
+        from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Inches, Pt
+
+        doc = Document()
+
+        # Set document margins
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Inches(1)
+            section.bottom_margin = Inches(1)
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
+
+        # Title
+        brief = state.brief
+        title = state.project_name or (brief.premise[:50] if brief else "Untitled Story")
+        title_para = doc.add_paragraph()
+        title_run = title_para.add_run(title)
+        title_run.font.size = Pt(24)
+        title_run.bold = True
+        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Metadata
+        if brief:
+            meta_para = doc.add_paragraph()
+            meta_run = meta_para.add_run(
+                f"Genre: {brief.genre} | Tone: {brief.tone}\n"
+                f"Setting: {brief.setting_place}, {brief.setting_time}"
+            )
+            meta_run.font.size = Pt(10)
+            meta_run.italic = True
+            meta_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        doc.add_paragraph()  # Spacing
+
+        # Chapters
+        for chapter in state.chapters:
+            if chapter.content:
+                # Chapter heading
+                chapter_heading = doc.add_paragraph()
+                chapter_run = chapter_heading.add_run(f"Chapter {chapter.number}: {chapter.title}")
+                chapter_run.font.size = Pt(18)
+                chapter_run.bold = True
+
+                # Chapter content
+                for para in chapter.content.split("\n\n"):
+                    if para.strip():
+                        p = doc.add_paragraph(para.strip())
+                        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                        p_format = p.paragraph_format
+                        p_format.space_after = Pt(12)
+                        p_format.line_spacing = 1.5
+
+                # Page break after each chapter
+                doc.add_page_break()
+
+        # Write to bytes using context manager for proper cleanup
+        with BytesIO() as output:
+            doc.save(output)
+            return output.getvalue()
 
     def save_to_file(
         self,
@@ -318,16 +424,18 @@ class ExportService:
 
         Args:
             state: The story state to export.
-            format: Export format ('markdown', 'text', 'epub', 'pdf', 'html').
+            format: Export format ('markdown', 'text', 'epub', 'pdf', 'html', 'docx').
             filepath: Output file path.
 
         Returns:
             Path where the file was saved.
 
         Raises:
-            ValueError: If format is not supported.
+            ValueError: If format is not supported or path is invalid.
         """
         filepath = Path(filepath)
+        # Validate export path
+        filepath = _validate_export_path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
         if format == "markdown":
@@ -344,6 +452,9 @@ class ExportService:
             filepath.write_bytes(bytes_content)
         elif format == "pdf":
             bytes_content = self.to_pdf(state)
+            filepath.write_bytes(bytes_content)
+        elif format == "docx":
+            bytes_content = self.to_docx(state)
             filepath.write_bytes(bytes_content)
         else:
             raise ValueError(f"Unsupported export format: {format}")
@@ -366,5 +477,6 @@ class ExportService:
             "html": ".html",
             "epub": ".epub",
             "pdf": ".pdf",
+            "docx": ".docx",
         }
         return extensions.get(format, ".txt")

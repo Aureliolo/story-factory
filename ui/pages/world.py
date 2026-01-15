@@ -217,7 +217,7 @@ class WorldPage:
 
                 ui.button(
                     "Delete",
-                    on_click=self._delete_entity,
+                    on_click=self._confirm_delete_entity,
                     icon="delete",
                 ).props("color=negative outline")
 
@@ -463,6 +463,31 @@ class WorldPage:
             ui.notify("Entity saved", type="positive")
         except Exception as e:
             logger.exception(f"Failed to save entity {self.state.selected_entity_id}")
+            ui.notify(f"Error: {e}", type="negative")
+
+    def _confirm_delete_entity(self) -> None:
+        """Show confirmation dialog before deleting entity."""
+        if not self.state.selected_entity_id or not self.state.world_db:
+            return
+
+        from ui.components.common import confirmation_dialog
+
+        try:
+            # Get entity name for better UX
+            entity = self.services.world.get_entity(
+                self.state.world_db,
+                self.state.selected_entity_id,
+            )
+            entity_name = entity.name if entity else "this entity"
+
+            confirmation_dialog(
+                title="Delete Entity?",
+                message=f'Are you sure you want to delete "{entity_name}"? This will also remove all relationships. This cannot be undone.',
+                on_confirm=self._delete_entity,
+                confirm_text="Delete",
+                cancel_text="Cancel",
+            )
+        except Exception as e:
             ui.notify(f"Error: {e}", type="negative")
 
     def _delete_entity(self) -> None:

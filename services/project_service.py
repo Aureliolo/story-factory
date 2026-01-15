@@ -15,6 +15,28 @@ from settings import STORIES_DIR, WORLDS_DIR, Settings
 logger = logging.getLogger(__name__)
 
 
+def _validate_path(path: Path, base_dir: Path) -> Path:
+    """Validate that a path is within the base directory.
+
+    Args:
+        path: Path to validate
+        base_dir: Base directory to check against
+
+    Returns:
+        Resolved absolute path
+
+    Raises:
+        ValueError: If path escapes base directory
+    """
+    try:
+        resolved = path.resolve()
+        base_resolved = base_dir.resolve()
+        resolved.relative_to(base_resolved)
+        return resolved
+    except ValueError:
+        raise ValueError(f"Invalid path: {path} is outside {base_dir}")
+
+
 @dataclass
 class ProjectSummary:
     """Summary information about a project for listing."""
@@ -98,8 +120,11 @@ class ProjectService:
 
         Raises:
             FileNotFoundError: If project doesn't exist.
+            ValueError: If path validation fails.
         """
         story_path = STORIES_DIR / f"{project_id}.json"
+        # Validate path is within STORIES_DIR
+        story_path = _validate_path(story_path, STORIES_DIR)
 
         if not story_path.exists():
             raise FileNotFoundError(f"Project not found: {project_id}")
@@ -118,7 +143,10 @@ class ProjectService:
             story_state.world_db_path = world_db_path
             self.save_project(story_state)
 
-        world_db = WorldDatabase(Path(world_db_path))
+        # Validate world DB path
+        world_db_path_obj = Path(world_db_path)
+        world_db_path_obj = _validate_path(world_db_path_obj, WORLDS_DIR)
+        world_db = WorldDatabase(world_db_path_obj)
 
         logger.info(f"Loaded project: {project_id}")
         return story_state, world_db
@@ -204,9 +232,16 @@ class ProjectService:
 
         Returns:
             True if deleted successfully, False if project not found.
+
+        Raises:
+            ValueError: If path validation fails.
         """
         story_path = STORIES_DIR / f"{project_id}.json"
         world_path = WORLDS_DIR / f"{project_id}.db"
+
+        # Validate paths are within their respective directories
+        story_path = _validate_path(story_path, STORIES_DIR)
+        world_path = _validate_path(world_path, WORLDS_DIR)
 
         deleted = False
 
