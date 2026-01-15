@@ -71,12 +71,13 @@ class WritePage:
 
     def _build_no_project_message(self) -> None:
         """Build message when no project is selected."""
-        with ui.column().classes("w-full h-full items-center justify-center gap-4"):
-            ui.icon("folder_off", size="xl").classes("text-gray-400")
-            ui.label("No Project Selected").classes("text-xl text-gray-500")
-            ui.label("Select a project from the header dropdown or create a new one.").classes(
-                "text-gray-400"
-            )
+        from ui.components.common import empty_state
+
+        empty_state(
+            icon="folder_off",
+            title="No Project Selected",
+            description="Select a project from the header dropdown or create a new one.",
+        )
 
     def _build_fundamentals(self) -> None:
         """Build the Fundamentals tab content."""
@@ -209,9 +210,7 @@ class WritePage:
                 status_color = (
                     "green"
                     if chapter.status == "final"
-                    else "orange"
-                    if chapter.status in ["drafting", "edited"]
-                    else "gray"
+                    else "orange" if chapter.status in ["drafting", "edited"] else "gray"
                 )
 
                 with ui.row().classes("w-full items-start gap-2 p-2 hover:bg-gray-50 rounded"):
@@ -259,13 +258,14 @@ class WritePage:
 
     def _build_live_writing(self) -> None:
         """Build the Live Writing tab content."""
+        from ui.components.common import empty_state
+
         if not self.state.can_write:
-            with ui.column().classes("w-full h-full items-center justify-center gap-4"):
-                ui.icon("edit_off", size="xl").classes("text-gray-400")
-                ui.label("Story structure not ready").classes("text-xl text-gray-500")
-                ui.label("Complete the interview and build the story structure first.").classes(
-                    "text-gray-400"
-                )
+            empty_state(
+                icon="edit_off",
+                title="Story structure not ready",
+                description="Complete the interview and build the story structure first.",
+            )
             return
 
         with ui.row().classes("w-full h-full gap-4 p-4"):
@@ -345,13 +345,17 @@ class WritePage:
             "Write Chapter",
             on_click=self._write_current_chapter,
             icon="edit",
-        ).props("color=primary").classes("w-full")
+        ).props(
+            "color=primary"
+        ).classes("w-full")
 
         ui.button(
             "Write All",
             on_click=self._write_all_chapters,
             icon="auto_fix_high",
-        ).props("outline").classes("w-full")
+        ).props(
+            "outline"
+        ).classes("w-full")
 
         ui.separator()
 
@@ -371,7 +375,9 @@ class WritePage:
             ui.button(
                 "Apply Feedback",
                 on_click=self._apply_feedback,
-            ).props("flat").classes("w-full")
+            ).props(
+                "flat"
+            ).classes("w-full")
 
         ui.separator()
 

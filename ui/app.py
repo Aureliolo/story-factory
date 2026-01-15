@@ -7,6 +7,7 @@ from nicegui import app, ui
 
 from services import ServiceContainer
 from ui.components.header import Header
+from ui.keyboard_shortcuts import KeyboardShortcuts
 from ui.pages.models import ModelsPage
 from ui.pages.projects import ProjectsPage
 from ui.pages.settings import SettingsPage
@@ -47,9 +48,21 @@ class StoryFactoryApp:
         # Page instances (created on build)
         self._header: Header | None = None
         self._pages: dict[str, Page] = {}
+        self._shortcuts: KeyboardShortcuts | None = None
 
     def build(self) -> None:
         """Build the application routes and pages."""
+        # Add custom styles
+        from pathlib import Path
+
+        css_path = Path(__file__).parent / "styles.css"
+        if css_path.exists():
+            with open(css_path) as f:
+                ui.add_head_html(f"<style>{f.read()}</style>")
+
+        # Register keyboard shortcuts
+        self._shortcuts = KeyboardShortcuts(self.state, self.services)
+        self._shortcuts.register()
 
         @ui.page("/")
         def main_page():
