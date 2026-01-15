@@ -2,6 +2,16 @@
 
 This is a Python-based multi-agent system for generating stories using local AI models via Ollama. The system uses specialized AI agents (Interviewer, Architect, Writer, Editor, Continuity Checker) working together to create short stories, novellas, and novels with iterative refinement.
 
+## Critical Rules
+
+**Never defer work.** Do not suggest "this can be done later" or "consider for a future PR". Complete all requested changes fully.
+
+**No placeholder code.** Every piece of code must be fully functional. No `# TODO`, no `pass` as placeholders, no "implement later" comments.
+
+**No partial implementations.** If you start refactoring something, finish it completely. Don't leave work as "pending" or "remaining".
+
+**No boilerplate.** Don't generate generic/template code that needs to be filled in. Write the actual implementation.
+
 ## Code Standards
 
 ### Python Best Practices
