@@ -50,7 +50,7 @@ class LoadingSpinner:
 
         with self._container:
             ui.spinner(size=self.size, color="primary")
-            ui.label(self.message).classes("text-sm text-gray-500")
+            ui.label(self.message).classes("text-sm text-gray-500 dark:text-gray-400")
 
         if not self._visible:
             self._container.set_visibility(False)
@@ -143,7 +143,7 @@ def empty_state(
     """
     from ui.theme import get_text_class
 
-    icon_class = "text-gray-400" if not dark_mode else "text-gray-500"
+    icon_class = "text-gray-400 dark:text-gray-500"
     title_class = get_text_class(dark_mode, variant="secondary")
     desc_class = get_text_class(dark_mode, variant="muted")
 
@@ -177,7 +177,7 @@ def loading_skeleton(width: str = "100%", height: str = "20px") -> None:
 
     # Use sanitize=False since we're generating safe HTML ourselves after validation
     ui.html(
-        f'<div class="animate-pulse bg-gray-200 rounded" '
+        f'<div class="animate-pulse bg-gray-200 dark:bg-gray-700 rounded" '
         f'style="width: {width}; height: {height};"></div>',
         sanitize=False,
     )
@@ -248,7 +248,7 @@ def progress_bar(value: float, max_value: float = 100.0, show_text: bool = True)
 
     with ui.column().classes("w-full gap-1"):
         if show_text:
-            ui.label(f"{percentage:.0f}%").classes("text-sm text-gray-600")
+            ui.label(f"{percentage:.0f}%").classes("text-sm text-gray-600 dark:text-gray-400")
 
         ui.linear_progress(value=percentage / 100.0).props("color=primary")
 
@@ -270,10 +270,10 @@ def info_card(
         dismissible: Whether card can be dismissed.
     """
     color_map = {
-        "blue": "bg-blue-50 border-blue-200 text-blue-800",
-        "green": "bg-green-50 border-green-200 text-green-800",
-        "yellow": "bg-yellow-50 border-yellow-200 text-yellow-800",
-        "red": "bg-red-50 border-red-200 text-red-800",
+        "blue": "bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200",
+        "green": "bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-700 text-green-800 dark:text-green-200",
+        "yellow": "bg-yellow-50 dark:bg-yellow-900 border-yellow-200 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200",
+        "red": "bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-700 text-red-800 dark:text-red-200",
     }
 
     card_classes = f"w-full p-4 rounded-lg border {color_map.get(color, color_map['blue'])}"

@@ -130,7 +130,9 @@ class SettingsPage:
                             options=model_options,
                             value=agent_model_value,
                         ).classes("flex-grow")
-                        ui.label(info["description"]).classes("text-sm text-gray-500")
+                        ui.label(info["description"]).classes(
+                            "text-sm text-gray-500 dark:text-gray-400"
+                        )
 
     def _build_temperature_section(self) -> None:
         """Build temperature settings."""

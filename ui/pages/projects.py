@@ -105,10 +105,10 @@ class ProjectsPage:
                             project.premise[:150] + "..."
                             if len(project.premise) > 150
                             else project.premise
-                        ).classes("text-sm text-gray-600")
+                        ).classes("text-sm text-gray-600 dark:text-gray-400")
 
                     # Stats
-                    with ui.row().classes("gap-4 text-sm text-gray-500"):
+                    with ui.row().classes("gap-4 text-sm text-gray-500 dark:text-gray-400"):
                         ui.label(f"{project.chapter_count} chapters")
                         ui.label(f"{project.word_count:,} words")
                         ui.label(f"Updated: {self._format_date(project.updated_at)}")
