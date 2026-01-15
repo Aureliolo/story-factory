@@ -48,7 +48,7 @@ class ChatComponent:
         with ui.column().classes("w-full h-full"):
             # Message display area
             self._message_container = ui.column().classes(
-                "w-full flex-grow overflow-auto p-4 bg-gray-50 rounded-lg gap-3"
+                "w-full flex-grow overflow-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg gap-3"
             )
 
             # Typing indicator (hidden by default)
@@ -56,7 +56,9 @@ class ChatComponent:
                 self._typing_indicator = row
                 self._typing_indicator.set_visibility(False)
                 ui.spinner(size="sm")
-                ui.label("AI is thinking...").classes("text-gray-500 text-sm italic")
+                ui.label("AI is thinking...").classes(
+                    "text-gray-500 dark:text-gray-400 text-sm italic"
+                )
 
             # Input area
             with ui.row().classes("w-full items-end gap-2 mt-2"):
@@ -113,7 +115,7 @@ class ChatComponent:
     def _create_assistant_message(self, content: str) -> None:
         """Create an assistant message bubble."""
         with ui.row().classes("w-full justify-start"):
-            with ui.card().classes("max-w-3/4 bg-white"):
+            with ui.card().classes("max-w-3/4 bg-white dark:bg-gray-700"):
                 ui.markdown(content)
 
     def set_messages(self, messages: list[dict[str, str]]) -> None:

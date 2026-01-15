@@ -61,7 +61,7 @@ class ModelsPage:
             ui.space()
 
             # VRAM indicator
-            with ui.row().classes("items-center gap-2 p-2 bg-gray-100 rounded"):
+            with ui.row().classes("items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded"):
                 ui.icon("memory")
                 ui.label(f"{vram} GB VRAM").classes("font-medium")
 
@@ -78,7 +78,7 @@ class ModelsPage:
             installed = self.services.model.list_installed()
 
             if not installed:
-                ui.label("No models installed").classes("text-gray-500")
+                ui.label("No models installed").classes("text-gray-500 dark:text-gray-400")
                 return
 
             # Model table
@@ -168,7 +168,9 @@ class ModelsPage:
                         if info["uncensored"]:
                             ui.badge("NSFW").props("color=warning")
 
-                    ui.label(info["description"]).classes("text-sm text-gray-600")
+                    ui.label(info["description"]).classes(
+                        "text-sm text-gray-600 dark:text-gray-400"
+                    )
 
                     # Stats
                     with ui.row().classes("gap-4 text-sm"):
@@ -204,7 +206,9 @@ class ModelsPage:
                                 icon="download",
                             ).props("color=primary")
                         else:
-                            ui.label("Needs more VRAM").classes("text-sm text-gray-500")
+                            ui.label("Needs more VRAM").classes(
+                                "text-sm text-gray-500 dark:text-gray-400"
+                            )
                     else:
                         ui.button(
                             "Test",
@@ -221,13 +225,15 @@ class ModelsPage:
         with ui.card().classes("w-full"):
             ui.label("Model Comparison").classes("text-lg font-semibold mb-4")
             ui.label("Compare models on the same prompt to see output quality and speed").classes(
-                "text-sm text-gray-500 mb-4"
+                "text-sm text-gray-500 dark:text-gray-400 mb-4"
             )
 
             installed = self.services.model.list_installed()
 
             if len(installed) < 2:
-                ui.label("Install at least 2 models to compare").classes("text-gray-500")
+                ui.label("Install at least 2 models to compare").classes(
+                    "text-gray-500 dark:text-gray-400"
+                )
                 return
 
             # Model selection
@@ -291,7 +297,9 @@ class ModelsPage:
         with self._pull_progress:
             ui.label(f"Pulling {model_id}...").classes("font-medium")
             progress_bar = ui.linear_progress(value=0).classes("w-full")
-            status_label = ui.label("Starting...").classes("text-sm text-gray-500")
+            status_label = ui.label("Starting...").classes(
+                "text-sm text-gray-500 dark:text-gray-400"
+            )
 
         try:
             async for progress in self._async_pull(model_id):
@@ -336,7 +344,9 @@ class ModelsPage:
         """Delete a model."""
         with ui.dialog() as dialog, ui.card():
             ui.label("Delete Model?").classes("text-lg font-semibold")
-            ui.label(f"Are you sure you want to delete {model_id}?").classes("text-gray-600")
+            ui.label(f"Are you sure you want to delete {model_id}?").classes(
+                "text-gray-600 dark:text-gray-400"
+            )
 
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
@@ -375,7 +385,7 @@ class ModelsPage:
         self._comparison_result.clear()
 
         with self._comparison_result:
-            ui.label("Running comparison...").classes("text-gray-500")
+            ui.label("Running comparison...").classes("text-gray-500 dark:text-gray-400")
             ui.spinner()
 
         # Run comparison

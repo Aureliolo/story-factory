@@ -90,7 +90,7 @@ class GraphComponent:
             # Graph container
             self._container = (
                 ui.html(sanitize=False)
-                .classes("w-full border rounded-lg bg-white")
+                .classes("w-full border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800")
                 .style(f"height: {self.height}px;")
             )
 
@@ -215,7 +215,7 @@ def mini_graph(
         filter_types: Entity types to show.
     """
     if not world_db:
-        ui.label("No world data").classes("text-gray-500 text-sm")
+        ui.label("No world data").classes("text-gray-500 dark:text-gray-400 text-sm")
         return
 
     html = render_graph_html(
@@ -225,4 +225,6 @@ def mini_graph(
         height=height,
     )
 
-    ui.html(html, sanitize=False).classes("w-full border rounded").style(f"height: {height}px;")
+    ui.html(html, sanitize=False).classes(
+        "w-full border dark:border-gray-700 rounded bg-white dark:bg-gray-800"
+    ).style(f"height: {height}px;")

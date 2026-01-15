@@ -113,7 +113,9 @@ class WritePage:
             ui.badge(status.title()).style(f"background-color: {color}22; color: {color};")
 
             if self.state.interview_complete:
-                ui.label("Interview complete - structure ready").classes("text-sm text-gray-500")
+                ui.label("Interview complete - structure ready").classes(
+                    "text-sm text-gray-500 dark:text-gray-400"
+                )
                 ui.button(
                     "Continue Interview",
                     on_click=self._enable_continue_interview,
@@ -152,7 +154,9 @@ class WritePage:
     def _build_world_overview(self) -> None:
         """Build the world overview section."""
         if not self.state.world_db:
-            ui.label("No world data yet. Complete the interview first.").classes("text-gray-500")
+            ui.label("No world data yet. Complete the interview first.").classes(
+                "text-gray-500 dark:text-gray-400"
+            )
             return
 
         # Entity summary cards
@@ -171,7 +175,9 @@ class WritePage:
     def _build_structure_section(self) -> None:
         """Build the story structure section."""
         if not self.state.project or not self.state.project.brief:
-            ui.label("Complete the interview to see story structure.").classes("text-gray-500")
+            ui.label("Complete the interview to see story structure.").classes(
+                "text-gray-500 dark:text-gray-400"
+            )
             return
 
         project = self.state.project
@@ -179,28 +185,28 @@ class WritePage:
         assert brief is not None  # Already checked above
 
         # Brief summary
-        with ui.card().classes("w-full bg-gray-50"):
+        with ui.card().classes("w-full bg-gray-50 dark:bg-gray-800"):
             ui.label("Story Brief").classes("text-lg font-semibold mb-2")
 
             with ui.row().classes("gap-4 flex-wrap"):
                 with ui.column().classes("gap-1"):
-                    ui.label("Genre").classes("text-xs text-gray-500")
+                    ui.label("Genre").classes("text-xs text-gray-500 dark:text-gray-400")
                     ui.label(brief.genre).classes("font-medium")
 
                 with ui.column().classes("gap-1"):
-                    ui.label("Tone").classes("text-xs text-gray-500")
+                    ui.label("Tone").classes("text-xs text-gray-500 dark:text-gray-400")
                     ui.label(brief.tone).classes("font-medium")
 
                 with ui.column().classes("gap-1"):
-                    ui.label("Setting").classes("text-xs text-gray-500")
+                    ui.label("Setting").classes("text-xs text-gray-500 dark:text-gray-400")
                     ui.label(f"{brief.setting_place}, {brief.setting_time}")
 
                 with ui.column().classes("gap-1"):
-                    ui.label("Length").classes("text-xs text-gray-500")
+                    ui.label("Length").classes("text-xs text-gray-500 dark:text-gray-400")
                     ui.label(brief.target_length.replace("_", " ").title())
 
             ui.separator().classes("my-2")
-            ui.label("Premise").classes("text-xs text-gray-500")
+            ui.label("Premise").classes("text-xs text-gray-500 dark:text-gray-400")
             ui.label(brief.premise).classes("text-sm")
 
         # Chapter outline
@@ -216,7 +222,9 @@ class WritePage:
                     else "gray"
                 )
 
-                with ui.row().classes("w-full items-start gap-2 p-2 hover:bg-gray-50 rounded"):
+                with ui.row().classes(
+                    "w-full items-start gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded"
+                ):
                     ui.icon(
                         "check_circle" if chapter.status == "final" else "radio_button_unchecked",
                         color=status_color,
@@ -229,7 +237,7 @@ class WritePage:
                             chapter.outline[:150] + "..."
                             if len(chapter.outline) > 150
                             else chapter.outline
-                        ).classes("text-sm text-gray-600")
+                        ).classes("text-sm text-gray-600 dark:text-gray-400")
                     if chapter.word_count:
                         ui.badge(f"{chapter.word_count} words").props("outline")
 
@@ -241,14 +249,16 @@ class WritePage:
         reviews = self.state.project.reviews
 
         if not reviews:
-            ui.label("No reviews or notes yet.").classes("text-gray-500")
+            ui.label("No reviews or notes yet.").classes("text-gray-500 dark:text-gray-400")
 
         for review in reviews:
             with ui.card().classes("w-full"):
                 with ui.row().classes("items-center gap-2"):
                     ui.badge(review.get("type", "note"))
                     if review.get("chapter"):
-                        ui.label(f"Chapter {review['chapter']}").classes("text-sm text-gray-500")
+                        ui.label(f"Chapter {review['chapter']}").classes(
+                            "text-sm text-gray-500 dark:text-gray-400"
+                        )
                 ui.label(review.get("content", "")).classes("mt-2")
 
         # Add note form
@@ -317,7 +327,7 @@ class WritePage:
                 ui.row()
                 .classes(
                     f"w-full items-center gap-2 p-2 rounded cursor-pointer "
-                    f"{'bg-blue-50' if is_current else 'hover:bg-gray-50'}"
+                    f"{'bg-blue-50 dark:bg-blue-900' if is_current else 'hover:bg-gray-50 dark:hover:bg-gray-700'}"
                 )
                 .on("click", lambda n=chapter.number: self._select_chapter(n))
             ):
@@ -330,11 +340,13 @@ class WritePage:
         with ui.row().classes("w-full items-center"):
             ui.label("Story Content").classes("text-lg font-semibold")
             ui.space()
-            self._word_count_label = ui.label("0 words").classes("text-sm text-gray-500")
+            self._word_count_label = ui.label("0 words").classes(
+                "text-sm text-gray-500 dark:text-gray-400"
+            )
 
-        # Writing area
+        # Writing area - use dark: prefix for automatic dark mode support
         self._writing_display = ui.markdown().classes(
-            "w-full flex-grow p-4 bg-white rounded-lg border prose max-w-none overflow-auto"
+            "w-full flex-grow p-4 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 prose dark:prose-invert max-w-none overflow-auto"
         )
 
         # Load current chapter content
