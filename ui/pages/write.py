@@ -5,6 +5,7 @@ import logging
 from typing import Literal
 
 from nicegui import Client, context, run, ui
+from nicegui.elements.button import Button
 from nicegui.elements.html import Html
 from nicegui.elements.label import Label
 from nicegui.elements.markdown import Markdown
@@ -55,6 +56,8 @@ class WritePage:
         self._word_count_label: Label | None = None
         self._feedback_input: Textarea | None = None
         self._client: Client | None = None  # For background task safety
+        self._finalize_btn: Button | None = None
+        self._build_structure_btn: Button | None = None
 
     def _notify(
         self,
@@ -161,20 +164,24 @@ class WritePage:
             # Start interview if fresh
             asyncio.create_task(self._start_interview())
 
-        # Action buttons
+        # Action buttons - stored as instance vars for dynamic visibility
         with ui.row().classes("w-full justify-end gap-2 mt-2"):
-            if not self.state.interview_complete:
-                ui.button(
-                    "Finalize Interview",
-                    on_click=self._finalize_interview,
-                ).props("flat")
+            self._finalize_btn = ui.button(
+                "Finalize Interview",
+                on_click=self._finalize_interview,
+            ).props("flat")
+            self._finalize_btn.set_visibility(not self.state.interview_complete)
 
-            if self.state.interview_complete and self.state.project:
-                if not self.state.project.chapters:
-                    ui.button(
-                        "Build Story Structure",
-                        on_click=self._build_structure,
-                    ).props("color=primary")
+            self._build_structure_btn = ui.button(
+                "Build Story Structure",
+                on_click=self._build_structure,
+            ).props("color=primary")
+            show_build = bool(
+                self.state.interview_complete
+                and self.state.project
+                and not self.state.project.chapters
+            )
+            self._build_structure_btn.set_visibility(show_build)
 
     def _build_world_overview(self) -> None:
         """Build the world overview section."""
@@ -464,6 +471,7 @@ class WritePage:
             if is_complete:
                 self.state.interview_complete = True
                 self._chat.set_disabled(True)
+                self._update_interview_buttons()
                 self._notify(
                     "Interview complete! You can now build the story structure.", type="positive"
                 )
@@ -476,16 +484,63 @@ class WritePage:
             self._chat.show_typing(False)
             self._notify(f"Error: {e}", type="negative")
 
+    def _update_interview_buttons(self) -> None:
+        """Update visibility of interview action buttons."""
+        if hasattr(self, "_finalize_btn") and self._finalize_btn:
+            self._finalize_btn.set_visibility(not self.state.interview_complete)
+        if hasattr(self, "_build_structure_btn") and self._build_structure_btn:
+            show_build = bool(
+                self.state.interview_complete
+                and self.state.project
+                and not self.state.project.chapters
+            )
+            self._build_structure_btn.set_visibility(show_build)
+
     async def _finalize_interview(self) -> None:
-        """Force finalize the interview."""
+        """Force finalize the interview with confirmation."""
+        if not self.state.project:
+            return
+
+        # Show confirmation dialog
+        with ui.dialog() as dialog, ui.card().classes("w-96"):
+            ui.label("Finalize Interview?").classes("text-xl font-bold mb-2")
+            ui.label(
+                "This will generate a story brief based on the conversation so far. "
+                "Are you sure you want to finalize?"
+            ).classes("text-gray-600 dark:text-gray-400 mb-4")
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Finalize",
+                    on_click=lambda: self._do_finalize_interview(dialog),
+                ).props("color=primary")
+
+        dialog.open()
+
+    async def _do_finalize_interview(self, dialog) -> None:
+        """Actually perform the interview finalization."""
+        dialog.close()
+
         if not self.state.project:
             return
 
         try:
-            self.services.story.finalize_interview(self.state.project)
+            self._notify("Finalizing interview...", type="info")
+            brief = await run.io_bound(self.services.story.finalize_interview, self.state.project)
             self.state.interview_complete = True
             if self._chat:
                 self._chat.set_disabled(True)
+                # Show the generated brief in chat
+                brief_summary = (
+                    f"**Story Brief Generated:**\n\n"
+                    f"- **Premise:** {brief.premise}\n"
+                    f"- **Genre:** {brief.genre}\n"
+                    f"- **Tone:** {brief.tone}\n"
+                    f"- **Setting:** {brief.setting_place}, {brief.setting_time}"
+                )
+                self._chat.add_message("assistant", brief_summary)
+            self._update_interview_buttons()
             self.services.project.save_project(self.state.project)
             self._notify("Interview finalized!", type="positive")
         except Exception as e:
