@@ -71,12 +71,14 @@ class WritePage:
 
     def _build_no_project_message(self) -> None:
         """Build message when no project is selected."""
-        with ui.column().classes("w-full h-full items-center justify-center gap-4"):
-            ui.icon("folder_off", size="xl").classes("text-gray-400")
-            ui.label("No Project Selected").classes("text-xl text-gray-500")
-            ui.label("Select a project from the header dropdown or create a new one.").classes(
-                "text-gray-400"
-            )
+        from ui.components.common import empty_state
+
+        empty_state(
+            icon="folder_off",
+            title="No Project Selected",
+            description="Select a project from the header dropdown or create a new one.",
+            dark_mode=self.state.dark_mode,
+        )
 
     def _build_fundamentals(self) -> None:
         """Build the Fundamentals tab content."""
@@ -259,13 +261,15 @@ class WritePage:
 
     def _build_live_writing(self) -> None:
         """Build the Live Writing tab content."""
+        from ui.components.common import empty_state
+
         if not self.state.can_write:
-            with ui.column().classes("w-full h-full items-center justify-center gap-4"):
-                ui.icon("edit_off", size="xl").classes("text-gray-400")
-                ui.label("Story structure not ready").classes("text-xl text-gray-500")
-                ui.label("Complete the interview and build the story structure first.").classes(
-                    "text-gray-400"
-                )
+            empty_state(
+                icon="edit_off",
+                title="Story structure not ready",
+                description="Complete the interview and build the story structure first.",
+                dark_mode=self.state.dark_mode,
+            )
             return
 
         with ui.row().classes("w-full h-full gap-4 p-4"):

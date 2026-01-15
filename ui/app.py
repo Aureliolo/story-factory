@@ -7,6 +7,7 @@ from nicegui import app, ui
 
 from services import ServiceContainer
 from ui.components.header import Header
+from ui.keyboard_shortcuts import KeyboardShortcuts
 from ui.pages.models import ModelsPage
 from ui.pages.projects import ProjectsPage
 from ui.pages.settings import SettingsPage
@@ -41,9 +42,13 @@ class StoryFactoryApp:
         self.services = services
         self.state = AppState()
 
+        # Load dark mode preference from settings
+        self.state.dark_mode = services.settings.dark_mode
+
         # Page instances (created on build)
         self._header: Header | None = None
         self._pages: dict[str, Page] = {}
+        self._shortcuts: KeyboardShortcuts | None = None
 
     def build(self) -> None:
         """Build the application routes and pages."""
@@ -51,6 +56,18 @@ class StoryFactoryApp:
         @ui.page("/")
         def main_page():
             """Main application page."""
+            # Add custom styles (inside page function)
+            from pathlib import Path
+
+            css_path = Path(__file__).parent / "styles.css"
+            if css_path.exists():
+                with open(css_path) as f:
+                    ui.add_head_html(f"<style>{f.read()}</style>")
+
+            # Register keyboard shortcuts (inside page function)
+            shortcuts = KeyboardShortcuts(self.state, self.services)
+            shortcuts.register()
+
             self._build_main_page()
 
         # Store app reference for cleanup
@@ -60,8 +77,17 @@ class StoryFactoryApp:
 
     def _build_main_page(self) -> None:
         """Build the main page UI."""
-        # Apply dark mode styles
-        ui.query("body").classes("bg-gray-50")
+        from ui.theme import get_background_class
+
+        # Apply theme-based background
+        bg_class = get_background_class(self.state.dark_mode)
+        ui.query("body").classes(bg_class)
+
+        # Apply NiceGUI dark mode
+        if self.state.dark_mode:
+            ui.dark_mode().enable()
+        else:
+            ui.dark_mode().disable()
 
         # Header with project selector
         self._header = Header(self.state, self.services)
@@ -70,7 +96,8 @@ class StoryFactoryApp:
         # Main content area
         with ui.column().classes("w-full flex-grow"):
             # Tab navigation
-            with ui.tabs().classes("w-full bg-white shadow-sm") as tabs:
+            tab_bg = "bg-gray-800" if self.state.dark_mode else "bg-white"
+            with ui.tabs().classes(f"w-full {tab_bg} shadow-sm") as tabs:
                 ui.tab("write", label="Write Story", icon="edit")
                 ui.tab("world", label="World Builder", icon="public")
                 ui.tab("projects", label="Projects", icon="folder")
