@@ -92,11 +92,15 @@ class SettingsPage:
             installed_models = self.services.model.list_installed()
             model_options = {"auto": "Auto-select"} | {m: m for m in installed_models}
 
-            # Default model
+            # Default model (fall back to "auto" if saved model not installed)
+            default_model_value = self.settings.default_model
+            if default_model_value not in model_options:
+                default_model_value = "auto"
+
             self._default_model_select = ui.select(
                 label="Default Model",
                 options=model_options,
-                value=self.settings.default_model,
+                value=default_model_value,
             ).classes("w-full mb-4")
 
             # Per-agent toggle
@@ -115,11 +119,16 @@ class SettingsPage:
 
                 self._agent_model_selects = {}
                 for role, info in AGENT_ROLES.items():
+                    # Fall back to "auto" if saved model not installed
+                    agent_model_value = self.settings.agent_models.get(role, "auto")
+                    if agent_model_value not in model_options:
+                        agent_model_value = "auto"
+
                     with ui.row().classes("w-full items-center gap-4"):
                         ui.label(info["name"]).classes("w-32")
                         self._agent_model_selects[role] = ui.select(
                             options=model_options,
-                            value=self.settings.agent_models.get(role, "auto"),
+                            value=agent_model_value,
                         ).classes("flex-grow")
                         ui.label(info["description"]).classes("text-sm text-gray-500")
 
