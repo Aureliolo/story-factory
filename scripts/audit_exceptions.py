@@ -10,9 +10,10 @@ This script finds all exception handlers and checks:
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 
-def find_exception_handlers(file_path: Path) -> list[dict[str, any]]:
+def find_exception_handlers(file_path: Path) -> list[dict[str, Any]]:
     """Find all exception handlers in a Python file."""
     handlers = []
 
@@ -61,7 +62,9 @@ def find_exception_handlers(file_path: Path) -> list[dict[str, any]]:
     return handlers
 
 
-def audit_exceptions(root_dir: Path, exclude_dirs: list[str] = None) -> dict[str, list]:
+def audit_exceptions(
+    root_dir: Path, exclude_dirs: list[str] | None = None
+) -> dict[str, int | list[dict[str, Any]]]:
     """Audit all exception handlers in the codebase."""
     if exclude_dirs is None:
         exclude_dirs = ["tests", ".git", "__pycache__", "venv", ".venv", "build", "dist"]
@@ -87,7 +90,7 @@ def audit_exceptions(root_dir: Path, exclude_dirs: list[str] = None) -> dict[str
     }
 
 
-def print_report(audit_results: dict[str, any]) -> None:
+def print_report(audit_results: dict[str, Any]) -> None:
     """Print a formatted audit report."""
     total = audit_results["total"]
     broad_no_log = audit_results["broad_without_logging"]

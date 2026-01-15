@@ -3,12 +3,13 @@
 ## Current Status
 
 ### Test Coverage
-- **Total Coverage**: 46.6%
+- **Total Coverage**: 37.8%
 - **Target Coverage**: 70% minimum, 80% goal
-- **Unit Tests**: 100 tests
-- **Smoke Tests**: 13 tests
-- **Integration Tests**: 16 tests (13 original + 3 for main.py)
+- **Unit Tests**: 110 tests
+- **Smoke Tests**: 11 tests
+- **Integration Tests**: 25 tests (13 original + 12 for main.py)
 - **E2E Tests**: 7 tests
+- **Total Tests**: 146 tests (was 124, +22 new tests)
 
 ### Code Quality Metrics
 
@@ -30,9 +31,10 @@
 - `tests/unit/test_error_handling.py`: 2 instances for unreachable code assertions
 
 **Broad Exception Handlers:**
-- 29 instances of `except Exception as e:` found
-- Most are in UI layer for user-facing error handling
-- All should log exceptions for debugging
+- Static analysis identified **44 exception handlers without logging**
+- This includes **29 broad** `except Exception as e:` blocks found in production code
+- Most of these handlers are in the UI layer for user-facing error handling
+- All such handlers should log exceptions for debugging and operational visibility
 
 ## Critical Coverage Gaps
 
@@ -245,10 +247,10 @@ Before release:
 ## Summary
 
 **Current State:**
-- ✅ Good foundation with 124 tests
+- ✅ Good foundation with 146 tests
 - ✅ No suppressed warnings
 - ✅ Clean linting
-- ⚠️ Coverage below target (46.6% vs 70% goal)
+- ⚠️ Coverage below target (37.8% vs 70% goal)
 - ⚠️ Some broad exception handlers
 
 **Next Steps:**

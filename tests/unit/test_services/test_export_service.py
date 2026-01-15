@@ -158,8 +158,8 @@ class TestExportServiceText:
 class TestExportServicePDF:
     """Test PDF export functionality."""
 
-    def test_export_to_pdf(self, tmp_path):
-        """Test PDF export with mocked reportlab."""
+    def test_export_to_pdf(self):
+        """Test PDF export."""
         settings = Settings()
         service = ExportService(settings)
 
@@ -186,7 +186,7 @@ class TestExportServicePDF:
 class TestExportServiceEPUB:
     """Test EPUB export functionality."""
 
-    def test_export_to_epub(self, tmp_path):
+    def test_export_to_epub(self):
         """Test EPUB export."""
         settings = Settings()
         service = ExportService(settings)
@@ -232,7 +232,7 @@ class TestExportServiceMethods:
 class TestExportServiceEdgeCases:
     """Test edge cases in export service."""
 
-    def test_export_with_no_chapters(self, tmp_path):
+    def test_export_with_no_chapters(self):
         """Test export with no chapters doesn't crash."""
         settings = Settings()
         service = ExportService(settings)
@@ -252,7 +252,7 @@ class TestExportServiceEdgeCases:
         markdown = service.to_markdown(state)
         assert "No Chapters" in markdown or len(markdown) > 0
 
-    def test_export_with_special_characters(self, tmp_path):
+    def test_export_with_special_characters(self):
         """Test export with special characters in content."""
         settings = Settings()
         service = ExportService(settings)
