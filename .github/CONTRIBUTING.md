@@ -151,7 +151,6 @@ with log_performance(logger, "story_generation"):
 
 Our GitHub Actions workflow automatically:
 - Runs tests with coverage
-- Uploads coverage reports to Codecov
 - Checks code formatting (ruff format)
 - Runs linting (ruff check)
 
