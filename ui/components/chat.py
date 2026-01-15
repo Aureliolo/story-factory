@@ -134,14 +134,24 @@ class ChatComponent:
     def _create_user_message(self, content: str) -> None:
         """Create a user message bubble."""
         with ui.row().classes("w-full justify-end"):
-            with ui.card().classes("max-w-3/4 bg-blue-500 text-white"):
-                ui.markdown(content).classes("text-white")
+            with (
+                ui.card()
+                .classes("max-w-[75%] bg-blue-500 text-white")
+                .style("word-wrap: break-word; overflow-wrap: break-word;")
+            ):
+                ui.markdown(content).classes("text-white whitespace-pre-wrap break-words")
 
     def _create_assistant_message(self, content: str) -> None:
         """Create an assistant message bubble."""
         with ui.row().classes("w-full justify-start"):
-            with ui.card().classes("max-w-3/4 bg-gray-100 dark:bg-gray-700"):
-                ui.markdown(content).classes("prose-sm dark:prose-invert")
+            with (
+                ui.card()
+                .classes("max-w-[75%] bg-gray-100 dark:bg-gray-700")
+                .style("word-wrap: break-word; overflow-wrap: break-word;")
+            ):
+                ui.markdown(content).classes(
+                    "prose-sm dark:prose-invert whitespace-pre-wrap break-words"
+                )
 
     def set_messages(self, messages: list[dict[str, str]]) -> None:
         """Set all messages at once (replacing existing).
