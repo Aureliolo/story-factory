@@ -50,7 +50,7 @@ def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Pa
 class ExportService:
     """Export stories to various formats.
 
-    Supports markdown, plain text, EPUB, and PDF export.
+    Supports markdown, plain text, HTML, EPUB, PDF, and DOCX export.
     """
 
     def __init__(self, settings: Settings | None = None):
