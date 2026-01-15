@@ -90,9 +90,17 @@ Keep it friendly and conversational. Do NOT ask about language upfront - you'll 
 
 {history_text}
 
-Either:
-1. Ask follow-up questions ONLY if you genuinely need more info about characters, themes, tone, or story specifics
-2. If you have enough information, output a complete story brief in this exact JSON format:
+YOUR TASK:
+1. If this is the user's FIRST detailed message about their story idea, ask 2-3 thoughtful follow-up questions about:
+   - Characters they envision (main protagonist, love interests, antagonists)
+   - Specific themes or elements they want emphasized
+   - Any specific scenes, plot points, or moments they're excited about
+   - Things they definitely want to AVOID
+
+2. If you've already asked follow-up questions and the user has answered them, summarize what you understand and ASK FOR CONFIRMATION:
+   "Here's what I understand about your story: [brief summary]. Is there anything you'd like to add, change, or clarify before I create the story brief?"
+
+3. ONLY when the user explicitly confirms they're done (says something like "yes", "that's all", "looks good", "I'm ready", "nothing else", etc.), output the JSON brief:
 
 ```json
 {{
@@ -112,11 +120,14 @@ Either:
 }}
 ```
 
-IMPORTANT:
+IMPORTANT RULES:
+- NEVER output the JSON brief immediately after the user's first message!
+- ALWAYS ask at least one round of follow-up questions first
+- ALWAYS ask for confirmation before generating the brief
 - Use the ALREADY DETERMINED values above if provided - do NOT ask about them!
-- Otherwise infer language from the language the user is writing in
-- Otherwise infer content rating from keywords: "smut"/"nsfw"/"explicit" = adult
-- Only ask about things that are genuinely unclear from the user's message!"""
+- Infer language from the language the user is writing in
+- Infer content rating from keywords: "smut"/"nsfw"/"explicit" = adult
+- Be conversational and enthusiastic about their ideas!"""
 
         response = self.generate(prompt)
         self.conversation_history.append({"role": "assistant", "content": response})
