@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import Literal
 
-from nicegui import Client, context, ui
+from nicegui import Client, context, run, ui
 from nicegui.elements.html import Html
 from nicegui.elements.label import Label
 from nicegui.elements.markdown import Markdown
@@ -434,7 +434,8 @@ class WritePage:
 
         try:
             self._chat.show_typing(True)
-            questions = self.services.story.start_interview(self.state.project)
+            # Run LLM call in thread pool to avoid blocking event loop
+            questions = await run.io_bound(self.services.story.start_interview, self.state.project)
             self._chat.show_typing(False)
             self._chat.add_message("assistant", questions)
             self.state.add_interview_message("assistant", questions)
@@ -451,8 +452,9 @@ class WritePage:
             self._chat.show_typing(True)
             self.state.add_interview_message("user", message)
 
-            response, is_complete = self.services.story.process_interview(
-                self.state.project, message
+            # Run LLM call in thread pool to avoid blocking event loop
+            response, is_complete = await run.io_bound(
+                self.services.story.process_interview, self.state.project, message
             )
 
             self._chat.show_typing(False)
@@ -506,7 +508,10 @@ class WritePage:
 
         try:
             self._notify("Building story structure...", type="info")
-            self.services.story.build_structure(self.state.project, self.state.world_db)
+            # Run LLM call in thread pool to avoid blocking event loop
+            await run.io_bound(
+                self.services.story.build_structure, self.state.project, self.state.world_db
+            )
             self.services.project.save_project(self.state.project)
             self._notify("Story structure built!", type="positive")
             # Refresh the page
@@ -550,13 +555,25 @@ class WritePage:
             self._notify("Select a chapter first", type="warning")
             return
 
+        # Capture for closure type narrowing
+        project = self.state.project
+        chapter_num = self.state.current_chapter
+
         try:
             self.state.is_writing = True
-            self._notify(f"Writing chapter {self.state.current_chapter}...", type="info")
+            self._notify(f"Writing chapter {chapter_num}...", type="info")
 
-            for event in self.services.story.write_chapter(
-                self.state.project, self.state.current_chapter
-            ):
+            # Run blocking generator in thread pool to avoid blocking event loop
+            def write_chapter_blocking() -> list:
+                events = []
+                for event in self.services.story.write_chapter(project, chapter_num):
+                    events.append(event)
+                return events
+
+            events = await run.io_bound(write_chapter_blocking)
+
+            # Process events after completion
+            for event in events:
                 self.state.writing_progress = event.message
 
             self.state.is_writing = False
@@ -573,12 +590,25 @@ class WritePage:
         if not self.state.project:
             return
 
+        # Capture for closure type narrowing
+        project = self.state.project
+
         try:
             self.state.is_writing = True
+            self._notify("Writing all chapters...", type="info")
 
-            for event in self.services.story.write_all_chapters(self.state.project):
+            # Run blocking generator in thread pool to avoid blocking event loop
+            def write_all_blocking() -> list:
+                events = []
+                for event in self.services.story.write_all_chapters(project):
+                    events.append(event)
+                return events
+
+            events = await run.io_bound(write_all_blocking)
+
+            # Process events after completion
+            for event in events:
                 self.state.writing_progress = event.message
-                self._notify(event.message, type="info")
 
             self.state.is_writing = False
             self._refresh_writing_display()

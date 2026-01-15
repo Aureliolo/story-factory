@@ -58,6 +58,11 @@ class WorldPage:
             self._build_no_project_message()
             return
 
+        # Check if interview is complete
+        if not self.state.interview_complete:
+            self._build_interview_required_message()
+            return
+
         with ui.row().classes("w-full h-full gap-4 p-4"):
             # Left panel - Entity browser
             with ui.column().classes("w-1/5 gap-4"):
@@ -85,39 +90,62 @@ class WorldPage:
                 "text-gray-400 dark:text-gray-500"
             )
 
+    def _build_interview_required_message(self) -> None:
+        """Build message when interview is not complete."""
+        with ui.column().classes("w-full min-h-96 items-center justify-center gap-6 py-16"):
+            ui.icon("chat", size="xl").classes("text-blue-400")
+            ui.label("Complete the Interview First").classes(
+                "text-xl font-semibold text-gray-700 dark:text-gray-200"
+            )
+            ui.label(
+                "The World Builder requires story context from the interview. "
+                "Complete the interview to populate your story's world."
+            ).classes("text-gray-500 dark:text-gray-400 text-center max-w-md")
+
+            ui.button(
+                "Go to Interview",
+                on_click=lambda: ui.navigate.to("/"),
+                icon="arrow_forward",
+            ).props("color=primary size=lg")
+
     def _build_entity_browser(self) -> None:
         """Build the entity browser panel."""
-        ui.label("Entity Browser").classes("text-lg font-semibold")
+        with ui.card().classes("w-full h-full"):
+            ui.label("Entity Browser").classes("text-lg font-semibold")
 
-        # Type filter
-        ui.label("Filter by Type").classes("text-sm font-medium text-gray-600 dark:text-gray-400")
+            # Type filter
+            ui.label("Filter by Type").classes(
+                "text-sm font-medium text-gray-600 dark:text-gray-400 mt-2"
+            )
 
-        for entity_type in ["character", "location", "item", "faction", "concept"]:
-            color = ENTITY_COLORS[entity_type]
-            ui.checkbox(
-                entity_type.title(),
-                value=entity_type in self.state.entity_filter_types,
-                on_change=lambda e, t=entity_type: self._toggle_type_filter(t, e.value),
-            ).props(f'color="{color}"')
+            for entity_type in ["character", "location", "item", "faction", "concept"]:
+                color = ENTITY_COLORS[entity_type]
+                ui.checkbox(
+                    entity_type.title(),
+                    value=entity_type in self.state.entity_filter_types,
+                    on_change=lambda e, t=entity_type: self._toggle_type_filter(t, e.value),
+                ).props(f'color="{color}"')
 
-        ui.separator()
+            ui.separator()
 
-        # Search
-        ui.input(
-            placeholder="Search entities...",
-            on_change=self._on_search,
-        ).classes("w-full").props("outlined dense")
+            # Search
+            ui.input(
+                placeholder="Search entities...",
+                on_change=self._on_search,
+            ).classes("w-full").props("outlined dense")
 
-        # Entity list
-        self._entity_list = ui.column().classes("w-full gap-1 overflow-auto")
-        self._refresh_entity_list()
+            # Entity list with proper styling
+            self._entity_list = ui.column().classes(
+                "w-full gap-1 overflow-auto max-h-64 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg"
+            )
+            self._refresh_entity_list()
 
-        # Add button
-        ui.button(
-            "+ Add Entity",
-            on_click=self._show_add_dialog,
-            icon="add",
-        ).props("color=primary").classes("w-full mt-2")
+            # Add button
+            ui.button(
+                "+ Add Entity",
+                on_click=self._show_add_dialog,
+                icon="add",
+            ).props("color=primary").classes("w-full mt-2")
 
     def _build_graph_section(self) -> None:
         """Build the graph visualization section."""
@@ -130,59 +158,64 @@ class WorldPage:
 
     def _build_entity_editor(self) -> None:
         """Build the entity editor panel."""
-        ui.label("Entity Editor").classes("text-lg font-semibold")
+        with ui.card().classes("w-full h-full"):
+            ui.label("Entity Editor").classes("text-lg font-semibold")
 
-        if not self.state.selected_entity_id or not self.state.world_db:
-            ui.label("Select an entity to edit").classes("text-gray-500 dark:text-gray-400 text-sm")
-            return
+            if not self.state.selected_entity_id or not self.state.world_db:
+                ui.label("Select an entity to edit").classes(
+                    "text-gray-500 dark:text-gray-400 text-sm mt-4"
+                )
+                return
 
-        entity = self.services.world.get_entity(self.state.world_db, self.state.selected_entity_id)
-        if not entity:
-            ui.label("Entity not found").classes("text-red-500 text-sm")
-            return
-
-        # Entity form
-        self._entity_name_input = ui.input(
-            label="Name",
-            value=entity.name,
-        ).classes("w-full")
-
-        self._entity_type_select = ui.select(
-            label="Type",
-            options=["character", "location", "item", "faction", "concept"],
-            value=entity.type,
-        ).classes("w-full")
-
-        self._entity_desc_input = (
-            ui.textarea(
-                label="Description",
-                value=entity.description,
+            entity = self.services.world.get_entity(
+                self.state.world_db, self.state.selected_entity_id
             )
-            .classes("w-full")
-            .props("rows=4")
-        )
+            if not entity:
+                ui.label("Entity not found").classes("text-red-500 text-sm")
+                return
 
-        # Attributes (JSON editor would be better, but using textarea for simplicity)
-        if entity.attributes:
-            with ui.expansion("Attributes", icon="list").classes("w-full"):
-                for key, value in entity.attributes.items():
-                    with ui.row().classes("w-full gap-2"):
-                        ui.label(f"{key}:").classes("font-medium")
-                        ui.label(str(value))
+            # Entity form
+            self._entity_name_input = ui.input(
+                label="Name",
+                value=entity.name,
+            ).classes("w-full")
 
-        # Action buttons
-        with ui.row().classes("w-full gap-2 mt-4"):
-            ui.button(
-                "Save",
-                on_click=self._save_entity,
-                icon="save",
-            ).props("color=primary")
+            self._entity_type_select = ui.select(
+                label="Type",
+                options=["character", "location", "item", "faction", "concept"],
+                value=entity.type,
+            ).classes("w-full")
 
-            ui.button(
-                "Delete",
-                on_click=self._delete_entity,
-                icon="delete",
-            ).props("color=negative outline")
+            self._entity_desc_input = (
+                ui.textarea(
+                    label="Description",
+                    value=entity.description,
+                )
+                .classes("w-full")
+                .props("rows=4")
+            )
+
+            # Attributes (JSON editor would be better, but using textarea for simplicity)
+            if entity.attributes:
+                with ui.expansion("Attributes", icon="list").classes("w-full"):
+                    for key, value in entity.attributes.items():
+                        with ui.row().classes("w-full gap-2"):
+                            ui.label(f"{key}:").classes("font-medium")
+                            ui.label(str(value))
+
+            # Action buttons
+            with ui.row().classes("w-full gap-2 mt-4"):
+                ui.button(
+                    "Save",
+                    on_click=self._save_entity,
+                    icon="save",
+                ).props("color=primary")
+
+                ui.button(
+                    "Delete",
+                    on_click=self._delete_entity,
+                    icon="delete",
+                ).props("color=negative outline")
 
     def _build_relationships_section(self) -> None:
         """Build the relationships management section."""
