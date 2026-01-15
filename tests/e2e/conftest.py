@@ -1,5 +1,6 @@
 """E2E test fixtures for Playwright browser automation."""
 
+import os
 import socket
 import subprocess
 import time
@@ -43,11 +44,17 @@ def app_server():
     """
     port = find_free_port()
 
+    # Clear pytest env vars so NiceGUI doesn't enter test mode in subprocess
+    # NiceGUI checks PYTEST_CURRENT_TEST to detect pytest and expects
+    # NICEGUI_SCREEN_TEST_PORT to be set, which breaks our subprocess approach
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTEST")}
+
     process = subprocess.Popen(
         ["python", "main.py", "--port", str(port)],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env=env,
     )
 
     if not wait_for_server(port):
