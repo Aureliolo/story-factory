@@ -100,7 +100,17 @@ This ensures code quality and prevents broken builds.
    - Use Python's `logging` module with `logger = logging.getLogger(__name__)`
    - Follow existing logging patterns for consistency
 
-10. **Web UI**: The NiceGUI interface should remain simple and user-friendly. Test UI changes by running the application.
+10. **Web UI (NiceGUI)**:
+    - **Framework**: Uses NiceGUI 2.24.2+ for the web interface
+    - **Pattern**: Page-based architecture with reusable components
+    - **UI Elements**: Import from `nicegui import ui`
+    - **HTML Elements**: Use `ui.html(content)` - no `sanitize` parameter (not supported)
+    - **Component Types**: `ui.card()`, `ui.button()`, `ui.input()`, `ui.label()`, etc.
+    - **State Management**: Centralized in `ui/state.py` via AppState class
+    - **Service Integration**: Pages receive ServiceContainer via dependency injection
+    - **Async Operations**: Use `async def` for methods that call async services
+    - **Notifications**: Use `ui.notify(message, type="positive|negative|warning|info")`
+    - **Testing**: UI changes should be tested by running `python main.py` and checking http://localhost:7860
 
 11. **JSON Parsing**: Use the utilities in `utils/json_parser.py` for extracting and parsing JSON from LLM responses. LLMs may include JSON in markdown code blocks or with surrounding text.
 

@@ -254,9 +254,31 @@ class ModelsPage:
             self._comparison_result = ui.column().classes("w-full mt-4")
 
     def _filter_models(self, fits_only: bool) -> None:
-        """Filter model list by VRAM fit."""
-        # Would need to rebuild the model list with filter applied
-        pass
+        """Filter model list by VRAM fit.
+
+        Args:
+            fits_only: If True, only show models that fit in available VRAM.
+        """
+        if not self._model_list:
+            return
+
+        # Clear the current model list
+        self._model_list.clear()
+
+        # Rebuild with filter applied
+        vram = self.services.model.get_vram()
+        installed = set(self.services.model.list_installed())
+
+        with self._model_list:
+            for model_id, info in AVAILABLE_MODELS.items():
+                fits_vram = info["vram_required"] <= vram
+                is_installed = any(model_id in m for m in installed)
+
+                # Apply filter: skip if fits_only is True and model doesn't fit
+                if fits_only and not fits_vram:
+                    continue
+
+                self._build_model_card(model_id, info, fits_vram, is_installed)
 
     async def _pull_model(self, model_id: str) -> None:
         """Pull a model from Ollama."""

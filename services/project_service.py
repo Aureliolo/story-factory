@@ -10,12 +10,9 @@ from pathlib import Path
 
 from memory.story_state import StoryState
 from memory.world_database import WorldDatabase
-from settings import STORIES_DIR, Settings
+from settings import STORIES_DIR, WORLDS_DIR, Settings
 
 logger = logging.getLogger(__name__)
-
-# Directory for world databases
-WORLDS_DIR = Path(__file__).parent.parent / "output" / "worlds"
 
 
 @dataclass
