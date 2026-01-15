@@ -73,6 +73,10 @@ class AppState:
             project: StoryState instance.
             world_db: WorldDatabase instance.
         """
+        # Close existing database connection before switching
+        if self.world_db is not None:
+            self.world_db.close()
+
         self.project_id = project_id
         self.project = project
         self.world_db = world_db
@@ -90,6 +94,10 @@ class AppState:
 
     def clear_project(self) -> None:
         """Clear the current project."""
+        # Close database connection before clearing
+        if self.world_db is not None:
+            self.world_db.close()
+
         self.project_id = None
         self.project = None
         self.world_db = None

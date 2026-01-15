@@ -439,6 +439,7 @@ class WritePage:
             self._chat.add_message("assistant", questions)
             self.state.add_interview_message("assistant", questions)
         except Exception as e:
+            logger.exception("Failed to start interview")
             self._chat.show_typing(False)
             self._notify(f"Error starting interview: {e}", type="negative")
 
@@ -471,6 +472,7 @@ class WritePage:
             self.services.project.save_project(self.state.project)
 
         except Exception as e:
+            logger.exception("Failed to process interview message")
             self._chat.show_typing(False)
             self._notify(f"Error: {e}", type="negative")
 
@@ -487,6 +489,7 @@ class WritePage:
             self.services.project.save_project(self.state.project)
             self._notify("Interview finalized!", type="positive")
         except Exception as e:
+            logger.exception("Failed to finalize interview")
             self._notify(f"Error: {e}", type="negative")
 
     def _enable_continue_interview(self) -> None:
@@ -516,6 +519,7 @@ class WritePage:
             # Refresh the page
             ui.navigate.reload()
         except Exception as e:
+            logger.exception("Failed to build story structure")
             self._notify(f"Error building structure: {e}", type="negative")
 
     def _on_chapter_select(self, e) -> None:
@@ -581,6 +585,7 @@ class WritePage:
             self._notify("Chapter complete!", type="positive")
 
         except Exception as e:
+            logger.exception(f"Failed to write chapter {chapter_num}")
             self.state.is_writing = False
             self._notify(f"Error: {e}", type="negative")
 
@@ -615,6 +620,7 @@ class WritePage:
             self._notify("All chapters complete!", type="positive")
 
         except Exception as e:
+            logger.exception("Failed to write all chapters")
             self.state.is_writing = False
             self._notify(f"Error: {e}", type="negative")
 
@@ -675,4 +681,5 @@ class WritePage:
 
             self._notify(f"Exported as {fmt.upper()}", type="positive")
         except Exception as e:
+            logger.exception(f"Failed to export as {fmt}")
             self._notify(f"Export failed: {e}", type="negative")
