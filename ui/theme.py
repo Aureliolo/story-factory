@@ -286,7 +286,8 @@ def get_background_class(dark_mode: bool = False) -> str:
     """Get background class for the current theme.
 
     Args:
-        dark_mode: Whether to use dark mode.
+        dark_mode: DEPRECATED - Parameter is ignored. The returned class string
+                  includes both light and dark mode variants using Tailwind's dark: prefix.
 
     Returns:
         Background class string with Tailwind dark: variant.
@@ -298,7 +299,8 @@ def get_surface_class(dark_mode: bool = False) -> str:
     """Get surface (card/panel) class for the current theme.
 
     Args:
-        dark_mode: Whether to use dark mode.
+        dark_mode: DEPRECATED - Parameter is ignored. The returned class string
+                  includes both light and dark mode variants using Tailwind's dark: prefix.
 
     Returns:
         Surface class string with Tailwind dark: variant.
