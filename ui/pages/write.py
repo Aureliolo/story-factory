@@ -210,7 +210,9 @@ class WritePage:
                 status_color = (
                     "green"
                     if chapter.status == "final"
-                    else "orange" if chapter.status in ["drafting", "edited"] else "gray"
+                    else "orange"
+                    if chapter.status in ["drafting", "edited"]
+                    else "gray"
                 )
 
                 with ui.row().classes("w-full items-start gap-2 p-2 hover:bg-gray-50 rounded"):
@@ -345,17 +347,13 @@ class WritePage:
             "Write Chapter",
             on_click=self._write_current_chapter,
             icon="edit",
-        ).props(
-            "color=primary"
-        ).classes("w-full")
+        ).props("color=primary").classes("w-full")
 
         ui.button(
             "Write All",
             on_click=self._write_all_chapters,
             icon="auto_fix_high",
-        ).props(
-            "outline"
-        ).classes("w-full")
+        ).props("outline").classes("w-full")
 
         ui.separator()
 
@@ -375,9 +373,7 @@ class WritePage:
             ui.button(
                 "Apply Feedback",
                 on_click=self._apply_feedback,
-            ).props(
-                "flat"
-            ).classes("w-full")
+            ).props("flat").classes("w-full")
 
         ui.separator()
 

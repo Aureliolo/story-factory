@@ -106,9 +106,7 @@ class WorldPage:
         ui.input(
             placeholder="Search entities...",
             on_change=self._on_search,
-        ).classes(
-            "w-full"
-        ).props("outlined dense")
+        ).classes("w-full").props("outlined dense")
 
         # Entity list
         self._entity_list = ui.column().classes("w-full gap-1 overflow-auto")
@@ -119,9 +117,7 @@ class WorldPage:
             "+ Add Entity",
             on_click=self._show_add_dialog,
             icon="add",
-        ).props(
-            "color=primary"
-        ).classes("w-full mt-2")
+        ).props("color=primary").classes("w-full mt-2")
 
     def _build_graph_section(self) -> None:
         """Build the graph visualization section."""

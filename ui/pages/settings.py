@@ -56,9 +56,7 @@ class SettingsPage:
                 "Save Settings",
                 on_click=self._save_settings,
                 icon="save",
-            ).props(
-                "color=primary"
-            ).classes("mt-4")
+            ).props("color=primary").classes("mt-4")
 
     def _build_connection_section(self) -> None:
         """Build Ollama connection settings."""

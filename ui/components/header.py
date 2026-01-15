@@ -119,9 +119,7 @@ class Header:
         ui.button(
             icon=icon,
             on_click=toggle_theme,
-        ).props(
-            "flat round"
-        ).tooltip(tooltip)
+        ).props("flat round").tooltip(tooltip)
 
     async def _on_project_change(self, e) -> None:
         """Handle project selection change."""
