@@ -61,7 +61,10 @@ def app_server():
     process.wait(timeout=5)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def base_url(app_server):
-    """Get the base URL for the running app."""
+    """Get the base URL for the running app.
+
+    Must be session-scoped to match app_server fixture scope.
+    """
     return app_server
