@@ -1,6 +1,6 @@
 # Makefile for Story Factory development tasks
 
-.PHONY: help install test test-unit test-smoke test-integration test-e2e lint format check clean run healthcheck
+.PHONY: help install test test-unit test-smoke test-integration test-e2e test-cov test-cov-min test-strict test-all test-ci lint format check clean run run-cli healthcheck
 
 help:  ## Show this help message
 	@echo "Available commands:"
