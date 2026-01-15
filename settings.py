@@ -218,6 +218,7 @@ class Settings:
 
     # UI settings
     dark_mode: bool = True
+    last_project_id: str | None = None  # Remember last opened project
 
     def save(self):
         """Save settings to JSON file."""
