@@ -95,7 +95,7 @@ class ProjectsPage:
                     with ui.row().classes("items-center gap-2"):
                         ui.label(project.name).classes("text-lg font-semibold")
                         ui.badge(project.status.title()).style(
-                            f"background-color: {status_color}22; color: {status_color};"
+                            f"background-color: {status_color}; color: white;"
                         )
                         if is_current:
                             ui.badge("Active").props("color=primary").classes("text-white")
