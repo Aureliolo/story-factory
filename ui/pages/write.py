@@ -194,7 +194,8 @@ class WritePage:
 
         ui.button(
             "Open World Builder",
-            on_click=lambda: setattr(self.state, "active_tab", "world"),
+            on_click=lambda: ui.navigate.to("/world"),
+            icon="public",
         ).props("flat").classes("mt-2")
 
     def _build_structure_section(self) -> None:
