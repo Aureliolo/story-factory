@@ -125,9 +125,11 @@ def render_graph_html(
         #{container_id} {{
             border: 1px solid #e5e7eb;
             border-radius: 4px;
+            background: #ffffff;
         }}
         .dark #{container_id} {{
             border-color: #374151;
+            background: #1f2937;
         }}
     </style>
     <div id="{container_id}" style="height: {height}px;"></div>
