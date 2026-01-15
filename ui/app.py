@@ -95,8 +95,8 @@ class StoryFactoryApp:
 
         # Main content area
         with ui.column().classes("w-full flex-grow"):
-            # Tab navigation
-            with ui.tabs().classes("w-full bg-white dark:bg-gray-800 shadow-sm") as tabs:
+            # Tab navigation - using Tailwind dark: variants for proper theming
+            with ui.tabs().classes("w-full bg-gray-100 dark:bg-gray-800 shadow-sm") as tabs:
                 ui.tab("write", label="Write Story", icon="edit")
                 ui.tab("world", label="World Builder", icon="public")
                 ui.tab("projects", label="Projects", icon="folder")

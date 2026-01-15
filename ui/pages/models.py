@@ -178,23 +178,31 @@ class ModelsPage:
                         ui.label(f"VRAM: {info['vram_required']} GB")
                         ui.label(f"Release: {info['release']}")
 
-                    # Quality/Speed bars
+                    # Quality/Speed bars - using dark-mode aware empty color
                     with ui.row().classes("gap-4 items-center"):
                         ui.label("Quality:").classes("text-sm")
                         with ui.row().classes("gap-1"):
                             for i in range(10):
-                                color = quality_color if i < info["quality"] else "#e0e0e0"
-                                ui.element("div").style(
-                                    f"width: 12px; height: 12px; background: {color}; border-radius: 2px;"
-                                )
+                                if i < info["quality"]:
+                                    ui.element("div").style(
+                                        f"width: 12px; height: 12px; background: {quality_color}; border-radius: 2px;"
+                                    )
+                                else:
+                                    ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
+                                        "width: 12px; height: 12px; border-radius: 2px;"
+                                    )
 
                         ui.label("Speed:").classes("text-sm ml-4")
                         with ui.row().classes("gap-1"):
                             for i in range(10):
-                                color = "#4CAF50" if i < info["speed"] else "#e0e0e0"
-                                ui.element("div").style(
-                                    f"width: 12px; height: 12px; background: {color}; border-radius: 2px;"
-                                )
+                                if i < info["speed"]:
+                                    ui.element("div").style(
+                                        "width: 12px; height: 12px; background: #4CAF50; border-radius: 2px;"
+                                    )
+                                else:
+                                    ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
+                                        "width: 12px; height: 12px; border-radius: 2px;"
+                                    )
 
                 # Actions
                 with ui.column().classes("gap-2"):

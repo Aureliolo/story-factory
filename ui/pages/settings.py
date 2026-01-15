@@ -78,10 +78,12 @@ class SettingsPage:
             health = self.services.model.check_health()
             if health.is_healthy:
                 ui.label(f"Connected - {health.available_vram} GB VRAM available").classes(
-                    "text-sm text-green-600 mt-2"
+                    "text-sm text-green-600 dark:text-green-400 mt-2"
                 )
             else:
-                ui.label(f"Not connected: {health.message}").classes("text-sm text-red-600 mt-2")
+                ui.label(f"Not connected: {health.message}").classes(
+                    "text-sm text-red-600 dark:text-red-400 mt-2"
+                )
 
     def _build_model_section(self) -> None:
         """Build model selection settings."""

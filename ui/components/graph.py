@@ -135,12 +135,15 @@ class GraphComponent:
 
         if not self.world_db:
             self._container.content = """
-                <div style="
+                <style>
+                    .graph-empty { color: #6b7280; }
+                    .dark .graph-empty { color: #9ca3af; }
+                </style>
+                <div class="graph-empty" style="
                     height: 100%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    color: #666;
                 ">
                     <p>No world data to display. Create or load a project first.</p>
                 </div>
