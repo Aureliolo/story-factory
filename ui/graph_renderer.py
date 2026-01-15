@@ -109,6 +109,22 @@ def render_graph_html(
             border-color: #374151;
             background: #1f2937;
         }}
+        /* vis.js navigation button styling for dark mode */
+        .dark #{container_id} .vis-navigation .vis-button {{
+            background-color: #374151 !important;
+            border: 1px solid #4b5563 !important;
+        }}
+        .dark #{container_id} .vis-navigation .vis-button:hover {{
+            background-color: #4b5563 !important;
+            box-shadow: 0 0 3px rgba(255, 255, 255, 0.3) !important;
+        }}
+        .dark #{container_id} .vis-navigation .vis-button:active {{
+            background-color: #1f2937 !important;
+        }}
+        /* Make the icons white/light in dark mode using filter */
+        .dark #{container_id} .vis-navigation .vis-button {{
+            filter: invert(1) hue-rotate(180deg);
+        }}
     </style>
     <div id="{container_id}" style="height: {height}px;"></div>
     """
