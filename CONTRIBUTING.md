@@ -114,17 +114,17 @@ class MyAgent(BaseAgent):
             model=model,
             settings=settings,
         )
-    
+
     def my_method(self, story_state: StoryState) -> ReturnType:
         # Validate brief
         brief = PromptBuilder.ensure_brief(story_state, self.name)
-        
+
         # Build prompt using PromptBuilder
         builder = PromptBuilder()
         builder.add_language_requirement(brief.language)
         builder.add_brief_requirements(brief)
         # ... add more sections
-        
+
         prompt = builder.build()
         response = self.generate(prompt)
         return response
@@ -139,7 +139,7 @@ class MyService:
     def __init__(self, settings: Settings | None = None):
         """Initialize service with settings."""
         self.settings = settings or Settings.load()
-    
+
     def my_method(self, ...):
         # Business logic here
         pass
@@ -152,16 +152,16 @@ Pages are created as classes with dependency injection:
 ```python
 def create_my_page(services: ServiceContainer, state: AppState):
     """Create and return the page UI."""
-    
+
     with ui.card():
         ui.label("My Page")
         # ... UI elements
-    
+
     # Event handlers
     def on_button_click():
         # Handle event
         pass
-    
+
     return container  # Return reference if needed
 ```
 
@@ -172,15 +172,15 @@ def create_my_page(services: ServiceContainer, state: AppState):
 ```python
 class TestMyFeature:
     """Tests for MyFeature."""
-    
+
     def test_specific_behavior(self):
         """Should demonstrate specific behavior."""
         # Arrange
         input_data = create_test_data()
-        
+
         # Act
         result = my_function(input_data)
-        
+
         # Assert
         assert result == expected_output
 ```
@@ -208,13 +208,13 @@ When testing agents, mock Ollama API calls:
 ```python
 def test_my_agent(monkeypatch):
     """Test agent without calling Ollama."""
-    
+
     # Mock the generate method
     def mock_generate(self, prompt, context=None, temperature=None):
         return "Mocked response"
-    
+
     monkeypatch.setattr(BaseAgent, "generate", mock_generate)
-    
+
     # Now test the agent
     agent = MyAgent()
     result = agent.my_method(story_state)

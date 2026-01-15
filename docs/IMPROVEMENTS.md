@@ -220,7 +220,7 @@ BaseAgent (agents/base.py)
 Specialized Agents:
 ├── InterviewerAgent - Gathers requirements
 ├── ArchitectAgent - Designs structure
-├── WriterAgent - Generates prose  
+├── WriterAgent - Generates prose
 ├── EditorAgent - Polishes content
 ├── ContinuityAgent - Checks consistency
 └── ValidatorAgent - Validates responses

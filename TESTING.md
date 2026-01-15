@@ -78,10 +78,10 @@ def test_my_feature():
     # Arrange - Set up test data and conditions
     input_data = create_test_data()
     expected_output = "expected result"
-    
+
     # Act - Execute the code being tested
     result = my_function(input_data)
-    
+
     # Assert - Verify the results
     assert result == expected_output
 ```
@@ -107,12 +107,12 @@ Group related tests in classes:
 ```python
 class TestSettings:
     """Tests for Settings class."""
-    
+
     def test_default_values(self):
         """Should have sensible default values."""
         settings = Settings()
         assert settings.ollama_url == "http://localhost:11434"
-    
+
     def test_validate_raises_on_invalid_url(self):
         """Should raise ValueError for invalid Ollama URL."""
         settings = Settings(ollama_url="not-a-url")
@@ -163,7 +163,7 @@ def test_raises_specific_error():
     """Should raise custom exception."""
     with pytest.raises(CustomError) as exc_info:
         dangerous_function()
-    
+
     # Check exception details
     assert "expected error message" in str(exc_info.value)
 ```
@@ -176,7 +176,7 @@ def test_file_operations(tmp_path):
     # tmp_path is a pytest fixture providing temporary directory
     test_file = tmp_path / "test.txt"
     test_file.write_text("test content")
-    
+
     result = read_file(test_file)
     assert result == "test content"
 ```
@@ -204,15 +204,15 @@ def test_chapter_count_for_length(input_value, expected):
 ```python
 def test_agent_without_ollama(monkeypatch):
     """Test agent logic without calling Ollama."""
-    
+
     def mock_generate(self, prompt, context=None, temperature=None):
         return "Mocked LLM response"
-    
+
     monkeypatch.setattr(BaseAgent, "generate", mock_generate)
-    
+
     agent = WriterAgent()
     result = agent.write_chapter(story_state, chapter)
-    
+
     assert "Mocked LLM response" in result
 ```
 
@@ -221,13 +221,13 @@ def test_agent_without_ollama(monkeypatch):
 ```python
 def test_save_without_filesystem(monkeypatch, tmp_path):
     """Test save logic without affecting real filesystem."""
-    
+
     # Redirect saves to temporary directory
     monkeypatch.setattr("settings.STORIES_DIR", tmp_path)
-    
+
     orchestrator = StoryOrchestrator()
     filepath = orchestrator.save_story()
-    
+
     assert filepath.exists()
 ```
 
@@ -236,15 +236,15 @@ def test_save_without_filesystem(monkeypatch, tmp_path):
 ```python
 def test_ollama_list_models(monkeypatch):
     """Test model listing without Ollama installed."""
-    
+
     def mock_run(*args, **kwargs):
         class MockResult:
             stdout = "model1:latest\nmodel2:7b\n"
             returncode = 0
         return MockResult()
-    
+
     monkeypatch.setattr("subprocess.run", mock_run)
-    
+
     models = get_installed_models()
     assert "model1:latest" in models
 ```
@@ -264,7 +264,7 @@ def test_extract_json_from_code_block():
     {"key": "value"}
     ```
     '''
-    
+
     result = extract_json(text)
     assert result == {"key": "value"}
 ```
@@ -276,7 +276,7 @@ def test_extract_json_from_code_block():
 def test_settings_validation():
     """Should validate settings constraints."""
     settings = Settings(context_size=999)  # Too small
-    
+
     with pytest.raises(ValueError, match="context_size must be between"):
         settings.validate()
 ```
@@ -288,10 +288,10 @@ def test_settings_validation():
 def test_create_project(tmp_path, monkeypatch):
     """Should create new project successfully."""
     monkeypatch.setattr("settings.STORIES_DIR", tmp_path)
-    
+
     service = ProjectService()
     state = service.create_project("Test Project")
-    
+
     assert state.project_name == "Test Project"
     assert state.id is not None
 ```
@@ -304,13 +304,13 @@ def test_add_entity(tmp_path):
     """Should add entity to database."""
     db_path = tmp_path / "test.db"
     db = WorldDatabase(db_path)
-    
+
     entity_id = db.add_entity(
         entity_type="character",
         name="Test Character",
         description="A test character"
     )
-    
+
     entity = db.get_entity(entity_id)
     assert entity.name == "Test Character"
 ```
@@ -322,15 +322,15 @@ When testing agents, **always mock** the Ollama calls:
 ```python
 def test_architect_creates_world(monkeypatch, sample_story_state):
     """Should create world description."""
-    
+
     def mock_generate(self, prompt, context=None, temperature=None):
         return "A detailed fantasy world with magic and dragons."
-    
+
     monkeypatch.setattr(BaseAgent, "generate", mock_generate)
-    
+
     agent = ArchitectAgent()
     world = agent.create_world(sample_story_state)
-    
+
     assert "fantasy world" in world.lower()
 ```
 
@@ -344,11 +344,11 @@ async def test_ui_component():
     """Should render component correctly."""
     from nicegui import ui
     from nicegui.testing import UserFixture
-    
+
     # Create UI
     with ui.card():
         ui.label("Test Label")
-    
+
     # Test interactions
     # (Implementation depends on NiceGUI testing capabilities)
 ```
@@ -462,20 +462,20 @@ Good test documentation helps future maintainers:
 ```python
 class TestPromptBuilder:
     """Tests for the PromptBuilder class.
-    
+
     PromptBuilder consolidates common prompt patterns used across agents,
     reducing code duplication and ensuring consistency.
     """
-    
+
     def test_add_language_requirement(self):
         """Should add language enforcement section.
-        
+
         This test verifies that the language requirement is properly
         formatted and includes the correct language name.
         """
         builder = PromptBuilder()
         result = builder.add_language_requirement("Spanish").build()
-        
+
         assert "LANGUAGE: Spanish" in result
         assert "Write ALL content in Spanish" in result
 ```
@@ -489,10 +489,10 @@ Use builder pattern for complex objects:
 ```python
 def create_test_story_state(**overrides):
     """Create a StoryState with sensible defaults.
-    
+
     Args:
         **overrides: Override any default values.
-    
+
     Returns:
         Configured StoryState for testing.
     """
@@ -533,7 +533,7 @@ def test_with_data_file():
     test_data_path = Path(__file__).parent / "test_data" / "sample.json"
     with open(test_data_path) as f:
         data = json.load(f)
-    
+
     result = process_data(data)
     assert result["status"] == "success"
 ```
@@ -556,13 +556,13 @@ async def test_async_function():
 def test_database_rollback(tmp_path):
     """Test that failed operations don't corrupt database."""
     db = WorldDatabase(tmp_path / "test.db")
-    
+
     try:
         db.add_entity("character", "Test", "Desc")
         raise Exception("Simulated error")
     except Exception:
         pass
-    
+
     # Database should still be usable
     entities = db.get_all_entities()
     assert isinstance(entities, list)
@@ -575,7 +575,7 @@ def test_random_with_seed(monkeypatch):
     """Test function with random elements."""
     import random
     random.seed(42)  # Make test deterministic
-    
+
     result = function_with_randomness()
     assert result in expected_range
 ```
