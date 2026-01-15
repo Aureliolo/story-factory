@@ -12,10 +12,15 @@ def extract_model_name(model_id: str) -> str:
     Returns:
         The display name (e.g., "llama3.3" or "qwen3-30b")
 
+    Raises:
+        ValueError: If model_id is None or empty string
+
     Examples:
         >>> extract_model_name("llama3.3")
         'llama3.3'
         >>> extract_model_name("qwen/qwen3-30b")
         'qwen3-30b'
     """
+    if not model_id or not model_id.strip():
+        raise ValueError("model_id cannot be None or empty")
     return model_id.split("/")[-1] if "/" in model_id else model_id
