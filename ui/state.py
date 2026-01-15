@@ -51,6 +51,9 @@ class AppState:
     # ========== Feedback Settings ==========
     feedback_mode: str = "per-chapter"  # per-chapter, mid-chapter, on-demand
 
+    # ========== UI Settings ==========
+    dark_mode: bool = False  # Dark mode toggle
+
     # ========== Callbacks ==========
     # These are called when certain state changes occur
     _on_project_change: Callable[[], None] | None = None
