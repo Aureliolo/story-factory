@@ -80,6 +80,8 @@ class KeyboardShortcuts:
         try:
             project, world_db = self.services.project.create_project()
             self.state.set_project(project.id, project, world_db)
+            self.services.settings.last_project_id = project.id
+            self.services.settings.save()
             ui.notify("New project created! (Ctrl+N)", type="positive")
         except Exception as e:
             ui.notify(f"Error: {e}", type="negative")

@@ -157,6 +157,8 @@ class ProjectsPage:
         try:
             project, world_db = self.services.project.create_project()
             self.state.set_project(project.id, project, world_db)
+            self.services.settings.last_project_id = project.id
+            self.services.settings.save()
             ui.notify("Project created!", type="positive")
             # Reload to update header dropdown
             ui.navigate.reload()
@@ -168,6 +170,8 @@ class ProjectsPage:
         try:
             project, world_db = self.services.project.load_project(project_id)
             self.state.set_project(project_id, project, world_db)
+            self.services.settings.last_project_id = project_id
+            self.services.settings.save()
             ui.notify(f"Opened: {project.project_name}", type="positive")
             self._refresh_project_list()
         except Exception as e:
@@ -203,6 +207,8 @@ class ProjectsPage:
             # Clear if this is the current project
             if self.state.project_id == project_id:
                 self.state.clear_project()
+                self.services.settings.last_project_id = None
+                self.services.settings.save()
 
             self.services.project.delete_project(project_id)
             self._refresh_project_list()

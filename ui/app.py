@@ -41,6 +41,30 @@ class StoryFactoryApp:
         self.state = AppState()
         self.state.dark_mode = services.settings.dark_mode
 
+        # Auto-load last project if available
+        self._load_last_project()
+
+    def _load_last_project(self) -> None:
+        """Load the last opened project if it still exists."""
+        last_id = self.services.settings.last_project_id
+        if not last_id:
+            return
+
+        try:
+            project, world_db = self.services.project.load_project(last_id)
+            self.state.set_project(last_id, project, world_db)
+            logger.info(f"Auto-loaded last project: {project.project_name}")
+        except FileNotFoundError:
+            # Project was deleted, clear the setting
+            logger.info(f"Last project {last_id} no longer exists, clearing setting")
+            self.services.settings.last_project_id = None
+            self.services.settings.save()
+        except Exception as e:
+            logger.warning(f"Failed to auto-load last project {last_id}: {e}")
+            # Clear invalid project reference
+            self.services.settings.last_project_id = None
+            self.services.settings.save()
+
     def _apply_theme(self) -> None:
         """Apply theme settings to the page."""
         from ui.theme import get_background_class
