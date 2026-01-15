@@ -192,15 +192,11 @@ def section_header(
         title: Section title.
         icon: Optional icon name.
         actions: Optional list of button configs [{"text": "...", "on_click": ...}, ...]
-        dark_mode: Whether to use dark mode styling.
+        dark_mode: Deprecated, ignored. Uses Tailwind dark: variants.
     """
-    from ui.theme import get_text_class
-
-    icon_class = get_text_class(dark_mode, variant="secondary")
-
     with ui.row().classes("w-full items-center mb-4"):
         if icon:
-            ui.icon(icon, size="md").classes(icon_class)
+            ui.icon(icon, size="md").classes("text-gray-600 dark:text-gray-300")
         ui.label(title).classes("text-lg font-semibold")
         ui.space()
 

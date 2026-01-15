@@ -311,21 +311,17 @@ def get_surface_class(dark_mode: bool = False) -> str:
 def get_text_class(dark_mode: bool = False, variant: str = "primary") -> str:
     """Get text color class for the current theme.
 
+    Uses Tailwind dark: variants for automatic dark mode support.
+
     Args:
-        dark_mode: Whether to use dark mode.
+        dark_mode: Deprecated, ignored. Kept for backwards compatibility.
         variant: Text variant (primary, secondary, muted).
 
     Returns:
-        Text class string.
+        Text class string with dark: variants.
     """
-    if dark_mode:
-        return {
-            "primary": "text-gray-100",
-            "secondary": "text-gray-300",
-            "muted": "text-gray-400",
-        }.get(variant, "text-gray-100")
     return {
-        "primary": "text-gray-800",
-        "secondary": "text-gray-600",
-        "muted": "text-gray-500",
-    }.get(variant, "text-gray-800")
+        "primary": "text-gray-800 dark:text-gray-100",
+        "secondary": "text-gray-600 dark:text-gray-300",
+        "muted": "text-gray-500 dark:text-gray-400",
+    }.get(variant, "text-gray-800 dark:text-gray-100")
