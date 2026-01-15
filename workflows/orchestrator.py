@@ -3,6 +3,7 @@
 import json
 import logging
 import uuid
+from collections import deque
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
@@ -60,7 +61,8 @@ class StoryOrchestrator:
 
         # State
         self.story_state: StoryState | None = None
-        self.events: list[WorkflowEvent] = []
+        # Use deque with maxlen to prevent unbounded memory growth
+        self.events: deque[WorkflowEvent] = deque(maxlen=MAX_EVENTS)
         self._correlation_id: str | None = None  # Current workflow correlation ID
 
     def _validate_response(self, response: str, task: str = "") -> str:
@@ -182,9 +184,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             correlation_id=self._correlation_id,
         )
         self.events.append(event)
-        # Trim old events to prevent memory leak
-        if len(self.events) > MAX_EVENTS:
-            self.events = self.events[-MAX_EVENTS:]
+        # Deque automatically trims old events when maxlen is reached
         return event
 
     def clear_events(self):

@@ -1,5 +1,6 @@
 """Export service - handles exporting stories to various formats."""
 
+import html
 import logging
 from io import BytesIO
 from pathlib import Path
@@ -8,6 +9,34 @@ from memory.story_state import StoryState
 from settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_export_path(path: Path) -> Path:
+    """Validate that an export path is safe to write to.
+
+    Args:
+        path: Path to validate
+
+    Returns:
+        Resolved absolute path
+
+    Raises:
+        ValueError: If path is suspicious or unsafe
+    """
+    try:
+        resolved = path.resolve()
+        # Don't allow writing to system directories
+        forbidden_dirs = [Path("/"), Path("/etc"), Path("/usr"), Path("/bin"), Path("/sys")]
+        for forbidden in forbidden_dirs:
+            try:
+                resolved.relative_to(forbidden)
+                raise ValueError(f"Cannot export to system directory: {resolved}")
+            except ValueError:
+                # Not under this forbidden dir, continue checking
+                continue
+        return resolved
+    except Exception as e:
+        raise ValueError(f"Invalid export path: {path}") from e
 
 
 class ExportService:
@@ -248,10 +277,8 @@ class ExportService:
                 # Split into paragraphs
                 for para in ch.content.split("\n\n"):
                     if para.strip():
-                        # Escape special characters
-                        safe_para = (
-                            para.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                        )
+                        # Escape special characters using standard library
+                        safe_para = html.escape(para.strip())
                         story_elements.append(Paragraph(safe_para, body_style))
 
                 story_elements.append(PageBreak())
@@ -275,7 +302,7 @@ class ExportService:
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
-            f"<title>{title}</title>",
+            f"<title>{html.escape(title)}</title>",
             "<meta charset='utf-8'>",
             "<style>",
             "body { font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }",
@@ -286,23 +313,23 @@ class ExportService:
             "</style>",
             "</head>",
             "<body>",
-            f"<h1>{title}</h1>",
+            f"<h1>{html.escape(title)}</h1>",
         ]
 
         if brief:
             html_parts.append(
-                f"<p class='meta'>Genre: {brief.genre} | Tone: {brief.tone}<br>"
-                f"Setting: {brief.setting_place}, {brief.setting_time}</p>"
+                f"<p class='meta'>Genre: {html.escape(brief.genre)} | Tone: {html.escape(brief.tone)}<br>"
+                f"Setting: {html.escape(brief.setting_place)}, {html.escape(brief.setting_time)}</p>"
             )
 
         for chapter in state.chapters:
             if chapter.content:
-                html_parts.append(f"<h2>Chapter {chapter.number}: {chapter.title}</h2>")
+                html_parts.append(
+                    f"<h2>Chapter {chapter.number}: {html.escape(chapter.title)}</h2>"
+                )
                 for para in chapter.content.split("\n\n"):
                     if para.strip():
-                        safe_para = (
-                            para.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                        )
+                        safe_para = html.escape(para.strip())
                         html_parts.append(f"<p>{safe_para}</p>")
 
         html_parts.extend(["</body>", "</html>"])
@@ -325,9 +352,11 @@ class ExportService:
             Path where the file was saved.
 
         Raises:
-            ValueError: If format is not supported.
+            ValueError: If format is not supported or path is invalid.
         """
         filepath = Path(filepath)
+        # Validate export path
+        filepath = _validate_export_path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
         if format == "markdown":

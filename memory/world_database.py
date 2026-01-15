@@ -112,6 +112,15 @@ class WorldDatabase:
         if self.conn:
             self.conn.close()
 
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures connection is closed."""
+        self.close()
+        return False  # Don't suppress exceptions
+
     # =========================================================================
     # Entity CRUD Operations
     # =========================================================================

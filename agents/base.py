@@ -67,7 +67,8 @@ class BaseAgent:
         else:
             self.temperature = self.settings.get_temperature_for_agent(self.agent_role)
 
-        self.client = ollama.Client(host=self.settings.ollama_url)
+        # Create Ollama client with timeout to prevent hanging
+        self.client = ollama.Client(host=self.settings.ollama_url, timeout=120.0)
 
     @classmethod
     @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)
@@ -77,7 +78,7 @@ class BaseAgent:
         Returns:
             Tuple of (is_healthy, message)
         """
-        client = ollama.Client(host=ollama_url)
+        client = ollama.Client(host=ollama_url, timeout=30.0)
         models = client.list()
         model_count = len(models.get("models", []))
         return True, f"Ollama connected. {model_count} models available."
