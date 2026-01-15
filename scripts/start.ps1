@@ -195,7 +195,7 @@ while ($true) {
             "4" { Show-Logs; $script:lastAction = "" }
             "5" { Open-Browser }
             "6" { Clear-LogFile }
-            "Q" { exit 0 }
+            "Q" { [Environment]::Exit(0) }
             default {
                 if ($choice -and $choice -ne "`r" -and $choice -ne "`n") {
                     Set-ActionMessage "Invalid: $choice" "Red"
