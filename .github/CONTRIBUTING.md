@@ -12,7 +12,7 @@ Thank you for your interest in contributing to Story Factory! This document prov
 
 2. **Install dependencies**
    ```bash
-   pip install -r requirements-dev.txt
+   pip install -r requirements.txt
    ```
 
 3. **Install Ollama and pull a model**
@@ -46,7 +46,7 @@ We use automated code quality tools to maintain consistent code style:
 
 ```bash
 # Format code
-black .
+ruff format .
 
 # Check linting
 ruff check .
@@ -63,7 +63,7 @@ make check  # Run both linting and tests
 ### Code Style
 
 - **Line length**: 100 characters
-- **Formatting**: Black (automatic)
+- **Formatting**: Ruff (automatic)
 - **Import sorting**: Ruff (automatic)
 - **Linting**: Ruff
 - **Type hints**: Encouraged but not required (we're gradually adding them)
@@ -151,9 +151,8 @@ with log_performance(logger, "story_generation"):
 
 Our GitHub Actions workflow automatically:
 - Runs tests with coverage
-- Checks code formatting (black)
-- Runs linting (ruff)
-- Reports coverage to Codecov
+- Checks code formatting (ruff format)
+- Runs linting (ruff check)
 
 Make sure all checks pass before requesting review.
 
