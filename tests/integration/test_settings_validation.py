@@ -6,19 +6,8 @@ These tests verify that settings page handles various model states correctly.
 import json
 from unittest.mock import MagicMock, patch
 
-
-class MockModel:
-    """Mock model object returned by ollama.list()."""
-
-    def __init__(self, model: str):
-        self.model = model
-
-
-class MockListResponse:
-    """Mock response from ollama.list()."""
-
-    def __init__(self, models: list[str]):
-        self.models = [MockModel(m) for m in models]
+# Import shared mock classes from integration conftest
+from tests.integration.conftest import MockListResponse
 
 
 class TestModelSelectionFallback:

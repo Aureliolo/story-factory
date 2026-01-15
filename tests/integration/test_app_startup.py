@@ -4,33 +4,9 @@ These tests verify that components work together correctly during startup.
 """
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-
-
-class MockModel:
-    """Mock model object returned by ollama.list()."""
-
-    def __init__(self, model: str):
-        self.model = model
-
-
-class MockListResponse:
-    """Mock response from ollama.list()."""
-
-    def __init__(self, models: list[str]):
-        self.models = [MockModel(m) for m in models]
-
-
-@pytest.fixture
-def mock_ollama_client():
-    """Mock Ollama client for tests."""
-    with patch("services.model_service.ollama") as mock_ollama:
-        mock_client = MagicMock()
-        mock_client.list.return_value = MockListResponse(["model-a:latest", "model-b:7b"])
-        mock_ollama.Client.return_value = mock_client
-        yield mock_client
+# mock_ollama_client fixture is provided by conftest.py
 
 
 class TestFullStartupSequence:
@@ -132,8 +108,12 @@ class TestServiceInteractions:
 class TestSettingsValidation:
     """Test settings validation during startup."""
 
-    def test_invalid_ollama_url_falls_back_to_default(self, tmp_path):
-        """Settings falls back to default URL for invalid URLs."""
+    def test_invalid_ollama_url_returns_default_settings(self, tmp_path):
+        """Settings.load() returns default Settings when config has invalid URL.
+
+        When validation fails (e.g., invalid URL format), the entire settings
+        object is replaced with defaults, not just the invalid field.
+        """
         from settings import Settings
 
         config_file = tmp_path / "settings.json"
@@ -141,7 +121,7 @@ class TestSettingsValidation:
 
         with patch("settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
-            # Invalid URL gets replaced with default
+            # Entire settings is replaced with defaults when validation fails
             assert settings.ollama_url == "http://localhost:11434"
 
     def test_missing_required_fields_use_defaults(self, tmp_path):

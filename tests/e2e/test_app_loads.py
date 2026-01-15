@@ -49,8 +49,7 @@ class TestTabNavigation:
         page.wait_for_load_state("networkidle")
 
         page.get_by_role("tab", name="Settings").click()
-        page.wait_for_timeout(500)
-
+        # Playwright's expect has auto-waiting, no need for fixed timeout
         expect(page.get_by_text("Ollama Connection")).to_be_visible()
 
     def test_models_tab_loads(self, page: Page, base_url: str):
@@ -59,8 +58,7 @@ class TestTabNavigation:
         page.wait_for_load_state("networkidle")
 
         page.get_by_role("tab", name="Models").click()
-        page.wait_for_timeout(500)
-
+        # Playwright's expect has auto-waiting, no need for fixed timeout
         expect(page.get_by_text("Model")).to_be_visible()
 
 
@@ -71,16 +69,14 @@ class TestSettingsPage:
         """Settings form elements are visible."""
         page.goto(base_url)
         page.get_by_role("tab", name="Settings").click()
-        page.wait_for_timeout(500)
-
+        # Playwright's expect has auto-waiting
         expect(page.get_by_label("Ollama URL")).to_be_visible()
 
     def test_model_dropdown_has_options(self, page: Page, base_url: str):
         """Model dropdown has selectable options."""
         page.goto(base_url)
         page.get_by_role("tab", name="Settings").click()
-        page.wait_for_timeout(500)
-
+        # Playwright's expect has auto-waiting
         model_select = (
             page.locator("text=Default Model").locator("..").locator("select, [role='listbox']")
         )

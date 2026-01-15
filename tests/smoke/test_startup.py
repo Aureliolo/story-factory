@@ -151,27 +151,3 @@ class TestUIComponentsConstruction:
 
             assert app is not None
             assert app.services is services
-
-
-class TestSettingsPageModelHandling:
-    """Test settings page handles model states correctly."""
-
-    def test_model_fallback_when_not_in_options(self):
-        """Settings page falls back to 'auto' for missing models."""
-        model_options = {"auto": "Auto-select", "model-a": "model-a"}
-
-        saved_value = "nonexistent-model"
-        if saved_value not in model_options:
-            saved_value = "auto"
-
-        assert saved_value == "auto"
-
-    def test_model_preserved_when_in_options(self):
-        """Settings page preserves valid model selections."""
-        model_options = {"auto": "Auto-select", "model-a": "model-a"}
-
-        saved_value = "model-a"
-        if saved_value not in model_options:
-            saved_value = "auto"
-
-        assert saved_value == "model-a"

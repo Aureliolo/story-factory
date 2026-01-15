@@ -37,13 +37,7 @@ strict_equality = true
 
 [[tool.mypy.overrides]]
 module = [
-    "ollama.*",
-    "nicegui.*",
-    "ebooklib.*",
-    "reportlab.*",
-    "PIL.*",
-    "networkx.*",
-    "playwright.*",
+    "ebooklib.*",  # No type stubs available, no py.typed
 ]
 ignore_missing_imports = true
 
