@@ -46,9 +46,36 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --strict-markers"
+# Fail on warnings in strict mode (use PYTEST_STRICT=1 to enable)
+# filterwarnings = ["error"]  # Uncomment for strict warning mode
 markers = [
     "e2e: End-to-end browser tests (require playwright)",
     "smoke: Quick startup validation tests",
     "integration: Integration tests for component interactions",
+    "slow: Slow tests that take more than 1 second",
 ]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "*/site-packages/*",
+    "*/__pycache__/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "\\.\\.\\.",
+]
+precision = 1
+show_missing = true
+skip_covered = false
