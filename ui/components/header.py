@@ -33,11 +33,14 @@ class Header:
 
     def build(self) -> None:
         """Build the header UI."""
-        with ui.header().classes("bg-white shadow-sm items-center"):
+        from ui.theme import get_surface_class
+
+        header_bg = get_surface_class(self.state.dark_mode)
+        with ui.header().classes(f"{header_bg} shadow-sm items-center"):
             with ui.row().classes("w-full items-center gap-4 px-4 py-2"):
                 # Logo/Title
                 ui.icon("auto_stories", size="lg").classes("text-blue-500")
-                ui.label("Story Factory").classes("text-xl font-bold text-gray-800")
+                ui.label("Story Factory").classes("text-xl font-bold")
 
                 ui.separator().props("vertical").classes("h-8")
 
@@ -52,6 +55,11 @@ class Header:
 
                 # Spacer
                 ui.space()
+
+                # Dark mode toggle
+                self._build_theme_toggle()
+
+                ui.separator().props("vertical").classes("h-6")
 
                 # Ollama status
                 self._build_status_display()
@@ -91,6 +99,27 @@ class Header:
             with ui.row().classes("items-center gap-1"):
                 ui.icon("memory", size="sm").classes("text-gray-500")
                 self._vram_label = ui.label(f"{vram} GB VRAM").classes("text-sm text-gray-600")
+
+    def _build_theme_toggle(self) -> None:
+        """Build the dark mode toggle button."""
+
+        def toggle_theme():
+            """Toggle between dark and light mode."""
+            self.state.dark_mode = not self.state.dark_mode
+            self.services.settings.dark_mode = self.state.dark_mode
+            self.services.settings.save()
+            ui.notify(
+                f"{'Dark' if self.state.dark_mode else 'Light'} mode enabled. Refresh to apply.",
+                type="info",
+            )
+
+        icon = "dark_mode" if not self.state.dark_mode else "light_mode"
+        tooltip = "Enable dark mode" if not self.state.dark_mode else "Enable light mode"
+
+        ui.button(
+            icon=icon,
+            on_click=toggle_theme,
+        ).props("flat round").tooltip(tooltip)
 
     async def _on_project_change(self, e) -> None:
         """Handle project selection change."""
