@@ -1,61 +1,46 @@
 # Story Factory - TODO
 
-## High Priority
+## Remaining Work
 
-### World Page Improvements
-- [ ] **Entity editor doesn't refresh on selection** - Clicking different entities shows stale data. The form fields need to be updated when selection changes in `ui/pages/world.py`
-- [ ] **Graph node selection callback** - Node clicks may not trigger Python callbacks properly in NiceGUI context (`ui/components/graph.py:188-205`)
+### Nice to Have
 
-### Code Quality Pass
-- [ ] **Full test coverage review** - Audit all modules for missing unit tests, especially:
-  - `ui/pages/*.py` - UI component tests
-  - `ui/components/*.py` - Component tests
-  - `services/model_mode_service.py` - More edge cases
-  - `workflows/orchestrator.py` - Integration tests
-- [ ] **Logging audit** - Ensure consistent logging across all modules:
-  - Add `logger.info()` for important operations
-  - Add `logger.debug()` for detailed flow
-  - Add `logger.error()` with `exc_info=True` for all exceptions
-- [ ] **Exception handling review** - Audit for:
-  - Bare `except:` clauses that should be specific
-  - Missing try/except around I/O operations
-  - Proper exception chaining with `raise ... from e`
-  - User-friendly error messages in UI
-
-## Medium Priority
-
-### UI/UX Improvements
-- [ ] **Dark mode graph colors** - Graph detection relies on multiple DOM selectors that may not work reliably with NiceGUI (`ui/graph_renderer.py:143-146`)
-- [ ] **Empty state on World page** - Show guidance when no entities exist instead of just "No entities found"
-- [ ] **Graph search highlighting** - When searching entities, highlight matching nodes in the graph
-- [ ] **Relationship editing** - Allow viewing/editing relationship properties by clicking edges
-
-### Performance
-- [ ] **Graph initialization timeout** - Add timeout to prevent infinite retry loop if vis.js CDN fails to load (`ui/graph_renderer.py:135-140`)
-
-## Low Priority
-
-### Responsive Design
-- [ ] **World page mobile layout** - Fixed column widths (20%/60%/20%) break on small screens (`ui/pages/world.py:70-86`)
-- [ ] **Analytics page mobile** - Test and fix mobile responsiveness
-
-### Features
-- [ ] **Entity attributes editing** - Currently read-only, need JSON editor for attributes
-- [ ] **Undo/redo system** - No way to undo entity creation/deletion
-- [ ] **Graph node dragging** - Enable physics simulation for draggable nodes
-
-### Code Quality
-- [ ] **Type hints consistency** - Some functions have full type hints, others use `Any`
-- [ ] **Graph renderer refactor** - Returns `tuple[str, str]` for HTML/JS, should use named tuple or dataclass
-- [ ] **HTML sanitization** - `ui/pages/world.py:328` uses `sanitize=False`, verify safety
+- [ ] **Graph node dragging** - Improve physics simulation for smoother draggable nodes
 
 ## Completed
 
+### World Page Improvements (Recent)
+- [x] Undo/redo system - Full undo/redo for entity and relationship CRUD operations
+
+### World Page Improvements
+- [x] Entity editor refreshes on selection - Added `_refresh_entity_editor()` method and refreshable container
+- [x] Graph node selection callback - Uses NiceGUI's `emitEvent`/`ui.on()` event system
+- [x] Empty state on World page - Shows helpful guidance when no entities exist
+- [x] Graph search highlighting - Matching nodes highlighted with red border, non-matching dimmed
+- [x] Relationship editing via edge clicks - Click edges to edit/delete relationships in dialog
+- [x] Entity attributes JSON editor - Full JSON editor for entity attributes
+
+### Graph & Visualization
 - [x] Fix vis-network version mismatch (white graph)
 - [x] Implement circular layout with calculated positions
 - [x] Implement grid layout with calculated positions
+- [x] Dark mode graph detection - Robust detection using body class, data-theme, computed colors
+- [x] Graph initialization timeout - 5 second timeout with error message if CDN fails
+
+### Security & Code Quality
+- [x] HTML sanitization verified - Added `html.escape()` to all user content in graph tooltips/analysis results
+- [x] Graph renderer refactor - Now returns `GraphRenderResult` dataclass instead of tuple
+- [x] Logging audit complete - All services have proper logging with `logger.info/debug/warning`
+- [x] Exception handling review - No bare except clauses, proper exception chaining in place
+- [x] Type hints consistency - Added return types to main functions
+
+### Test Coverage
+- [x] Full test coverage review - Added 36 new tests for ModelModeService (263 tests total)
+- [x] Fixed bugs found during testing - `time_seconds` and `tokens_per_second` None formatting
+
+### Models & Services
 - [x] Add "Check for Updates" button to Models page
 - [x] Fix model pull progress None values crash
 - [x] Auto-sync CDN versions via GitHub Action
 - [x] Fix `finish_tracking` to persist performance metrics
 - [x] Fix `save_custom_mode` to preserve `created_at`
+- [x] Add `update_relationship` method to WorldDatabase

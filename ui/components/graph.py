@@ -1,5 +1,6 @@
 """Graph visualization component using vis.js."""
 
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -40,6 +41,7 @@ class GraphComponent:
         self,
         world_db: WorldDatabase | None = None,
         on_node_select: Callable[[str], Any] | None = None,
+        on_edge_select: Callable[[str], Any] | None = None,
         height: int = 500,
     ):
         """Initialize graph component.
@@ -47,21 +49,45 @@ class GraphComponent:
         Args:
             world_db: WorldDatabase to visualize.
             on_node_select: Callback when a node is selected.
+            on_edge_select: Callback when an edge is selected (passes relationship ID).
             height: Graph container height in pixels.
         """
         self.world_db = world_db
         self.on_node_select = on_node_select
+        self.on_edge_select = on_edge_select
         self.height = height
 
         self._container: Html | None = None
         self._filter_types: list[str] = ["character", "location"]
         self._layout = "force-directed"
         self._selected_entity_id: str | None = None
+        self._callback_id = f"graph_node_select_{uuid.uuid4().hex[:8]}"
+        self._edge_callback_id = f"graph_edge_select_{uuid.uuid4().hex[:8]}"
 
     def build(self) -> None:
         """Build the graph UI."""
         # Ensure vis-network library is loaded
         _ensure_vis_network_loaded()
+
+        # Register event handler for node selection
+        if self.on_node_select:
+
+            def handle_node_select(e) -> None:
+                node_id = e.args.get("node_id") if e.args else None
+                if node_id and self.on_node_select:
+                    self.on_node_select(node_id)
+
+            ui.on(self._callback_id, handle_node_select)
+
+        # Register event handler for edge selection
+        if self.on_edge_select:
+
+            def handle_edge_select(e) -> None:
+                edge_id = e.args.get("edge_id") if e.args else None
+                if edge_id and self.on_edge_select:
+                    self.on_edge_select(edge_id)
+
+            ui.on(self._edge_callback_id, handle_edge_select)
 
         with ui.column().classes("w-full"):
             # Controls
@@ -169,7 +195,7 @@ class GraphComponent:
             return
 
         # Generate vis.js HTML and JavaScript separately
-        html, js = render_graph_html(
+        result = render_graph_html(
             world_db=self.world_db,
             filter_types=self._filter_types if self._filter_types else None,
             layout=self._layout,
@@ -179,30 +205,117 @@ class GraphComponent:
         )
 
         # Set HTML content (no script tags)
-        self._container.content = html
+        self._container.content = result.html
 
         # Run JavaScript initialization
-        ui.run_javascript(js)
+        ui.run_javascript(result.js)
 
-        # Add JavaScript handler for node selection
-        if self.on_node_select:
+        # Add JavaScript handler for node and edge selection
+        if self.on_node_select or self.on_edge_select:
+            node_callback = self._callback_id if self.on_node_select else ""
+            edge_callback = self._edge_callback_id if self.on_edge_select else ""
             ui.run_javascript(
-                """
-                if (window.graphNetwork) {
+                f"""
+                if (window.graphNetwork) {{
                     window.graphNetwork.off('click');
-                    window.graphNetwork.on('click', function(params) {
-                        if (params.nodes.length > 0) {
+                    window.graphNetwork.on('click', function(params) {{
+                        if (params.nodes.length > 0) {{
                             const nodeId = params.nodes[0];
-                            // Send to Python via NiceGUI
-                            window.parent.postMessage({
-                                type: 'graph_node_select',
-                                nodeId: nodeId
-                            }, '*');
-                        }
-                    });
-                }
+                            if ('{node_callback}') {{
+                                emitEvent('{node_callback}', {{node_id: nodeId}});
+                            }}
+                        }} else if (params.edges.length > 0) {{
+                            const edgeId = params.edges[0];
+                            if ('{edge_callback}') {{
+                                emitEvent('{edge_callback}', {{edge_id: edgeId}});
+                            }}
+                        }}
+                    }});
+                }}
             """
             )
+
+    def highlight_search(self, query: str) -> None:
+        """Highlight nodes matching a search query.
+
+        Args:
+            query: Search query to match against node labels.
+        """
+        if not query:
+            # Clear highlighting
+            ui.run_javascript(
+                """
+                if (window.graphNetwork && window.graphNodes) {
+                    // Reset all nodes to original styling
+                    var updates = [];
+                    window.graphNodes.forEach(function(node) {
+                        if (node._originalColor) {
+                            updates.push({
+                                id: node.id,
+                                color: node._originalColor,
+                                borderWidth: 1,
+                                font: { color: node._originalFontColor || '#333' }
+                            });
+                        }
+                    });
+                    if (updates.length > 0) {
+                        window.graphNodes.update(updates);
+                    }
+                }
+                """
+            )
+            return
+
+        # Highlight matching nodes and dim non-matching ones
+        escaped_query = query.replace("\\", "\\\\").replace("'", "\\'").lower()
+        ui.run_javascript(
+            f"""
+            if (window.graphNetwork && window.graphNodes) {{
+                var query = '{escaped_query}';
+                var updates = [];
+
+                window.graphNodes.forEach(function(node) {{
+                    var label = (node.label || '').toLowerCase();
+                    var matches = label.includes(query);
+
+                    // Store original colors on first highlight
+                    if (!node._originalColor) {{
+                        node._originalColor = node.color;
+                        node._originalFontColor = node.font ? node.font.color : '#333';
+                    }}
+
+                    if (matches) {{
+                        // Highlight matching nodes
+                        updates.push({{
+                            id: node.id,
+                            borderWidth: 3,
+                            color: {{
+                                background: node._originalColor.background || node._originalColor,
+                                border: '#ef4444',
+                                highlight: {{ background: '#fef2f2', border: '#ef4444' }}
+                            }},
+                            font: {{ color: '#ef4444', bold: true }}
+                        }});
+                    }} else {{
+                        // Dim non-matching nodes
+                        updates.push({{
+                            id: node.id,
+                            borderWidth: 1,
+                            color: {{
+                                background: '#d1d5db',
+                                border: '#9ca3af'
+                            }},
+                            font: {{ color: '#9ca3af' }}
+                        }});
+                    }}
+                }});
+
+                if (updates.length > 0) {{
+                    window.graphNodes.update(updates);
+                }}
+            }}
+            """
+        )
 
     def _toggle_filter(self, entity_type: str, enabled: bool) -> None:
         """Toggle a type filter.
@@ -248,11 +361,9 @@ def mini_graph(
     _ensure_vis_network_loaded()
 
     # Use unique container ID for mini graphs
-    import uuid
-
     container_id = f"mini-graph-{uuid.uuid4().hex[:8]}"
 
-    html, js = render_graph_html(
+    result = render_graph_html(
         world_db=world_db,
         filter_types=filter_types or ["character", "location"],
         layout="force-directed",
@@ -261,9 +372,9 @@ def mini_graph(
     )
 
     # Add HTML container (no script tags)
-    ui.html(html, sanitize=False).classes(
+    ui.html(result.html, sanitize=False).classes(
         "w-full border dark:border-gray-700 rounded bg-white dark:bg-gray-800"
     ).style(f"height: {height}px;")
 
     # Run JavaScript initialization
-    ui.run_javascript(js)
+    ui.run_javascript(result.js)

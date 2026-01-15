@@ -21,7 +21,7 @@ from utils.logging_config import setup_logging
 logger = logging.getLogger(__name__)
 
 
-def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False):
+def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False) -> None:
     """Launch the NiceGUI web interface.
 
     Args:
@@ -44,7 +44,7 @@ def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False):
     app.run(host=host, port=port, reload=reload)
 
 
-def run_cli(load_story: str | None = None, list_stories: bool = False):
+def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
     """Run a simple CLI version.
 
     Args:
@@ -160,7 +160,7 @@ def run_cli(load_story: str | None = None, list_stories: bool = False):
         print(f"Story saved to: {filepath}")
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Story Factory - AI-Powered Story Production Team")
     parser.add_argument(

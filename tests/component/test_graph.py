@@ -61,9 +61,9 @@ class TestMiniGraph:
 class TestGraphRenderer:
     """Tests for the graph_renderer module."""
 
-    def test_render_graph_html_returns_tuple(self, test_world_db):
-        """render_graph_html returns (html, js) tuple, not combined HTML."""
-        from ui.graph_renderer import render_graph_html
+    def test_render_graph_html_returns_dataclass(self, test_world_db):
+        """render_graph_html returns GraphRenderResult dataclass."""
+        from ui.graph_renderer import GraphRenderResult, render_graph_html
 
         result = render_graph_html(
             test_world_db,
@@ -71,12 +71,10 @@ class TestGraphRenderer:
             height=300,
         )
 
-        assert isinstance(result, tuple), "Should return tuple"
-        assert len(result) == 2, "Should return (html, js)"
-        html, js = result
-        assert "test-container" in html, "HTML should contain container ID"
-        assert "<script>" not in html, "HTML should not contain script tags"
-        assert "vis.Network" in js, "JS should contain vis.Network initialization"
+        assert isinstance(result, GraphRenderResult), "Should return GraphRenderResult"
+        assert "test-container" in result.html, "HTML should contain container ID"
+        assert "<script>" not in result.html, "HTML should not contain script tags"
+        assert "vis.Network" in result.js, "JS should contain vis.Network initialization"
 
     def test_render_entity_summary_html_no_script_tags(self, test_world_db):
         """Entity summary HTML doesn't contain script tags."""
@@ -90,26 +88,26 @@ class TestGraphRenderer:
         """Graph JavaScript contains entity data from world database."""
         from ui.graph_renderer import render_graph_html
 
-        _, js = render_graph_html(
+        result = render_graph_html(
             test_world_db,
             container_id="test",
             height=300,
         )
 
         # Should contain our test entity
-        assert "Test Character" in js, "Should contain entity names"
+        assert "Test Character" in result.js, "Should contain entity names"
 
     def test_render_graph_html_has_valid_js(self, test_world_db):
         """Graph JavaScript is valid and can initialize vis.Network."""
         from ui.graph_renderer import render_graph_html
 
-        _, js = render_graph_html(
+        result = render_graph_html(
             test_world_db,
             container_id="test",
             height=300,
         )
 
         # Should have vis.Network initialization
-        assert "new vis.Network" in js, "Should initialize vis.Network"
-        assert "nodes:" in js, "Should have nodes data"
-        assert "edges:" in js, "Should have edges data"
+        assert "new vis.Network" in result.js, "Should initialize vis.Network"
+        assert "nodes:" in result.js, "Should have nodes data"
+        assert "edges:" in result.js, "Should have edges data"

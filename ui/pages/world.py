@@ -3,9 +3,11 @@
 import logging
 
 from nicegui import ui
+from nicegui.elements.button import Button
 from nicegui.elements.column import Column
 from nicegui.elements.html import Html
 from nicegui.elements.input import Input
+from nicegui.elements.json_editor import JsonEditor
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
@@ -18,7 +20,7 @@ from ui.graph_renderer import (
     render_communities_result,
     render_path_result,
 )
-from ui.state import AppState
+from ui.state import ActionType, AppState, UndoAction
 from ui.theme import ENTITY_COLORS
 
 logger = logging.getLogger(__name__)
@@ -48,13 +50,18 @@ class WorldPage:
         # UI references
         self._graph: GraphComponent | None = None
         self._entity_list: Column | None = None
+        self._editor_container: Column | None = None
         self._entity_name_input: Input | None = None
         self._entity_type_select: Select | None = None
         self._entity_desc_input: Textarea | None = None
+        self._entity_attrs_editor: JsonEditor | None = None
+        self._entity_attrs: dict = {}
         self._rel_source_select: Select | None = None
         self._rel_type_select: Select | None = None
         self._rel_target_select: Select | None = None
         self._analysis_result: Html | None = None
+        self._undo_btn: Button | None = None
+        self._redo_btn: Button | None = None
 
     def build(self) -> None:
         """Build the world page UI."""
@@ -67,17 +74,19 @@ class WorldPage:
             self._build_interview_required_message()
             return
 
-        with ui.row().classes("w-full h-full gap-4 p-4"):
-            # Left panel - Entity browser
-            with ui.column().classes("w-1/5 gap-4"):
+        # Responsive layout: stack on mobile, 3-column on desktop
+        with ui.row().classes("w-full h-full gap-4 p-4 flex-wrap lg:flex-nowrap"):
+            # Left panel - Entity browser (full width on mobile, 20% on desktop)
+            with ui.column().classes("w-full lg:w-1/5 gap-4 min-w-[250px]"):
                 self._build_entity_browser()
 
-            # Center panel - Graph visualization
-            with ui.column().classes("w-3/5 gap-4"):
+            # Center panel - Graph visualization (full width on mobile, 60% on desktop)
+            with ui.column().classes("w-full lg:w-3/5 gap-4 min-w-[300px]"):
                 self._build_graph_section()
 
-            # Right panel - Entity editor
-            with ui.column().classes("w-1/5 gap-4"):
+            # Right panel - Entity editor (full width on mobile, 20% on desktop)
+            self._editor_container = ui.column().classes("w-full lg:w-1/5 gap-4 min-w-[250px]")
+            with self._editor_container:
                 self._build_entity_editor()
 
         # Bottom sections
@@ -151,11 +160,32 @@ class WorldPage:
                 icon="add",
             ).props("color=primary").classes("w-full mt-2")
 
+            # Undo/Redo buttons
+            with ui.row().classes("w-full gap-2 mt-2"):
+                self._undo_btn = (
+                    ui.button(
+                        icon="undo",
+                        on_click=self._do_undo,
+                    )
+                    .props("flat dense")
+                    .tooltip("Undo (Ctrl+Z)")
+                )
+                self._redo_btn = (
+                    ui.button(
+                        icon="redo",
+                        on_click=self._do_redo,
+                    )
+                    .props("flat dense")
+                    .tooltip("Redo (Ctrl+Y)")
+                )
+                self._update_undo_redo_buttons()
+
     def _build_graph_section(self) -> None:
         """Build the graph visualization section."""
         self._graph = GraphComponent(
             world_db=self.state.world_db,
             on_node_select=self._on_node_select,
+            on_edge_select=self._on_edge_select,
             height=450,
         )
         self._graph.build()
@@ -199,13 +229,24 @@ class WorldPage:
                 .props("rows=4")
             )
 
-            # Attributes (JSON editor would be better, but using textarea for simplicity)
-            if entity.attributes:
-                with ui.expansion("Attributes", icon="list").classes("w-full"):
-                    for key, value in entity.attributes.items():
-                        with ui.row().classes("w-full gap-2"):
-                            ui.label(f"{key}:").classes("font-medium")
-                            ui.label(str(value))
+            # Attributes JSON editor
+            with ui.expansion("Attributes", icon="list").classes("w-full"):
+                ui.label("Edit entity attributes as JSON").classes(
+                    "text-xs text-gray-500 dark:text-gray-400 mb-2"
+                )
+
+                # Initialize attrs from entity
+                self._entity_attrs = entity.attributes.copy() if entity.attributes else {}
+
+                # JSON editor for attributes
+                self._entity_attrs_editor = (
+                    ui.json_editor(
+                        {"content": {"json": self._entity_attrs}},
+                        on_change=self._on_attrs_change,
+                    )
+                    .classes("w-full")
+                    .style("height: 200px;")
+                )
 
             # Action buttons
             with ui.row().classes("w-full gap-2 mt-4"):
@@ -359,7 +400,29 @@ class WorldPage:
 
         with self._entity_list:
             if not entities:
-                ui.label("No entities found").classes("text-gray-500 dark:text-gray-400 text-sm")
+                # Check if there are entities at all or just filtered out
+                all_entities = self.services.world.list_entities(self.state.world_db)
+                if not all_entities:
+                    # No entities exist at all - show guidance
+                    with ui.column().classes("items-center gap-2 py-4"):
+                        ui.icon("group_add", size="md").classes("text-gray-400 dark:text-gray-500")
+                        ui.label("No entities yet").classes(
+                            "text-gray-500 dark:text-gray-400 font-medium"
+                        )
+                        ui.label("Add characters, locations, and more").classes(
+                            "text-xs text-gray-400 dark:text-gray-500 text-center"
+                        )
+                        ui.label("using the button below.").classes(
+                            "text-xs text-gray-400 dark:text-gray-500 text-center"
+                        )
+                else:
+                    # Entities exist but are filtered out
+                    ui.label("No matching entities").classes(
+                        "text-gray-500 dark:text-gray-400 text-sm"
+                    )
+                    ui.label("Try adjusting filters or search").classes(
+                        "text-xs text-gray-400 dark:text-gray-500"
+                    )
             else:
                 for entity in entities:
                     entity_list_item(
@@ -386,18 +449,162 @@ class WorldPage:
         self.state.entity_search_query = e.value
         self._refresh_entity_list()
 
+        # Highlight matching nodes in the graph
+        if self._graph:
+            self._graph.highlight_search(e.value)
+
     def _on_node_select(self, entity_id: str) -> None:
         """Handle graph node selection."""
         self.state.select_entity(entity_id)
         self._refresh_entity_list()
-        # Would need to rebuild editor section
+        self._refresh_entity_editor()
+
+    def _on_edge_select(self, relationship_id: str) -> None:
+        """Handle graph edge selection to show relationship editor."""
+        if not self.state.world_db:
+            return
+
+        # Get all relationships and find the one that matches
+        relationships = self.state.world_db.list_relationships()
+        rel = next((r for r in relationships if r.id == relationship_id), None)
+
+        if not rel:
+            logger.warning(f"Relationship not found: {relationship_id}")
+            return
+
+        # Get source and target entities
+        source = self.services.world.get_entity(self.state.world_db, rel.source_id)
+        target = self.services.world.get_entity(self.state.world_db, rel.target_id)
+
+        source_name = source.name if source else "Unknown"
+        target_name = target.name if target else "Unknown"
+
+        # Show relationship editor dialog
+        with ui.dialog() as dialog, ui.card().classes("w-96"):
+            ui.label("Edit Relationship").classes("text-lg font-semibold")
+            ui.label(f"{source_name} → {target_name}").classes(
+                "text-sm text-gray-500 dark:text-gray-400"
+            )
+
+            ui.separator()
+
+            # Relationship type
+            rel_type_input = ui.input(
+                "Relationship Type",
+                value=rel.relation_type,
+            ).classes("w-full")
+
+            # Description
+            rel_desc_input = ui.textarea(
+                "Description",
+                value=rel.description,
+            ).classes("w-full")
+
+            # Strength slider
+            ui.label("Strength").classes("text-sm mt-2")
+            rel_strength_slider = ui.slider(
+                min=0.0,
+                max=1.0,
+                step=0.1,
+                value=rel.strength,
+            ).classes("w-full")
+
+            # Bidirectional checkbox
+            rel_bidir_checkbox = ui.checkbox(
+                "Bidirectional",
+                value=rel.bidirectional,
+            )
+
+            ui.separator()
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                def save_relationship():
+                    if not self.state.world_db:
+                        return
+
+                    # Record action for undo (store old values)
+                    self.state.record_action(
+                        UndoAction(
+                            action_type=ActionType.UPDATE_RELATIONSHIP,
+                            data={
+                                "relationship_id": rel.id,
+                                "relation_type": rel_type_input.value,
+                                "description": rel_desc_input.value,
+                                "strength": rel_strength_slider.value,
+                                "bidirectional": rel_bidir_checkbox.value,
+                            },
+                            inverse_data={
+                                "relation_type": rel.relation_type,
+                                "description": rel.description,
+                                "strength": rel.strength,
+                                "bidirectional": rel.bidirectional,
+                            },
+                        )
+                    )
+
+                    # Update the relationship
+                    self.state.world_db.update_relationship(
+                        relationship_id=rel.id,
+                        relation_type=rel_type_input.value,
+                        description=rel_desc_input.value,
+                        strength=rel_strength_slider.value,
+                        bidirectional=rel_bidir_checkbox.value,
+                    )
+                    dialog.close()
+                    if self._graph:
+                        self._graph.refresh()
+                    self._update_undo_redo_buttons()
+                    ui.notify("Relationship updated", type="positive")
+
+                ui.button("Save", on_click=save_relationship).props("color=primary")
+
+                def delete_relationship():
+                    if not self.state.world_db:
+                        return
+
+                    # Record action for undo
+                    self.state.record_action(
+                        UndoAction(
+                            action_type=ActionType.DELETE_RELATIONSHIP,
+                            data={"relationship_id": rel.id},
+                            inverse_data={
+                                "source_id": rel.source_id,
+                                "target_id": rel.target_id,
+                                "relation_type": rel.relation_type,
+                                "description": rel.description,
+                            },
+                        )
+                    )
+
+                    self.services.world.delete_relationship(self.state.world_db, rel.id)
+                    dialog.close()
+                    if self._graph:
+                        self._graph.refresh()
+                    self._update_undo_redo_buttons()
+                    ui.notify("Relationship deleted", type="warning")
+
+                ui.button("Delete", on_click=delete_relationship).props("color=negative flat")
+
+        dialog.open()
 
     def _select_entity(self, entity: Entity) -> None:
         """Select an entity for editing."""
         self.state.select_entity(entity.id)
         self._refresh_entity_list()
+        self._refresh_entity_editor()
         if self._graph:
             self._graph.set_selected(entity.id)
+
+    def _refresh_entity_editor(self) -> None:
+        """Refresh the entity editor panel with current selection."""
+        if not self._editor_container:
+            return
+
+        self._editor_container.clear()
+        with self._editor_container:
+            self._build_entity_editor()
 
     async def _show_add_dialog(self) -> None:
         """Show dialog to add new entity."""
@@ -430,20 +637,53 @@ class WorldPage:
             return
 
         try:
-            self.services.world.add_entity(
+            entity_id = self.services.world.add_entity(
                 self.state.world_db,
                 entity_type=entity_type,
                 name=name,
                 description=description,
             )
+
+            # Record action for undo
+            self.state.record_action(
+                UndoAction(
+                    action_type=ActionType.ADD_ENTITY,
+                    data={
+                        "entity_id": entity_id,
+                        "type": entity_type,
+                        "name": name,
+                        "description": description,
+                    },
+                    inverse_data={
+                        "type": entity_type,
+                        "name": name,
+                        "description": description,
+                    },
+                )
+            )
+
             dialog.close()
             self._refresh_entity_list()
             if self._graph:
                 self._graph.refresh()
+            self._update_undo_redo_buttons()
             ui.notify(f"Added {name}", type="positive")
         except Exception as e:
             logger.exception(f"Failed to add entity {name}")
             ui.notify(f"Error: {e}", type="negative")
+
+    def _on_attrs_change(self, e) -> None:
+        """Handle changes in the attributes JSON editor."""
+        try:
+            content = e.args.get("content", {})
+            if "json" in content:
+                self._entity_attrs = content["json"]
+            elif "text" in content:
+                import json
+
+                self._entity_attrs = json.loads(content["text"])
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass  # Invalid JSON, don't update
 
     def _save_entity(self) -> None:
         """Save current entity changes."""
@@ -451,15 +691,48 @@ class WorldPage:
             return
 
         try:
+            # Get current state for inverse data
+            old_entity = self.services.world.get_entity(
+                self.state.world_db, self.state.selected_entity_id
+            )
+            if not old_entity:
+                ui.notify("Entity not found", type="negative")
+                return
+
+            new_name = self._entity_name_input.value if self._entity_name_input else None
+            new_desc = self._entity_desc_input.value if self._entity_desc_input else None
+            new_attrs = self._entity_attrs if self._entity_attrs else None
+
             self.services.world.update_entity(
                 self.state.world_db,
                 entity_id=self.state.selected_entity_id,
-                name=self._entity_name_input.value if self._entity_name_input else None,
-                description=self._entity_desc_input.value if self._entity_desc_input else None,
+                name=new_name,
+                description=new_desc,
+                attributes=new_attrs,
             )
+
+            # Record action for undo
+            self.state.record_action(
+                UndoAction(
+                    action_type=ActionType.UPDATE_ENTITY,
+                    data={
+                        "entity_id": self.state.selected_entity_id,
+                        "name": new_name,
+                        "description": new_desc,
+                        "attributes": new_attrs,
+                    },
+                    inverse_data={
+                        "name": old_entity.name,
+                        "description": old_entity.description,
+                        "attributes": old_entity.attributes,
+                    },
+                )
+            )
+
             self._refresh_entity_list()
             if self._graph:
                 self._graph.refresh()
+            self._update_undo_redo_buttons()
             ui.notify("Entity saved", type="positive")
         except Exception as e:
             logger.exception(f"Failed to save entity {self.state.selected_entity_id}")
@@ -496,14 +769,41 @@ class WorldPage:
             return
 
         try:
+            # Get entity data for inverse (restore) operation
+            entity = self.services.world.get_entity(
+                self.state.world_db, self.state.selected_entity_id
+            )
+            if not entity:
+                ui.notify("Entity not found", type="negative")
+                return
+
+            entity_id = self.state.selected_entity_id
+
             self.services.world.delete_entity(
                 self.state.world_db,
-                self.state.selected_entity_id,
+                entity_id,
             )
+
+            # Record action for undo
+            self.state.record_action(
+                UndoAction(
+                    action_type=ActionType.DELETE_ENTITY,
+                    data={"entity_id": entity_id},
+                    inverse_data={
+                        "type": entity.type,
+                        "name": entity.name,
+                        "description": entity.description,
+                        "attributes": entity.attributes,
+                    },
+                )
+            )
+
             self.state.select_entity(None)
             self._refresh_entity_list()
+            self._refresh_entity_editor()
             if self._graph:
                 self._graph.refresh()
+            self._update_undo_redo_buttons()
             ui.notify("Entity deleted", type="positive")
         except Exception as e:
             logger.exception(f"Failed to delete entity {self.state.selected_entity_id}")
@@ -523,14 +823,34 @@ class WorldPage:
             return
 
         try:
-            self.services.world.add_relationship(
+            relationship_id = self.services.world.add_relationship(
                 self.state.world_db,
                 source_id=source_id,
                 target_id=target_id,
                 relation_type=rel_type,
             )
+
+            # Record action for undo
+            self.state.record_action(
+                UndoAction(
+                    action_type=ActionType.ADD_RELATIONSHIP,
+                    data={
+                        "relationship_id": relationship_id,
+                        "source_id": source_id,
+                        "target_id": target_id,
+                        "relation_type": rel_type,
+                    },
+                    inverse_data={
+                        "source_id": source_id,
+                        "target_id": target_id,
+                        "relation_type": rel_type,
+                    },
+                )
+            )
+
             if self._graph:
                 self._graph.refresh()
+            self._update_undo_redo_buttons()
             ui.notify("Relationship added", type="positive")
         except Exception as e:
             logger.exception("Failed to add relationship")
@@ -561,3 +881,144 @@ class WorldPage:
 
         if self._analysis_result:
             self._analysis_result.content = render_communities_result(self.state.world_db)
+
+    # ========== Undo/Redo Methods ==========
+
+    def _update_undo_redo_buttons(self) -> None:
+        """Update undo/redo button states based on history."""
+        if self._undo_btn:
+            self._undo_btn.set_enabled(self.state.can_undo())
+        if self._redo_btn:
+            self._redo_btn.set_enabled(self.state.can_redo())
+
+    def _do_undo(self) -> None:
+        """Execute undo operation."""
+        action = self.state.undo()
+        if not action or not self.state.world_db:
+            return
+
+        try:
+            if action.action_type == ActionType.ADD_ENTITY:
+                # Undo add = delete
+                self.services.world.delete_entity(
+                    self.state.world_db,
+                    action.data["entity_id"],
+                )
+            elif action.action_type == ActionType.DELETE_ENTITY:
+                # Undo delete = add back
+                self.services.world.add_entity(
+                    self.state.world_db,
+                    entity_type=action.inverse_data["type"],
+                    name=action.inverse_data["name"],
+                    description=action.inverse_data.get("description", ""),
+                    attributes=action.inverse_data.get("attributes"),
+                )
+            elif action.action_type == ActionType.UPDATE_ENTITY:
+                # Undo update = restore old values
+                self.services.world.update_entity(
+                    self.state.world_db,
+                    entity_id=action.data["entity_id"],
+                    name=action.inverse_data.get("name"),
+                    description=action.inverse_data.get("description"),
+                    attributes=action.inverse_data.get("attributes"),
+                )
+            elif action.action_type == ActionType.ADD_RELATIONSHIP:
+                # Undo add = delete
+                self.services.world.delete_relationship(
+                    self.state.world_db,
+                    action.data["relationship_id"],
+                )
+            elif action.action_type == ActionType.DELETE_RELATIONSHIP:
+                # Undo delete = add back
+                self.services.world.add_relationship(
+                    self.state.world_db,
+                    source_id=action.inverse_data["source_id"],
+                    target_id=action.inverse_data["target_id"],
+                    relation_type=action.inverse_data["relation_type"],
+                    description=action.inverse_data.get("description", ""),
+                )
+            elif action.action_type == ActionType.UPDATE_RELATIONSHIP:
+                # Undo update = restore old values
+                self.state.world_db.update_relationship(
+                    relationship_id=action.data["relationship_id"],
+                    relation_type=action.inverse_data.get("relation_type"),
+                    description=action.inverse_data.get("description"),
+                    strength=action.inverse_data.get("strength"),
+                    bidirectional=action.inverse_data.get("bidirectional"),
+                )
+
+            self._refresh_entity_list()
+            self._refresh_entity_editor()
+            if self._graph:
+                self._graph.refresh()
+            self._update_undo_redo_buttons()
+            ui.notify("Undone", type="info")
+        except Exception as e:
+            logger.exception("Undo failed")
+            ui.notify(f"Undo failed: {e}", type="negative")
+
+    def _do_redo(self) -> None:
+        """Execute redo operation."""
+        action = self.state.redo()
+        if not action or not self.state.world_db:
+            return
+
+        try:
+            if action.action_type == ActionType.ADD_ENTITY:
+                # Redo add = add again
+                self.services.world.add_entity(
+                    self.state.world_db,
+                    entity_type=action.data["type"],
+                    name=action.data["name"],
+                    description=action.data.get("description", ""),
+                    attributes=action.data.get("attributes"),
+                )
+            elif action.action_type == ActionType.DELETE_ENTITY:
+                # Redo delete = delete again
+                self.services.world.delete_entity(
+                    self.state.world_db,
+                    action.data["entity_id"],
+                )
+            elif action.action_type == ActionType.UPDATE_ENTITY:
+                # Redo update = apply new values again
+                self.services.world.update_entity(
+                    self.state.world_db,
+                    entity_id=action.data["entity_id"],
+                    name=action.data.get("name"),
+                    description=action.data.get("description"),
+                    attributes=action.data.get("attributes"),
+                )
+            elif action.action_type == ActionType.ADD_RELATIONSHIP:
+                # Redo add = add again
+                self.services.world.add_relationship(
+                    self.state.world_db,
+                    source_id=action.data["source_id"],
+                    target_id=action.data["target_id"],
+                    relation_type=action.data["relation_type"],
+                    description=action.data.get("description", ""),
+                )
+            elif action.action_type == ActionType.DELETE_RELATIONSHIP:
+                # Redo delete = delete again
+                self.services.world.delete_relationship(
+                    self.state.world_db,
+                    action.data["relationship_id"],
+                )
+            elif action.action_type == ActionType.UPDATE_RELATIONSHIP:
+                # Redo update = apply new values again
+                self.state.world_db.update_relationship(
+                    relationship_id=action.data["relationship_id"],
+                    relation_type=action.data.get("relation_type"),
+                    description=action.data.get("description"),
+                    strength=action.data.get("strength"),
+                    bidirectional=action.data.get("bidirectional"),
+                )
+
+            self._refresh_entity_list()
+            self._refresh_entity_editor()
+            if self._graph:
+                self._graph.refresh()
+            self._update_undo_redo_buttons()
+            ui.notify("Redone", type="info")
+        except Exception as e:
+            logger.exception("Redo failed")
+            ui.notify(f"Redo failed: {e}", type="negative")

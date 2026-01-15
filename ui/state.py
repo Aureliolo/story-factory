@@ -1,11 +1,35 @@
 """Centralized UI state management."""
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 from memory.story_state import StoryState
 from memory.world_database import WorldDatabase
+
+logger = logging.getLogger(__name__)
+
+
+class ActionType(Enum):
+    """Types of undoable actions."""
+
+    ADD_ENTITY = "add_entity"
+    DELETE_ENTITY = "delete_entity"
+    UPDATE_ENTITY = "update_entity"
+    ADD_RELATIONSHIP = "add_relationship"
+    DELETE_RELATIONSHIP = "delete_relationship"
+    UPDATE_RELATIONSHIP = "update_relationship"
+
+
+@dataclass
+class UndoAction:
+    """Represents an undoable action."""
+
+    action_type: ActionType
+    data: dict[str, Any]
+    inverse_data: dict[str, Any]  # Data needed to reverse the action
 
 
 @dataclass
@@ -53,6 +77,11 @@ class AppState:
 
     # ========== UI Settings ==========
     dark_mode: bool = False  # Dark mode toggle
+
+    # ========== Undo/Redo History ==========
+    _undo_stack: list[UndoAction] = field(default_factory=list)
+    _redo_stack: list[UndoAction] = field(default_factory=list)
+    _max_undo_history: int = 50
 
     # ========== Callbacks ==========
     # These are called when certain state changes occur
@@ -211,3 +240,61 @@ class AppState:
             "selected_entity_id": self.selected_entity_id,
             "feedback_mode": self.feedback_mode,
         }
+
+    # ========== Undo/Redo Methods ==========
+
+    def record_action(self, action: UndoAction) -> None:
+        """Record an action for undo/redo.
+
+        Args:
+            action: The action to record.
+        """
+        self._undo_stack.append(action)
+        self._redo_stack.clear()  # Clear redo on new action
+
+        # Limit history size
+        if len(self._undo_stack) > self._max_undo_history:
+            self._undo_stack.pop(0)
+
+        logger.debug(f"Recorded action: {action.action_type.value}")
+
+    def can_undo(self) -> bool:
+        """Check if undo is available."""
+        return len(self._undo_stack) > 0
+
+    def can_redo(self) -> bool:
+        """Check if redo is available."""
+        return len(self._redo_stack) > 0
+
+    def undo(self) -> UndoAction | None:
+        """Pop the last action from undo stack.
+
+        Returns:
+            The action to undo, or None if stack is empty.
+        """
+        if not self._undo_stack:
+            return None
+
+        action = self._undo_stack.pop()
+        self._redo_stack.append(action)
+        logger.debug(f"Undo: {action.action_type.value}")
+        return action
+
+    def redo(self) -> UndoAction | None:
+        """Pop the last action from redo stack.
+
+        Returns:
+            The action to redo, or None if stack is empty.
+        """
+        if not self._redo_stack:
+            return None
+
+        action = self._redo_stack.pop()
+        self._undo_stack.append(action)
+        logger.debug(f"Redo: {action.action_type.value}")
+        return action
+
+    def clear_history(self) -> None:
+        """Clear undo/redo history."""
+        self._undo_stack.clear()
+        self._redo_stack.clear()

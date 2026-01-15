@@ -495,6 +495,70 @@ class WorldDatabase:
         self._invalidate_graph()
         return cursor.rowcount > 0
 
+    def update_relationship(
+        self,
+        relationship_id: str,
+        relation_type: str | None = None,
+        description: str | None = None,
+        strength: float | None = None,
+        bidirectional: bool | None = None,
+        attributes: dict[str, Any] | None = None,
+    ) -> bool:
+        """Update an existing relationship.
+
+        Args:
+            relationship_id: Relationship ID to update.
+            relation_type: New relationship type.
+            description: New description.
+            strength: New strength value.
+            bidirectional: New bidirectional flag.
+            attributes: New attributes (merged with existing).
+
+        Returns:
+            True if updated, False if not found.
+        """
+        cursor = self.conn.cursor()
+
+        # Get current relationship
+        cursor.execute("SELECT * FROM relationships WHERE id = ?", (relationship_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return False
+
+        # Prepare updated values
+        new_type = relation_type if relation_type is not None else row["relation_type"]
+        new_desc = description if description is not None else row["description"]
+        new_strength = strength if strength is not None else row["strength"]
+        new_bidir = bidirectional if bidirectional is not None else row["bidirectional"]
+
+        # Handle attributes merging
+        current_attrs = json.loads(row["attributes"]) if row["attributes"] else {}
+        if attributes is not None:
+            current_attrs.update(attributes)
+
+        cursor.execute(
+            """
+            UPDATE relationships
+            SET relation_type = ?,
+                description = ?,
+                strength = ?,
+                bidirectional = ?,
+                attributes = ?
+            WHERE id = ?
+            """,
+            (
+                new_type,
+                new_desc,
+                new_strength,
+                1 if new_bidir else 0,
+                json.dumps(current_attrs),
+                relationship_id,
+            ),
+        )
+        self.conn.commit()
+        self._invalidate_graph()
+        return cursor.rowcount > 0
+
     def list_relationships(self) -> list[Relationship]:
         """List all relationships.
 

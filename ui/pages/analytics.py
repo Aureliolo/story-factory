@@ -72,11 +72,11 @@ class AnalyticsPage:
 
     def _build_header(self) -> None:
         """Build the header with title and actions."""
-        with ui.row().classes("w-full items-center"):
+        with ui.row().classes("w-full items-center flex-wrap gap-2"):
             ui.label("Analytics").classes("text-2xl font-bold")
             ui.space()
 
-            with ui.row().classes("gap-2"):
+            with ui.row().classes("gap-2 flex-wrap"):
                 ui.button(
                     "Refresh",
                     on_click=self._refresh_all,
@@ -92,31 +92,35 @@ class AnalyticsPage:
     def _build_filters(self) -> None:
         """Build filter controls."""
         with ui.card().classes("w-full"):
-            with ui.row().classes("w-full items-end gap-4"):
-                ui.icon("filter_list").classes("text-blue-500")
-                ui.label("Filters").classes("font-semibold")
+            with ui.row().classes("w-full items-end gap-4 flex-wrap"):
+                with ui.row().classes("items-center gap-2"):
+                    ui.icon("filter_list").classes("text-blue-500")
+                    ui.label("Filters").classes("font-semibold")
+
                 ui.space()
 
-                # Agent role filter
-                role_options = {"": "All Agents"} | {
-                    role: info["name"] for role, info in AGENT_ROLES.items()
-                }
-                ui.select(
-                    label="Agent Role",
-                    options=role_options,
-                    value="",
-                    on_change=lambda e: self._apply_filter(agent_role=e.value or None),
-                ).classes("w-40").props("dense outlined")
+                # Filter dropdowns - responsive width
+                with ui.row().classes("gap-2 flex-wrap"):
+                    # Agent role filter
+                    role_options = {"": "All Agents"} | {
+                        role: info["name"] for role, info in AGENT_ROLES.items()
+                    }
+                    ui.select(
+                        label="Agent Role",
+                        options=role_options,
+                        value="",
+                        on_change=lambda e: self._apply_filter(agent_role=e.value or None),
+                    ).classes("w-full sm:w-40").props("dense outlined")
 
-                # Genre filter (populated from data)
-                genres = self._db.get_unique_genres()
-                genre_options = {"": "All Genres"} | {g: g for g in genres if g}
-                ui.select(
-                    label="Genre",
-                    options=genre_options,
-                    value="",
-                    on_change=lambda e: self._apply_filter(genre=e.value or None),
-                ).classes("w-40").props("dense outlined")
+                    # Genre filter (populated from data)
+                    genres = self._db.get_unique_genres()
+                    genre_options = {"": "All Genres"} | {g: g for g in genres if g}
+                    ui.select(
+                        label="Genre",
+                        options=genre_options,
+                        value="",
+                        on_change=lambda e: self._apply_filter(genre=e.value or None),
+                    ).classes("w-full sm:w-40").props("dense outlined")
 
     def _apply_filter(self, agent_role: str | None = None, genre: str | None = None) -> None:
         """Apply filters and refresh data."""
@@ -292,7 +296,9 @@ class AnalyticsPage:
                         }
                     )
 
-                ui.table(columns=columns, rows=rows, row_key="model").classes("w-full")
+                # Wrap table in scrollable container for mobile
+                with ui.element("div").classes("w-full overflow-x-auto"):
+                    ui.table(columns=columns, rows=rows, row_key="model").classes("w-full")
 
     def _build_recommendations_section(self) -> None:
         """Build the recommendations history section."""
@@ -325,7 +331,7 @@ class AnalyticsPage:
 
                 for rec in recommendations:
                     with ui.card().classes("w-full mb-2").props("flat bordered"):
-                        with ui.row().classes("w-full items-start gap-3"):
+                        with ui.row().classes("w-full items-start gap-3 flex-wrap sm:flex-nowrap"):
                             # Status icon
                             if rec.was_applied:
                                 ui.icon("check_circle", color="green")
@@ -334,9 +340,9 @@ class AnalyticsPage:
                             else:
                                 ui.icon("pending", color="grey")
 
-                            with ui.column().classes("flex-grow gap-1"):
+                            with ui.column().classes("flex-grow gap-1 min-w-0"):
                                 # Type and change
-                                with ui.row().classes("items-center gap-2"):
+                                with ui.row().classes("items-center gap-2 flex-wrap"):
                                     ui.badge(rec.recommendation_type).props("color=primary")
                                     if rec.affected_role:
                                         ui.label(f"({rec.affected_role})").classes(
@@ -344,10 +350,14 @@ class AnalyticsPage:
                                         )
 
                                 # Current -> Suggested
-                                with ui.row().classes("items-center gap-2 text-sm"):
-                                    ui.label(rec.current_value).classes("font-mono")
+                                with ui.row().classes("items-center gap-2 text-sm flex-wrap"):
+                                    ui.label(rec.current_value).classes(
+                                        "font-mono truncate max-w-[120px] sm:max-w-none"
+                                    )
                                     ui.icon("arrow_forward", size="xs")
-                                    ui.label(rec.suggested_value).classes("font-mono text-blue-500")
+                                    ui.label(rec.suggested_value).classes(
+                                        "font-mono text-blue-500 truncate max-w-[120px] sm:max-w-none"
+                                    )
 
                                 # Reason
                                 ui.label(rec.reason).classes(
