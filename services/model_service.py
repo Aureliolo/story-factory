@@ -98,25 +98,52 @@ class ModelService:
             logger.warning(f"Failed to list models from Ollama: {e}")
             return []
 
+    def list_installed_with_sizes(self) -> dict[str, float]:
+        """List installed Ollama models with their actual sizes.
+
+        Returns:
+            Dict mapping model ID to size in GB.
+        """
+        try:
+            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
+            response = client.list()
+            models = {}
+            for model in response.models:
+                if model.model:
+                    # Ollama returns size in bytes, convert to GB
+                    size_bytes = getattr(model, "size", 0) or 0
+                    size_gb = round(size_bytes / (1024**3), 1)
+                    models[model.model] = size_gb
+            return models
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
+            logger.warning(f"Failed to list models from Ollama: {e}")
+            return {}
+
     def list_available(self) -> list[ModelStatus]:
         """List all available models with their status.
 
         Returns:
-            List of ModelStatus objects for all known models.
+            List of ModelStatus objects for all known and installed models.
         """
-        installed = set(self.list_installed())
+        installed_with_sizes = self.list_installed_with_sizes()
+        installed_ids = set(installed_with_sizes.keys())
         models = []
+        seen_ids = set()
 
+        # First, add all known models from AVAILABLE_MODELS
         for model_id, info in AVAILABLE_MODELS.items():
             # Check if any variant of this model is installed
-            is_installed = model_id in installed or any(model_id in m for m in installed)
+            is_installed = model_id in installed_ids or any(model_id in m for m in installed_ids)
+
+            # Use actual size from Ollama if available, otherwise use hardcoded
+            actual_size = installed_with_sizes.get(model_id, info["size_gb"])
 
             models.append(
                 ModelStatus(
                     model_id=model_id,
                     name=info["name"],
                     installed=is_installed,
-                    size_gb=info["size_gb"],
+                    size_gb=actual_size,
                     vram_required=info["vram_required"],
                     quality=info["quality"],
                     speed=info["speed"],
@@ -124,6 +151,49 @@ class ModelService:
                     description=info["description"],
                 )
             )
+            seen_ids.add(model_id)
+
+        # Then, add any installed models that aren't in AVAILABLE_MODELS
+        for model_id, size_gb in installed_with_sizes.items():
+            if model_id not in seen_ids:
+                # Check if this is a variant of a known model (e.g., :latest tag)
+                base_name = model_id.split(":")[0] if ":" in model_id else model_id
+                known_base = None
+                for known_id in AVAILABLE_MODELS:
+                    if known_id.startswith(base_name):
+                        known_base = AVAILABLE_MODELS[known_id]
+                        break
+
+                if known_base:
+                    # Use info from known base model
+                    models.append(
+                        ModelStatus(
+                            model_id=model_id,
+                            name=f"{known_base['name']} ({model_id.split(':')[-1] if ':' in model_id else 'custom'})",
+                            installed=True,
+                            size_gb=size_gb,
+                            vram_required=known_base["vram_required"],
+                            quality=known_base["quality"],
+                            speed=known_base["speed"],
+                            uncensored=known_base["uncensored"],
+                            description=known_base["description"],
+                        )
+                    )
+                else:
+                    # Completely unknown model - use defaults with actual size
+                    models.append(
+                        ModelStatus(
+                            model_id=model_id,
+                            name=model_id,
+                            installed=True,
+                            size_gb=size_gb,
+                            vram_required=int(size_gb * 1.2) if size_gb > 0 else 8,  # Estimate VRAM
+                            quality=5,  # Default quality
+                            speed=5,  # Default speed
+                            uncensored=True,  # Assume uncensored
+                            description="Custom/unknown model",
+                        )
+                    )
 
         return models
 
