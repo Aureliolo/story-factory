@@ -1,11 +1,15 @@
 """Header component with navigation, project selector and status."""
 
+import logging
+
 from nicegui import ui
 from nicegui.elements.label import Label
 from nicegui.elements.select import Select
 
 from services import ServiceContainer
 from ui.state import AppState
+
+logger = logging.getLogger(__name__)
 
 # Navigation items: (path, label, icon)
 NAV_ITEMS = [
@@ -135,8 +139,10 @@ class Header:
             self.services.settings.save()
             ui.notify(f"Loaded: {project.project_name}", type="positive")
         except FileNotFoundError:
+            logger.warning(f"Project not found: {project_id}")
             ui.notify("Project not found", type="negative")
         except Exception as ex:
+            logger.exception(f"Error loading project {project_id}")
             ui.notify(f"Error loading project: {ex}", type="negative")
 
     async def _create_project(self) -> None:
@@ -149,6 +155,7 @@ class Header:
             ui.notify("New project created!", type="positive")
             self._refresh_project_list()
         except Exception as ex:
+            logger.exception("Failed to create project")
             ui.notify(f"Error: {ex}", type="negative")
 
     def _refresh_project_list(self) -> None:

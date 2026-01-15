@@ -1,5 +1,6 @@
 """Projects page - project management."""
 
+import logging
 from datetime import datetime
 
 from nicegui import ui
@@ -8,6 +9,8 @@ from nicegui.elements.column import Column
 from services import ServiceContainer
 from ui.state import AppState
 from ui.theme import get_status_color
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectsPage:
@@ -162,6 +165,7 @@ class ProjectsPage:
             # Reload to update header dropdown
             ui.navigate.reload()
         except Exception as e:
+            logger.exception("Failed to create project")
             ui.notify(f"Error: {e}", type="negative")
 
     async def _open_project(self, project_id: str) -> None:
@@ -174,6 +178,7 @@ class ProjectsPage:
             ui.notify(f"Opened: {project.project_name}", type="positive")
             self._refresh_project_list()
         except Exception as e:
+            logger.exception(f"Failed to open project {project_id}")
             ui.notify(f"Error: {e}", type="negative")
 
     async def _duplicate_project(self, project_id: str) -> None:
@@ -183,6 +188,7 @@ class ProjectsPage:
             ui.notify(f"Duplicated as: {project.project_name}", type="positive")
             self._refresh_project_list()
         except Exception as e:
+            logger.exception(f"Failed to duplicate project {project_id}")
             ui.notify(f"Error: {e}", type="negative")
 
     async def _confirm_delete(self, project) -> None:
@@ -213,4 +219,5 @@ class ProjectsPage:
             self._refresh_project_list()
             ui.notify("Project deleted", type="positive")
         except Exception as e:
+            logger.exception(f"Failed to delete project {project_id}")
             ui.notify(f"Error: {e}", type="negative")

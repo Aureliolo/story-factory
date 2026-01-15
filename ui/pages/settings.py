@@ -1,10 +1,14 @@
 """Settings page - application configuration."""
 
+import logging
+
 from nicegui import ui
 
 from services import ServiceContainer
 from settings import AGENT_ROLES
 from ui.state import AppState
+
+logger = logging.getLogger(__name__)
 
 
 class SettingsPage:
@@ -386,6 +390,8 @@ class SettingsPage:
             ui.notify("Settings saved!", type="positive")
 
         except ValueError as e:
+            logger.warning(f"Invalid setting value: {e}")
             ui.notify(f"Invalid setting: {e}", type="negative")
         except Exception as e:
+            logger.exception("Failed to save settings")
             ui.notify(f"Error saving: {e}", type="negative")

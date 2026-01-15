@@ -1,6 +1,10 @@
 """Keyboard shortcuts handler for Story Factory."""
 
+import logging
+
 from nicegui import ui
+
+logger = logging.getLogger(__name__)
 
 
 class KeyboardShortcuts:
@@ -84,6 +88,7 @@ class KeyboardShortcuts:
             self.services.settings.save()
             ui.notify("New project created! (Ctrl+N)", type="positive")
         except Exception as e:
+            logger.exception("Failed to create project via shortcut")
             ui.notify(f"Error: {e}", type="negative")
 
     def _handle_save(self) -> None:
@@ -93,6 +98,7 @@ class KeyboardShortcuts:
                 self.services.project.save_project(self.state.project)
                 ui.notify("Project saved! (Ctrl+S)", type="positive")
             except Exception as e:
+                logger.exception(f"Failed to save project {self.state.project_id}")
                 ui.notify(f"Error saving: {e}", type="negative")
         else:
             ui.notify("No active project to save", type="info")
