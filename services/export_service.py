@@ -409,10 +409,10 @@ class ExportService:
                 # Page break after each chapter
                 doc.add_page_break()
 
-        # Write to bytes
-        output = BytesIO()
-        doc.save(output)
-        return output.getvalue()
+        # Write to bytes using context manager for proper cleanup
+        with BytesIO() as output:
+            doc.save(output)
+            return output.getvalue()
 
     def save_to_file(
         self,

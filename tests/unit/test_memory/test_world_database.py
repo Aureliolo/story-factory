@@ -221,3 +221,47 @@ class TestWorldDatabase:
         entity = db.get_entity(entity_id)
         assert entity is not None
         assert entity.name == "Spaced Name"
+
+    def test_context_manager_closes_connection(self, tmp_path):
+        """Test that context manager properly closes the database connection."""
+        db_path = tmp_path / "context_test.db"
+
+        # Use context manager
+        with WorldDatabase(db_path) as db:
+            entity_id = db.add_entity("character", "Test Character")
+            assert entity_id is not None
+            assert db.count_entities() == 1
+
+        # After exiting context, connection should be closed
+        # Verify by opening a new connection and checking data persisted
+        db2 = WorldDatabase(db_path)
+        assert db2.count_entities() == 1
+        db2.close()
+
+    def test_context_manager_does_not_suppress_exceptions(self, tmp_path):
+        """Test that context manager does not suppress exceptions."""
+        db_path = tmp_path / "exception_test.db"
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            with WorldDatabase(db_path) as db:
+                db.add_entity("character", "")  # Should raise ValueError
+
+    def test_description_whitespace_stripped_on_add(self, tmp_path):
+        """Test that description whitespace is stripped when adding entity."""
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "Test", "  Spaced description  ")
+
+        entity = db.get_entity(entity_id)
+        assert entity is not None
+        assert entity.description == "Spaced description"
+
+    def test_description_whitespace_stripped_on_update(self, tmp_path):
+        """Test that description whitespace is stripped when updating entity."""
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "Test", "Original")
+
+        db.update_entity(entity_id, description="  Updated description  ")
+
+        entity = db.get_entity(entity_id)
+        assert entity is not None
+        assert entity.description == "Updated description"

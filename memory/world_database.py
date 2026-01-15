@@ -157,7 +157,9 @@ class WorldDatabase:
         if not entity_type:
             raise ValueError("Entity type cannot be empty")
 
-        if description and len(description) > 5000:
+        # Strip whitespace from description for consistency
+        description = description.strip() if description else ""
+        if len(description) > 5000:
             raise ValueError("Entity description cannot exceed 5000 characters")
 
         entity_id = str(uuid.uuid4())
@@ -247,8 +249,12 @@ class WorldDatabase:
         # Validate description if being updated
         if "description" in update_fields:
             description = update_fields["description"]
-            if description and len(description) > 5000:
-                raise ValueError("Entity description cannot exceed 5000 characters")
+            # Strip whitespace from description for consistency
+            if description is not None:
+                description = str(description).strip()
+                if len(description) > 5000:
+                    raise ValueError("Entity description cannot exceed 5000 characters")
+                update_fields["description"] = description
 
         # Validate type if being updated
         if "type" in update_fields:
