@@ -460,16 +460,14 @@ class ModelsPage:
 
                 status = progress.get("status", "")
                 status_label.text = status
-                if progress.get("total", 0) > 0:
-                    pct = progress.get("completed", 0) / progress["total"]
+                total = progress.get("total") or 0
+                completed = progress.get("completed") or 0
+                if total > 0:
+                    pct = completed / total
                     progress_bar.value = pct
 
                 # Check for completion
-                if (
-                    "success" in status.lower()
-                    or progress.get("completed") == progress.get("total", 0)
-                    and progress.get("total", 0) > 0
-                ):
+                if "success" in status.lower() or (total > 0 and completed == total):
                     success = True
 
             if success:
