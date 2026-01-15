@@ -22,6 +22,9 @@ class ModelsPage:
     - VRAM recommendations
     """
 
+    # Allow 10% VRAM tolerance - if you have 23GB and model needs 24GB, it should work
+    VRAM_TOLERANCE = 0.10
+
     def __init__(self, state: AppState, services: ServiceContainer):
         """Initialize models page.
 
@@ -35,6 +38,25 @@ class ModelsPage:
         self._model_list: Column | None = None
         self._pull_progress: Column | None = None
         self._comparison_result: Column | None = None
+
+        # Filter state
+        self._filter_fits_vram = True
+        self._filter_quality_min = 0
+        self._filter_uncensored_only = False
+        self._filter_search = ""
+
+    def _model_fits_vram(self, vram_required: float, available_vram: float) -> bool:
+        """Check if model fits in VRAM with tolerance.
+
+        Args:
+            vram_required: VRAM required by model.
+            available_vram: Available VRAM.
+
+        Returns:
+            True if model fits (with tolerance), False otherwise.
+        """
+        # Allow models that are within 10% of available VRAM
+        return vram_required <= available_vram * (1 + self.VRAM_TOLERANCE)
 
     def build(self) -> None:
         """Build the models page UI."""
@@ -109,32 +131,106 @@ class ModelsPage:
     def _build_available_section(self) -> None:
         """Build the available models section."""
         with ui.card().classes("w-full"):
-            ui.label("Available Models").classes("text-lg font-semibold mb-4")
-
-            vram = self.services.model.get_vram()
-            installed = set(self.services.model.list_installed())
-
-            # Filter controls
-            with ui.row().classes("w-full gap-4 mb-4"):
-                ui.checkbox(
-                    "Only show models that fit my VRAM",
-                    value=True,
-                    on_change=lambda e: self._filter_models(e.value),
+            with ui.row().classes("w-full items-center mb-4"):
+                ui.icon("download").classes("text-blue-500")
+                ui.label("Available Models").classes("text-lg font-semibold")
+                ui.icon("help_outline", size="xs").classes("text-gray-400 cursor-help").tooltip(
+                    "Models from the Ollama registry you can download"
                 )
+
+            # Filter controls - responsive grid
+            with ui.element("div").classes(
+                "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+            ):
+                # Search
+                ui.input(
+                    label="Search",
+                    placeholder="Model name...",
+                    on_change=lambda e: self._apply_filters(search=e.value),
+                ).classes("w-full").props("dense clearable")
+
+                # Quality filter
+                ui.select(
+                    label="Min Quality",
+                    options={0: "Any", 5: "5+", 7: "7+", 8: "8+"},
+                    value=0,
+                    on_change=lambda e: self._apply_filters(quality=e.value),
+                ).classes("w-full").props("dense")
+
+                # Checkboxes row
+                with ui.column().classes("gap-2"):
+                    ui.checkbox(
+                        "Fits my VRAM (~10% tolerance)",
+                        value=True,
+                        on_change=lambda e: self._apply_filters(fits_vram=e.value),
+                    ).tooltip("Show models that fit your available VRAM with 10% tolerance")
+
+                    ui.checkbox(
+                        "Uncensored only",
+                        value=False,
+                        on_change=lambda e: self._apply_filters(uncensored=e.value),
+                    ).tooltip("Only show models without content filters")
 
             # Model cards
             self._model_list = ui.column().classes("w-full gap-4")
-
-            with self._model_list:
-                for model_id, info in AVAILABLE_MODELS.items():
-                    fits_vram = info["vram_required"] <= vram
-                    is_installed = any(model_id in m for m in installed)
-
-                    self._build_model_card(model_id, info, fits_vram, is_installed)
+            self._refresh_model_list()
 
             # Pull progress
             self._pull_progress = ui.column().classes("w-full mt-4")
             self._pull_progress.set_visibility(False)
+
+    def _apply_filters(
+        self,
+        search: str | None = None,
+        quality: int | None = None,
+        fits_vram: bool | None = None,
+        uncensored: bool | None = None,
+    ) -> None:
+        """Apply filters and refresh model list."""
+        if search is not None:
+            self._filter_search = search
+        if quality is not None:
+            self._filter_quality_min = quality
+        if fits_vram is not None:
+            self._filter_fits_vram = fits_vram
+        if uncensored is not None:
+            self._filter_uncensored_only = uncensored
+
+        self._refresh_model_list()
+
+    def _refresh_model_list(self) -> None:
+        """Refresh the model list with current filters."""
+        if not self._model_list:
+            return
+
+        self._model_list.clear()
+
+        vram = self.services.model.get_vram()
+        installed = set(self.services.model.list_installed())
+
+        with self._model_list:
+            shown_count = 0
+            for model_id, info in AVAILABLE_MODELS.items():
+                # Apply filters
+                if self._filter_search and self._filter_search.lower() not in info["name"].lower():
+                    continue
+                if self._filter_quality_min and info["quality"] < self._filter_quality_min:
+                    continue
+                if self._filter_uncensored_only and not info["uncensored"]:
+                    continue
+
+                fits_vram = self._model_fits_vram(info["vram_required"], vram)
+                if self._filter_fits_vram and not fits_vram:
+                    continue
+
+                is_installed = any(model_id in m for m in installed)
+                self._build_model_card(model_id, info, fits_vram, is_installed, vram)
+                shown_count += 1
+
+            if shown_count == 0:
+                ui.label("No models match your filters").classes(
+                    "text-gray-500 dark:text-gray-400 text-center py-8"
+                )
 
     def _build_model_card(
         self,
@@ -142,6 +238,7 @@ class ModelsPage:
         info: ModelInfo,
         fits_vram: bool,
         is_installed: bool,
+        available_vram: float = 0,
     ) -> None:
         """Build a model card.
 
@@ -150,83 +247,95 @@ class ModelsPage:
             info: Model info dictionary.
             fits_vram: Whether model fits available VRAM.
             is_installed: Whether model is installed.
+            available_vram: Available VRAM for comparison display.
         """
         quality_color = get_quality_color(info["quality"])
 
         card_classes = "w-full"
         if not fits_vram:
-            card_classes += " opacity-50"
+            card_classes += " opacity-60"
 
         with ui.card().classes(card_classes):
-            with ui.row().classes("w-full items-start gap-4"):
-                # Model info
-                with ui.column().classes("flex-grow gap-2"):
-                    with ui.row().classes("items-center gap-2"):
-                        ui.label(info["name"]).classes("text-lg font-semibold")
-                        if is_installed:
-                            ui.badge("Installed").props("color=positive")
-                        if info["uncensored"]:
-                            ui.badge("NSFW").props("color=warning")
-
-                    ui.label(info["description"]).classes(
-                        "text-sm text-gray-600 dark:text-gray-400"
+            # Header row with name and badges
+            with ui.row().classes("w-full items-center gap-2 mb-2"):
+                ui.label(info["name"]).classes("text-lg font-semibold")
+                if is_installed:
+                    ui.badge("Installed").props("color=positive")
+                if info["uncensored"]:
+                    ui.badge("Uncensored").props("color=warning").tooltip(
+                        "This model has no content filters"
                     )
-
-                    # Stats
-                    with ui.row().classes("gap-4 text-sm"):
-                        ui.label(f"Size: {info['size_gb']} GB")
-                        ui.label(f"VRAM: {info['vram_required']} GB")
-                        ui.label(f"Release: {info['release']}")
-
-                    # Quality/Speed bars - using dark-mode aware empty color
-                    with ui.row().classes("gap-4 items-center"):
-                        ui.label("Quality:").classes("text-sm")
-                        with ui.row().classes("gap-1"):
-                            for i in range(10):
-                                if i < info["quality"]:
-                                    ui.element("div").style(
-                                        f"width: 12px; height: 12px; background: {quality_color}; border-radius: 2px;"
-                                    )
-                                else:
-                                    ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
-                                        "width: 12px; height: 12px; border-radius: 2px;"
-                                    )
-
-                        ui.label("Speed:").classes("text-sm ml-4")
-                        with ui.row().classes("gap-1"):
-                            for i in range(10):
-                                if i < info["speed"]:
-                                    ui.element("div").style(
-                                        "width: 12px; height: 12px; background: #4CAF50; border-radius: 2px;"
-                                    )
-                                else:
-                                    ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
-                                        "width: 12px; height: 12px; border-radius: 2px;"
-                                    )
-
-                # Actions
-                with ui.column().classes("gap-2"):
-                    if not is_installed:
-                        if fits_vram:
-                            ui.button(
-                                "Pull",
-                                on_click=lambda m=model_id: self._pull_model(m),
-                                icon="download",
-                            ).props("color=primary")
-                        else:
-                            ui.label("Needs more VRAM").classes(
-                                "text-sm text-gray-500 dark:text-gray-400"
-                            )
+                ui.space()
+                # Actions in header
+                if not is_installed:
+                    if fits_vram:
+                        ui.button(
+                            "Download",
+                            on_click=lambda m=model_id: self._pull_model(m),
+                            icon="download",
+                        ).props("color=primary dense")
                     else:
+                        ui.label(f"Needs {info['vram_required']}GB").classes(
+                            "text-sm text-orange-500 dark:text-orange-400"
+                        ).tooltip(
+                            f"Requires {info['vram_required']}GB VRAM, you have ~{available_vram}GB available"
+                        )
+                else:
+                    with ui.row().classes("gap-1"):
                         ui.button(
-                            "Test",
-                            on_click=lambda m=model_id: self._test_model(m),
-                        ).props("flat")
+                            icon="play_arrow", on_click=lambda m=model_id: self._test_model(m)
+                        ).props("flat dense round").tooltip("Test model")
+                        ui.button(
+                            icon="delete", on_click=lambda m=model_id: self._delete_model(m)
+                        ).props("flat dense round color=negative").tooltip("Delete model")
 
-                        ui.button(
-                            "Delete",
-                            on_click=lambda m=model_id: self._delete_model(m),
-                        ).props("flat color=negative")
+            # Description
+            ui.label(info["description"]).classes("text-sm text-gray-600 dark:text-gray-400 mb-3")
+
+            # Stats grid
+            with ui.element("div").classes("grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"):
+                # Size
+                with ui.column().classes("gap-0.5"):
+                    ui.label("Disk Size").classes("text-xs text-gray-500 dark:text-gray-400")
+                    ui.label(f"{info['size_gb']} GB").classes("font-medium")
+
+                # VRAM
+                with ui.column().classes("gap-0.5"):
+                    ui.label("VRAM Needed").classes("text-xs text-gray-500 dark:text-gray-400")
+                    vram_class = "font-medium"
+                    if not fits_vram:
+                        vram_class += " text-orange-500"
+                    ui.label(f"{info['vram_required']} GB").classes(vram_class)
+
+                # Quality bar
+                with ui.column().classes("gap-0.5"):
+                    ui.label("Quality").classes("text-xs text-gray-500 dark:text-gray-400")
+                    with ui.row().classes("gap-0.5 items-center"):
+                        for i in range(10):
+                            if i < info["quality"]:
+                                ui.element("div").style(
+                                    f"width: 8px; height: 8px; background: {quality_color}; border-radius: 2px;"
+                                )
+                            else:
+                                ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
+                                    "width: 8px; height: 8px; border-radius: 2px;"
+                                )
+                        ui.label(f"{info['quality']}/10").classes("text-xs ml-1")
+
+                # Speed bar
+                with ui.column().classes("gap-0.5"):
+                    ui.label("Speed").classes("text-xs text-gray-500 dark:text-gray-400")
+                    with ui.row().classes("gap-0.5 items-center"):
+                        for i in range(10):
+                            if i < info["speed"]:
+                                ui.element("div").style(
+                                    "width: 8px; height: 8px; background: #4CAF50; border-radius: 2px;"
+                                )
+                            else:
+                                ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
+                                    "width: 8px; height: 8px; border-radius: 2px;"
+                                )
+                        ui.label(f"{info['speed']}/10").classes("text-xs ml-1")
 
     def _build_comparison_section(self) -> None:
         """Build the model comparison section."""
@@ -266,33 +375,6 @@ class ModelsPage:
 
             # Results
             self._comparison_result = ui.column().classes("w-full mt-4")
-
-    def _filter_models(self, fits_only: bool) -> None:
-        """Filter model list by VRAM fit.
-
-        Args:
-            fits_only: If True, only show models that fit in available VRAM.
-        """
-        if not self._model_list:
-            return
-
-        # Clear the current model list
-        self._model_list.clear()
-
-        # Rebuild with filter applied
-        vram = self.services.model.get_vram()
-        installed = set(self.services.model.list_installed())
-
-        with self._model_list:
-            for model_id, info in AVAILABLE_MODELS.items():
-                fits_vram = info["vram_required"] <= vram
-                is_installed = any(model_id in m for m in installed)
-
-                # Apply filter: skip if fits_only is True and model doesn't fit
-                if fits_only and not fits_vram:
-                    continue
-
-                self._build_model_card(model_id, info, fits_vram, is_installed)
 
     async def _pull_model(self, model_id: str) -> None:
         """Pull a model from Ollama."""
