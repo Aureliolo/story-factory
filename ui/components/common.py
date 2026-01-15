@@ -22,18 +22,18 @@ class LoadingSpinner:
         """
         self.message = message
         self.size = size
-        self._container = None
+        self._container: ui.element | None = None
         self._visible = False
 
     def show(self) -> None:
         """Show the loading spinner."""
-        if self._container:
+        if self._container is not None:
             self._container.set_visibility(True)
             self._visible = True
 
     def hide(self) -> None:
         """Hide the loading spinner."""
-        if self._container:
+        if self._container is not None:
             self._container.set_visibility(False)
             self._visible = False
 
@@ -107,14 +107,18 @@ def confirmation_dialog(
         ui.label(message).classes("mb-4")
 
         with ui.row().classes("w-full justify-end gap-2"):
-            ui.button(
-                cancel_text,
-                on_click=lambda: (dialog.close(), on_cancel() if on_cancel else None),
-            ).props("flat")
-            ui.button(
-                confirm_text,
-                on_click=lambda: (dialog.close(), on_confirm()),
-            ).props("color=primary")
+
+            def handle_cancel() -> None:
+                dialog.close()
+                if on_cancel:
+                    on_cancel()
+
+            def handle_confirm() -> None:
+                dialog.close()
+                on_confirm()
+
+            ui.button(cancel_text, on_click=handle_cancel).props("flat")
+            ui.button(confirm_text, on_click=handle_confirm).props("color=primary")
 
     dialog.open()
 
@@ -151,9 +155,11 @@ def loading_skeleton(width: str = "100%", height: str = "20px") -> None:
         width: Skeleton width.
         height: Skeleton height.
     """
+    # Use sanitize=False since we're generating safe HTML ourselves
     ui.html(
         f'<div class="animate-pulse bg-gray-200 rounded" '
-        f'style="width: {width}; height: {height};"></div>'
+        f'style="width: {width}; height: {height};"></div>',
+        sanitize=False,
     )
 
 
