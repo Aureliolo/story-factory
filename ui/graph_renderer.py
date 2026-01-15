@@ -74,6 +74,18 @@ def render_graph_html(
 
         nodes.append(node)
 
+    # Apply positions for circular/grid layouts
+    if layout == "circular" and nodes:
+        positions = _calculate_circular_positions(len(nodes))
+        for i, node in enumerate(nodes):
+            node["x"] = positions[i][0]
+            node["y"] = positions[i][1]
+    elif layout == "grid" and nodes:
+        positions = _calculate_grid_positions(len(nodes))
+        for i, node in enumerate(nodes):
+            node["x"] = positions[i][0]
+            node["y"] = positions[i][1]
+
     # Get node IDs that made it through the filter
     visible_node_ids = {n["id"] for n in nodes}
 
@@ -267,17 +279,25 @@ def _get_layout_options(layout: str) -> str:
             }
         """
     elif layout == "circular":
+        # Circular layout - disable physics to keep positions fixed
         return """
             layout: {
-                improvedLayout: true,
+                improvedLayout: false,
                 hierarchical: false
+            },
+            physics: {
+                enabled: false
             }
         """
     elif layout == "grid":
+        # Grid layout - disable physics to keep positions fixed
         return """
             layout: {
-                improvedLayout: true,
+                improvedLayout: false,
                 hierarchical: false
+            },
+            physics: {
+                enabled: false
             }
         """
     else:  # force-directed (default)
@@ -285,8 +305,65 @@ def _get_layout_options(layout: str) -> str:
             layout: {
                 improvedLayout: true,
                 hierarchical: false
+            },
+            physics: {
+                enabled: true,
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: {
+                    gravitationalConstant: -50,
+                    centralGravity: 0.01,
+                    springLength: 100,
+                    springConstant: 0.08
+                },
+                stabilization: {
+                    iterations: 100
+                }
             }
         """
+
+
+def _calculate_circular_positions(node_count: int, radius: int = 300) -> list[tuple[int, int]]:
+    """Calculate positions for circular layout.
+
+    Args:
+        node_count: Number of nodes.
+        radius: Circle radius in pixels.
+
+    Returns:
+        List of (x, y) positions.
+    """
+    import math
+
+    positions = []
+    for i in range(node_count):
+        angle = (2 * math.pi * i) / node_count - math.pi / 2  # Start from top
+        x = int(radius * math.cos(angle))
+        y = int(radius * math.sin(angle))
+        positions.append((x, y))
+    return positions
+
+
+def _calculate_grid_positions(node_count: int, spacing: int = 150) -> list[tuple[int, int]]:
+    """Calculate positions for grid layout.
+
+    Args:
+        node_count: Number of nodes.
+        spacing: Space between nodes in pixels.
+
+    Returns:
+        List of (x, y) positions.
+    """
+    import math
+
+    cols = max(1, int(math.ceil(math.sqrt(node_count))))
+    positions = []
+    for i in range(node_count):
+        row = i // cols
+        col = i % cols
+        x = col * spacing - (cols * spacing) // 2
+        y = row * spacing - ((node_count // cols) * spacing) // 2
+        positions.append((x, y))
+    return positions
 
 
 def render_entity_summary_html(world_db: WorldDatabase) -> str:
