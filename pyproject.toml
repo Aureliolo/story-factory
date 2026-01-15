@@ -47,6 +47,9 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short --strict-markers"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+main_file = "tests/component/test_app_entry.py"
 # Fail on warnings in strict mode (use PYTEST_STRICT=1 to enable)
 # filterwarnings = ["error"]  # Uncomment for strict warning mode
 markers = [
@@ -54,6 +57,7 @@ markers = [
     "smoke: Quick startup validation tests",
     "integration: Integration tests for component interactions",
     "slow: Slow tests that take more than 1 second",
+    "component: NiceGUI component tests using User fixture",
 ]
 
 [tool.coverage.run]
