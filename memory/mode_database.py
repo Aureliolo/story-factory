@@ -218,38 +218,37 @@ class ModeDatabase:
         Raises:
             sqlite3.Error: If database operation fails.
         """
-        updates = []
+        set_expressions = []
         values = []
 
         if prose_quality is not None:
-            updates.append("prose_quality = ?")
+            set_expressions.append("prose_quality = ?")
             values.append(prose_quality)
         if instruction_following is not None:
-            updates.append("instruction_following = ?")
+            set_expressions.append("instruction_following = ?")
             values.append(instruction_following)
         if consistency_score is not None:
-            updates.append("consistency_score = ?")
+            set_expressions.append("consistency_score = ?")
             values.append(consistency_score)
         if was_regenerated is not None:
-            updates.append("was_regenerated = ?")
+            set_expressions.append("was_regenerated = ?")
             values.append(1 if was_regenerated else 0)
         if edit_distance is not None:
-            updates.append("edit_distance = ?")
+            set_expressions.append("edit_distance = ?")
             values.append(edit_distance)
         if user_rating is not None:
-            updates.append("user_rating = ?")
+            set_expressions.append("user_rating = ?")
             values.append(user_rating)
 
-        if not updates:
+        if not set_expressions:
             return
 
+        set_clause = ", ".join(set_expressions)
         values.append(score_id)
         try:
             with sqlite3.connect(self.db_path) as conn:
-                conn.execute(
-                    f"UPDATE generation_scores SET {', '.join(updates)} WHERE id = ?",
-                    values,
-                )
+                sql = f"UPDATE generation_scores SET {set_clause} WHERE id = ?"
+                conn.execute(sql, values)
                 conn.commit()
         except sqlite3.Error as e:
             logger.error(f"Failed to update score {score_id}: {e}", exc_info=True)

@@ -105,15 +105,17 @@ class ModelModeService:
         # Check custom modes
         custom = self._db.get_custom_mode(mode_id)
         if custom:
-            # Validate VRAM strategy with fallback
+            # Validate VRAM strategy - raise exception if invalid
             try:
                 vram_strategy = VramStrategy(custom["vram_strategy"])
             except (ValueError, KeyError) as e:
-                logger.warning(
-                    f"Invalid VRAM strategy '{custom.get('vram_strategy')}' in mode {mode_id}, "
-                    f"using ADAPTIVE. Error: {e}"
+                error_msg = (
+                    f"Invalid VRAM strategy '{custom.get('vram_strategy')}' in custom mode '{mode_id}'. "
+                    f"Valid options are: {', '.join([s.value for s in VramStrategy])}. "
+                    f"Please update the mode configuration."
                 )
-                vram_strategy = VramStrategy.ADAPTIVE
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
 
             mode = GenerationMode(
                 id=custom["id"],
