@@ -94,7 +94,7 @@ class TestModelFiltering:
             assert info["vram_required"] > 0, (
                 f"Model {model_id} has invalid VRAM requirement: {info['vram_required']}"
             )
-            assert isinstance(info["vram_required"], (int, float)), (
+            assert isinstance(info["vram_required"], int | float), (
                 f"Model {model_id} VRAM is not a number"
             )
 

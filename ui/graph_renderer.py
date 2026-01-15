@@ -122,7 +122,8 @@ def render_graph_html(
 
     return f"""
     <div id="{container_id}" style="height: {height}px; border: 1px solid #ddd; border-radius: 4px;"></div>
-    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- vis-network version tracked in /package.json for Dependabot -->
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <script>
     (function() {{
         var nodes = new vis.DataSet({json.dumps(nodes)});
