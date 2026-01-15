@@ -59,10 +59,7 @@ def app_server():
 
     if not wait_for_server(port):
         process.kill()
-        try:
-            stdout, stderr = process.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
-            stdout, stderr = "", "Timed out collecting output"
+        stdout, stderr = process.communicate()
         pytest.fail(f"Server failed to start within timeout.\nstdout: {stdout}\nstderr: {stderr}")
 
     yield f"http://localhost:{port}"
@@ -72,7 +69,11 @@ def app_server():
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
         process.kill()
-        process.wait()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            # Give up on waiting; avoid hanging the test suite if the process is unkillable.
+            pass
 
 
 @pytest.fixture(scope="session")
