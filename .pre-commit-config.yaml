@@ -7,6 +7,9 @@ ci:
   autoupdate_schedule: weekly
   autoupdate_commit_msg: "deps(pre-commit): autoupdate hooks"
   autofix_prs: true
+  # Skip mypy in CI - image with all deps exceeds 250MB limit
+  # Local pre-commit runs mypy with full type checking
+  skip: [mypy]
 
 repos:
   # Use ruff for linting and formatting
@@ -17,7 +20,7 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  # Type checking with mypy
+  # Type checking with mypy (skipped in pre-commit.ci, runs locally)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
     hooks:
