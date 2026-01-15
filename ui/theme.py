@@ -87,39 +87,39 @@ DARK_COLORS = {
     "divider": "#424242",
 }
 
-# ========== Tailwind-style Classes (Light Mode) ==========
+# ========== Tailwind-style Classes (with Dark Mode) ==========
 # Reusable class strings for consistent styling
 STYLES = {
     # Cards
-    "card": "rounded-lg shadow-md bg-white",
-    "card_header": "bg-gray-100 p-4 rounded-t-lg border-b",
+    "card": "rounded-lg shadow-md bg-white dark:bg-gray-800",
+    "card_header": "bg-gray-100 dark:bg-gray-900 p-4 rounded-t-lg border-b dark:border-gray-700",
     "card_body": "p-4",
     # Buttons
     "btn_primary": "bg-blue-500 hover:bg-blue-600 text-white transition-colors",
     "btn_secondary": "bg-gray-500 hover:bg-gray-600 text-white transition-colors",
     "btn_success": "bg-green-500 hover:bg-green-600 text-white transition-colors",
     "btn_danger": "bg-red-500 hover:bg-red-600 text-white transition-colors",
-    "btn_outline": "border border-gray-300 hover:bg-gray-100 transition-colors",
+    "btn_outline": "border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
     # Text
-    "text_heading": "text-xl font-bold text-gray-800",
-    "text_subheading": "text-lg font-semibold text-gray-700",
-    "text_body": "text-base text-gray-600",
-    "text_muted": "text-sm text-gray-500",
-    "text_error": "text-red-500",
+    "text_heading": "text-xl font-bold text-gray-800 dark:text-gray-100",
+    "text_subheading": "text-lg font-semibold text-gray-700 dark:text-gray-200",
+    "text_body": "text-base text-gray-600 dark:text-gray-300",
+    "text_muted": "text-sm text-gray-500 dark:text-gray-400",
+    "text_error": "text-red-500 dark:text-red-400",
     # Layout
     "container": "max-w-7xl mx-auto px-4",
     "section": "py-6",
     "row": "flex flex-row gap-4",
     "column": "flex flex-col gap-4",
     # Form elements
-    "input": "border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 transition-shadow",
-    "label": "text-sm font-medium text-gray-700",
+    "input": "border rounded px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 transition-shadow",
+    "label": "text-sm font-medium text-gray-700 dark:text-gray-300",
     # Status badges
     "badge": "px-2 py-1 rounded-full text-xs font-medium",
-    "badge_success": "bg-green-100 text-green-800",
-    "badge_warning": "bg-yellow-100 text-yellow-800",
-    "badge_error": "bg-red-100 text-red-800",
-    "badge_info": "bg-blue-100 text-blue-800",
+    "badge_success": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+    "badge_warning": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+    "badge_error": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+    "badge_info": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
 }
 
 # ========== Dark Mode Styles ==========
@@ -286,44 +286,42 @@ def get_background_class(dark_mode: bool = False) -> str:
     """Get background class for the current theme.
 
     Args:
-        dark_mode: Whether to use dark mode.
+        dark_mode: DEPRECATED - Parameter is ignored. The returned class string
+                  includes both light and dark mode variants using Tailwind's dark: prefix.
 
     Returns:
-        Background class string.
+        Background class string with Tailwind dark: variant.
     """
-    return "bg-gray-900" if dark_mode else "bg-gray-50"
+    return "bg-gray-50 dark:bg-gray-900"
 
 
 def get_surface_class(dark_mode: bool = False) -> str:
     """Get surface (card/panel) class for the current theme.
 
     Args:
-        dark_mode: Whether to use dark mode.
+        dark_mode: DEPRECATED - Parameter is ignored. The returned class string
+                  includes both light and dark mode variants using Tailwind's dark: prefix.
 
     Returns:
-        Surface class string.
+        Surface class string with Tailwind dark: variant.
     """
-    return "bg-gray-800" if dark_mode else "bg-white"
+    return "bg-white dark:bg-gray-800"
 
 
 def get_text_class(dark_mode: bool = False, variant: str = "primary") -> str:
     """Get text color class for the current theme.
 
+    Uses Tailwind dark: variants for automatic dark mode support.
+
     Args:
-        dark_mode: Whether to use dark mode.
+        dark_mode: Deprecated, ignored. Kept for backwards compatibility.
         variant: Text variant (primary, secondary, muted).
 
     Returns:
-        Text class string.
+        Text class string with dark: variants.
     """
-    if dark_mode:
-        return {
-            "primary": "text-gray-100",
-            "secondary": "text-gray-300",
-            "muted": "text-gray-400",
-        }.get(variant, "text-gray-100")
     return {
-        "primary": "text-gray-800",
-        "secondary": "text-gray-600",
-        "muted": "text-gray-500",
-    }.get(variant, "text-gray-800")
+        "primary": "text-gray-800 dark:text-gray-100",
+        "secondary": "text-gray-600 dark:text-gray-300",
+        "muted": "text-gray-500 dark:text-gray-400",
+    }.get(variant, "text-gray-800 dark:text-gray-100")

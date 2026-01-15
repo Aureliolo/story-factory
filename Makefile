@@ -11,6 +11,7 @@ healthcheck:  ## Run system health check
 
 install:  ## Install dependencies
 	pip install -r requirements.txt
+	playwright install chromium
 
 test:  ## Run all tests (unit + smoke + integration, excludes e2e)
 	pytest tests/unit tests/smoke tests/integration
@@ -24,7 +25,7 @@ test-smoke:  ## Run smoke tests (quick startup validation)
 test-integration:  ## Run integration tests
 	pytest tests/integration
 
-test-e2e:  ## Run E2E browser tests (requires: playwright install chromium)
+test-e2e:  ## Run E2E browser tests (headless)
 	pytest tests/e2e
 
 test-cov:  ## Run tests with coverage report

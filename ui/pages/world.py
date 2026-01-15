@@ -78,11 +78,11 @@ class WorldPage:
 
     def _build_no_project_message(self) -> None:
         """Build message when no project is selected."""
-        with ui.column().classes("w-full h-full items-center justify-center gap-4"):
-            ui.icon("public_off", size="xl").classes("text-gray-400")
-            ui.label("No Project Selected").classes("text-xl text-gray-500")
+        with ui.column().classes("w-full min-h-96 items-center justify-center gap-4 py-16"):
+            ui.icon("public_off", size="xl").classes("text-gray-400 dark:text-gray-500")
+            ui.label("No Project Selected").classes("text-xl text-gray-500 dark:text-gray-400")
             ui.label("Select a project from the header to explore its world.").classes(
-                "text-gray-400"
+                "text-gray-400 dark:text-gray-500"
             )
 
     def _build_entity_browser(self) -> None:
@@ -90,7 +90,7 @@ class WorldPage:
         ui.label("Entity Browser").classes("text-lg font-semibold")
 
         # Type filter
-        ui.label("Filter by Type").classes("text-sm font-medium text-gray-600")
+        ui.label("Filter by Type").classes("text-sm font-medium text-gray-600 dark:text-gray-400")
 
         for entity_type in ["character", "location", "item", "faction", "concept"]:
             color = ENTITY_COLORS[entity_type]
@@ -133,7 +133,7 @@ class WorldPage:
         ui.label("Entity Editor").classes("text-lg font-semibold")
 
         if not self.state.selected_entity_id or not self.state.world_db:
-            ui.label("Select an entity to edit").classes("text-gray-500 text-sm")
+            ui.label("Select an entity to edit").classes("text-gray-500 dark:text-gray-400 text-sm")
             return
 
         entity = self.services.world.get_entity(self.state.world_db, self.state.selected_entity_id)
@@ -251,7 +251,7 @@ class WorldPage:
 
                     ui.table(columns=columns, rows=rows).classes("w-full")
                 else:
-                    ui.label("No relationships yet").classes("text-gray-500")
+                    ui.label("No relationships yet").classes("text-gray-500 dark:text-gray-400")
 
     def _build_analysis_section(self) -> None:
         """Build the graph analysis section."""
@@ -322,7 +322,7 @@ class WorldPage:
 
         with self._entity_list:
             if not entities:
-                ui.label("No entities found").classes("text-gray-500 text-sm")
+                ui.label("No entities found").classes("text-gray-500 dark:text-gray-400 text-sm")
             else:
                 for entity in entities:
                     entity_list_item(

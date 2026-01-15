@@ -42,7 +42,7 @@ class Header:
                 ui.icon("auto_stories", size="lg").classes("text-blue-500")
                 ui.label("Story Factory").classes("text-xl font-bold")
 
-                ui.separator().props("vertical").classes("h-8")
+                ui.separator().props("vertical").classes("h-8 bg-gray-300 dark:bg-gray-600")
 
                 # Project selector
                 self._build_project_selector()
@@ -59,7 +59,7 @@ class Header:
                 # Dark mode toggle
                 self._build_theme_toggle()
 
-                ui.separator().props("vertical").classes("h-6")
+                ui.separator().props("vertical").classes("h-6 bg-gray-300 dark:bg-gray-600")
 
                 # Ollama status
                 self._build_status_display()
@@ -86,19 +86,25 @@ class Header:
             health = self.services.model.check_health()
 
             if health.is_healthy:
-                ui.icon("check_circle", color="green").classes("text-green-500")
-                self._status_label = ui.label("Ollama Connected").classes("text-sm text-green-600")
+                ui.icon("check_circle", color="green").classes("text-green-500 dark:text-green-400")
+                self._status_label = ui.label("Ollama Connected").classes(
+                    "text-sm text-green-500 dark:text-green-400"
+                )
             else:
-                ui.icon("error", color="red").classes("text-red-500")
-                self._status_label = ui.label("Ollama Offline").classes("text-sm text-red-600")
+                ui.icon("error", color="red").classes("text-red-500 dark:text-red-400")
+                self._status_label = ui.label("Ollama Offline").classes(
+                    "text-sm text-red-500 dark:text-red-400"
+                )
 
-            ui.separator().props("vertical").classes("h-6")
+            ui.separator().props("vertical").classes("h-6 bg-gray-300 dark:bg-gray-600")
 
             # VRAM display
             vram = self.services.model.get_vram()
             with ui.row().classes("items-center gap-1"):
-                ui.icon("memory", size="sm").classes("text-gray-500")
-                self._vram_label = ui.label(f"{vram} GB VRAM").classes("text-sm text-gray-600")
+                ui.icon("memory", size="sm").classes("text-gray-500 dark:text-gray-400")
+                self._vram_label = ui.label(f"{vram} GB VRAM").classes(
+                    "text-sm text-gray-600 dark:text-gray-400"
+                )
 
     def _build_theme_toggle(self) -> None:
         """Build the dark mode toggle button."""
@@ -169,10 +175,10 @@ class Header:
         if self._status_label:
             if health.is_healthy:
                 self._status_label.text = "Ollama Connected"
-                self._status_label.classes(replace="text-sm text-green-600")
+                self._status_label.classes(replace="text-sm text-green-500 dark:text-green-400")
             else:
                 self._status_label.text = "Ollama Offline"
-                self._status_label.classes(replace="text-sm text-red-600")
+                self._status_label.classes(replace="text-sm text-red-500 dark:text-red-400")
 
         if self._vram_label:
             vram = self.services.model.get_vram()

@@ -130,14 +130,16 @@ class SettingsPage:
                             options=model_options,
                             value=agent_model_value,
                         ).classes("flex-grow")
-                        ui.label(info["description"]).classes("text-sm text-gray-500")
+                        ui.label(info["description"]).classes(
+                            "text-sm text-gray-500 dark:text-gray-400"
+                        )
 
     def _build_temperature_section(self) -> None:
         """Build temperature settings."""
         with ui.card().classes("w-full"):
             ui.label("Agent Temperatures").classes("text-lg font-semibold mb-4")
             ui.label("Higher values = more creative, lower = more focused").classes(
-                "text-sm text-gray-500 mb-4"
+                "text-sm text-gray-500 dark:text-gray-400 mb-4"
             )
 
             self._temp_sliders = {}
@@ -190,7 +192,7 @@ class SettingsPage:
         with ui.card().classes("w-full"):
             ui.label("Context Limits").classes("text-lg font-semibold mb-4")
             ui.label("Control how much context is sent to the AI").classes(
-                "text-sm text-gray-500 mb-4"
+                "text-sm text-gray-500 dark:text-gray-400 mb-4"
             )
 
             with ui.row().classes("w-full gap-4"):

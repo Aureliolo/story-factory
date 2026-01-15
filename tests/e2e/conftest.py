@@ -8,6 +8,18 @@ import time
 import pytest
 
 
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    """Configure browser context - headless mode is default."""
+    return {**browser_context_args}
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    """Force headless mode for all browser launches."""
+    return {**browser_type_launch_args, "headless": True}
+
+
 def find_free_port() -> int:
     """Find an available port by letting the OS assign one."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

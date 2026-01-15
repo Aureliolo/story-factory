@@ -96,8 +96,7 @@ class StoryFactoryApp:
         # Main content area
         with ui.column().classes("w-full flex-grow"):
             # Tab navigation
-            tab_bg = "bg-gray-800" if self.state.dark_mode else "bg-white"
-            with ui.tabs().classes(f"w-full {tab_bg} shadow-sm") as tabs:
+            with ui.tabs().classes("w-full bg-white dark:bg-gray-800 shadow-sm") as tabs:
                 ui.tab("write", label="Write Story", icon="edit")
                 ui.tab("world", label="World Builder", icon="public")
                 ui.tab("projects", label="Projects", icon="folder")
@@ -174,6 +173,7 @@ class StoryFactoryApp:
             title=title,
             reload=reload,
             favicon="📚",
+            show=False,  # Don't auto-open browser
         )
 
 
