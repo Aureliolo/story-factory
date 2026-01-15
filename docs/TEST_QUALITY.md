@@ -9,7 +9,7 @@
 - **Smoke Tests**: 11 tests
 - **Integration Tests**: 25 tests (13 original + 12 for main.py)
 - **E2E Tests**: 7 tests
-- **Total Tests**: 146 tests (was 124, +22 new tests)
+- **Total Tests**: 153 tests (was 124, +29 new tests)
 
 ### Code Quality Metrics
 
@@ -247,7 +247,7 @@ Before release:
 ## Summary
 
 **Current State:**
-- ✅ Good foundation with 146 tests
+- ✅ Good foundation with 153 tests
 - ✅ No suppressed warnings
 - ✅ Clean linting
 - ⚠️ Coverage below target (37.8% vs 70% goal)
