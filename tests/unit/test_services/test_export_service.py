@@ -279,3 +279,57 @@ class TestExportServiceEdgeCases:
         markdown = service.to_markdown(state)
         # Should handle unicode without crashing
         assert len(markdown) > 0
+
+    def test_export_to_docx(self, tmp_path):
+        """Test DOCX export."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        brief = StoryBrief(
+            premise="DOCX test story",
+            genre="Sci-Fi",
+            tone="Tense",
+            setting_time="Future",
+            setting_place="Space Station",
+            target_length="short_story",
+            content_rating="none",
+        )
+        state = StoryState(id="test-docx", project_name="DOCX Test", brief=brief)
+        state.chapters = [
+            Chapter(
+                number=1,
+                title="First Chapter",
+                outline="Start",
+                content="This is the first chapter.\n\nAnd a second paragraph.",
+            )
+        ]
+
+        docx_bytes = service.to_docx(state)
+        assert len(docx_bytes) > 0
+        assert docx_bytes[:4] == b"PK\x03\x04"  # DOCX is a ZIP file
+
+    def test_save_to_file_docx(self, tmp_path):
+        """Test saving DOCX to file."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        brief = StoryBrief(
+            premise="File test",
+            genre="Mystery",
+            tone="Suspenseful",
+            setting_time="1920s",
+            setting_place="London",
+            target_length="short_story",
+            content_rating="none",
+        )
+        state = StoryState(id="test-file", project_name="File Test", brief=brief)
+        state.chapters = [
+            Chapter(number=1, title="Opening", outline="Start", content="Content here.")
+        ]
+
+        output_file = tmp_path / "story.docx"
+        result_path = service.save_to_file(state, "docx", output_file)
+
+        assert result_path.exists()
+        assert result_path.suffix == ".docx"
+        assert result_path.stat().st_size > 0
