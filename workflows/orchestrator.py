@@ -276,7 +276,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             "=" * 50,
         ]
 
-        # Handle missing brief (old saved stories may not have it)
+        # Handle projects created before brief feature was added
         if state.brief:
             summary_parts.extend(
                 [

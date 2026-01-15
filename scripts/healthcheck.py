@@ -15,11 +15,11 @@ logging.basicConfig(level=logging.ERROR)
 
 
 def check_python_version() -> tuple[bool, str]:
-    """Check if Python version is 3.11+."""
+    """Check if Python version is 3.13+."""
     version = sys.version_info
-    if version.major == 3 and version.minor >= 11:
+    if version.major == 3 and version.minor >= 13:
         return True, f"Python {version.major}.{version.minor}.{version.micro} ✓"
-    return False, f"Python {version.major}.{version.minor} (requires 3.11+) ✗"
+    return False, f"Python {version.major}.{version.minor} (requires 3.13+) ✗"
 
 
 def check_dependencies() -> tuple[bool, str]:

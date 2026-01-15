@@ -36,7 +36,7 @@ class KeyboardShortcuts:
                 window.__nicegui.emit('shortcut:new-project');
             }
 
-            // Ctrl+S - Save (placeholder)
+            // Ctrl+S - Save
             if (event.ctrlKey && event.key === 's') {
                 event.preventDefault();
                 window.__nicegui.emit('shortcut:save');
