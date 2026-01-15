@@ -51,6 +51,8 @@ class ProjectsPage:
 
     def _refresh_project_list(self) -> None:
         """Refresh the project list display."""
+        from ui.components.common import empty_state
+
         if not self._project_list:
             return
 
@@ -59,10 +61,14 @@ class ProjectsPage:
 
         if not projects:
             with self._project_list:
-                with ui.column().classes("w-full items-center py-12"):
-                    ui.icon("folder_open", size="xl").classes("text-gray-400")
-                    ui.label("No projects yet").classes("text-xl text-gray-500")
-                    ui.label("Create a new project to get started.").classes("text-gray-400")
+                empty_state(
+                    icon="folder_open",
+                    title="No projects yet",
+                    description="Create a new project to get started.",
+                    action_text="Create Project",
+                    on_action=self._create_project,
+                    dark_mode=self.state.dark_mode,
+                )
             return
 
         with self._project_list:
@@ -177,22 +183,20 @@ class ProjectsPage:
 
     async def _confirm_delete(self, project) -> None:
         """Show delete confirmation dialog."""
-        with ui.dialog() as dialog, ui.card():
-            ui.label("Delete Project?").classes("text-lg font-semibold")
-            ui.label(
-                f'Are you sure you want to delete "{project.name}"? This cannot be undone.'
-            ).classes("text-gray-600")
+        from ui.components.common import confirmation_dialog
 
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                ui.button("Cancel", on_click=dialog.close).props("flat")
-                ui.button(
-                    "Delete",
-                    on_click=lambda: self._delete_project(dialog, project.id),
-                ).props("color=negative")
+        def delete():
+            self._delete_project(project.id)
 
-        dialog.open()
+        confirmation_dialog(
+            title="Delete Project?",
+            message=f'Are you sure you want to delete "{project.name}"? This cannot be undone.',
+            on_confirm=delete,
+            confirm_text="Delete",
+            cancel_text="Cancel",
+        )
 
-    def _delete_project(self, dialog, project_id: str) -> None:
+    def _delete_project(self, project_id: str) -> None:
         """Delete a project."""
         try:
             # Clear if this is the current project
@@ -200,7 +204,6 @@ class ProjectsPage:
                 self.state.clear_project()
 
             self.services.project.delete_project(project_id)
-            dialog.close()
             self._refresh_project_list()
             ui.notify("Project deleted", type="positive")
         except Exception as e:
