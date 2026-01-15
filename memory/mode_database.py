@@ -161,39 +161,46 @@ class ModeDatabase:
 
         Returns:
             The ID of the inserted record.
+
+        Raises:
+            sqlite3.Error: If database operation fails.
         """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO generation_scores (
-                    project_id, chapter_id, agent_role, model_id, mode_name, genre,
-                    tokens_generated, time_seconds, tokens_per_second, vram_used_gb,
-                    prose_quality, instruction_following, consistency_score,
-                    was_regenerated, edit_distance, user_rating, prompt_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    project_id,
-                    chapter_id,
-                    agent_role,
-                    model_id,
-                    mode_name,
-                    genre,
-                    tokens_generated,
-                    time_seconds,
-                    tokens_per_second,
-                    vram_used_gb,
-                    prose_quality,
-                    instruction_following,
-                    consistency_score,
-                    1 if was_regenerated else 0,
-                    edit_distance,
-                    user_rating,
-                    prompt_hash,
-                ),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO generation_scores (
+                        project_id, chapter_id, agent_role, model_id, mode_name, genre,
+                        tokens_generated, time_seconds, tokens_per_second, vram_used_gb,
+                        prose_quality, instruction_following, consistency_score,
+                        was_regenerated, edit_distance, user_rating, prompt_hash
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project_id,
+                        chapter_id,
+                        agent_role,
+                        model_id,
+                        mode_name,
+                        genre,
+                        tokens_generated,
+                        time_seconds,
+                        tokens_per_second,
+                        vram_used_gb,
+                        prose_quality,
+                        instruction_following,
+                        consistency_score,
+                        1 if was_regenerated else 0,
+                        edit_distance,
+                        user_rating,
+                        prompt_hash,
+                    ),
+                )
+                conn.commit()
+                return cursor.lastrowid or 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to record score: {e}")
+            raise
 
     def update_score(
         self,
@@ -206,7 +213,11 @@ class ModeDatabase:
         edit_distance: int | None = None,
         user_rating: int | None = None,
     ) -> None:
-        """Update an existing score with additional metrics."""
+        """Update an existing score with additional metrics.
+
+        Raises:
+            sqlite3.Error: If database operation fails.
+        """
         updates = []
         values = []
 
@@ -233,12 +244,16 @@ class ModeDatabase:
             return
 
         values.append(score_id)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                f"UPDATE generation_scores SET {', '.join(updates)} WHERE id = ?",
-                values,
-            )
-            conn.commit()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    f"UPDATE generation_scores SET {', '.join(updates)} WHERE id = ?",
+                    values,
+                )
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update score {score_id}: {e}")
+            raise
 
     def get_scores_for_model(
         self,
@@ -418,29 +433,40 @@ class ModeDatabase:
         affected_role: str | None = None,
         expected_improvement: str | None = None,
     ) -> int:
-        """Record a tuning recommendation."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO recommendations (
-                    recommendation_type, current_value, suggested_value,
-                    affected_role, reason, confidence, evidence_json,
-                    expected_improvement
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    recommendation_type,
-                    current_value,
-                    suggested_value,
-                    affected_role,
-                    reason,
-                    confidence,
-                    json.dumps(evidence) if evidence else None,
-                    expected_improvement,
-                ),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+        """Record a tuning recommendation.
+
+        Returns:
+            The ID of the inserted recommendation.
+
+        Raises:
+            sqlite3.Error: If database operation fails.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO recommendations (
+                        recommendation_type, current_value, suggested_value,
+                        affected_role, reason, confidence, evidence_json,
+                        expected_improvement
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        recommendation_type,
+                        current_value,
+                        suggested_value,
+                        affected_role,
+                        reason,
+                        confidence,
+                        json.dumps(evidence) if evidence else None,
+                        expected_improvement,
+                    ),
+                )
+                conn.commit()
+                return cursor.lastrowid or 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to record recommendation: {e}")
+            raise
 
     def update_recommendation_outcome(
         self,
@@ -499,27 +525,35 @@ class ModeDatabase:
         description: str = "",
         is_experimental: bool = False,
     ) -> None:
-        """Save or update a custom generation mode."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO custom_modes (
-                    id, name, description, agent_models_json,
-                    agent_temperatures_json, vram_strategy, is_experimental,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                """,
-                (
-                    mode_id,
-                    name,
-                    description,
-                    json.dumps(agent_models),
-                    json.dumps(agent_temperatures),
-                    vram_strategy,
-                    1 if is_experimental else 0,
-                ),
-            )
-            conn.commit()
+        """Save or update a custom generation mode.
+
+        Raises:
+            sqlite3.Error: If database operation fails.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO custom_modes (
+                        id, name, description, agent_models_json,
+                        agent_temperatures_json, vram_strategy, is_experimental,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    """,
+                    (
+                        mode_id,
+                        name,
+                        description,
+                        json.dumps(agent_models),
+                        json.dumps(agent_temperatures),
+                        vram_strategy,
+                        1 if is_experimental else 0,
+                    ),
+                )
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to save custom mode {mode_id}: {e}")
+            raise
 
     def get_custom_mode(self, mode_id: str) -> dict | None:
         """Get a custom mode by ID."""

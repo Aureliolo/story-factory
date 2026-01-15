@@ -134,30 +134,43 @@ class AnalyticsPage:
 
         self._summary_section.clear()
 
-        # Get summary stats
-        total_scores = self._db.get_score_count(
-            agent_role=self._filter_agent_role, genre=self._filter_genre
-        )
-        avg_quality = self._db.get_average_score(
-            "prose_quality",
-            agent_role=self._filter_agent_role,
-            genre=self._filter_genre,
-        )
-        avg_instruction = self._db.get_average_score(
-            "instruction_following",
-            agent_role=self._filter_agent_role,
-            genre=self._filter_genre,
-        )
-        avg_consistency = self._db.get_average_score(
-            "consistency_score",
-            agent_role=self._filter_agent_role,
-            genre=self._filter_genre,
-        )
-        avg_speed = self._db.get_average_score(
-            "tokens_per_second",
-            agent_role=self._filter_agent_role,
-            genre=self._filter_genre,
-        )
+        try:
+            # Get summary stats
+            total_scores = self._db.get_score_count(
+                agent_role=self._filter_agent_role, genre=self._filter_genre
+            )
+            avg_quality = self._db.get_average_score(
+                "prose_quality",
+                agent_role=self._filter_agent_role,
+                genre=self._filter_genre,
+            )
+            avg_instruction = self._db.get_average_score(
+                "instruction_following",
+                agent_role=self._filter_agent_role,
+                genre=self._filter_genre,
+            )
+            avg_consistency = self._db.get_average_score(
+                "consistency_score",
+                agent_role=self._filter_agent_role,
+                genre=self._filter_genre,
+            )
+            avg_speed = self._db.get_average_score(
+                "tokens_per_second",
+                agent_role=self._filter_agent_role,
+                genre=self._filter_genre,
+            )
+            logger.debug(
+                f"Analytics summary: {total_scores} scores, "
+                f"quality={avg_quality:.1f if avg_quality else 'N/A'}, "
+                f"speed={avg_speed:.1f if avg_speed else 'N/A'} t/s"
+            )
+        except Exception as e:
+            logger.error(f"Failed to load analytics summary: {e}", exc_info=True)
+            with self._summary_section:
+                ui.label("Failed to load analytics data. Check logs for details.").classes(
+                    "text-red-500 p-4"
+                )
+            return
 
         with self._summary_section:
             with ui.element("div").classes("grid grid-cols-2 md:grid-cols-5 gap-4"):
@@ -207,10 +220,20 @@ class AnalyticsPage:
 
         self._model_section.clear()
 
-        # Get model performance summaries
-        summaries = self._db.get_model_summaries(
-            agent_role=self._filter_agent_role, genre=self._filter_genre
-        )
+        try:
+            # Get model performance summaries
+            summaries = self._db.get_model_summaries(
+                agent_role=self._filter_agent_role, genre=self._filter_genre
+            )
+            logger.debug(f"Loaded {len(summaries)} model performance summaries")
+        except Exception as e:
+            logger.error(f"Failed to load model performance data: {e}", exc_info=True)
+            with self._model_section:
+                with ui.card().classes("w-full"):
+                    ui.label(
+                        "Failed to load model performance data. Check logs for details."
+                    ).classes("text-red-500 p-4")
+            return
 
         with self._model_section:
             with ui.card().classes("w-full"):
@@ -275,7 +298,17 @@ class AnalyticsPage:
 
         self._recommendations_section.clear()
 
-        recommendations = self._db.get_recent_recommendations(limit=10)
+        try:
+            recommendations = self._db.get_recent_recommendations(limit=10)
+            logger.debug(f"Loaded {len(recommendations)} recent recommendations")
+        except Exception as e:
+            logger.error(f"Failed to load recommendations: {e}", exc_info=True)
+            with self._recommendations_section:
+                with ui.card().classes("w-full"):
+                    ui.label("Failed to load recommendations. Check logs for details.").classes(
+                        "text-red-500 p-4"
+                    )
+            return
 
         with self._recommendations_section:
             with ui.card().classes("w-full"):
@@ -331,73 +364,81 @@ class AnalyticsPage:
 
     def _export_csv(self) -> None:
         """Export score data to CSV."""
-        scores = self._db.get_all_scores(
-            agent_role=self._filter_agent_role, genre=self._filter_genre
-        )
+        try:
+            scores = self._db.get_all_scores(
+                agent_role=self._filter_agent_role, genre=self._filter_genre
+            )
+            logger.info(f"Exporting {len(scores)} scores to CSV")
 
-        if not scores:
-            ui.notify("No data to export", type="warning")
-            return
+            if not scores:
+                logger.warning("No data to export")
+                ui.notify("No data to export", type="warning")
+                return
 
-        # Build CSV in memory
-        output = io.StringIO()
-        writer = csv.writer(output)
+            # Build CSV in memory
+            output = io.StringIO()
+            writer = csv.writer(output)
 
-        # Header
-        writer.writerow(
-            [
-                "timestamp",
-                "project_id",
-                "chapter_id",
-                "agent_role",
-                "model_id",
-                "mode_name",
-                "genre",
-                "prose_quality",
-                "instruction_following",
-                "consistency_score",
-                "tokens_generated",
-                "time_seconds",
-                "tokens_per_second",
-                "was_regenerated",
-                "edit_distance",
-                "user_rating",
-            ]
-        )
-
-        # Data rows
-        for score in scores:
+            # Header
             writer.writerow(
                 [
-                    score.timestamp.isoformat() if score.timestamp else "",
-                    score.project_id,
-                    score.chapter_id or "",
-                    score.agent_role,
-                    score.model_id,
-                    score.mode_name,
-                    score.genre or "",
-                    score.quality.prose_quality if score.quality.prose_quality else "",
-                    score.quality.instruction_following
-                    if score.quality.instruction_following
-                    else "",
-                    score.quality.consistency_score if score.quality.consistency_score else "",
-                    score.performance.tokens_generated
-                    if score.performance.tokens_generated
-                    else "",
-                    score.performance.time_seconds if score.performance.time_seconds else "",
-                    score.performance.tokens_per_second
-                    if score.performance.tokens_per_second
-                    else "",
-                    score.signals.was_regenerated,
-                    score.signals.edit_distance if score.signals.edit_distance else "",
-                    score.signals.user_rating if score.signals.user_rating else "",
+                    "timestamp",
+                    "project_id",
+                    "chapter_id",
+                    "agent_role",
+                    "model_id",
+                    "mode_name",
+                    "genre",
+                    "prose_quality",
+                    "instruction_following",
+                    "consistency_score",
+                    "tokens_generated",
+                    "time_seconds",
+                    "tokens_per_second",
+                    "was_regenerated",
+                    "edit_distance",
+                    "user_rating",
                 ]
             )
 
-        csv_content = output.getvalue()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"story_factory_analytics_{timestamp}.csv"
+            # Data rows
+            for score in scores:
+                writer.writerow(
+                    [
+                        score.timestamp.isoformat() if score.timestamp else "",
+                        score.project_id,
+                        score.chapter_id or "",
+                        score.agent_role,
+                        score.model_id,
+                        score.mode_name,
+                        score.genre or "",
+                        score.quality.prose_quality if score.quality.prose_quality else "",
+                        score.quality.instruction_following
+                        if score.quality.instruction_following
+                        else "",
+                        score.quality.consistency_score if score.quality.consistency_score else "",
+                        score.performance.tokens_generated
+                        if score.performance.tokens_generated
+                        else "",
+                        score.performance.time_seconds if score.performance.time_seconds else "",
+                        score.performance.tokens_per_second
+                        if score.performance.tokens_per_second
+                        else "",
+                        score.signals.was_regenerated,
+                        score.signals.edit_distance if score.signals.edit_distance else "",
+                        score.signals.user_rating if score.signals.user_rating else "",
+                    ]
+                )
 
-        # Trigger download
-        ui.download(csv_content.encode(), filename)
-        ui.notify(f"Exported {len(scores)} records to {filename}", type="positive")
+            csv_content = output.getvalue()
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"story_factory_analytics_{timestamp}.csv"
+
+            # Trigger download
+            ui.download(csv_content.encode(), filename)
+            logger.info(f"Successfully exported {len(scores)} records to {filename}")
+            ui.notify(f"Exported {len(scores)} records to {filename}", type="positive")
+
+        except Exception as e:
+            logger.error(f"Failed to export CSV: {e}", exc_info=True)
+            ui.notify(f"Export failed: {str(e)}", type="negative")

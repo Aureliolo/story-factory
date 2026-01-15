@@ -8,6 +8,7 @@ This service handles:
 """
 
 import hashlib
+import json
 import logging
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from memory.mode_models import (
     list_preset_modes,
 )
 from settings import AVAILABLE_MODELS, Settings, get_available_vram
+from utils.json_parser import extract_json
 
 logger = logging.getLogger(__name__)
 
@@ -103,13 +105,23 @@ class ModelModeService:
         # Check custom modes
         custom = self._db.get_custom_mode(mode_id)
         if custom:
+            # Validate VRAM strategy with fallback
+            try:
+                vram_strategy = VramStrategy(custom["vram_strategy"])
+            except (ValueError, KeyError) as e:
+                logger.warning(
+                    f"Invalid VRAM strategy '{custom.get('vram_strategy')}' in mode {mode_id}, "
+                    f"using ADAPTIVE. Error: {e}"
+                )
+                vram_strategy = VramStrategy.ADAPTIVE
+
             mode = GenerationMode(
                 id=custom["id"],
                 name=custom["name"],
                 description=custom.get("description", ""),
                 agent_models=custom["agent_models"],
                 agent_temperatures=custom["agent_temperatures"],
-                vram_strategy=VramStrategy(custom["vram_strategy"]),
+                vram_strategy=vram_strategy,
                 is_preset=False,
                 is_experimental=bool(custom.get("is_experimental", False)),
             )
@@ -223,14 +235,21 @@ class ModelModeService:
     def _unload_all_except(self, keep_model: str) -> None:
         """Unload all models except the specified one.
 
-        Note: Ollama handles model lifecycle automatically, but we can
-        hint by not keeping references and letting it manage the cache.
+        Note: Ollama manages model lifecycle automatically via LRU caching.
+        This method only updates our tracking. Actual VRAM freeing depends
+        on Ollama's internal memory management, not explicit unload calls.
+
+        For truly sequential model usage, consider using Ollama's --noprune
+        flag with manual model loading/unloading via the API if available.
         """
         # For now, just clear our tracking
         # Ollama will unload based on its own LRU cache
         models_to_remove = self._loaded_models - {keep_model}
         if models_to_remove:
-            logger.debug(f"Marking models for unload: {models_to_remove}")
+            logger.debug(
+                f"Marking models for potential unload by Ollama: {models_to_remove} "
+                f"(actual unloading depends on Ollama's memory management)"
+            )
             self._loaded_models = {keep_model}
 
     # === Score Recording ===
@@ -264,25 +283,33 @@ class ModelModeService:
         if prompt_text:
             prompt_hash = hashlib.md5(prompt_text.encode()).hexdigest()[:16]
 
-        score_id = self._db.record_score(
-            project_id=project_id,
-            agent_role=agent_role,
-            model_id=model_id,
-            mode_name=mode.id,
-            chapter_id=chapter_id,
-            genre=genre,
-            tokens_generated=tokens_generated,
-            time_seconds=time_seconds,
-            tokens_per_second=tokens_per_second,
-            prompt_hash=prompt_hash,
-        )
+        try:
+            score_id = self._db.record_score(
+                project_id=project_id,
+                agent_role=agent_role,
+                model_id=model_id,
+                mode_name=mode.id,
+                chapter_id=chapter_id,
+                genre=genre,
+                tokens_generated=tokens_generated,
+                time_seconds=time_seconds,
+                tokens_per_second=tokens_per_second,
+                prompt_hash=prompt_hash,
+            )
 
-        logger.debug(
-            f"Recorded generation: {agent_role}/{model_id} "
-            f"({tokens_generated} tokens in {time_seconds:.1f}s)"
-        )
+            logger.info(
+                f"Recorded generation score {score_id}: {agent_role}/{model_id} "
+                f"(mode={mode.id}, tokens={tokens_generated}, time={time_seconds:.1f}s, "
+                f"speed={tokens_per_second:.1f if tokens_per_second else 'N/A'} t/s)"
+            )
+            return score_id
 
-        return score_id
+        except Exception as e:
+            logger.error(
+                f"Failed to record generation for {agent_role}/{model_id}: {e}",
+                exc_info=True,
+            )
+            raise
 
     def update_quality_scores(
         self,
@@ -290,12 +317,21 @@ class ModelModeService:
         quality: QualityScores,
     ) -> None:
         """Update a score record with quality scores."""
-        self._db.update_score(
-            score_id,
-            prose_quality=quality.prose_quality,
-            instruction_following=quality.instruction_following,
-            consistency_score=quality.consistency_score,
-        )
+        try:
+            self._db.update_score(
+                score_id,
+                prose_quality=quality.prose_quality,
+                instruction_following=quality.instruction_following,
+                consistency_score=quality.consistency_score,
+            )
+            logger.debug(
+                f"Updated quality scores for {score_id}: "
+                f"prose={quality.prose_quality}, instruction={quality.instruction_following}, "
+                f"consistency={quality.consistency_score}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to update quality scores for {score_id}: {e}", exc_info=True)
+            raise
 
     def record_implicit_signal(
         self,
@@ -306,12 +342,25 @@ class ModelModeService:
         user_rating: int | None = None,
     ) -> None:
         """Record an implicit quality signal."""
-        self._db.update_score(
-            score_id,
-            was_regenerated=was_regenerated,
-            edit_distance=edit_distance,
-            user_rating=user_rating,
-        )
+        try:
+            self._db.update_score(
+                score_id,
+                was_regenerated=was_regenerated,
+                edit_distance=edit_distance,
+                user_rating=user_rating,
+            )
+            signals = []
+            if was_regenerated:
+                signals.append("regenerated")
+            if edit_distance is not None:
+                signals.append(f"edited({edit_distance} chars)")
+            if user_rating is not None:
+                signals.append(f"rated({user_rating}/5)")
+
+            logger.debug(f"Recorded signals for score {score_id}: {', '.join(signals)}")
+        except Exception as e:
+            logger.error(f"Failed to record implicit signal for {score_id}: {e}", exc_info=True)
+            raise
 
     # === LLM Quality Judge ===
 
@@ -335,6 +384,11 @@ class ModelModeService:
         """
         # Use validator model or smallest available
         judge_model = self.get_model_for_agent("validator")
+        logger.debug(f"Using {judge_model} to judge quality for {genre}/{tone}")
+
+        # Limit content size for faster judging
+        MAX_CONTENT_LENGTH = 3000
+        truncated_content = content[:MAX_CONTENT_LENGTH]
 
         prompt = f"""You are evaluating the quality of AI-generated story content.
 
@@ -344,7 +398,7 @@ Tone: {tone}
 Themes: {", ".join(themes)}
 
 **Content to evaluate:**
-{content[:3000]}  # Truncate for speed
+{truncated_content}
 
 Rate each dimension from 0-10:
 
@@ -362,24 +416,32 @@ Respond ONLY with JSON:
                 options={"num_predict": 100, "temperature": 0.1},
             )
 
-            # Parse response
-            import json
-            import re
+            # Parse response using extract_json utility
+            text = response["response"]
+            logger.debug(f"LLM judge raw response: {text[:200]}")
 
-            text = response.response
-            # Find JSON in response
-            match = re.search(r"\{[^}]+\}", text)
-            if match:
-                data = json.loads(match.group())
-                return QualityScores(
+            json_str = extract_json(text)
+            if json_str:
+                data = json.loads(json_str)
+                scores = QualityScores(
                     prose_quality=float(data.get("prose_quality", 5)),
                     instruction_following=float(data.get("instruction_following", 5)),
                 )
+                logger.info(
+                    f"Quality judged: prose={scores.prose_quality:.1f}, "
+                    f"instruction={scores.instruction_following:.1f}"
+                )
+                return scores
+            else:
+                logger.warning(f"No JSON found in judge response: {text}")
 
+        except json.JSONDecodeError as e:
+            logger.warning(f"Quality judgment JSON parse error: {e}")
         except Exception as e:
-            logger.warning(f"Quality judgment failed: {e}")
+            logger.error(f"Quality judgment failed: {e}", exc_info=True)
 
         # Return neutral scores on failure
+        logger.warning("Returning neutral quality scores (5.0) due to judgment failure")
         return QualityScores(prose_quality=5.0, instruction_following=5.0)
 
     def calculate_consistency_score(self, issues: list[dict]) -> float:
