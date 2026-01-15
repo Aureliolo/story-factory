@@ -1,8 +1,10 @@
 """Write Story page - Fundamentals and Live Writing tabs."""
 
 import asyncio
+import logging
+from typing import Literal
 
-from nicegui import ui
+from nicegui import Client, context, ui
 from nicegui.elements.html import Html
 from nicegui.elements.label import Label
 from nicegui.elements.markdown import Markdown
@@ -15,6 +17,8 @@ from ui.components.graph import mini_graph
 from ui.graph_renderer import render_entity_summary_html
 from ui.state import AppState
 from ui.theme import get_status_color
+
+logger = logging.getLogger(__name__)
 
 
 class WritePage:
@@ -50,9 +54,31 @@ class WritePage:
         self._writing_display: Markdown | None = None
         self._word_count_label: Label | None = None
         self._feedback_input: Textarea | None = None
+        self._client: Client | None = None  # For background task safety
+
+    def _notify(
+        self,
+        message: str,
+        type: Literal["positive", "negative", "warning", "info", "ongoing"] = "info",
+    ) -> None:
+        """Show notification safely from background tasks."""
+        if self._client:
+            with self._client:
+                ui.notify(message, type=type)
+        else:
+            try:
+                ui.notify(message, type=type)
+            except RuntimeError:
+                logger.warning(f"Could not show notification: {message}")
 
     def build(self) -> None:
         """Build the write page UI."""
+        # Capture client for background task safety
+        try:
+            self._client = context.client
+        except RuntimeError:
+            logger.warning("Could not capture client context during build")
+
         if not self.state.has_project:
             self._build_no_project_message()
             return
@@ -414,7 +440,7 @@ class WritePage:
             self.state.add_interview_message("assistant", questions)
         except Exception as e:
             self._chat.show_typing(False)
-            ui.notify(f"Error starting interview: {e}", type="negative")
+            self._notify(f"Error starting interview: {e}", type="negative")
 
     async def _handle_interview_message(self, message: str) -> None:
         """Handle user message in interview."""
@@ -436,7 +462,7 @@ class WritePage:
             if is_complete:
                 self.state.interview_complete = True
                 self._chat.set_disabled(True)
-                ui.notify(
+                self._notify(
                     "Interview complete! You can now build the story structure.", type="positive"
                 )
 
@@ -445,7 +471,7 @@ class WritePage:
 
         except Exception as e:
             self._chat.show_typing(False)
-            ui.notify(f"Error: {e}", type="negative")
+            self._notify(f"Error: {e}", type="negative")
 
     async def _finalize_interview(self) -> None:
         """Force finalize the interview."""
@@ -458,9 +484,9 @@ class WritePage:
             if self._chat:
                 self._chat.set_disabled(True)
             self.services.project.save_project(self.state.project)
-            ui.notify("Interview finalized!", type="positive")
+            self._notify("Interview finalized!", type="positive")
         except Exception as e:
-            ui.notify(f"Error: {e}", type="negative")
+            self._notify(f"Error: {e}", type="negative")
 
     def _enable_continue_interview(self) -> None:
         """Enable continuing the interview."""
@@ -479,14 +505,14 @@ class WritePage:
             return
 
         try:
-            ui.notify("Building story structure...", type="info")
+            self._notify("Building story structure...", type="info")
             self.services.story.build_structure(self.state.project, self.state.world_db)
             self.services.project.save_project(self.state.project)
-            ui.notify("Story structure built!", type="positive")
+            self._notify("Story structure built!", type="positive")
             # Refresh the page
             ui.navigate.reload()
         except Exception as e:
-            ui.notify(f"Error building structure: {e}", type="negative")
+            self._notify(f"Error building structure: {e}", type="negative")
 
     def _on_chapter_select(self, e) -> None:
         """Handle chapter selection change."""
@@ -521,12 +547,12 @@ class WritePage:
     async def _write_current_chapter(self) -> None:
         """Write the current chapter."""
         if not self.state.project or not self.state.current_chapter:
-            ui.notify("Select a chapter first", type="warning")
+            self._notify("Select a chapter first", type="warning")
             return
 
         try:
             self.state.is_writing = True
-            ui.notify(f"Writing chapter {self.state.current_chapter}...", type="info")
+            self._notify(f"Writing chapter {self.state.current_chapter}...", type="info")
 
             for event in self.services.story.write_chapter(
                 self.state.project, self.state.current_chapter
@@ -536,11 +562,11 @@ class WritePage:
             self.state.is_writing = False
             self._refresh_writing_display()
             self.services.project.save_project(self.state.project)
-            ui.notify("Chapter complete!", type="positive")
+            self._notify("Chapter complete!", type="positive")
 
         except Exception as e:
             self.state.is_writing = False
-            ui.notify(f"Error: {e}", type="negative")
+            self._notify(f"Error: {e}", type="negative")
 
     async def _write_all_chapters(self) -> None:
         """Write all chapters."""
@@ -552,23 +578,23 @@ class WritePage:
 
             for event in self.services.story.write_all_chapters(self.state.project):
                 self.state.writing_progress = event.message
-                ui.notify(event.message, type="info")
+                self._notify(event.message, type="info")
 
             self.state.is_writing = False
             self._refresh_writing_display()
             self.services.project.save_project(self.state.project)
-            ui.notify("All chapters complete!", type="positive")
+            self._notify("All chapters complete!", type="positive")
 
         except Exception as e:
             self.state.is_writing = False
-            ui.notify(f"Error: {e}", type="negative")
+            self._notify(f"Error: {e}", type="negative")
 
     def _apply_feedback(self) -> None:
         """Apply instant feedback to current chapter."""
         if not self._feedback_input or not self._feedback_input.value:
             return
         if not self.state.project or self.state.current_chapter is None:
-            ui.notify("No chapter selected", type="warning")
+            self._notify("No chapter selected", type="warning")
             return
 
         feedback = self._feedback_input.value
@@ -582,7 +608,7 @@ class WritePage:
         )
 
         self.services.project.save_project(self.state.project)
-        ui.notify(f"Feedback saved for chapter {self.state.current_chapter}", type="positive")
+        self._notify(f"Feedback saved for chapter {self.state.current_chapter}", type="positive")
         self._feedback_input.value = ""
 
     def _add_note(self, content: str) -> None:
@@ -597,7 +623,7 @@ class WritePage:
             chapter_num=self.state.current_chapter,
         )
         self.services.project.save_project(self.state.project)
-        ui.notify("Note added", type="positive")
+        self._notify("Note added", type="positive")
 
     async def _export(self, fmt: str) -> None:
         """Export the story."""
@@ -618,6 +644,6 @@ class WritePage:
                 bytes_content = self.services.export.to_pdf(self.state.project)
                 ui.download(bytes_content, f"{self.state.project.project_name}.pdf")
 
-            ui.notify(f"Exported as {fmt.upper()}", type="positive")
+            self._notify(f"Exported as {fmt.upper()}", type="positive")
         except Exception as e:
-            ui.notify(f"Export failed: {e}", type="negative")
+            self._notify(f"Export failed: {e}", type="negative")

@@ -140,13 +140,10 @@ class Header:
         try:
             project, world_db = self.services.project.create_project()
             self.state.set_project(project.id, project, world_db)
-
-            # Update dropdown
-            self._refresh_project_list()
-
             ui.notify("New project created!", type="positive")
+            self._refresh_project_list()
         except Exception as ex:
-            ui.notify(f"Error creating project: {ex}", type="negative")
+            ui.notify(f"Error: {ex}", type="negative")
 
     def _refresh_project_list(self) -> None:
         """Refresh the project dropdown options."""

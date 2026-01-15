@@ -1,13 +1,16 @@
 """Chat component for interview interface."""
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
-from nicegui import ui
+from nicegui import Client, context, ui
 from nicegui.elements.button import Button
 from nicegui.elements.column import Column
 from nicegui.elements.row import Row
 from nicegui.elements.textarea import Textarea
+
+logger = logging.getLogger(__name__)
 
 
 class ChatComponent:
@@ -42,9 +45,16 @@ class ChatComponent:
         self._send_button: Button | None = None
         self._typing_indicator: Row | None = None
         self._is_processing = False
+        self._client: Client | None = None  # Store client for background task safety
 
     def build(self) -> None:
         """Build the chat UI."""
+        # Capture client for background task safety
+        try:
+            self._client = context.client
+        except RuntimeError:
+            logger.warning("Could not capture client context during build")
+
         with ui.column().classes("w-full h-full"):
             # Message display area
             self._message_container = ui.column().classes(
@@ -87,6 +97,8 @@ class ChatComponent:
     def add_message(self, role: str, content: str) -> None:
         """Add a message to the chat.
 
+        Safe to call from background tasks.
+
         Args:
             role: 'user' or 'assistant'.
             content: Message content.
@@ -94,17 +106,29 @@ class ChatComponent:
         if not self._message_container:
             return
 
-        with self._message_container:
-            if role == "user":
-                self._create_user_message(content)
-            else:
-                self._create_assistant_message(content)
+        # Use client context for background task safety
+        def _do_add_message():
+            if self._message_container is None:
+                return
+            with self._message_container:
+                if role == "user":
+                    self._create_user_message(content)
+                else:
+                    self._create_assistant_message(content)
 
-        # Auto-scroll to bottom
-        ui.run_javascript(
-            "document.querySelector('.overflow-auto').scrollTop = "
-            "document.querySelector('.overflow-auto').scrollHeight"
-        )
+            # Auto-scroll to bottom
+            ui.run_javascript(
+                "document.querySelector('.overflow-auto').scrollTop = "
+                "document.querySelector('.overflow-auto').scrollHeight"
+            )
+
+        # If we have a client, use it to ensure proper context
+        if self._client:
+            with self._client:
+                _do_add_message()
+        else:
+            # Fallback to direct execution (may fail in background tasks)
+            _do_add_message()
 
     def _create_user_message(self, content: str) -> None:
         """Create a user message bubble."""
@@ -139,21 +163,32 @@ class ChatComponent:
     def show_typing(self, show: bool = True) -> None:
         """Show or hide the typing indicator.
 
+        Safe to call from background tasks.
+
         Args:
             show: Whether to show the indicator.
         """
-        if self._typing_indicator:
-            self._typing_indicator.set_visibility(show)
-        self._is_processing = show
 
-        # Disable input while processing
-        if self._input and self._send_button:
-            if show:
-                self._input.disable()
-                self._send_button.disable()
-            elif not self.disabled:
-                self._input.enable()
-                self._send_button.enable()
+        def _do_show_typing():
+            if self._typing_indicator:
+                self._typing_indicator.set_visibility(show)
+            self._is_processing = show
+
+            # Disable input while processing
+            if self._input and self._send_button:
+                if show:
+                    self._input.disable()
+                    self._send_button.disable()
+                elif not self.disabled:
+                    self._input.enable()
+                    self._send_button.enable()
+
+        # Use client context for background task safety
+        if self._client:
+            with self._client:
+                _do_show_typing()
+        else:
+            _do_show_typing()
 
     def clear(self) -> None:
         """Clear all messages."""
