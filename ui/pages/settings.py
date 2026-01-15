@@ -198,6 +198,7 @@ class SettingsPage:
                     ui.label("Creative (1.2+)").classes("text-gray-500 dark:text-gray-400")
 
             self._temp_sliders: dict = {}
+            self._temp_labels: dict = {}
             with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-4"):
                 for role, info in AGENT_ROLES.items():
                     default_temp = self.settings.agent_temperatures.get(role, 0.8)
@@ -208,14 +209,13 @@ class SettingsPage:
                     ):
                         with ui.row().classes("w-full items-center justify-between mb-2"):
                             ui.label(info["name"]).classes("font-medium text-sm")
-                            ui.label().bind_text_from(
-                                lambda r=role: self._temp_sliders.get(r),
-                                "value",
-                                backward=lambda v: f"{v:.1f}" if v else "0.8",
-                            ).classes(
+                            # Create label with initial value - will be updated by slider
+                            self._temp_labels[role] = ui.label(f"{default_temp:.1f}").classes(
                                 "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
                             )
-                        self._temp_sliders[role] = (
+
+                        # Create slider and bind label to it
+                        slider = (
                             ui.slider(
                                 min=0.0,
                                 max=2.0,
@@ -224,6 +224,12 @@ class SettingsPage:
                             )
                             .classes("w-full")
                             .props("label-always")
+                        )
+                        self._temp_sliders[role] = slider
+
+                        # Bind the label to the slider value
+                        self._temp_labels[role].bind_text_from(
+                            slider, "value", backward=lambda v: f"{v:.1f}"
                         )
 
     def _build_interaction_section(self) -> None:
