@@ -252,7 +252,7 @@ class ModeDatabase:
                 )
                 conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"Failed to update score {score_id}: {e}")
+            logger.error(f"Failed to update score {score_id}: {e}", exc_info=True)
             raise
 
     def get_scores_for_model(
