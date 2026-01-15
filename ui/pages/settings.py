@@ -50,7 +50,7 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1.2 1 380px; min-width: 380px;"):
                     self._build_model_section()
 
-                with ui.element("div").style("flex: 1.5 1 480px; min-width: 480px;"):
+                with ui.element("div").style("flex: 2 1 550px; min-width: 550px;"):
                     self._build_temperature_section()
 
             # Save button
@@ -177,7 +177,7 @@ class SettingsPage:
 
     def _build_temperature_section(self) -> None:
         """Build temperature settings."""
-        with ui.card().classes("w-full"):
+        with ui.card().classes("w-full h-full"):
             self._section_header(
                 "Creativity (Temperature)",
                 "thermostat",
