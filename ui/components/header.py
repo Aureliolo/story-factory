@@ -33,10 +33,10 @@ class Header:
 
     def build(self) -> None:
         """Build the header UI."""
-        from ui.theme import get_surface_class
-
-        header_bg = get_surface_class(self.state.dark_mode)
-        with ui.header().classes(f"{header_bg} shadow-sm items-center"):
+        # NiceGUI header has built-in white background that overrides Tailwind classes
+        # Use inline style to force dark mode background
+        bg_color = "#1f2937" if self.state.dark_mode else "#ffffff"  # gray-800 or white
+        with ui.header().classes("shadow-sm items-center").style(f"background-color: {bg_color}"):
             with ui.row().classes("w-full items-center gap-4 px-4 py-2"):
                 # Logo/Title
                 ui.icon("auto_stories", size="lg").classes("text-blue-500")
