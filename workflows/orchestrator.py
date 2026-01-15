@@ -20,6 +20,7 @@ from agents import (
 )
 from memory.story_state import Chapter, StoryBrief, StoryState
 from settings import STORIES_DIR, Settings
+from utils.message_analyzer import analyze_message, format_inference_context
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +210,12 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             raise ValueError("No story state. Call create_new_story() first.")
 
         self._emit("agent_start", "Interviewer", "Processing your response...")
-        response = self.interviewer.process_response(user_response)
+
+        # Analyze the user message to infer language and content rating
+        analysis = analyze_message(user_response)
+        context = format_inference_context(analysis)
+
+        response = self.interviewer.process_response(user_response, context=context)
 
         # Check if a brief was generated
         brief = self.interviewer.extract_brief(response)
