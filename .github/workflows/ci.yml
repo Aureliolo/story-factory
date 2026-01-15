@@ -30,9 +30,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install Playwright browsers
+        run: playwright install chromium
+
       - name: Run tests
         run: |
-          pytest --cov=. --cov-report=term --cov-report=html
+          make test-ci
 
   code-quality:
     name: Code Quality
