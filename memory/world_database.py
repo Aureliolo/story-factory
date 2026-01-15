@@ -142,7 +142,24 @@ class WorldDatabase:
 
         Returns:
             Entity ID
+
+        Raises:
+            ValueError: If name or entity_type is invalid
         """
+        # Validate inputs
+        name = name.strip()
+        if not name:
+            raise ValueError("Entity name cannot be empty")
+        if len(name) > 200:
+            raise ValueError("Entity name cannot exceed 200 characters")
+
+        entity_type = entity_type.strip()
+        if not entity_type:
+            raise ValueError("Entity type cannot be empty")
+
+        if description and len(description) > 5000:
+            raise ValueError("Entity description cannot exceed 5000 characters")
+
         entity_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
         attrs_json = json.dumps(attributes or {})
@@ -208,12 +225,37 @@ class WorldDatabase:
 
         Returns:
             True if updated, False if entity not found
+
+        Raises:
+            ValueError: If validation fails
         """
         allowed_fields = {"name", "description", "attributes", "type"}
         update_fields = {k: v for k, v in updates.items() if k in allowed_fields}
 
         if not update_fields:
             return False
+
+        # Validate name if being updated
+        if "name" in update_fields:
+            name = update_fields["name"].strip()
+            if not name:
+                raise ValueError("Entity name cannot be empty")
+            if len(name) > 200:
+                raise ValueError("Entity name cannot exceed 200 characters")
+            update_fields["name"] = name
+
+        # Validate description if being updated
+        if "description" in update_fields:
+            description = update_fields["description"]
+            if description and len(description) > 5000:
+                raise ValueError("Entity description cannot exceed 5000 characters")
+
+        # Validate type if being updated
+        if "type" in update_fields:
+            entity_type = update_fields["type"].strip()
+            if not entity_type:
+                raise ValueError("Entity type cannot be empty")
+            update_fields["type"] = entity_type
 
         # Handle attributes specially
         if "attributes" in update_fields:

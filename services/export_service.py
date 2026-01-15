@@ -6,34 +6,36 @@ from io import BytesIO
 from pathlib import Path
 
 from memory.story_state import StoryState
-from settings import Settings
+from settings import STORIES_DIR, Settings
 
 logger = logging.getLogger(__name__)
 
 
-def _validate_export_path(path: Path) -> Path:
+def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Path:
     """Validate that an export path is safe to write to.
 
     Args:
         path: Path to validate
+        base_dir: Base directory to constrain exports to (default: output/)
 
     Returns:
         Resolved absolute path
 
     Raises:
-        ValueError: If path is suspicious or unsafe
+        ValueError: If path escapes base directory or is otherwise unsafe
     """
     try:
         resolved = path.resolve()
-        # Don't allow writing to system directories
-        forbidden_dirs = [Path("/"), Path("/etc"), Path("/usr"), Path("/bin"), Path("/sys")]
-        for forbidden in forbidden_dirs:
-            try:
-                resolved.relative_to(forbidden)
-                raise ValueError(f"Cannot export to system directory: {resolved}")
-            except ValueError:
-                # Not under this forbidden dir, continue checking
-                continue
+        base_resolved = base_dir.resolve()
+
+        # Check if path is within base directory
+        try:
+            resolved.relative_to(base_resolved)
+        except ValueError:
+            raise ValueError(
+                f"Export path {resolved} is outside allowed directory {base_resolved}"
+            ) from None
+
         return resolved
     except Exception as e:
         raise ValueError(f"Invalid export path: {path}") from e

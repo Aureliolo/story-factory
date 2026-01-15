@@ -178,3 +178,51 @@ class TestWorldDatabase:
         char_names = [c["name"] for c in context["characters"]]
         assert "Alice" in char_names
         assert "Bob" in char_names
+
+    def test_add_entity_validation_empty_name(self, tmp_path):
+        """Test that empty entity names are rejected."""
+        import pytest
+
+        db = WorldDatabase(tmp_path / "test.db")
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            db.add_entity("character", "")
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            db.add_entity("character", "   ")
+
+    def test_add_entity_validation_long_name(self, tmp_path):
+        """Test that overly long entity names are rejected."""
+        import pytest
+
+        db = WorldDatabase(tmp_path / "test.db")
+
+        with pytest.raises(ValueError, match="cannot exceed 200 characters"):
+            db.add_entity("character", "x" * 201)
+
+    def test_add_entity_validation_long_description(self, tmp_path):
+        """Test that overly long descriptions are rejected."""
+        import pytest
+
+        db = WorldDatabase(tmp_path / "test.db")
+
+        with pytest.raises(ValueError, match="cannot exceed 5000 characters"):
+            db.add_entity("character", "Test", "x" * 5001)
+
+    def test_update_entity_validation_empty_name(self, tmp_path):
+        """Test that empty names are rejected in updates."""
+        import pytest
+
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "Valid Name")
+
+        with pytest.raises(ValueError, match="Entity name cannot be empty"):
+            db.update_entity(entity_id, name="")
+
+    def test_update_entity_validation_strips_whitespace(self, tmp_path):
+        """Test that entity names are trimmed."""
+        db = WorldDatabase(tmp_path / "test.db")
+        entity_id = db.add_entity("character", "  Spaced Name  ")
+
+        entity = db.get_entity(entity_id)
+        assert entity.name == "Spaced Name"
