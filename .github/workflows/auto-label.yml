@@ -11,7 +11,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Add pre-commit.ci autofix label
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo } = context.repo;
