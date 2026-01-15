@@ -120,12 +120,27 @@ def render_graph_html(
     # Generate unique container ID
     container_id = "graph-container"
 
+    # Use CSS variables for dark mode support - NiceGUI adds .dark class to body
     return f"""
-    <div id="{container_id}" style="height: {height}px; border: 1px solid #ddd; border-radius: 4px;"></div>
+    <style>
+        #{container_id} {{
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+        }}
+        .dark #{container_id} {{
+            border-color: #374151;
+        }}
+    </style>
+    <div id="{container_id}" style="height: {height}px;"></div>
     <!-- vis-network version tracked in /package.json for Dependabot -->
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <script>
     (function() {{
+        var isDarkMode = document.body.classList.contains('dark') ||
+                         document.documentElement.classList.contains('dark') ||
+                         window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var fontColor = isDarkMode ? '#e5e7eb' : '#374151';
+
         var nodes = new vis.DataSet({json.dumps(nodes)});
         var edges = new vis.DataSet({json.dumps(edges)});
 
@@ -144,11 +159,11 @@ def render_graph_html(
                 }}
             }},
             nodes: {{
-                font: {{ size: 14, color: '#333' }},
+                font: {{ size: 14, color: fontColor }},
                 scaling: {{ min: 10, max: 30 }}
             }},
             edges: {{
-                font: {{ size: 10, align: 'middle' }},
+                font: {{ size: 10, align: 'middle', color: fontColor }},
                 smooth: {{ type: 'continuous' }}
             }},
             interaction: {{
@@ -268,30 +283,37 @@ def render_entity_summary_html(world_db: WorldDatabase) -> str:
     total = sum(counts.values())
     rel_count = len(world_db.list_relationships())
 
+    # Use CSS class-based dark mode for proper theming
     return f"""
+    <style>
+        .entity-summary-label {{ color: #6b7280; }}
+        .dark .entity-summary-label {{ color: #9ca3af; }}
+        .entity-summary-total {{ color: #9ca3af; }}
+        .dark .entity-summary-total {{ color: #6b7280; }}
+    </style>
     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
         <div style="background: {ENTITY_COLORS["character"]}22; border-left: 4px solid {ENTITY_COLORS["character"]}; padding: 10px; border-radius: 4px; min-width: 100px;">
             <div style="font-size: 24px; font-weight: bold; color: {ENTITY_COLORS["character"]};">{counts["character"]}</div>
-            <div style="font-size: 12px; color: #666;">Characters</div>
+            <div class="entity-summary-label" style="font-size: 12px;">Characters</div>
         </div>
         <div style="background: {ENTITY_COLORS["location"]}22; border-left: 4px solid {ENTITY_COLORS["location"]}; padding: 10px; border-radius: 4px; min-width: 100px;">
             <div style="font-size: 24px; font-weight: bold; color: {ENTITY_COLORS["location"]};">{counts["location"]}</div>
-            <div style="font-size: 12px; color: #666;">Locations</div>
+            <div class="entity-summary-label" style="font-size: 12px;">Locations</div>
         </div>
         <div style="background: {ENTITY_COLORS["item"]}22; border-left: 4px solid {ENTITY_COLORS["item"]}; padding: 10px; border-radius: 4px; min-width: 100px;">
             <div style="font-size: 24px; font-weight: bold; color: {ENTITY_COLORS["item"]};">{counts["item"]}</div>
-            <div style="font-size: 12px; color: #666;">Items</div>
+            <div class="entity-summary-label" style="font-size: 12px;">Items</div>
         </div>
         <div style="background: {ENTITY_COLORS["faction"]}22; border-left: 4px solid {ENTITY_COLORS["faction"]}; padding: 10px; border-radius: 4px; min-width: 100px;">
             <div style="font-size: 24px; font-weight: bold; color: {ENTITY_COLORS["faction"]};">{counts["faction"]}</div>
-            <div style="font-size: 12px; color: #666;">Factions</div>
+            <div class="entity-summary-label" style="font-size: 12px;">Factions</div>
         </div>
-        <div style="background: #60606022; border-left: 4px solid #606060; padding: 10px; border-radius: 4px; min-width: 100px;">
-            <div style="font-size: 24px; font-weight: bold; color: #606060;">{rel_count}</div>
-            <div style="font-size: 12px; color: #666;">Relationships</div>
+        <div style="background: #60606022; border-left: 4px solid #6b7280; padding: 10px; border-radius: 4px; min-width: 100px;">
+            <div style="font-size: 24px; font-weight: bold; color: #6b7280;">{rel_count}</div>
+            <div class="entity-summary-label" style="font-size: 12px;">Relationships</div>
         </div>
     </div>
-    <div style="margin-top: 10px; font-size: 12px; color: #888;">
+    <div class="entity-summary-total" style="margin-top: 10px; font-size: 12px;">
         Total: {total} entities
     </div>
     """
@@ -308,7 +330,13 @@ def render_path_result(world_db: WorldDatabase, path: list[str]) -> str:
         HTML string showing the path
     """
     if not path:
-        return "<p style='color: #666;'>No path found between these entities.</p>"
+        return """
+        <style>
+            .path-no-result { color: #6b7280; }
+            .dark .path-no-result { color: #9ca3af; }
+        </style>
+        <p class='path-no-result'>No path found between these entities.</p>
+        """
 
     parts = []
     for i, entity_id in enumerate(path):
@@ -325,13 +353,17 @@ def render_path_result(world_db: WorldDatabase, path: list[str]) -> str:
                 next_id = path[i + 1]
                 rel = world_db.get_relationship_between(entity_id, next_id)
                 if rel:
-                    parts.append(
-                        f"<span style='color: #666; margin: 0 8px;'>--{rel.relation_type}--></span>"
-                    )
+                    parts.append(f"<span class='path-arrow'>--{rel.relation_type}--></span>")
                 else:
-                    parts.append("<span style='color: #666; margin: 0 8px;'>---></span>")
+                    parts.append("<span class='path-arrow'>---></span>")
 
-    return f"<div style='display: flex; align-items: center; flex-wrap: wrap; gap: 4px;'>{''.join(parts)}</div>"
+    return f"""
+    <style>
+        .path-arrow {{ color: #6b7280; margin: 0 8px; }}
+        .dark .path-arrow {{ color: #9ca3af; }}
+    </style>
+    <div style='display: flex; align-items: center; flex-wrap: wrap; gap: 4px;'>{"".join(parts)}</div>
+    """
 
 
 def render_centrality_result(world_db: WorldDatabase, limit: int = 10) -> str:
@@ -347,14 +379,20 @@ def render_centrality_result(world_db: WorldDatabase, limit: int = 10) -> str:
     most_connected = world_db.get_most_connected(limit)
 
     if not most_connected:
-        return "<p style='color: #666;'>No entities found.</p>"
+        return """
+        <style>
+            .centrality-no-result { color: #6b7280; }
+            .dark .centrality-no-result { color: #9ca3af; }
+        </style>
+        <p class='centrality-no-result'>No entities found.</p>
+        """
 
     rows = []
     for i, (entity, degree) in enumerate(most_connected, 1):
         color = ENTITY_COLORS.get(entity.type, "#607D8B")
         rows.append(
             f"""
-            <tr>
+            <tr class='centrality-row'>
                 <td style='padding: 8px; text-align: center;'>{i}</td>
                 <td style='padding: 8px;'>
                     <span style='background: {color}22; color: {color}; padding: 2px 6px; border-radius: 3px;'>{entity.type}</span>
@@ -366,9 +404,15 @@ def render_centrality_result(world_db: WorldDatabase, limit: int = 10) -> str:
         )
 
     return f"""
+    <style>
+        .centrality-header {{ background: #f3f4f6; }}
+        .dark .centrality-header {{ background: #374151; }}
+        .centrality-row {{ color: #374151; }}
+        .dark .centrality-row {{ color: #e5e7eb; }}
+    </style>
     <table style='width: 100%; border-collapse: collapse;'>
         <thead>
-            <tr style='background: #f5f5f5;'>
+            <tr class='centrality-header'>
                 <th style='padding: 8px; text-align: center;'>#</th>
                 <th style='padding: 8px;'>Type</th>
                 <th style='padding: 8px;'>Name</th>
@@ -394,7 +438,13 @@ def render_communities_result(world_db: WorldDatabase) -> str:
     communities = world_db.get_communities()
 
     if not communities:
-        return "<p style='color: #666;'>No communities found.</p>"
+        return """
+        <style>
+            .communities-no-result { color: #6b7280; }
+            .dark .communities-no-result { color: #9ca3af; }
+        </style>
+        <p class='communities-no-result'>No communities found.</p>
+        """
 
     parts = []
     for i, community in enumerate(communities, 1):
@@ -409,14 +459,12 @@ def render_communities_result(world_db: WorldDatabase) -> str:
 
         overflow = ""
         if len(community) > 10:
-            overflow = (
-                f"<span style='color: #666; margin-left: 8px;'>+{len(community) - 10} more</span>"
-            )
+            overflow = f"<span class='community-overflow'>+{len(community) - 10} more</span>"
 
         parts.append(
             f"""
-            <div style='margin-bottom: 12px; padding: 10px; background: #f9f9f9; border-radius: 4px;'>
-                <div style='font-weight: bold; margin-bottom: 8px;'>Community {i} ({len(community)} members)</div>
+            <div class='community-card'>
+                <div class='community-title'>Community {i} ({len(community)} members)</div>
                 <div style='display: flex; flex-wrap: wrap; gap: 4px;'>
                     {"".join(members)}{overflow}
                 </div>
@@ -424,4 +472,32 @@ def render_communities_result(world_db: WorldDatabase) -> str:
         """
         )
 
-    return f"<div>{''.join(parts)}</div>"
+    return f"""
+    <style>
+        .community-card {{
+            margin-bottom: 12px;
+            padding: 10px;
+            background: #f3f4f6;
+            border-radius: 4px;
+        }}
+        .dark .community-card {{
+            background: #374151;
+        }}
+        .community-title {{
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #374151;
+        }}
+        .dark .community-title {{
+            color: #e5e7eb;
+        }}
+        .community-overflow {{
+            color: #6b7280;
+            margin-left: 8px;
+        }}
+        .dark .community-overflow {{
+            color: #9ca3af;
+        }}
+    </style>
+    <div>{"".join(parts)}</div>
+    """
