@@ -12,6 +12,7 @@ from memory.mode_database import ModeDatabase
 from services import ServiceContainer
 from settings import AGENT_ROLES
 from ui.state import AppState
+from utils import extract_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +275,7 @@ class AnalyticsPage:
 
                 rows = []
                 for s in summaries:
-                    model_name = s.model_id.split("/")[-1] if "/" in s.model_id else s.model_id
+                    model_name = extract_model_name(s.model_id)
                     rows.append(
                         {
                             "model": model_name,

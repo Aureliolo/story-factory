@@ -38,7 +38,7 @@ class ScoringService:
 
         # Track active score IDs for updates
         # Note: Use clear_chapter_tracking() when chapters are complete to prevent memory leaks
-        self._active_scores: dict[str, int] = {}  # chapter_id -> score_id
+        self._active_scores: dict[str, int] = {}  # chapter_id:agent_role -> score_id
 
         # Track original content for edit distance calculation
         # Note: Use clear_chapter_tracking() when chapters are complete to prevent memory leaks

@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TypedDict
 from urllib.parse import urlparse
 
+from memory.mode_models import LearningTrigger
+
 # Configure module logger
 logger = logging.getLogger(__name__)
 
@@ -232,7 +234,9 @@ class Settings:
 
     # Learning/tuning settings
     learning_triggers: list = field(
-        default_factory=lambda: ["after_project"]  # off, after_project, periodic, continuous
+        default_factory=lambda: [
+            LearningTrigger.AFTER_PROJECT.value
+        ]  # off, after_project, periodic, continuous
     )
     learning_autonomy: str = "balanced"  # manual, cautious, balanced, aggressive, experimental
     learning_periodic_interval: int = 5  # Chapters between periodic analysis

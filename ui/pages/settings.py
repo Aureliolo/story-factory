@@ -13,6 +13,7 @@ from memory.mode_models import (
 from services import ServiceContainer
 from settings import AGENT_ROLES
 from ui.state import AppState
+from utils import extract_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -404,7 +405,7 @@ class SettingsPage:
                                     temp = current_mode.agent_temperatures.get(role, 0.8)
                                     with ui.row().classes("items-center gap-2"):
                                         ui.label(f"{role.title()}:").classes("font-medium w-24")
-                                        ui.label(model.split("/")[-1]).classes(
+                                        ui.label(extract_model_name(model)).classes(
                                             "text-gray-600 dark:text-gray-400"
                                         )
                                         ui.label(f"({temp})").classes("text-xs text-gray-500")
