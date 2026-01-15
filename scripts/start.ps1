@@ -20,6 +20,7 @@ function Show-Menu {
     Write-Host "[3] Restart Story Factory" -ForegroundColor Yellow
     Write-Host "[4] View Logs (live)" -ForegroundColor Yellow
     Write-Host "[5] Open in Browser" -ForegroundColor Magenta
+    Write-Host "[6] Clear Logs" -ForegroundColor DarkYellow
     Write-Host "[Q] Quit" -ForegroundColor Gray
     Write-Host ""
 }
@@ -87,6 +88,18 @@ function Open-Browser {
     Write-Host "Opening browser..." -ForegroundColor Magenta
 }
 
+function Clear-Logs {
+    $logFile = Join-Path $projectRoot "logs\story_factory.log"
+
+    if (Test-Path $logFile) {
+        $size = (Get-Item $logFile).Length
+        Clear-Content -Path $logFile
+        Write-Host "Log file cleared. ($([math]::Round($size/1KB, 2)) KB freed)" -ForegroundColor DarkYellow
+    } else {
+        Write-Host "Log file not found." -ForegroundColor Yellow
+    }
+}
+
 # Main loop
 while ($true) {
     Write-Header
@@ -113,6 +126,7 @@ while ($true) {
         "3" { Restart-StoryFactory; Start-Sleep -Seconds 2 }
         "4" { Show-Logs }
         "5" { Open-Browser; Start-Sleep -Seconds 1 }
+        "6" { Clear-Logs; Start-Sleep -Seconds 1 }
         "Q" {
             Write-Host "Goodbye!" -ForegroundColor Cyan
             exit
