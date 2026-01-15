@@ -100,6 +100,37 @@ function Clear-Logs {
     }
 }
 
+function Show-RecentLogs {
+    param([int]$Lines = 8)
+
+    $logFile = Join-Path $projectRoot "logs\story_factory.log"
+
+    Write-Host "--- Recent Logs ---" -ForegroundColor DarkGray
+    if (Test-Path $logFile) {
+        $logs = Get-Content -Path $logFile -Tail $Lines -ErrorAction SilentlyContinue
+        if ($logs) {
+            foreach ($line in $logs) {
+                # Color code by log level
+                if ($line -match "ERROR|EXCEPTION|Traceback") {
+                    Write-Host $line -ForegroundColor Red
+                } elseif ($line -match "WARNING") {
+                    Write-Host $line -ForegroundColor Yellow
+                } elseif ($line -match "INFO") {
+                    Write-Host $line -ForegroundColor Gray
+                } else {
+                    Write-Host $line -ForegroundColor DarkGray
+                }
+            }
+        } else {
+            Write-Host "(log file is empty)" -ForegroundColor DarkGray
+        }
+    } else {
+        Write-Host "(no log file yet)" -ForegroundColor DarkGray
+    }
+    Write-Host "-------------------" -ForegroundColor DarkGray
+    Write-Host ""
+}
+
 # Main loop
 while ($true) {
     Write-Header
@@ -117,6 +148,9 @@ while ($true) {
     Write-Host ""
 
     Show-Menu
+
+    # Show recent logs at the bottom
+    Show-RecentLogs
 
     $choice = Read-Host "Enter choice"
 
