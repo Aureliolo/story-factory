@@ -100,35 +100,40 @@ function Clear-Logs {
     }
 }
 
-function Show-RecentLogs {
-    param([int]$Lines = 8)
+function Get-RecentLogLines {
+    param([int]$Lines = 6)
 
     $logFile = Join-Path $projectRoot "logs\story_factory.log"
+    $result = @()
 
-    Write-Host "--- Recent Logs ---" -ForegroundColor DarkGray
     if (Test-Path $logFile) {
         $logs = Get-Content -Path $logFile -Tail $Lines -ErrorAction SilentlyContinue
         if ($logs) {
             foreach ($line in $logs) {
-                # Color code by log level
-                if ($line -match "ERROR|EXCEPTION|Traceback") {
-                    Write-Host $line -ForegroundColor Red
-                } elseif ($line -match "WARNING") {
-                    Write-Host $line -ForegroundColor Yellow
-                } elseif ($line -match "INFO") {
-                    Write-Host $line -ForegroundColor Gray
-                } else {
-                    Write-Host $line -ForegroundColor DarkGray
+                # Truncate long lines
+                if ($line.Length -gt 120) {
+                    $line = $line.Substring(0, 117) + "..."
                 }
+                $result += $line
             }
-        } else {
-            Write-Host "(log file is empty)" -ForegroundColor DarkGray
         }
-    } else {
-        Write-Host "(no log file yet)" -ForegroundColor DarkGray
     }
-    Write-Host "-------------------" -ForegroundColor DarkGray
-    Write-Host ""
+    return $result
+}
+
+function Write-LogLine {
+    param([string]$Line)
+
+    # Color code by log level
+    if ($Line -match "ERROR|EXCEPTION|Traceback|AttributeError") {
+        Write-Host $Line -ForegroundColor Red
+    } elseif ($Line -match "WARNING") {
+        Write-Host $Line -ForegroundColor Yellow
+    } elseif ($Line -match "INFO") {
+        Write-Host $Line -ForegroundColor Gray
+    } else {
+        Write-Host $Line -ForegroundColor DarkGray
+    }
 }
 
 # Main loop
@@ -149,10 +154,30 @@ while ($true) {
 
     Show-Menu
 
-    # Show recent logs at the bottom
-    Show-RecentLogs
+    # Get input
+    Write-Host "Enter choice: " -NoNewline -ForegroundColor White
+    $inputPos = $Host.UI.RawUI.CursorPosition
 
-    $choice = Read-Host "Enter choice"
+    # Move down and show logs
+    Write-Host ""
+    Write-Host ""
+    Write-Host "--- Recent Logs (last 6 lines) ---" -ForegroundColor DarkCyan
+
+    $logs = Get-RecentLogLines -Lines 6
+    if ($logs.Count -eq 0) {
+        Write-Host "(no logs yet)" -ForegroundColor DarkGray
+    } else {
+        foreach ($line in $logs) {
+            Write-LogLine $line
+        }
+    }
+    Write-Host "----------------------------------" -ForegroundColor DarkCyan
+
+    # Move cursor back to input position
+    $Host.UI.RawUI.CursorPosition = $inputPos
+
+    # Read input (cursor is now at the right place)
+    $choice = Read-Host
 
     switch ($choice.ToUpper()) {
         "1" { Start-StoryFactory; Start-Sleep -Seconds 2 }
@@ -162,6 +187,7 @@ while ($true) {
         "5" { Open-Browser; Start-Sleep -Seconds 1 }
         "6" { Clear-Logs; Start-Sleep -Seconds 1 }
         "Q" {
+            Write-Host ""
             Write-Host "Goodbye!" -ForegroundColor Cyan
             exit
         }
