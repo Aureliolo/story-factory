@@ -9,6 +9,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 # Store last action message
 $script:lastAction = ""
 $script:lastActionColor = "Gray"
+$script:previousLogs = @()
 
 function Set-ActionMessage {
     param([string]$Message, [string]$Color = "Gray")
@@ -173,11 +174,12 @@ function Clear-LogFile {
     }
 }
 
-# Main loop with auto-refresh every 3 seconds
-$refreshInterval = 3000  # milliseconds
-$lastRefresh = [DateTime]::Now
+# Main loop with auto-refresh only when logs change
+$checkInterval = 2000  # milliseconds between log checks
+$lastCheck = [DateTime]::Now
 
 Write-Screen
+$script:previousLogs = Get-RecentLogLines -Lines 6
 Write-Host "  Choice: " -NoNewline
 
 while ($true) {
@@ -205,16 +207,23 @@ while ($true) {
 
         # Redraw screen after action
         Write-Screen
+        $script:previousLogs = Get-RecentLogLines -Lines 6
         Write-Host "  Choice: " -NoNewline
-        $lastRefresh = [DateTime]::Now
+        $lastCheck = [DateTime]::Now
     }
 
-    # Auto-refresh logs every 3 seconds
-    $elapsed = ([DateTime]::Now - $lastRefresh).TotalMilliseconds
-    if ($elapsed -ge $refreshInterval) {
-        Write-Screen
-        Write-Host "  Choice: " -NoNewline
-        $lastRefresh = [DateTime]::Now
+    # Check for log changes periodically
+    $elapsed = ([DateTime]::Now - $lastCheck).TotalMilliseconds
+    if ($elapsed -ge $checkInterval) {
+        $currentLogs = Get-RecentLogLines -Lines 6
+        $logsChanged = ($currentLogs -join "`n") -ne ($script:previousLogs -join "`n")
+
+        if ($logsChanged) {
+            Write-Screen
+            $script:previousLogs = $currentLogs
+            Write-Host "  Choice: " -NoNewline
+        }
+        $lastCheck = [DateTime]::Now
     }
 
     # Small sleep to avoid CPU spinning
