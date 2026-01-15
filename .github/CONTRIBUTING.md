@@ -95,9 +95,9 @@ def test_agent_without_ollama(monkeypatch):
     """Test agent logic without calling Ollama."""
     def mock_generate(self, prompt, context=None, temperature=None):
         return "Mocked LLM response"
-    
+
     monkeypatch.setattr(BaseAgent, "generate", mock_generate)
-    
+
     agent = WriterAgent()
     result = agent.write_chapter(story_state, chapter)
     assert "Mocked LLM response" in result
@@ -109,7 +109,7 @@ def test_export_to_markdown_file(sample_story_state):
     """Should export story to markdown file."""
     orchestrator = StoryOrchestrator()
     orchestrator.story_state = sample_story_state
-    
+
     result = orchestrator.export_story_to_file(format="markdown")
     assert Path(result).exists()
 ```
@@ -140,13 +140,13 @@ class MyAgent(BaseAgent):
     def my_method(self, story_state: StoryState) -> str:
         # Validate brief exists
         brief = PromptBuilder.ensure_brief(story_state, self.name)
-        
+
         # Build prompt using fluent API
         builder = PromptBuilder()
         builder.add_language_requirement(brief.language)
         builder.add_brief_requirements(brief)
         builder.add_text("Additional instructions...")
-        
+
         prompt = builder.build()
         return self.generate(prompt)
 ```
