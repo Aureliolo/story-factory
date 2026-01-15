@@ -130,6 +130,13 @@ class TestExportFunctionality:
 class TestWorkflowEvents:
     """Tests for workflow event handling."""
 
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests to avoid polluting output/stories."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
     def test_create_new_story_sets_correlation_id(self):
         """Should set correlation ID when creating a new story."""
         orchestrator = StoryOrchestrator()
