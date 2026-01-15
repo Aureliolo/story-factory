@@ -9,6 +9,7 @@ on:
 # Restrict permissions for security
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   tests:
@@ -38,6 +39,7 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   code-quality:
     name: Code Quality
