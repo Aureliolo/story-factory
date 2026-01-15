@@ -552,7 +552,7 @@ Respond ONLY with JSON:
                     model_id=current_model, agent_role=role
                 )
 
-                if current_perf and len(current_perf) > 0:
+                if current_perf:
                     current_quality = current_perf[0].get("avg_prose_quality", 0) or 0
                     best_quality = best.get("avg_prose_quality", 0) or 0
 

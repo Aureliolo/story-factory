@@ -21,6 +21,6 @@ def extract_model_name(model_id: str) -> str:
         >>> extract_model_name("qwen/qwen3-30b")
         'qwen3-30b'
     """
-    if not model_id or not model_id.strip():
+    if model_id is None or not model_id.strip():
         raise ValueError("model_id cannot be None or empty")
     return model_id.split("/")[-1] if "/" in model_id else model_id
