@@ -124,7 +124,8 @@ story-factory/
 │   ├── architect.py        # Structure and character design
 │   ├── writer.py           # Prose generation
 │   ├── editor.py           # Refinement and polish
-│   └── continuity.py       # Plot hole detection
+│   ├── continuity.py       # Plot hole detection
+│   └── validator.py        # Response validation
 ├── workflows/
 │   └── orchestrator.py     # Agent coordination
 ├── memory/
@@ -139,6 +140,11 @@ story-factory/
 │   └── export_service.py   # Export formats
 ├── ui/                     # NiceGUI web interface
 │   ├── app.py              # Main application
+│   ├── state.py            # Centralized UI state
+│   ├── theme.py            # Colors, styles
+│   ├── styles.css          # Custom CSS
+│   ├── graph_renderer.py   # vis.js graph rendering
+│   ├── keyboard_shortcuts.py # Keyboard shortcut handling
 │   ├── pages/              # Page components
 │   │   ├── write.py        # Write Story page
 │   │   ├── world.py        # World Builder page
@@ -146,11 +152,16 @@ story-factory/
 │   │   ├── settings.py     # Settings page
 │   │   └── models.py       # Models page
 │   └── components/         # Reusable UI components
-│       ├── header.py       # App header
+│       ├── header.py       # App header with project selector
 │       ├── chat.py         # Chat interface
-│       ├── graph.py        # Graph visualization
-│       └── entity_card.py  # Entity display
+│       ├── graph.py        # Graph component wrapper
+│       ├── entity_card.py  # Entity display
+│       └── common.py       # Shared components (loading, dialogs, etc.)
 └── tests/                  # Test suite
+    ├── unit/               # Unit tests
+    ├── component/          # NiceGUI component tests
+    ├── integration/        # Integration tests
+    └── e2e/                # End-to-end tests
 ```
 
 ## Workflow
