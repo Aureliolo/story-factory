@@ -23,4 +23,7 @@ def extract_model_name(model_id: str) -> str:
     """
     if model_id is None or not model_id.strip():
         raise ValueError("model_id cannot be None or empty")
-    return model_id.split("/")[-1] if "/" in model_id else model_id
+    name = model_id.split("/")[-1] if "/" in model_id else model_id
+    if name == "":
+        raise ValueError("model_id cannot end with '/'")
+    return name
