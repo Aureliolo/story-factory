@@ -2,14 +2,13 @@
 
 ## Remaining Work
 
-### Nice to Have
-
-- [ ] **Graph node dragging** - Improve physics simulation for smoother draggable nodes
+_No outstanding items._
 
 ## Completed
 
 ### World Page Improvements (Recent)
 - [x] Undo/redo system - Full undo/redo for entity and relationship CRUD operations
+- [x] Graph node dragging - Smooth physics simulation with drag-pause behavior
 
 ### World Page Improvements
 - [x] Entity editor refreshes on selection - Added `_refresh_entity_editor()` method and refreshable container
