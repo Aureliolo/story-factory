@@ -96,7 +96,7 @@ class StoryState(BaseModel):
     # Story brief
     brief: StoryBrief | None = None
 
-    # World building (legacy - now primarily in WorldDatabase)
+    # World building (kept for backward compatibility - primary storage is WorldDatabase)
     world_description: str = ""
     world_rules: list[str] = Field(default_factory=list)
 

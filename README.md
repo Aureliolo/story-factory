@@ -202,7 +202,7 @@ pytest
 pytest --cov=. --cov-report=term
 
 # Format code
-black .
+ruff format .
 
 # Lint
 ruff check .
@@ -213,8 +213,7 @@ mypy .
 
 ### Code Quality
 
-- **Black**: Code formatting (line length: 100)
-- **Ruff**: Fast Python linter
+- **Ruff**: Fast Python formatter and linter
 - **MyPy**: Type checking
 - **Pytest**: Testing framework with coverage
 
