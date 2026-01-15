@@ -44,12 +44,7 @@ module = [
     "PIL.*",
     "networkx.*",
     "playwright.*",
-    "pytest_playwright.*",
 ]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "tests.e2e.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
