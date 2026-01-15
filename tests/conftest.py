@@ -188,8 +188,9 @@ def mock_ollama(monkeypatch):
     """
 
     class MockOllamaClient:
-        def __init__(self, host=None):
+        def __init__(self, host=None, timeout=None):
             self.host = host
+            self.timeout = timeout
 
         def list(self):
             class Models:

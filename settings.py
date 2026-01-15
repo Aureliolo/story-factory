@@ -43,79 +43,85 @@ class AgentRoleInfo(TypedDict):
     recommended_quality: int
 
 
-# Available models registry - models released in 2025 or late 2024
+# Available models registry - curated for creative writing (uncensored)
+# Organized by use case: creative specialists, general purpose, high-end
 AVAILABLE_MODELS: dict[str, ModelInfo] = {
-    # === 2025 Models (Newest) ===
-    "huihui_ai/qwen3-abliterated:32b": {
-        "name": "Qwen3 32B Abliterated",
-        "release": "April 2025",
-        "size_gb": 20,
-        "vram_required": 22,
-        "quality": 9,
-        "speed": 6,
-        "uncensored": True,
-        "description": "Newest Qwen3, excellent reasoning and creative writing",
-    },
-    "huihui_ai/qwen3-abliterated:14b": {
-        "name": "Qwen3 14B Abliterated",
-        "release": "April 2025",
-        "size_gb": 9,
-        "vram_required": 12,
-        "quality": 8,
-        "speed": 8,
-        "uncensored": True,
-        "description": "Fast Qwen3 variant, good quality/speed balance",
-    },
-    "huihui_ai/qwen3-abliterated:8b": {
-        "name": "Qwen3 8B Abliterated",
-        "release": "April 2025",
-        "size_gb": 5,
-        "vram_required": 8,
-        "quality": 7,
-        "speed": 9,
-        "uncensored": True,
-        "description": "Compact Qwen3, fast inference",
-    },
-    "huihui_ai/qwen3-next-abliterated": {
-        "name": "Qwen3-Next 70B Abliterated",
+    # === CREATIVE WRITING SPECIALISTS ===
+    # These models are specifically fine-tuned for fiction and prose
+    "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": {
+        "name": "Celeste V1.9 12B",
         "release": "2025",
-        "size_gb": 48,
-        "vram_required": 24,
-        "quality": 9.5,
-        "speed": 5,
+        "size_gb": 13,
+        "vram_required": 14,
+        "quality": 9,
+        "speed": 7,
         "uncensored": True,
-        "description": "Next-gen Qwen3 70B, excellent creative writing",
+        "description": "Purpose-built for fiction writing, excellent prose quality",
     },
-    "huihui_ai/llama3.3-abliterated": {
-        "name": "Llama 3.3 70B Abliterated",
-        "release": "December 2024",
-        "size_gb": 40,
-        "vram_required": 24,
-        "quality": 9.5,
-        "speed": 5,
+    "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit": {
+        "name": "Dark Champion 18B MOE",
+        "release": "2025",
+        "size_gb": 11,
+        "vram_required": 14,
+        "quality": 9,
+        "speed": 7,
         "uncensored": True,
-        "description": "Meta's newest 70B, state-of-art performance",
+        "description": "Exceptional fiction/RP, outstanding prose quality",
     },
-    "goekdenizguelmez/JOSIEFIED-Qwen3:8b": {
-        "name": "JOSIEFIED Qwen3 8B",
+    # === GENERAL PURPOSE (FAST) ===
+    # Good for interviewer, editor, continuity - fast and reliable
+    "huihui_ai/dolphin3-abliterated:8b": {
+        "name": "Dolphin 3.0 8B Abliterated",
         "release": "2025",
         "size_gb": 5,
         "vram_required": 8,
         "quality": 7.5,
         "speed": 9,
         "uncensored": True,
-        "description": "Fine-tuned Qwen3 for maximum uncensored behavior",
+        "description": "Eric Hartford's latest, highly compliant, no Chinese output",
     },
-    # === Older but quality models ===
-    "tohur/natsumura-storytelling-rp-llama-3.1": {
-        "name": "Natsumura 8B (Storytelling)",
-        "release": "2024",
+    "CognitiveComputations/dolphin-mistral-nemo:12b": {
+        "name": "Dolphin Mistral Nemo 12B",
+        "release": "2025",
+        "size_gb": 7,
+        "vram_required": 10,
+        "quality": 8,
+        "speed": 8,
+        "uncensored": True,
+        "description": "128K context, excellent for editing and refinement",
+    },
+    # === HIGH-END (LARGE VRAM / QUANTIZED) ===
+    # Best reasoning for story architecture
+    "huihui_ai/llama3.3-abliterated:70b": {
+        "name": "Llama 3.3 70B Abliterated",
+        "release": "December 2024",
+        "size_gb": 40,
+        "vram_required": 48,
+        "quality": 9.5,
+        "speed": 5,
+        "uncensored": True,
+        "description": "Best reasoning, excellent for story architecture",
+    },
+    "huihui_ai/llama3.3-abliterated:70b-q4_K_M": {
+        "name": "Llama 3.3 70B Q4_K_M",
+        "release": "December 2024",
+        "size_gb": 40,
+        "vram_required": 24,
+        "quality": 9,
+        "speed": 4,
+        "uncensored": True,
+        "description": "Quantized 70B, fits 24GB VRAM, great for architect role",
+    },
+    # === LEGACY (kept for compatibility) ===
+    "huihui_ai/qwen3-abliterated:8b": {
+        "name": "Qwen3 8B Abliterated (v1)",
+        "release": "April 2025",
         "size_gb": 5,
         "vram_required": 8,
-        "quality": 6,
+        "quality": 7,
         "speed": 9,
         "uncensored": True,
-        "description": "Tuned specifically for storytelling/RP",
+        "description": "Fast but may output Chinese characters - use Dolphin instead",
     },
 }
 
@@ -172,7 +178,7 @@ class Settings:
     max_tokens: int = 8192  # Increased to support longer chapters (2000+ words)
 
     # Default model for all agents (if not using per-agent)
-    default_model: str = "huihui_ai/qwen3-abliterated:32b"
+    default_model: str = "huihui_ai/dolphin3-abliterated:8b"
 
     # Per-agent model settings
     use_per_agent_models: bool = True
@@ -308,6 +314,7 @@ class Settings:
         """Get the appropriate model for an agent role.
 
         If set to 'auto', selects based on agent's quality requirements and available VRAM.
+        Special handling for writer role to prefer creative writing specialists.
         """
         if not self.use_per_agent_models:
             return self.default_model
@@ -316,6 +323,28 @@ class Settings:
 
         if model_setting != "auto":
             return model_setting
+
+        # Special case: Writer role prefers creative writing specialists
+        if agent_role == "writer":
+            creative_models = [
+                "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+                "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit",
+            ]
+            for model_id in creative_models:
+                info = AVAILABLE_MODELS.get(model_id)
+                if info and info["vram_required"] <= available_vram:
+                    return model_id
+
+        # Special case: Architect role prefers high-reasoning models
+        if agent_role == "architect":
+            architect_models = [
+                "huihui_ai/llama3.3-abliterated:70b-q4_K_M",  # Fits 24GB
+                "huihui_ai/llama3.3-abliterated:70b",  # Needs 48GB
+            ]
+            for model_id in architect_models:
+                info = AVAILABLE_MODELS.get(model_id)
+                if info and info["vram_required"] <= available_vram:
+                    return model_id
 
         # Auto-select based on agent role and VRAM
         role_info: AgentRoleInfo | None = AGENT_ROLES.get(agent_role)
