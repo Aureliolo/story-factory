@@ -204,5 +204,8 @@ class PromptBuilder:
             ValueError: If story state or brief is missing
         """
         if not story_state or not story_state.brief:
-            raise ValueError(f"{agent_name} requires a story brief to operate")
+            raise ValueError(
+                f"Story brief must be created before using {agent_name}. "
+                "Please complete the interview phase first."
+            )
         return story_state.brief

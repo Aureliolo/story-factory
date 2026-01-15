@@ -229,17 +229,17 @@ class TestPromptBuilder:
 
     def test_ensure_brief_raises_on_no_state(self):
         """Should raise ValueError when state is None."""
-        with pytest.raises(ValueError, match="TestAgent requires a story brief"):
+        with pytest.raises(ValueError, match="Story brief must be created before using TestAgent"):
             PromptBuilder.ensure_brief(None, "TestAgent")
 
     def test_ensure_brief_raises_on_no_brief(self):
         """Should raise ValueError when brief is None."""
         state = StoryState(id="test", brief=None)
 
-        with pytest.raises(ValueError, match="TestAgent requires a story brief"):
+        with pytest.raises(ValueError, match="Story brief must be created before using TestAgent"):
             PromptBuilder.ensure_brief(state, "TestAgent")
 
     def test_ensure_brief_default_agent_name(self):
         """Should use default agent name in error message."""
-        with pytest.raises(ValueError, match="Agent requires a story brief"):
+        with pytest.raises(ValueError, match="Story brief must be created before using Agent"):
             PromptBuilder.ensure_brief(None)

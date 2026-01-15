@@ -80,21 +80,93 @@ make check  # Run both linting and tests
 
 ## Writing Tests
 
-- Place tests in the `tests/` directory
+- Place tests in the `tests/unit/` directory
 - Follow the naming convention: `test_*.py`
-- Use pytest fixtures for common setup
-- Write descriptive test names
+- Use pytest fixtures for common setup (see `tests/conftest.py`)
+- Write descriptive test names and docstrings
 - Test both success and error cases
+- Use the Arrange-Act-Assert pattern
 
-Example:
+### Testing Patterns
+
+**Mocking Ollama API calls**:
+```python
+def test_agent_without_ollama(monkeypatch):
+    """Test agent logic without calling Ollama."""
+    def mock_generate(self, prompt, context=None, temperature=None):
+        return "Mocked LLM response"
+    
+    monkeypatch.setattr(BaseAgent, "generate", mock_generate)
+    
+    agent = WriterAgent()
+    result = agent.write_chapter(story_state, chapter)
+    assert "Mocked LLM response" in result
+```
+
+**Using fixtures**:
 ```python
 def test_export_to_markdown_file(sample_story_state):
     """Should export story to markdown file."""
     orchestrator = StoryOrchestrator()
     orchestrator.story_state = sample_story_state
-
+    
     result = orchestrator.export_story_to_file(format="markdown")
     assert Path(result).exists()
+```
+
+**Parametrized tests**:
+```python
+@pytest.mark.parametrize("input_value,expected", [
+    ("short_story", 1),
+    ("novella", 7),
+    ("novel", 20),
+])
+def test_chapter_count(input_value, expected):
+    """Should return correct chapter count for story length."""
+    result = get_chapter_count(input_value)
+    assert result == expected
+```
+
+## Architecture Patterns
+
+### Agent Pattern
+
+All agents inherit from `BaseAgent` and use `PromptBuilder` for constructing prompts:
+
+```python
+from utils.prompt_builder import PromptBuilder
+
+class MyAgent(BaseAgent):
+    def my_method(self, story_state: StoryState) -> str:
+        # Validate brief exists
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
+        
+        # Build prompt using fluent API
+        builder = PromptBuilder()
+        builder.add_language_requirement(brief.language)
+        builder.add_brief_requirements(brief)
+        builder.add_text("Additional instructions...")
+        
+        prompt = builder.build()
+        return self.generate(prompt)
+```
+
+### Service Pattern
+
+Services use dependency injection:
+
+```python
+class MyService:
+    def __init__(self, settings: Settings | None = None):
+        """Initialize service with settings."""
+        self.settings = settings or Settings.load()
+```
+
+All services are initialized through `ServiceContainer`:
+```python
+services = ServiceContainer(settings)
+services.project.list_projects()
+services.story.start_interview(state)
 ```
 
 ## Logging

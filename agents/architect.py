@@ -31,6 +31,36 @@ Output your plans in structured formats (JSON when requested) so other team memb
 class ArchitectAgent(BaseAgent):
     """Agent that designs story structure, characters, and outlines."""
 
+    # JSON schema constants for structured outputs
+    CHARACTER_SCHEMA = """[
+    {
+        "name": "Full Name",
+        "role": "protagonist|antagonist|love_interest|supporting",
+        "description": "Physical and personality description (2-3 sentences)",
+        "personality_traits": ["trait1", "trait2", "trait3"],
+        "goals": ["what they want", "what they need"],
+        "relationships": {"other_character": "relationship description"},
+        "arc_notes": "How this character should change through the story"
+    }
+]"""
+
+    PLOT_POINT_SCHEMA = """[
+    {"description": "Inciting incident - ...", "chapter": 1},
+    {"description": "First plot point - ...", "chapter": 2},
+    {"description": "Midpoint twist - ...", "chapter": null},
+    {"description": "Crisis - ...", "chapter": null},
+    {"description": "Climax - ...", "chapter": null},
+    {"description": "Resolution - ...", "chapter": null}
+]"""
+
+    CHAPTER_SCHEMA = """[
+    {
+        "number": 1,
+        "title": "Chapter Title",
+        "outline": "Detailed outline of what happens in this chapter (3-5 sentences). Include key scenes, character moments, and how it advances the plot."
+    }
+]"""
+
     def __init__(self, model: str | None = None, settings=None):
         super().__init__(
             name="Architect",
@@ -72,19 +102,6 @@ class ArchitectAgent(BaseAgent):
         """Design the main characters."""
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
-        # JSON schema example
-        json_schema = """[
-    {
-        "name": "Full Name",
-        "role": "protagonist|antagonist|love_interest|supporting",
-        "description": "Physical and personality description (2-3 sentences)",
-        "personality_traits": ["trait1", "trait2", "trait3"],
-        "goals": ["what they want", "what they need"],
-        "relationships": {"other_character": "relationship description"},
-        "arc_notes": "How this character should change through the story"
-    }
-]"""
-
         # Build prompt using PromptBuilder
         builder = PromptBuilder()
         builder.add_text("Design the main characters for this story.")
@@ -95,7 +112,7 @@ class ArchitectAgent(BaseAgent):
         builder.add_text(
             f"Create 2-4 main characters. For each, output JSON (all text values in {brief.language}):"
         )
-        builder.add_json_output_format(json_schema)
+        builder.add_json_output_format(self.CHARACTER_SCHEMA)
         builder.add_text("Make them complex, with flaws and desires that create conflict.")
 
         prompt = builder.build()
@@ -105,16 +122,6 @@ class ArchitectAgent(BaseAgent):
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
         brief = PromptBuilder.ensure_brief(story_state, self.name)
-
-        # JSON schema example
-        json_schema = """[
-    {"description": "Inciting incident - ...", "chapter": 1},
-    {"description": "First plot point - ...", "chapter": 2},
-    {"description": "Midpoint twist - ...", "chapter": null},
-    {"description": "Crisis - ...", "chapter": null},
-    {"description": "Climax - ...", "chapter": null},
-    {"description": "Resolution - ...", "chapter": null}
-]"""
 
         # Build prompt using PromptBuilder
         builder = PromptBuilder()
@@ -136,7 +143,7 @@ class ArchitectAgent(BaseAgent):
             f"1. A compelling plot summary (1-2 paragraphs) in {brief.language}\n"
             f"2. Key plot points as JSON (descriptions in {brief.language}):"
         )
-        builder.add_json_output_format(json_schema)
+        builder.add_json_output_format(self.PLOT_POINT_SCHEMA)
         builder.add_text(
             "Make sure the plot serves the themes and gives characters room to grow.\n"
             f"For mature content at level '{brief.content_rating}', integrate intimate moments naturally into the arc."
@@ -165,15 +172,6 @@ class ArchitectAgent(BaseAgent):
 
         plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
 
-        # JSON schema example
-        json_schema = """[
-    {
-        "number": 1,
-        "title": "Chapter Title",
-        "outline": "Detailed outline of what happens in this chapter (3-5 sentences). Include key scenes, character moments, and how it advances the plot."
-    }
-]"""
-
         # Build prompt using PromptBuilder
         builder = PromptBuilder()
         builder.add_text(f"Create a {num_chapters}-chapter outline for this story.")
@@ -183,7 +181,7 @@ class ArchitectAgent(BaseAgent):
         builder.add_text(f"CHARACTERS: {', '.join(c.name for c in story_state.characters)}")
 
         builder.add_text(f"For each chapter, output JSON (all text in {brief.language}):")
-        builder.add_json_output_format(json_schema)
+        builder.add_json_output_format(self.CHAPTER_SCHEMA)
         builder.add_text(
             "Ensure good pacing - build tension, vary intensity, place climactic moments appropriately."
         )
