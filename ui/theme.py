@@ -67,41 +67,6 @@ COLORS = {
     "divider": "#BDBDBD",
 }
 
-# ========== Tailwind-style Classes (with Dark Mode) ==========
-# Reusable class strings for consistent styling
-STYLES = {
-    # Cards
-    "card": "rounded-lg shadow-md bg-white dark:bg-gray-800",
-    "card_header": "bg-gray-100 dark:bg-gray-900 p-4 rounded-t-lg border-b dark:border-gray-700",
-    "card_body": "p-4",
-    # Buttons
-    "btn_primary": "bg-blue-500 hover:bg-blue-600 text-white transition-colors",
-    "btn_secondary": "bg-gray-500 hover:bg-gray-600 text-white transition-colors",
-    "btn_success": "bg-green-500 hover:bg-green-600 text-white transition-colors",
-    "btn_danger": "bg-red-500 hover:bg-red-600 text-white transition-colors",
-    "btn_outline": "border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors",
-    # Text
-    "text_heading": "text-xl font-bold text-gray-800 dark:text-gray-100",
-    "text_subheading": "text-lg font-semibold text-gray-700 dark:text-gray-200",
-    "text_body": "text-base text-gray-600 dark:text-gray-300",
-    "text_muted": "text-sm text-gray-500 dark:text-gray-400",
-    "text_error": "text-red-500 dark:text-red-400",
-    # Layout
-    "container": "max-w-7xl mx-auto px-4",
-    "section": "py-6",
-    "row": "flex flex-row gap-4",
-    "column": "flex flex-col gap-4",
-    # Form elements
-    "input": "border rounded px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 transition-shadow",
-    "label": "text-sm font-medium text-gray-700 dark:text-gray-300",
-    # Status badges
-    "badge": "px-2 py-1 rounded-full text-xs font-medium",
-    "badge_success": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-    "badge_warning": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-    "badge_error": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-    "badge_info": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-}
-
 # ========== Graph Visualization Settings ==========
 GRAPH_SETTINGS = {
     "node_size_min": 10,
