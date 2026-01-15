@@ -28,16 +28,6 @@ class Page(Protocol):
         ...
 
 
-# Navigation items: (path, label, icon)
-NAV_ITEMS = [
-    ("/", "Write Story", "edit"),
-    ("/world", "World Builder", "public"),
-    ("/projects", "Projects", "folder"),
-    ("/settings", "Settings", "settings"),
-    ("/models", "Models", "smart_toy"),
-]
-
-
 class StoryFactoryApp:
     """Main Story Factory application.
 
@@ -70,27 +60,8 @@ class StoryFactoryApp:
             with open(css_path) as f:
                 ui.add_head_html(f"<style>{f.read()}</style>")
 
-    def _build_navigation(self, current_path: str) -> None:
-        """Build the navigation bar."""
-        with ui.row().classes(
-            "w-full justify-center bg-gray-100 dark:bg-gray-800 shadow-sm py-2 gap-1"
-        ):
-            for path, label, icon in NAV_ITEMS:
-                is_active = current_path == path
-                btn_classes = "px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                if is_active:
-                    btn_classes += " bg-blue-500 text-white"
-                else:
-                    btn_classes += (
-                        " text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    )
-
-                with ui.link(target=path).classes(btn_classes):
-                    ui.icon(icon, size="sm")
-                    ui.label(label)
-
     def _page_layout(self, current_path: str, build_content: Callable[[], None]) -> None:
-        """Shared page layout with header and navigation."""
+        """Shared page layout with header (includes navigation)."""
         self._add_styles()
         self._apply_theme()
 
@@ -98,12 +69,9 @@ class StoryFactoryApp:
         shortcuts = KeyboardShortcuts(self.state, self.services)
         shortcuts.register()
 
-        # Header with project selector
-        header = Header(self.state, self.services)
+        # Header with navigation and project selector
+        header = Header(self.state, self.services, current_path)
         header.build()
-
-        # Navigation bar
-        self._build_navigation(current_path)
 
         # Page content
         with ui.column().classes("w-full flex-grow p-0"):

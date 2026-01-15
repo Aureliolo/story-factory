@@ -1,4 +1,4 @@
-"""Header component with project selector and status."""
+"""Header component with navigation, project selector and status."""
 
 from nicegui import ui
 from nicegui.elements.label import Label
@@ -7,62 +7,65 @@ from nicegui.elements.select import Select
 from services import ServiceContainer
 from ui.state import AppState
 
+# Navigation items: (path, label, icon)
+NAV_ITEMS = [
+    ("/", "Write", "edit"),
+    ("/world", "World", "public"),
+    ("/projects", "Projects", "folder"),
+    ("/settings", "Settings", "settings"),
+    ("/models", "Models", "smart_toy"),
+]
+
 
 class Header:
-    """Application header with project selector and Ollama status.
+    """Application header with navigation, project selector and status."""
 
-    Features:
-    - Project dropdown selector
-    - New project button
-    - Ollama connection status
-    - VRAM display
-    """
-
-    def __init__(self, state: AppState, services: ServiceContainer):
-        """Initialize header.
-
-        Args:
-            state: Application state.
-            services: Service container.
-        """
+    def __init__(self, state: AppState, services: ServiceContainer, current_path: str = "/"):
+        """Initialize header."""
         self.state = state
         self.services = services
+        self.current_path = current_path
         self._project_select: Select | None = None
         self._status_label: Label | None = None
-        self._vram_label: Label | None = None
 
     def build(self) -> None:
         """Build the header UI."""
-        # NiceGUI header has built-in white background that overrides Tailwind classes
-        # Use inline style to force dark mode background
-        bg_color = "#1f2937" if self.state.dark_mode else "#ffffff"  # gray-800 or white
+        bg_color = "#1f2937" if self.state.dark_mode else "#ffffff"
         with ui.header().classes("shadow-sm items-center").style(f"background-color: {bg_color}"):
-            with ui.row().classes("w-full items-center gap-4 px-4 py-2"):
+            with ui.row().classes("w-full items-center gap-2 px-4 py-2"):
                 # Logo/Title
                 ui.icon("auto_stories", size="lg").classes("text-blue-500")
-                ui.label("Story Factory").classes("text-xl font-bold")
+                ui.label("Story Factory").classes("text-xl font-bold mr-2")
 
-                ui.separator().props("vertical").classes("h-8 bg-gray-300 dark:bg-gray-600")
-
-                # Project selector
-                self._build_project_selector()
-
-                # New project button
-                ui.button(
-                    "+ New Project",
-                    on_click=self._create_project,
-                ).props("flat color=primary")
+                # Navigation links
+                self._build_navigation()
 
                 # Spacer
                 ui.space()
 
+                # Project selector (compact)
+                self._build_project_selector()
+
                 # Dark mode toggle
                 self._build_theme_toggle()
 
-                ui.separator().props("vertical").classes("h-6 bg-gray-300 dark:bg-gray-600")
-
-                # Ollama status
+                # Ollama status (compact)
                 self._build_status_display()
+
+    def _build_navigation(self) -> None:
+        """Build navigation links."""
+        for path, label, icon in NAV_ITEMS:
+            is_active = self.current_path == path
+            if is_active:
+                classes = "text-blue-400 bg-blue-500/20"
+            else:
+                classes = "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
+
+            with ui.link(target=path).classes(
+                f"flex items-center gap-1 px-3 py-1.5 rounded-md transition-colors {classes}"
+            ):
+                ui.icon(icon, size="xs")
+                ui.label(label).classes("text-sm")
 
     def _build_project_selector(self) -> None:
         """Build the project dropdown selector."""
@@ -70,41 +73,30 @@ class Header:
 
         options = {p.id: p.name for p in projects}
         if not options:
-            options = {"": "No projects yet"}
+            options = {"": "No projects"}
 
-        self._project_select = ui.select(
-            options=options,
-            value=self.state.project_id,
-            label="Active Project",
-            on_change=self._on_project_change,
-        ).classes("w-64")
+        self._project_select = (
+            ui.select(
+                options=options,
+                value=self.state.project_id,
+                on_change=self._on_project_change,
+            )
+            .classes("w-40")
+            .props("dense outlined dark")
+        )
 
     def _build_status_display(self) -> None:
-        """Build Ollama status and VRAM display."""
-        with ui.row().classes("items-center gap-4"):
-            # Ollama status
+        """Build Ollama status and VRAM display (compact)."""
+        with ui.row().classes("items-center gap-2"):
             health = self.services.model.check_health()
+            vram = self.services.model.get_vram()
 
             if health.is_healthy:
-                ui.icon("check_circle", color="green").classes("text-green-500 dark:text-green-400")
-                self._status_label = ui.label("Ollama Connected").classes(
-                    "text-sm text-green-500 dark:text-green-400"
-                )
+                ui.icon("check_circle", size="xs").classes("text-green-500")
+                self._status_label = ui.label(f"{vram}GB").classes("text-xs text-green-500")
             else:
-                ui.icon("error", color="red").classes("text-red-500 dark:text-red-400")
-                self._status_label = ui.label("Ollama Offline").classes(
-                    "text-sm text-red-500 dark:text-red-400"
-                )
-
-            ui.separator().props("vertical").classes("h-6 bg-gray-300 dark:bg-gray-600")
-
-            # VRAM display
-            vram = self.services.model.get_vram()
-            with ui.row().classes("items-center gap-1"):
-                ui.icon("memory", size="sm").classes("text-gray-500 dark:text-gray-400")
-                self._vram_label = ui.label(f"{vram} GB VRAM").classes(
-                    "text-sm text-gray-600 dark:text-gray-400"
-                )
+                ui.icon("error", size="xs").classes("text-red-500")
+                self._status_label = ui.label("Offline").classes("text-xs text-red-500")
 
     def _build_theme_toggle(self) -> None:
         """Build the dark mode toggle button."""
@@ -170,16 +162,13 @@ class Header:
 
     def refresh_status(self) -> None:
         """Refresh the Ollama status display."""
-        health = self.services.model.check_health()
-
         if self._status_label:
-            if health.is_healthy:
-                self._status_label.text = "Ollama Connected"
-                self._status_label.classes(replace="text-sm text-green-500 dark:text-green-400")
-            else:
-                self._status_label.text = "Ollama Offline"
-                self._status_label.classes(replace="text-sm text-red-500 dark:text-red-400")
-
-        if self._vram_label:
+            health = self.services.model.check_health()
             vram = self.services.model.get_vram()
-            self._vram_label.text = f"{vram} GB VRAM"
+
+            if health.is_healthy:
+                self._status_label.text = f"{vram}GB"
+                self._status_label.classes(replace="text-xs text-green-500")
+            else:
+                self._status_label.text = "Offline"
+                self._status_label.classes(replace="text-xs text-red-500")
