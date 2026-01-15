@@ -2,6 +2,7 @@
 
 import html
 import logging
+import tempfile
 from io import BytesIO
 from pathlib import Path
 
@@ -28,8 +29,9 @@ def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Pa
         resolved = path.resolve()
         base_resolved = base_dir.resolve()
 
-        # Allow /tmp for testing
-        if resolved.as_posix().startswith("/tmp"):
+        # Allow system temp directory for testing (cross-platform)
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        if resolved.is_relative_to(temp_dir):
             return resolved
 
         # Check if path is within base directory
@@ -41,7 +43,7 @@ def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Pa
             ) from None
 
         return resolved
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid export path: {path}") from e
 
 

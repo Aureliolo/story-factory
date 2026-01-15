@@ -1,5 +1,7 @@
 """Tests for WorldDatabase."""
 
+import pytest
+
 from memory.world_database import WorldDatabase
 
 
@@ -181,8 +183,6 @@ class TestWorldDatabase:
 
     def test_add_entity_validation_empty_name(self, tmp_path):
         """Test that empty entity names are rejected."""
-        import pytest
-
         db = WorldDatabase(tmp_path / "test.db")
 
         with pytest.raises(ValueError, match="Entity name cannot be empty"):
@@ -193,8 +193,6 @@ class TestWorldDatabase:
 
     def test_add_entity_validation_long_name(self, tmp_path):
         """Test that overly long entity names are rejected."""
-        import pytest
-
         db = WorldDatabase(tmp_path / "test.db")
 
         with pytest.raises(ValueError, match="cannot exceed 200 characters"):
@@ -202,8 +200,6 @@ class TestWorldDatabase:
 
     def test_add_entity_validation_long_description(self, tmp_path):
         """Test that overly long descriptions are rejected."""
-        import pytest
-
         db = WorldDatabase(tmp_path / "test.db")
 
         with pytest.raises(ValueError, match="cannot exceed 5000 characters"):
@@ -211,8 +207,6 @@ class TestWorldDatabase:
 
     def test_update_entity_validation_empty_name(self, tmp_path):
         """Test that empty names are rejected in updates."""
-        import pytest
-
         db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Valid Name")
 
@@ -225,4 +219,5 @@ class TestWorldDatabase:
         entity_id = db.add_entity("character", "  Spaced Name  ")
 
         entity = db.get_entity(entity_id)
+        assert entity is not None
         assert entity.name == "Spaced Name"

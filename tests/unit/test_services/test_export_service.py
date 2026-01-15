@@ -1,8 +1,13 @@
 """Unit tests for export service."""
 
+import tempfile
+from pathlib import Path
+
+import pytest
+
 from memory.story_state import Chapter, StoryBrief, StoryState
-from services.export_service import ExportService
-from settings import Settings
+from services.export_service import ExportService, _validate_export_path
+from settings import STORIES_DIR, Settings
 
 
 class TestExportServiceMarkdown:
@@ -333,3 +338,70 @@ class TestExportServiceEdgeCases:
         assert result_path.exists()
         assert result_path.suffix == ".docx"
         assert result_path.stat().st_size > 0
+
+
+class TestValidateExportPath:
+    """Tests for _validate_export_path function (path traversal prevention)."""
+
+    def test_valid_path_within_base(self, tmp_path):
+        """Test that valid paths within base directory are accepted."""
+        base_dir = tmp_path / "output"
+        base_dir.mkdir()
+        valid_path = base_dir / "stories" / "story.md"
+
+        result = _validate_export_path(valid_path, base_dir)
+        assert result == valid_path.resolve()
+
+    def test_valid_path_in_temp_directory(self):
+        """Test that paths in temp directory are accepted (for testing)."""
+        temp_dir = Path(tempfile.gettempdir())
+        temp_path = temp_dir / "test_export.md"
+
+        result = _validate_export_path(temp_path, STORIES_DIR.parent)
+        assert result == temp_path.resolve()
+
+    def test_rejects_path_traversal_unix(self):
+        """Test that Unix-style path traversal is rejected."""
+        # Use STORIES_DIR.parent as base, then traverse outside it
+        base_dir = STORIES_DIR.parent
+        malicious_path = base_dir / ".." / ".." / "etc" / "passwd"
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_export_path(malicious_path, base_dir)
+
+    def test_rejects_path_traversal_windows(self):
+        """Test that Windows-style path traversal is rejected."""
+        # Use STORIES_DIR.parent as base, then traverse outside it
+        base_dir = STORIES_DIR.parent
+        malicious_path = base_dir / ".." / ".." / ".." / "windows" / "system32" / "file"
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_export_path(malicious_path, base_dir)
+
+    def test_rejects_absolute_path_outside_base(self):
+        """Test that absolute paths outside base are rejected."""
+        base_dir = STORIES_DIR.parent
+        # Use a path that's clearly outside both base_dir and temp
+        outside_path = Path("/some/other/path/file.txt")
+
+        with pytest.raises(ValueError, match="outside"):
+            _validate_export_path(outside_path, base_dir)
+
+    def test_returns_resolved_path(self, tmp_path):
+        """Test that the function returns resolved absolute paths."""
+        base_dir = tmp_path / "output"
+        base_dir.mkdir()
+        relative_path = base_dir / "." / "sub" / ".." / "story.md"
+
+        result = _validate_export_path(relative_path, base_dir)
+        assert result.is_absolute()
+        assert ".." not in str(result)
+
+    def test_uses_default_base_dir(self, tmp_path):
+        """Test that function uses default base_dir when not specified."""
+        # Create a path inside the actual output directory
+        valid_path = STORIES_DIR / "test_story.md"
+
+        # Should not raise if path is within default base_dir
+        result = _validate_export_path(valid_path)
+        assert result.is_absolute()
