@@ -113,7 +113,7 @@ class AppState:
 # services/__init__.py
 class ServiceContainer:
     """Dependency injection container for all services.
-    
+
     Creates and holds instances of all service classes,
     injecting settings as needed. This provides:
     - Single place to initialize all services
