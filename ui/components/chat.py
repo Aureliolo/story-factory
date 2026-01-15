@@ -26,7 +26,7 @@ class ChatComponent:
     def __init__(
         self,
         on_send: Callable[[str], Any] | None = None,
-        placeholder: str = "Type your response...",
+        placeholder: str = "Type your response... (Ctrl+Enter to send)",
         disabled: bool = False,
     ):
         """Initialize chat component.
@@ -79,6 +79,7 @@ class ChatComponent:
                     )
                     .classes("flex-grow")
                     .props("outlined autogrow rows=2")
+                    .on("keydown.ctrl.enter", self._handle_send)
                 )
 
                 self._send_button = (
