@@ -60,16 +60,24 @@ story-factory/
 │   ├── json_parser.py
 │   └── error_handling.py
 │
-├── tests/                   # Tests (expanded)
+├── tests/                   # Tests
 │   ├── unit/               # Unit tests
 │   │   ├── test_services/
-│   │   └── test_memory/
-│   ├── integration/        # Integration tests
+│   │   ├── test_memory/
+│   │   └── test_*.py       # Unit test files
 │   └── conftest.py         # Pytest fixtures
 │
+├── docs/                    # Documentation
+│   ├── ARCHITECTURE.md
+│   ├── MODELS.md
+│   └── UX_UI_IMPROVEMENTS.md
+│
+├── scripts/                 # Utility scripts
+│   ├── healthcheck.py
+│   └── start.ps1
+│
 ├── settings.py              # Configuration
-├── main.py                  # Entry point
-└── healthcheck.py           # Health checks
+└── main.py                  # Entry point
 ```
 
 ## Layer Responsibilities

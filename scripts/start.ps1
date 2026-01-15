@@ -3,6 +3,9 @@
 
 $Host.UI.RawUI.WindowTitle = "Story Factory Control Panel"
 
+# Get the project root directory (parent of scripts/)
+$projectRoot = Split-Path -Parent $PSScriptRoot
+
 function Write-Header {
     Clear-Host
     Write-Host "============================================" -ForegroundColor Cyan
@@ -35,10 +38,7 @@ function Start-StoryFactory {
     }
 
     Write-Host "Starting Story Factory..." -ForegroundColor Green
-    $scriptDir = Split-Path -Parent $MyInvocation.ScriptName
-    if (-not $scriptDir) { $scriptDir = Get-Location }
-
-    Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory $scriptDir -WindowStyle Hidden
+    Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory $projectRoot -WindowStyle Hidden
     Start-Sleep -Seconds 2
 
     Write-Host "Story Factory started!" -ForegroundColor Green
@@ -63,10 +63,7 @@ function Restart-StoryFactory {
     $wasRunning = Stop-StoryFactory
     Start-Sleep -Seconds 1
 
-    $scriptDir = Split-Path -Parent $MyInvocation.ScriptName
-    if (-not $scriptDir) { $scriptDir = Get-Location }
-
-    Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory $scriptDir -WindowStyle Hidden
+    Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory $projectRoot -WindowStyle Hidden
     Start-Sleep -Seconds 2
 
     Write-Host "Story Factory restarted!" -ForegroundColor Green
@@ -74,9 +71,7 @@ function Restart-StoryFactory {
 }
 
 function Show-Logs {
-    $scriptDir = Split-Path -Parent $MyInvocation.ScriptName
-    if (-not $scriptDir) { $scriptDir = Get-Location }
-    $logFile = Join-Path $scriptDir "logs\story_factory.log"
+    $logFile = Join-Path $projectRoot "logs\story_factory.log"
 
     if (Test-Path $logFile) {
         Write-Host "Streaming logs (Ctrl+C to stop)..." -ForegroundColor Yellow

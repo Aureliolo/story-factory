@@ -87,7 +87,7 @@ ollama pull huihui_ai/qwen3-abliterated:8b
 ollama pull huihui_ai/qwen3-abliterated:14b
 ```
 
-See [MODELS.md](MODELS.md) for full model recommendations.
+See [docs/MODELS.md](docs/MODELS.md) for full model recommendations.
 
 ### 3. Install Python Dependencies
 

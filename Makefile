@@ -7,13 +7,10 @@ help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 healthcheck:  ## Run system health check
-	python healthcheck.py
+	python scripts/healthcheck.py
 
 install:  ## Install dependencies
 	pip install -r requirements.txt
-
-install-dev:  ## Install development dependencies
-	pip install -r requirements-dev.txt
 
 test:  ## Run tests
 	pytest
@@ -21,12 +18,12 @@ test:  ## Run tests
 test-cov:  ## Run tests with coverage
 	pytest --cov=. --cov-report=term --cov-report=html
 
-lint:  ## Run linters (ruff and black check)
+lint:  ## Run linters (ruff check and format check)
 	ruff check .
-	black --check .
+	ruff format --check .
 
-format:  ## Format code with black and fix ruff issues
-	black .
+format:  ## Format code with ruff
+	ruff format .
 	ruff check --fix .
 
 check: lint test  ## Run linters and tests
