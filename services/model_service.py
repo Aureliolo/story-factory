@@ -59,7 +59,7 @@ class ModelService:
         """
         try:
             # Try to list models as a health check
-            client = ollama.Client(host=self.settings.ollama_url)
+            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
             client.list()  # Just check connectivity
 
             # Get VRAM
@@ -72,11 +72,13 @@ class ModelService:
                 available_vram=vram,
             )
         except ollama.ResponseError as e:
+            logger.warning(f"Ollama API error during health check: {e}")
             return OllamaHealth(
                 is_healthy=False,
                 message=f"Ollama API error: {e}",
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError) as e:
+            logger.warning(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
             return OllamaHealth(
                 is_healthy=False,
                 message=f"Cannot connect to Ollama: {e}",
@@ -89,11 +91,11 @@ class ModelService:
             List of installed model IDs.
         """
         try:
-            client = ollama.Client(host=self.settings.ollama_url)
+            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
             response = client.list()
             return [model.model for model in response.models if model.model]
-        except Exception as e:
-            logger.warning(f"Failed to list models: {e}")
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
+            logger.warning(f"Failed to list models from Ollama: {e}")
             return []
 
     def list_available(self) -> list[ModelStatus]:
@@ -146,7 +148,7 @@ class ModelService:
             Progress dictionaries with status, completed, total.
         """
         try:
-            client = ollama.Client(host=self.settings.ollama_url)
+            client = ollama.Client(host=self.settings.ollama_url, timeout=600.0)  # 10 min for pulls
 
             for progress in client.pull(model_id, stream=True):
                 yield {
@@ -156,8 +158,10 @@ class ModelService:
                 }
 
         except ollama.ResponseError as e:
+            logger.error(f"Ollama API error pulling model {model_id}: {e}")
             yield {"status": f"Error: {e}", "error": True}
-        except Exception as e:
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Connection error pulling model {model_id}: {e}")
             yield {"status": f"Failed to pull model: {e}", "error": True}
 
     def delete_model(self, model_id: str) -> bool:
@@ -170,11 +174,11 @@ class ModelService:
             True if deleted successfully.
         """
         try:
-            client = ollama.Client(host=self.settings.ollama_url)
+            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
             client.delete(model_id)
             logger.info(f"Deleted model: {model_id}")
             return True
-        except Exception as e:
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Failed to delete model {model_id}: {e}")
             return False
 
@@ -232,7 +236,7 @@ class ModelService:
             Tuple of (success, message).
         """
         try:
-            client = ollama.Client(host=self.settings.ollama_url)
+            client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
             response = client.generate(
                 model=model_id,
                 prompt="Say 'hello' in one word.",
@@ -244,8 +248,10 @@ class ModelService:
             return False, "Model returned empty response"
 
         except ollama.ResponseError as e:
+            logger.warning(f"Model test failed for {model_id}: {e}")
             return False, f"Model error: {e}"
-        except Exception as e:
+        except (ConnectionError, TimeoutError) as e:
+            logger.warning(f"Connection error testing model {model_id}: {e}")
             return False, f"Test failed: {e}"
 
     def get_model_by_quality(
@@ -295,7 +301,7 @@ class ModelService:
         import time
 
         results = []
-        client = ollama.Client(host=self.settings.ollama_url)
+        client = ollama.Client(host=self.settings.ollama_url, timeout=180.0)
 
         for model_id in model_ids:
             try:
@@ -318,7 +324,8 @@ class ModelService:
                         "success": True,
                     }
                 )
-            except Exception as e:
+            except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
+                logger.warning(f"Failed to compare model {model_id}: {e}")
                 results.append(
                     {
                         "model_id": model_id,

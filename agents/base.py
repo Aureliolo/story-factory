@@ -107,7 +107,7 @@ class BaseAgent:
             return False, (
                 f"Model '{model_name}' not found. Available models: {', '.join(available_models[:5])}"
             )
-        except Exception as e:
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             error_msg = f"Error checking model availability: {e}"
             logger.warning(error_msg)
             return False, error_msg
@@ -171,9 +171,9 @@ class BaseAgent:
                     logger.error(f"{self.name}: Ollama response error: {e}")
                     raise LLMGenerationError(f"Model error: {e}") from e
 
-                except Exception as e:
+                except TimeoutError as e:
                     last_error = e
-                    logger.warning(f"{self.name}: Error on attempt {attempt + 1}: {e}")
+                    logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
                     if attempt < self.MAX_RETRIES - 1:
                         logger.info(f"{self.name}: Retrying in {delay}s...")
                         time.sleep(delay)
