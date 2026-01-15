@@ -129,6 +129,38 @@ select:focus-visible {
     color: #f0f0f0;
 }
 
+/* Chat message markdown styling */
+.dark .q-markdown,
+.dark .q-markdown p,
+.dark .q-markdown span,
+.dark .q-markdown li {
+    color: #e0e0e0 !important;
+    background: transparent !important;
+}
+
+.dark .q-markdown code {
+    background: rgba(0, 0, 0, 0.2) !important;
+    color: #e0e0e0 !important;
+}
+
+.dark .q-markdown pre {
+    background: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Ensure markdown links are visible in dark mode */
+.dark .q-markdown a {
+    color: #60a5fa !important;
+}
+
+/* Fix selection-like highlighting in markdown */
+.q-markdown ::selection {
+    background: rgba(59, 130, 246, 0.3);
+}
+
+.dark .q-markdown strong {
+    color: #f0f0f0 !important;
+}
+
 /* Status badge animations */
 .status-badge {
     transition: all 0.2s ease;
