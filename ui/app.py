@@ -103,6 +103,23 @@ class StoryFactoryApp:
                 ui.tab("settings", label="Settings", icon="settings")
                 ui.tab("models", label="Models", icon="smart_toy")
 
+            # URL hash persistence for tabs
+            valid_tabs = ["write", "world", "projects", "settings", "models"]
+
+            async def read_hash():
+                """Read URL hash and set initial tab."""
+                result = await ui.run_javascript("window.location.hash.slice(1)")
+                if result in valid_tabs:
+                    tabs.value = result
+
+            def update_hash(e):
+                """Update URL hash when tab changes."""
+                if e.value in valid_tabs:
+                    ui.run_javascript(f"window.location.hash = '{e.value}'")
+
+            tabs.on_value_change(update_hash)
+            ui.timer(0.1, read_hash, once=True)
+
             # Tab panels
             with ui.tab_panels(tabs, value="write").classes("w-full flex-grow"):
                 with ui.tab_panel("write").classes("p-0"):

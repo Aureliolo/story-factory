@@ -36,17 +36,22 @@ class SettingsPage:
         with ui.column().classes("w-full gap-6 p-4"):
             ui.label("Settings").classes("text-2xl font-bold")
 
-            # Flexible grid - all cards flow and wrap based on content and screen size
-            with (
-                ui.element("div")
-                .classes("grid gap-4 w-full")
-                .style("grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));")
-            ):
-                self._build_connection_section()
-                self._build_interaction_section()
-                self._build_context_section()
-                self._build_model_section()
-                self._build_temperature_section()
+            # Row 1: Small/medium cards - same height via align-items-stretch
+            with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch"):
+                with ui.element("div").style("flex: 1 1 260px; min-width: 260px;"):
+                    self._build_connection_section()
+
+                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
+                    self._build_interaction_section()
+
+                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
+                    self._build_context_section()
+
+                with ui.element("div").style("flex: 1.5 1 380px; min-width: 380px;"):
+                    self._build_model_section()
+
+            # Row 2: Temperature sliders (own row since it's wide)
+            self._build_temperature_section()
 
             # Save button
             ui.button(
@@ -66,7 +71,7 @@ class SettingsPage:
 
     def _build_connection_section(self) -> None:
         """Build Ollama connection settings."""
-        with ui.card().classes("w-full"):
+        with ui.card().classes("w-full h-full"):
             self._section_header(
                 "Connection",
                 "link",
@@ -107,7 +112,7 @@ class SettingsPage:
 
     def _build_model_section(self) -> None:
         """Build model selection settings."""
-        with ui.card().classes("w-full"):
+        with ui.card().classes("w-full h-full"):
             self._section_header(
                 "Model Selection",
                 "smart_toy",
@@ -193,32 +198,28 @@ class SettingsPage:
 
             self._temp_sliders: dict = {}
             self._temp_labels: dict = {}
-            with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-4"):
+            # 3-column grid for temperature sliders
+            with ui.element("div").classes("grid grid-cols-2 lg:grid-cols-3 gap-3"):
                 for role, info in AGENT_ROLES.items():
                     default_temp = self.settings.agent_temperatures.get(role, 0.8)
                     with (
                         ui.card()
-                        .classes("p-3 bg-gray-50 dark:bg-gray-800")
+                        .classes("p-4 bg-gray-50 dark:bg-gray-800")
                         .tooltip(info["description"])
                     ):
-                        with ui.row().classes("w-full items-center justify-between mb-2"):
+                        with ui.row().classes("w-full items-center justify-between mb-3"):
                             ui.label(info["name"]).classes("font-medium text-sm")
-                            # Create label with initial value - will be updated by slider
                             self._temp_labels[role] = ui.label(f"{default_temp:.1f}").classes(
                                 "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
                             )
 
-                        # Create slider and bind label to it
-                        slider = (
-                            ui.slider(
-                                min=0.0,
-                                max=2.0,
-                                step=0.1,
-                                value=default_temp,
-                            )
-                            .classes("w-full")
-                            .props("label-always")
-                        )
+                        # Slider without floating label (value shown in corner)
+                        slider = ui.slider(
+                            min=0.0,
+                            max=2.0,
+                            step=0.1,
+                            value=default_temp,
+                        ).classes("w-full")
                         self._temp_sliders[role] = slider
 
                         # Bind the label to the slider value
@@ -228,7 +229,7 @@ class SettingsPage:
 
     def _build_interaction_section(self) -> None:
         """Build interaction mode settings."""
-        with ui.card().classes("w-full"):
+        with ui.card().classes("w-full h-full"):
             self._section_header(
                 "Workflow",
                 "tune",
@@ -278,7 +279,7 @@ class SettingsPage:
 
     def _build_context_section(self) -> None:
         """Build context limit settings."""
-        with ui.card().classes("w-full"):
+        with ui.card().classes("w-full h-full"):
             self._section_header(
                 "Memory & Context",
                 "memory",

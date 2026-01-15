@@ -173,26 +173,50 @@ function Clear-LogFile {
     }
 }
 
-# Main loop
+# Main loop with auto-refresh every 3 seconds
+$refreshInterval = 3000  # milliseconds
+$lastRefresh = [DateTime]::Now
+
+Write-Screen
+Write-Host "  Choice: " -NoNewline
+
 while ($true) {
-    Write-Screen
+    # Check if key is available (non-blocking)
+    if ([Console]::KeyAvailable) {
+        $key = [Console]::ReadKey($true)
+        $choice = $key.KeyChar.ToString().ToUpper()
 
-    $choice = Read-Host "  Choice"
+        Write-Host $choice  # Echo the key
 
-    switch ($choice.ToUpper()) {
-        "1" { Start-StoryFactory }
-        "2" { Stop-StoryFactory }
-        "3" { Restart-StoryFactory }
-        "4" { Show-Logs; $script:lastAction = "" }
-        "5" { Open-Browser }
-        "6" { Clear-LogFile }
-        "Q" {
-            exit 0
-        }
-        default {
-            if ($choice) {
-                Set-ActionMessage "Invalid choice: $choice" "Red"
+        switch ($choice) {
+            "1" { Start-StoryFactory }
+            "2" { Stop-StoryFactory }
+            "3" { Restart-StoryFactory }
+            "4" { Show-Logs; $script:lastAction = "" }
+            "5" { Open-Browser }
+            "6" { Clear-LogFile }
+            "Q" { exit 0 }
+            default {
+                if ($choice -and $choice -ne "`r" -and $choice -ne "`n") {
+                    Set-ActionMessage "Invalid: $choice" "Red"
+                }
             }
         }
+
+        # Redraw screen after action
+        Write-Screen
+        Write-Host "  Choice: " -NoNewline
+        $lastRefresh = [DateTime]::Now
     }
+
+    # Auto-refresh logs every 3 seconds
+    $elapsed = ([DateTime]::Now - $lastRefresh).TotalMilliseconds
+    if ($elapsed -ge $refreshInterval) {
+        Write-Screen
+        Write-Host "  Choice: " -NoNewline
+        $lastRefresh = [DateTime]::Now
+    }
+
+    # Small sleep to avoid CPU spinning
+    Start-Sleep -Milliseconds 100
 }
