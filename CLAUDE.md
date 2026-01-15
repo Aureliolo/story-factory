@@ -92,7 +92,9 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 
 ## Testing
 
-- Tests in `tests/unit/` with `test_*.py` naming
+- Unit tests in `tests/unit/` with `test_*.py` naming
+- Component tests in `tests/component/` using NiceGUI User fixture
+- Integration tests in `tests/integration/`
 - Mock Ollama in tests to avoid requiring running instance
 - Shared fixtures in `tests/conftest.py`
 

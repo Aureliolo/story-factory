@@ -11,39 +11,43 @@ Clean architecture with separation of concerns:
 
 ```
 story-factory/
-├── agents/                  # AI agents (unchanged)
+├── agents/                  # AI agents
 │   ├── base.py             # Base agent class
 │   ├── interviewer.py      # Story interview
 │   ├── architect.py        # Story structure
 │   ├── writer.py           # Content generation
 │   ├── editor.py           # Content editing
 │   ├── continuity.py       # Consistency checking
-│   └── validator.py        # Language validation
+│   └── validator.py        # Response validation
 │
-├── memory/                  # Data models (unchanged)
+├── memory/                  # Data models
 │   ├── story_state.py      # Story state model
 │   ├── entities.py         # Entity models
 │   └── world_database.py   # SQLite + NetworkX
 │
-├── services/                # NEW: Business logic layer
-│   ├── __init__.py
+├── services/                # Business logic layer
+│   ├── __init__.py         # ServiceContainer
 │   ├── project_service.py  # Project CRUD, listing
 │   ├── story_service.py    # Story generation workflow
 │   ├── world_service.py    # World/entity management
 │   ├── model_service.py    # Ollama model operations
 │   └── export_service.py   # Export to various formats
 │
-├── ui/                      # NEW: NiceGUI UI layer
+├── ui/                      # NiceGUI UI layer
 │   ├── __init__.py
 │   ├── app.py              # Main app setup
-│   ├── state.py            # Centralized UI state
-│   ├── theme.py            # Colors, styles
+│   ├── state.py            # Centralized UI state (AppState)
+│   ├── theme.py            # Colors, styles, helpers
+│   ├── styles.css          # Custom CSS styles
+│   ├── graph_renderer.py   # vis.js graph rendering
+│   ├── keyboard_shortcuts.py # Keyboard shortcut handling
 │   ├── components/         # Reusable components
 │   │   ├── __init__.py
-│   │   ├── header.py       # Project selector + status
+│   │   ├── header.py       # Project selector + navigation
 │   │   ├── chat.py         # Chat interface
 │   │   ├── entity_card.py  # Entity display card
-│   │   └── graph.py        # Graph visualization
+│   │   ├── graph.py        # Graph visualization wrapper
+│   │   └── common.py       # Shared components (loading, dialogs, etc.)
 │   └── pages/              # Full pages
 │       ├── __init__.py
 │       ├── write.py        # Fundamentals + Live Writing
@@ -52,29 +56,25 @@ story-factory/
 │       ├── settings.py     # Settings
 │       └── models.py       # Model management
 │
-├── workflows/               # Orchestration (simplified)
+├── workflows/               # Orchestration
 │   └── orchestrator.py     # Coordinates agents
 │
-├── utils/                   # Utilities (unchanged)
+├── utils/                   # Utilities
 │   ├── logging_config.py
 │   ├── json_parser.py
 │   └── error_handling.py
 │
 ├── tests/                   # Tests
-│   ├── unit/               # Unit tests
-│   │   ├── test_services/
-│   │   ├── test_memory/
-│   │   └── test_*.py       # Unit test files
-│   └── conftest.py         # Pytest fixtures
+│   ├── unit/               # Unit tests (fast, isolated)
+│   ├── component/          # NiceGUI component tests (User fixture)
+│   ├── integration/        # Integration tests
+│   ├── e2e/                # End-to-end tests
+│   └── conftest.py         # Shared pytest fixtures
 │
 ├── docs/                    # Documentation
 │   ├── ARCHITECTURE.md
 │   ├── MODELS.md
 │   └── UX_UI_IMPROVEMENTS.md
-│
-├── scripts/                 # Utility scripts
-│   ├── healthcheck.py
-│   └── start.ps1
 │
 ├── settings.py              # Configuration
 └── main.py                  # Entry point
@@ -106,13 +106,14 @@ story-factory/
 # ui/state.py
 class AppState:
     """Centralized UI state."""
-    current_project_id: str | None = None
-    current_project: StoryState | None = None
+    project_id: str | None = None
+    project: StoryState | None = None
     world_db: WorldDatabase | None = None
 
     # UI-only state
     selected_entity_id: str | None = None
     active_tab: str = "write"
+    dark_mode: bool = False
     feedback_mode: str = "per-chapter"
 ```
 
@@ -228,13 +229,22 @@ class WritePage:
 
 ## Testing Strategy
 
-### Unit Tests
-- Services: Mock agents, test logic
+### Unit Tests (`tests/unit/`)
+- Services: Mock agents, test business logic
 - Models: Validation, serialization
+- Utilities: JSON parsing, error handling
 
-### Integration Tests
-- Full workflow with mock Ollama
-- UI interaction tests
+### Component Tests (`tests/component/`)
+- NiceGUI component tests using User fixture
+- Page rendering tests
+- Dark mode styling verification
+- Chat interface tests
 
-### E2E Tests (optional)
-- Playwright for browser testing
+### Integration Tests (`tests/integration/`)
+- App startup and initialization
+- Settings validation
+- Service container wiring
+
+### E2E Tests (`tests/e2e/`)
+- Full browser-based testing (optional)
+- Complete user workflows
