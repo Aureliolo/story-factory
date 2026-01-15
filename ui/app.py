@@ -173,6 +173,7 @@ class StoryFactoryApp:
             title=title,
             reload=reload,
             favicon="📚",
+            show=False,  # Don't auto-open browser
         )
 
 
