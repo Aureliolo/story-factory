@@ -7,6 +7,9 @@ ci:
   autoupdate_schedule: weekly
   autoupdate_commit_msg: "deps(pre-commit): autoupdate hooks"
   autofix_prs: true
+  # Skip mypy in CI - image with all deps exceeds 250MB limit
+  # Local pre-commit runs mypy with full type checking
+  skip: [mypy]
 
 repos:
   # Use ruff for linting and formatting
@@ -17,17 +20,20 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  # Type checking with mypy
+  # Type checking with mypy (skipped in pre-commit.ci, runs locally)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
     hooks:
       - id: mypy
         additional_dependencies:
           - pydantic>=2.0.0
-          - types-requests
-          - pytest
-          - nicegui>=2.0.0
-          - networkx-stubs
+          - pytest>=8.0.0
+          - nicegui>=3.0.0
+          - ollama>=0.4.0
+          - playwright>=1.40.0
+          - types-networkx>=3.0
+          - types-Pillow>=10.0.0
+          - types-reportlab>=4.0.0
         args: [--config-file=pyproject.toml]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

@@ -722,7 +722,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import inch
-        from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+        from reportlab.platypus import Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
         buffer = BytesIO()
         doc = SimpleDocTemplate(
@@ -756,7 +756,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             spaceAfter=12,
         )
 
-        story_elements = []
+        story_elements: list[Flowable] = []
 
         # Title page
         brief = self.story_state.brief

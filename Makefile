@@ -1,6 +1,6 @@
 # Makefile for Story Factory development tasks
 
-.PHONY: help install test lint format check clean run healthcheck
+.PHONY: help install test test-unit test-smoke test-integration test-e2e test-cov test-cov-min test-strict test-all test-ci lint format check clean run run-cli healthcheck
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -12,11 +12,35 @@ healthcheck:  ## Run system health check
 install:  ## Install dependencies
 	pip install -r requirements.txt
 
-test:  ## Run tests
-	pytest
+test:  ## Run all tests (unit + smoke + integration, excludes e2e)
+	pytest tests/unit tests/smoke tests/integration
 
-test-cov:  ## Run tests with coverage
-	pytest --cov=. --cov-report=term --cov-report=html
+test-unit:  ## Run unit tests only
+	pytest tests/unit
+
+test-smoke:  ## Run smoke tests (quick startup validation)
+	pytest tests/smoke
+
+test-integration:  ## Run integration tests
+	pytest tests/integration
+
+test-e2e:  ## Run E2E browser tests (requires: playwright install chromium)
+	pytest tests/e2e
+
+test-cov:  ## Run tests with coverage report
+	pytest --cov=. --cov-report=term --cov-report=html tests/unit tests/smoke tests/integration
+
+test-cov-min:  ## Run tests with minimum coverage threshold (70%)
+	pytest --cov=. --cov-report=term --cov-fail-under=70 tests/unit tests/smoke tests/integration
+
+test-strict:  ## Run tests with warnings as errors
+	PYTEST_STRICT=1 pytest -W error tests/unit tests/smoke tests/integration
+
+test-all:  ## Run all tests including E2E
+	pytest tests/
+
+test-ci:  ## Run tests as in CI (coverage + strict)
+	pytest --cov=. --cov-report=term --cov-report=xml -W default tests/unit tests/smoke tests/integration
 
 lint:  ## Run linters (ruff check and format check)
 	ruff check .
