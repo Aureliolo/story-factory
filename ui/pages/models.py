@@ -1,6 +1,7 @@
 """Models page - Ollama model management."""
 
 import asyncio
+import logging
 
 from nicegui import ui
 from nicegui.elements.column import Column
@@ -9,6 +10,8 @@ from services import ServiceContainer
 from settings import AVAILABLE_MODELS, ModelInfo
 from ui.state import AppState
 from ui.theme import get_quality_color
+
+logger = logging.getLogger(__name__)
 
 
 class ModelsPage:
@@ -407,6 +410,7 @@ class ModelsPage:
             # Refresh would be needed
 
         except Exception as e:
+            logger.exception(f"Failed to pull model {model_id}")
             ui.notify(f"Error: {e}", type="negative")
 
         finally:

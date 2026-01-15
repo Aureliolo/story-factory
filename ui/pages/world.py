@@ -1,5 +1,7 @@
 """World Builder page - entity and relationship management."""
 
+import logging
+
 from nicegui import ui
 from nicegui.elements.column import Column
 from nicegui.elements.html import Html
@@ -18,6 +20,8 @@ from ui.graph_renderer import (
 )
 from ui.state import AppState
 from ui.theme import ENTITY_COLORS
+
+logger = logging.getLogger(__name__)
 
 
 class WorldPage:
@@ -438,6 +442,7 @@ class WorldPage:
                 self._graph.refresh()
             ui.notify(f"Added {name}", type="positive")
         except Exception as e:
+            logger.exception(f"Failed to add entity {name}")
             ui.notify(f"Error: {e}", type="negative")
 
     def _save_entity(self) -> None:
@@ -457,6 +462,7 @@ class WorldPage:
                 self._graph.refresh()
             ui.notify("Entity saved", type="positive")
         except Exception as e:
+            logger.exception(f"Failed to save entity {self.state.selected_entity_id}")
             ui.notify(f"Error: {e}", type="negative")
 
     def _delete_entity(self) -> None:
@@ -475,6 +481,7 @@ class WorldPage:
                 self._graph.refresh()
             ui.notify("Entity deleted", type="positive")
         except Exception as e:
+            logger.exception(f"Failed to delete entity {self.state.selected_entity_id}")
             ui.notify(f"Error: {e}", type="negative")
 
     def _add_relationship(self) -> None:
@@ -501,6 +508,7 @@ class WorldPage:
                 self._graph.refresh()
             ui.notify("Relationship added", type="positive")
         except Exception as e:
+            logger.exception("Failed to add relationship")
             ui.notify(f"Error: {e}", type="negative")
 
     def _find_path(self, source_id: str, target_id: str) -> None:
