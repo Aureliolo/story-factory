@@ -24,7 +24,7 @@ def check_python_version() -> tuple[bool, str]:
 
 def check_dependencies() -> tuple[bool, str]:
     """Check if all required Python packages are installed."""
-    required = ["ollama", "gradio", "pydantic"]
+    required = ["ollama", "nicegui", "pydantic"]
     missing = []
 
     for package in required:

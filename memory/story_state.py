@@ -1,6 +1,7 @@
 """Story state management - maintains context across the generation process."""
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -65,7 +66,7 @@ class StoryBrief(BaseModel):
     setting_place: str
     target_length: str  # short_story, novella, novel
     language: str = "English"  # Output language for all content
-    nsfw_level: str  # none, mild, moderate, explicit
+    content_rating: str  # none, mild, moderate, explicit
     content_preferences: list[str] = Field(default_factory=list)  # What to include
     content_avoid: list[str] = Field(default_factory=list)  # What to avoid
     additional_notes: str = ""
@@ -83,10 +84,19 @@ class StoryState(BaseModel):
     project_description: str = ""  # Optional notes
     last_saved: datetime | None = None  # Track last save time
 
+    # World database reference (SQLite file path)
+    world_db_path: str = ""
+
+    # Interview history (for displaying and continuing conversations)
+    interview_history: list[dict[str, str]] = Field(default_factory=list)
+
+    # Reviews and notes from user/AI
+    reviews: list[dict[str, Any]] = Field(default_factory=list)
+
     # Story brief
     brief: StoryBrief | None = None
 
-    # World building
+    # World building (legacy - now primarily in WorldDatabase)
     world_description: str = ""
     world_rules: list[str] = Field(default_factory=list)
 

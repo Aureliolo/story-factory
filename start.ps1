@@ -23,7 +23,7 @@ function Show-Menu {
 
 function Get-PythonProcess {
     Get-Process -Name python -ErrorAction SilentlyContinue | Where-Object {
-        $_.MainWindowTitle -match "gradio" -or $_.CommandLine -match "main.py"
+        $_.MainWindowTitle -match "Story Factory" -or $_.CommandLine -match "main.py"
     }
 }
 

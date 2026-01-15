@@ -1,6 +1,8 @@
 # Story Factory
 
-A local AI-powered multi-agent system for generating short stories, novellas, and novels with iterative refinement, self-critique, and plot-hole detection.
+> **DISCLAIMER**: This is a personal holiday/hobby project created primarily as an experimentation playground for testing AI coding assistants (Claude Code, GitHub Copilot, Cursor, etc.) and exploring local LLM capabilities with Ollama. It's built for my own learning and enjoyment. Feel free to explore, but note that this is not production-grade software and comes with no guarantees. Use at your own risk!
+
+A local AI-powered multi-agent system for generating short stories, novellas, and novels with iterative refinement, self-critique, and plot-hole detection. Everything runs locally on your machine using Ollama.
 
 ## Features
 
@@ -11,15 +13,46 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
   - **Editor**: Polishes and refines the writing
   - **Continuity Checker**: Detects plot holes and inconsistencies
 
-- **Iterative Refinement**: Write → Edit → Check → Revise loop for quality
-- **NSFW Support**: Uncensored models for adult content
+- **World Building System**: SQLite + NetworkX powered entity/relationship database
+  - Characters, locations, items, factions tracking
+  - Interactive graph visualization with vis.js
+  - Relationship mapping and path finding
+  - Community/cluster detection
+
+- **Modern Web UI**: Built with NiceGUI
+  - **Write Story Tab**: Interview-based story creation with live writing
+  - **World Builder Tab**: Visual entity management with graph explorer
+  - **Projects Tab**: Manage multiple stories
+  - **Settings Tab**: Configure models and preferences
+  - **Models Tab**: Ollama model management with VRAM detection
+
+- **Iterative Refinement**: Write -> Edit -> Check -> Revise loop for quality
 - **Flexible Output**: Short stories, novellas, or full novels
-- **User Interaction**: Configurable checkpoints for feedback and steering
+- **Multiple Export Formats**: Markdown, Text, HTML, EPUB, PDF
 - **Local & Private**: Everything runs on your machine
+
+## Screenshots
+
+The UI is organized into tabs:
+
+1. **Write Story** - Two sub-tabs:
+   - *Fundamentals*: Interview chat, world overview, story structure
+   - *Live Writing*: Chapter-by-chapter writing with real-time feedback
+
+2. **World Builder** - Entity management:
+   - Left panel: Entity browser with type filters and search
+   - Center: Interactive vis.js graph visualization
+   - Right panel: Entity editor with attributes
+
+3. **Projects** - Project management with create, load, duplicate, delete
+
+4. **Settings** - Model configuration, agent temperatures, preferences
+
+5. **Models** - Ollama model management with pull/delete functionality
 
 ## Requirements
 
-- **GPU**: NVIDIA GPU with 8GB+ VRAM (24GB recommended for 70B models)
+- **GPU**: NVIDIA GPU with 8GB+ VRAM (24GB recommended for larger models)
 - **CUDA**: 11.x or higher
 - **Python**: 3.13+
 - **Ollama**: For local LLM serving
@@ -43,10 +76,10 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ```bash
 # Recommended starter model (8B, fits on most GPUs)
-ollama pull tohur/natsumura-storytelling-rp-llama-3.1
+ollama pull huihui_ai/qwen3-abliterated:8b
 
-# For better quality (requires 20GB+ VRAM)
-ollama pull vanilj/midnight-miqu-70b-v1.5:Q4_K_M
+# For better quality (requires 16GB+ VRAM)
+ollama pull huihui_ai/qwen3-abliterated:14b
 ```
 
 See [MODELS.md](MODELS.md) for full model recommendations.
@@ -74,13 +107,70 @@ Open http://localhost:7860 in your browser.
 python main.py --cli
 ```
 
+## Architecture
+
+```
+story-factory/
+├── main.py                 # Entry point
+├── settings.py             # Settings management & model registry
+├── agents/                 # AI agent implementations
+│   ├── base.py             # Base agent class
+│   ├── interviewer.py      # Story requirements gathering
+│   ├── architect.py        # Structure and character design
+│   ├── writer.py           # Prose generation
+│   ├── editor.py           # Refinement and polish
+│   └── continuity.py       # Plot hole detection
+├── workflows/
+│   └── orchestrator.py     # Agent coordination
+├── memory/
+│   ├── story_state.py      # Story state management
+│   ├── entities.py         # Entity/Relationship models
+│   └── world_database.py   # SQLite + NetworkX database
+├── services/               # Business logic layer
+│   ├── project_service.py  # Project CRUD
+│   ├── story_service.py    # Story generation
+│   ├── world_service.py    # Entity management
+│   ├── model_service.py    # Ollama operations
+│   └── export_service.py   # Export formats
+├── ui/                     # NiceGUI web interface
+│   ├── app.py              # Main application
+│   ├── pages/              # Page components
+│   │   ├── write.py        # Write Story page
+│   │   ├── world.py        # World Builder page
+│   │   ├── projects.py     # Projects page
+│   │   ├── settings.py     # Settings page
+│   │   └── models.py       # Models page
+│   └── components/         # Reusable UI components
+│       ├── header.py       # App header
+│       ├── chat.py         # Chat interface
+│       ├── graph.py        # Graph visualization
+│       └── entity_card.py  # Entity display
+└── tests/                  # Test suite
+```
+
+## Workflow
+
+```
+User Input -> Interviewer -> Architect -> [Writer -> Editor -> Continuity] x N -> Final Story
+                                              ^_______revision loop_______v
+```
+
+1. **Interview Phase**: The Interviewer asks about your story idea, genre, tone, characters
+2. **Architecture Phase**: The Architect creates world-building, character profiles, plot outline
+3. **Writing Phase**: For each chapter:
+   - Writer drafts the content
+   - Editor polishes the prose
+   - Continuity Checker validates consistency
+   - If issues found, loop back to Writer (max 3 iterations)
+4. **Output**: Complete story exported in your preferred format
+
 ## Configuration
 
 Settings can be configured via the web UI or by editing `settings.json`:
 
 ```json
 {
-  "default_model": "huihui_ai/qwen3-abliterated:32b",
+  "default_model": "huihui_ai/qwen3-abliterated:14b",
   "context_size": 32768,
   "interaction_mode": "checkpoint",
   "chapters_between_checkpoints": 3,
@@ -92,135 +182,57 @@ Settings can be configured via the web UI or by editing `settings.json`:
 }
 ```
 
-Copy `settings.example.json` to `settings.json` to get started.
-
-## Project Structure
-
-```
-story-factory/
-├── main.py                 # Entry point
-├── settings.py             # Settings management & model registry
-├── settings.json           # User settings (not in git)
-├── settings.example.json   # Example settings template
-├── requirements.txt        # Python dependencies
-├── agents/                 # AI agent implementations
-│   ├── base.py             # Base agent class
-│   ├── interviewer.py      # Story requirements gathering
-│   ├── architect.py        # Structure and character design
-│   ├── writer.py           # Prose generation
-│   ├── editor.py           # Refinement and polish
-│   └── continuity.py       # Plot hole detection
-├── workflows/
-│   └── orchestrator.py     # Agent coordination
-├── memory/
-│   └── story_state.py      # Story state management
-├── utils/
-│   └── json_parser.py      # JSON extraction utilities
-├── ui/
-│   └── gradio_app.py       # Web interface
-└── output/
-    └── stories/            # Generated stories
-```
-
-## Workflow
-
-```
-User Input → Interviewer → Architect → [Writer → Editor → Continuity] × N → Final Story
-                                              ↑_______revision loop_______↓
-```
-
-1. **Interview Phase**: The Interviewer asks about your story idea, genre, tone, characters, and content preferences
-2. **Architecture Phase**: The Architect creates world-building, character profiles, plot outline, and chapter structure
-3. **Writing Phase**: For each chapter:
-   - Writer drafts the content
-   - Editor polishes the prose
-   - Continuity Checker validates consistency
-   - If issues found, loop back to Writer (max 3 iterations)
-4. **Output**: Complete story exported as markdown
-
-## Interaction Modes
-
-| Mode | Description |
-|------|-------------|
-| **Minimal** | Only asks at start, shows final result |
-| **Checkpoint** | Reviews every N chapters |
-| **Interactive** | Reviews each chapter |
-| **Collaborative** | Frequent interaction, steer mid-scene |
-
-## Exporting Stories
-
-Stories can be exported in multiple formats:
-
-```python
-# Via Python API
-orchestrator.export_story_to_file(format="markdown")  # .md file
-orchestrator.export_story_to_file(format="text")      # .txt file
-orchestrator.save_story()                             # .json file (for resuming)
-```
-
-Files are saved to `output/stories/` by default.
-
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development setup and guidelines.
-
-### Quick Start for Developers
+### Quick Start
 
 ```bash
 # Install dev dependencies
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 # Run tests
-make test
-
-# Run tests with coverage
-make test-cov
-
-# Format and lint code
-make format
-make lint
-
-# Run all checks (lint + test)
-make check
-```
-
-### Testing
-
-The project has comprehensive test coverage for core functionality:
-
-- **Unit Tests**: Test individual components (settings, JSON parsing, error handling, export)
-- **Test Coverage**: 41 tests covering validation, error handling, and file operations
-- **CI Integration**: Automated testing on every push and PR
-
-Run tests:
-```bash
-# All tests
 pytest
 
-# With coverage report
-pytest --cov=. --cov-report=term --cov-report=html
+# Run with coverage
+pytest --cov=. --cov-report=term
 
-# Specific test file
-pytest tests/test_settings.py
+# Format code
+black .
 
-# Using Makefile
-make test
-make test-cov
+# Lint
+ruff check .
+
+# Type check
+mypy .
 ```
 
-### Code Quality Tools
+### Code Quality
 
 - **Black**: Code formatting (line length: 100)
 - **Ruff**: Fast Python linter
+- **MyPy**: Type checking
 - **Pytest**: Testing framework with coverage
-- **MyPy**: Type checking (planned)
+
+## Tech Stack
+
+- **[NiceGUI](https://nicegui.io/)**: Modern Python web UI framework
+- **[Ollama](https://ollama.com/)**: Local LLM serving
+- **[NetworkX](https://networkx.org/)**: Graph analysis for world-building
+- **[SQLite](https://sqlite.org/)**: Entity storage
+- **[vis.js](https://visjs.org/)**: Interactive graph visualization
+- **[Pydantic](https://pydantic.dev/)**: Data validation
 
 ## License
 
 MIT License - See LICENSE file for details.
 
-## Acknowledgments
+## Purpose
 
-- [Ollama](https://ollama.com/) - Local LLM serving
-- [Gradio](https://gradio.app/) - Web UI framework
-- [CrewAI](https://crewai.com/) - Multi-agent inspiration
+This project serves multiple purposes:
+
+1. **AI Assistant Testing**: Experimenting with different AI coding assistants to see how they handle complex, multi-file Python projects
+2. **Local LLM Exploration**: Testing various Ollama models for creative writing tasks
+3. **Multi-Agent Architecture**: Learning about coordinating multiple AI agents
+4. **Personal Entertainment**: Actually generating stories for fun!
+
+Remember: This is a hobby project. Have fun with it!

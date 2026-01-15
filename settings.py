@@ -30,7 +30,7 @@ class ModelInfo(TypedDict):
     vram_required: int
     quality: int | float
     speed: int
-    nsfw: bool
+    uncensored: bool
     description: str
 
 
@@ -52,7 +52,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "vram_required": 22,
         "quality": 9,
         "speed": 6,
-        "nsfw": True,
+        "uncensored": True,
         "description": "Newest Qwen3, excellent reasoning and creative writing",
     },
     "huihui_ai/qwen3-abliterated:14b": {
@@ -62,7 +62,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "vram_required": 12,
         "quality": 8,
         "speed": 8,
-        "nsfw": True,
+        "uncensored": True,
         "description": "Fast Qwen3 variant, good quality/speed balance",
     },
     "huihui_ai/qwen3-abliterated:8b": {
@@ -72,7 +72,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "vram_required": 8,
         "quality": 7,
         "speed": 9,
-        "nsfw": True,
+        "uncensored": True,
         "description": "Compact Qwen3, fast inference",
     },
     "huihui_ai/qwen3-next-abliterated": {
@@ -82,7 +82,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "vram_required": 24,
         "quality": 9.5,
         "speed": 5,
-        "nsfw": True,
+        "uncensored": True,
         "description": "Next-gen Qwen3 70B, excellent creative writing",
     },
     "huihui_ai/llama3.3-abliterated": {
@@ -92,7 +92,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "vram_required": 24,
         "quality": 9.5,
         "speed": 5,
-        "nsfw": True,
+        "uncensored": True,
         "description": "Meta's newest 70B, state-of-art performance",
     },
     "goekdenizguelmez/JOSIEFIED-Qwen3:8b": {
@@ -102,7 +102,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "vram_required": 8,
         "quality": 7.5,
         "speed": 9,
-        "nsfw": True,
+        "uncensored": True,
         "description": "Fine-tuned Qwen3 for maximum uncensored behavior",
     },
     # === Older but quality models ===
@@ -113,7 +113,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "vram_required": 8,
         "quality": 6,
         "speed": 9,
-        "nsfw": True,
+        "uncensored": True,
         "description": "Tuned specifically for storytelling/RP",
     },
 }
@@ -393,7 +393,7 @@ def get_model_info(model_id: str) -> ModelInfo:
             vram_required=0,
             quality=5,
             speed=5,
-            nsfw=True,
+            uncensored=True,
             description="Unknown model",
         ),
     )

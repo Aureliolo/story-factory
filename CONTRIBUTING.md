@@ -74,7 +74,7 @@ make check  # Run both linting and tests
 - `workflows/`: Agent coordination and orchestration
 - `memory/`: Story state management
 - `utils/`: Utility modules (JSON parsing, logging, etc.)
-- `ui/`: Gradio web interface
+- `ui/`: NiceGUI web interface
 - `tests/`: Test suite
 - `settings.py`: Settings management and model registry
 

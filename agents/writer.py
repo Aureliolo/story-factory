@@ -24,7 +24,7 @@ You write prose that serves the story's genre and tone. You understand that diff
 - Horror: atmosphere, dread, the unseen
 - Fantasy: world details woven naturally, wonder
 
-For NSFW content, you write intimate scenes with:
+For mature content, you write intimate scenes with:
 - Emotional truth - what characters feel, not just what they do
 - Building tension and anticipation
 - Character voice maintained even in heated moments
@@ -86,7 +86,7 @@ STORY CONTEXT:
 
 GENRE: {brief.genre}
 TONE: {brief.tone}
-NSFW LEVEL: {brief.nsfw_level}
+CONTENT RATING: {brief.content_rating}
 {revision_note}
 
 Write the complete chapter in {brief.language}. Include:
@@ -130,8 +130,8 @@ LANGUAGE: {brief.language} - Write the ENTIRE story in {brief.language}. All pro
 
 GENRE: {brief.genre}
 TONE: {brief.tone}
-THEMES: {', '.join(brief.themes)}
-NSFW LEVEL: {brief.nsfw_level}
+THEMES: {", ".join(brief.themes)}
+CONTENT RATING: {brief.content_rating}
 SETTING: {brief.setting_place}, {brief.setting_time}
 
 CHARACTERS:
@@ -174,7 +174,7 @@ LANGUAGE: {brief.language} - Continue writing in {brief.language}. All prose mus
 
 GENRE: {brief.genre}
 TONE: {brief.tone}
-NSFW LEVEL: {brief.nsfw_level}
+CONTENT RATING: {brief.content_rating}
 
 Continue seamlessly from where the text ends. Write 500-1000 more words in {brief.language}.
 Maintain the same voice, tense, and style."""

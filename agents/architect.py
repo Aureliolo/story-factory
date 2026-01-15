@@ -22,7 +22,7 @@ You understand genre conventions and know when to follow or subvert them.
 You create characters with depth - flaws, desires, fears, and growth potential.
 You think about themes and how they manifest through plot and character.
 
-For NSFW content, you integrate intimate scenes naturally into the narrative arc - they serve character development and plot, not just titillation.
+For mature content, you integrate intimate scenes naturally into the narrative arc - they serve character development and plot.
 
 Output your plans in structured formats (JSON when requested) so other team members can execute them."""
 
@@ -50,10 +50,10 @@ class ArchitectAgent(BaseAgent):
 LANGUAGE: {brief.language} - Write EVERYTHING in {brief.language}. All descriptions, names, and text must be in {brief.language}.
 
 PREMISE: {brief.premise}
-GENRE: {brief.genre} (subgenres: {', '.join(brief.subgenres)})
+GENRE: {brief.genre} (subgenres: {", ".join(brief.subgenres)})
 SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
-THEMES: {', '.join(brief.themes)}
+THEMES: {", ".join(brief.themes)}
 
 Create:
 1. A vivid description of the world/setting (2-3 paragraphs)
@@ -75,9 +75,9 @@ LANGUAGE: {brief.language} - Write ALL content in {brief.language}. Names, descr
 
 PREMISE: {brief.premise}
 GENRE: {brief.genre}
-THEMES: {', '.join(brief.themes)}
-NSFW LEVEL: {brief.nsfw_level}
-CONTENT NOTES: Include {', '.join(brief.content_preferences) if brief.content_preferences else 'nothing specific'}
+THEMES: {", ".join(brief.themes)}
+CONTENT RATING: {brief.content_rating}
+CONTENT NOTES: Include {", ".join(brief.content_preferences) if brief.content_preferences else "nothing specific"}
 
 Create 2-4 main characters. For each, output JSON (all text values in {brief.language}):
 ```json
@@ -114,8 +114,8 @@ PREMISE: {brief.premise}
 GENRE: {brief.genre}
 TONE: {brief.tone}
 LENGTH: {brief.target_length}
-NSFW LEVEL: {brief.nsfw_level}
-THEMES: {', '.join(brief.themes)}
+CONTENT RATING: {brief.content_rating}
+THEMES: {", ".join(brief.themes)}
 
 CHARACTERS:
 {chars}
@@ -138,7 +138,7 @@ Create:
 ```
 
 Make sure the plot serves the themes and gives characters room to grow.
-For NSFW content at level '{brief.nsfw_level}', integrate intimate moments naturally into the arc.
+For mature content at level '{brief.content_rating}', integrate intimate moments naturally into the arc.
 ALL text must be in {brief.language}!"""
 
         response = self.generate(prompt)
@@ -176,7 +176,7 @@ KEY PLOT POINTS:
 {plot_points_text}
 
 CHARACTERS:
-{', '.join(c.name for c in story_state.characters)}
+{", ".join(c.name for c in story_state.characters)}
 
 For each chapter, output JSON (all text in {brief.language}):
 ```json

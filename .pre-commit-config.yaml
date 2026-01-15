@@ -3,19 +3,13 @@
 # Run manually: pre-commit run --all-files
 
 repos:
-  # Use black for formatting (matches CI)
-  - repo: https://github.com/psf/black
-    rev: 25.12.0
-    hooks:
-      - id: black
-        language_version: python3.13
-
-  # Use ruff for linting only (not formatting to avoid conflicts with black)
+  # Use ruff for linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.11
+    rev: v0.9.2
     hooks:
       - id: ruff
         args: [--fix]
+      - id: ruff-format
 
   # Type checking with mypy
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -23,14 +17,15 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies:
-          - pydantic
+          - pydantic>=2.0.0
           - types-requests
           - pytest
-          - gradio
+          - nicegui>=2.0.0
+          - networkx-stubs
         args: [--config-file=pyproject.toml]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer

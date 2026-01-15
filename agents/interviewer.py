@@ -14,18 +14,18 @@ You ask thoughtful, specific questions to understand:
 - Setting (time and place)
 - Key characters the user has in mind
 - Themes to explore
-- Content preferences and boundaries (including NSFW comfort level)
+- Content preferences and maturity level
 - Story length preference
 
 Be conversational and encouraging. Ask follow-up questions when answers are vague. Help users who aren't sure what they want by offering creative suggestions.
 
 When you have enough information, output a structured story brief in JSON format.
 
-IMPORTANT: For NSFW content levels, use these definitions:
-- "none": Keep it clean, no sexual or graphic content
-- "mild": Fade to black, implied intimacy, mild violence
-- "moderate": Some explicit scenes, detailed violence, mature themes
-- "explicit": Fully explicit content, no restrictions
+IMPORTANT: For content rating levels, use these definitions:
+- "general": Family-friendly content suitable for all audiences
+- "teen": Some mild themes, suitable for teenagers
+- "mature": Adult themes, some explicit content
+- "adult": Fully explicit content, no restrictions
 
 Always be respectful and non-judgmental about content preferences."""
 
@@ -72,7 +72,7 @@ Keep it friendly and conversational. The language question is important - always
 {history_text}
 
 Either:
-1. Ask follow-up questions if you need more information about language, characters, themes, tone, NSFW comfort level, or content preferences
+1. Ask follow-up questions if you need more information about language, characters, themes, tone, content rating, or content preferences
 2. If you have enough information, output a complete story brief in this exact JSON format:
 
 ```json
@@ -86,14 +86,14 @@ Either:
     "setting_place": "...",
     "target_length": "short_story|novella|novel",
     "language": "English|German|Spanish|French|etc.",
-    "nsfw_level": "none|mild|moderate|explicit",
+    "content_rating": "general|teen|mature|adult",
     "content_preferences": ["things to include..."],
     "content_avoid": ["things to avoid..."],
     "additional_notes": "..."
 }}
 ```
 
-Make sure to explicitly ask about NSFW comfort level and language if not yet discussed."""
+Make sure to explicitly ask about content rating and language if not yet discussed."""
 
         response = self.generate(prompt, context)
         self.conversation_history.append({"role": "assistant", "content": response})
@@ -123,7 +123,7 @@ Output ONLY a JSON object in this exact format (no other text):
     "setting_place": "...",
     "target_length": "short_story|novella|novel",
     "language": "English|German|Spanish|French|etc.",
-    "nsfw_level": "none|mild|moderate|explicit",
+    "content_rating": "general|teen|mature|adult",
     "content_preferences": ["..."],
     "content_avoid": ["..."],
     "additional_notes": "..."
@@ -143,7 +143,7 @@ Output ONLY a JSON object in this exact format (no other text):
                 setting_place="Unspecified",
                 target_length="short_story",
                 language="English",
-                nsfw_level="moderate",
+                content_rating="mature",
             )
 
         return brief

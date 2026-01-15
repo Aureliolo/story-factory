@@ -1,5 +1,18 @@
-"""UI module for Story Factory."""
+"""UI module for Story Factory.
 
-from .gradio_app import StoryFactoryUI, main
+NiceGUI-based web interface with:
+- Write Story page (Fundamentals + Live Writing)
+- World Builder page (entity/relationship management)
+- Projects page (project management)
+- Settings page (configuration)
+- Models page (Ollama model management)
+"""
 
-__all__ = ["StoryFactoryUI", "main"]
+from .app import StoryFactoryApp, create_app
+from .state import AppState
+
+__all__ = [
+    "StoryFactoryApp",
+    "create_app",
+    "AppState",
+]
