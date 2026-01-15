@@ -1,6 +1,7 @@
 """Writer Agent - Writes the actual prose."""
 
 from memory.story_state import Chapter, StoryState
+from utils.prompt_builder import PromptBuilder
 
 from .base import BaseAgent
 
@@ -54,9 +55,7 @@ class WriterAgent(BaseAgent):
         revision_feedback: str | None = None,
     ) -> str:
         """Write or revise a single chapter."""
-        brief = story_state.brief
-        if not brief:
-            raise ValueError("Story brief is required to write a chapter")
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
 
         # Get previous chapter summary if exists
@@ -66,40 +65,35 @@ class WriterAgent(BaseAgent):
             if prev and prev.content:
                 ctx_chars = self.settings.previous_chapter_context_chars
                 prev_chapter_summary = (
-                    f"\nPREVIOUS CHAPTER ENDED WITH:\n...{prev.content[-ctx_chars:]}"
+                    f"PREVIOUS CHAPTER ENDED WITH:\n...{prev.content[-ctx_chars:]}"
                 )
 
-        revision_note = ""
-        if revision_feedback:
-            revision_note = f"\n\nREVISION REQUESTED:\n{revision_feedback}\n\nAddress these issues while rewriting."
+        # Build prompt using PromptBuilder
+        builder = PromptBuilder()
+        builder.add_text(f'Write Chapter {chapter.number}: "{chapter.title}"')
+        builder.add_language_requirement(brief.language)
+        builder.add_section("CHAPTER OUTLINE", chapter.outline)
+        builder.add_text(f"STORY CONTEXT:\n{context}")
 
-        prompt = f"""Write Chapter {chapter.number}: "{chapter.title}"
+        if prev_chapter_summary:
+            builder.add_text(prev_chapter_summary)
 
-LANGUAGE: {brief.language} - Write the ENTIRE chapter in {brief.language}. All prose, dialogue, and narration must be in {brief.language}.
+        builder.add_brief_requirements(brief)
+        builder.add_revision_notes(revision_feedback or "")
 
-CHAPTER OUTLINE:
-{chapter.outline}
+        builder.add_text(
+            f"Write the complete chapter in {brief.language}. Include:\n"
+            "- Scene-setting description\n"
+            "- Character actions and dialogue\n"
+            "- Internal thoughts/feelings where appropriate\n"
+            "- Smooth transitions between scenes\n"
+            "- A hook or tension point at the end to pull readers forward\n\n"
+            "Target length: 1500-2500 words for this chapter.\n"
+            "Write in third person past tense unless the outline specifies otherwise.\n"
+            "Do not include the chapter title or number in your output - just the prose."
+        )
 
-STORY CONTEXT:
-{context}
-{prev_chapter_summary}
-
-GENRE: {brief.genre}
-TONE: {brief.tone}
-CONTENT RATING: {brief.content_rating}
-{revision_note}
-
-Write the complete chapter in {brief.language}. Include:
-- Scene-setting description
-- Character actions and dialogue
-- Internal thoughts/feelings where appropriate
-- Smooth transitions between scenes
-- A hook or tension point at the end to pull readers forward
-
-Target length: 1500-2500 words for this chapter.
-Write in third person past tense unless the outline specifies otherwise.
-Do not include the chapter title or number in your output - just the prose.
-IMPORTANT: Every word must be in {brief.language}!"""
+        prompt = builder.build()
 
         # Use lower temperature for revisions (more focused output)
         temp = self.settings.revision_temperature if revision_feedback else None
@@ -111,42 +105,27 @@ IMPORTANT: Every word must be in {brief.language}!"""
         revision_feedback: str | None = None,
     ) -> str:
         """Write a complete short story in one pass."""
-        brief = story_state.brief
-        if not brief:
-            raise ValueError("Story brief is required to write a short story")
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
 
-        chars = "\n".join(f"- {c.name}: {c.description}" for c in story_state.characters)
+        # Build prompt using PromptBuilder
+        builder = PromptBuilder()
+        builder.add_text(f"Write a complete short story based on this premise:\n{brief.premise}")
+        builder.add_language_requirement(brief.language)
+        builder.add_brief_requirements(brief)
+        builder.add_text(f"SETTING: {brief.setting_place}, {brief.setting_time}")
+        builder.add_character_summary(story_state.characters)
+        builder.add_section("PLOT OUTLINE", story_state.plot_summary)
+        builder.add_revision_notes(revision_feedback or "")
 
-        revision_note = ""
-        if revision_feedback:
-            revision_note = f"\n\nREVISION REQUESTED:\n{revision_feedback}\n\nAddress these issues while rewriting."
+        builder.add_text(
+            f"Write a complete, polished short story in {brief.language} (2000-4000 words).\n"
+            "Include a strong opening hook, rising tension, a satisfying climax, and resolution.\n"
+            "Show character growth and explore the themes naturally through the narrative.\n\n"
+            "Write only the story prose - no titles, headers, or meta-commentary."
+        )
 
-        prompt = f"""Write a complete short story based on this premise:
-
-LANGUAGE: {brief.language} - Write the ENTIRE story in {brief.language}. All prose, dialogue, and narration must be in {brief.language}.
-
-{brief.premise}
-
-GENRE: {brief.genre}
-TONE: {brief.tone}
-THEMES: {", ".join(brief.themes)}
-CONTENT RATING: {brief.content_rating}
-SETTING: {brief.setting_place}, {brief.setting_time}
-
-CHARACTERS:
-{chars}
-
-PLOT OUTLINE:
-{story_state.plot_summary}
-{revision_note}
-
-Write a complete, polished short story in {brief.language} (2000-4000 words).
-Include a strong opening hook, rising tension, a satisfying climax, and resolution.
-Show character growth and explore the themes naturally through the narrative.
-
-Write only the story prose - no titles, headers, or meta-commentary.
-IMPORTANT: Every word must be in {brief.language}!"""
+        prompt = builder.build()
 
         # Use lower temperature for revisions (more focused output)
         temp = self.settings.revision_temperature if revision_feedback else None
@@ -159,24 +138,25 @@ IMPORTANT: Every word must be in {brief.language}!"""
         direction: str | None = None,
     ) -> str:
         """Continue writing from where the text left off."""
-        brief = story_state.brief
-        if not brief:
-            raise ValueError("Story brief is required to continue scene")
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
 
-        prompt = f"""Continue this scene:
+        # Build prompt using PromptBuilder
+        builder = PromptBuilder()
+        builder.add_text("Continue this scene:")
+        builder.add_language_requirement(brief.language)
+        builder.add_text(current_text[-1500:])
 
-LANGUAGE: {brief.language} - Continue writing in {brief.language}. All prose must be in {brief.language}.
+        if direction:
+            builder.add_section("DIRECTION", direction)
+        else:
+            builder.add_text("Continue naturally to the next beat.")
 
-{current_text[-1500:]}
+        builder.add_brief_requirements(brief)
+        builder.add_text(
+            f"Continue seamlessly from where the text ends. Write 500-1000 more words in {brief.language}.\n"
+            "Maintain the same voice, tense, and style."
+        )
 
-{"DIRECTION: " + direction if direction else "Continue naturally to the next beat."}
-
-GENRE: {brief.genre}
-TONE: {brief.tone}
-CONTENT RATING: {brief.content_rating}
-
-Continue seamlessly from where the text ends. Write 500-1000 more words in {brief.language}.
-Maintain the same voice, tense, and style."""
-
+        prompt = builder.build()
         return self.generate(prompt, context)

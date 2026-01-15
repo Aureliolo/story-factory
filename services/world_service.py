@@ -7,6 +7,7 @@ from typing import Any
 from memory.entities import Entity, Relationship
 from memory.story_state import StoryState
 from memory.world_database import WorldDatabase
+from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,14 @@ class WorldService:
     This service handles extraction of entities from story content,
     entity CRUD operations, and relationship management.
     """
+
+    def __init__(self, settings: Settings | None = None):
+        """Initialize WorldService.
+
+        Args:
+            settings: Application settings. If None, loads from settings.json.
+        """
+        self.settings = settings or Settings.load()
 
     # ========== ENTITY EXTRACTION ==========
 

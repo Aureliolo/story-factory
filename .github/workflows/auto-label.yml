@@ -1,0 +1,25 @@
+name: Auto Label PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  add-label:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Add pre-commit.ci autofix label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number,
+              labels: ['pre-commit.ci autofix']
+            });

@@ -44,9 +44,9 @@ class ServiceContainer:
         self.settings = settings or Settings.load()
         self.project = ProjectService(self.settings)
         self.story = StoryService(self.settings)
-        self.world = WorldService()
+        self.world = WorldService(self.settings)
         self.model = ModelService(self.settings)
-        self.export = ExportService()
+        self.export = ExportService(self.settings)
 
 
 __all__ = [

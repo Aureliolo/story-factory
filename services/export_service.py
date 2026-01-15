@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 
 from memory.story_state import StoryState
+from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,14 @@ class ExportService:
 
     Supports markdown, plain text, EPUB, and PDF export.
     """
+
+    def __init__(self, settings: Settings | None = None):
+        """Initialize ExportService.
+
+        Args:
+            settings: Application settings. If None, loads from settings.json.
+        """
+        self.settings = settings or Settings.load()
 
     def to_markdown(self, state: StoryState) -> str:
         """Export story as markdown.
