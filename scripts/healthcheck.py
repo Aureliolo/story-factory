@@ -78,7 +78,7 @@ def check_output_directory() -> tuple[bool, str]:
 
 def check_logs_directory() -> tuple[bool, str]:
     """Check if logs directory exists and is writable."""
-    logs_dir = Path(__file__).parent / "logs"
+    logs_dir = Path(__file__).parent.parent / "logs"
     try:
         logs_dir.mkdir(parents=True, exist_ok=True)
         test_file = logs_dir / ".write_test"

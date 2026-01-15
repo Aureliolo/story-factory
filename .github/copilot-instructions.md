@@ -15,17 +15,16 @@ This is a Python-based multi-agent system for generating stories using local AI 
 - Test: `pytest` (runs all tests in `tests/` directory)
 - Test with coverage: `pytest --cov`
 - Write unit tests for new functionality using pytest
-- Place test files in the `tests/` directory with `test_*.py` naming convention
+- Place test files in `tests/unit/` with `test_*.py` naming convention
 
 ### Development Flow
 - Install dependencies: `pip install -r requirements.txt`
-- Install dev dependencies: `pip install -r requirements-dev.txt`
 - Run the application: `python main.py` (starts web UI on http://localhost:7860)
 - Run in CLI mode: `python main.py --cli`
 
 ### After Every Change
 **IMPORTANT**: After making code changes, always:
-1. Run `black .` to format code
+1. Run `ruff format .` to format code
 2. Run `ruff check .` to lint
 3. Run `pytest` to verify tests pass
 4. Commit and push changes
@@ -38,10 +37,14 @@ This ensures code quality and prevents broken builds.
 - `main.py`: Entry point for the application (supports both web UI and CLI modes)
 - `settings.py`: Settings management and model registry
 - `settings.json`: User configuration file (not in git, copy from `settings.example.json`)
-- `requirements.txt`: Production Python dependencies
-- `requirements-dev.txt`: Development and testing dependencies
-- `MODELS.md`: Model recommendations and usage guidelines
-- `MODELS_ANALYSIS.md`: Detailed model analysis and comparisons
+- `requirements.txt`: Python dependencies (runtime, testing, and code quality)
+- `docs/`: Documentation files
+  - `MODELS.md`: Model recommendations and usage guidelines
+  - `ARCHITECTURE.md`: System architecture documentation
+  - `UX_UI_IMPROVEMENTS.md`: UI/UX feature documentation
+- `scripts/`: Utility scripts
+  - `healthcheck.py`: System health check utility
+  - `start.ps1`: PowerShell launcher script
 - `agents/`: AI agent implementations
   - `base.py`: Base agent class with common functionality
   - `interviewer.py`: Gathers story requirements from users
@@ -49,19 +52,35 @@ This ensures code quality and prevents broken builds.
   - `writer.py`: Generates prose content
   - `editor.py`: Polishes and refines writing
   - `continuity.py`: Detects plot holes and inconsistencies
+  - `validator.py`: Validates AI responses
 - `workflows/`: Agent coordination and orchestration
   - `orchestrator.py`: Manages the multi-agent workflow
-- `memory/`: Story state management
+- `memory/`: Story state and world management
   - `story_state.py`: Maintains story context across agents
+  - `entities.py`: Entity and relationship models
+  - `world_database.py`: SQLite + NetworkX world database
+- `services/`: Business logic layer
+  - `project_service.py`: Project CRUD operations
+  - `story_service.py`: Story generation workflow
+  - `world_service.py`: Entity management
+  - `model_service.py`: Ollama model operations
+  - `export_service.py`: Export to various formats
 - `utils/`: Utility modules
   - `json_parser.py`: JSON extraction and parsing utilities
   - `logging_config.py`: Logging configuration and setup
+  - `error_handling.py`: Error handling utilities
 - `ui/`: User interface components (NiceGUI)
   - `app.py`: Main NiceGUI application
-  - `pages/`: Page components (write, world, settings, models)
-  - `components/`: Reusable UI components (header, chat, graph)
-- `output/stories/`: Generated story outputs (gitignored)
+  - `state.py`: Centralized UI state management
+  - `theme.py`: Colors, styles, and theme utilities
+  - `pages/`: Page components (write, world, projects, settings, models)
+  - `components/`: Reusable UI components (header, chat, graph, common)
+- `output/`: Generated outputs (gitignored)
+  - `stories/`: Story output files
+  - `worlds/`: World database files
 - `tests/`: Test suite using pytest
+  - `unit/`: Unit tests
+  - `conftest.py`: Shared pytest fixtures
 - `logs/`: Application logs (logs written to `logs/story_factory.log`)
 - `.github/workflows/`: CI/CD workflows
 
@@ -82,17 +101,18 @@ This ensures code quality and prevents broken builds.
 
 6. **Dependencies**:
    - Minimize external dependencies
-   - When adding new dependencies, add them to `requirements.txt` or `requirements-dev.txt` as appropriate
+   - When adding new dependencies, add them to `requirements.txt`
    - Pin dependency versions with ranges (e.g., `>=4.0.0,<7.0.0`)
 
 7. **Testing**:
    - Write tests for new utility functions and critical logic
    - Mock Ollama API calls in tests to avoid requiring a running Ollama instance
    - Use pytest fixtures for test setup
+   - Place unit tests in `tests/unit/`
 
 8. **Documentation**:
    - Update README.md for significant feature changes
-   - Update MODELS.md when adding model recommendations
+   - Update docs/MODELS.md when adding model recommendations
    - Keep docstrings up to date with code changes
 
 9. **Logging**:
@@ -101,10 +121,10 @@ This ensures code quality and prevents broken builds.
    - Follow existing logging patterns for consistency
 
 10. **Web UI (NiceGUI)**:
-    - **Framework**: Uses NiceGUI 2.24.2+ for the web interface
+    - **Framework**: Uses NiceGUI 3.x for the web interface
     - **Pattern**: Page-based architecture with reusable components
     - **UI Elements**: Import from `nicegui import ui`
-    - **HTML Elements**: Use `ui.html(content)` - no `sanitize` parameter (not supported)
+    - **HTML Elements**: Use `ui.html(content, sanitize=False)` for trusted HTML with JavaScript
     - **Component Types**: `ui.card()`, `ui.button()`, `ui.input()`, `ui.label()`, etc.
     - **State Management**: Centralized in `ui/state.py` via AppState class
     - **Service Integration**: Pages receive ServiceContainer via dependency injection
@@ -120,6 +140,6 @@ The system follows this workflow:
 1. **Interview Phase**: Gather requirements from user
 2. **Architecture Phase**: Design world, characters, and plot
 3. **Writing Phase**: Iterative chapter generation with Writer → Editor → Continuity checking
-4. **Output**: Export completed story as markdown
+4. **Output**: Export completed story as markdown, text, EPUB, or PDF
 
 When modifying the workflow, maintain this structure and ensure agents can communicate effectively through the story state.
