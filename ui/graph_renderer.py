@@ -1,13 +1,29 @@
 """Graph rendering utilities for vis.js visualization."""
 
+import html
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from memory.world_database import WorldDatabase
 from ui.theme import ENTITY_COLORS, RELATION_COLORS
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class GraphRenderResult:
+    """Result of rendering a graph for vis.js.
+
+    Attributes:
+        html: HTML string for the graph container (no script tags).
+        js: JavaScript string for graph initialization.
+    """
+
+    html: str
+    js: str
+
 
 # Entity type shapes
 ENTITY_SHAPES = {
@@ -26,7 +42,7 @@ def render_graph_html(
     height: int = 500,
     selected_entity_id: str | None = None,
     container_id: str = "graph-container",
-) -> tuple[str, str]:
+) -> GraphRenderResult:
     """Generate vis.js graph HTML and JavaScript separately.
 
     Args:
@@ -38,7 +54,7 @@ def render_graph_html(
         container_id: Unique ID for the graph container
 
     Returns:
-        Tuple of (HTML string for container, JavaScript string for initialization)
+        GraphRenderResult with HTML and JavaScript strings.
     """
     graph = world_db.get_graph()
 
@@ -144,16 +160,46 @@ def render_graph_html(
     # JavaScript initialization (to be run via ui.run_javascript)
     js = f"""
     (function() {{
-        // Wait for vis-network to be available
+        // Wait for vis-network to be available with timeout
+        var attempts = 0;
+        var maxAttempts = 50; // 5 seconds max (50 * 100ms)
+
         function initGraph() {{
+            attempts++;
             if (typeof vis === 'undefined') {{
+                if (attempts >= maxAttempts) {{
+                    console.error('vis-network failed to load after 5 seconds');
+                    var container = document.getElementById('{container_id}');
+                    if (container) {{
+                        container.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ef4444;">' +
+                            '<p>Graph library failed to load. Please check your network connection and refresh.</p></div>';
+                    }}
+                    return;
+                }}
                 setTimeout(initGraph, 100);
                 return;
             }}
 
-            var isDarkMode = document.body.classList.contains('dark') ||
-                             document.documentElement.classList.contains('dark') ||
-                             window.matchMedia('(prefers-color-scheme: dark)').matches;
+            // Robust dark mode detection for NiceGUI
+            var isDarkMode = (function() {{
+                // Check body class (NiceGUI's primary method)
+                if (document.body.classList.contains('dark')) return true;
+                // Check html element
+                if (document.documentElement.classList.contains('dark')) return true;
+                // Check for NiceGUI's dark theme attribute
+                if (document.body.getAttribute('data-theme') === 'dark') return true;
+                // Check computed background color (fallback)
+                var bgColor = getComputedStyle(document.body).backgroundColor;
+                if (bgColor) {{
+                    var rgb = bgColor.match(/\\d+/g);
+                    if (rgb && rgb.length >= 3) {{
+                        var luminance = (parseInt(rgb[0]) * 0.299 + parseInt(rgb[1]) * 0.587 + parseInt(rgb[2]) * 0.114);
+                        if (luminance < 128) return true;
+                    }}
+                }}
+                // Check system preference as last resort
+                return window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }})();
             var fontColor = isDarkMode ? '#e5e7eb' : '#374151';
             var bgColor = isDarkMode ? '#1f2937' : '#ffffff';
 
@@ -246,13 +292,16 @@ def render_graph_html(
     }})();
     """
 
-    return html, js
+    return GraphRenderResult(html=html, js=js)
 
 
 def _build_tooltip(data: dict[str, Any]) -> str:
-    """Build HTML tooltip for a node."""
-    name = data.get("name", "Unknown")
-    entity_type = data.get("type", "unknown").title()
+    """Build HTML tooltip for a node.
+
+    All user-provided content is HTML-escaped to prevent XSS.
+    """
+    name = html.escape(data.get("name", "Unknown"))
+    entity_type = html.escape(data.get("type", "unknown").title())
     description = data.get("description", "")
 
     tooltip = f"<b>{name}</b><br><i>{entity_type}</i>"
@@ -260,7 +309,7 @@ def _build_tooltip(data: dict[str, Any]) -> str:
         # Truncate long descriptions
         if len(description) > 200:
             description = description[:200] + "..."
-        tooltip += f"<br><br>{description}"
+        tooltip += f"<br><br>{html.escape(description)}"
 
     return tooltip
 
@@ -446,8 +495,9 @@ def render_path_result(world_db: WorldDatabase, path: list[str]) -> str:
         entity = world_db.get_entity(entity_id)
         if entity:
             color = ENTITY_COLORS.get(entity.type, "#607D8B")
+            escaped_name = html.escape(entity.name)
             parts.append(
-                f"<span style='background: {color}22; color: {color}; padding: 4px 8px; border-radius: 4px; font-weight: bold;'>{entity.name}</span>"
+                f"<span style='background: {color}22; color: {color}; padding: 4px 8px; border-radius: 4px; font-weight: bold;'>{escaped_name}</span>"
             )
 
             # Add arrow if not last
@@ -456,7 +506,8 @@ def render_path_result(world_db: WorldDatabase, path: list[str]) -> str:
                 next_id = path[i + 1]
                 rel = world_db.get_relationship_between(entity_id, next_id)
                 if rel:
-                    parts.append(f"<span class='path-arrow'>--{rel.relation_type}--></span>")
+                    escaped_rel = html.escape(rel.relation_type)
+                    parts.append(f"<span class='path-arrow'>--{escaped_rel}--></span>")
                 else:
                     parts.append("<span class='path-arrow'>---></span>")
 
@@ -493,14 +544,16 @@ def render_centrality_result(world_db: WorldDatabase, limit: int = 10) -> str:
     rows = []
     for i, (entity, degree) in enumerate(most_connected, 1):
         color = ENTITY_COLORS.get(entity.type, "#607D8B")
+        escaped_type = html.escape(entity.type)
+        escaped_name = html.escape(entity.name)
         rows.append(
             f"""
             <tr class='centrality-row'>
                 <td style='padding: 8px; text-align: center;'>{i}</td>
                 <td style='padding: 8px;'>
-                    <span style='background: {color}22; color: {color}; padding: 2px 6px; border-radius: 3px;'>{entity.type}</span>
+                    <span style='background: {color}22; color: {color}; padding: 2px 6px; border-radius: 3px;'>{escaped_type}</span>
                 </td>
-                <td style='padding: 8px; font-weight: bold;'>{entity.name}</td>
+                <td style='padding: 8px; font-weight: bold;'>{escaped_name}</td>
                 <td style='padding: 8px; text-align: center;'>{degree}</td>
             </tr>
         """
@@ -556,8 +609,9 @@ def render_communities_result(world_db: WorldDatabase) -> str:
             entity = world_db.get_entity(entity_id)
             if entity:
                 color = ENTITY_COLORS.get(entity.type, "#607D8B")
+                escaped_name = html.escape(entity.name)
                 members.append(
-                    f"<span style='background: {color}22; color: {color}; padding: 2px 6px; border-radius: 3px; margin: 2px;'>{entity.name}</span>"
+                    f"<span style='background: {color}22; color: {color}; padding: 2px 6px; border-radius: 3px; margin: 2px;'>{escaped_name}</span>"
                 )
 
         overflow = ""

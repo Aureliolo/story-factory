@@ -243,7 +243,7 @@ class Settings:
     learning_min_samples: int = 5  # Minimum samples before making recommendations
     learning_confidence_threshold: float = 0.8  # For auto-applying in balanced mode
 
-    def save(self):
+    def save(self) -> None:
         """Save settings to JSON file."""
         # Validate before saving
         self.validate()

@@ -300,10 +300,11 @@ class ModelModeService:
             )
 
             speed_display = f"{tokens_per_second:.1f}" if tokens_per_second else "N/A"
+            time_display = f"{time_seconds:.1f}" if time_seconds is not None else "N/A"
 
             logger.info(
                 f"Recorded generation score {score_id}: {agent_role}/{model_id} "
-                f"(mode={mode.id}, tokens={tokens_generated}, time={time_seconds:.1f}s, "
+                f"(mode={mode.id}, tokens={tokens_generated}, time={time_display}s, "
                 f"speed={speed_display} t/s)"
             )
             return score_id
@@ -396,10 +397,12 @@ class ModelModeService:
                 tokens_per_second=tokens_per_second,
                 vram_used_gb=vram_used_gb,
             )
+            time_display = f"{time_seconds:.1f}" if time_seconds is not None else "N/A"
+            speed_display = f"{tokens_per_second:.1f}" if tokens_per_second else "N/A"
             logger.debug(
                 f"Updated performance metrics for {score_id}: "
-                f"tokens={tokens_generated}, time={time_seconds:.1f}s, "
-                f"speed={tokens_per_second:.1f if tokens_per_second else 'N/A'} t/s"
+                f"tokens={tokens_generated}, time={time_display}s, "
+                f"speed={speed_display} t/s"
             )
         except Exception as e:
             logger.error(f"Failed to update performance metrics for {score_id}: {e}", exc_info=True)
