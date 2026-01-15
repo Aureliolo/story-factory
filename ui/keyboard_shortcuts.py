@@ -134,6 +134,13 @@ class KeyboardShortcuts:
         )
 
     def _switch_tab(self, tab_name: str) -> None:
-        """Switch to a specific tab."""
-        self.state.active_tab = tab_name
-        ui.notify(f"Switched to {tab_name.title()} tab", type="info")
+        """Switch to a specific tab using route navigation."""
+        routes = {
+            "write": "/",
+            "world": "/world",
+            "projects": "/projects",
+            "settings": "/settings",
+            "models": "/models",
+        }
+        route = routes.get(tab_name, "/")
+        ui.navigate.to(route)
