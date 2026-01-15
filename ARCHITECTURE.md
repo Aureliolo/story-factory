@@ -108,11 +108,30 @@ class AppState:
     feedback_mode: str = "per-chapter"
 ```
 
-### 2. Service Injection
+### 2. Service Container Pattern
 ```python
-# Services created once, passed to UI
+# services/__init__.py
+class ServiceContainer:
+    """Dependency injection container for all services.
+    
+    Creates and holds instances of all service classes,
+    injecting settings as needed. This provides:
+    - Single place to initialize all services
+    - Easy dependency management
+    - Consistent settings across services
+    """
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.project = ProjectService(settings)
+        self.story = StoryService(settings)
+        self.world = WorldService()
+        self.model = ModelService(settings)
+        self.export = ExportService()
+
+# main.py - Services created once and passed to UI
+settings = Settings.load()
 services = ServiceContainer(settings)
-ui = StoryFactoryApp(services)
+app = create_app(services)
 ```
 
 ### 3. Event Flow
@@ -122,8 +141,45 @@ User Click → UI Handler → Service Method → Return Result → UI Update
 
 ### 4. No Global State
 - Services are stateless (receive what they need)
-- UI state is explicit and centralized
+- UI state is explicit and centralized in AppState
 - No hidden singletons
+- Settings passed via dependency injection
+
+## Error Handling Strategy
+
+### 1. Service Layer
+Services use explicit error handling with custom exceptions:
+```python
+# Ollama connection errors
+from utils.error_handling import handle_ollama_errors
+
+@handle_ollama_errors(default_value=None)
+def get_models() -> list[str]:
+    return ollama.list()
+```
+
+### 2. UI Layer
+UI components catch exceptions and show user-friendly notifications:
+```python
+try:
+    result = self.services.story.write_chapter(state, chapter_num)
+    ui.notify("Chapter written!", type="positive")
+except Exception as e:
+    logger.error(f"Write failed: {e}")
+    ui.notify(f"Error: {e}", type="negative")
+```
+
+### 3. Agent Layer
+Agents use retry logic and validation:
+- Retry with exponential backoff on Ollama errors
+- Response validation for language/content correctness
+- Graceful degradation (skip validation if validator fails)
+
+### 4. Logging
+- Module-level loggers: `logger = logging.getLogger(__name__)`
+- Centralized configuration in utils/logging_config.py
+- Default: INFO level, file: logs/story_factory.log
+- Configurable via CLI args: --log-level, --log-file
 
 ## API Patterns
 

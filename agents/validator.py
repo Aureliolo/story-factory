@@ -30,16 +30,18 @@ ALWAYS respond with ONLY one word: TRUE or FALSE. Nothing else."""
 class ValidatorAgent(BaseAgent):
     """Agent that validates AI responses for basic correctness."""
 
-    # Use a small, fast model for validation
-    DEFAULT_VALIDATOR_MODEL = "qwen2.5:0.5b"  # Small but capable
-
     def __init__(self, model: str | None = None, settings=None):
+        # Get validator model from settings, fallback to small model
+        default_model = "qwen2.5:0.5b"
+        if settings and hasattr(settings, "agent_models"):
+            default_model = settings.agent_models.get("validator", default_model)
+
         super().__init__(
             name="Validator",
             role="Response Validator",
             system_prompt=VALIDATOR_SYSTEM_PROMPT,
             agent_role="validator",
-            model=model or self.DEFAULT_VALIDATOR_MODEL,
+            model=model or default_model,
             settings=settings,
         )
 
