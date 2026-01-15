@@ -6,7 +6,7 @@
 - **Total Coverage**: 46.6%
 - **Target Coverage**: 70% minimum, 80% goal
 - **Unit Tests**: 100 tests
-- **Smoke Tests**: 13 tests  
+- **Smoke Tests**: 13 tests
 - **Integration Tests**: 16 tests (13 original + 3 for main.py)
 - **E2E Tests**: 7 tests
 
@@ -136,7 +136,7 @@ Need to:
 4. `workflows/orchestrator.py` (4) - ⚠️ Should log and preserve context
 5. `ui/pages/*.py` (13) - ✅ UI error handling for user feedback
 
-**Recommendation**: 
+**Recommendation**:
 - Add logging to all exception handlers
 - Consider more specific exception types where possible
 - Document why broad exceptions are needed
