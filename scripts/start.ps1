@@ -4,11 +4,7 @@
 $Host.UI.RawUI.WindowTitle = "Story Factory Control Panel"
 
 # Get the project root directory (parent of scripts/)
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot = Split-Path -Parent $scriptDir
-if (-not $projectRoot -or $projectRoot -eq "") {
-    $projectRoot = Get-Location
-}
+$projectRoot = Split-Path -Parent $PSScriptRoot
 
 function Write-Header {
     Clear-Host
