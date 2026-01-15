@@ -67,6 +67,7 @@ class ProjectsPage:
                     description="Create a new project to get started.",
                     action_text="Create Project",
                     on_action=self._create_project,
+                    dark_mode=self.state.dark_mode,
                 )
             return
 

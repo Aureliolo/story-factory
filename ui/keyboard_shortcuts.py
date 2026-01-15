@@ -33,31 +33,31 @@ class KeyboardShortcuts:
             // Ctrl+N - New project
             if (event.ctrlKey && event.key === 'n') {
                 event.preventDefault();
-                emitEvent('shortcut:new-project');
+                window.__nicegui.emit('shortcut:new-project');
             }
 
             // Ctrl+S - Save (placeholder)
             if (event.ctrlKey && event.key === 's') {
                 event.preventDefault();
-                emitEvent('shortcut:save');
+                window.__nicegui.emit('shortcut:save');
             }
 
             // Ctrl+/ - Show shortcuts
             if (event.ctrlKey && event.key === '/') {
                 event.preventDefault();
-                emitEvent('shortcut:show-help');
+                window.__nicegui.emit('shortcut:show-help');
             }
 
             // Ctrl+D - Toggle dark mode
             if (event.ctrlKey && event.key === 'd') {
                 event.preventDefault();
-                emitEvent('shortcut:toggle-dark-mode');
+                window.__nicegui.emit('shortcut:toggle-dark-mode');
             }
 
             // Alt+1-5 - Tab navigation
             if (event.altKey && ['1','2','3','4','5'].includes(event.key)) {
                 event.preventDefault();
-                emitEvent('shortcut:tab-' + event.key);
+                window.__nicegui.emit('shortcut:tab-' + event.key);
             }
         });
         """

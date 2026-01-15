@@ -129,6 +129,7 @@ def empty_state(
     description: str,
     action_text: str | None = None,
     on_action=None,
+    dark_mode: bool = False,
 ) -> None:
     """Create an empty state display.
 
@@ -138,11 +139,18 @@ def empty_state(
         description: Empty state description.
         action_text: Optional action button text.
         on_action: Optional action callback.
+        dark_mode: Whether to use dark mode styling.
     """
+    from ui.theme import get_text_class
+
+    icon_class = "text-gray-400" if not dark_mode else "text-gray-500"
+    title_class = get_text_class(dark_mode, variant="secondary")
+    desc_class = get_text_class(dark_mode, variant="muted")
+
     with ui.column().classes("w-full items-center justify-center gap-4 py-12"):
-        ui.icon(icon, size="xl").classes("text-gray-400")
-        ui.label(title).classes("text-xl text-gray-500")
-        ui.label(description).classes("text-gray-400")
+        ui.icon(icon, size="xl").classes(icon_class)
+        ui.label(title).classes(f"text-xl {title_class}")
+        ui.label(description).classes(desc_class)
 
         if action_text and on_action:
             ui.button(action_text, on_click=on_action).props("color=primary")
@@ -152,10 +160,22 @@ def loading_skeleton(width: str = "100%", height: str = "20px") -> None:
     """Create a loading skeleton placeholder.
 
     Args:
-        width: Skeleton width.
-        height: Skeleton height.
+        width: Skeleton width (must be valid CSS unit like '100%', '200px').
+        height: Skeleton height (must be valid CSS unit like '20px', '2rem').
+
+    Raises:
+        ValueError: If width or height contain invalid characters.
     """
-    # Use sanitize=False since we're generating safe HTML ourselves
+    import re
+
+    # Validate CSS units to prevent XSS
+    css_unit_pattern = r"^[\d.]+(px|%|em|rem|vh|vw)$"
+    if not re.match(css_unit_pattern, width):
+        raise ValueError(f"Invalid width CSS unit: {width}")
+    if not re.match(css_unit_pattern, height):
+        raise ValueError(f"Invalid height CSS unit: {height}")
+
+    # Use sanitize=False since we're generating safe HTML ourselves after validation
     ui.html(
         f'<div class="animate-pulse bg-gray-200 rounded" '
         f'style="width: {width}; height: {height};"></div>',
@@ -163,17 +183,24 @@ def loading_skeleton(width: str = "100%", height: str = "20px") -> None:
     )
 
 
-def section_header(title: str, icon: str | None = None, actions: list | None = None) -> None:
+def section_header(
+    title: str, icon: str | None = None, actions: list | None = None, dark_mode: bool = False
+) -> None:
     """Create a consistent section header.
 
     Args:
         title: Section title.
         icon: Optional icon name.
         actions: Optional list of button configs [{"text": "...", "on_click": ...}, ...]
+        dark_mode: Whether to use dark mode styling.
     """
+    from ui.theme import get_text_class
+
+    icon_class = get_text_class(dark_mode, variant="secondary")
+
     with ui.row().classes("w-full items-center mb-4"):
         if icon:
-            ui.icon(icon, size="md").classes("text-gray-700")
+            ui.icon(icon, size="md").classes(icon_class)
         ui.label(title).classes("text-lg font-semibold")
         ui.space()
 

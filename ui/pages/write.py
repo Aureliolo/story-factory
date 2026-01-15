@@ -77,6 +77,7 @@ class WritePage:
             icon="folder_off",
             title="No Project Selected",
             description="Select a project from the header dropdown or create a new one.",
+            dark_mode=self.state.dark_mode,
         )
 
     def _build_fundamentals(self) -> None:
@@ -267,6 +268,7 @@ class WritePage:
                 icon="edit_off",
                 title="Story structure not ready",
                 description="Complete the interview and build the story structure first.",
+                dark_mode=self.state.dark_mode,
             )
             return
 

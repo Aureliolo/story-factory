@@ -217,7 +217,7 @@ No new dependencies added - all improvements use existing NiceGUI and Tailwind C
 
 ### Testing
 - All 83 existing tests pass
-- Code formatted with black
+- Code formatted with ruff
 - Linted with ruff
 - Manual testing completed
 
