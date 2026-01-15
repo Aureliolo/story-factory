@@ -27,3 +27,16 @@ updates:
       actions:
         patterns:
           - "*"
+
+  # CDN dependencies tracked via package.json
+  # When Dependabot updates vis-network, also update the CDN URL in:
+  # ui/graph_renderer.py (search for "unpkg.com/vis-network")
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "deps(cdn)"
+    rebase-strategy: "auto"

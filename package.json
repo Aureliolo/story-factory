@@ -1,0 +1,9 @@
+{
+  "name": "story-factory-cdn-deps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CDN dependency tracking for Dependabot (not used for npm install)",
+  "dependencies": {
+    "vis-network": "9.1.9"
+  }
+}
