@@ -103,10 +103,13 @@ class ScoringService:
             # Enforce maximum tracking limit to prevent unbounded memory growth
             self._enforce_tracking_limits()
 
-        # Update the score with performance metrics
-        # Note: ModelModeService.record_generation handles the initial record,
-        # we'd need to add an update method for performance metrics
-        # For now, we log it
+        # Persist performance metrics to database
+        self._mode_service.update_performance_metrics(
+            score_id,
+            tokens_generated=tokens_generated,
+            time_seconds=time_seconds,
+        )
+
         logger.debug(
             f"Generation complete: score_id={score_id}, "
             f"tokens={tokens_generated}, time={time_seconds:.1f}s"

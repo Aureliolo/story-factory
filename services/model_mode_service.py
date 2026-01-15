@@ -366,6 +366,45 @@ class ModelModeService:
             logger.error(f"Failed to record implicit signal for {score_id}: {e}", exc_info=True)
             raise
 
+    def update_performance_metrics(
+        self,
+        score_id: int,
+        *,
+        tokens_generated: int | None = None,
+        time_seconds: float | None = None,
+        tokens_per_second: float | None = None,
+        vram_used_gb: float | None = None,
+    ) -> None:
+        """Update a score record with performance metrics.
+
+        Args:
+            score_id: The score record ID.
+            tokens_generated: Number of tokens generated.
+            time_seconds: Generation time in seconds.
+            tokens_per_second: Generation speed (calculated if not provided).
+            vram_used_gb: VRAM used during generation.
+        """
+        # Calculate tokens_per_second if not provided
+        if tokens_per_second is None and tokens_generated and time_seconds and time_seconds > 0:
+            tokens_per_second = tokens_generated / time_seconds
+
+        try:
+            self._db.update_performance_metrics(
+                score_id,
+                tokens_generated=tokens_generated,
+                time_seconds=time_seconds,
+                tokens_per_second=tokens_per_second,
+                vram_used_gb=vram_used_gb,
+            )
+            logger.debug(
+                f"Updated performance metrics for {score_id}: "
+                f"tokens={tokens_generated}, time={time_seconds:.1f}s, "
+                f"speed={tokens_per_second:.1f if tokens_per_second else 'N/A'} t/s"
+            )
+        except Exception as e:
+            logger.error(f"Failed to update performance metrics for {score_id}: {e}", exc_info=True)
+            raise
+
     # === LLM Quality Judge ===
 
     def judge_quality(
@@ -425,7 +464,7 @@ Respond ONLY with JSON:
             logger.debug(f"LLM judge raw response: {text[:200]}")
 
             data = extract_json(text)
-            if data:
+            if data and isinstance(data, dict):
                 scores = QualityScores(
                     prose_quality=float(data.get("prose_quality", 5)),
                     instruction_following=float(data.get("instruction_following", 5)),
@@ -436,7 +475,7 @@ Respond ONLY with JSON:
                 )
                 return scores
             else:
-                logger.warning(f"No JSON found in judge response: {text}")
+                logger.warning(f"No valid JSON dict found in judge response: {text}")
 
         except json.JSONDecodeError as e:
             logger.warning(f"Quality judgment JSON parse error: {e}")

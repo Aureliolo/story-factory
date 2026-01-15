@@ -10,6 +10,16 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from memory.mode_models import (
+    GenerationScore,
+    ImplicitSignals,
+    ModelPerformanceSummary,
+    PerformanceMetrics,
+    QualityScores,
+    RecommendationType,
+    TuningRecommendation,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -252,6 +262,58 @@ class ModeDatabase:
                 conn.commit()
         except sqlite3.Error as e:
             logger.error(f"Failed to update score {score_id}: {e}", exc_info=True)
+            raise
+
+    def update_performance_metrics(
+        self,
+        score_id: int,
+        *,
+        tokens_generated: int | None = None,
+        time_seconds: float | None = None,
+        tokens_per_second: float | None = None,
+        vram_used_gb: float | None = None,
+    ) -> None:
+        """Update an existing score with performance metrics.
+
+        Args:
+            score_id: The score record ID.
+            tokens_generated: Number of tokens generated.
+            time_seconds: Generation time in seconds.
+            tokens_per_second: Generation speed.
+            vram_used_gb: VRAM used during generation.
+
+        Raises:
+            sqlite3.Error: If database operation fails.
+        """
+        updates: list[str] = []
+        values: list[int | float] = []
+
+        if tokens_generated is not None:
+            updates.append("tokens_generated = ?")
+            values.append(tokens_generated)
+        if time_seconds is not None:
+            updates.append("time_seconds = ?")
+            values.append(time_seconds)
+        if tokens_per_second is not None:
+            updates.append("tokens_per_second = ?")
+            values.append(tokens_per_second)
+        if vram_used_gb is not None:
+            updates.append("vram_used_gb = ?")
+            values.append(vram_used_gb)
+
+        if not updates:
+            return
+
+        values.append(score_id)
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    f"UPDATE generation_scores SET {', '.join(updates)} WHERE id = ?",
+                    values,
+                )
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update performance metrics for {score_id}: {e}", exc_info=True)
             raise
 
     def get_scores_for_model(
@@ -526,6 +588,8 @@ class ModeDatabase:
     ) -> None:
         """Save or update a custom generation mode.
 
+        Uses INSERT ... ON CONFLICT to preserve created_at on updates.
+
         Raises:
             sqlite3.Error: If database operation fails.
         """
@@ -533,11 +597,19 @@ class ModeDatabase:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO custom_modes (
+                    INSERT INTO custom_modes (
                         id, name, description, agent_models_json,
                         agent_temperatures_json, vram_strategy, is_experimental,
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name,
+                        description = excluded.description,
+                        agent_models_json = excluded.agent_models_json,
+                        agent_temperatures_json = excluded.agent_temperatures_json,
+                        vram_strategy = excluded.vram_strategy,
+                        is_experimental = excluded.is_experimental,
+                        updated_at = datetime('now')
                     """,
                     (
                         mode_id,
@@ -694,13 +766,11 @@ class ModeDatabase:
         self,
         agent_role: str | None = None,
         genre: str | None = None,
-    ) -> list:
+    ) -> list[ModelPerformanceSummary]:
         """Get model performance summaries.
 
-        Returns list of ModelPerformanceSummary-like objects.
+        Returns list of ModelPerformanceSummary objects.
         """
-        from memory.mode_models import ModelPerformanceSummary
-
         query = "SELECT * FROM model_performance WHERE 1=1"
         params: list = []
 
@@ -735,10 +805,8 @@ class ModeDatabase:
                 )
             return results
 
-    def get_recent_recommendations(self, limit: int = 10) -> list:
+    def get_recent_recommendations(self, limit: int = 10) -> list[TuningRecommendation]:
         """Get recent recommendations as TuningRecommendation objects."""
-        from memory.mode_models import RecommendationType, TuningRecommendation
-
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
@@ -780,15 +848,8 @@ class ModeDatabase:
         agent_role: str | None = None,
         genre: str | None = None,
         limit: int = 1000,
-    ) -> list:
+    ) -> list[GenerationScore]:
         """Get all scores as GenerationScore objects."""
-        from memory.mode_models import (
-            GenerationScore,
-            ImplicitSignals,
-            PerformanceMetrics,
-            QualityScores,
-        )
-
         query = "SELECT * FROM generation_scores WHERE 1=1"
         params: list = []
 

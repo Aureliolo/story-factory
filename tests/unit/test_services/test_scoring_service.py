@@ -20,6 +20,7 @@ class TestScoringService:
         mock.judge_quality.return_value = QualityScores(prose_quality=8.0)
         mock.calculate_consistency_score.return_value = 9.0
         mock.update_quality_scores.return_value = None
+        mock.update_performance_metrics.return_value = None
         return mock
 
     @pytest.fixture
@@ -72,6 +73,25 @@ class TestScoringService:
 
         # The original content should be stored
         assert service._original_content.get("ch-1") == content
+
+    def test_finish_tracking_persists_performance_metrics(
+        self, service: ScoringService, mock_mode_service: MagicMock
+    ) -> None:
+        """Test that finish_tracking persists performance metrics to database."""
+        service.finish_tracking(
+            score_id=42,
+            content="Chapter content",
+            tokens_generated=500,
+            time_seconds=10.0,
+            chapter_id="ch-1",
+        )
+
+        # Verify performance metrics were persisted
+        mock_mode_service.update_performance_metrics.assert_called_once_with(
+            42,
+            tokens_generated=500,
+            time_seconds=10.0,
+        )
 
     def test_on_regenerate(self, service: ScoringService, mock_mode_service: MagicMock) -> None:
         """Test recording regenerate signal."""
