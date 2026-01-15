@@ -27,8 +27,20 @@ test-integration:  ## Run integration tests
 test-e2e:  ## Run E2E browser tests (requires: playwright install chromium)
 	pytest tests/e2e
 
-test-cov:  ## Run tests with coverage
-	pytest --cov=. --cov-report=term --cov-report=html
+test-cov:  ## Run tests with coverage report
+	pytest --cov=. --cov-report=term --cov-report=html tests/unit tests/smoke tests/integration
+
+test-cov-min:  ## Run tests with minimum coverage threshold (70%)
+	pytest --cov=. --cov-report=term --cov-fail-under=70 tests/unit tests/smoke tests/integration
+
+test-strict:  ## Run tests with warnings as errors
+	PYTEST_STRICT=1 pytest -W error tests/unit tests/smoke tests/integration
+
+test-all:  ## Run all tests including E2E
+	pytest tests/
+
+test-ci:  ## Run tests as in CI (coverage + strict)
+	pytest --cov=. --cov-report=term --cov-report=xml -W default tests/unit tests/smoke tests/integration
 
 lint:  ## Run linters (ruff check and format check)
 	ruff check .
