@@ -216,6 +216,9 @@ class Settings:
     # Comparison mode
     comparison_models: list = field(default_factory=list)
 
+    # UI settings
+    dark_mode: bool = False
+
     def save(self):
         """Save settings to JSON file."""
         # Validate before saving
