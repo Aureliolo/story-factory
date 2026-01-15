@@ -98,7 +98,7 @@ class ProjectsPage:
                             f"background-color: {status_color}22; color: {status_color};"
                         )
                         if is_current:
-                            ui.badge("Active").props("color=primary")
+                            ui.badge("Active").props("color=primary").classes("text-white")
 
                     if project.premise:
                         ui.label(
@@ -108,7 +108,7 @@ class ProjectsPage:
                         ).classes("text-sm text-gray-600 dark:text-gray-400")
 
                     # Stats
-                    with ui.row().classes("gap-4 text-sm text-gray-500 dark:text-gray-400"):
+                    with ui.row().classes("gap-4 text-sm text-gray-600 dark:text-gray-300"):
                         ui.label(f"{project.chapter_count} chapters")
                         ui.label(f"{project.word_count:,} words")
                         ui.label(f"Updated: {self._format_date(project.updated_at)}")
