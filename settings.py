@@ -149,7 +149,7 @@ AGENT_ROLES: dict[str, AgentRoleInfo] = {
     "validator": {
         "name": "Validator",
         "description": "Validates AI responses",
-        "recommended_quality": 3,  # Small, fast model sufficient
+        "recommended_quality": 3,  # Uses small/fast model for basic sanity checks
     },
 }
 
