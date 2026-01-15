@@ -103,7 +103,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     # Set third-party loggers to WARNING to reduce noise
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("gradio").setLevel(logging.WARNING)
+    logging.getLogger("nicegui").setLevel(logging.WARNING)
 
 
 @contextmanager

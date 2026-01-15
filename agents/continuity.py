@@ -301,7 +301,7 @@ Output as a simple list, one fact per line, starting with "- "."""
         prompt = f"""Analyze how each character develops in this chapter:
 
 CHAPTER CONTENT:
-{chapter_content[:self.settings.chapter_analysis_chars]}
+{chapter_content[: self.settings.chapter_analysis_chars]}
 
 CHARACTERS TO ANALYZE:
 {chr(10).join(f"- {c.name}: {c.arc_notes}" for c in story_state.characters)}
@@ -355,7 +355,7 @@ Only include characters who actually appear in this chapter."""
         prompt = f"""Check which plot points were addressed in this chapter:
 
 CHAPTER CONTENT:
-{chapter_content[:self.settings.chapter_analysis_chars]}
+{chapter_content[: self.settings.chapter_analysis_chars]}
 
 PENDING PLOT POINTS:
 {points_text}

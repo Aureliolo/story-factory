@@ -22,7 +22,7 @@ Your responsibilities:
 
 You do NOT:
 - Change the plot or major story elements
-- Remove content (including NSFW content) - only improve how it's written
+- Remove content (including mature content) - only improve how it's written
 - Add new scenes or characters
 - Change the fundamental meaning
 - Change the language of the text
@@ -73,7 +73,7 @@ Preserve:
 - All plot points and events
 - Character voices
 - The overall story content
-- NSFW content (improve writing quality, don't remove)
+- Mature content (improve writing quality, don't remove)
 - The language ({brief.language})
 
 Output ONLY the edited chapter text in {brief.language} - no commentary or notes."""
@@ -104,7 +104,7 @@ Output ONLY the edited text in {language} - no commentary."""
         prompt = f"""Review this text and provide specific editing suggestions:
 
 ---
-{text[:self.settings.full_text_preview_chars]}
+{text[: self.settings.full_text_preview_chars]}
 ---
 
 Identify:

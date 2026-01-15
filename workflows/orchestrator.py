@@ -283,7 +283,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
                     f"\nPREMISE: {state.brief.premise}",
                     f"GENRE: {state.brief.genre}",
                     f"TONE: {state.brief.tone}",
-                    f"NSFW LEVEL: {state.brief.nsfw_level}",
+                    f"CONTENT RATING: {state.brief.content_rating}",
                 ]
             )
         else:

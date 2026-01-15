@@ -27,7 +27,7 @@ class TestExportFunctionality:
                 setting_time="2150",
                 setting_place="Mars Colony",
                 target_length="short_story",
-                nsfw_level="none",
+                content_rating="none",
             ),
         )
         state.chapters = [

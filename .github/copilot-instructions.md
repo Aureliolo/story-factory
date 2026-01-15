@@ -56,8 +56,10 @@ This ensures code quality and prevents broken builds.
 - `utils/`: Utility modules
   - `json_parser.py`: JSON extraction and parsing utilities
   - `logging_config.py`: Logging configuration and setup
-- `ui/`: User interface components
-  - `gradio_app.py`: Gradio-based web interface
+- `ui/`: User interface components (NiceGUI)
+  - `app.py`: Main NiceGUI application
+  - `pages/`: Page components (write, world, settings, models)
+  - `components/`: Reusable UI components (header, chat, graph)
 - `output/stories/`: Generated story outputs (gitignored)
 - `tests/`: Test suite using pytest
 - `logs/`: Application logs (logs written to `logs/story_factory.log`)
@@ -98,7 +100,7 @@ This ensures code quality and prevents broken builds.
    - Use Python's `logging` module with `logger = logging.getLogger(__name__)`
    - Follow existing logging patterns for consistency
 
-10. **Web UI**: The Gradio interface should remain simple and user-friendly. Test UI changes by running the application.
+10. **Web UI**: The NiceGUI interface should remain simple and user-friendly. Test UI changes by running the application.
 
 11. **JSON Parsing**: Use the utilities in `utils/json_parser.py` for extracting and parsing JSON from LLM responses. LLMs may include JSON in markdown code blocks or with surrounding text.
 

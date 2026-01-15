@@ -9,24 +9,48 @@ A multi-agent system for generating stories with:
 - Continuity Checker: Detects plot holes
 
 Usage:
-    python main.py          # Launch Gradio web UI
+    python main.py          # Launch NiceGUI web UI
     python main.py --cli    # Run in CLI mode (basic)
 """
 
 import argparse
+import logging
 
 from utils.logging_config import setup_logging
 
+logger = logging.getLogger(__name__)
 
-def run_web_ui():
-    """Launch the Gradio web interface."""
-    from ui.gradio_app import main
 
-    main()
+def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False):
+    """Launch the NiceGUI web interface.
+
+    Args:
+        host: Host to bind to.
+        port: Port to listen on.
+        reload: Enable auto-reload for development.
+    """
+    from services import ServiceContainer
+    from settings import Settings
+    from ui import create_app
+
+    logger.info("Starting Story Factory web UI...")
+
+    # Load settings and create services
+    settings = Settings.load()
+    services = ServiceContainer(settings)
+
+    # Create and run app
+    app = create_app(services)
+    app.run(host=host, port=port, reload=reload)
 
 
 def run_cli(load_story: str | None = None, list_stories: bool = False):
-    """Run a simple CLI version."""
+    """Run a simple CLI version.
+
+    Args:
+        load_story: Path to story file to load.
+        list_stories: If True, list all saved stories.
+    """
     from workflows.orchestrator import StoryOrchestrator
 
     print("=" * 60)
@@ -156,10 +180,21 @@ def main():
         help="Load a saved story by path (CLI mode)",
     )
     parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host for web UI (default: 127.0.0.1)",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=7860,
         help="Port for web UI (default: 7860)",
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload for development",
     )
     parser.add_argument(
         "--log-level",
@@ -183,7 +218,7 @@ def main():
     if args.cli or args.list_stories or args.load:
         run_cli(load_story=args.load, list_stories=args.list_stories)
     else:
-        run_web_ui()
+        run_web_ui(host=args.host, port=args.port, reload=args.reload)
 
 
 if __name__ == "__main__":

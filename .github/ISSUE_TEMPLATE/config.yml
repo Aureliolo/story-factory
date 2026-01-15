@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ollama Documentation
+    url: https://ollama.com/library
+    about: Find available models and Ollama setup guides
+  - name: NiceGUI Documentation
+    url: https://nicegui.io/documentation
+    about: Learn about the UI framework used in this project

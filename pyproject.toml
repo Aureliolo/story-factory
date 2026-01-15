@@ -56,10 +56,11 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = [
     "ollama.*",
-    "gradio.*",
+    "nicegui.*",
     "ebooklib.*",
     "reportlab.*",
     "PIL.*",
+    "networkx.*",
 ]
 ignore_missing_imports = true
 
