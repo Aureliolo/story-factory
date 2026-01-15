@@ -127,12 +127,16 @@ def render_graph_html(
                              document.documentElement.classList.contains('dark') ||
                              window.matchMedia('(prefers-color-scheme: dark)').matches;
             var fontColor = isDarkMode ? '#e5e7eb' : '#374151';
+            var bgColor = isDarkMode ? '#1f2937' : '#ffffff';
 
             var nodes = new vis.DataSet({json.dumps(nodes)});
             var edges = new vis.DataSet({json.dumps(edges)});
 
             var container = document.getElementById('{container_id}');
             if (!container) return;
+
+            // Set background color based on dark mode
+            container.style.backgroundColor = bgColor;
 
             var data = {{ nodes: nodes, edges: edges }};
 

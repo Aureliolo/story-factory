@@ -218,7 +218,7 @@ def status_badge(status: str, color: str | None = None, icon: str | None = None)
     badge = ui.badge(status.title())
 
     if color:
-        badge.style(f"background-color: {color}22; color: {color};")
+        badge.style(f"background-color: {color}; color: white;")
 
     if icon:
         with badge:

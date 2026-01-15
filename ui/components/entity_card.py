@@ -155,7 +155,7 @@ def entity_list_item(
     ):
         ui.icon(icon, size="sm").style(f"color: {color};")
         ui.label(entity.name).classes("flex-grow truncate")
-        ui.badge(entity.type).style(f"background-color: {color}22; color: {color};")
+        ui.badge(entity.type).style(f"background-color: {color}; color: white;")
 
 
 def entity_badge(entity: Entity) -> None:
@@ -170,9 +170,7 @@ def entity_badge(entity: Entity) -> None:
     with (
         ui.row()
         .classes("items-center gap-1")
-        .style(
-            f"background-color: {color}22; color: {color}; padding: 2px 8px; border-radius: 4px;"
-        )
+        .style(f"background-color: {color}; color: white; padding: 2px 8px; border-radius: 4px;")
     ):
         ui.icon(icon, size="xs")
         ui.label(entity.name).classes("text-sm")

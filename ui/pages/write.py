@@ -135,7 +135,7 @@ class WritePage:
         color = get_status_color(status)
 
         with ui.row().classes("w-full items-center gap-2 mb-2"):
-            ui.badge(status.title()).style(f"background-color: {color}22; color: {color};")
+            ui.badge(status.title()).style(f"background-color: {color}; color: white;")
 
             if self.state.interview_complete:
                 ui.label("Interview complete - structure ready").classes(
@@ -264,7 +264,7 @@ class WritePage:
                             else chapter.outline
                         ).classes("text-sm text-gray-600 dark:text-gray-400")
                     if chapter.word_count:
-                        ui.badge(f"{chapter.word_count} words").props("outline")
+                        ui.badge(f"{chapter.word_count} words").props("color=grey-7")
 
     def _build_reviews_section(self) -> None:
         """Build the reviews and notes section."""
@@ -279,7 +279,7 @@ class WritePage:
         for review in reviews:
             with ui.card().classes("w-full"):
                 with ui.row().classes("items-center gap-2"):
-                    ui.badge(review.get("type", "note"))
+                    ui.badge(review.get("type", "note")).props("color=grey-7")
                     if review.get("chapter"):
                         ui.label(f"Chapter {review['chapter']}").classes(
                             "text-sm text-gray-500 dark:text-gray-400"

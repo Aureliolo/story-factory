@@ -489,7 +489,7 @@ class ModelsPage:
                     with ui.row().classes("items-center gap-2 mb-2"):
                         ui.label(result["model_id"]).classes("font-semibold")
                         if result["success"]:
-                            ui.badge(f"{result['time_seconds']}s").props("outline")
+                            ui.badge(f"{result['time_seconds']}s").props("color=grey-7")
                         else:
                             ui.badge("Failed").props("color=negative")
 

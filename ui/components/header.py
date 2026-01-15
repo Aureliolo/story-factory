@@ -124,11 +124,15 @@ class Header:
         project_id = e.value
         if not project_id:
             self.state.clear_project()
+            self.services.settings.last_project_id = None
+            self.services.settings.save()
             return
 
         try:
             project, world_db = self.services.project.load_project(project_id)
             self.state.set_project(project_id, project, world_db)
+            self.services.settings.last_project_id = project_id
+            self.services.settings.save()
             ui.notify(f"Loaded: {project.project_name}", type="positive")
         except FileNotFoundError:
             ui.notify("Project not found", type="negative")
@@ -140,6 +144,8 @@ class Header:
         try:
             project, world_db = self.services.project.create_project()
             self.state.set_project(project.id, project, world_db)
+            self.services.settings.last_project_id = project.id
+            self.services.settings.save()
             ui.notify("New project created!", type="positive")
             self._refresh_project_list()
         except Exception as ex:
