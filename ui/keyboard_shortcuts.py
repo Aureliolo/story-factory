@@ -115,7 +115,7 @@ class KeyboardShortcuts:
             for key, description in shortcuts:
                 with ui.row().classes("w-full items-center gap-4 py-2"):
                     ui.badge(key).props("color=primary")
-                    ui.label(description).classes("text-sm")
+                    ui.label(description).classes("text-sm text-gray-700 dark:text-gray-300")
 
             ui.button("Close", on_click=dialog.close).props("color=primary").classes("mt-4 w-full")
 

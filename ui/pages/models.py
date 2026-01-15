@@ -225,7 +225,7 @@ class ModelsPage:
         with ui.card().classes("w-full"):
             ui.label("Model Comparison").classes("text-lg font-semibold mb-4")
             ui.label("Compare models on the same prompt to see output quality and speed").classes(
-                "text-sm text-gray-500 mb-4"
+                "text-sm text-gray-500 dark:text-gray-400 mb-4"
             )
 
             installed = self.services.model.list_installed()
