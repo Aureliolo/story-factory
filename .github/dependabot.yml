@@ -29,8 +29,8 @@ updates:
           - "*"
 
   # CDN dependencies tracked via package.json
-  # When Dependabot updates vis-network, also update the CDN URL in:
-  # ui/graph_renderer.py (search for "unpkg.com/vis-network")
+  # When Dependabot updates vis-network in package.json, the CDN URL in ui/graph_renderer.py
+  # must also be updated in the same PR (search for "unpkg.com/vis-network")
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
