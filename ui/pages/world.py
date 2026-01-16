@@ -214,7 +214,13 @@ class WorldPage:
             return
 
         logger.info(f"Starting generation of {entity_type} for project {self.state.project.id}")
-        ui.notify(f"Generating {entity_type}...", type="ongoing")
+
+        # Use notification that can be dismissed
+        notification = ui.notification(
+            message=f"Generating {entity_type}...",
+            spinner=True,
+            timeout=None,
+        )
 
         try:
             from nicegui import run
@@ -241,6 +247,7 @@ class WorldPage:
                         },
                     )
                 logger.info(f"Added {len(new_chars)} characters to world database")
+                notification.dismiss()
                 ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
 
             elif entity_type == "locations":
@@ -265,6 +272,7 @@ class WorldPage:
                     else:
                         logger.warning(f"Skipping invalid location: {loc}")
                 logger.info(f"Added {added_count} locations to world database")
+                notification.dismiss()
                 ui.notify(f"Added {added_count} new locations!", type="positive")
 
             elif entity_type == "relationships":
@@ -284,6 +292,7 @@ class WorldPage:
 
                 if len(entity_names) < 2:
                     logger.warning("Cannot generate relationships: need at least 2 entities")
+                    notification.dismiss()
                     ui.notify("Need at least 2 entities to create relationships", type="warning")
                     return
 
@@ -322,6 +331,7 @@ class WorldPage:
                     else:
                         logger.warning(f"Skipping invalid relationship: {rel}")
                 logger.info(f"Added {added} relationships to world database")
+                notification.dismiss()
                 ui.notify(f"Added {added} new relationships!", type="positive")
 
             # Refresh the UI
@@ -339,6 +349,7 @@ class WorldPage:
             logger.info(f"Generation of {entity_type} completed successfully")
 
         except Exception as e:
+            notification.dismiss()
             logger.exception(f"Error generating {entity_type}: {e}")
             ui.notify(f"Error: {e}", type="negative")
 
@@ -379,7 +390,7 @@ class WorldPage:
         dialog.open()
 
     async def _do_regenerate(self, dialog) -> None:
-        """Execute world regeneration."""
+        """Execute world regeneration - builds complete world with locations and relationships."""
         logger.info("User confirmed rebuild - starting world regeneration")
         dialog.close()
 
@@ -389,7 +400,13 @@ class WorldPage:
             return
 
         logger.info(f"Starting world rebuild for project {self.state.project.id}")
-        ui.notify("Rebuilding world... This may take a moment.", type="ongoing")
+
+        # Use notification context manager so it auto-dismisses
+        notification = ui.notification(
+            message="Rebuilding world... This may take a moment.",
+            spinner=True,
+            timeout=None,  # Don't auto-dismiss
+        )
 
         try:
             from nicegui import run
@@ -407,7 +424,8 @@ class WorldPage:
                 self.state.world_db.delete_entity(entity.id)
             logger.info("All entities deleted")
 
-            # Rebuild the story structure via service (this calls the architect)
+            # Step 1: Rebuild the story structure via service (this calls the architect)
+            notification.message = "Step 1/4: Generating story structure..."
             logger.info("Calling rebuild_world via story service...")
             await run.io_bound(self.services.story.rebuild_world, self.state.project)
             logger.info(
@@ -416,14 +434,14 @@ class WorldPage:
                 f"Chapters: {len(self.state.project.chapters)}"
             )
 
-            # Extract characters to world database
+            # Step 2: Extract characters to world database
+            notification.message = "Step 2/4: Adding characters to world..."
             if self.state.project.characters:
                 logger.info(
                     f"Extracting {len(self.state.project.characters)} characters to world database..."
                 )
-                added_count = 0
+                added_chars = 0
                 for char in self.state.project.characters:
-                    # Check if already exists
                     existing = self.state.world_db.search_entities(
                         char.name, entity_type="character"
                     )
@@ -443,10 +461,91 @@ class WorldPage:
                             "arc_notes": char.arc_notes,
                         },
                     )
-                    added_count += 1
-                logger.info(f"Added {added_count} characters to world database")
+                    added_chars += 1
+                logger.info(f"Added {added_chars} characters to world database")
             else:
                 logger.warning("No characters generated by architect!")
+
+            # Step 3: Generate locations for the world
+            notification.message = "Step 3/4: Generating locations..."
+            logger.info("Generating locations for the world...")
+            try:
+                locations = await run.io_bound(
+                    self.services.story.generate_locations, self.state.project, 3
+                )
+                logger.info(f"Generated {len(locations)} locations from LLM")
+                added_locs = 0
+                for loc in locations:
+                    if isinstance(loc, dict) and "name" in loc:
+                        self.services.world.add_entity(
+                            self.state.world_db,
+                            name=loc["name"],
+                            entity_type="location",
+                            description=loc.get("description", ""),
+                            attributes={"significance": loc.get("significance", "")},
+                        )
+                        added_locs += 1
+                    else:
+                        logger.warning(f"Skipping invalid location: {loc}")
+                logger.info(f"Added {added_locs} locations to world database")
+            except Exception as e:
+                logger.exception(f"Failed to generate locations: {e}")
+
+            # Step 4: Generate relationships between all entities
+            notification.message = "Step 4/4: Generating relationships..."
+            logger.info("Generating relationships between entities...")
+            try:
+                all_entities = self.state.world_db.list_entities()
+                entity_names = [e.name for e in all_entities]
+                logger.info(f"Generating relationships for {len(entity_names)} entities")
+
+                if len(entity_names) >= 2:
+                    generated_rels: list = await run.io_bound(
+                        self.services.story.generate_relationships,
+                        self.state.project,
+                        entity_names,
+                        [],  # No existing relationships
+                        5,
+                    )
+                    logger.info(f"Generated {len(generated_rels)} relationships from LLM")
+
+                    added_rels = 0
+                    for rel_data in generated_rels:
+                        if (
+                            isinstance(rel_data, dict)
+                            and "source" in rel_data
+                            and "target" in rel_data
+                        ):
+                            source_entity = next(
+                                (e for e in all_entities if e.name == rel_data["source"]), None
+                            )
+                            target_entity = next(
+                                (e for e in all_entities if e.name == rel_data["target"]), None
+                            )
+                            if source_entity and target_entity:
+                                self.services.world.add_relationship(
+                                    self.state.world_db,
+                                    source_entity.id,
+                                    target_entity.id,
+                                    rel_data.get("relation_type", "knows"),
+                                    rel_data.get("description", ""),
+                                )
+                                added_rels += 1
+                            else:
+                                logger.warning(
+                                    f"Skipping relationship: {rel_data['source']} -> {rel_data['target']} "
+                                    "(entity not found)"
+                                )
+                        else:
+                            logger.warning(f"Skipping invalid relationship: {rel_data}")
+                    logger.info(f"Added {added_rels} relationships to world database")
+                else:
+                    logger.warning("Not enough entities to generate relationships")
+            except Exception as e:
+                logger.exception(f"Failed to generate relationships: {e}")
+
+            # Dismiss the loading notification
+            notification.dismiss()
 
             # Refresh the UI
             logger.info("Refreshing UI after rebuild...")
@@ -466,9 +565,13 @@ class WorldPage:
             logger.info(
                 f"World rebuild complete: {final_entities} entities, {final_rels} relationships"
             )
-            ui.notify("World rebuilt successfully!", type="positive")
+            ui.notify(
+                f"World rebuilt: {final_entities} entities, {final_rels} relationships",
+                type="positive",
+            )
 
         except Exception as e:
+            notification.dismiss()
             logger.exception(f"Error rebuilding world: {e}")
             ui.notify(f"Error: {e}", type="negative")
 
