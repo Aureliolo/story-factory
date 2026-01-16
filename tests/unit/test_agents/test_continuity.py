@@ -203,6 +203,17 @@ class TestContinuityCheckFullStory:
         assert issues == []
         continuity.generate.assert_not_called()
 
+    def test_raises_without_brief(self, continuity):
+        """Test raises error when brief is missing."""
+        state = StoryState(
+            id="test",
+            status="writing",
+            chapters=[Chapter(number=1, title="Ch1", outline="", content="Some content")],
+        )
+
+        with pytest.raises(ValueError, match="brief"):
+            continuity.check_full_story(state)
+
 
 class TestContinuityValidateAgainstOutline:
     """Tests for validate_against_outline method."""
@@ -427,3 +438,40 @@ class TestContinuityCheckPlotPoints:
         completed = continuity.check_plot_points_completed("Content", sample_story_state, 1)
 
         assert completed == []
+
+
+class TestContinuityParseIssues:
+    """Tests for issue parsing edge cases."""
+
+    def test_skips_malformed_issues(self, continuity, sample_story_state):
+        """Test skips malformed continuity issue items."""
+        # JSON with one valid and one malformed issue (missing required fields)
+        json_response = """```json
+[
+    {
+        "severity": "moderate",
+        "category": "character",
+        "description": "Valid issue",
+        "location": "Para 1",
+        "suggestion": "Fix it"
+    },
+    {
+        "wrong_field": "This should be skipped"
+    },
+    {
+        "severity": "minor",
+        "category": "logic",
+        "description": "Another valid issue",
+        "location": "Para 2",
+        "suggestion": "Fix that"
+    }
+]
+```"""
+        continuity.generate = MagicMock(return_value=json_response)
+
+        issues = continuity.check_chapter(sample_story_state, "Content...", chapter_number=1)
+
+        # Should have 2 issues (the malformed one is skipped)
+        assert len(issues) == 2
+        assert issues[0].description == "Valid issue"
+        assert issues[1].description == "Another valid issue"

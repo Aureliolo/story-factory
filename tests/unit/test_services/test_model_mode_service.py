@@ -511,3 +511,344 @@ class TestModelModeServiceVramStrategy:
 
         assert "Invalid VRAM strategy" in str(exc_info.value)
         assert "invalid_strategy" in str(exc_info.value)
+
+
+class TestModelModeServiceAdditional:
+    """Additional tests for full coverage."""
+
+    @pytest.fixture
+    def temp_db(self) -> Path:
+        """Create a temporary database file."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            return Path(f.name)
+
+    @pytest.fixture
+    def mock_settings(self) -> MagicMock:
+        """Create mock settings."""
+        mock = MagicMock(spec=Settings)
+        mock.ollama_url = "http://localhost:11434"
+        mock.get_model_for_agent.return_value = "fallback-model:8b"
+        mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
+        return mock
+
+    @pytest.fixture
+    def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
+        """Create a ModelModeService with mocked dependencies."""
+        return ModelModeService(mock_settings, db_path=temp_db)
+
+    def test_list_modes_includes_custom_modes(self, service: ModelModeService) -> None:
+        """Test list_modes includes custom modes."""
+        custom = GenerationMode(
+            id="custom_mode_test",
+            name="Custom Test",
+            description="A custom mode for testing",
+            agent_models={"writer": "custom-model"},
+            agent_temperatures={"writer": 0.8},
+            vram_strategy=VramStrategy.PARALLEL,
+            is_preset=False,
+            is_experimental=True,
+        )
+        service.save_custom_mode(custom)
+
+        modes = service.list_modes()
+        custom_ids = [m.id for m in modes if not m.is_preset]
+        assert "custom_mode_test" in custom_ids
+
+    def test_get_model_for_agent_fallback_to_settings(
+        self, service: ModelModeService, mock_settings: MagicMock
+    ) -> None:
+        """Test get_model_for_agent falls back to settings when mode doesn't specify."""
+        from unittest.mock import patch
+
+        # Set a mode with no model for 'validator'
+        custom = GenerationMode(
+            id="no_validator",
+            name="No Validator",
+            description="",
+            agent_models={},  # No models specified
+            agent_temperatures={},
+            vram_strategy=VramStrategy.PARALLEL,
+            is_preset=False,
+        )
+        service.save_custom_mode(custom)
+        service.set_mode("no_validator")
+
+        with patch("services.model_mode_service.get_available_vram", return_value=16):
+            model = service.get_model_for_agent("validator")
+
+        assert model == "fallback-model:8b"
+        mock_settings.get_model_for_agent.assert_called()
+
+    def test_prepare_model_adaptive_strategy_low_vram(self, service: ModelModeService) -> None:
+        """Test prepare_model with adaptive strategy when VRAM is low."""
+        from unittest.mock import patch
+
+        # Set mode with adaptive strategy
+        custom = GenerationMode(
+            id="adaptive_test",
+            name="Adaptive Test",
+            description="",
+            agent_models={},
+            agent_temperatures={},
+            vram_strategy=VramStrategy.ADAPTIVE,
+            is_preset=False,
+        )
+        service.save_custom_mode(custom)
+        service.set_mode("adaptive_test")
+
+        service._loaded_models = {"model-a", "model-b"}
+
+        # Mock low VRAM scenario - less than required
+        with patch("services.model_mode_service.get_available_vram", return_value=4):
+            with patch(
+                "services.model_mode_service.AVAILABLE_MODELS", {"model-c": {"vram_required": 8}}
+            ):
+                service.prepare_model("model-c")
+
+        # Should have unloaded other models
+        assert service._loaded_models == {"model-c"}
+
+    def test_record_generation_with_prompt_hash(self, service: ModelModeService) -> None:
+        """Test record_generation calculates prompt hash."""
+        score_id = service.record_generation(
+            project_id="test-project",
+            agent_role="writer",
+            model_id="test-model",
+            prompt_text="Write a story about a dragon",
+        )
+        assert score_id > 0
+
+    def test_record_generation_exception_handling(self, service: ModelModeService) -> None:
+        """Test record_generation handles exceptions."""
+        from unittest.mock import patch
+
+        with patch.object(service._db, "record_score", side_effect=Exception("DB error")):
+            with pytest.raises(Exception, match="DB error"):
+                service.record_generation(
+                    project_id="test",
+                    agent_role="writer",
+                    model_id="model",
+                )
+
+    def test_update_quality_scores_exception(self, service: ModelModeService) -> None:
+        """Test update_quality_scores handles exceptions."""
+        from unittest.mock import patch
+
+        score_id = service.record_generation(
+            project_id="test", agent_role="writer", model_id="model"
+        )
+
+        with patch.object(service._db, "update_score", side_effect=Exception("Update error")):
+            with pytest.raises(Exception, match="Update error"):
+                service.update_quality_scores(
+                    score_id, QualityScores(prose_quality=8.0, instruction_following=7.0)
+                )
+
+    def test_record_implicit_signal_exception(self, service: ModelModeService) -> None:
+        """Test record_implicit_signal handles exceptions."""
+        from unittest.mock import patch
+
+        score_id = service.record_generation(
+            project_id="test", agent_role="writer", model_id="model"
+        )
+
+        with patch.object(service._db, "update_score", side_effect=Exception("Signal error")):
+            with pytest.raises(Exception, match="Signal error"):
+                service.record_implicit_signal(score_id, user_rating=5)
+
+    def test_update_performance_metrics_exception(self, service: ModelModeService) -> None:
+        """Test update_performance_metrics handles exceptions."""
+        from unittest.mock import patch
+
+        score_id = service.record_generation(
+            project_id="test", agent_role="writer", model_id="model"
+        )
+
+        with patch.object(
+            service._db, "update_performance_metrics", side_effect=Exception("Perf error")
+        ):
+            with pytest.raises(Exception, match="Perf error"):
+                service.update_performance_metrics(score_id, tokens_generated=100)
+
+    def test_judge_quality_success(self, service: ModelModeService) -> None:
+        """Test judge_quality with successful LLM response."""
+        from unittest.mock import patch
+
+        mock_response = {"response": '{"prose_quality": 8.5, "instruction_following": 9.0}'}
+
+        with patch("services.model_mode_service.ollama.Client") as mock_client:
+            with patch("services.model_mode_service.extract_json") as mock_extract:
+                mock_extract.return_value = {"prose_quality": 8.5, "instruction_following": 9.0}
+                mock_instance = MagicMock()
+                mock_client.return_value = mock_instance
+                mock_instance.generate.return_value = mock_response
+
+                scores = service.judge_quality(
+                    content="A great story...",
+                    genre="fantasy",
+                    tone="epic",
+                    themes=["adventure", "courage"],
+                )
+
+                assert scores.prose_quality == 8.5
+                assert scores.instruction_following == 9.0
+
+    def test_judge_quality_invalid_json(self, service: ModelModeService) -> None:
+        """Test judge_quality handles invalid JSON response."""
+        from unittest.mock import patch
+
+        mock_response = {"response": "This is not JSON at all"}
+
+        with patch("services.model_mode_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.generate.return_value = mock_response
+
+            scores = service.judge_quality(
+                content="A story...",
+                genre="mystery",
+                tone="dark",
+                themes=["justice"],
+            )
+
+            # Should return neutral scores
+            assert scores.prose_quality == 5.0
+            assert scores.instruction_following == 5.0
+
+    def test_judge_quality_exception(self, service: ModelModeService) -> None:
+        """Test judge_quality handles exceptions gracefully."""
+        from unittest.mock import patch
+
+        with patch("services.model_mode_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.generate.side_effect = ConnectionError("LLM unavailable")
+
+            scores = service.judge_quality(
+                content="A story...",
+                genre="sci-fi",
+                tone="serious",
+                themes=["technology"],
+            )
+
+            # Should return neutral scores
+            assert scores.prose_quality == 5.0
+            assert scores.instruction_following == 5.0
+
+    def test_on_project_complete_with_after_project_trigger(
+        self, service: ModelModeService
+    ) -> None:
+        """Test on_project_complete returns recommendations when trigger is set."""
+        settings = LearningSettings(
+            triggers=[LearningTrigger.AFTER_PROJECT],
+            min_samples_for_recommendation=1,  # Low threshold for testing
+        )
+        service.set_learning_settings(settings)
+        service._chapters_since_analysis = 5
+
+        # Record some data
+        service.record_generation(
+            project_id="test",
+            agent_role="writer",
+            model_id="model-a",
+        )
+
+        recommendations = service.on_project_complete()
+
+        # Counter should be reset
+        assert service._chapters_since_analysis == 0
+        # May or may not have recommendations depending on data
+        assert isinstance(recommendations, list)
+
+    def test_apply_recommendation_exception(self, service: ModelModeService) -> None:
+        """Test apply_recommendation handles exceptions."""
+        service.set_mode("balanced")
+
+        # Create a recommendation that will cause an error
+        rec = TuningRecommendation(
+            recommendation_type=RecommendationType.MODEL_SWAP,
+            current_value="old",
+            suggested_value="new",
+            affected_role=None,  # This will cause the condition to fail
+            reason="test",
+            confidence=0.9,
+        )
+
+        result = service.apply_recommendation(rec)
+        assert result is False
+
+    def test_handle_recommendations_cautious_autonomy(self, service: ModelModeService) -> None:
+        """Test cautious autonomy only auto-applies temp adjustments."""
+        settings = LearningSettings(autonomy=AutonomyLevel.CAUTIOUS)
+        service.set_learning_settings(settings)
+        service.set_mode("balanced")
+
+        # Model swap should NOT be auto-applied
+        model_rec = TuningRecommendation(
+            recommendation_type=RecommendationType.MODEL_SWAP,
+            current_value="old",
+            suggested_value="new",
+            affected_role="writer",
+            reason="test",
+            confidence=0.99,
+        )
+
+        # Temp adjust should be auto-applied
+        temp_rec = TuningRecommendation(
+            recommendation_type=RecommendationType.TEMP_ADJUST,
+            current_value="0.7",
+            suggested_value="0.9",
+            affected_role="editor",
+            reason="test",
+            confidence=0.99,
+        )
+
+        pending = service.handle_recommendations([model_rec, temp_rec])
+
+        # Model swap should be pending, temp adjust should not
+        assert len(pending) == 1
+        assert pending[0].recommendation_type == RecommendationType.MODEL_SWAP
+
+    def test_handle_recommendations_balanced_autonomy(self, service: ModelModeService) -> None:
+        """Test balanced autonomy auto-applies above threshold."""
+        settings = LearningSettings(
+            autonomy=AutonomyLevel.BALANCED,
+            confidence_threshold=0.8,
+        )
+        service.set_learning_settings(settings)
+        service.set_mode("balanced")
+
+        # High confidence should be auto-applied
+        high_conf = TuningRecommendation(
+            recommendation_type=RecommendationType.MODEL_SWAP,
+            current_value="old",
+            suggested_value="new",
+            affected_role="writer",
+            reason="test",
+            confidence=0.9,  # Above threshold
+        )
+
+        # Low confidence should NOT be auto-applied
+        low_conf = TuningRecommendation(
+            recommendation_type=RecommendationType.MODEL_SWAP,
+            current_value="old",
+            suggested_value="other",
+            affected_role="editor",
+            reason="test",
+            confidence=0.5,  # Below threshold
+        )
+
+        pending = service.handle_recommendations([high_conf, low_conf])
+
+        assert len(pending) == 1
+        assert pending[0].affected_role == "editor"
+
+    def test_get_recommendation_history(self, service: ModelModeService) -> None:
+        """Test getting recommendation history."""
+        history = service.get_recommendation_history(limit=10)
+        assert isinstance(history, list)
+
+    def test_get_pending_recommendations(self, service: ModelModeService) -> None:
+        """Test getting pending recommendations."""
+        pending = service.get_pending_recommendations()
+        assert isinstance(pending, list)

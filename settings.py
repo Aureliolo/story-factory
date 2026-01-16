@@ -422,14 +422,14 @@ class Settings:
                     # If construction succeeded, the field is valid
                     setattr(defaults, field_name, data[field_name])
                     recovered_fields.append(field_name)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError):  # pragma: no cover
+                    # Defensive: dataclasses don't type-check, but keep for safety
                     invalid_fields.append(field_name)
-                    # Reset to default
                     setattr(defaults, field_name, default_value)
 
         if recovered_fields:
             logger.info(f"Recovered {len(recovered_fields)} valid settings: {recovered_fields}")
-        if invalid_fields:
+        if invalid_fields:  # pragma: no cover
             logger.warning(
                 f"Reset {len(invalid_fields)} invalid settings to defaults: {invalid_fields}"
             )

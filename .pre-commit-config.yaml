@@ -45,3 +45,18 @@ repos:
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
+
+  # Run tests with coverage enforcement
+  # NOTE: Skipped by default in CI (pre-commit.ci) due to time constraints
+  # Run locally: pre-commit run pytest-coverage --hook-stage push
+  # Full enforcement is in GitHub Actions CI workflow
+  # Current coverage: 90.5% (excluding UI) - target: 100%
+  - repo: local
+    hooks:
+      - id: pytest-coverage
+        name: pytest with coverage
+        entry: python -m pytest tests/unit/ tests/smoke/ tests/integration/ --cov=. --cov-fail-under=90 --cov-report=term -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]  # Run on push, not on every commit
