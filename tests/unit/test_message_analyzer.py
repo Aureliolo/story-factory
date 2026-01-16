@@ -84,6 +84,18 @@ class TestDetectLanguage:
         # Short messages without clear language markers default to English
         assert detect_language("A story about magic") == "English"
 
+    def test_detects_italian(self):
+        # Italian words: il, la, di, che, non, con, sono, una, per, come
+        assert detect_language("Il libro che la ragazza non ha sono per lei") == "Italian"
+
+    def test_detects_portuguese(self):
+        # Portuguese words: o, a, de, que, e, do, da, em, um, uma
+        assert detect_language("O livro que a menina tem do pai em uma casa") == "Portuguese"
+
+    def test_detects_dutch(self):
+        # Dutch words: de, het, een, van, en, is, dat, niet, op, met
+        assert detect_language("De man is het een van en dat niet met op") == "Dutch"
+
 
 class TestAnalyzeMessage:
     """Tests for full message analysis."""

@@ -405,3 +405,244 @@ class TestValidateExportPath:
         # Should not raise if path is within default base_dir
         result = _validate_export_path(valid_path)
         assert result.is_absolute()
+
+    def test_invalid_path_raises_value_error(self):
+        """Test that invalid paths raise ValueError."""
+        from unittest.mock import patch
+
+        # Mock Path.resolve() to raise OSError
+        with patch("pathlib.Path.resolve", side_effect=OSError("Invalid path")):
+            with pytest.raises(ValueError, match="Invalid export path"):
+                _validate_export_path(Path("some/path.txt"))
+
+
+class TestExportServiceHTML:
+    """Test HTML export functionality."""
+
+    def test_export_to_html_basic(self):
+        """Test basic HTML export with chapters."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        brief = StoryBrief(
+            premise="HTML test story",
+            genre="Fantasy",
+            tone="Epic",
+            setting_time="Medieval",
+            setting_place="Kingdom",
+            target_length="short_story",
+            content_rating="none",
+        )
+        state = StoryState(id="test-html", project_name="HTML Story", brief=brief)
+        state.chapters = [
+            Chapter(
+                number=1,
+                title="Beginning",
+                outline="Start",
+                content="First paragraph.\n\nSecond paragraph.",
+            )
+        ]
+
+        html = service.to_html(state)
+
+        assert "<!DOCTYPE html>" in html
+        assert "<html>" in html
+        assert "<title>HTML Story</title>" in html
+        assert "Chapter 1: Beginning" in html
+        assert "First paragraph." in html
+        assert "Second paragraph." in html
+        assert "</html>" in html
+
+    def test_export_to_html_escapes_special_chars(self):
+        """Test HTML export properly escapes special characters."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        brief = StoryBrief(
+            premise="Story with <html> & special chars",
+            genre="Test",
+            tone="Test",
+            setting_time="Test",
+            setting_place="Test",
+            target_length="short_story",
+            content_rating="none",
+        )
+        state = StoryState(id="test-escape", project_name="Story <Test> & 'Quotes'", brief=brief)
+        state.chapters = [
+            Chapter(
+                number=1,
+                title="Chapter <One>",
+                outline="Test",
+                content="Content with <tags> & symbols.",
+            )
+        ]
+
+        html = service.to_html(state)
+
+        assert "&lt;Test&gt;" in html
+        assert "&amp;" in html
+        assert "Chapter 1: Chapter &lt;One&gt;" in html
+        assert "Content with &lt;tags&gt;" in html
+
+
+class TestExportServiceThemes:
+    """Test export with themes."""
+
+    def test_markdown_includes_themes(self):
+        """Test markdown export includes themes when present."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        brief = StoryBrief(
+            premise="Story with themes",
+            genre="Fantasy",
+            tone="Epic",
+            setting_time="Medieval",
+            setting_place="Kingdom",
+            target_length="short_story",
+            content_rating="none",
+            themes=["Redemption", "Love", "Sacrifice"],
+        )
+        state = StoryState(id="test-themes", project_name="Theme Story", brief=brief)
+
+        markdown = service.to_markdown(state)
+
+        assert "Themes: Redemption, Love, Sacrifice" in markdown
+
+
+class TestExportServiceSaveToFile:
+    """Test save_to_file method for all formats."""
+
+    def test_save_to_file_markdown(self, tmp_path):
+        """Test saving markdown format to file."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("md-test")
+        output_file = tmp_path / "story.md"
+
+        result = service.save_to_file(state, "markdown", output_file)
+
+        assert result.exists()
+        assert result.read_text(encoding="utf-8")
+
+    def test_save_to_file_text(self, tmp_path):
+        """Test saving text format to file."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("txt-test")
+        output_file = tmp_path / "story.txt"
+
+        result = service.save_to_file(state, "text", output_file)
+
+        assert result.exists()
+        assert result.read_text(encoding="utf-8")
+
+    def test_save_to_file_html(self, tmp_path):
+        """Test saving HTML format to file."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("html-test")
+        output_file = tmp_path / "story.html"
+
+        result = service.save_to_file(state, "html", output_file)
+
+        assert result.exists()
+        content = result.read_text(encoding="utf-8")
+        assert "<!DOCTYPE html>" in content
+
+    def test_save_to_file_epub(self, tmp_path):
+        """Test saving EPUB format to file."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("epub-test")
+        output_file = tmp_path / "story.epub"
+
+        result = service.save_to_file(state, "epub", output_file)
+
+        assert result.exists()
+        assert result.stat().st_size > 0
+
+    def test_save_to_file_pdf(self, tmp_path):
+        """Test saving PDF format to file."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("pdf-test")
+        output_file = tmp_path / "story.pdf"
+
+        result = service.save_to_file(state, "pdf", output_file)
+
+        assert result.exists()
+        assert result.stat().st_size > 0
+
+    def test_save_to_file_unsupported_format(self, tmp_path):
+        """Test that unsupported format raises ValueError."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("invalid-test")
+        output_file = tmp_path / "story.xyz"
+
+        with pytest.raises(ValueError, match="Unsupported export format"):
+            service.save_to_file(state, "invalid_format", output_file)
+
+
+class TestExportServiceFileExtension:
+    """Test get_file_extension method."""
+
+    def test_get_extension_markdown(self):
+        """Test file extension for markdown."""
+        service = ExportService(Settings())
+        assert service.get_file_extension("markdown") == ".md"
+
+    def test_get_extension_text(self):
+        """Test file extension for text."""
+        service = ExportService(Settings())
+        assert service.get_file_extension("text") == ".txt"
+
+    def test_get_extension_html(self):
+        """Test file extension for HTML."""
+        service = ExportService(Settings())
+        assert service.get_file_extension("html") == ".html"
+
+    def test_get_extension_epub(self):
+        """Test file extension for EPUB."""
+        service = ExportService(Settings())
+        assert service.get_file_extension("epub") == ".epub"
+
+    def test_get_extension_pdf(self):
+        """Test file extension for PDF."""
+        service = ExportService(Settings())
+        assert service.get_file_extension("pdf") == ".pdf"
+
+    def test_get_extension_docx(self):
+        """Test file extension for DOCX."""
+        service = ExportService(Settings())
+        assert service.get_file_extension("docx") == ".docx"
+
+    def test_get_extension_unknown_defaults_to_txt(self):
+        """Test unknown format defaults to .txt extension."""
+        service = ExportService(Settings())
+        assert service.get_file_extension("unknown") == ".txt"
+
+
+def _create_test_state(state_id: str) -> StoryState:
+    """Helper function to create test story state."""
+    brief = StoryBrief(
+        premise="Test story premise",
+        genre="Fantasy",
+        tone="Epic",
+        setting_time="Medieval",
+        setting_place="Kingdom",
+        target_length="short_story",
+        content_rating="none",
+    )
+    state = StoryState(id=state_id, project_name="Test Story", brief=brief)
+    state.chapters = [
+        Chapter(number=1, title="Chapter One", outline="Outline", content="Chapter content here.")
+    ]
+    return state

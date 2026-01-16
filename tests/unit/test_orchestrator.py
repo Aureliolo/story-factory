@@ -1405,6 +1405,9 @@ class TestWritingMethods:
             orc.writer, "write_chapter", MagicMock(return_value="Chapter content...")
         )
         object.__setattr__(orc.editor, "edit_chapter", MagicMock(return_value="Edited content..."))
+        object.__setattr__(
+            orc.editor, "ensure_consistency", MagicMock(return_value="Consistent content...")
+        )
         object.__setattr__(orc.continuity, "check_chapter", MagicMock(return_value=[]))
         object.__setattr__(orc.continuity, "validate_against_outline", MagicMock(return_value=[]))
         object.__setattr__(orc.continuity, "extract_new_facts", MagicMock(return_value=[]))

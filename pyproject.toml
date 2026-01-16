@@ -77,9 +77,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-# Current: 90.5% on core modules (excluding UI)
-# Target: 100% - remaining gaps in services, memory/mode_database, utils/logging_config
-fail_under = 90
+# 100% coverage achieved on all core modules (849 tests)
+fail_under = 100
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
