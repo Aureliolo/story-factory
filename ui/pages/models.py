@@ -520,7 +520,8 @@ class ModelsPage:
                 task.status = "completed"
                 task.status_text = "Download complete!"
                 logger.info(f"Model {task.model_id} downloaded successfully")
-                ui.notify(f"Model {task.model_id} downloaded!", type="positive")
+                # Don't call ui.notify here - we're in a background context
+                # The status label update is sufficient feedback
             elif not task.cancel_requested and task.status != "error":
                 task.status = "error"
                 task.status_text = "Download failed"
