@@ -10,22 +10,21 @@ from nicegui.elements.html import Html
 from memory.world_database import WorldDatabase
 from ui.graph_renderer import render_graph_html
 
-# Flag to track if vis-network script has been added
-_vis_network_loaded = False
-
 
 def _ensure_vis_network_loaded() -> None:
-    """Ensure vis-network library is loaded (once per app)."""
-    global _vis_network_loaded
-    if not _vis_network_loaded:
-        # Add vis-network script with fallback CDN
-        # Primary: unpkg, Fallback: cdnjs
-        ui.add_body_html(
-            "<!-- vis-network version tracked in /package.json for Dependabot -->"
-            '<script src="https://unpkg.com/vis-network@10.0.2/standalone/umd/vis-network.min.js"'
-            " onerror=\"this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js'\"></script>"
-        )
-        _vis_network_loaded = True
+    """Add vis-network library script to current page.
+
+    This must be called for each page/client that needs the graph,
+    since ui.add_body_html only adds to the current client's page.
+    NiceGUI handles deduplication if called multiple times in same page.
+    """
+    # Add vis-network script with fallback CDN
+    # Primary: unpkg, Fallback: cdnjs
+    ui.add_body_html(
+        "<!-- vis-network version tracked in /package.json for Dependabot -->"
+        '<script src="https://unpkg.com/vis-network@10.0.2/standalone/umd/vis-network.min.js"'
+        " onerror=\"this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js'\"></script>"
+    )
 
 
 class GraphComponent:
