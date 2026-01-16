@@ -398,6 +398,13 @@ class WorldPage:
                 e for e in entities if query in e.name.lower() or query in e.description.lower()
             ]
 
+        # Clear selection if selected entity is filtered out
+        if self.state.selected_entity_id:
+            visible_ids = {e.id for e in entities}
+            if self.state.selected_entity_id not in visible_ids:
+                self.state.select_entity(None)
+                self._refresh_entity_editor()
+
         with self._entity_list:
             if not entities:
                 # Check if there are entities at all or just filtered out

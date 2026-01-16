@@ -828,6 +828,20 @@ class WritePage:
                 ui.download(bytes_content, f"{self.state.project.project_name}.pdf")
 
             self._notify(f"Exported as {fmt.upper()}", type="positive")
+        except PermissionError:
+            logger.exception(f"Permission denied exporting as {fmt}")
+            self._notify(
+                "Export failed: Permission denied. Check file permissions.", type="negative"
+            )
+        except OSError as e:
+            logger.exception(f"OS error exporting as {fmt}")
+            if "No space" in str(e) or "disk full" in str(e).lower():
+                self._notify("Export failed: Insufficient disk space.", type="negative")
+            else:
+                self._notify(f"Export failed: {e}", type="negative")
+        except ValueError as e:
+            logger.exception(f"Value error exporting as {fmt}")
+            self._notify(f"Export failed: {e}. Check chapter content.", type="negative")
         except Exception as e:
             logger.exception(f"Failed to export as {fmt}")
             self._notify(f"Export failed: {e}", type="negative")

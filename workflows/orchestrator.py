@@ -1019,7 +1019,6 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         # Determine file extension and content
         content: str | bytes
-        is_binary = False
         if format == "markdown":
             ext = ".md"
             content = self.export_to_markdown()
@@ -1032,11 +1031,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         elif format == "epub":
             ext = ".epub"
             content = self.export_to_epub()
-            is_binary = True
         elif format == "pdf":
             ext = ".pdf"
             content = self.export_to_pdf()
-            is_binary = True
         else:
             raise ValueError(f"Unsupported export format: {format}")
 
@@ -1051,12 +1048,13 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if is_binary:
+        # Use isinstance for proper type narrowing that mypy understands
+        if isinstance(content, bytes):
             with open(output_path, "wb") as f:
-                f.write(content)  # type: ignore[arg-type]
+                f.write(content)
         else:
             with open(output_path, "w", encoding="utf-8") as f:
-                f.write(content)  # type: ignore[arg-type]
+                f.write(content)
 
         logger.info(f"Story exported to {output_path} ({format} format)")
         return str(output_path)
