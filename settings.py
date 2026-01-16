@@ -281,6 +281,28 @@ class Settings:
     ollama_timeout: int = 120  # Timeout for Ollama API requests
     subprocess_timeout: int = 10  # Timeout for subprocess calls (ollama list, etc.)
 
+    # World quality refinement settings
+    world_quality_enabled: bool = True  # Enable quality refinement for world generation
+    world_quality_max_iterations: int = 3  # Maximum refinement iterations per entity
+    world_quality_threshold: float = 7.0  # Minimum quality score (0-10) to accept entity
+    world_quality_creator_temp: float = 0.9  # Temperature for creative generation
+    world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
+    world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
+
+    # World generation counts (randomized within range for variety)
+    world_gen_characters_min: int = 4
+    world_gen_characters_max: int = 7
+    world_gen_locations_min: int = 3
+    world_gen_locations_max: int = 6
+    world_gen_factions_min: int = 1
+    world_gen_factions_max: int = 3
+    world_gen_items_min: int = 2
+    world_gen_items_max: int = 5
+    world_gen_concepts_min: int = 1
+    world_gen_concepts_max: int = 3
+    world_gen_relationships_min: int = 8
+    world_gen_relationships_max: int = 15
+
     def save(self) -> None:
         """Save settings to JSON file."""
         # Validate before saving
@@ -378,6 +400,51 @@ class Settings:
             raise ValueError(
                 f"subprocess_timeout must be between 5 and 60 seconds, got {self.subprocess_timeout}"
             )
+
+        # Validate world quality settings
+        if not 1 <= self.world_quality_max_iterations <= 10:
+            raise ValueError(
+                f"world_quality_max_iterations must be between 1 and 10, "
+                f"got {self.world_quality_max_iterations}"
+            )
+
+        if not 0.0 <= self.world_quality_threshold <= 10.0:
+            raise ValueError(
+                f"world_quality_threshold must be between 0.0 and 10.0, "
+                f"got {self.world_quality_threshold}"
+            )
+
+        for temp_name, temp_value in [
+            ("world_quality_creator_temp", self.world_quality_creator_temp),
+            ("world_quality_judge_temp", self.world_quality_judge_temp),
+            ("world_quality_refinement_temp", self.world_quality_refinement_temp),
+        ]:
+            if not 0.0 <= temp_value <= 2.0:
+                raise ValueError(f"{temp_name} must be between 0.0 and 2.0, got {temp_value}")
+
+        # Validate world generation count settings
+        world_gen_ranges = [
+            ("characters", self.world_gen_characters_min, self.world_gen_characters_max),
+            ("locations", self.world_gen_locations_min, self.world_gen_locations_max),
+            ("factions", self.world_gen_factions_min, self.world_gen_factions_max),
+            ("items", self.world_gen_items_min, self.world_gen_items_max),
+            ("concepts", self.world_gen_concepts_min, self.world_gen_concepts_max),
+            ("relationships", self.world_gen_relationships_min, self.world_gen_relationships_max),
+        ]
+        for entity_type, min_val, max_val in world_gen_ranges:
+            if not 0 <= min_val <= 20:
+                raise ValueError(
+                    f"world_gen_{entity_type}_min must be between 0 and 20, got {min_val}"
+                )
+            if not 1 <= max_val <= 50:
+                raise ValueError(
+                    f"world_gen_{entity_type}_max must be between 1 and 50, got {max_val}"
+                )
+            if min_val > max_val:
+                raise ValueError(
+                    f"world_gen_{entity_type}_min ({min_val}) cannot exceed "
+                    f"world_gen_{entity_type}_max ({max_val})"
+                )
 
     @classmethod
     def load(cls) -> "Settings":

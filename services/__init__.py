@@ -14,6 +14,7 @@ from .model_service import ModelService
 from .project_service import ProjectService
 from .scoring_service import ScoringService
 from .story_service import StoryService
+from .world_quality_service import WorldQualityService
 from .world_service import WorldService
 
 
@@ -38,6 +39,7 @@ class ServiceContainer:
     export: ExportService
     mode: ModelModeService
     scoring: ScoringService
+    world_quality: WorldQualityService
 
     def __init__(self, settings: Settings | None = None):
         """Initialize all services with shared settings.
@@ -53,6 +55,7 @@ class ServiceContainer:
         self.export = ExportService(self.settings)
         self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
+        self.world_quality = WorldQualityService(self.settings, self.mode)
 
 
 __all__ = [
@@ -64,4 +67,5 @@ __all__ = [
     "ExportService",
     "ModelModeService",
     "ScoringService",
+    "WorldQualityService",
 ]

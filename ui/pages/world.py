@@ -1,17 +1,18 @@
 """World Builder page - entity and relationship management."""
 
 import logging
+import random
 
 from nicegui import ui
 from nicegui.elements.button import Button
 from nicegui.elements.column import Column
 from nicegui.elements.html import Html
 from nicegui.elements.input import Input
-from nicegui.elements.json_editor import JsonEditor
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
 from memory.entities import Entity
+from memory.world_quality import RefinementConfig
 from services import ServiceContainer
 from ui.components.entity_card import entity_list_item
 from ui.components.graph import GraphComponent
@@ -22,6 +23,7 @@ from ui.graph_renderer import (
 )
 from ui.state import ActionType, AppState, UndoAction
 from ui.theme import ENTITY_COLORS
+from utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +56,16 @@ class WorldPage:
         self._entity_name_input: Input | None = None
         self._entity_type_select: Select | None = None
         self._entity_desc_input: Textarea | None = None
-        self._entity_attrs_editor: JsonEditor | None = None
+        # Type-specific attribute form fields
+        self._attr_role_select: Select | None = None
+        self._attr_traits_input: Input | None = None
+        self._attr_goals_input: Input | None = None
+        self._attr_arc_input: Textarea | None = None
+        self._attr_significance_input: Textarea | None = None
+        self._attr_leader_input: Input | None = None
+        self._attr_values_input: Input | None = None
+        self._attr_properties_input: Input | None = None
+        self._attr_manifestations_input: Textarea | None = None
         self._entity_attrs: dict = {}
         self._rel_source_select: Select | None = None
         self._rel_type_select: Select | None = None
@@ -170,26 +181,61 @@ class WorldPage:
                             f"text-xs text-{readiness_color}-600 dark:text-{readiness_color}-400"
                         )
 
+            # Quality refinement toggle
+            with ui.row().classes("items-center gap-2"):
+                ui.switch(
+                    "Quality Refinement",
+                    value=self.state.quality_refinement_enabled,
+                    on_change=lambda e: setattr(self.state, "quality_refinement_enabled", e.value),
+                ).tooltip(
+                    "When enabled, entities are iteratively refined until they meet quality standards"
+                )
+                ui.button(
+                    icon="settings",
+                    on_click=self._show_quality_settings_dialog,
+                ).props("flat dense").tooltip("Quality settings")
+
             ui.space()
 
-            # Generation buttons
-            ui.button(
-                "Add Characters",
-                on_click=lambda: self._generate_more("characters"),
-                icon="person_add",
-            ).props("outline").classes("text-green-600")
+            # Generation buttons - first row
+            with ui.row().classes("gap-2 flex-wrap"):
+                ui.button(
+                    "Characters",
+                    on_click=lambda: self._generate_more("characters"),
+                    icon="person_add",
+                ).props("outline dense").classes("text-green-600").tooltip("Add more characters")
 
-            ui.button(
-                "Add Locations",
-                on_click=lambda: self._generate_more("locations"),
-                icon="add_location",
-            ).props("outline").classes("text-blue-600")
+                ui.button(
+                    "Locations",
+                    on_click=lambda: self._generate_more("locations"),
+                    icon="add_location",
+                ).props("outline dense").classes("text-blue-600").tooltip("Add more locations")
 
-            ui.button(
-                "Add Relationships",
-                on_click=lambda: self._generate_more("relationships"),
-                icon="link",
-            ).props("outline").classes("text-purple-600")
+                ui.button(
+                    "Factions",
+                    on_click=lambda: self._generate_more("factions"),
+                    icon="groups",
+                ).props("outline dense").classes("text-amber-600").tooltip(
+                    "Add factions/organizations"
+                )
+
+                ui.button(
+                    "Items",
+                    on_click=lambda: self._generate_more("items"),
+                    icon="category",
+                ).props("outline dense").classes("text-cyan-600").tooltip("Add significant items")
+
+                ui.button(
+                    "Concepts",
+                    on_click=lambda: self._generate_more("concepts"),
+                    icon="lightbulb",
+                ).props("outline dense").classes("text-pink-600").tooltip("Add thematic concepts")
+
+                ui.button(
+                    "Relationships",
+                    on_click=lambda: self._generate_more("relationships"),
+                    icon="link",
+                ).props("outline dense").classes("text-purple-600").tooltip("Add relationships")
 
             ui.separator().props("vertical")
 
@@ -200,11 +246,163 @@ class WorldPage:
                 icon="refresh",
             ).props("outline color=negative")
 
+    def _show_quality_settings_dialog(self) -> None:
+        """Show dialog to configure quality refinement settings."""
+        settings = self.services.settings
+        config = RefinementConfig.from_settings(settings)
+
+        with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[400px]"):
+            ui.label("Quality Refinement Settings").classes("text-lg font-bold mb-4")
+
+            # Quality Threshold with reactive value display
+            with ui.row().classes("w-full items-center gap-2 mt-2"):
+                ui.label("Quality Threshold").classes("text-sm font-medium flex-grow")
+                threshold_value_label = ui.label(f"{config.quality_threshold:.1f}").classes(
+                    "text-sm font-bold text-primary"
+                )
+            threshold_slider = ui.slider(
+                min=0.0,
+                max=10.0,
+                step=0.5,
+                value=config.quality_threshold,
+                on_change=lambda e: threshold_value_label.set_text(f"{e.value:.1f}"),
+            ).classes("w-full")
+            with ui.row().classes("w-full justify-between text-xs text-gray-500"):
+                ui.label("0 (Accept all)")
+                ui.label("10 (Very strict)")
+
+            # Max Iterations with reactive value display
+            with ui.row().classes("w-full items-center gap-2 mt-4"):
+                ui.label("Max Iterations").classes("text-sm font-medium flex-grow")
+                iterations_value_label = ui.label(f"{config.max_iterations}").classes(
+                    "text-sm font-bold text-primary"
+                )
+            iterations_slider = ui.slider(
+                min=1,
+                max=10,
+                step=1,
+                value=config.max_iterations,
+                on_change=lambda e: iterations_value_label.set_text(f"{int(e.value)}"),
+            ).classes("w-full")
+            with ui.row().classes("w-full justify-between text-xs text-gray-500"):
+                ui.label("1 (No refinement)")
+                ui.label("10 (Max)")
+
+            with ui.expansion("Advanced", icon="tune").classes("w-full mt-4"):
+                # Creator Temperature with reactive display
+                with ui.row().classes("w-full items-center gap-2 mt-2"):
+                    ui.label("Creator Temperature").classes("text-sm font-medium flex-grow")
+                    creator_value_label = ui.label(f"{config.creator_temperature:.1f}").classes(
+                        "text-sm font-bold text-primary"
+                    )
+                creator_temp = ui.slider(
+                    min=0.0,
+                    max=2.0,
+                    step=0.1,
+                    value=config.creator_temperature,
+                    on_change=lambda e: creator_value_label.set_text(f"{e.value:.1f}"),
+                ).classes("w-full")
+                ui.label("Higher = more creative").classes("text-xs text-gray-500")
+
+                # Judge Temperature with reactive display
+                with ui.row().classes("w-full items-center gap-2 mt-4"):
+                    ui.label("Judge Temperature").classes("text-sm font-medium flex-grow")
+                    judge_value_label = ui.label(f"{config.judge_temperature:.1f}").classes(
+                        "text-sm font-bold text-primary"
+                    )
+                judge_temp = ui.slider(
+                    min=0.0,
+                    max=2.0,
+                    step=0.1,
+                    value=config.judge_temperature,
+                    on_change=lambda e: judge_value_label.set_text(f"{e.value:.1f}"),
+                ).classes("w-full")
+                ui.label("Lower = more consistent").classes("text-xs text-gray-500")
+
+                # Refinement Temperature with reactive display
+                with ui.row().classes("w-full items-center gap-2 mt-4"):
+                    ui.label("Refinement Temperature").classes("text-sm font-medium flex-grow")
+                    refine_value_label = ui.label(f"{config.refinement_temperature:.1f}").classes(
+                        "text-sm font-bold text-primary"
+                    )
+                refine_temp = ui.slider(
+                    min=0.0,
+                    max=2.0,
+                    step=0.1,
+                    value=config.refinement_temperature,
+                    on_change=lambda e: refine_value_label.set_text(f"{e.value:.1f}"),
+                ).classes("w-full")
+                ui.label("Balanced creativity and consistency").classes("text-xs text-gray-500")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                def save_settings():
+                    settings.world_quality_threshold = threshold_slider.value
+                    settings.world_quality_max_iterations = int(iterations_slider.value)
+                    settings.world_quality_creator_temp = creator_temp.value
+                    settings.world_quality_judge_temp = judge_temp.value
+                    settings.world_quality_refinement_temp = refine_temp.value
+                    settings.save()
+                    dialog.close()
+                    ui.notify("Quality settings saved", type="positive")
+
+                ui.button("Save", on_click=save_settings).props("color=primary")
+
+        dialog.open()
+
+    def _get_all_entity_names(self) -> list[str]:
+        """Get all entity names from the world database.
+
+        Returns:
+            List of all entity names across all types.
+        """
+        if not self.state.world_db:
+            return []
+        return [e.name for e in self.state.world_db.list_entities()]
+
+    def _get_entity_names_by_type(self, entity_type: str) -> list[str]:
+        """Get entity names filtered by type.
+
+        Args:
+            entity_type: Type to filter by.
+
+        Returns:
+            List of entity names of the specified type.
+        """
+        if not self.state.world_db:
+            return []
+        return [e.name for e in self.state.world_db.list_entities() if e.type == entity_type]
+
+    def _get_random_count(self, entity_type: str) -> int:
+        """Get a random count for entity generation based on settings.
+
+        Args:
+            entity_type: Type of entity (characters, locations, factions, items, concepts, relationships)
+
+        Returns:
+            Random integer between min and max from settings.
+        """
+        settings = self.services.settings
+        ranges = {
+            "characters": (settings.world_gen_characters_min, settings.world_gen_characters_max),
+            "locations": (settings.world_gen_locations_min, settings.world_gen_locations_max),
+            "factions": (settings.world_gen_factions_min, settings.world_gen_factions_max),
+            "items": (settings.world_gen_items_min, settings.world_gen_items_max),
+            "concepts": (settings.world_gen_concepts_min, settings.world_gen_concepts_max),
+            "relationships": (
+                settings.world_gen_relationships_min,
+                settings.world_gen_relationships_max,
+            ),
+        }
+        min_val, max_val = ranges.get(entity_type, (2, 4))
+        return random.randint(min_val, max_val)
+
     async def _generate_more(self, entity_type: str) -> None:
         """Generate more entities of a specific type.
 
         Args:
-            entity_type: Type of entities to generate (characters, locations, relationships)
+            entity_type: Type of entities to generate (characters, locations, factions, items, concepts, relationships)
         """
         logger.info(f"Generate more clicked: entity_type={entity_type}")
 
@@ -215,9 +413,24 @@ class WorldPage:
 
         logger.info(f"Starting generation of {entity_type} for project {self.state.project.id}")
 
+        # Check if quality refinement is enabled
+        use_quality = (
+            self.state.quality_refinement_enabled and self.services.settings.world_quality_enabled
+        )
+        logger.info(f"Quality refinement enabled: {use_quality}")
+
+        # Get count from settings (randomized within range)
+        count = self._get_random_count(entity_type)
+        logger.info(f"Will generate {count} {entity_type}")
+
+        # Get ALL existing entity names to avoid duplicates
+        all_existing_names = self._get_all_entity_names()
+        logger.info(f"Found {len(all_existing_names)} existing entities to avoid duplicates")
+
         # Use notification that can be dismissed
+        quality_msg = " with quality refinement" if use_quality else ""
         notification = ui.notification(
-            message=f"Generating {entity_type}...",
+            message=f"Generating {count} {entity_type}{quality_msg}...",
             spinner=True,
             timeout=None,
         )
@@ -226,54 +439,343 @@ class WorldPage:
             from nicegui import run
 
             if entity_type == "characters":
-                # Generate characters via service
-                logger.info("Calling story service to generate characters...")
-                new_chars = await run.io_bound(
-                    self.services.story.generate_more_characters, self.state.project, 2
-                )
-                logger.info(f"Generated {len(new_chars)} characters from LLM")
-                # Add to world database
-                for char in new_chars:
-                    self.services.world.add_entity(
-                        self.state.world_db,
-                        name=char.name,
-                        entity_type="character",
-                        description=char.description,
-                        attributes={
+                if use_quality:
+                    # Generate characters with quality refinement
+                    logger.info("Calling world quality service to generate characters...")
+                    results = await run.io_bound(
+                        self.services.world_quality.generate_characters_with_quality,
+                        self.state.project,
+                        all_existing_names,
+                        count,
+                    )
+                    logger.info(f"Generated {len(results)} characters with quality refinement")
+
+                    # Generate mini descriptions for hover tooltips
+                    notification.message = "Generating hover summaries..."
+                    entity_data = [
+                        {"name": c.name, "type": "character", "description": c.description}
+                        for c, _ in results
+                    ]
+                    mini_descs = await run.io_bound(
+                        self.services.world_quality.generate_mini_descriptions_batch,
+                        entity_data,
+                    )
+
+                    # Add to world database with quality scores and mini descriptions
+                    for char, scores in results:
+                        attrs = {
                             "role": char.role,
                             "traits": char.personality_traits,
                             "goals": char.goals,
                             "arc": char.arc_notes,
-                        },
-                    )
-                logger.info(f"Added {len(new_chars)} characters to world database")
-                notification.dismiss()
-                ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
-
-            elif entity_type == "locations":
-                # Generate locations via service
-                logger.info("Calling story service to generate locations...")
-                locations = await run.io_bound(
-                    self.services.story.generate_locations, self.state.project, 3
-                )
-                logger.info(f"Generated {len(locations)} locations from LLM")
-                # Add to world database
-                added_count = 0
-                for loc in locations:
-                    if isinstance(loc, dict) and "name" in loc:
+                            "quality_scores": scores.to_dict(),
+                        }
+                        if char.name in mini_descs:
+                            attrs["mini_description"] = mini_descs[char.name]
                         self.services.world.add_entity(
                             self.state.world_db,
-                            name=loc["name"],
-                            entity_type="location",
-                            description=loc.get("description", ""),
-                            attributes={"significance": loc.get("significance", "")},
+                            name=char.name,
+                            entity_type="character",
+                            description=char.description,
+                            attributes=attrs,
                         )
-                        added_count += 1
-                    else:
-                        logger.warning(f"Skipping invalid location: {loc}")
-                logger.info(f"Added {added_count} locations to world database")
-                notification.dismiss()
-                ui.notify(f"Added {added_count} new locations!", type="positive")
+                        # Also add to story state
+                        self.state.project.characters.append(char)
+                    notification.dismiss()
+                    avg_quality = (
+                        sum(s.average for _, s in results) / len(results) if results else 0
+                    )
+                    ui.notify(
+                        f"Added {len(results)} characters (avg quality: {avg_quality:.1f})",
+                        type="positive",
+                    )
+                else:
+                    # Generate characters via service (original method)
+                    logger.info("Calling story service to generate characters...")
+                    new_chars = await run.io_bound(
+                        self.services.story.generate_more_characters, self.state.project, count
+                    )
+                    logger.info(f"Generated {len(new_chars)} characters from LLM")
+                    # Add to world database
+                    for char in new_chars:
+                        self.services.world.add_entity(
+                            self.state.world_db,
+                            name=char.name,
+                            entity_type="character",
+                            description=char.description,
+                            attributes={
+                                "role": char.role,
+                                "traits": char.personality_traits,
+                                "goals": char.goals,
+                                "arc": char.arc_notes,
+                            },
+                        )
+                    logger.info(f"Added {len(new_chars)} characters to world database")
+                    notification.dismiss()
+                    ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
+
+            elif entity_type == "locations":
+                if use_quality:
+                    # Generate locations with quality refinement
+                    logger.info("Calling world quality service to generate locations...")
+                    loc_results = await run.io_bound(
+                        self.services.world_quality.generate_locations_with_quality,
+                        self.state.project,
+                        all_existing_names,
+                        count,
+                    )
+                    logger.info(f"Generated {len(loc_results)} locations with quality refinement")
+
+                    # Generate mini descriptions for hover tooltips
+                    notification.message = "Generating hover summaries..."
+                    entity_data = [
+                        {
+                            "name": loc.get("name", ""),
+                            "type": "location",
+                            "description": loc.get("description", ""),
+                        }
+                        for loc, _ in loc_results
+                        if isinstance(loc, dict) and loc.get("name")
+                    ]
+                    mini_descs = await run.io_bound(
+                        self.services.world_quality.generate_mini_descriptions_batch,
+                        entity_data,
+                    )
+
+                    # Add to world database with quality scores and mini descriptions
+                    for loc, scores in loc_results:  # type: ignore[assignment]
+                        if isinstance(loc, dict) and "name" in loc:
+                            attrs = {
+                                "significance": loc.get("significance", ""),
+                                "quality_scores": scores.to_dict(),
+                            }
+                            if loc["name"] in mini_descs:
+                                attrs["mini_description"] = mini_descs[loc["name"]]
+                            self.services.world.add_entity(
+                                self.state.world_db,
+                                name=loc["name"],
+                                entity_type="location",
+                                description=loc.get("description", ""),
+                                attributes=attrs,
+                            )
+                    notification.dismiss()
+                    avg_quality = (
+                        sum(s.average for _, s in loc_results) / len(loc_results)
+                        if loc_results
+                        else 0
+                    )
+                    ui.notify(
+                        f"Added {len(loc_results)} locations (avg quality: {avg_quality:.1f})",
+                        type="positive",
+                    )
+                else:
+                    # Generate locations via service (original method)
+                    logger.info("Calling story service to generate locations...")
+                    locations = await run.io_bound(
+                        self.services.story.generate_locations, self.state.project, count
+                    )
+                    logger.info(f"Generated {len(locations)} locations from LLM")
+                    # Add to world database
+                    added_count = 0
+                    for loc in locations:
+                        if isinstance(loc, dict) and "name" in loc:
+                            self.services.world.add_entity(
+                                self.state.world_db,
+                                name=loc["name"],
+                                entity_type="location",
+                                description=loc.get("description", ""),
+                                attributes={"significance": loc.get("significance", "")},
+                            )
+                            added_count += 1
+                        else:
+                            logger.warning(f"Skipping invalid location: {loc}")
+                    logger.info(f"Added {added_count} locations to world database")
+                    notification.dismiss()
+                    ui.notify(f"Added {added_count} new locations!", type="positive")
+
+            elif entity_type == "factions":
+                if use_quality:
+                    # Generate factions with quality refinement
+                    logger.info("Calling world quality service to generate factions...")
+                    faction_results = await run.io_bound(
+                        self.services.world_quality.generate_factions_with_quality,
+                        self.state.project,
+                        all_existing_names,
+                        count,
+                    )
+                    logger.info(
+                        f"Generated {len(faction_results)} factions with quality refinement"
+                    )
+
+                    # Generate mini descriptions for hover tooltips
+                    notification.message = "Generating hover summaries..."
+                    entity_data = [
+                        {
+                            "name": faction.get("name", ""),
+                            "type": "faction",
+                            "description": faction.get("description", ""),
+                        }
+                        for faction, _ in faction_results
+                        if isinstance(faction, dict) and faction.get("name")
+                    ]
+                    mini_descs = await run.io_bound(
+                        self.services.world_quality.generate_mini_descriptions_batch,
+                        entity_data,
+                    )
+
+                    # Add to world database with quality scores and mini descriptions
+                    for faction, scores in faction_results:  # type: ignore[assignment]
+                        if isinstance(faction, dict) and "name" in faction:
+                            attrs = {
+                                "leader": faction.get("leader", ""),
+                                "goals": faction.get("goals", []),
+                                "values": faction.get("values", []),
+                                "quality_scores": scores.to_dict(),
+                            }
+                            if faction["name"] in mini_descs:
+                                attrs["mini_description"] = mini_descs[faction["name"]]
+                            self.services.world.add_entity(
+                                self.state.world_db,
+                                name=faction["name"],
+                                entity_type="faction",
+                                description=faction.get("description", ""),
+                                attributes=attrs,
+                            )
+                    notification.dismiss()
+                    avg_quality = (
+                        sum(s.average for _, s in faction_results) / len(faction_results)
+                        if faction_results
+                        else 0
+                    )
+                    ui.notify(
+                        f"Added {len(faction_results)} factions (avg quality: {avg_quality:.1f})",
+                        type="positive",
+                    )
+                else:
+                    notification.dismiss()
+                    ui.notify("Enable Quality Refinement to generate factions", type="warning")
+                    return
+
+            elif entity_type == "items":
+                if use_quality:
+                    # Generate items with quality refinement
+                    logger.info("Calling world quality service to generate items...")
+                    item_results = await run.io_bound(
+                        self.services.world_quality.generate_items_with_quality,
+                        self.state.project,
+                        all_existing_names,
+                        count,
+                    )
+                    logger.info(f"Generated {len(item_results)} items with quality refinement")
+
+                    # Generate mini descriptions for hover tooltips
+                    notification.message = "Generating hover summaries..."
+                    entity_data = [
+                        {
+                            "name": item.get("name", ""),
+                            "type": "item",
+                            "description": item.get("description", ""),
+                        }
+                        for item, _ in item_results
+                        if isinstance(item, dict) and item.get("name")
+                    ]
+                    mini_descs = await run.io_bound(
+                        self.services.world_quality.generate_mini_descriptions_batch,
+                        entity_data,
+                    )
+
+                    # Add to world database with quality scores and mini descriptions
+                    for item, scores in item_results:  # type: ignore[assignment]
+                        if isinstance(item, dict) and "name" in item:
+                            attrs = {
+                                "significance": item.get("significance", ""),
+                                "properties": item.get("properties", []),
+                                "quality_scores": scores.to_dict(),
+                            }
+                            if item["name"] in mini_descs:
+                                attrs["mini_description"] = mini_descs[item["name"]]
+                            self.services.world.add_entity(
+                                self.state.world_db,
+                                name=item["name"],
+                                entity_type="item",
+                                description=item.get("description", ""),
+                                attributes=attrs,
+                            )
+                    notification.dismiss()
+                    avg_quality = (
+                        sum(s.average for _, s in item_results) / len(item_results)
+                        if item_results
+                        else 0
+                    )
+                    ui.notify(
+                        f"Added {len(item_results)} items (avg quality: {avg_quality:.1f})",
+                        type="positive",
+                    )
+                else:
+                    notification.dismiss()
+                    ui.notify("Enable Quality Refinement to generate items", type="warning")
+                    return
+
+            elif entity_type == "concepts":
+                if use_quality:
+                    # Generate concepts with quality refinement
+                    logger.info("Calling world quality service to generate concepts...")
+                    concept_results = await run.io_bound(
+                        self.services.world_quality.generate_concepts_with_quality,
+                        self.state.project,
+                        all_existing_names,
+                        count,
+                    )
+                    logger.info(
+                        f"Generated {len(concept_results)} concepts with quality refinement"
+                    )
+
+                    # Generate mini descriptions for hover tooltips
+                    notification.message = "Generating hover summaries..."
+                    entity_data = [
+                        {
+                            "name": concept.get("name", ""),
+                            "type": "concept",
+                            "description": concept.get("description", ""),
+                        }
+                        for concept, _ in concept_results
+                        if isinstance(concept, dict) and concept.get("name")
+                    ]
+                    mini_descs = await run.io_bound(
+                        self.services.world_quality.generate_mini_descriptions_batch,
+                        entity_data,
+                    )
+
+                    # Add to world database with quality scores and mini descriptions
+                    for concept, scores in concept_results:  # type: ignore[assignment]
+                        if isinstance(concept, dict) and "name" in concept:
+                            attrs = {
+                                "manifestations": concept.get("manifestations", ""),
+                                "quality_scores": scores.to_dict(),
+                            }
+                            if concept["name"] in mini_descs:
+                                attrs["mini_description"] = mini_descs[concept["name"]]
+                            self.services.world.add_entity(
+                                self.state.world_db,
+                                name=concept["name"],
+                                entity_type="concept",
+                                description=concept.get("description", ""),
+                                attributes=attrs,
+                            )
+                    notification.dismiss()
+                    avg_quality = (
+                        sum(s.average for _, s in concept_results) / len(concept_results)
+                        if concept_results
+                        else 0
+                    )
+                    ui.notify(
+                        f"Added {len(concept_results)} concepts (avg quality: {avg_quality:.1f})",
+                        type="positive",
+                    )
+                else:
+                    notification.dismiss()
+                    ui.notify("Enable Quality Refinement to generate concepts", type="warning")
+                    return
 
             elif entity_type == "relationships":
                 # Get existing entities and relationships
@@ -296,43 +798,103 @@ class WorldPage:
                     ui.notify("Need at least 2 entities to create relationships", type="warning")
                     return
 
-                # Generate relationships via service
-                logger.info("Calling story service to generate relationships...")
-                relationships = await run.io_bound(
-                    self.services.story.generate_relationships,
-                    self.state.project,
-                    entity_names,
-                    existing_rels,
-                    5,
-                )
-                logger.info(f"Generated {len(relationships)} relationships from LLM")
+                if use_quality:
+                    # Generate relationships with quality refinement
+                    logger.info("Calling world quality service to generate relationships...")
+                    rel_results = await run.io_bound(
+                        self.services.world_quality.generate_relationships_with_quality,
+                        self.state.project,
+                        entity_names,
+                        existing_rels,
+                        count,
+                    )
+                    logger.info(
+                        f"Generated {len(rel_results)} relationships with quality refinement"
+                    )
 
-                # Add to world database
-                added = 0
-                for rel in relationships:
-                    if isinstance(rel, dict) and "source" in rel and "target" in rel:
-                        # Find entity IDs by name
-                        source_entity = next((e for e in entities if e.name == rel["source"]), None)
-                        target_entity = next((e for e in entities if e.name == rel["target"]), None)
-                        if source_entity and target_entity:
-                            self.services.world.add_relationship(
-                                self.state.world_db,
-                                source_entity.id,
-                                target_entity.id,
-                                rel.get("relation_type", "knows"),
-                                rel.get("description", ""),
+                    # Add to world database with quality scores
+                    added = 0
+                    for rel_data, scores in rel_results:  # type: ignore[assignment]
+                        if (
+                            isinstance(rel_data, dict)
+                            and "source" in rel_data
+                            and "target" in rel_data
+                        ):
+                            source_entity = next(
+                                (e for e in entities if e.name == rel_data["source"]), None
                             )
-                            added += 1
+                            target_entity = next(
+                                (e for e in entities if e.name == rel_data["target"]), None
+                            )
+                            if source_entity and target_entity:
+                                rel_id = self.services.world.add_relationship(
+                                    self.state.world_db,
+                                    source_entity.id,
+                                    target_entity.id,
+                                    rel_data.get("relation_type", "knows"),
+                                    rel_data.get("description", ""),
+                                )
+                                # Store quality scores in relationship attributes
+                                self.state.world_db.update_relationship(
+                                    relationship_id=rel_id,
+                                    attributes={"quality_scores": scores.to_dict()},
+                                )
+                                added += 1
+                    notification.dismiss()
+                    avg_quality = (
+                        sum(s.average for _, s in rel_results) / len(rel_results)
+                        if rel_results
+                        else 0
+                    )
+                    ui.notify(
+                        f"Added {added} relationships (avg quality: {avg_quality:.1f})",
+                        type="positive",
+                    )
+                else:
+                    # Generate relationships via service (original method)
+                    logger.info("Calling story service to generate relationships...")
+                    relationships = await run.io_bound(
+                        self.services.story.generate_relationships,
+                        self.state.project,
+                        entity_names,
+                        existing_rels,
+                        count,
+                    )
+                    logger.info(f"Generated {len(relationships)} relationships from LLM")
+
+                    # Add to world database
+                    added = 0
+                    for rel in relationships:
+                        if isinstance(rel, dict) and "source" in rel and "target" in rel:
+                            # Find entity IDs by name
+                            source_entity = next(
+                                (e for e in entities if e.name == rel["source"]), None
+                            )
+                            target_entity = next(
+                                (e for e in entities if e.name == rel["target"]), None
+                            )
+                            if source_entity and target_entity:
+                                self.services.world.add_relationship(
+                                    self.state.world_db,
+                                    source_entity.id,
+                                    target_entity.id,
+                                    rel.get("relation_type", "knows"),
+                                    rel.get("description", ""),
+                                )
+                                added += 1
+                            else:
+                                logger.warning(
+                                    f"Skipping relationship: source={rel['source']} or "
+                                    f"target={rel['target']} not found"
+                                )
                         else:
-                            logger.warning(
-                                f"Skipping relationship: source={rel['source']} or "
-                                f"target={rel['target']} not found"
-                            )
-                    else:
-                        logger.warning(f"Skipping invalid relationship: {rel}")
-                logger.info(f"Added {added} relationships to world database")
-                notification.dismiss()
-                ui.notify(f"Added {added} new relationships!", type="positive")
+                            logger.warning(f"Skipping invalid relationship: {rel}")
+                    logger.info(f"Added {added} relationships to world database")
+                    notification.dismiss()
+                    ui.notify(f"Added {added} new relationships!", type="positive")
+
+            # Invalidate graph cache to ensure fresh tooltips
+            self.state.world_db.invalidate_graph_cache()
 
             # Refresh the UI
             logger.info("Refreshing UI after generation...")
@@ -348,9 +910,13 @@ class WorldPage:
 
             logger.info(f"Generation of {entity_type} completed successfully")
 
+        except WorldGenerationError as e:
+            notification.dismiss()
+            logger.error(f"World generation failed for {entity_type}: {e}")
+            ui.notify(f"Generation failed: {e}", type="negative", close_button=True, timeout=10)
         except Exception as e:
             notification.dismiss()
-            logger.exception(f"Error generating {entity_type}: {e}")
+            logger.exception(f"Unexpected error generating {entity_type}: {e}")
             ui.notify(f"Error: {e}", type="negative")
 
     def _confirm_regenerate(self) -> None:
@@ -544,14 +1110,40 @@ class WorldPage:
             except Exception as e:
                 logger.exception(f"Failed to generate relationships: {e}")
 
+            # Step 5: Generate mini descriptions for tooltips
+            notification.message = "Finalizing: Generating hover summaries..."
+            logger.info("Generating mini descriptions for entities...")
+            try:
+                all_entities = self.state.world_db.list_entities()
+                entity_data = [
+                    {"name": e.name, "type": e.type, "description": e.description}
+                    for e in all_entities
+                ]
+                mini_descs = await run.io_bound(
+                    self.services.world_quality.generate_mini_descriptions_batch,
+                    entity_data,
+                )
+                logger.info(f"Generated {len(mini_descs)} mini descriptions")
+
+                # Update entities with mini descriptions
+                for entity in all_entities:
+                    if entity.name in mini_descs:
+                        # Merge mini_description into existing attributes
+                        attrs = dict(entity.attributes) if entity.attributes else {}
+                        attrs["mini_description"] = mini_descs[entity.name]
+                        self.state.world_db.update_entity(
+                            entity_id=entity.id,
+                            attributes=attrs,
+                        )
+                logger.info("Updated entities with mini descriptions")
+
+                # Invalidate graph cache to ensure fresh tooltips
+                self.state.world_db.invalidate_graph_cache()
+            except Exception as e:
+                logger.exception(f"Failed to generate mini descriptions: {e}")
+
             # Dismiss the loading notification
             notification.dismiss()
-
-            # Refresh the UI
-            logger.info("Refreshing UI after rebuild...")
-            self._refresh_entity_list()
-            if self._graph:
-                self._graph.refresh()
 
             # Save the project
             if self.state.project:
@@ -570,6 +1162,19 @@ class WorldPage:
                 type="positive",
             )
 
+            # Force page refresh to ensure all components update correctly
+            logger.info("Triggering page refresh after world rebuild...")
+            ui.navigate.reload()
+
+        except WorldGenerationError as e:
+            notification.dismiss()
+            logger.error(f"World rebuild generation failed: {e}")
+            ui.notify(
+                f"World rebuild failed: {e}",
+                type="negative",
+                close_button=True,
+                timeout=10,
+            )
         except Exception as e:
             notification.dismiss()
             logger.exception(f"Error rebuilding world: {e}")
@@ -662,7 +1267,10 @@ class WorldPage:
                 ui.label("Entity not found").classes("text-red-500 text-sm")
                 return
 
-            # Entity form
+            # Initialize attrs from entity for saving later
+            self._entity_attrs = entity.attributes.copy() if entity.attributes else {}
+
+            # Entity form - common fields
             self._entity_name_input = ui.input(
                 label="Name",
                 value=entity.name,
@@ -672,6 +1280,7 @@ class WorldPage:
                 label="Type",
                 options=["character", "location", "item", "faction", "concept"],
                 value=entity.type,
+                on_change=lambda e: self._refresh_entity_editor(),
             ).classes("w-full")
 
             self._entity_desc_input = (
@@ -683,24 +1292,8 @@ class WorldPage:
                 .props("rows=4")
             )
 
-            # Attributes JSON editor
-            with ui.expansion("Attributes", icon="list").classes("w-full"):
-                ui.label("Edit entity attributes as JSON").classes(
-                    "text-xs text-gray-500 dark:text-gray-400 mb-2"
-                )
-
-                # Initialize attrs from entity
-                self._entity_attrs = entity.attributes.copy() if entity.attributes else {}
-
-                # JSON editor for attributes
-                self._entity_attrs_editor = (
-                    ui.json_editor(
-                        {"content": {"json": self._entity_attrs}},
-                        on_change=self._on_attrs_change,
-                    )
-                    .classes("w-full")
-                    .style("height: 200px;")
-                )
+            # Type-specific attribute fields
+            self._build_type_specific_fields(entity)
 
             # Action buttons
             with ui.row().classes("w-full gap-2 mt-4"):
@@ -715,6 +1308,143 @@ class WorldPage:
                     on_click=self._confirm_delete_entity,
                     icon="delete",
                 ).props("color=negative outline")
+
+    def _build_type_specific_fields(self, entity: Entity) -> None:
+        """Build attribute fields specific to entity type."""
+        attrs = entity.attributes or {}
+
+        with ui.expansion("Attributes", icon="list", value=True).classes("w-full"):
+            if entity.type == "character":
+                # Role
+                self._attr_role_select = ui.select(
+                    label="Role",
+                    options=[
+                        "protagonist",
+                        "antagonist",
+                        "love_interest",
+                        "supporting",
+                        "mentor",
+                        "sidekick",
+                    ],
+                    value=attrs.get("role", "supporting"),
+                ).classes("w-full")
+
+                # Traits (comma-separated)
+                traits = attrs.get("traits") or attrs.get("personality_traits") or []
+                traits_str = ", ".join(traits) if isinstance(traits, list) else str(traits)
+                self._attr_traits_input = (
+                    ui.input(
+                        label="Traits (comma-separated)",
+                        value=traits_str,
+                    )
+                    .classes("w-full")
+                    .props("hint='e.g., brave, stubborn, loyal'")
+                )
+
+                # Goals (comma-separated)
+                goals = attrs.get("goals") or []
+                goals_str = ", ".join(goals) if isinstance(goals, list) else str(goals)
+                self._attr_goals_input = ui.input(
+                    label="Goals (comma-separated)",
+                    value=goals_str,
+                ).classes("w-full")
+
+                # Arc notes
+                self._attr_arc_input = (
+                    ui.textarea(
+                        label="Character Arc",
+                        value=attrs.get("arc") or attrs.get("arc_notes") or "",
+                    )
+                    .classes("w-full")
+                    .props("rows=2")
+                )
+
+            elif entity.type == "location":
+                # Significance
+                self._attr_significance_input = (
+                    ui.textarea(
+                        label="Significance",
+                        value=attrs.get("significance", ""),
+                    )
+                    .classes("w-full")
+                    .props("rows=3 hint='Why is this location important to the story?'")
+                )
+
+            elif entity.type == "faction":
+                # Leader
+                self._attr_leader_input = ui.input(
+                    label="Leader",
+                    value=attrs.get("leader", ""),
+                ).classes("w-full")
+
+                # Goals (comma-separated)
+                goals = attrs.get("goals") or []
+                goals_str = ", ".join(goals) if isinstance(goals, list) else str(goals)
+                self._attr_goals_input = ui.input(
+                    label="Goals (comma-separated)",
+                    value=goals_str,
+                ).classes("w-full")
+
+                # Values (comma-separated)
+                values = attrs.get("values") or []
+                values_str = ", ".join(values) if isinstance(values, list) else str(values)
+                self._attr_values_input = ui.input(
+                    label="Values (comma-separated)",
+                    value=values_str,
+                ).classes("w-full")
+
+            elif entity.type == "item":
+                # Significance
+                self._attr_significance_input = (
+                    ui.textarea(
+                        label="Significance",
+                        value=attrs.get("significance", ""),
+                    )
+                    .classes("w-full")
+                    .props("rows=2 hint='Why is this item important?'")
+                )
+
+                # Properties (comma-separated)
+                properties = attrs.get("properties") or []
+                props_str = (
+                    ", ".join(properties) if isinstance(properties, list) else str(properties)
+                )
+                self._attr_properties_input = (
+                    ui.input(
+                        label="Properties (comma-separated)",
+                        value=props_str,
+                    )
+                    .classes("w-full")
+                    .props("hint='e.g., indestructible, glowing, cursed'")
+                )
+
+            elif entity.type == "concept":
+                # Manifestations
+                self._attr_manifestations_input = (
+                    ui.textarea(
+                        label="Manifestations",
+                        value=attrs.get("manifestations", ""),
+                    )
+                    .classes("w-full")
+                    .props("rows=3 hint='How does this concept appear in the story?'")
+                )
+
+            # Show quality scores if present (read-only display)
+            quality_scores = attrs.get("quality_scores")
+            if quality_scores and isinstance(quality_scores, dict):
+                with ui.expansion("Quality Scores", icon="star", value=False).classes(
+                    "w-full mt-2"
+                ):
+                    avg = quality_scores.get("average", 0)
+                    ui.label(f"Average: {avg:.1f}/10").classes("font-semibold text-primary")
+                    for key, value in quality_scores.items():
+                        if key not in ("average", "feedback") and isinstance(value, (int, float)):
+                            ui.label(f"{key.replace('_', ' ').title()}: {value:.1f}").classes(
+                                "text-sm"
+                            )
+                    feedback = quality_scores.get("feedback", "")
+                    if feedback:
+                        ui.label(f"Feedback: {feedback}").classes("text-xs text-gray-500 mt-2")
 
     def _build_relationships_section(self) -> None:
         """Build the relationships management section."""
@@ -930,7 +1660,9 @@ class WorldPage:
         rel = next((r for r in relationships if r.id == relationship_id), None)
 
         if not rel:
-            logger.warning(f"Relationship not found: {relationship_id}")
+            # This can happen when clicking on a stale edge after relationships were
+            # regenerated - the graph may have old edge IDs. Silently ignore.
+            logger.debug(f"Relationship not found (stale edge click): {relationship_id}")
             return
 
         # Get source and target entities
@@ -1133,18 +1865,66 @@ class WorldPage:
             logger.exception(f"Failed to add entity {name}")
             ui.notify(f"Error: {e}", type="negative")
 
-    def _on_attrs_change(self, e) -> None:
-        """Handle changes in the attributes JSON editor."""
-        try:
-            content = e.args.get("content", {})
-            if "json" in content:
-                self._entity_attrs = content["json"]
-            elif "text" in content:
-                import json
+    def _collect_attrs_from_form(self, entity_type: str) -> dict:
+        """Collect attributes from type-specific form fields.
 
-                self._entity_attrs = json.loads(content["text"])
-        except (json.JSONDecodeError, TypeError, KeyError):
-            pass  # Invalid JSON, don't update
+        Args:
+            entity_type: The type of entity being edited.
+
+        Returns:
+            Dictionary of attributes collected from form fields.
+        """
+        # Start with existing attrs to preserve fields not shown in form
+        attrs = self._entity_attrs.copy() if self._entity_attrs else {}
+
+        if entity_type == "character":
+            if self._attr_role_select:
+                attrs["role"] = self._attr_role_select.value
+            if self._attr_traits_input and self._attr_traits_input.value:
+                traits_list = [
+                    t.strip() for t in self._attr_traits_input.value.split(",") if t.strip()
+                ]
+                attrs["traits"] = traits_list
+            if self._attr_goals_input and self._attr_goals_input.value:
+                goals_list = [
+                    g.strip() for g in self._attr_goals_input.value.split(",") if g.strip()
+                ]
+                attrs["goals"] = goals_list
+            if self._attr_arc_input:
+                attrs["arc"] = self._attr_arc_input.value
+
+        elif entity_type == "location":
+            if self._attr_significance_input:
+                attrs["significance"] = self._attr_significance_input.value
+
+        elif entity_type == "faction":
+            if self._attr_leader_input:
+                attrs["leader"] = self._attr_leader_input.value
+            if self._attr_goals_input and self._attr_goals_input.value:
+                goals_list = [
+                    g.strip() for g in self._attr_goals_input.value.split(",") if g.strip()
+                ]
+                attrs["goals"] = goals_list
+            if self._attr_values_input and self._attr_values_input.value:
+                values_list = [
+                    v.strip() for v in self._attr_values_input.value.split(",") if v.strip()
+                ]
+                attrs["values"] = values_list
+
+        elif entity_type == "item":
+            if self._attr_significance_input:
+                attrs["significance"] = self._attr_significance_input.value
+            if self._attr_properties_input and self._attr_properties_input.value:
+                props_list = [
+                    p.strip() for p in self._attr_properties_input.value.split(",") if p.strip()
+                ]
+                attrs["properties"] = props_list
+
+        elif entity_type == "concept":
+            if self._attr_manifestations_input:
+                attrs["manifestations"] = self._attr_manifestations_input.value
+
+        return attrs
 
     def _save_entity(self) -> None:
         """Save current entity changes."""
@@ -1162,7 +1942,12 @@ class WorldPage:
 
             new_name = self._entity_name_input.value if self._entity_name_input else None
             new_desc = self._entity_desc_input.value if self._entity_desc_input else None
-            new_attrs = self._entity_attrs if self._entity_attrs else None
+            new_type = (
+                self._entity_type_select.value if self._entity_type_select else old_entity.type
+            )
+
+            # Collect attributes from form fields
+            new_attrs = self._collect_attrs_from_form(new_type)
 
             self.services.world.update_entity(
                 self.state.world_db,
@@ -1204,8 +1989,6 @@ class WorldPage:
         if not self.state.selected_entity_id or not self.state.world_db:
             return
 
-        from ui.components.common import confirmation_dialog
-
         try:
             # Get entity name for better UX
             entity = self.services.world.get_entity(
@@ -1214,14 +1997,67 @@ class WorldPage:
             )
             entity_name = entity.name if entity else "this entity"
 
-            confirmation_dialog(
-                title="Delete Entity?",
-                message=f'Are you sure you want to delete "{entity_name}"? This will also remove all relationships. This cannot be undone.',
-                on_confirm=self._delete_entity,
-                confirm_text="Delete",
-                cancel_text="Cancel",
-            )
+            # Count attached relationships
+            all_rels = self.state.world_db.list_relationships()
+            attached_rels = [
+                r
+                for r in all_rels
+                if r.source_id == self.state.selected_entity_id
+                or r.target_id == self.state.selected_entity_id
+            ]
+            rel_count = len(attached_rels)
+
+            # Build message with relationship info
+            message = f'Are you sure you want to delete "{entity_name}"?'
+            if rel_count > 0:
+                rel_word = "relationship" if rel_count == 1 else "relationships"
+                message += f"\n\nThis will also delete {rel_count} attached {rel_word}."
+            message += "\n\nThis action cannot be undone."
+
+            # Custom dialog with more info
+            with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[400px]"):
+                ui.label("Delete Entity?").classes("text-lg font-bold text-red-600")
+                ui.label(message).classes(
+                    "text-gray-600 dark:text-gray-400 whitespace-pre-line mt-2"
+                )
+
+                if rel_count > 0:
+                    with ui.expansion("Show affected relationships", icon="link").classes(
+                        "w-full mt-2"
+                    ):
+                        for rel in attached_rels[:10]:  # Show max 10
+                            source = self.services.world.get_entity(
+                                self.state.world_db, rel.source_id
+                            )
+                            target = self.services.world.get_entity(
+                                self.state.world_db, rel.target_id
+                            )
+                            src_name = source.name if source else "?"
+                            tgt_name = target.name if target else "?"
+                            ui.label(f"{src_name} → {tgt_name} ({rel.relation_type})").classes(
+                                "text-sm text-gray-500"
+                            )
+                        if rel_count > 10:
+                            ui.label(f"... and {rel_count - 10} more").classes(
+                                "text-sm text-gray-400 italic"
+                            )
+
+                def _do_delete() -> None:
+                    dialog.close()
+                    self._delete_entity()
+
+                with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat")
+                    ui.button(
+                        "Delete",
+                        on_click=_do_delete,
+                        icon="delete",
+                    ).props("color=negative")
+
+            dialog.open()
+
         except Exception as e:
+            logger.exception("Error showing delete confirmation")
             ui.notify(f"Error: {e}", type="negative")
 
     def _delete_entity(self) -> None:

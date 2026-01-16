@@ -113,10 +113,17 @@ def render_graph_html(
 
         rel_type = data.get("relation_type", "related")
         description = data.get("description", "")
-        # Show relation type in tooltip, not as label (cleaner UI)
-        tooltip = f"<b>{rel_type}</b>"
+        # Use plain text tooltip for reliable display
         if description:
-            tooltip += f"<br>{description}"
+            # Truncate to ~15 words
+            words = description.split()
+            if len(words) > 15:
+                short_desc = " ".join(words[:15]) + "..."
+            else:
+                short_desc = description
+            tooltip = f"{rel_type}: {short_desc}"
+        else:
+            tooltip = rel_type
         edge = {
             "from": u,
             "to": v,
@@ -304,22 +311,33 @@ def render_graph_html(
 
 
 def _build_tooltip(data: dict[str, Any]) -> str:
-    """Build HTML tooltip for a node.
+    """Build plain text tooltip for a node.
 
-    All user-provided content is HTML-escaped to prevent XSS.
+    Uses mini_description if available, otherwise truncates description.
+    Returns plain text (no HTML) for reliable vis.js display.
     """
-    name = html.escape(data.get("name", "Unknown"))
-    entity_type = html.escape(data.get("type", "unknown").title())
+    name = data.get("name", "Unknown")
+    entity_type = data.get("type", "unknown").title()
+
+    # Check for mini description (generated summary for hover)
+    attributes = data.get("attributes", {})
+    mini_desc = attributes.get("mini_description", "")
+
+    if mini_desc:
+        # Use the short mini description
+        return f"{name} ({entity_type})\n{mini_desc}"
+
     description = data.get("description", "")
-
-    tooltip = f"<b>{name}</b><br><i>{entity_type}</i>"
     if description:
-        # Truncate long descriptions
-        if len(description) > 200:
-            description = description[:200] + "..."
-        tooltip += f"<br><br>{html.escape(description)}"
+        # Truncate to ~15 words for hover
+        words = description.split()
+        if len(words) > 15:
+            short_desc = " ".join(words[:15]) + "..."
+        else:
+            short_desc = description
+        return f"{name} ({entity_type})\n{short_desc}"
 
-    return tooltip
+    return f"{name} ({entity_type})"
 
 
 def _get_layout_options(layout: str) -> str:

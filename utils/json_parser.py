@@ -8,44 +8,88 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _try_parse_json(json_str: str) -> dict[str, Any] | list[Any] | None:
+    """Try to parse a string as JSON.
+
+    Args:
+        json_str: String to parse.
+
+    Returns:
+        Parsed JSON or None if parsing fails.
+    """
+    try:
+        parsed: dict[str, Any] | list[Any] = json.loads(json_str.strip())
+        return parsed
+    except json.JSONDecodeError:
+        return None
+
+
 def extract_json(
     response: str,
     fallback_pattern: str | None = None,
 ) -> dict[str, Any] | list[Any] | None:
     """Extract a JSON object or array from an LLM response.
 
-    Looks for JSON in markdown code blocks first, then tries fallback pattern.
+    Tries multiple extraction strategies in order:
+    1. ```json code block (markdown standard)
+    2. ``` code block (without language marker)
+    3. Raw JSON object {...} or array [...]
+    4. Custom fallback pattern (if provided)
 
     Args:
         response: The LLM response text
-        fallback_pattern: Optional regex pattern to try if no code block found
+        fallback_pattern: Optional regex pattern to try if other methods fail
 
     Returns:
         Parsed JSON (dict or list) or None if extraction/parsing fails
     """
-    # Try markdown code block first
-    json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
+    # Strip <think>...</think> tags (some models output reasoning this way)
+    response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
+    response = re.sub(r"</think>", "", response)  # orphan closing tags
 
+    # Strategy 1: Try ```json code block
+    json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
     if json_match:
-        json_str = json_match.group(1)
-    elif fallback_pattern:
-        # Try fallback pattern
+        result = _try_parse_json(json_match.group(1))
+        if result is not None:
+            return result
+        logger.debug("Found ```json block but failed to parse")
+
+    # Strategy 2: Try ``` code block (no language marker)
+    code_match = re.search(r"```\s*(.*?)\s*```", response, re.DOTALL)
+    if code_match:
+        result = _try_parse_json(code_match.group(1))
+        if result is not None:
+            return result
+        logger.debug("Found ``` block but failed to parse")
+
+    # Strategy 3: Try raw JSON object or array
+    # Look for outermost { } or [ ]
+    json_obj_match = re.search(r"(\{[\s\S]*\})", response)
+    if json_obj_match:
+        result = _try_parse_json(json_obj_match.group(1))
+        if result is not None:
+            return result
+        logger.debug("Found raw JSON object but failed to parse")
+
+    json_arr_match = re.search(r"(\[[\s\S]*\])", response)
+    if json_arr_match:
+        result = _try_parse_json(json_arr_match.group(1))
+        if result is not None:
+            return result
+        logger.debug("Found raw JSON array but failed to parse")
+
+    # Strategy 4: Try custom fallback pattern
+    if fallback_pattern:
         fallback_match = re.search(fallback_pattern, response, re.DOTALL)
         if fallback_match:
-            json_str = fallback_match.group(0)
-        else:
-            logger.debug("No JSON found in response (tried code block and fallback)")
-            return None
-    else:
-        logger.debug("No JSON code block found in response")
-        return None
+            result = _try_parse_json(fallback_match.group(0))
+            if result is not None:
+                return result
+            logger.debug("Found fallback match but failed to parse")
 
-    try:
-        parsed: dict[str, Any] | list[Any] = json.loads(json_str)
-        return parsed
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse JSON: {e}. Content: {json_str[:200]}...")
-        return None
+    logger.warning(f"No valid JSON found in response. Response preview: {response[:200]}...")
+    return None
 
 
 def extract_json_list(response: str) -> list[Any] | None:

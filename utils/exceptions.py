@@ -8,7 +8,8 @@ Exception Hierarchy:
     │   └── LLMGenerationError (generation failures after retries)
     ├── ValidationError (validation failures)
     │   └── ResponseValidationError (AI response validation)
-    └── ExportError (export/file related errors)
+    ├── ExportError (export/file related errors)
+    └── WorldGenerationError (world entity generation failures)
 
 Usage:
     from utils.exceptions import LLMError, LLMConnectionError
@@ -86,6 +87,16 @@ class ExportError(StoryFactoryError):
 
     This covers failures in exporting stories to various formats
     (EPUB, PDF, etc.) or file I/O errors during export.
+    """
+
+    pass
+
+
+class WorldGenerationError(StoryFactoryError):
+    """Raised when world entity generation fails.
+
+    This indicates a failure to generate characters, locations,
+    relationships, or other world entities after all retries.
     """
 
     pass

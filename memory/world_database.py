@@ -928,6 +928,15 @@ class WorldDatabase:
         """Invalidate cached graph."""
         self._graph = None
 
+    def invalidate_graph_cache(self) -> None:
+        """Force graph rebuild on next access.
+
+        Call this after updating entity attributes (like mini_description)
+        to ensure the graph reflects the latest data for tooltips.
+        """
+        self._graph = None
+        logger.debug("Graph cache invalidated - will rebuild on next access")
+
     def _add_entity_to_graph(
         self,
         entity_id: str,

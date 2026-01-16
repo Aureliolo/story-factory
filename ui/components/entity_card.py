@@ -9,6 +9,41 @@ from memory.entities import Entity
 from ui.theme import get_entity_color, get_entity_icon
 
 
+def _get_quality_badge_color(score: float) -> str:
+    """Get badge color based on quality score.
+
+    Args:
+        score: Quality score (0-10).
+
+    Returns:
+        Color string for the badge.
+    """
+    if score >= 8.0:
+        return "green"
+    elif score >= 6.0:
+        return "orange"
+    else:
+        return "red"
+
+
+def _format_quality_tooltip(quality_scores: dict[str, Any]) -> str:
+    """Format quality scores for tooltip display.
+
+    Args:
+        quality_scores: Dictionary of quality dimension scores.
+
+    Returns:
+        Formatted tooltip string.
+    """
+    lines = []
+    for key, value in quality_scores.items():
+        if key == "feedback":
+            continue  # Skip feedback in tooltip
+        if isinstance(value, (int, float)):
+            lines.append(f"{key.replace('_', ' ').title()}: {value:.1f}")
+    return "\n".join(lines)
+
+
 class EntityCard:
     """Card component for displaying an entity.
 
@@ -50,6 +85,10 @@ class EntityCard:
         color = get_entity_color(self.entity.type)
         icon = get_entity_icon(self.entity.type)
 
+        # Check for quality scores in attributes
+        quality_scores = self.entity.attributes.get("quality_scores")
+        avg_quality = quality_scores.get("average") if quality_scores else None
+
         # Card container
         card_classes = "w-full cursor-pointer hover:shadow-lg transition-shadow"
         if self.selected:
@@ -68,6 +107,16 @@ class EntityCard:
                 ui.label(self.entity.type.title()).classes("text-sm font-medium").style(
                     f"color: {color};"
                 )
+
+                # Quality score badge
+                if avg_quality is not None and quality_scores is not None:
+                    badge_color = _get_quality_badge_color(avg_quality)
+                    tooltip_text = _format_quality_tooltip(quality_scores)
+                    with ui.element("div").classes("ml-2"):
+                        ui.badge(
+                            f"{avg_quality:.1f}",
+                            color=badge_color,
+                        ).props("outline").tooltip(tooltip_text).classes("text-xs")
 
                 ui.space()
 
@@ -102,8 +151,14 @@ class EntityCard:
 
     def _build_attributes(self) -> None:
         """Build the attributes display."""
+        # Filter out quality_scores as it's displayed in the badge
+        display_attrs = {k: v for k, v in self.entity.attributes.items() if k != "quality_scores"}
+
+        if not display_attrs:
+            return
+
         with ui.expansion("Attributes", icon="list").classes("w-full"):
-            for key, value in self.entity.attributes.items():
+            for key, value in display_attrs.items():
                 with ui.row().classes("w-full items-start gap-2"):
                     ui.label(f"{key}:").classes(
                         "text-sm font-medium text-gray-700 dark:text-gray-300"
