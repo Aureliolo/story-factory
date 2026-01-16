@@ -2,7 +2,7 @@
 
 import logging
 from collections import OrderedDict
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import Any
 
 from agents.continuity import ContinuityIssue
@@ -455,7 +455,7 @@ class StoryService:
         state: StoryState,
         chapter_num: int,
         feedback: str | None = None,
-        cancel_check: callable | None = None,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with streaming events.
 
