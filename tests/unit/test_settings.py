@@ -380,26 +380,23 @@ class TestSettingsGetModelForAgent:
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
 
-        # With 24GB VRAM, should prefer Q4_K_M quantized version
+        # With 24GB VRAM, should prefer Qwen3-30B (MoE, only 18GB needed)
         result = settings.get_model_for_agent("architect", available_vram=24)
 
-        # Should select the Q4_K_M variant that fits 24GB
-        assert result == "huihui_ai/llama3.3-abliterated:70b-q4_K_M"
+        # Should select Qwen3-30B as the recommended architect model
+        assert result == "huihui_ai/qwen3-abliterated:30b"
 
     def test_selects_architect_model_high_vram(self):
-        """Test selects full architect model with high VRAM."""
+        """Test selects architect model with high VRAM."""
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
 
-        # With 48GB VRAM, should prefer full 70B model
+        # With 48GB VRAM, still prefers Qwen3-30B as recommended
         result = settings.get_model_for_agent("architect", available_vram=48)
 
-        # With 48GB can use the full 70B model
-        assert result in [
-            "huihui_ai/llama3.3-abliterated:70b-q4_K_M",
-            "huihui_ai/llama3.3-abliterated:70b",
-        ]
+        # Qwen3-30B is first in preference list
+        assert result == "huihui_ai/qwen3-abliterated:30b"
 
     def test_selects_architect_model_low_vram_falls_through(self):
         """Test architect falls through to auto-select with very low VRAM."""

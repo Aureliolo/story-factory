@@ -138,7 +138,7 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 #### Llama 3.3 70B Abliterated (Legacy)
 - **Status:** Still excellent, but Qwen3-30B-A3B matches quality at half VRAM
 - **Use case:** When you need the absolute best reasoning and have VRAM to spare
-- **Ollama:** `huihui_ai/llama3.3-abliterated:70b-q4_K_M`
+- **Ollama:** `huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M`
 
 ### General Purpose Models
 

@@ -528,6 +528,21 @@ class TestModelServiceCheckModelUpdateEdgeCases:
             assert result["has_update"] is False
             assert "up to date" in result["message"].lower()
 
+    def test_returns_update_on_downloading_status(self, model_service):
+        """Test returns update when 'downloading' status is seen."""
+        with patch("services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            # Simulate actual downloading happening
+            mock_instance.pull.return_value = [
+                {"status": "downloading abc123", "total": 1000, "completed": 100},
+            ]
+
+            result = model_service.check_model_update("test-model")
+
+            assert result["has_update"] is True
+            assert "available" in result["message"].lower()
+
 
 class TestModelServiceGetRecommendedModel:
     """Tests for get_recommended_model method."""

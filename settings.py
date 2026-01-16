@@ -92,8 +92,30 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "uncensored": True,
         "description": "128K context, excellent for editing and refinement",
     },
+    # === REASONING / ARCHITECT SPECIALISTS ===
+    # MoE models offer excellent reasoning at reduced VRAM
+    "huihui_ai/qwen3-abliterated:30b": {
+        "name": "Qwen3 30B Abliterated (MoE)",
+        "release": "January 2025",
+        "size_gb": 18,
+        "vram_required": 18,
+        "quality": 9,
+        "speed": 7,
+        "uncensored": True,
+        "description": "MoE (30B/3B active), matches 70B reasoning at half VRAM - RECOMMENDED for architect",
+    },
     # === HIGH-END (LARGE VRAM / QUANTIZED) ===
-    # Best reasoning for story architecture
+    # Premium models for those with VRAM to spare
+    "vanilj/midnight-miqu-70b-v1.5": {
+        "name": "Midnight Miqu 70B V1.5",
+        "release": "2024",
+        "size_gb": 42,
+        "vram_required": 48,
+        "quality": 9.5,
+        "speed": 4,
+        "uncensored": True,
+        "description": "Premium creative writer - writes like a novelist, 32K context",
+    },
     "huihui_ai/llama3.3-abliterated:70b": {
         "name": "Llama 3.3 70B Abliterated",
         "release": "December 2024",
@@ -104,15 +126,27 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         "uncensored": True,
         "description": "Best reasoning, excellent for story architecture",
     },
-    "huihui_ai/llama3.3-abliterated:70b-q4_K_M": {
+    "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M": {
         "name": "Llama 3.3 70B Q4_K_M",
         "release": "December 2024",
-        "size_gb": 40,
+        "size_gb": 43,
         "vram_required": 24,
         "quality": 9,
         "speed": 4,
         "uncensored": True,
         "description": "Quantized 70B, fits 24GB VRAM, great for architect role",
+    },
+    # === SMALL / VALIDATOR MODELS ===
+    # Minimal models for basic validation tasks
+    "qwen3:0.6b": {
+        "name": "Qwen3 0.6B",
+        "release": "2025",
+        "size_gb": 1,
+        "vram_required": 2,
+        "quality": 3,
+        "speed": 10,
+        "uncensored": False,
+        "description": "Tiny model for validator role - basic sanity checks only",
     },
     # === LEGACY (kept for compatibility) ===
     "huihui_ai/qwen3-abliterated:8b": {
@@ -474,7 +508,8 @@ class Settings:
         # Special case: Architect role prefers high-reasoning models
         if agent_role == "architect":
             architect_models = [
-                "huihui_ai/llama3.3-abliterated:70b-q4_K_M",  # Fits 24GB
+                "huihui_ai/qwen3-abliterated:30b",  # MoE, matches 70B reasoning at 18GB - RECOMMENDED
+                "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M",  # Fits 24GB
                 "huihui_ai/llama3.3-abliterated:70b",  # Needs 48GB
             ]
             for model_id in architect_models:

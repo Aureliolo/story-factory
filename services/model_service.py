@@ -289,14 +289,29 @@ class ModelService:
             client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
 
             # Pull with stream to check status without full download
+            # Track whether we've seen actual downloading (not just layer verification)
+            seen_downloading = False
             for progress in client.pull(model_id, stream=True):
                 status = progress.get("status", "").lower()
-
-                # If we see actual downloading, there's an update
                 total = progress.get("total") or 0
-                if "pulling" in status and total > 0:
-                    # Cancel by not consuming more - Ollama will continue in background
-                    # but we got the info we need
+                completed = progress.get("completed") or 0
+
+                # "downloading" status means actually fetching new data
+                if "downloading" in status:
+                    seen_downloading = True
+                    return {
+                        "has_update": True,
+                        "message": "Update available",
+                    }
+
+                # If pulling a layer and completed is significantly less than total,
+                # it's an actual download (not just verification)
+                if "pulling" in status and total > 0 and completed < total * 0.9:
+                    # Wait a moment to confirm it's not just instant verification
+                    import time
+
+                    time.sleep(0.1)
+                    seen_downloading = True
                     return {
                         "has_update": True,
                         "message": "Update available",
@@ -309,8 +324,8 @@ class ModelService:
                         "message": "Already up to date",
                     }
 
-                # Success without download means up to date
-                if "success" in status:
+                # Success without actual download means up to date
+                if "success" in status and not seen_downloading:
                     return {
                         "has_update": False,
                         "message": "Already up to date",
