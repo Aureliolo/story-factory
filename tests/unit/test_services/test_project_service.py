@@ -193,3 +193,120 @@ class TestValidatePath:
         assert result.is_absolute()
         assert ".." not in str(result)
         assert result == (base_dir / "file.txt").resolve()
+
+
+class TestProjectServiceAdditional:
+    """Additional tests for edge cases and uncovered methods."""
+
+    def test_list_projects_stories_dir_not_exists(self, tmp_settings, monkeypatch, tmp_path):
+        """Test list_projects returns empty list when STORIES_DIR doesn't exist."""
+        # Create service first (which creates directories)
+        nonexistent = tmp_path / "nonexistent"
+        monkeypatch.setattr("services.project_service.STORIES_DIR", nonexistent)
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Now delete the directory to simulate it not existing
+        import shutil
+
+        if nonexistent.exists():
+            shutil.rmtree(nonexistent)
+
+        projects = service.list_projects()
+
+        assert projects == []
+
+    def test_list_projects_skips_corrupt_files(self, tmp_settings, monkeypatch, tmp_path):
+        """Test list_projects skips corrupt JSON files."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True)
+        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        # Create a valid project first
+        service = ProjectService(tmp_settings)
+        service.create_project("Valid Project")
+
+        # Create a corrupt JSON file
+        corrupt_file = stories_dir / "corrupt.json"
+        corrupt_file.write_text("{ not valid json", encoding="utf-8")
+
+        # Should still list valid projects without error
+        projects = service.list_projects()
+        assert len(projects) == 1
+        assert projects[0].name == "Valid Project"
+
+    def test_load_legacy_project_without_world_db(self, tmp_settings, monkeypatch, tmp_path):
+        """Test loading a legacy project without world_db_path creates one."""
+        import json
+
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True)
+        worlds_dir = tmp_path / "worlds"
+        worlds_dir.mkdir(parents=True)
+        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", worlds_dir)
+
+        # Create a legacy project file without world_db_path
+        project_id = "legacy-test-id"
+        legacy_data = {
+            "id": project_id,
+            "project_name": "Legacy Project",
+            "status": "interview",
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
+            # No world_db_path field
+        }
+        project_file = stories_dir / f"{project_id}.json"
+        project_file.write_text(json.dumps(legacy_data), encoding="utf-8")
+
+        service = ProjectService(tmp_settings)
+        state, world_db = service.load_project(project_id)
+
+        # Should create world DB path
+        assert state.world_db_path is not None
+        assert "legacy-test-id.db" in state.world_db_path
+        assert world_db is not None
+
+    def test_update_project_name(self, tmp_settings, monkeypatch, tmp_path):
+        """Test updating a project's name."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create a project
+        state, _ = service.create_project("Original Name")
+        project_id = state.id
+
+        # Update name
+        updated = service.update_project_name(project_id, "New Name")
+
+        assert updated.project_name == "New Name"
+
+        # Verify persistence
+        loaded, _ = service.load_project(project_id)
+        assert loaded.project_name == "New Name"
+
+    def test_get_project_path(self, tmp_settings, monkeypatch, tmp_path):
+        """Test get_project_path returns correct path."""
+        stories_dir = tmp_path / "stories"
+        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+        path = service.get_project_path("test-uuid-123")
+
+        assert path == stories_dir / "test-uuid-123.json"
+
+    def test_get_world_db_path(self, tmp_settings, monkeypatch, tmp_path):
+        """Test get_world_db_path returns correct path."""
+        worlds_dir = tmp_path / "worlds"
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", worlds_dir)
+
+        service = ProjectService(tmp_settings)
+        path = service.get_world_db_path("test-uuid-123")
+
+        assert path == worlds_dir / "test-uuid-123.db"

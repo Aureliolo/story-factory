@@ -28,7 +28,7 @@ class TestExtractModelName:
     def test_none_raises(self):
         """Test that None raises ValueError."""
         with pytest.raises(ValueError, match="cannot be None or empty"):
-            extract_model_name(None)
+            extract_model_name(None)  # type: ignore[arg-type]
 
     def test_whitespace_only_raises(self):
         """Test that whitespace-only string raises ValueError."""
@@ -38,3 +38,8 @@ class TestExtractModelName:
     def test_model_with_special_characters(self):
         """Test extraction with special characters in name."""
         assert extract_model_name("org/model-v1.2_beta") == "model-v1.2_beta"
+
+    def test_trailing_slash_raises(self):
+        """Test that model_id ending with '/' raises ValueError."""
+        with pytest.raises(ValueError, match="cannot end with '/'"):
+            extract_model_name("org/")

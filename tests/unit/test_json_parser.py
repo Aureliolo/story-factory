@@ -2,7 +2,12 @@
 
 from pydantic import BaseModel
 
-from utils.json_parser import extract_json, extract_json_list, parse_json_to_model
+from utils.json_parser import (
+    extract_json,
+    extract_json_list,
+    parse_json_list_to_models,
+    parse_json_to_model,
+)
 
 
 class SampleModel(BaseModel):
@@ -107,3 +112,42 @@ class TestParseJsonToModel:
         response = "No JSON here."
         result = parse_json_to_model(response, SampleModel)
         assert result is None
+
+    def test_returns_none_when_json_is_list_not_object(self):
+        """Should return None and log warning when JSON is a list, not object."""
+        response = """```json
+[{"name": "a"}, {"name": "b"}]
+```"""
+        result = parse_json_to_model(response, SampleModel)
+        assert result is None
+
+
+class TestParseJsonListToModels:
+    """Tests for parse_json_list_to_models function."""
+
+    def test_parses_list_to_models(self):
+        """Should parse JSON array to list of Pydantic models."""
+        response = """```json
+[{"name": "a", "value": 1}, {"name": "b", "value": 2}]
+```"""
+        result = parse_json_list_to_models(response, SampleModel)
+        assert len(result) == 2
+        assert result[0].name == "a"
+        assert result[1].name == "b"
+
+    def test_returns_empty_list_for_no_json(self):
+        """Should return empty list when no JSON found."""
+        response = "No JSON here."
+        result = parse_json_list_to_models(response, SampleModel)
+        assert result == []
+
+    def test_skips_invalid_items_in_list(self):
+        """Should skip items that don't match model and continue."""
+        response = """```json
+[{"name": "valid", "value": 1}, {"wrong_field": "invalid"}, {"name": "also_valid", "value": 3}]
+```"""
+        result = parse_json_list_to_models(response, SampleModel)
+        # Should have 2 valid items, skipping the invalid one
+        assert len(result) == 2
+        assert result[0].name == "valid"
+        assert result[1].name == "also_valid"
