@@ -455,6 +455,7 @@ class StoryService:
         state: StoryState,
         chapter_num: int,
         feedback: str | None = None,
+        cancel_check: callable | None = None,
     ) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with streaming events.
 
@@ -462,12 +463,16 @@ class StoryService:
             state: The story state.
             chapter_num: Chapter number to write.
             feedback: Optional feedback to incorporate.
+            cancel_check: Optional callable that returns True if cancellation is requested.
 
         Yields:
             WorkflowEvent objects for progress updates.
 
         Returns:
             The completed chapter content.
+
+        Raises:
+            GenerationCancelled: If cancellation is requested.
         """
         validate_not_none(state, "state")
         validate_type(state, "state", StoryState)
@@ -478,6 +483,11 @@ class StoryService:
         # Write the chapter
         content = ""
         for event in orchestrator.write_chapter(chapter_num):
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                logger.info(f"Chapter {chapter_num} generation cancelled by user")
+                raise GenerationCancelled(f"Chapter {chapter_num} generation cancelled")
+
             yield event
             # The generator returns the content at the end
             if event.event_type == "agent_complete" and event.agent_name == "System":
@@ -488,6 +498,12 @@ class StoryService:
 
         self._sync_state(orchestrator, state)
         return content
+
+
+class GenerationCancelled(Exception):
+    """Exception raised when generation is cancelled by user."""
+
+    pass
 
     def write_all_chapters(self, state: StoryState) -> Generator[WorkflowEvent]:
         """Write all chapters with streaming events.

@@ -61,6 +61,10 @@ class AppState:
     current_chapter: int = 0
     is_writing: bool = False  # True while generating content
     writing_progress: str = ""  # Current progress message
+    generation_cancel_requested: bool = False  # Request cancellation of current generation
+    generation_pause_requested: bool = False  # Request pause of current generation
+    generation_is_paused: bool = False  # Generation is currently paused
+    generation_can_resume: bool = False  # Generation can be resumed
 
     # ========== UI Navigation ==========
     active_tab: str = "write"  # write, world, projects, settings, models
@@ -299,3 +303,29 @@ class AppState:
         """Clear undo/redo history."""
         self._undo_stack.clear()
         self._redo_stack.clear()
+
+    # ========== Generation Control Methods ==========
+
+    def request_cancel_generation(self) -> None:
+        """Request cancellation of the current generation."""
+        self.generation_cancel_requested = True
+        logger.info("Generation cancellation requested")
+
+    def request_pause_generation(self) -> None:
+        """Request pause of the current generation."""
+        self.generation_pause_requested = True
+        logger.info("Generation pause requested")
+
+    def resume_generation(self) -> None:
+        """Resume a paused generation."""
+        self.generation_is_paused = False
+        self.generation_pause_requested = False
+        logger.info("Generation resumed")
+
+    def reset_generation_flags(self) -> None:
+        """Reset all generation control flags."""
+        self.generation_cancel_requested = False
+        self.generation_pause_requested = False
+        self.generation_is_paused = False
+        self.generation_can_resume = False
+        logger.debug("Generation flags reset")
