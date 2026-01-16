@@ -10,7 +10,7 @@ class PromptBuilder:
     repeated language enforcement, context building, and formatting patterns.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.sections: list[str] = []
 
     def add_language_requirement(self, language: str) -> "PromptBuilder":

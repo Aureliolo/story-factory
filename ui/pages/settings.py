@@ -1,6 +1,7 @@
 """Settings page - application configuration."""
 
 import logging
+from typing import Any
 
 from nicegui import ui
 
@@ -215,8 +216,8 @@ class SettingsPage:
                     ui.element("div").classes("w-3 h-3 rounded bg-orange-500")
                     ui.label("Creative (1.2+)").classes("text-gray-500 dark:text-gray-400")
 
-            self._temp_sliders: dict = {}
-            self._temp_labels: dict = {}
+            self._temp_sliders: dict[str, Any] = {}
+            self._temp_labels: dict[str, Any] = {}
             # 3-column grid for temperature sliders
             with ui.element("div").classes("grid grid-cols-2 lg:grid-cols-3 gap-3"):
                 for role, info in AGENT_ROLES.items():

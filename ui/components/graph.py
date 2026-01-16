@@ -86,7 +86,7 @@ class GraphComponent:
         # Register event handler for node selection
         if self.on_node_select:
 
-            def handle_node_select(e) -> None:
+            def handle_node_select(e: Any) -> None:
                 node_id = e.args.get("node_id") if e.args else None
                 if node_id and self.on_node_select:
                     self.on_node_select(node_id)
@@ -96,7 +96,7 @@ class GraphComponent:
         # Register event handler for edge selection
         if self.on_edge_select:
 
-            def handle_edge_select(e) -> None:
+            def handle_edge_select(e: Any) -> None:
                 edge_id = e.args.get("edge_id") if e.args else None
                 if edge_id and self.on_edge_select:
                     self.on_edge_select(edge_id)
@@ -380,7 +380,7 @@ class GraphComponent:
 
         self._render_graph()
 
-    def _on_layout_change(self, e) -> None:
+    def _on_layout_change(self, e: Any) -> None:
         """Handle layout change.
 
         Args:

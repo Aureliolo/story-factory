@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 from nicegui import ui
 from nicegui.elements.column import Column
@@ -83,7 +84,7 @@ class ProjectsPage:
             for project in projects:
                 self._build_project_card(project)
 
-    def _build_project_card(self, project) -> None:
+    def _build_project_card(self, project: Any) -> None:
         """Build a project card.
 
         Args:
@@ -270,11 +271,11 @@ class ProjectsPage:
             logger.exception(f"Failed to duplicate project {project_id}")
             ui.notify(f"Error: {e}", type="negative")
 
-    async def _confirm_delete(self, project) -> None:
+    async def _confirm_delete(self, project: Any) -> None:
         """Show delete confirmation dialog."""
         from ui.components.common import confirmation_dialog
 
-        def delete():
+        def delete() -> None:
             self._delete_project(project.id)
 
         confirmation_dialog(

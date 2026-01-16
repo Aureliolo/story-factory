@@ -122,7 +122,7 @@ class ChatComponent:
             return
 
         # Use client context for background task safety
-        def _do_add_message():
+        def _do_add_message() -> None:
             if self._message_container is None:
                 return
             with self._message_container:
@@ -184,7 +184,7 @@ class ChatComponent:
             show: Whether to show the indicator.
         """
 
-        def _do_show_typing():
+        def _do_show_typing() -> None:
             if self._typing_indicator:
                 self._typing_indicator.set_visibility(show)
             self._is_processing = show
@@ -225,7 +225,7 @@ class ChatComponent:
                 self._input.enable()
                 self._send_button.enable()
 
-    def _on_input_change(self, e) -> None:
+    def _on_input_change(self, e: Any) -> None:
         """Handle input changes (for future features like char count)."""
         pass
 

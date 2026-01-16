@@ -1,5 +1,7 @@
 """Common reusable UI components."""
 
+from typing import Any, Callable
+
 from nicegui import ui
 
 
@@ -59,10 +61,10 @@ class LoadingSpinner:
 def tooltip_button(
     text: str,
     tooltip: str,
-    on_click=None,
+    on_click: Callable[[], Any] | None = None,
     icon: str | None = None,
     color: str = "primary",
-    **kwargs,
+    **kwargs: Any,
 ) -> ui.button:
     """Create a button with a tooltip.
 
@@ -87,8 +89,8 @@ def tooltip_button(
 def confirmation_dialog(
     title: str,
     message: str,
-    on_confirm,
-    on_cancel=None,
+    on_confirm: Callable[[], Any],
+    on_cancel: Callable[[], Any] | None = None,
     confirm_text: str = "Confirm",
     cancel_text: str = "Cancel",
 ) -> None:
@@ -128,7 +130,7 @@ def empty_state(
     title: str,
     description: str,
     action_text: str | None = None,
-    on_action=None,
+    on_action: Callable[[], Any] | None = None,
 ) -> None:
     """Create an empty state display.
 
@@ -181,7 +183,9 @@ def loading_skeleton(width: str = "100%", height: str = "20px") -> None:
     )
 
 
-def section_header(title: str, icon: str | None = None, actions: list | None = None) -> None:
+def section_header(
+    title: str, icon: str | None = None, actions: list[dict[str, Any]] | None = None
+) -> None:
     """Create a consistent section header.
 
     Args:

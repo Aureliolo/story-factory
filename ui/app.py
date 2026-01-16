@@ -108,16 +108,16 @@ class StoryFactoryApp:
         """Build the application routes."""
 
         @ui.page("/")
-        def write_page():
-            def content():
+        def write_page() -> None:
+            def content() -> None:
                 page = WritePage(self.state, self.services)
                 page.build()
 
             self._page_layout("/", content)
 
         @ui.page("/world")
-        def world_page():
-            def content():
+        def world_page() -> None:
+            def content() -> None:
                 page = WorldPage(self.state, self.services)
                 page.build()
 
@@ -132,32 +132,32 @@ class StoryFactoryApp:
             self._page_layout("/timeline", content)
 
         @ui.page("/projects")
-        def projects_page():
-            def content():
+        def projects_page() -> None:
+            def content() -> None:
                 page = ProjectsPage(self.state, self.services)
                 page.build()
 
             self._page_layout("/projects", content)
 
         @ui.page("/settings")
-        def settings_page():
-            def content():
+        def settings_page() -> None:
+            def content() -> None:
                 page = SettingsPage(self.state, self.services)
                 page.build()
 
             self._page_layout("/settings", content)
 
         @ui.page("/models")
-        def models_page():
-            def content():
+        def models_page() -> None:
+            def content() -> None:
                 page = ModelsPage(self.state, self.services)
                 page.build()
 
             self._page_layout("/models", content)
 
         @ui.page("/analytics")
-        def analytics_page():
-            def content():
+        def analytics_page() -> None:
+            def content() -> None:
                 page = AnalyticsPage(self.state, self.services)
                 page.build()
 

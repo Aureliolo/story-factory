@@ -2,6 +2,7 @@
 
 import logging
 import random
+from typing import Any
 
 from nicegui import ui
 from nicegui.elements.button import Button
@@ -69,7 +70,7 @@ class WorldPage:
         self._attr_values_input: Input | None = None
         self._attr_properties_input: Input | None = None
         self._attr_manifestations_input: Textarea | None = None
-        self._entity_attrs: dict = {}
+        self._entity_attrs: dict[str, Any] = {}
         self._rel_source_select: Select | None = None
         self._rel_type_select: Select | None = None
         self._rel_target_select: Select | None = None
@@ -340,7 +341,7 @@ class WorldPage:
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
-                def save_settings():
+                def save_settings() -> None:
                     settings.world_quality_threshold = threshold_slider.value
                     settings.world_quality_max_iterations = int(iterations_slider.value)
                     settings.world_quality_creator_temp = creator_temp.value
@@ -958,7 +959,7 @@ class WorldPage:
 
         dialog.open()
 
-    async def _do_regenerate(self, dialog) -> None:
+    async def _do_regenerate(self, dialog: ui.dialog) -> None:
         """Execute world regeneration - builds complete world with locations and relationships."""
         logger.info("User confirmed rebuild - starting world regeneration")
         dialog.close()
@@ -1069,7 +1070,7 @@ class WorldPage:
                 logger.info(f"Generating relationships for {len(entity_names)} entities")
 
                 if len(entity_names) >= 2:
-                    generated_rels: list = await run.io_bound(
+                    generated_rels: list[dict[str, Any]] = await run.io_bound(
                         self.services.story.generate_relationships,
                         self.state.project,
                         entity_names,
@@ -1641,7 +1642,7 @@ class WorldPage:
         if self._graph:
             self._graph.set_filter(self.state.entity_filter_types)
 
-    def _on_search(self, e) -> None:
+    def _on_search(self, e: Any) -> None:
         """Handle search input change."""
         self.state.entity_search_query = e.value
         self._refresh_entity_list()
@@ -1719,7 +1720,7 @@ class WorldPage:
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
-                def save_relationship():
+                def save_relationship() -> None:
                     if not self.state.world_db:
                         return
 
@@ -1759,7 +1760,7 @@ class WorldPage:
 
                 ui.button("Save", on_click=save_relationship).props("color=primary")
 
-                def delete_relationship():
+                def delete_relationship() -> None:
                     if not self.state.world_db:
                         return
 
@@ -1986,7 +1987,7 @@ class WorldPage:
 
         dialog.open()
 
-    def _add_entity(self, dialog, name: str, entity_type: str, description: str) -> None:
+    def _add_entity(self, dialog: ui.dialog, name: str, entity_type: str, description: str) -> None:
         """Add a new entity."""
         if not name or not self.state.world_db:
             ui.notify("Name is required", type="warning")
@@ -2028,7 +2029,7 @@ class WorldPage:
             logger.exception(f"Failed to add entity {name}")
             ui.notify(f"Error: {e}", type="negative")
 
-    def _collect_attrs_from_form(self, entity_type: str) -> dict:
+    def _collect_attrs_from_form(self, entity_type: str) -> dict[str, Any]:
         """Collect attributes from type-specific form fields.
 
         Args:
