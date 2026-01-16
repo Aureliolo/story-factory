@@ -499,25 +499,32 @@ class StoryService:
         self._sync_state(orchestrator, state)
         return content
 
-
-class GenerationCancelled(Exception):
-    """Exception raised when generation is cancelled by user."""
-
-    pass
-
-    def write_all_chapters(self, state: StoryState) -> Generator[WorkflowEvent]:
+    def write_all_chapters(
+        self, state: StoryState, cancel_check: Callable[[], bool] | None = None
+    ) -> Generator[WorkflowEvent]:
         """Write all chapters with streaming events.
 
         Args:
             state: The story state.
+            cancel_check: Optional callable that returns True if cancellation is requested.
 
         Yields:
             WorkflowEvent objects for progress updates.
+
+        Raises:
+            GenerationCancelled: If cancellation is requested.
         """
         orchestrator = self._get_orchestrator(state)
         orchestrator.story_state = state
 
-        yield from orchestrator.write_all_chapters()
+        for event in orchestrator.write_all_chapters():
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                logger.info("Write all chapters cancelled by user")
+                raise GenerationCancelled("Write all chapters cancelled")
+
+            yield event
+
         self._sync_state(orchestrator, state)
 
     def write_short_story(self, state: StoryState) -> Generator[WorkflowEvent, None, str]:
@@ -847,3 +854,9 @@ class GenerationCancelled(Exception):
         if state.id in self._orchestrators:
             del self._orchestrators[state.id]
             logger.debug(f"Cleaned up orchestrator for story {state.id}")
+
+
+class GenerationCancelled(Exception):
+    """Exception raised when generation is cancelled by user."""
+
+    pass

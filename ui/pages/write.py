@@ -903,10 +903,17 @@ class WritePage:
                 try:
                     # Run blocking generator in thread pool
                     def write_all_blocking():
-                        return list(self.services.story.write_all_chapters(project))
+                        return list(
+                            self.services.story.write_all_chapters(
+                                project, cancel_check=should_cancel
+                            )
+                        )
 
                     events = await run.io_bound(write_all_blocking)
                     return events, None
+                except GenerationCancelled as e:
+                    logger.info("Write all chapters cancelled")
+                    return [], e
                 except Exception as e:
                     logger.exception("Failed to write all chapters")
                     return [], e
@@ -916,7 +923,10 @@ class WritePage:
 
             # Update UI based on results
             if error:
-                self._notify(f"Error: {error}", type="negative")
+                if isinstance(error, GenerationCancelled):
+                    self._notify("Generation cancelled by user", type="warning")
+                else:
+                    self._notify(f"Error: {error}", type="negative")
             else:
                 # Process events for progress display
                 for event in events:
