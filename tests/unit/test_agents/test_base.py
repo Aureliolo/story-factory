@@ -62,7 +62,8 @@ class TestBaseAgentInit:
         """Test agent uses explicit model when provided."""
         agent = BaseAgent(
             name="Test",
-            role="Tester",
+            role="Writer",
+            agent_role="writer",
             system_prompt="Test prompt",
             model="custom-model:7b",
         )
@@ -112,18 +113,18 @@ class TestBaseAgentInit:
         """Test agent_role is derived from role if not provided."""
         agent = BaseAgent(
             name="Test",
-            role="Story Writer",
+            role="Writer",
             system_prompt="Test prompt",
         )
 
-        assert agent.agent_role == "story_writer"
+        assert agent.agent_role == "writer"
 
     def test_init_creates_ollama_client_with_settings(self):
         """Test Ollama client is created with settings URL and timeout."""
         settings = Settings()
         agent = BaseAgent(
             name="Test",
-            role="Tester",
+            role="Editor",
             system_prompt="Test prompt",
             settings=settings,
         )
@@ -360,7 +361,7 @@ class TestBaseAgentGetModelInfo:
 
         agent = BaseAgent(
             name="Test",
-            role="Tester",
+            role="Writer",
             system_prompt="Test",
             model="test-model:7b",
         )
@@ -378,7 +379,7 @@ class TestBaseAgentRepr:
         """Test __repr__ shows agent name and model."""
         agent = BaseAgent(
             name="TestAgent",
-            role="Tester",
+            role="Writer",
             system_prompt="Test",
             model="test-model:7b",
         )

@@ -12,6 +12,14 @@ This is a Python-based multi-agent system for generating stories using local AI 
 
 **No boilerplate.** Don't generate generic/template code that needs to be filled in. Write the actual implementation.
 
+**No default fallbacks.** Never use `.get(key, default_value)` patterns for configuration values. All configurable values must be explicitly defined in settings with proper validation. If a value is missing, raise an error rather than silently using a default.
+
+**Everything needs logging.** All functions and methods should have appropriate logging for debugging and traceability. Use `logger.debug()` for routine operations, `logger.info()` for significant events, `logger.warning()` for unexpected but recoverable situations, and `logger.error()` for failures.
+
+**Everything needs tests.** All new code must have corresponding unit tests. When modifying existing code, update related tests. Tests should cover both happy paths and edge cases.
+
+**Run tests in background.** When working on multi-step tasks, always run tests in background to avoid blocking on long test runs.
+
 ## Code Standards
 
 ### Python Best Practices

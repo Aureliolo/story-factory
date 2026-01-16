@@ -198,13 +198,17 @@ class ModelModeService:
         return self.settings.get_model_for_agent(agent_role, vram)
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
-        """Get the temperature for an agent based on current mode."""
+        """Get the temperature for an agent based on current mode.
+
+        Raises:
+            ValueError: If agent_role is not configured in agent_temperatures.
+        """
         mode = self.get_current_mode()
         temp = mode.agent_temperatures.get(agent_role)
         if temp is not None:
             return float(temp)
-        settings_temp = self.settings.agent_temperatures.get(agent_role, 0.7)
-        return float(settings_temp)
+        # Fall back to settings (which validates agent role)
+        return self.settings.get_temperature_for_agent(agent_role)
 
     # === VRAM Management ===
 
@@ -459,7 +463,7 @@ Respond ONLY with JSON:
             response = client.generate(
                 model=judge_model,
                 prompt=prompt,
-                options={"num_predict": 100, "temperature": 0.1},
+                options={"num_predict": 100, "temperature": self.settings.temp_capability_check},
             )
 
             # Parse response using extract_json utility

@@ -33,8 +33,12 @@ class TestSettings:
         assert settings.get_temperature_for_agent("writer") == 0.9
         assert settings.get_temperature_for_agent("editor") == 0.6
         assert settings.get_temperature_for_agent("continuity") == 0.3
-        # Unknown role should return default
-        assert settings.get_temperature_for_agent("unknown") == 0.8
+
+    def test_get_temperature_for_agent_unknown_raises(self):
+        """Should raise ValueError for unknown agent role."""
+        settings = Settings()
+        with pytest.raises(ValueError, match="Unknown agent role"):
+            settings.get_temperature_for_agent("unknown")
 
     def test_get_model_for_agent_with_override(self):
         """Should return overridden model when set."""

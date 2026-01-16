@@ -183,7 +183,7 @@ Output ONLY a JSON object in this exact format (no other text):
 }}
 ```"""
 
-        response = self.generate(prompt, temperature=0.3)
+        response = self.generate(prompt, temperature=self.settings.temp_brief_extraction)
         brief = self.extract_brief(response)
 
         if not brief:

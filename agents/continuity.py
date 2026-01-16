@@ -313,7 +313,7 @@ CHARACTER_NAME: Brief description of their state/development in this chapter
 
 Only include characters who actually appear in this chapter."""
 
-        response = self.generate(prompt, temperature=0.3)
+        response = self.generate(prompt, temperature=self.temperature)
 
         arcs = {}
         for line in response.split("\n"):
@@ -363,7 +363,7 @@ PENDING PLOT POINTS:
 List ONLY the numbers of plot points that were CLEARLY addressed or completed in this chapter.
 Output format: Just the numbers separated by commas (e.g., "0, 2, 5") or "none" if no plot points were addressed."""
 
-        response = self.generate(prompt, temperature=0.2)
+        response = self.generate(prompt, temperature=self.settings.temp_plot_checking)
 
         completed_indices = []
         response_clean = response.lower().strip()

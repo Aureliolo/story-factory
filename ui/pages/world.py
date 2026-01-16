@@ -1243,6 +1243,7 @@ class WorldPage:
         """Build the graph visualization section."""
         self._graph = GraphComponent(
             world_db=self.state.world_db,
+            settings=self.services.settings,
             on_node_select=self._on_node_select,
             on_edge_select=self._on_edge_select,
             height=450,

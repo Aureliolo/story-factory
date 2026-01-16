@@ -36,6 +36,7 @@ class TestModelModeService:
         mock.ollama_url = "http://localhost:11434"
         mock.get_model_for_agent.return_value = "test-model:8b"
         mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
+        mock.get_temperature_for_agent.side_effect = lambda role: mock.agent_temperatures.get(role)
         return mock
 
     @pytest.fixture
@@ -529,6 +530,7 @@ class TestModelModeServiceAdditional:
         mock.ollama_url = "http://localhost:11434"
         mock.get_model_for_agent.return_value = "fallback-model:8b"
         mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
+        mock.get_temperature_for_agent.side_effect = lambda role: mock.agent_temperatures.get(role)
         return mock
 
     @pytest.fixture

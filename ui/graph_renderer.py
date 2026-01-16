@@ -4,10 +4,13 @@ import html
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from memory.world_database import WorldDatabase
 from ui.theme import ENTITY_COLORS, RELATION_COLORS
+
+if TYPE_CHECKING:
+    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,7 @@ ENTITY_SHAPES = {
 
 def render_graph_html(
     world_db: WorldDatabase,
+    settings: "Settings",
     filter_types: list[str] | None = None,
     layout: str = "force-directed",
     height: int = 500,
@@ -47,6 +51,7 @@ def render_graph_html(
 
     Args:
         world_db: WorldDatabase instance
+        settings: Application settings for configuration values
         filter_types: List of entity types to show (None = all)
         layout: Layout algorithm ("force-directed", "hierarchical", "circular", "grid")
         height: Graph container height in pixels
@@ -56,6 +61,8 @@ def render_graph_html(
     Returns:
         GraphRenderResult with HTML and JavaScript strings.
     """
+    max_words = settings.mini_description_words_max
+    logger.debug(f"Rendering graph with max_words={max_words}, filter_types={filter_types}")
     graph = world_db.get_graph()
 
     # Filter nodes by type
@@ -76,7 +83,7 @@ def render_graph_html(
             "group": node_type,
             "color": ENTITY_COLORS.get(node_type, "#607D8B"),
             "shape": ENTITY_SHAPES.get(node_type, "dot"),
-            "title": _build_tooltip(data),
+            "title": _build_tooltip(data, max_words),
         }
 
         # Highlight selected node
@@ -115,10 +122,10 @@ def render_graph_html(
         description = data.get("description", "")
         # Use plain text tooltip for reliable display
         if description:
-            # Truncate to ~15 words
+            # Truncate to configured word limit
             words = description.split()
-            if len(words) > 15:
-                short_desc = " ".join(words[:15]) + "..."
+            if len(words) > max_words:
+                short_desc = " ".join(words[:max_words]) + "..."
             else:
                 short_desc = description
             tooltip = f"{rel_type}: {short_desc}"
@@ -310,11 +317,18 @@ def render_graph_html(
     return GraphRenderResult(html=html, js=js)
 
 
-def _build_tooltip(data: dict[str, Any]) -> str:
+def _build_tooltip(data: dict[str, Any], max_words: int) -> str:
     """Build plain text tooltip for a node.
 
     Uses mini_description if available, otherwise truncates description.
     Returns plain text (no HTML) for reliable vis.js display.
+
+    Args:
+        data: Node data dictionary.
+        max_words: Maximum words for description truncation.
+
+    Returns:
+        Plain text tooltip string.
     """
     name = data.get("name", "Unknown")
     entity_type = data.get("type", "unknown").title()
@@ -329,10 +343,10 @@ def _build_tooltip(data: dict[str, Any]) -> str:
 
     description = data.get("description", "")
     if description:
-        # Truncate to ~15 words for hover
+        # Truncate to configured word limit
         words = description.split()
-        if len(words) > 15:
-            short_desc = " ".join(words[:15]) + "..."
+        if len(words) > max_words:
+            short_desc = " ".join(words[:max_words]) + "..."
         else:
             short_desc = description
         return f"{name} ({entity_type})\n{short_desc}"
