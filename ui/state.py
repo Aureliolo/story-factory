@@ -71,6 +71,7 @@ class AppState:
     entity_filter_types: list[str] = field(default_factory=lambda: ["character", "location"])
     graph_layout: str = "force-directed"  # force-directed, hierarchical, circular
     entity_search_query: str = ""
+    quality_refinement_enabled: bool = True  # Whether to use quality refinement for generation
 
     # ========== Feedback Settings ==========
     feedback_mode: str = "per-chapter"  # per-chapter, mid-chapter, on-demand
