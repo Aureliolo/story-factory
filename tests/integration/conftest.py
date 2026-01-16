@@ -27,6 +27,19 @@ class MockListResponse:
         self.models = [MockModel(m) for m in models]
 
 
+class MockChatResponse:
+    """Mock response from ollama.Client().chat()."""
+
+    def __init__(self, content: str):
+        self.message = {"content": content}
+
+    def __getitem__(self, key):
+        """Support dictionary-style access."""
+        if key == "message":
+            return self.message
+        raise KeyError(key)
+
+
 @pytest.fixture
 def mock_ollama_client():
     """Mock Ollama client for integration tests.
@@ -38,4 +51,24 @@ def mock_ollama_client():
         mock_client = MagicMock()
         mock_client.list.return_value = MockListResponse(["model-a:latest", "model-b:7b"])
         mock_ollama.Client.return_value = mock_client
+        yield mock_client
+
+
+@pytest.fixture
+def mock_ollama_for_agents():
+    """Mock Ollama for agent operations.
+
+    Provides comprehensive mocking for all agent interactions.
+    Returns a mock client configured to work with agents.
+    """
+    with patch("agents.base.ollama") as mock_ollama:
+        mock_client = MagicMock()
+
+        # Default chat response
+        def default_chat(*args, **kwargs):
+            return MockChatResponse("Default AI response")
+
+        mock_client.chat.side_effect = default_chat
+        mock_ollama.Client.return_value = mock_client
+
         yield mock_client
