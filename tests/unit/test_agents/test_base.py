@@ -1,6 +1,7 @@
 """Tests for the base agent class."""
 
 import threading
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import ollama
@@ -9,6 +10,49 @@ import pytest
 from agents.base import BaseAgent
 from settings import Settings
 from utils.exceptions import LLMGenerationError
+
+
+class MockedBaseAgent(BaseAgent):
+    """BaseAgent subclass with MagicMock client for testing.
+
+    This provides proper type hints for the mocked client while
+    allowing access to MagicMock methods like .return_value and .side_effect.
+    """
+
+    client: MagicMock  # Override type to MagicMock for testing
+
+
+def create_mock_agent(**overrides: Any) -> MockedBaseAgent:
+    """Create a BaseAgent with mocked internals for testing.
+
+    This is the proper way to create test agents without triggering
+    actual Ollama connections. All required attributes are set to
+    sensible test defaults.
+
+    Args:
+        **overrides: Override any default attributes.
+
+    Returns:
+        A MockedBaseAgent instance ready for testing.
+    """
+    # Create agent with minimal required args
+    agent = BaseAgent(
+        name=overrides.get("name", "TestAgent"),
+        role=overrides.get("role", "Tester"),
+        system_prompt=overrides.get("system_prompt", "You are a test agent"),
+        model=overrides.get("model", "test-model:7b"),
+        temperature=overrides.get("temperature", 0.7),
+    )
+
+    # Replace the real Ollama client with a mock
+    agent.client = MagicMock()
+
+    # Apply any additional overrides
+    for key, value in overrides.items():
+        if hasattr(agent, key):
+            setattr(agent, key, value)
+
+    return cast(MockedBaseAgent, agent)
 
 
 class TestBaseAgentInit:
@@ -118,11 +162,9 @@ class TestBaseAgentCheckOllamaHealth:
 class TestBaseAgentValidateModel:
     """Tests for validate_model method."""
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_validate_installed_model_returns_true(self):
         """Test validates installed model."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.list.return_value = {"models": [{"name": "test-model:7b"}]}
 
         is_valid, message = agent.validate_model("test-model:7b")
@@ -130,11 +172,9 @@ class TestBaseAgentValidateModel:
         assert is_valid is True
         assert "is available" in message
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_validate_with_latest_suffix(self):
         """Test validates model with :latest suffix."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.list.return_value = {"models": [{"name": "test-model:latest"}]}
 
         is_valid, message = agent.validate_model("test-model")
@@ -142,11 +182,9 @@ class TestBaseAgentValidateModel:
         assert is_valid is True
         assert "is available" in message
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_validate_missing_model_returns_false(self):
         """Test returns false for missing model."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.list.return_value = {"models": [{"name": "other-model:7b"}]}
 
         is_valid, message = agent.validate_model("missing-model")
@@ -154,11 +192,9 @@ class TestBaseAgentValidateModel:
         assert is_valid is False
         assert "not found" in message
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_validate_handles_connection_error(self):
         """Test handles connection error gracefully."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.list.side_effect = ConnectionError("Connection refused")
 
         is_valid, message = agent.validate_model("any-model")
@@ -166,11 +202,9 @@ class TestBaseAgentValidateModel:
         assert is_valid is False
         assert "Error checking model availability" in message
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_validate_handles_timeout_error(self):
         """Test handles timeout error gracefully."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.list.side_effect = TimeoutError("Timeout")
 
         is_valid, message = agent.validate_model("any-model")
@@ -178,11 +212,9 @@ class TestBaseAgentValidateModel:
         assert is_valid is False
         assert "Error checking model availability" in message
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_validate_handles_response_error(self):
         """Test handles Ollama response error gracefully."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.list.side_effect = ollama.ResponseError("Error")
 
         is_valid, message = agent.validate_model("any-model")
@@ -194,36 +226,18 @@ class TestBaseAgentValidateModel:
 class TestBaseAgentGenerate:
     """Tests for generate method."""
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_generate_returns_content(self):
         """Test generate returns response content."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.return_value = {"message": {"content": "Test response"}}
 
         result = agent.generate("Test prompt")
 
         assert result == "Test response"
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_generate_includes_context(self):
         """Test generate includes context in messages."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.return_value = {"message": {"content": "Response"}}
 
         agent.generate("Prompt", context="Story context here")
@@ -233,18 +247,9 @@ class TestBaseAgentGenerate:
         context_messages = [m for m in messages if "CURRENT STORY CONTEXT" in m.get("content", "")]
         assert len(context_messages) == 1
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_generate_uses_custom_model(self):
         """Test generate uses custom model when provided."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "default-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.return_value = {"message": {"content": "Response"}}
 
         agent.generate("Prompt", model="custom-model:7b")
@@ -252,18 +257,9 @@ class TestBaseAgentGenerate:
         call_args = agent.client.chat.call_args
         assert call_args.kwargs["model"] == "custom-model:7b"
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_generate_uses_custom_temperature(self):
         """Test generate uses custom temperature when provided."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.return_value = {"message": {"content": "Response"}}
 
         agent.generate("Prompt", temperature=0.9)
@@ -271,19 +267,10 @@ class TestBaseAgentGenerate:
         call_args = agent.client.chat.call_args
         assert call_args.kwargs["options"]["temperature"] == 0.9
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     @patch("agents.base.time.sleep")
     def test_generate_retries_on_connection_error(self, mock_sleep):
         """Test generate retries on connection error."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.side_effect = [
             ConnectionError("First failure"),
             {"message": {"content": "Success after retry"}},
@@ -295,19 +282,10 @@ class TestBaseAgentGenerate:
         assert agent.client.chat.call_count == 2
         mock_sleep.assert_called_once()
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     @patch("agents.base.time.sleep")
     def test_generate_retries_on_timeout(self, mock_sleep):
         """Test generate retries on timeout."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.side_effect = [
             TimeoutError("Timeout"),
             {"message": {"content": "Success after retry"}},
@@ -318,19 +296,10 @@ class TestBaseAgentGenerate:
         assert result == "Success after retry"
         assert agent.client.chat.call_count == 2
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     @patch("agents.base.time.sleep")
     def test_generate_exhausts_retries(self, mock_sleep):
         """Test generate raises after exhausting retries."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.side_effect = ConnectionError("Persistent failure")
 
         with pytest.raises(LLMGenerationError, match="Failed to generate after"):
@@ -338,18 +307,9 @@ class TestBaseAgentGenerate:
 
         assert agent.client.chat.call_count == 3
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_generate_raises_immediately_on_response_error(self):
         """Test generate raises immediately on Ollama response error."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.side_effect = ollama.ResponseError("Model not found")
 
         with pytest.raises(LLMGenerationError, match="Model error"):
@@ -362,18 +322,9 @@ class TestBaseAgentGenerate:
 class TestBaseAgentRateLimiting:
     """Tests for rate limiting in generate method."""
 
-    @patch.object(BaseAgent, "__init__", lambda self, *args, **kwargs: None)
     def test_generate_respects_rate_limit(self):
         """Test generate uses semaphore for rate limiting."""
-        agent = BaseAgent()  # type: ignore[call-arg]
-        agent.name = "TestAgent"
-        agent.system_prompt = "You are a test agent"
-        agent.model = "test-model:7b"
-        agent.temperature = 0.7
-        agent.settings = MagicMock()
-        agent.settings.max_tokens = 1000
-        agent.settings.context_size = 4096
-        agent.client = MagicMock()
+        agent = create_mock_agent()
         agent.client.chat.return_value = {"message": {"content": "Response"}}
 
         # Verify semaphore is used (indirectly by checking concurrent calls)
