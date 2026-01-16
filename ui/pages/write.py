@@ -15,7 +15,6 @@ from nicegui.elements.textarea import Textarea
 from memory.mode_models import PRESET_MODES
 from services import ServiceContainer
 from ui.components.chat import ChatComponent
-from ui.components.graph import mini_graph
 from ui.graph_renderer import render_entity_summary_html
 from ui.state import AppState
 from ui.theme import get_status_color
@@ -196,15 +195,30 @@ class WritePage:
         self._entity_summary = ui.html(sanitize=False)
         self._entity_summary.content = render_entity_summary_html(self.state.world_db)
 
-        # Mini graph preview
-        ui.label("Relationship Graph").classes("text-sm font-medium mt-4")
-        mini_graph(self.state.world_db, height=200)
+        # Entity list (simple view instead of graph)
+        characters = self.state.world_db.list_entities("character")
+        if characters:
+            ui.label("Characters").classes("text-sm font-medium mt-4")
+            with ui.row().classes("flex-wrap gap-2"):
+                for char in characters[:8]:  # Limit to 8 for preview
+                    ui.chip(char.name, icon="person", color="green").props("outline")
+                if len(characters) > 8:
+                    ui.chip(f"+{len(characters) - 8} more", color="grey").props("outline")
+
+        locations = self.state.world_db.list_entities("location")
+        if locations:
+            ui.label("Locations").classes("text-sm font-medium mt-2")
+            with ui.row().classes("flex-wrap gap-2"):
+                for loc in locations[:6]:  # Limit to 6 for preview
+                    ui.chip(loc.name, icon="place", color="blue").props("outline")
+                if len(locations) > 6:
+                    ui.chip(f"+{len(locations) - 6} more", color="grey").props("outline")
 
         ui.button(
             "Open World Builder",
             on_click=lambda: ui.navigate.to("/world"),
             icon="public",
-        ).props("flat").classes("mt-2")
+        ).props("flat").classes("mt-4")
 
     def _build_structure_section(self) -> None:
         """Build the story structure section."""

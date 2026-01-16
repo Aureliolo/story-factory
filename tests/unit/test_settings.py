@@ -469,7 +469,17 @@ class TestSettingsGetModelForAgent:
             },
         }
 
-        with patch.object(settings_module, "AVAILABLE_MODELS", mock_models):
+        with (
+            patch.object(settings_module, "AVAILABLE_MODELS", mock_models),
+            patch.object(
+                settings_module,
+                "get_installed_models",
+                return_value=[
+                    "small-quality-model:7b",
+                    "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+                ],
+            ),
+        ):
             # With 10GB VRAM: Celeste doesn't fit (14GB), but small-quality-model fits (8GB)
             result = s.get_model_for_agent("writer", available_vram=10)
 

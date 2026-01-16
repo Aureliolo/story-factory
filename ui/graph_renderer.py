@@ -112,13 +112,18 @@ def render_graph_html(
             continue
 
         rel_type = data.get("relation_type", "related")
+        description = data.get("description", "")
+        # Show relation type in tooltip, not as label (cleaner UI)
+        tooltip = f"<b>{rel_type}</b>"
+        if description:
+            tooltip += f"<br>{description}"
         edge = {
             "from": u,
             "to": v,
-            "label": rel_type,
-            "color": RELATION_COLORS.get(rel_type, "#90A4AE"),
-            "arrows": "to",
-            "title": data.get("description", ""),
+            "color": RELATION_COLORS.get(rel_type, "#6b7280"),
+            "arrows": {"to": {"enabled": True, "scaleFactor": 0.5}},
+            "title": tooltip,
+            "width": 2,
         }
         edges.append(edge)
 
@@ -136,22 +141,6 @@ def render_graph_html(
         .dark #{container_id} {{
             border-color: #374151;
             background: #1f2937;
-        }}
-        /* vis.js navigation button styling for dark mode */
-        .dark #{container_id} .vis-navigation .vis-button {{
-            background-color: #374151 !important;
-            border: 1px solid #4b5563 !important;
-        }}
-        .dark #{container_id} .vis-navigation .vis-button:hover {{
-            background-color: #4b5563 !important;
-            box-shadow: 0 0 3px rgba(255, 255, 255, 0.3) !important;
-        }}
-        .dark #{container_id} .vis-navigation .vis-button:active {{
-            background-color: #1f2937 !important;
-        }}
-        /* Make the icons white/light in dark mode using filter */
-        .dark #{container_id} .vis-navigation .vis-button {{
-            filter: invert(1) hue-rotate(180deg);
         }}
     </style>
     <div id="{container_id}" style="height: {height}px;"></div>
@@ -215,32 +204,21 @@ def render_graph_html(
             var data = {{ nodes: nodes, edges: edges }};
 
             var options = {{
-                physics: {{
-                    enabled: true,
-                    stabilization: {{ iterations: 100, fit: true }},
-                    barnesHut: {{
-                        gravitationalConstant: -2000,
-                        centralGravity: 0.3,
-                        springLength: 150,
-                        springConstant: 0.04,
-                        damping: 0.5,
-                        avoidOverlap: 0.5
-                    }},
-                    minVelocity: 0.75,
-                    maxVelocity: 30
-                }},
                 nodes: {{
                     font: {{ size: 14, color: fontColor }},
-                    scaling: {{ min: 10, max: 30 }}
+                    scaling: {{ min: 10, max: 30 }},
+                    borderWidth: 2
                 }},
                 edges: {{
-                    font: {{ size: 10, align: 'middle', color: fontColor }},
-                    smooth: {{ type: 'continuous' }}
+                    smooth: false,
+                    width: 2,
+                    color: {{ color: '#6b7280', highlight: '#3b82f6' }},
+                    arrows: {{ to: {{ enabled: true, scaleFactor: 0.5 }} }}
                 }},
                 interaction: {{
                     hover: true,
                     tooltipDelay: 200,
-                    navigationButtons: true,
+                    navigationButtons: false,
                     keyboard: true,
                     dragNodes: true,
                     dragView: true,
@@ -315,19 +293,7 @@ def render_graph_html(
 
             // Store network reference for external control
             window.graphNetwork = network;
-
-            // Style navigation buttons for dark mode
-            if (isDarkMode) {{
-                setTimeout(function() {{
-                    var navButtons = container.querySelectorAll('.vis-button');
-                    navButtons.forEach(function(btn) {{
-                        btn.style.filter = 'invert(0.85) hue-rotate(180deg)';
-                        btn.style.backgroundColor = '#374151';
-                        btn.style.border = '1px solid #4b5563';
-                        btn.style.borderRadius = '4px';
-                    }});
-                }}, 100);
-            }}
+            window.graphNodes = nodes;
         }}
 
         initGraph();
@@ -399,16 +365,20 @@ def _get_layout_options(layout: str) -> str:
             },
             physics: {
                 enabled: true,
-                solver: 'forceAtlas2Based',
-                forceAtlas2Based: {
-                    gravitationalConstant: -50,
-                    centralGravity: 0.01,
-                    springLength: 100,
-                    springConstant: 0.08
+                solver: 'barnesHut',
+                barnesHut: {
+                    gravitationalConstant: -2000,
+                    centralGravity: 0.3,
+                    springLength: 150,
+                    springConstant: 0.04,
+                    damping: 0.3,
+                    avoidOverlap: 0.5
                 },
                 stabilization: {
-                    iterations: 100
-                }
+                    iterations: 100,
+                    fit: true
+                },
+                minVelocity: 0.75
             }
         """
 

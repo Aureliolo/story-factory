@@ -105,14 +105,14 @@ class TestModelInstallationTracking:
     def test_installed_model_identification(self):
         """Test that installed models are correctly identified."""
         # Mock installed models list
-        installed = ["qwen2.5:0.5b", "huihui_ai/qwen3-abliterated:8b"]
+        installed = ["qwen3:0.6b", "huihui_ai/qwen3-abliterated:8b"]
 
         # Test identification logic
         for model_id in AVAILABLE_MODELS.keys():
             # Check if model_id is in any installed model name
             is_installed = any(model_id in m for m in installed)
 
-            if model_id in ["qwen2.5:0.5b", "huihui_ai/qwen3-abliterated:8b"]:
+            if model_id in ["qwen3:0.6b", "huihui_ai/qwen3-abliterated:8b"]:
                 assert is_installed, f"{model_id} should be identified as installed"
 
     def test_partial_model_name_matching(self):
@@ -127,10 +127,10 @@ class TestModelInstallationTracking:
 
     def test_no_false_positives_in_matching(self):
         """Test that similar model names don't cause false matches."""
-        installed = ["qwen2.5:0.5b"]
+        installed = ["qwen3:0.6b"]
 
         # Similar but different model
-        model_id = "qwen2.5:1.5b"
+        model_id = "qwen3:1.5b"
         is_installed = any(model_id in m for m in installed)
 
         # This test documents current behavior - may need refinement

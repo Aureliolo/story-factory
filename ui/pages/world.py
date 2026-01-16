@@ -74,6 +74,9 @@ class WorldPage:
             self._build_interview_required_message()
             return
 
+        # World generation toolbar
+        self._build_generation_toolbar()
+
         # Responsive layout: stack on mobile, 3-column on desktop
         with ui.row().classes("w-full h-full gap-4 p-4 flex-wrap lg:flex-nowrap"):
             # Left panel - Entity browser (full width on mobile, 20% on desktop)
@@ -120,6 +123,354 @@ class WorldPage:
                 on_click=lambda: ui.navigate.to("/"),
                 icon="arrow_forward",
             ).props("color=primary size=lg")
+
+    def _build_generation_toolbar(self) -> None:
+        """Build the world generation toolbar with readiness score and action buttons."""
+        if not self.state.world_db:
+            return
+
+        # Count entities
+        char_count = self.state.world_db.count_entities("character")
+        loc_count = self.state.world_db.count_entities("location")
+        rel_count = len(self.state.world_db.list_relationships())
+
+        # Calculate simple readiness score
+        # Based on: characters (weight 3), locations (weight 2), relationships (weight 1)
+        target_chars = 5  # Minimum recommended
+        target_locs = 3
+        target_rels = 8
+
+        char_score = min(100, (char_count / target_chars) * 100)
+        loc_score = min(100, (loc_count / target_locs) * 100)
+        rel_score = min(100, (rel_count / target_rels) * 100)
+
+        readiness = int(char_score * 0.4 + loc_score * 0.3 + rel_score * 0.3)
+        readiness_color = "green" if readiness >= 80 else "orange" if readiness >= 50 else "red"
+        readiness_text = (
+            "Ready to write!"
+            if readiness >= 80
+            else "Needs more content"
+            if readiness >= 50
+            else "World is sparse"
+        )
+
+        with ui.row().classes("w-full items-center gap-4 px-4 pt-4 pb-2"):
+            # Readiness indicator
+            with ui.card().classes("p-3"):
+                with ui.row().classes("items-center gap-3"):
+                    ui.circular_progress(
+                        value=readiness / 100,
+                        show_value=True,
+                        size="lg",
+                        color=readiness_color,
+                    )
+                    with ui.column().classes("gap-0"):
+                        ui.label("World Readiness").classes("text-sm font-medium")
+                        ui.label(readiness_text).classes(
+                            f"text-xs text-{readiness_color}-600 dark:text-{readiness_color}-400"
+                        )
+
+            ui.space()
+
+            # Generation buttons
+            ui.button(
+                "Add Characters",
+                on_click=lambda: self._generate_more("characters"),
+                icon="person_add",
+            ).props("outline").classes("text-green-600")
+
+            ui.button(
+                "Add Locations",
+                on_click=lambda: self._generate_more("locations"),
+                icon="add_location",
+            ).props("outline").classes("text-blue-600")
+
+            ui.button(
+                "Add Relationships",
+                on_click=lambda: self._generate_more("relationships"),
+                icon="link",
+            ).props("outline").classes("text-purple-600")
+
+            ui.separator().props("vertical")
+
+            # Regenerate button (dangerous action)
+            ui.button(
+                "Rebuild World",
+                on_click=self._confirm_regenerate,
+                icon="refresh",
+            ).props("outline color=negative")
+
+    async def _generate_more(self, entity_type: str) -> None:
+        """Generate more entities of a specific type.
+
+        Args:
+            entity_type: Type of entities to generate (characters, locations, relationships)
+        """
+        logger.info(f"Generate more clicked: entity_type={entity_type}")
+
+        if not self.state.project or not self.state.world_db:
+            logger.warning("Generate more failed: no project or world_db")
+            ui.notify("No project loaded", type="negative")
+            return
+
+        logger.info(f"Starting generation of {entity_type} for project {self.state.project.id}")
+        ui.notify(f"Generating {entity_type}...", type="ongoing")
+
+        try:
+            from nicegui import run
+
+            if entity_type == "characters":
+                # Generate characters via service
+                logger.info("Calling story service to generate characters...")
+                new_chars = await run.io_bound(
+                    self.services.story.generate_more_characters, self.state.project, 2
+                )
+                logger.info(f"Generated {len(new_chars)} characters from LLM")
+                # Add to world database
+                for char in new_chars:
+                    self.services.world.add_entity(
+                        self.state.world_db,
+                        name=char.name,
+                        entity_type="character",
+                        description=char.description,
+                        attributes={
+                            "role": char.role,
+                            "traits": char.personality_traits,
+                            "goals": char.goals,
+                            "arc": char.arc_notes,
+                        },
+                    )
+                logger.info(f"Added {len(new_chars)} characters to world database")
+                ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
+
+            elif entity_type == "locations":
+                # Generate locations via service
+                logger.info("Calling story service to generate locations...")
+                locations = await run.io_bound(
+                    self.services.story.generate_locations, self.state.project, 3
+                )
+                logger.info(f"Generated {len(locations)} locations from LLM")
+                # Add to world database
+                added_count = 0
+                for loc in locations:
+                    if isinstance(loc, dict) and "name" in loc:
+                        self.services.world.add_entity(
+                            self.state.world_db,
+                            name=loc["name"],
+                            entity_type="location",
+                            description=loc.get("description", ""),
+                            attributes={"significance": loc.get("significance", "")},
+                        )
+                        added_count += 1
+                    else:
+                        logger.warning(f"Skipping invalid location: {loc}")
+                logger.info(f"Added {added_count} locations to world database")
+                ui.notify(f"Added {added_count} new locations!", type="positive")
+
+            elif entity_type == "relationships":
+                # Get existing entities and relationships
+                entities = self.state.world_db.list_entities()
+                entity_names = [e.name for e in entities]
+                logger.info(f"Found {len(entities)} existing entities: {entity_names}")
+
+                # Get existing relationships - look up entity names from IDs
+                existing_rels = []
+                for rel in self.state.world_db.list_relationships():
+                    source = self.services.world.get_entity(self.state.world_db, rel.source_id)
+                    target = self.services.world.get_entity(self.state.world_db, rel.target_id)
+                    if source and target:
+                        existing_rels.append((source.name, target.name))
+                logger.info(f"Found {len(existing_rels)} existing relationships")
+
+                if len(entity_names) < 2:
+                    logger.warning("Cannot generate relationships: need at least 2 entities")
+                    ui.notify("Need at least 2 entities to create relationships", type="warning")
+                    return
+
+                # Generate relationships via service
+                logger.info("Calling story service to generate relationships...")
+                relationships = await run.io_bound(
+                    self.services.story.generate_relationships,
+                    self.state.project,
+                    entity_names,
+                    existing_rels,
+                    5,
+                )
+                logger.info(f"Generated {len(relationships)} relationships from LLM")
+
+                # Add to world database
+                added = 0
+                for rel in relationships:
+                    if isinstance(rel, dict) and "source" in rel and "target" in rel:
+                        # Find entity IDs by name
+                        source_entity = next((e for e in entities if e.name == rel["source"]), None)
+                        target_entity = next((e for e in entities if e.name == rel["target"]), None)
+                        if source_entity and target_entity:
+                            self.services.world.add_relationship(
+                                self.state.world_db,
+                                source_entity.id,
+                                target_entity.id,
+                                rel.get("relation_type", "knows"),
+                                rel.get("description", ""),
+                            )
+                            added += 1
+                        else:
+                            logger.warning(
+                                f"Skipping relationship: source={rel['source']} or "
+                                f"target={rel['target']} not found"
+                            )
+                    else:
+                        logger.warning(f"Skipping invalid relationship: {rel}")
+                logger.info(f"Added {added} relationships to world database")
+                ui.notify(f"Added {added} new relationships!", type="positive")
+
+            # Refresh the UI
+            logger.info("Refreshing UI after generation...")
+            self._refresh_entity_list()
+            if self._graph:
+                self._graph.refresh()
+
+            # Save the project
+            if self.state.project:
+                logger.info(f"Saving project {self.state.project.id}...")
+                self.services.project.save_project(self.state.project)
+                logger.info("Project saved successfully")
+
+            logger.info(f"Generation of {entity_type} completed successfully")
+
+        except Exception as e:
+            logger.exception(f"Error generating {entity_type}: {e}")
+            ui.notify(f"Error: {e}", type="negative")
+
+    def _confirm_regenerate(self) -> None:
+        """Show confirmation dialog before regenerating world."""
+        logger.info("Rebuild World button clicked - showing confirmation dialog")
+
+        # Check if there's existing story content
+        has_chapters = (
+            self.state.project
+            and self.state.project.chapters
+            and any(c.content for c in self.state.project.chapters)
+        )
+        logger.info(f"Has written chapters: {has_chapters}")
+
+        warning_msg = (
+            "This will rebuild the entire world from scratch, "
+            "replacing all characters, locations, and relationships."
+        )
+        if has_chapters:
+            warning_msg += (
+                "\n\n⚠️ WARNING: You have written chapters. "
+                "Regenerating the world may create inconsistencies!"
+            )
+
+        with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[400px]"):
+            ui.label("Rebuild World?").classes("text-lg font-bold")
+            ui.label(warning_msg).classes("text-gray-600 dark:text-gray-400 whitespace-pre-line")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Rebuild",
+                    on_click=lambda: self._do_regenerate(dialog),
+                    icon="refresh",
+                ).props("color=negative")
+
+        dialog.open()
+
+    async def _do_regenerate(self, dialog) -> None:
+        """Execute world regeneration."""
+        logger.info("User confirmed rebuild - starting world regeneration")
+        dialog.close()
+
+        if not self.state.project or not self.state.world_db:
+            logger.warning("Rebuild failed: no project or world_db available")
+            ui.notify("No project available", type="negative")
+            return
+
+        logger.info(f"Starting world rebuild for project {self.state.project.id}")
+        ui.notify("Rebuilding world... This may take a moment.", type="ongoing")
+
+        try:
+            from nicegui import run
+
+            # Clear the world database - delete relationships first, then entities
+            relationships = self.state.world_db.list_relationships()
+            logger.info(f"Deleting {len(relationships)} existing relationships...")
+            for rel in relationships:
+                self.state.world_db.delete_relationship(rel.id)
+            logger.info("All relationships deleted")
+
+            entities = self.state.world_db.list_entities()
+            logger.info(f"Deleting {len(entities)} existing entities...")
+            for entity in entities:
+                self.state.world_db.delete_entity(entity.id)
+            logger.info("All entities deleted")
+
+            # Rebuild the story structure via service (this calls the architect)
+            logger.info("Calling rebuild_world via story service...")
+            await run.io_bound(self.services.story.rebuild_world, self.state.project)
+            logger.info(
+                f"Story service rebuild complete. "
+                f"Characters: {len(self.state.project.characters)}, "
+                f"Chapters: {len(self.state.project.chapters)}"
+            )
+
+            # Extract characters to world database
+            if self.state.project.characters:
+                logger.info(
+                    f"Extracting {len(self.state.project.characters)} characters to world database..."
+                )
+                added_count = 0
+                for char in self.state.project.characters:
+                    # Check if already exists
+                    existing = self.state.world_db.search_entities(
+                        char.name, entity_type="character"
+                    )
+                    if existing:
+                        logger.debug(f"Character already exists: {char.name}")
+                        continue
+
+                    self.services.world.add_entity(
+                        self.state.world_db,
+                        name=char.name,
+                        entity_type="character",
+                        description=char.description,
+                        attributes={
+                            "role": char.role,
+                            "personality_traits": char.personality_traits,
+                            "goals": char.goals,
+                            "arc_notes": char.arc_notes,
+                        },
+                    )
+                    added_count += 1
+                logger.info(f"Added {added_count} characters to world database")
+            else:
+                logger.warning("No characters generated by architect!")
+
+            # Refresh the UI
+            logger.info("Refreshing UI after rebuild...")
+            self._refresh_entity_list()
+            if self._graph:
+                self._graph.refresh()
+
+            # Save the project
+            if self.state.project:
+                logger.info(f"Saving project {self.state.project.id}...")
+                self.services.project.save_project(self.state.project)
+                logger.info("Project saved successfully")
+
+            # Log final stats
+            final_entities = self.state.world_db.count_entities()
+            final_rels = len(self.state.world_db.list_relationships())
+            logger.info(
+                f"World rebuild complete: {final_entities} entities, {final_rels} relationships"
+            )
+            ui.notify("World rebuilt successfully!", type="positive")
+
+        except Exception as e:
+            logger.exception(f"Error rebuilding world: {e}")
+            ui.notify(f"Error: {e}", type="negative")
 
     def _build_entity_browser(self) -> None:
         """Build the entity browser panel."""

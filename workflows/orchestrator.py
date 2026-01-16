@@ -271,6 +271,123 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         self._emit("agent_complete", "Architect", "Story structure complete!")
         return self.story_state
 
+    def generate_more_characters(self, count: int = 2) -> list:
+        """Generate additional characters for the story.
+
+        Args:
+            count: Number of characters to generate.
+
+        Returns:
+            List of new Character objects.
+        """
+        if not self.story_state:
+            raise ValueError("No story state. Create a story first.")
+
+        logger.info(f"Generating {count} more characters...")
+        self._emit("agent_start", "Architect", f"Generating {count} new characters...")
+
+        existing_names = [c.name for c in self.story_state.characters]
+        new_characters = self.architect.generate_more_characters(
+            self.story_state, existing_names, count
+        )
+
+        # Add to story state
+        self.story_state.characters.extend(new_characters)
+
+        self._emit(
+            "agent_complete",
+            "Architect",
+            f"Generated {len(new_characters)} new characters!",
+        )
+        return new_characters
+
+    def generate_locations(self, count: int = 3) -> list:
+        """Generate locations for the story world.
+
+        Args:
+            count: Number of locations to generate.
+
+        Returns:
+            List of location dictionaries.
+        """
+        if not self.story_state:
+            raise ValueError("No story state. Create a story first.")
+
+        logger.info(f"Generating {count} locations...")
+        self._emit("agent_start", "Architect", f"Generating {count} new locations...")
+
+        # Get existing location names from world_description heuristic
+        existing_locations: list[str] = []
+        # Locations will be added to world database by the caller
+
+        locations = self.architect.generate_locations(self.story_state, existing_locations, count)
+
+        self._emit(
+            "agent_complete",
+            "Architect",
+            f"Generated {len(locations)} new locations!",
+        )
+        return locations
+
+    def generate_relationships(
+        self, entity_names: list[str], existing_rels: list[tuple[str, str]], count: int = 5
+    ) -> list:
+        """Generate relationships between entities.
+
+        Args:
+            entity_names: Names of all entities that can have relationships.
+            existing_rels: List of (source, target) tuples to avoid duplicates.
+            count: Number of relationships to generate.
+
+        Returns:
+            List of relationship dictionaries.
+        """
+        if not self.story_state:
+            raise ValueError("No story state. Create a story first.")
+
+        logger.info(f"Generating {count} relationships...")
+        self._emit("agent_start", "Architect", f"Generating {count} new relationships...")
+
+        relationships = self.architect.generate_relationships(
+            self.story_state, entity_names, existing_rels, count
+        )
+
+        self._emit(
+            "agent_complete",
+            "Architect",
+            f"Generated {len(relationships)} new relationships!",
+        )
+        return relationships
+
+    def rebuild_world(self) -> StoryState:
+        """Rebuild the entire world from scratch.
+
+        This regenerates world description, characters, plot, and chapters.
+        Use with caution if chapters have already been written.
+
+        Returns:
+            Updated StoryState.
+        """
+        if not self.story_state:
+            raise ValueError("No story state. Create a story first.")
+
+        logger.info("Rebuilding entire world...")
+        self._emit("agent_start", "Architect", "Rebuilding world from scratch...")
+
+        # Clear existing content but keep the brief
+        self.story_state.world_description = ""
+        self.story_state.world_rules = []
+        self.story_state.characters = []
+        self.story_state.plot_summary = ""
+        self.story_state.plot_points = []
+        self.story_state.chapters = []
+
+        # Rebuild everything
+        self.story_state = self.architect.build_story_structure(self.story_state)
+
+        self._emit("agent_complete", "Architect", "World rebuilt successfully!")
+        return self.story_state
+
     def get_outline_summary(self) -> str:
         """Get a human-readable summary of the story outline."""
         if not self.story_state:
