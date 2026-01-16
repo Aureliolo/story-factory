@@ -396,9 +396,11 @@ class TestWorldServiceGraphAnalysis:
 
         path = world_service.find_path(world_db, a_id, c_id)
 
-        assert path is not None and len(path) > 0
+        assert path is not None
+        assert len(path) > 0
         assert len(path) == 3  # A -> B -> C
-        assert path[0] == a_id and path[-1] == c_id
+        assert path[0] == a_id
+        assert path[-1] == c_id
 
     def test_find_path_no_connection(self, world_service, world_db):
         """Test returns empty list or None when no path exists."""

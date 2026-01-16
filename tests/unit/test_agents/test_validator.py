@@ -38,9 +38,12 @@ class TestValidatorAgentInit:
         with patch("agents.base.ollama.Client"):
             agent = ValidatorAgent(settings=settings)
             # Should use a small model like qwen3:0.6b or similar
-            assert isinstance(agent.model, str) and len(agent.model) > 0
+            assert isinstance(agent.model, str)
+            assert len(agent.model) > 0
             # Verify it's actually a model identifier (contains : or has recognizable name)
-            assert ":" in agent.model or any(word in agent.model.lower() for word in ["qwen", "llama", "mistral", "phi"])
+            has_version_separator = ":" in agent.model
+            has_known_model_name = any(word in agent.model.lower() for word in ["qwen", "llama", "mistral", "phi"])
+            assert has_version_separator or has_known_model_name
 
 
 class TestValidatorValidateResponse:

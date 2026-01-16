@@ -160,7 +160,10 @@ class TestModelModeService:
         # Should fall back to settings
         assert temp == 0.9  # From mock_settings.agent_temperatures
         assert isinstance(temp, float)
-        assert 0.0 < temp <= 2.0
+        # Temperature must be in valid range for LLM generation
+        MIN_TEMPERATURE = 0.0
+        MAX_TEMPERATURE = 2.0
+        assert MIN_TEMPERATURE < temp <= MAX_TEMPERATURE
 
     # === Score Recording Tests ===
 
