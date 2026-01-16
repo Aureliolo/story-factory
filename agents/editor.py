@@ -1,8 +1,12 @@
 """Editor Agent - Refines and polishes prose."""
 
+import logging
+
 from memory.story_state import StoryState
 
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 EDITOR_SYSTEM_PROMPT = """You are the Editor, a meticulous craftsman who polishes prose to perfection.
 
@@ -46,6 +50,7 @@ class EditorAgent(BaseAgent):
 
     def edit_chapter(self, story_state: StoryState, chapter_content: str) -> str:
         """Edit and polish a chapter."""
+        logger.info(f"Editing chapter ({len(chapter_content)} chars)")
         brief = story_state.brief
         if not brief:
             raise ValueError("Story brief is required to edit a chapter")
@@ -78,12 +83,17 @@ Preserve:
 
 Output ONLY the edited chapter text in {brief.language} - no commentary or notes."""
 
-        return self.generate(prompt)
+        edited = self.generate(prompt)
+        logger.info(f"Chapter edited ({len(edited)} chars, was {len(chapter_content)} chars)")
+        return edited
 
     def edit_passage(
         self, passage: str, focus: str | None = None, language: str = "English"
     ) -> str:
         """Edit a specific passage with optional focus area."""
+        logger.info(
+            f"Editing passage ({len(passage)} chars)" + (f" focus: {focus}" if focus else "")
+        )
         focus_instruction = f"\n\nFOCUS ESPECIALLY ON: {focus}" if focus else ""
 
         prompt = f"""Edit and polish this passage.
@@ -97,10 +107,13 @@ LANGUAGE: {language} - Keep ALL text in {language}. Do not translate.
 
 Output ONLY the edited text in {language} - no commentary."""
 
-        return self.generate(prompt)
+        edited = self.generate(prompt)
+        logger.debug(f"Passage edited ({len(edited)} chars)")
+        return edited
 
     def get_edit_suggestions(self, text: str) -> str:
         """Get editing suggestions without making changes."""
+        logger.info(f"Getting edit suggestions for text ({len(text)} chars)")
         prompt = f"""Review this text and provide specific editing suggestions:
 
 ---
@@ -117,7 +130,9 @@ Identify:
 
 Be specific - quote the problematic text and suggest improvements."""
 
-        return self.generate(prompt, temperature=0.5)
+        suggestions = self.generate(prompt, temperature=0.5)
+        logger.debug(f"Generated edit suggestions ({len(suggestions)} chars)")
+        return suggestions
 
     def ensure_consistency(
         self,
@@ -126,6 +141,10 @@ Be specific - quote the problematic text and suggest improvements."""
         story_state: StoryState,
     ) -> str:
         """Edit new content to ensure consistency with previous content."""
+        logger.info(
+            f"Checking consistency: {len(new_content)} chars new, "
+            f"{len(previous_content)} chars previous"
+        )
         brief = story_state.brief
         if not brief:
             raise ValueError("Story brief is required to ensure consistency")
@@ -151,4 +170,6 @@ Check for and fix:
 
 Output the corrected version of the NEW CONTENT only, in {brief.language}."""
 
-        return self.generate(prompt)
+        corrected = self.generate(prompt)
+        logger.debug(f"Consistency check complete ({len(corrected)} chars)")
+        return corrected

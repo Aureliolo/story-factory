@@ -63,15 +63,19 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["."]
+source = ["agents", "services", "workflows", "memory", "ui", "utils"]
 omit = [
     "tests/*",
     "*/site-packages/*",
     "*/__pycache__/*",
     "*/test_*.py",
+    "*/conftest.py",
 ]
 
 [tool.coverage.report]
+# Set to 50% initially - UI code is harder to test without NiceGUI User fixtures
+# Can raise as more component tests are added
+fail_under = 50
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

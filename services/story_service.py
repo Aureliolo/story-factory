@@ -1,6 +1,7 @@
 """Story service - handles story generation workflow."""
 
 import logging
+from collections import OrderedDict
 from collections.abc import Generator
 from typing import Any
 
@@ -10,6 +11,9 @@ from settings import Settings
 from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 logger = logging.getLogger(__name__)
+
+# Maximum number of orchestrators to keep in cache
+MAX_ORCHESTRATOR_CACHE_SIZE = 10
 
 
 class StoryService:
@@ -27,13 +31,15 @@ class StoryService:
             settings: Application settings.
         """
         self.settings = settings
-        self._orchestrators: dict[str, StoryOrchestrator] = {}
+        # Use OrderedDict for LRU cache behavior
+        self._orchestrators: OrderedDict[str, StoryOrchestrator] = OrderedDict()
 
     def _get_orchestrator(self, state: StoryState) -> StoryOrchestrator:
         """Get or create an orchestrator for a story state.
 
         Each story gets its own orchestrator instance to maintain
-        conversation history and agent state.
+        conversation history and agent state. Uses LRU eviction to
+        prevent unbounded memory growth.
 
         Args:
             state: The story state.
@@ -41,11 +47,22 @@ class StoryService:
         Returns:
             StoryOrchestrator for this story.
         """
-        if state.id not in self._orchestrators:
-            orchestrator = StoryOrchestrator(settings=self.settings)
-            orchestrator.story_state = state
-            self._orchestrators[state.id] = orchestrator
-        return self._orchestrators[state.id]
+        if state.id in self._orchestrators:
+            # Move to end (most recently used)
+            self._orchestrators.move_to_end(state.id)
+            return self._orchestrators[state.id]
+
+        # Create new orchestrator
+        orchestrator = StoryOrchestrator(settings=self.settings)
+        orchestrator.story_state = state
+        self._orchestrators[state.id] = orchestrator
+
+        # Evict oldest if over capacity
+        if len(self._orchestrators) > MAX_ORCHESTRATOR_CACHE_SIZE:
+            evicted_id, _ = self._orchestrators.popitem(last=False)
+            logger.debug(f"Evicted orchestrator {evicted_id} from cache (LRU)")
+
+        return orchestrator
 
     def _sync_state(self, orchestrator: StoryOrchestrator, state: StoryState) -> None:
         """Sync orchestrator state back to the provided state object.
@@ -377,6 +394,128 @@ class StoryService:
         orchestrator = self._get_orchestrator(state)
         orchestrator.story_state = state
         return orchestrator.get_statistics()
+
+    # ========== CONTINUATION & EDITING ==========
+
+    def continue_chapter(
+        self,
+        state: StoryState,
+        chapter_num: int,
+        direction: str | None = None,
+    ) -> Generator[WorkflowEvent, None, str]:
+        """Continue writing a chapter from where it left off.
+
+        Args:
+            state: The story state.
+            chapter_num: Chapter number to continue.
+            direction: Optional direction for where to take the scene.
+
+        Yields:
+            WorkflowEvent objects for progress updates.
+
+        Returns:
+            The continuation text.
+        """
+        orchestrator = self._get_orchestrator(state)
+        orchestrator.story_state = state
+
+        continuation = ""
+        for event in orchestrator.continue_chapter(chapter_num, direction):
+            yield event
+            if event.event_type == "agent_complete" and event.agent_name == "Writer":
+                # Get updated chapter content
+                chapter = next((c for c in state.chapters if c.number == chapter_num), None)
+                if chapter:
+                    continuation = event.data.get("continuation", "") if event.data else ""
+
+        self._sync_state(orchestrator, state)
+        return continuation
+
+    def edit_passage(
+        self,
+        state: StoryState,
+        text: str,
+        focus: str | None = None,
+    ) -> Generator[WorkflowEvent, None, str]:
+        """Edit a specific passage with optional focus area.
+
+        Args:
+            state: The story state.
+            text: The text passage to edit.
+            focus: Optional focus area (e.g., "dialogue", "pacing").
+
+        Yields:
+            WorkflowEvent objects for progress updates.
+
+        Returns:
+            The edited passage.
+        """
+        orchestrator = self._get_orchestrator(state)
+        orchestrator.story_state = state
+
+        edited = ""
+        for event in orchestrator.edit_passage(text, focus):
+            yield event
+            if event.event_type == "agent_complete":
+                # The edited text is returned from the generator
+                pass
+
+        # The generator returns the edited text at the end
+        # We need to call it fully and capture the return
+        return edited
+
+    def get_edit_suggestions(
+        self,
+        state: StoryState,
+        text: str,
+    ) -> Generator[WorkflowEvent, None, str]:
+        """Get editing suggestions without making changes.
+
+        Args:
+            state: The story state.
+            text: The text to review.
+
+        Yields:
+            WorkflowEvent objects for progress updates.
+
+        Returns:
+            Suggestions for improving the text.
+        """
+        orchestrator = self._get_orchestrator(state)
+
+        suggestions = ""
+        for event in orchestrator.get_edit_suggestions(text):
+            yield event
+            if event.event_type == "agent_complete" and event.data:
+                suggestions = event.data.get("suggestions", "")
+
+        return suggestions
+
+    def review_full_story(
+        self,
+        state: StoryState,
+    ) -> Generator[WorkflowEvent, None, list]:
+        """Perform a full story continuity review.
+
+        Args:
+            state: The story state.
+
+        Yields:
+            WorkflowEvent objects for progress updates.
+
+        Returns:
+            List of ContinuityIssue objects (as dicts).
+        """
+        orchestrator = self._get_orchestrator(state)
+        orchestrator.story_state = state
+
+        issues = []
+        for event in orchestrator.review_full_story():
+            yield event
+            if event.event_type == "agent_complete" and event.data:
+                issues = event.data.get("issues", [])
+
+        return issues
 
     # ========== FEEDBACK & REVIEWS ==========
 

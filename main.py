@@ -53,6 +53,8 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
     """
     from workflows.orchestrator import StoryOrchestrator
 
+    logger.info("Starting Story Factory CLI mode")
+
     print("=" * 60)
     print("STORY FACTORY - CLI Mode")
     print("=" * 60)
@@ -60,9 +62,11 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
 
     # List saved stories
     if list_stories:
+        logger.debug("Listing saved stories")
         stories = StoryOrchestrator.list_saved_stories()
         if not stories:
             print("No saved stories found.")
+            logger.info("No saved stories found")
         else:
             print("Saved Stories:")
             print("-" * 40)
@@ -73,14 +77,17 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
                 print(f"{i}. {premise}...")
                 print(f"   Status: {status} | Path: {path}")
                 print()
+            logger.info(f"Listed {len(stories)} saved stories")
         return
 
     orchestrator = StoryOrchestrator()
 
     # Load existing story
     if load_story:
+        logger.info(f"Loading story from: {load_story}")
         try:
             state = orchestrator.load_story(load_story)
+            logger.info(f"Loaded story: {state.id} (status: {state.status})")
             print(f"Loaded story: {state.id}")
             print(f"Status: {state.status}")
             print()
@@ -92,12 +99,15 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
             print(orchestrator.get_full_story())
             return
         except FileNotFoundError as e:
+            logger.error(f"Story file not found: {load_story}")
             print(f"Error: {e}")
             return
 
     orchestrator.create_new_story()
+    logger.info("Created new story")
 
     # Interview phase
+    logger.debug("Starting interview phase")
     print("INTERVIEWER:")
     print("-" * 40)
     questions = orchestrator.start_interview()
@@ -107,6 +117,7 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
     while True:
         response = input("\nYour response (or 'done' to finish interview): ").strip()
         if response.lower() == "done":
+            logger.debug("User requested interview finalization")
             orchestrator.finalize_interview()
             break
 
@@ -114,11 +125,16 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
         print("\n" + follow_up)
 
         if is_complete:
+            logger.debug("Interview completed automatically")
             break
+
+    logger.info("Interview phase completed")
 
     print("\n" + "=" * 60)
     print("Building story structure...")
+    logger.info("Building story structure")
     orchestrator.build_story_structure()
+    logger.info("Story structure complete")
 
     print("\nOUTLINE:")
     print("-" * 40)
@@ -126,23 +142,30 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
 
     proceed = input("\n\nProceed with writing? (yes/no): ").strip().lower()
     if proceed != "yes":
+        logger.info("User aborted before writing")
         print("Aborted.")
         return
 
     print("\n" + "=" * 60)
     print("Writing story...")
+    logger.info("Starting story writing")
 
     if not orchestrator.story_state or not orchestrator.story_state.brief:
+        logger.error("No story state or brief available")
         print("Error: No story state or brief available.")
         return
 
     is_short_story = orchestrator.story_state.brief.target_length == "short_story"
     if is_short_story:
+        logger.info("Writing short story")
         for event in orchestrator.write_short_story():
             print(f"  [{event.agent_name}] {event.message}")
     else:
+        logger.info("Writing full story")
         for event in orchestrator.write_all_chapters():
             print(f"  [{event.agent_name}] {event.message}")
+
+    logger.info("Story writing complete")
 
     print("\n" + "=" * 60)
     print("FINAL STORY")
@@ -150,6 +173,9 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
     print(orchestrator.get_full_story())
 
     stats = orchestrator.get_statistics()
+    logger.info(
+        f"Story statistics: {stats['total_words']} words, {stats['total_chapters']} chapters"
+    )
     print("\n" + "-" * 40)
     print(f"Statistics: {stats['total_words']} words, {stats['total_chapters']} chapters")
 
@@ -157,6 +183,7 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
     save = input("\nSave story? (yes/no): ").strip().lower()
     if save == "yes":
         filepath = orchestrator.save_story()
+        logger.info(f"Story saved to: {filepath}")
         print(f"Story saved to: {filepath}")
 
 

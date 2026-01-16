@@ -20,6 +20,7 @@ from agents import (
 )
 from memory.story_state import Chapter, StoryBrief, StoryState
 from settings import STORIES_DIR, Settings
+from utils.constants import get_language_code
 from utils.message_analyzer import analyze_message, format_inference_context
 
 logger = logging.getLogger(__name__)
@@ -413,9 +414,25 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         if not self.story_state:
             raise ValueError("No story state. Call create_new_story() first.")
 
+        # Validate chapter number bounds
+        if not self.story_state.chapters:
+            raise ValueError("No chapters defined. Build story structure first.")
+
+        valid_numbers = [c.number for c in self.story_state.chapters]
+        min_chapter = min(valid_numbers)
+        max_chapter = max(valid_numbers)
+
+        if chapter_number < min_chapter or chapter_number > max_chapter:
+            raise ValueError(
+                f"Chapter {chapter_number} is out of bounds. "
+                f"Valid chapter numbers are {min_chapter} to {max_chapter}."
+            )
+
         chapter = next((c for c in self.story_state.chapters if c.number == chapter_number), None)
         if not chapter:
-            raise ValueError(f"Chapter {chapter_number} not found")
+            raise ValueError(
+                f"Chapter {chapter_number} not found. Available chapters: {sorted(valid_numbers)}"
+            )
 
         chapter.status = "drafting"
 
@@ -574,9 +591,201 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
                 # The UI will handle getting user input and calling continue
 
+        # Final full-story review
+        self._emit("agent_start", "Continuity", "Performing final story review...")
+        yield self.events[-1]
+
+        final_issues = self.continuity.check_full_story(self.story_state)
+        if final_issues:
+            # Report any remaining issues but don't block completion
+            issue_summary = self.continuity.format_revision_feedback(final_issues)
+            critical_count = sum(1 for i in final_issues if i.severity == "critical")
+            moderate_count = sum(1 for i in final_issues if i.severity == "moderate")
+            minor_count = sum(1 for i in final_issues if i.severity == "minor")
+
+            self._emit(
+                "progress",
+                "Continuity",
+                f"Final review found {len(final_issues)} issues: {critical_count} critical, {moderate_count} moderate, {minor_count} minor",
+                {"issues": [vars(i) for i in final_issues], "feedback": issue_summary},
+            )
+            yield self.events[-1]
+            logger.info(f"Final story review found {len(final_issues)} issues")
+        else:
+            self._emit("progress", "Continuity", "Final review: No issues found!")
+            yield self.events[-1]
+            logger.info("Final story review: clean")
+
         self.story_state.status = "complete"
         self._emit("agent_complete", "System", "All chapters complete!")
         yield self.events[-1]
+
+    # ========== CONTINUATION & EDITING ==========
+
+    def continue_chapter(
+        self,
+        chapter_number: int,
+        direction: str | None = None,
+    ) -> Generator[WorkflowEvent, None, str]:
+        """Continue writing a chapter from where it left off.
+
+        Args:
+            chapter_number: The chapter to continue.
+            direction: Optional direction for where to take the scene.
+
+        Returns:
+            The continued content.
+        """
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
+        chapter = next((c for c in self.story_state.chapters if c.number == chapter_number), None)
+        if not chapter:
+            raise ValueError(f"Chapter {chapter_number} not found.")
+
+        if not chapter.content:
+            raise ValueError(f"Chapter {chapter_number} has no content to continue from.")
+
+        self._emit(
+            "agent_start",
+            "Writer",
+            f"Continuing Chapter {chapter_number}...",
+            {"direction": direction} if direction else None,
+        )
+        yield self.events[-1]
+
+        # Use WriterAgent.continue_scene() to continue from current text
+        continuation = self.writer.continue_scene(
+            self.story_state,
+            chapter.content,
+            direction=direction,
+        )
+
+        # Validate continuation
+        try:
+            self._validate_response(continuation, f"Chapter {chapter_number} continuation")
+        except ResponseValidationError as e:
+            logger.warning(f"Validation warning for continuation: {e}")
+
+        # Append continuation to chapter content
+        chapter.content = chapter.content + "\n\n" + continuation
+        chapter.word_count = len(chapter.content.split())
+
+        # Auto-save
+        try:
+            self.save_story()
+            logger.debug(f"Auto-saved after continuing chapter {chapter_number}")
+        except Exception as e:
+            logger.warning(f"Auto-save failed: {e}")
+
+        self._emit(
+            "agent_complete",
+            "Writer",
+            f"Chapter {chapter_number} continued (+{len(continuation.split())} words)",
+        )
+        yield self.events[-1]
+
+        return continuation
+
+    def edit_passage(
+        self,
+        text: str,
+        focus: str | None = None,
+    ) -> Generator[WorkflowEvent, None, str]:
+        """Edit a specific passage with optional focus area.
+
+        Args:
+            text: The text passage to edit.
+            focus: Optional focus area (e.g., "dialogue", "pacing", "description").
+
+        Returns:
+            The edited passage.
+        """
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
+        brief = self.story_state.brief
+        language = brief.language if brief else "English"
+
+        focus_msg = f" (focus: {focus})" if focus else ""
+        self._emit("agent_start", "Editor", f"Editing passage{focus_msg}...")
+        yield self.events[-1]
+
+        # Use EditorAgent.edit_passage() for targeted editing
+        edited = self.editor.edit_passage(text, focus=focus, language=language)
+
+        self._emit(
+            "agent_complete",
+            "Editor",
+            f"Passage edited ({len(edited.split())} words)",
+        )
+        yield self.events[-1]
+
+        return edited
+
+    def get_edit_suggestions(
+        self,
+        text: str,
+    ) -> Generator[WorkflowEvent, None, str]:
+        """Get editing suggestions without making changes.
+
+        Args:
+            text: The text to review.
+
+        Returns:
+            Suggestions for improving the text.
+        """
+        self._emit("agent_start", "Editor", "Analyzing text for suggestions...")
+        yield self.events[-1]
+
+        # Use EditorAgent.get_edit_suggestions() for review mode
+        suggestions = self.editor.get_edit_suggestions(text)
+
+        self._emit(
+            "agent_complete",
+            "Editor",
+            "Edit suggestions ready",
+            {"suggestions": suggestions},
+        )
+        yield self.events[-1]
+
+        return suggestions
+
+    def review_full_story(self) -> Generator[WorkflowEvent, None, list]:
+        """Perform a full story continuity review.
+
+        Returns:
+            List of ContinuityIssue objects.
+        """
+        if not self.story_state:
+            raise ValueError("No story state. Call create_new_story() first.")
+
+        self._emit("agent_start", "Continuity", "Reviewing complete story...")
+        yield self.events[-1]
+
+        issues = self.continuity.check_full_story(self.story_state)
+
+        if issues:
+            feedback = self.continuity.format_revision_feedback(issues)
+            critical_count = sum(1 for i in issues if i.severity == "critical")
+            moderate_count = sum(1 for i in issues if i.severity == "moderate")
+            minor_count = sum(1 for i in issues if i.severity == "minor")
+
+            self._emit(
+                "agent_complete",
+                "Continuity",
+                f"Found {len(issues)} issues: {critical_count} critical, {moderate_count} moderate, {minor_count} minor",
+                {"issues": [vars(i) for i in issues], "feedback": feedback},
+            )
+        else:
+            self._emit(
+                "agent_complete",
+                "Continuity",
+                "No continuity issues found!",
+            )
+
+        yield self.events[-1]
+        return issues
 
     # ========== OUTPUT ==========
 
@@ -662,22 +871,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Set metadata
         brief = self.story_state.brief
         title = self.story_state.project_name or (brief.premise[:50] if brief else "Untitled Story")
-        # Map common language names to ISO 639-1 codes
-        lang_map = {
-            "English": "en",
-            "German": "de",
-            "Spanish": "es",
-            "French": "fr",
-            "Italian": "it",
-            "Portuguese": "pt",
-            "Dutch": "nl",
-            "Russian": "ru",
-            "Japanese": "ja",
-            "Chinese": "zh",
-            "Korean": "ko",
-            "Arabic": "ar",
-        }
-        lang_code = lang_map.get(brief.language, "en") if brief else "en"
+        lang_code = get_language_code(brief.language) if brief else "en"
         book.set_identifier(self.story_state.id)
         book.set_title(title)
         book.set_language(lang_code)

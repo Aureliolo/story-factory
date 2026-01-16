@@ -3,6 +3,7 @@
 import json
 import logging
 import sqlite3
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -14,103 +15,210 @@ from memory.entities import Entity, EventParticipant, Relationship, WorldEvent
 
 logger = logging.getLogger(__name__)
 
+# Schema version for migration support
+SCHEMA_VERSION = 1
+
+# Valid entity types (whitelist)
+VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
+
+# Allowed fields for entity updates (SQL injection prevention)
+ENTITY_UPDATE_FIELDS = frozenset({"name", "description", "attributes", "type", "updated_at"})
+
+# Attributes constraints
+MAX_ATTRIBUTES_DEPTH = 3
+MAX_ATTRIBUTES_SIZE_BYTES = 10 * 1024  # 10KB
+
+
+def _validate_attributes(attrs: dict[str, Any], max_depth: int = MAX_ATTRIBUTES_DEPTH) -> None:
+    """Validate attributes dict depth and size.
+
+    Args:
+        attrs: Attributes dictionary to validate.
+        max_depth: Maximum nesting depth allowed.
+
+    Raises:
+        ValueError: If attributes exceed limits.
+    """
+    # Check size
+    attrs_json = json.dumps(attrs)
+    if len(attrs_json.encode("utf-8")) > MAX_ATTRIBUTES_SIZE_BYTES:
+        raise ValueError(f"Attributes exceed maximum size of {MAX_ATTRIBUTES_SIZE_BYTES // 1024}KB")
+
+    # Check depth
+    def _check_depth(obj: Any, current_depth: int) -> None:
+        if current_depth > max_depth:
+            raise ValueError(f"Attributes exceed maximum nesting depth of {max_depth}")
+        if isinstance(obj, dict):
+            for value in obj.values():
+                _check_depth(value, current_depth + 1)
+        elif isinstance(obj, list):
+            for item in obj:
+                _check_depth(item, current_depth + 1)
+
+    _check_depth(attrs, 1)
+
 
 class WorldDatabase:
-    """SQLite-backed worldbuilding database with NetworkX integration."""
+    """SQLite-backed worldbuilding database with NetworkX integration.
+
+    Thread-safe implementation using RLock for all database operations.
+    """
 
     def __init__(self, db_path: Path | str):
         """Initialize database connection.
 
         Args:
-            db_path: Path to SQLite database file
+            db_path: Path to SQLite database file.
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Thread safety lock
+        self._lock = threading.RLock()
+
+        # Connection with WAL mode for better concurrency
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
+
         self._init_schema()
         self._graph: nx.DiGraph | None = None
+        self._closed = False
+
+    def __del__(self) -> None:
+        """Safety net for resource cleanup."""
+        if hasattr(self, "_closed") and not self._closed:
+            try:
+                self.close()
+            except Exception:
+                # Ignore errors during garbage collection
+                pass
 
     def _init_schema(self) -> None:
-        """Initialize database schema."""
-        cursor = self.conn.cursor()
+        """Initialize database schema with versioning."""
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        # Core entity table
-        cursor.execute(
+            # Schema version table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY
+                )
             """
-            CREATE TABLE IF NOT EXISTS entities (
-                id TEXT PRIMARY KEY,
-                type TEXT NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                attributes TEXT DEFAULT '{}',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
             )
-        """
-        )
 
-        # Relationships table
-        cursor.execute(
+            # Check current version
+            cursor.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
+            row = cursor.fetchone()
+            current_version = row[0] if row else 0
+
+            # Core entity table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS entities (
+                    id TEXT PRIMARY KEY,
+                    type TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    attributes TEXT DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
             """
-            CREATE TABLE IF NOT EXISTS relationships (
-                id TEXT PRIMARY KEY,
-                source_id TEXT NOT NULL,
-                target_id TEXT NOT NULL,
-                relation_type TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                strength REAL DEFAULT 1.0,
-                bidirectional INTEGER DEFAULT 0,
-                attributes TEXT DEFAULT '{}',
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (source_id) REFERENCES entities(id) ON DELETE CASCADE,
-                FOREIGN KEY (target_id) REFERENCES entities(id) ON DELETE CASCADE
             )
-        """
-        )
 
-        # Events table
-        cursor.execute(
+            # Run migrations if needed
+            if current_version < SCHEMA_VERSION:
+                self._run_migrations(cursor, current_version, SCHEMA_VERSION)
+                cursor.execute(
+                    "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+                    (SCHEMA_VERSION,),
+                )
+
+            # Relationships table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS relationships (
+                    id TEXT PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    relation_type TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    strength REAL DEFAULT 1.0,
+                    bidirectional INTEGER DEFAULT 0,
+                    attributes TEXT DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (source_id) REFERENCES entities(id) ON DELETE CASCADE,
+                    FOREIGN KEY (target_id) REFERENCES entities(id) ON DELETE CASCADE
+                )
             """
-            CREATE TABLE IF NOT EXISTS events (
-                id TEXT PRIMARY KEY,
-                description TEXT NOT NULL,
-                chapter_number INTEGER,
-                timestamp_in_story TEXT DEFAULT '',
-                consequences TEXT DEFAULT '[]',
-                created_at TEXT NOT NULL
             )
-        """
-        )
 
-        # Event participants (many-to-many)
-        cursor.execute(
+            # Events table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS events (
+                    id TEXT PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    chapter_number INTEGER,
+                    timestamp_in_story TEXT DEFAULT '',
+                    consequences TEXT DEFAULT '[]',
+                    created_at TEXT NOT NULL
+                )
             """
-            CREATE TABLE IF NOT EXISTS event_participants (
-                event_id TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                PRIMARY KEY (event_id, entity_id),
-                FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-                FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
             )
+
+            # Event participants (many-to-many)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_participants (
+                    event_id TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    PRIMARY KEY (event_id, entity_id),
+                    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+                    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+                )
+            """
+            )
+
+            # Indexes for fast queries
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_target ON relationships(target_id)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_rel_type ON relationships(relation_type)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_type ON entities(type)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_name ON entities(name)")
+
+            self.conn.commit()
+            logger.debug(f"Database schema initialized: {self.db_path}")
+
+    def _run_migrations(self, cursor: sqlite3.Cursor, from_version: int, to_version: int) -> None:
+        """Run database migrations.
+
+        Args:
+            cursor: Database cursor.
+            from_version: Current schema version.
+            to_version: Target schema version.
         """
-        )
+        logger.info(f"Migrating database schema from v{from_version} to v{to_version}")
 
-        # Indexes for fast queries
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_target ON relationships(target_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_type ON relationships(relation_type)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_type ON entities(type)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_entity_name ON entities(name)")
+        # Add migration logic here as schema evolves
+        # Example:
+        # if from_version < 2:
+        #     cursor.execute("ALTER TABLE entities ADD COLUMN new_field TEXT")
 
-        self.conn.commit()
-        logger.debug(f"Database schema initialized: {self.db_path}")
+        logger.info("Database migration complete")
 
     def close(self) -> None:
         """Close database connection."""
-        if self.conn:
-            self.conn.close()
+        with self._lock:
+            if self.conn and not self._closed:
+                self.conn.close()
+                self._closed = True
+                logger.debug(f"Database connection closed: {self.db_path}")
 
     def __enter__(self):
         """Context manager entry."""
@@ -144,7 +252,7 @@ class WorldDatabase:
             Entity ID
 
         Raises:
-            ValueError: If name or entity_type is invalid
+            ValueError: If name, entity_type, or attributes are invalid
         """
         # Validate inputs
         name = name.strip()
@@ -153,29 +261,41 @@ class WorldDatabase:
         if len(name) > 200:
             raise ValueError("Entity name cannot exceed 200 characters")
 
-        entity_type = entity_type.strip()
+        entity_type = entity_type.strip().lower()
         if not entity_type:
             raise ValueError("Entity type cannot be empty")
+        if entity_type not in VALID_ENTITY_TYPES:
+            raise ValueError(
+                f"Invalid entity type '{entity_type}'. "
+                f"Must be one of: {', '.join(sorted(VALID_ENTITY_TYPES))}"
+            )
 
         # Strip whitespace from description for consistency
         description = description.strip() if description else ""
         if len(description) > 5000:
             raise ValueError("Entity description cannot exceed 5000 characters")
 
+        # Validate attributes
+        attrs = attributes or {}
+        if attrs:
+            _validate_attributes(attrs)
+
         entity_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
-        attrs_json = json.dumps(attributes or {})
+        attrs_json = json.dumps(attrs)
 
-        cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO entities (id, type, name, description, attributes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (entity_id, entity_type, name, description, attrs_json, now, now),
-        )
-        self.conn.commit()
-        self._invalidate_graph()
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO entities (id, type, name, description, attributes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (entity_id, entity_type, name, description, attrs_json, now, now),
+            )
+            self.conn.commit()
+            self._add_entity_to_graph(entity_id, name, entity_type, description, attrs)
+
         logger.debug(f"Added entity: {name} ({entity_type}) id={entity_id}")
         return entity_id
 
@@ -188,12 +308,13 @@ class WorldDatabase:
         Returns:
             Entity or None if not found
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
-        row = cursor.fetchone()
-        if row is None:
-            return None
-        return self._row_to_entity(row)
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return self._row_to_entity(row)
 
     def get_entity_by_name(self, name: str, entity_type: str | None = None) -> Entity | None:
         """Get an entity by name (case-insensitive).
@@ -205,18 +326,19 @@ class WorldDatabase:
         Returns:
             Entity or None if not found
         """
-        cursor = self.conn.cursor()
-        if entity_type:
-            cursor.execute(
-                "SELECT * FROM entities WHERE LOWER(name) = LOWER(?) AND type = ?",
-                (name, entity_type),
-            )
-        else:
-            cursor.execute("SELECT * FROM entities WHERE LOWER(name) = LOWER(?)", (name,))
-        row = cursor.fetchone()
-        if row is None:
-            return None
-        return self._row_to_entity(row)
+        with self._lock:
+            cursor = self.conn.cursor()
+            if entity_type:
+                cursor.execute(
+                    "SELECT * FROM entities WHERE LOWER(name) = LOWER(?) AND type = ?",
+                    (name, entity_type),
+                )
+            else:
+                cursor.execute("SELECT * FROM entities WHERE LOWER(name) = LOWER(?)", (name,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return self._row_to_entity(row)
 
     def update_entity(self, entity_id: str, **updates: Any) -> bool:
         """Update an entity.
@@ -229,10 +351,17 @@ class WorldDatabase:
             True if updated, False if entity not found
 
         Raises:
-            ValueError: If validation fails
+            ValueError: If validation fails or field names are invalid
         """
-        allowed_fields = {"name", "description", "attributes", "type"}
-        update_fields = {k: v for k, v in updates.items() if k in allowed_fields}
+        # Filter and validate field names (SQL injection prevention)
+        update_fields: dict[str, Any] = {}
+        for key, value in updates.items():
+            if key not in ENTITY_UPDATE_FIELDS:
+                logger.warning(f"Ignoring unknown field in update_entity: {key}")
+                continue
+            if key == "updated_at":
+                continue  # We set this ourselves
+            update_fields[key] = value
 
         if not update_fields:
             return False
@@ -249,7 +378,6 @@ class WorldDatabase:
         # Validate description if being updated
         if "description" in update_fields:
             description = update_fields["description"]
-            # Strip whitespace from description for consistency
             if description is not None:
                 description = str(description).strip()
                 if len(description) > 5000:
@@ -258,28 +386,60 @@ class WorldDatabase:
 
         # Validate type if being updated
         if "type" in update_fields:
-            entity_type = update_fields["type"].strip()
+            entity_type = update_fields["type"].strip().lower()
             if not entity_type:
                 raise ValueError("Entity type cannot be empty")
+            if entity_type not in VALID_ENTITY_TYPES:
+                raise ValueError(
+                    f"Invalid entity type '{entity_type}'. "
+                    f"Must be one of: {', '.join(sorted(VALID_ENTITY_TYPES))}"
+                )
             update_fields["type"] = entity_type
 
-        # Handle attributes specially
+        # Validate and serialize attributes
         if "attributes" in update_fields:
-            update_fields["attributes"] = json.dumps(update_fields["attributes"])
+            attrs = update_fields["attributes"]
+            if attrs:
+                _validate_attributes(attrs)
+            update_fields["attributes"] = json.dumps(attrs or {})
 
         update_fields["updated_at"] = datetime.now().isoformat()
 
-        set_clause = ", ".join(f"{k} = ?" for k in update_fields.keys())
-        values = list(update_fields.values()) + [entity_id]
+        # Build SET clause with explicit field validation (defense in depth)
+        set_parts = []
+        values = []
+        for field in update_fields:
+            # Double-check field is in whitelist (already filtered, but defense in depth)
+            if field not in ENTITY_UPDATE_FIELDS:
+                raise ValueError(f"Invalid field name: {field}")
+            set_parts.append(f"{field} = ?")
+            values.append(update_fields[field])
 
-        cursor = self.conn.cursor()
-        cursor.execute(
-            f"UPDATE entities SET {set_clause} WHERE id = ?",
-            values,
-        )
-        self.conn.commit()
-        self._invalidate_graph()
-        return cursor.rowcount > 0
+        set_clause = ", ".join(set_parts)
+        values.append(entity_id)
+
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                f"UPDATE entities SET {set_clause} WHERE id = ?",
+                values,
+            )
+            self.conn.commit()
+            updated = cursor.rowcount > 0
+
+            # Update graph incrementally
+            if updated:
+                self._update_entity_in_graph(
+                    entity_id,
+                    update_fields.get("name"),
+                    update_fields.get("type"),
+                    update_fields.get("description"),
+                    json.loads(update_fields["attributes"])
+                    if "attributes" in update_fields
+                    else None,
+                )
+
+        return updated
 
     def delete_entity(self, entity_id: str) -> bool:
         """Delete an entity and its relationships.
@@ -290,11 +450,14 @@ class WorldDatabase:
         Returns:
             True if deleted, False if not found
         """
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
-        self.conn.commit()
-        self._invalidate_graph()
-        return cursor.rowcount > 0
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
+            self.conn.commit()
+            deleted = cursor.rowcount > 0
+            if deleted:
+                self._remove_entity_from_graph(entity_id)
+        return deleted
 
     def list_entities(self, entity_type: str | None = None) -> list[Entity]:
         """List all entities, optionally filtered by type.
@@ -305,15 +468,16 @@ class WorldDatabase:
         Returns:
             List of entities
         """
-        cursor = self.conn.cursor()
-        if entity_type:
-            cursor.execute(
-                "SELECT * FROM entities WHERE type = ? ORDER BY name",
-                (entity_type,),
-            )
-        else:
-            cursor.execute("SELECT * FROM entities ORDER BY type, name")
-        return [self._row_to_entity(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            if entity_type:
+                cursor.execute(
+                    "SELECT * FROM entities WHERE type = ? ORDER BY name",
+                    (entity_type,),
+                )
+            else:
+                cursor.execute("SELECT * FROM entities ORDER BY type, name")
+            return [self._row_to_entity(row) for row in cursor.fetchall()]
 
     def count_entities(self, entity_type: str | None = None) -> int:
         """Count entities, optionally by type.
@@ -324,13 +488,14 @@ class WorldDatabase:
         Returns:
             Count of entities
         """
-        cursor = self.conn.cursor()
-        if entity_type:
-            cursor.execute("SELECT COUNT(*) FROM entities WHERE type = ?", (entity_type,))
-        else:
-            cursor.execute("SELECT COUNT(*) FROM entities")
-        result = cursor.fetchone()
-        return int(result[0]) if result else 0
+        with self._lock:
+            cursor = self.conn.cursor()
+            if entity_type:
+                cursor.execute("SELECT COUNT(*) FROM entities WHERE type = ?", (entity_type,))
+            else:
+                cursor.execute("SELECT COUNT(*) FROM entities")
+            result = cursor.fetchone()
+            return int(result[0]) if result else 0
 
     def search_entities(self, query: str, entity_type: str | None = None) -> list[Entity]:
         """Search entities by name or description.
@@ -342,27 +507,28 @@ class WorldDatabase:
         Returns:
             List of matching entities
         """
-        cursor = self.conn.cursor()
-        search_pattern = f"%{query}%"
-        if entity_type:
-            cursor.execute(
-                """
-                SELECT * FROM entities
-                WHERE (name LIKE ? OR description LIKE ?) AND type = ?
-                ORDER BY name
-                """,
-                (search_pattern, search_pattern, entity_type),
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT * FROM entities
-                WHERE name LIKE ? OR description LIKE ?
-                ORDER BY type, name
-                """,
-                (search_pattern, search_pattern),
-            )
-        return [self._row_to_entity(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            search_pattern = f"%{query}%"
+            if entity_type:
+                cursor.execute(
+                    """
+                    SELECT * FROM entities
+                    WHERE (name LIKE ? OR description LIKE ?) AND type = ?
+                    ORDER BY name
+                    """,
+                    (search_pattern, search_pattern, entity_type),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT * FROM entities
+                    WHERE name LIKE ? OR description LIKE ?
+                    ORDER BY type, name
+                    """,
+                    (search_pattern, search_pattern),
+                )
+            return [self._row_to_entity(row) for row in cursor.fetchall()]
 
     def _row_to_entity(self, row: sqlite3.Row) -> Entity:
         """Convert a database row to an Entity."""
@@ -408,27 +574,31 @@ class WorldDatabase:
         now = datetime.now().isoformat()
         attrs_json = json.dumps(attributes or {})
 
-        cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO relationships
-            (id, source_id, target_id, relation_type, description, strength, bidirectional, attributes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                rel_id,
-                source_id,
-                target_id,
-                relation_type,
-                description,
-                strength,
-                1 if bidirectional else 0,
-                attrs_json,
-                now,
-            ),
-        )
-        self.conn.commit()
-        self._invalidate_graph()
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO relationships
+                (id, source_id, target_id, relation_type, description, strength, bidirectional, attributes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    rel_id,
+                    source_id,
+                    target_id,
+                    relation_type,
+                    description,
+                    strength,
+                    1 if bidirectional else 0,
+                    attrs_json,
+                    now,
+                ),
+            )
+            self.conn.commit()
+            self._add_relationship_to_graph(
+                rel_id, source_id, target_id, relation_type, description, strength, bidirectional
+            )
+
         logger.debug(f"Added relationship: {source_id} --{relation_type}--> {target_id}")
         return rel_id
 
@@ -442,19 +612,20 @@ class WorldDatabase:
         Returns:
             List of relationships
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        if direction == "outgoing":
-            cursor.execute("SELECT * FROM relationships WHERE source_id = ?", (entity_id,))
-        elif direction == "incoming":
-            cursor.execute("SELECT * FROM relationships WHERE target_id = ?", (entity_id,))
-        else:
-            cursor.execute(
-                "SELECT * FROM relationships WHERE source_id = ? OR target_id = ?",
-                (entity_id, entity_id),
-            )
+            if direction == "outgoing":
+                cursor.execute("SELECT * FROM relationships WHERE source_id = ?", (entity_id,))
+            elif direction == "incoming":
+                cursor.execute("SELECT * FROM relationships WHERE target_id = ?", (entity_id,))
+            else:
+                cursor.execute(
+                    "SELECT * FROM relationships WHERE source_id = ? OR target_id = ?",
+                    (entity_id, entity_id),
+                )
 
-        return [self._row_to_relationship(row) for row in cursor.fetchall()]
+            return [self._row_to_relationship(row) for row in cursor.fetchall()]
 
     def get_relationship_between(self, source_id: str, target_id: str) -> Relationship | None:
         """Get relationship between two specific entities.
@@ -466,19 +637,20 @@ class WorldDatabase:
         Returns:
             Relationship or None
         """
-        cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            SELECT * FROM relationships
-            WHERE (source_id = ? AND target_id = ?)
-               OR (bidirectional = 1 AND source_id = ? AND target_id = ?)
-            """,
-            (source_id, target_id, target_id, source_id),
-        )
-        row = cursor.fetchone()
-        if row is None:
-            return None
-        return self._row_to_relationship(row)
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM relationships
+                WHERE (source_id = ? AND target_id = ?)
+                   OR (bidirectional = 1 AND source_id = ? AND target_id = ?)
+                """,
+                (source_id, target_id, target_id, source_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return self._row_to_relationship(row)
 
     def delete_relationship(self, rel_id: str) -> bool:
         """Delete a relationship.
@@ -489,11 +661,22 @@ class WorldDatabase:
         Returns:
             True if deleted, False if not found
         """
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM relationships WHERE id = ?", (rel_id,))
-        self.conn.commit()
-        self._invalidate_graph()
-        return cursor.rowcount > 0
+        with self._lock:
+            cursor = self.conn.cursor()
+            # Get relationship info before deletion for graph update
+            cursor.execute("SELECT * FROM relationships WHERE id = ?", (rel_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return False
+
+            source_id = row["source_id"]
+            target_id = row["target_id"]
+            bidirectional = bool(row["bidirectional"])
+
+            cursor.execute("DELETE FROM relationships WHERE id = ?", (rel_id,))
+            self.conn.commit()
+            self._remove_relationship_from_graph(source_id, target_id, bidirectional)
+            return True
 
     def update_relationship(
         self,
@@ -517,47 +700,58 @@ class WorldDatabase:
         Returns:
             True if updated, False if not found.
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        # Get current relationship
-        cursor.execute("SELECT * FROM relationships WHERE id = ?", (relationship_id,))
-        row = cursor.fetchone()
-        if row is None:
-            return False
+            # Get current relationship
+            cursor.execute("SELECT * FROM relationships WHERE id = ?", (relationship_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return False
 
-        # Prepare updated values
-        new_type = relation_type if relation_type is not None else row["relation_type"]
-        new_desc = description if description is not None else row["description"]
-        new_strength = strength if strength is not None else row["strength"]
-        new_bidir = bidirectional if bidirectional is not None else row["bidirectional"]
+            source_id = row["source_id"]
+            target_id = row["target_id"]
+            old_bidir = bool(row["bidirectional"])
 
-        # Handle attributes merging
-        current_attrs = json.loads(row["attributes"]) if row["attributes"] else {}
-        if attributes is not None:
-            current_attrs.update(attributes)
+            # Prepare updated values
+            new_type = relation_type if relation_type is not None else row["relation_type"]
+            new_desc = description if description is not None else row["description"]
+            new_strength = strength if strength is not None else row["strength"]
+            new_bidir = bidirectional if bidirectional is not None else old_bidir
 
-        cursor.execute(
-            """
-            UPDATE relationships
-            SET relation_type = ?,
-                description = ?,
-                strength = ?,
-                bidirectional = ?,
-                attributes = ?
-            WHERE id = ?
-            """,
-            (
-                new_type,
-                new_desc,
-                new_strength,
-                1 if new_bidir else 0,
-                json.dumps(current_attrs),
-                relationship_id,
-            ),
-        )
-        self.conn.commit()
-        self._invalidate_graph()
-        return cursor.rowcount > 0
+            # Handle attributes merging
+            current_attrs = json.loads(row["attributes"]) if row["attributes"] else {}
+            if attributes is not None:
+                current_attrs.update(attributes)
+
+            cursor.execute(
+                """
+                UPDATE relationships
+                SET relation_type = ?,
+                    description = ?,
+                    strength = ?,
+                    bidirectional = ?,
+                    attributes = ?
+                WHERE id = ?
+                """,
+                (
+                    new_type,
+                    new_desc,
+                    new_strength,
+                    1 if new_bidir else 0,
+                    json.dumps(current_attrs),
+                    relationship_id,
+                ),
+            )
+            self.conn.commit()
+
+            # Update graph: remove old edges and add new ones
+            self._remove_relationship_from_graph(source_id, target_id, old_bidir)
+            self._add_relationship_to_graph(
+                relationship_id, source_id, target_id, new_type, new_desc, new_strength, new_bidir
+            )
+
+            return cursor.rowcount > 0
 
     def list_relationships(self) -> list[Relationship]:
         """List all relationships.
@@ -565,9 +759,10 @@ class WorldDatabase:
         Returns:
             List of all relationships
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM relationships ORDER BY created_at")
-        return [self._row_to_relationship(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM relationships ORDER BY created_at")
+            return [self._row_to_relationship(row) for row in cursor.fetchall()]
 
     def _row_to_relationship(self, row: sqlite3.Row) -> Relationship:
         """Convert a database row to a Relationship."""
@@ -611,24 +806,26 @@ class WorldDatabase:
         now = datetime.now().isoformat()
         consequences_json = json.dumps(consequences or [])
 
-        cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO events (id, description, chapter_number, timestamp_in_story, consequences, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (event_id, description, chapter_number, timestamp_in_story, consequences_json, now),
-        )
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO events (id, description, chapter_number, timestamp_in_story, consequences, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, description, chapter_number, timestamp_in_story, consequences_json, now),
+            )
 
-        # Add participants
-        if participants:
-            for entity_id, role in participants:
-                cursor.execute(
-                    "INSERT INTO event_participants (event_id, entity_id, role) VALUES (?, ?, ?)",
-                    (event_id, entity_id, role),
-                )
+            # Add participants
+            if participants:
+                for entity_id, role in participants:
+                    cursor.execute(
+                        "INSERT INTO event_participants (event_id, entity_id, role) VALUES (?, ?, ?)",
+                        (event_id, entity_id, role),
+                    )
 
-        self.conn.commit()
+            self.conn.commit()
+
         logger.debug(f"Added event: {description[:50]}...")
         return event_id
 
@@ -641,17 +838,18 @@ class WorldDatabase:
         Returns:
             List of events
         """
-        cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            SELECT e.* FROM events e
-            JOIN event_participants ep ON e.id = ep.event_id
-            WHERE ep.entity_id = ?
-            ORDER BY e.chapter_number, e.created_at
-            """,
-            (entity_id,),
-        )
-        return [self._row_to_event(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT e.* FROM events e
+                JOIN event_participants ep ON e.id = ep.event_id
+                WHERE ep.entity_id = ?
+                ORDER BY e.chapter_number, e.created_at
+                """,
+                (entity_id,),
+            )
+            return [self._row_to_event(row) for row in cursor.fetchall()]
 
     def get_events_for_chapter(self, chapter_number: int) -> list[WorldEvent]:
         """Get all events for a chapter.
@@ -662,12 +860,13 @@ class WorldDatabase:
         Returns:
             List of events
         """
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT * FROM events WHERE chapter_number = ? ORDER BY created_at",
-            (chapter_number,),
-        )
-        return [self._row_to_event(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT * FROM events WHERE chapter_number = ? ORDER BY created_at",
+                (chapter_number,),
+            )
+            return [self._row_to_event(row) for row in cursor.fetchall()]
 
     def get_event_participants(self, event_id: str) -> list[EventParticipant]:
         """Get participants for an event.
@@ -678,16 +877,17 @@ class WorldDatabase:
         Returns:
             List of event participants
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM event_participants WHERE event_id = ?", (event_id,))
-        return [
-            EventParticipant(
-                event_id=row["event_id"],
-                entity_id=row["entity_id"],
-                role=row["role"],
-            )
-            for row in cursor.fetchall()
-        ]
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM event_participants WHERE event_id = ?", (event_id,))
+            return [
+                EventParticipant(
+                    event_id=row["event_id"],
+                    entity_id=row["entity_id"],
+                    role=row["role"],
+                )
+                for row in cursor.fetchall()
+            ]
 
     def list_events(self, limit: int | None = None) -> list[WorldEvent]:
         """List all events.
@@ -698,15 +898,16 @@ class WorldDatabase:
         Returns:
             List of events
         """
-        cursor = self.conn.cursor()
-        if limit:
-            cursor.execute(
-                "SELECT * FROM events ORDER BY chapter_number, created_at LIMIT ?",
-                (limit,),
-            )
-        else:
-            cursor.execute("SELECT * FROM events ORDER BY chapter_number, created_at")
-        return [self._row_to_event(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            if limit:
+                cursor.execute(
+                    "SELECT * FROM events ORDER BY chapter_number, created_at LIMIT ?",
+                    (limit,),
+                )
+            else:
+                cursor.execute("SELECT * FROM events ORDER BY chapter_number, created_at")
+            return [self._row_to_event(row) for row in cursor.fetchall()]
 
     def _row_to_event(self, row: sqlite3.Row) -> WorldEvent:
         """Convert a database row to a WorldEvent."""
@@ -726,6 +927,149 @@ class WorldDatabase:
     def _invalidate_graph(self) -> None:
         """Invalidate cached graph."""
         self._graph = None
+
+    def _add_entity_to_graph(
+        self,
+        entity_id: str,
+        name: str,
+        entity_type: str,
+        description: str,
+        attributes: dict[str, Any],
+    ) -> None:
+        """Add entity to graph incrementally (no full rebuild).
+
+        Args:
+            entity_id: Entity ID
+            name: Entity name
+            entity_type: Entity type
+            description: Entity description
+            attributes: Entity attributes
+        """
+        if self._graph is None:
+            return  # Graph not built yet, will be built on next get_graph()
+
+        self._graph.add_node(
+            entity_id,
+            name=name,
+            type=entity_type,
+            description=description,
+            attributes=attributes,
+        )
+        logger.debug(f"Added entity to graph: {name} ({entity_id})")
+
+    def _remove_entity_from_graph(self, entity_id: str) -> None:
+        """Remove entity from graph incrementally (no full rebuild).
+
+        Args:
+            entity_id: Entity ID to remove
+        """
+        if self._graph is None:
+            return  # Graph not built yet
+
+        if entity_id in self._graph:
+            self._graph.remove_node(entity_id)
+            logger.debug(f"Removed entity from graph: {entity_id}")
+
+    def _update_entity_in_graph(
+        self,
+        entity_id: str,
+        name: str | None = None,
+        entity_type: str | None = None,
+        description: str | None = None,
+        attributes: dict[str, Any] | None = None,
+    ) -> None:
+        """Update entity in graph incrementally (no full rebuild).
+
+        Args:
+            entity_id: Entity ID
+            name: New name (if changed)
+            entity_type: New type (if changed)
+            description: New description (if changed)
+            attributes: New attributes (if changed)
+        """
+        if self._graph is None:
+            return  # Graph not built yet
+
+        if entity_id not in self._graph:
+            return  # Entity not in graph
+
+        # Update only provided fields
+        if name is not None:
+            self._graph.nodes[entity_id]["name"] = name
+        if entity_type is not None:
+            self._graph.nodes[entity_id]["type"] = entity_type
+        if description is not None:
+            self._graph.nodes[entity_id]["description"] = description
+        if attributes is not None:
+            self._graph.nodes[entity_id]["attributes"] = attributes
+
+        logger.debug(f"Updated entity in graph: {entity_id}")
+
+    def _add_relationship_to_graph(
+        self,
+        rel_id: str,
+        source_id: str,
+        target_id: str,
+        relation_type: str,
+        description: str,
+        strength: float,
+        bidirectional: bool,
+    ) -> None:
+        """Add relationship to graph incrementally (no full rebuild).
+
+        Args:
+            rel_id: Relationship ID
+            source_id: Source entity ID
+            target_id: Target entity ID
+            relation_type: Relationship type
+            description: Relationship description
+            strength: Relationship strength
+            bidirectional: Whether relationship is bidirectional
+        """
+        if self._graph is None:
+            return  # Graph not built yet
+
+        self._graph.add_edge(
+            source_id,
+            target_id,
+            id=rel_id,
+            relation_type=relation_type,
+            description=description,
+            strength=strength,
+        )
+
+        if bidirectional:
+            self._graph.add_edge(
+                target_id,
+                source_id,
+                id=rel_id,
+                relation_type=relation_type,
+                description=description,
+                strength=strength,
+                is_reverse=True,
+            )
+        logger.debug(f"Added relationship to graph: {source_id} -> {target_id}")
+
+    def _remove_relationship_from_graph(
+        self, source_id: str, target_id: str, bidirectional: bool = False
+    ) -> None:
+        """Remove relationship from graph incrementally (no full rebuild).
+
+        Args:
+            source_id: Source entity ID
+            target_id: Target entity ID
+            bidirectional: Whether to also remove reverse edge
+        """
+        if self._graph is None:
+            return  # Graph not built yet
+
+        if self._graph.has_edge(source_id, target_id):
+            self._graph.remove_edge(source_id, target_id)
+
+        if bidirectional and self._graph.has_edge(target_id, source_id):
+            self._graph.remove_edge(target_id, source_id)
+
+        logger.debug(f"Removed relationship from graph: {source_id} -> {target_id}")
 
     def _rebuild_graph(self) -> None:
         """Rebuild NetworkX graph from database."""
@@ -1012,79 +1356,81 @@ class WorldDatabase:
         Args:
             data: Previously exported data
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        # Clear existing data
-        cursor.execute("DELETE FROM event_participants")
-        cursor.execute("DELETE FROM events")
-        cursor.execute("DELETE FROM relationships")
-        cursor.execute("DELETE FROM entities")
+            # Clear existing data
+            cursor.execute("DELETE FROM event_participants")
+            cursor.execute("DELETE FROM events")
+            cursor.execute("DELETE FROM relationships")
+            cursor.execute("DELETE FROM entities")
 
-        # Import entities
-        for entity_data in data.get("entities", []):
-            cursor.execute(
-                """
-                INSERT INTO entities (id, type, name, description, attributes, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    entity_data["id"],
-                    entity_data["type"],
-                    entity_data["name"],
-                    entity_data.get("description", ""),
-                    json.dumps(entity_data.get("attributes", {})),
-                    entity_data.get("created_at", datetime.now().isoformat()),
-                    entity_data.get("updated_at", datetime.now().isoformat()),
-                ),
-            )
-
-        # Import relationships
-        for rel_data in data.get("relationships", []):
-            cursor.execute(
-                """
-                INSERT INTO relationships
-                (id, source_id, target_id, relation_type, description, strength, bidirectional, attributes, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    rel_data["id"],
-                    rel_data["source_id"],
-                    rel_data["target_id"],
-                    rel_data["relation_type"],
-                    rel_data.get("description", ""),
-                    rel_data.get("strength", 1.0),
-                    1 if rel_data.get("bidirectional", False) else 0,
-                    json.dumps(rel_data.get("attributes", {})),
-                    rel_data.get("created_at", datetime.now().isoformat()),
-                ),
-            )
-
-        # Import events
-        for event_data in data.get("events", []):
-            cursor.execute(
-                """
-                INSERT INTO events (id, description, chapter_number, timestamp_in_story, consequences, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event_data["id"],
-                    event_data["description"],
-                    event_data.get("chapter_number"),
-                    event_data.get("timestamp_in_story", ""),
-                    json.dumps(event_data.get("consequences", [])),
-                    event_data.get("created_at", datetime.now().isoformat()),
-                ),
-            )
-
-            # Import participants
-            for participant in event_data.get("participants", []):
+            # Import entities
+            for entity_data in data.get("entities", []):
                 cursor.execute(
-                    "INSERT INTO event_participants (event_id, entity_id, role) VALUES (?, ?, ?)",
-                    (event_data["id"], participant["entity_id"], participant["role"]),
+                    """
+                    INSERT INTO entities (id, type, name, description, attributes, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        entity_data["id"],
+                        entity_data["type"],
+                        entity_data["name"],
+                        entity_data.get("description", ""),
+                        json.dumps(entity_data.get("attributes", {})),
+                        entity_data.get("created_at", datetime.now().isoformat()),
+                        entity_data.get("updated_at", datetime.now().isoformat()),
+                    ),
                 )
 
-        self.conn.commit()
-        self._invalidate_graph()
+            # Import relationships
+            for rel_data in data.get("relationships", []):
+                cursor.execute(
+                    """
+                    INSERT INTO relationships
+                    (id, source_id, target_id, relation_type, description, strength, bidirectional, attributes, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        rel_data["id"],
+                        rel_data["source_id"],
+                        rel_data["target_id"],
+                        rel_data["relation_type"],
+                        rel_data.get("description", ""),
+                        rel_data.get("strength", 1.0),
+                        1 if rel_data.get("bidirectional", False) else 0,
+                        json.dumps(rel_data.get("attributes", {})),
+                        rel_data.get("created_at", datetime.now().isoformat()),
+                    ),
+                )
+
+            # Import events
+            for event_data in data.get("events", []):
+                cursor.execute(
+                    """
+                    INSERT INTO events (id, description, chapter_number, timestamp_in_story, consequences, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event_data["id"],
+                        event_data["description"],
+                        event_data.get("chapter_number"),
+                        event_data.get("timestamp_in_story", ""),
+                        json.dumps(event_data.get("consequences", [])),
+                        event_data.get("created_at", datetime.now().isoformat()),
+                    ),
+                )
+
+                # Import participants
+                for participant in event_data.get("participants", []):
+                    cursor.execute(
+                        "INSERT INTO event_participants (event_id, entity_id, role) VALUES (?, ?, ?)",
+                        (event_data["id"], participant["entity_id"], participant["role"]),
+                    )
+
+            self.conn.commit()
+            self._invalidate_graph()
+
         logger.info(
             f"Imported {len(data.get('entities', []))} entities, "
             f"{len(data.get('relationships', []))} relationships, "

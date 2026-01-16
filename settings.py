@@ -243,6 +243,10 @@ class Settings:
     learning_min_samples: int = 5  # Minimum samples before making recommendations
     learning_confidence_threshold: float = 0.8  # For auto-applying in balanced mode
 
+    # Timeout settings (in seconds)
+    ollama_timeout: int = 120  # Timeout for Ollama API requests
+    subprocess_timeout: int = 10  # Timeout for subprocess calls (ollama list, etc.)
+
     def save(self) -> None:
         """Save settings to JSON file."""
         # Validate before saving
@@ -330,9 +334,24 @@ class Settings:
                 f"learning_confidence_threshold must be between 0.0 and 1.0, got {self.learning_confidence_threshold}"
             )
 
+        # Validate timeout settings
+        if not 10 <= self.ollama_timeout <= 600:
+            raise ValueError(
+                f"ollama_timeout must be between 10 and 600 seconds, got {self.ollama_timeout}"
+            )
+
+        if not 5 <= self.subprocess_timeout <= 60:
+            raise ValueError(
+                f"subprocess_timeout must be between 5 and 60 seconds, got {self.subprocess_timeout}"
+            )
+
     @classmethod
     def load(cls) -> "Settings":
-        """Load settings from JSON file, or create defaults."""
+        """Load settings from JSON file, or create defaults.
+
+        Attempts to repair invalid settings by merging valid fields with
+        defaults rather than silently overwriting the entire file.
+        """
         if SETTINGS_FILE.exists():
             try:
                 with open(SETTINGS_FILE) as f:
@@ -342,14 +361,90 @@ class Settings:
                 settings.validate()
                 return settings
             except json.JSONDecodeError as e:
-                logger.warning(f"Invalid JSON in settings file, using defaults: {e}")
-            except (TypeError, ValueError) as e:
-                logger.warning(f"Settings file has invalid values, using defaults: {e}")
+                logger.error(f"Corrupted settings file (invalid JSON): {e}")
+                logger.warning("Creating backup and using default settings")
+                cls._backup_corrupted_settings()
+            except TypeError as e:
+                logger.warning(f"Unknown fields in settings file: {e}")
+                # Try partial recovery - use only known fields
+                return cls._recover_partial_settings(data)
+            except ValueError as e:
+                logger.warning(f"Invalid setting values: {e}")
+                # Try partial recovery - use valid fields
+                return cls._recover_partial_settings(data)
 
         # Create default settings
         settings = cls()
         settings.save()
         return settings
+
+    @classmethod
+    def _backup_corrupted_settings(cls) -> None:
+        """Create a backup of corrupted settings file."""
+        if SETTINGS_FILE.exists():
+            backup_path = SETTINGS_FILE.with_suffix(".json.bak")
+            try:
+                import shutil
+
+                shutil.copy(SETTINGS_FILE, backup_path)
+                logger.info(f"Backed up corrupted settings to {backup_path}")
+            except OSError as e:
+                logger.warning(f"Failed to backup settings: {e}")
+
+    @classmethod
+    def _recover_partial_settings(cls, data: dict) -> "Settings":
+        """Attempt to recover partial settings from corrupted data.
+
+        Merges valid fields from the loaded data with default values,
+        preserving as much user configuration as possible.
+
+        Args:
+            data: The raw dict loaded from the settings file.
+
+        Returns:
+            Settings object with recovered valid fields.
+        """
+        defaults = cls()
+        default_dict = asdict(defaults)
+        recovered_fields: list[str] = []
+        invalid_fields: list[str] = []
+
+        # Try each field individually
+        for field_name, default_value in default_dict.items():
+            if field_name in data:
+                try:
+                    # Create a test settings with just this field changed
+                    test_data = default_dict.copy()
+                    test_data[field_name] = data[field_name]
+                    # Validate by attempting to construct with this field
+                    cls(**test_data)
+
+                    # If construction succeeded, the field is valid
+                    setattr(defaults, field_name, data[field_name])
+                    recovered_fields.append(field_name)
+                except (TypeError, ValueError):
+                    invalid_fields.append(field_name)
+                    # Reset to default
+                    setattr(defaults, field_name, default_value)
+
+        if recovered_fields:
+            logger.info(f"Recovered {len(recovered_fields)} valid settings: {recovered_fields}")
+        if invalid_fields:
+            logger.warning(
+                f"Reset {len(invalid_fields)} invalid settings to defaults: {invalid_fields}"
+            )
+
+        # Validate the recovered settings
+        try:
+            defaults.validate()
+        except ValueError as e:
+            logger.error(f"Recovery failed validation: {e}")
+            logger.warning("Falling back to complete defaults")
+            defaults = cls()
+
+        # Save the recovered/repaired settings
+        defaults.save()
+        return defaults
 
     def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
         """Get the appropriate model for an agent role.
@@ -418,10 +513,17 @@ class Settings:
         return temp
 
 
-def get_installed_models() -> list[str]:
-    """Get list of models currently installed in Ollama."""
+def get_installed_models(timeout: int | None = None) -> list[str]:
+    """Get list of models currently installed in Ollama.
+
+    Args:
+        timeout: Timeout in seconds. If None, uses default (10s).
+    """
+    actual_timeout = timeout if timeout is not None else 10
     try:
-        result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            ["ollama", "list"], capture_output=True, text=True, timeout=actual_timeout
+        )
         models = []
         for line in result.stdout.strip().split("\n")[1:]:  # Skip header
             if line.strip():
@@ -432,21 +534,26 @@ def get_installed_models() -> list[str]:
         logger.warning("Ollama not found. Please ensure Ollama is installed and in PATH.")
         return []
     except subprocess.TimeoutExpired:
-        logger.warning("Ollama list command timed out.")
+        logger.warning(f"Ollama list command timed out after {actual_timeout}s.")
         return []
     except (OSError, ValueError) as e:
         logger.warning(f"Error listing Ollama models: {e}")
         return []
 
 
-def get_available_vram() -> int:
-    """Detect available VRAM in GB. Returns 8GB default if detection fails."""
+def get_available_vram(timeout: int | None = None) -> int:
+    """Detect available VRAM in GB. Returns 8GB default if detection fails.
+
+    Args:
+        timeout: Timeout in seconds. If None, uses default (10s).
+    """
+    actual_timeout = timeout if timeout is not None else 10
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=actual_timeout,
         )
         vram_mb = int(result.stdout.strip().split("\n")[0])
         return vram_mb // 1024
@@ -454,7 +561,7 @@ def get_available_vram() -> int:
         logger.info("nvidia-smi not found. Using default VRAM assumption of 8GB.")
         return 8
     except subprocess.TimeoutExpired:
-        logger.warning("nvidia-smi timed out. Using default VRAM assumption of 8GB.")
+        logger.warning(f"nvidia-smi timed out after {actual_timeout}s. Using default 8GB.")
         return 8
     except (ValueError, IndexError) as e:
         logger.warning(f"Could not parse VRAM from nvidia-smi output: {e}. Using default 8GB.")
