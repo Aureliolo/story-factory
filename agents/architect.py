@@ -4,7 +4,7 @@ import logging
 import re
 
 from memory.story_state import Chapter, Character, PlotPoint, StoryState
-from utils.json_parser import parse_json_list_to_models
+from utils.json_parser import extract_json_list, parse_json_list_to_models
 from utils.prompt_builder import PromptBuilder
 
 from .base import BaseAgent
@@ -236,3 +236,165 @@ class ArchitectAgent(BaseAgent):
             f"{len(story_state.chapters)} chapters"
         )
         return story_state
+
+    # JSON schema for locations
+    LOCATION_SCHEMA = """[
+    {
+        "name": "Location Name",
+        "type": "location",
+        "description": "Detailed description of the location (2-3 sentences)",
+        "significance": "Why this place matters to the story"
+    }
+]"""
+
+    # JSON schema for relationships
+    RELATIONSHIP_SCHEMA = """[
+    {
+        "source": "Character/Entity Name 1",
+        "target": "Character/Entity Name 2",
+        "relation_type": "knows|loves|hates|allies_with|enemies_with|located_in|owns|member_of",
+        "description": "Description of the relationship"
+    }
+]"""
+
+    def generate_more_characters(
+        self, story_state: StoryState, existing_names: list[str], count: int = 2
+    ) -> list[Character]:
+        """Generate additional characters that complement existing ones.
+
+        Args:
+            story_state: Current story state with brief.
+            existing_names: Names of existing characters to avoid duplicates.
+            count: Number of new characters to generate.
+
+        Returns:
+            List of new Character objects.
+        """
+        logger.info(f"Generating {count} more characters for story")
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
+
+        builder = PromptBuilder()
+        builder.add_text(
+            f"Create {count} NEW supporting characters for this story. "
+            "These should complement and interact with existing characters."
+        )
+        builder.add_language_requirement(brief.language)
+        builder.add_text(f"PREMISE: {brief.premise}")
+        builder.add_section("EXISTING CHARACTERS (do NOT recreate)", ", ".join(existing_names))
+
+        builder.add_text(
+            f"Create {count} NEW characters. Output JSON (all text in {brief.language}):"
+        )
+        builder.add_json_output_format(self.CHARACTER_SCHEMA)
+        builder.add_text(
+            "Make these characters interesting and give them connections to existing characters. "
+            "Consider: mentors, rivals, allies, family members, or mysterious figures."
+        )
+
+        prompt = builder.build()
+        response = self.generate(prompt)
+        characters = parse_json_list_to_models(response, Character)
+        logger.info(f"Generated {len(characters)} new characters: {[c.name for c in characters]}")
+        return characters
+
+    def generate_locations(
+        self, story_state: StoryState, existing_locations: list[str], count: int = 3
+    ) -> list[dict]:
+        """Generate locations for the story world.
+
+        Args:
+            story_state: Current story state with brief and world description.
+            existing_locations: Names of existing locations to avoid duplicates.
+            count: Number of locations to generate.
+
+        Returns:
+            List of location dictionaries with name, type, description, significance.
+        """
+        logger.info(f"Generating {count} locations for story")
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
+
+        builder = PromptBuilder()
+        builder.add_text(
+            f"Create {count} important locations for this story's world. "
+            "These should be places where key scenes will happen."
+        )
+        builder.add_language_requirement(brief.language)
+        builder.add_text(f"PREMISE: {brief.premise}")
+
+        if story_state.world_description:
+            world_preview = story_state.world_description[:500]
+            builder.add_section("WORLD", world_preview)
+
+        if existing_locations:
+            builder.add_section(
+                "EXISTING LOCATIONS (do NOT recreate)", ", ".join(existing_locations)
+            )
+
+        builder.add_text(
+            f"Create {count} NEW locations. Output JSON (all text in {brief.language}):"
+        )
+        builder.add_json_output_format(self.LOCATION_SCHEMA)
+        builder.add_text(
+            "Include a mix of: main settings, secret places, meeting spots, dangerous areas. "
+            "Make each location atmospheric and memorable."
+        )
+
+        prompt = builder.build()
+        response = self.generate(prompt)
+
+        # Parse JSON response
+        locations = extract_json_list(response) or []
+        logger.info(f"Generated {len(locations)} locations")
+        return locations
+
+    def generate_relationships(
+        self,
+        story_state: StoryState,
+        entity_names: list[str],
+        existing_relationships: list[tuple[str, str]],
+        count: int = 5,
+    ) -> list[dict]:
+        """Generate relationships between existing entities.
+
+        Args:
+            story_state: Current story state with brief.
+            entity_names: Names of all entities that can have relationships.
+            existing_relationships: List of (source, target) tuples to avoid duplicates.
+            count: Number of relationships to generate.
+
+        Returns:
+            List of relationship dictionaries.
+        """
+        logger.info(f"Generating {count} relationships between entities")
+        brief = PromptBuilder.ensure_brief(story_state, self.name)
+
+        # Format existing relationships
+        existing_rel_strs = [f"{s} → {t}" for s, t in existing_relationships]
+
+        builder = PromptBuilder()
+        builder.add_text(
+            f"Create {count} meaningful relationships between characters/entities in this story."
+        )
+        builder.add_language_requirement(brief.language)
+        builder.add_text(f"PREMISE: {brief.premise}")
+        builder.add_section("AVAILABLE ENTITIES", ", ".join(entity_names))
+
+        if existing_rel_strs:
+            builder.add_section(
+                "EXISTING RELATIONSHIPS (avoid these)", "\n".join(existing_rel_strs[:20])
+            )
+
+        builder.add_text(f"Create {count} NEW relationships. Output JSON (in {brief.language}):")
+        builder.add_json_output_format(self.RELATIONSHIP_SCHEMA)
+        builder.add_text(
+            "Create interesting dynamics: allies, rivals, secret connections, family ties, "
+            "romantic interests, professional relationships. Each should add depth to the story."
+        )
+
+        prompt = builder.build()
+        response = self.generate(prompt)
+
+        # Parse JSON response
+        relationships = extract_json_list(response) or []
+        logger.info(f"Generated {len(relationships)} relationships")
+        return relationships

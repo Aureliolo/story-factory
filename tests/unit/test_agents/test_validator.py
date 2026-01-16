@@ -37,8 +37,8 @@ class TestValidatorAgentInit:
         """Test uses small/fast model for validation."""
         with patch("agents.base.ollama.Client"):
             agent = ValidatorAgent(settings=settings)
-            # Should use a small model like qwen2.5:0.5b or similar
-            assert "0.5" in agent.model or "small" in agent.model.lower() or agent.model is not None
+            # Should use a small model like qwen3:0.6b or similar
+            assert "0.6" in agent.model or "small" in agent.model.lower() or agent.model is not None
 
 
 class TestValidatorValidateResponse:

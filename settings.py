@@ -225,7 +225,7 @@ class Settings:
             "writer": "auto",
             "editor": "auto",
             "continuity": "auto",
-            "validator": "qwen2.5:0.5b",  # Small, fast model for validation
+            "validator": "auto",  # Small, fast model for validation
         }
     )
 
@@ -483,7 +483,8 @@ class Settings:
     def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
         """Get the appropriate model for an agent role.
 
-        If set to 'auto', selects based on agent's quality requirements and available VRAM.
+        If set to 'auto', selects based on agent's quality requirements, available VRAM,
+        and which models are actually installed. Only returns installed models.
         Special handling for writer role to prefer creative writing specialists.
         """
         if not self.use_per_agent_models:
@@ -494,6 +495,13 @@ class Settings:
         if model_setting != "auto":
             return model_setting
 
+        # Get installed models to filter candidates
+        installed = get_installed_models()
+
+        def is_installed(model_id: str) -> bool:
+            """Check if model is installed (exact match or base name match)."""
+            return any(model_id in m or m.startswith(model_id.split(":")[0]) for m in installed)
+
         # Special case: Writer role prefers creative writing specialists
         if agent_role == "writer":
             creative_models = [
@@ -502,7 +510,7 @@ class Settings:
             ]
             for model_id in creative_models:
                 info = AVAILABLE_MODELS.get(model_id)
-                if info and info["vram_required"] <= available_vram:
+                if info and info["vram_required"] <= available_vram and is_installed(model_id):
                     return model_id
 
         # Special case: Architect role prefers high-reasoning models
@@ -514,20 +522,35 @@ class Settings:
             ]
             for model_id in architect_models:
                 info = AVAILABLE_MODELS.get(model_id)
-                if info and info["vram_required"] <= available_vram:
+                if info and info["vram_required"] <= available_vram and is_installed(model_id):
+                    return model_id
+
+        # Special case: Validator role prefers smallest/fastest models
+        if agent_role == "validator":
+            validator_models = [
+                "qwen3:0.6b",  # Tiny, fast - ideal for simple validation
+            ]
+            for model_id in validator_models:
+                info = AVAILABLE_MODELS.get(model_id)
+                if info and info["vram_required"] <= available_vram and is_installed(model_id):
                     return model_id
 
         # Auto-select based on agent role and VRAM
         role_info: AgentRoleInfo | None = AGENT_ROLES.get(agent_role)
         required_quality: int = role_info["recommended_quality"] if role_info else 7
 
-        # Filter models that fit VRAM and meet quality requirement
+        # Filter models that fit VRAM, meet quality requirement, AND are installed
         candidates = []
         for model_id, info in AVAILABLE_MODELS.items():
-            if info["vram_required"] <= available_vram and info["quality"] >= required_quality:
+            if (
+                info["vram_required"] <= available_vram
+                and info["quality"] >= required_quality
+                and is_installed(model_id)
+            ):
                 candidates.append((model_id, info))
 
         if not candidates:
+            # No suitable installed model found - fall back to default
             return self.default_model
 
         # For high quality roles (9+), prioritize quality
