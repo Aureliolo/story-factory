@@ -191,7 +191,7 @@ class WorldService:
                 seen.add(name.lower())
                 unique_locations.append((name, desc))
 
-        return unique_locations[:10]  # Limit to prevent over-extraction
+        return unique_locations[: self.settings.entity_extract_locations_max]
 
     def _extract_items_from_text(self, text: str) -> list[tuple[str, str]]:
         """Extract significant items from text.
@@ -229,7 +229,7 @@ class WorldService:
                 seen.add(name.lower())
                 unique_items.append((name, desc))
 
-        return unique_items[:5]  # Limit
+        return unique_items[: self.settings.entity_extract_items_max]
 
     def _extract_events_from_text(self, text: str, chapter_number: int) -> list[str]:
         """Extract key events from chapter text.
@@ -281,7 +281,7 @@ class WorldService:
                     events.append(sentence)
                     break
 
-        return events[:5]  # Limit to most significant events
+        return events[: self.settings.entity_extract_events_max]
 
     # ========== ENTITY CRUD ==========
 

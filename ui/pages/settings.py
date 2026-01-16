@@ -220,7 +220,7 @@ class SettingsPage:
             # 3-column grid for temperature sliders
             with ui.element("div").classes("grid grid-cols-2 lg:grid-cols-3 gap-3"):
                 for role, info in AGENT_ROLES.items():
-                    default_temp = self.settings.agent_temperatures.get(role, 0.8)
+                    default_temp = self.settings.get_temperature_for_agent(role)
                     with (
                         ui.card()
                         .classes("p-4 bg-gray-50 dark:bg-gray-800")
@@ -402,7 +402,9 @@ class SettingsPage:
                         with ui.expansion("Mode Details", icon="info").classes("w-full mt-2"):
                             with ui.column().classes("gap-1 text-sm"):
                                 for role, model in current_mode.agent_models.items():
-                                    temp = current_mode.agent_temperatures.get(role, 0.8)
+                                    temp = current_mode.agent_temperatures.get(
+                                        role, self.settings.get_temperature_for_agent(role)
+                                    )
                                     with ui.row().classes("items-center gap-2"):
                                         ui.label(f"{role.title()}:").classes("font-medium w-24")
                                         ui.label(extract_model_name(model)).classes(

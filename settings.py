@@ -241,6 +241,13 @@ class Settings:
         }
     )
 
+    # Task-specific temperatures (override agent defaults for specific operations)
+    temp_brief_extraction: float = 0.3  # Lower for structured JSON output
+    temp_edit_suggestions: float = 0.5  # Moderate for creative suggestions
+    temp_plot_checking: float = 0.2  # Very low for deterministic analysis
+    temp_capability_check: float = 0.1  # Very low for yes/no capability check
+    temp_model_evaluation: float = 0.8  # Higher for creative model evaluation
+
     # Revision settings
     revision_temperature: float = 0.7  # Lower temperature for more focused revisions
 
@@ -302,6 +309,47 @@ class Settings:
     world_gen_concepts_max: int = 3
     world_gen_relationships_min: int = 8
     world_gen_relationships_max: int = 15
+
+    # LLM generation token limits (num_predict values)
+    llm_tokens_character_create: int = 500
+    llm_tokens_character_judge: int = 300
+    llm_tokens_character_refine: int = 500
+    llm_tokens_location_create: int = 400
+    llm_tokens_location_judge: int = 200
+    llm_tokens_location_refine: int = 400
+    llm_tokens_faction_create: int = 400
+    llm_tokens_faction_judge: int = 200
+    llm_tokens_faction_refine: int = 400
+    llm_tokens_item_create: int = 400
+    llm_tokens_item_judge: int = 200
+    llm_tokens_item_refine: int = 400
+    llm_tokens_concept_create: int = 400
+    llm_tokens_concept_judge: int = 200
+    llm_tokens_concept_refine: int = 400
+    llm_tokens_relationship_create: int = 300
+    llm_tokens_relationship_judge: int = 200
+    llm_tokens_relationship_refine: int = 300
+    llm_tokens_mini_description: int = 50
+
+    # Entity extraction limits
+    entity_extract_locations_max: int = 10
+    entity_extract_items_max: int = 5
+    entity_extract_events_max: int = 5
+
+    # Mini description settings
+    mini_description_words_max: int = 15
+    mini_description_temperature: float = 0.3
+
+    # Workflow and orchestration limits
+    orchestrator_cache_size: int = 10
+    workflow_max_events: int = 100
+
+    # LLM request limits
+    llm_max_concurrent_requests: int = 2
+    llm_max_retries: int = 3
+
+    # Content truncation limits
+    content_truncation_for_judgment: int = 3000
 
     def save(self) -> None:
         """Save settings to JSON file."""
@@ -365,6 +413,18 @@ class Settings:
         for agent, temp in self.agent_temperatures.items():
             if not 0.0 <= temp <= 2.0:
                 raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
+
+        # Validate task-specific temperatures
+        task_temps = [
+            ("temp_brief_extraction", self.temp_brief_extraction),
+            ("temp_edit_suggestions", self.temp_edit_suggestions),
+            ("temp_plot_checking", self.temp_plot_checking),
+            ("temp_capability_check", self.temp_capability_check),
+            ("temp_model_evaluation", self.temp_model_evaluation),
+        ]
+        for name, temp in task_temps:
+            if not 0.0 <= temp <= 2.0:
+                raise ValueError(f"{name} must be between 0.0 and 2.0, got {temp}")
 
         # Validate learning settings
         valid_autonomy = ["manual", "cautious", "balanced", "aggressive", "experimental"]
@@ -445,6 +505,82 @@ class Settings:
                     f"world_gen_{entity_type}_min ({min_val}) cannot exceed "
                     f"world_gen_{entity_type}_max ({max_val})"
                 )
+
+        # Validate LLM token limits
+        token_settings = [
+            ("llm_tokens_character_create", self.llm_tokens_character_create),
+            ("llm_tokens_character_judge", self.llm_tokens_character_judge),
+            ("llm_tokens_character_refine", self.llm_tokens_character_refine),
+            ("llm_tokens_location_create", self.llm_tokens_location_create),
+            ("llm_tokens_location_judge", self.llm_tokens_location_judge),
+            ("llm_tokens_location_refine", self.llm_tokens_location_refine),
+            ("llm_tokens_faction_create", self.llm_tokens_faction_create),
+            ("llm_tokens_faction_judge", self.llm_tokens_faction_judge),
+            ("llm_tokens_faction_refine", self.llm_tokens_faction_refine),
+            ("llm_tokens_item_create", self.llm_tokens_item_create),
+            ("llm_tokens_item_judge", self.llm_tokens_item_judge),
+            ("llm_tokens_item_refine", self.llm_tokens_item_refine),
+            ("llm_tokens_concept_create", self.llm_tokens_concept_create),
+            ("llm_tokens_concept_judge", self.llm_tokens_concept_judge),
+            ("llm_tokens_concept_refine", self.llm_tokens_concept_refine),
+            ("llm_tokens_relationship_create", self.llm_tokens_relationship_create),
+            ("llm_tokens_relationship_judge", self.llm_tokens_relationship_judge),
+            ("llm_tokens_relationship_refine", self.llm_tokens_relationship_refine),
+            ("llm_tokens_mini_description", self.llm_tokens_mini_description),
+        ]
+        for name, value in token_settings:
+            if not 10 <= value <= 4096:
+                raise ValueError(f"{name} must be between 10 and 4096, got {value}")
+
+        # Validate entity extraction limits
+        for name, value in [
+            ("entity_extract_locations_max", self.entity_extract_locations_max),
+            ("entity_extract_items_max", self.entity_extract_items_max),
+            ("entity_extract_events_max", self.entity_extract_events_max),
+        ]:
+            if not 1 <= value <= 100:
+                raise ValueError(f"{name} must be between 1 and 100, got {value}")
+
+        # Validate mini description settings
+        if not 5 <= self.mini_description_words_max <= 50:
+            raise ValueError(
+                f"mini_description_words_max must be between 5 and 50, "
+                f"got {self.mini_description_words_max}"
+            )
+        if not 0.0 <= self.mini_description_temperature <= 2.0:
+            raise ValueError(
+                f"mini_description_temperature must be between 0.0 and 2.0, "
+                f"got {self.mini_description_temperature}"
+            )
+
+        # Validate workflow limits
+        if not 1 <= self.orchestrator_cache_size <= 100:
+            raise ValueError(
+                f"orchestrator_cache_size must be between 1 and 100, "
+                f"got {self.orchestrator_cache_size}"
+            )
+        if not 10 <= self.workflow_max_events <= 10000:
+            raise ValueError(
+                f"workflow_max_events must be between 10 and 10000, got {self.workflow_max_events}"
+            )
+
+        # Validate LLM request limits
+        if not 1 <= self.llm_max_concurrent_requests <= 10:
+            raise ValueError(
+                f"llm_max_concurrent_requests must be between 1 and 10, "
+                f"got {self.llm_max_concurrent_requests}"
+            )
+        if not 1 <= self.llm_max_retries <= 10:
+            raise ValueError(
+                f"llm_max_retries must be between 1 and 10, got {self.llm_max_retries}"
+            )
+
+        # Validate content truncation
+        if not 500 <= self.content_truncation_for_judgment <= 50000:
+            raise ValueError(
+                f"content_truncation_for_judgment must be between 500 and 50000, "
+                f"got {self.content_truncation_for_judgment}"
+            )
 
     @classmethod
     def load(cls) -> "Settings":
@@ -633,9 +769,17 @@ class Settings:
         return candidates[0][0]
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
-        """Get temperature setting for an agent."""
-        temp: float = self.agent_temperatures.get(agent_role, 0.8)
-        return temp
+        """Get temperature setting for an agent.
+
+        Raises:
+            ValueError: If agent_role is not configured in agent_temperatures.
+        """
+        if agent_role not in self.agent_temperatures:
+            raise ValueError(
+                f"Unknown agent role '{agent_role}' - must be one of: "
+                f"{sorted(self.agent_temperatures.keys())}"
+            )
+        return float(self.agent_temperatures[agent_role])
 
 
 def get_installed_models(timeout: int | None = None) -> list[str]:

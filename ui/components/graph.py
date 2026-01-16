@@ -2,13 +2,16 @@
 
 import uuid
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 from nicegui.elements.html import Html
 
 from memory.world_database import WorldDatabase
 from ui.graph_renderer import render_graph_html
+
+if TYPE_CHECKING:
+    from settings import Settings
 
 
 def _ensure_vis_network_loaded() -> None:
@@ -38,6 +41,7 @@ class GraphComponent:
     def __init__(
         self,
         world_db: WorldDatabase | None = None,
+        settings: "Settings | None" = None,
         on_node_select: Callable[[str], Any] | None = None,
         on_edge_select: Callable[[str], Any] | None = None,
         height: int = 500,
@@ -46,11 +50,15 @@ class GraphComponent:
 
         Args:
             world_db: WorldDatabase to visualize.
+            settings: Application settings for configuration values.
             on_node_select: Callback when a node is selected.
             on_edge_select: Callback when an edge is selected (passes relationship ID).
             height: Graph container height in pixels.
         """
+        from settings import Settings
+
         self.world_db = world_db
+        self.settings = settings or Settings.load()
         self.on_node_select = on_node_select
         self.on_edge_select = on_edge_select
         self.height = height
@@ -195,6 +203,7 @@ class GraphComponent:
         # Generate vis.js HTML and JavaScript separately
         result = render_graph_html(
             world_db=self.world_db,
+            settings=self.settings,
             filter_types=self._filter_types if self._filter_types else None,
             layout=self._layout,
             height=self.height - 20,  # Account for border
@@ -341,6 +350,7 @@ class GraphComponent:
 
 def mini_graph(
     world_db: WorldDatabase | None,
+    settings: "Settings | None" = None,
     height: int = 200,
     filter_types: list[str] | None = None,
 ) -> None:
@@ -348,12 +358,17 @@ def mini_graph(
 
     Args:
         world_db: WorldDatabase to visualize.
+        settings: Application settings for configuration values.
         height: Container height.
         filter_types: Entity types to show.
     """
+    from settings import Settings
+
     if not world_db:
         ui.label("No world data").classes("text-gray-500 dark:text-gray-400 text-sm")
         return
+
+    settings = settings or Settings.load()
 
     # Ensure vis-network library is loaded
     _ensure_vis_network_loaded()
@@ -363,6 +378,7 @@ def mini_graph(
 
     result = render_graph_html(
         world_db=world_db,
+        settings=settings,
         filter_types=filter_types or ["character", "location"],
         layout="force-directed",
         height=height,

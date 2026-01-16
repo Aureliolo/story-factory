@@ -9,6 +9,14 @@ import pytest
 from nicegui import ui
 from nicegui.testing import User
 
+from settings import Settings
+
+
+@pytest.fixture
+def test_settings() -> Settings:
+    """Create settings for testing."""
+    return Settings()
+
 
 @pytest.mark.component
 class TestGraphComponent:
@@ -61,12 +69,13 @@ class TestMiniGraph:
 class TestGraphRenderer:
     """Tests for the graph_renderer module."""
 
-    def test_render_graph_html_returns_dataclass(self, test_world_db):
+    def test_render_graph_html_returns_dataclass(self, test_world_db, test_settings):
         """render_graph_html returns GraphRenderResult dataclass."""
         from ui.graph_renderer import GraphRenderResult, render_graph_html
 
         result = render_graph_html(
             test_world_db,
+            test_settings,
             container_id="test-container",
             height=300,
         )
@@ -84,12 +93,13 @@ class TestGraphRenderer:
 
         assert "<script>" not in html, "Summary HTML should not contain script tags"
 
-    def test_render_graph_html_contains_entity_data(self, test_world_db):
+    def test_render_graph_html_contains_entity_data(self, test_world_db, test_settings):
         """Graph JavaScript contains entity data from world database."""
         from ui.graph_renderer import render_graph_html
 
         result = render_graph_html(
             test_world_db,
+            test_settings,
             container_id="test",
             height=300,
         )
@@ -97,12 +107,13 @@ class TestGraphRenderer:
         # Should contain our test entity
         assert "Test Character" in result.js, "Should contain entity names"
 
-    def test_render_graph_html_has_valid_js(self, test_world_db):
+    def test_render_graph_html_has_valid_js(self, test_world_db, test_settings):
         """Graph JavaScript is valid and can initialize vis.Network."""
         from ui.graph_renderer import render_graph_html
 
         result = render_graph_html(
             test_world_db,
+            test_settings,
             container_id="test",
             height=300,
         )

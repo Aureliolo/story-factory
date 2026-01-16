@@ -260,7 +260,10 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 500},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_character_create,
+                },
             )
 
             data = extract_json(response["response"])
@@ -328,7 +331,10 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 300},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_character_judge,
+                },
             )
 
             data = extract_json(response["response"])
@@ -421,7 +427,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 500},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_character_refine,
+                },
             )
 
             data = extract_json(response["response"])
@@ -563,7 +572,10 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_location_create,
+                },
             )
 
             data = extract_json(response["response"])
@@ -611,7 +623,10 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 200},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_location_judge,
+                },
             )
 
             data = extract_json(response["response"])
@@ -689,7 +704,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_location_refine,
+                },
             )
 
             data = extract_json(response["response"])
@@ -872,7 +890,10 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 300},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_relationship_create,
+                },
             )
 
             data = extract_json(response["response"])
@@ -921,7 +942,10 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 200},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_relationship_judge,
+                },
             )
 
             data = extract_json(response["response"])
@@ -995,7 +1019,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 300},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_relationship_refine,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1128,7 +1155,10 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_faction_create,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1174,7 +1204,10 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 200},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_faction_judge,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1255,7 +1288,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_faction_refine,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1387,7 +1423,10 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_item_create,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1432,7 +1471,10 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 200},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_item_judge,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1511,7 +1553,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_item_refine,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1643,7 +1688,10 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_concept_create,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1687,7 +1735,10 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 200},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_concept_judge,
+                },
             )
 
             data = extract_json(response["response"])
@@ -1759,7 +1810,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": temperature, "num_predict": 400},
+                options={
+                    "temperature": temperature,
+                    "num_predict": self.settings.llm_tokens_concept_refine,
+                },
             )
 
             data = extract_json(response["response"])
@@ -2162,14 +2216,15 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             full_description: Full description to summarize.
 
         Returns:
-            A short summary (10-15 words max).
+            A short summary (configured word limit).
         """
-        if not full_description or len(full_description.split()) <= 15:
+        max_words = self.settings.mini_description_words_max
+        if not full_description or len(full_description.split()) <= max_words:
             # Already short enough, just return trimmed version
-            words = full_description.split()[:15]
+            words = full_description.split()[:max_words]
             return " ".join(words)
 
-        prompt = f"""Summarize in EXACTLY 10-15 words for a tooltip preview.
+        prompt = f"""Summarize in EXACTLY 10-{max_words} words for a tooltip preview.
 
 ENTITY: {name} ({entity_type})
 FULL DESCRIPTION: {full_description}
@@ -2184,21 +2239,24 @@ SUMMARY:"""
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
-                options={"temperature": 0.3, "num_predict": 50},
+                options={
+                    "temperature": self.settings.world_quality_judge_temp,
+                    "num_predict": self.settings.llm_tokens_mini_description,
+                },
             )
             summary: str = str(response["response"]).strip()
             # Clean up any quotes or formatting
             summary = summary.strip("\"'").strip()
             # Ensure it's not too long
             words = summary.split()
-            if len(words) > 18:
-                summary = " ".join(words[:15]) + "..."
+            if len(words) > max_words + 3:
+                summary = " ".join(words[:max_words]) + "..."
             return summary
         except Exception as e:
             logger.warning(f"Failed to generate mini description: {e}")
             # Fallback: truncate description
-            words = full_description.split()[:15]
-            return " ".join(words) + ("..." if len(full_description.split()) > 15 else "")
+            words = full_description.split()[:max_words]
+            return " ".join(words) + ("..." if len(full_description.split()) > max_words else "")
 
     def generate_mini_descriptions_batch(
         self,

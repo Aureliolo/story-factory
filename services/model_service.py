@@ -480,7 +480,7 @@ class ModelService:
                     prompt=prompt,
                     options={
                         "num_predict": self.settings.max_tokens,
-                        "temperature": 0.8,
+                        "temperature": self.settings.temp_model_evaluation,
                     },
                 )
                 elapsed = time.time() - start

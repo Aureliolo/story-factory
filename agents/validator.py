@@ -125,7 +125,7 @@ Is this response:
 Answer only TRUE or FALSE."""
 
         try:
-            result = self.generate(prompt, temperature=0.1)
+            result = self.generate(prompt, temperature=self.temperature)
             result_clean = result.strip().upper()
 
             # Parse response

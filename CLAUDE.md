@@ -12,6 +12,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **No boilerplate.** Don't generate generic/template code that needs to be filled in. Write the actual implementation.
 
+**No default fallbacks.** Never use `.get(key, default_value)` patterns for configuration values. All configurable values must be explicitly defined in settings with proper validation. If a value is missing, raise an error rather than silently using a default.
+
+**Everything needs logging.** All functions and methods should have appropriate logging for debugging and traceability. Use `logger.debug()` for routine operations, `logger.info()` for significant events, `logger.warning()` for unexpected but recoverable situations, and `logger.error()` for failures.
+
+**Everything needs tests.** All new code must have corresponding unit tests. When modifying existing code, update related tests. Tests should cover both happy paths and edge cases.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.
@@ -104,6 +110,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 - Integration tests in `tests/integration/`
 - Mock Ollama in tests to avoid requiring running instance
 - Shared fixtures in `tests/conftest.py`
+- **Always run tests in background** to avoid blocking on long test runs when working on todo lists
 
 ## Ollama Integration
 

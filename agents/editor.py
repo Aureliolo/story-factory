@@ -130,7 +130,7 @@ Identify:
 
 Be specific - quote the problematic text and suggest improvements."""
 
-        suggestions = self.generate(prompt, temperature=0.5)
+        suggestions = self.generate(prompt, temperature=self.settings.temp_edit_suggestions)
         logger.debug(f"Generated edit suggestions ({len(suggestions)} chars)")
         return suggestions
 
