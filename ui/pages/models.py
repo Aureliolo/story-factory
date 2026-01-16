@@ -542,10 +542,9 @@ class ModelsPage:
         # Continue processing queue
         await self._process_download_queue()
 
-        # Refresh lists if any downloads completed
+        # Refresh lists if any downloads completed (no notify from background)
         if task.status == "completed":
-            self._refresh_all()
-            self._update_download_all_btn()
+            self._refresh_all(notify=False)
 
     def _safe_update_label(self, label, text: str) -> None:
         """Safely update a label's text, handling deleted elements."""
@@ -762,13 +761,18 @@ class ModelsPage:
             # Results
             self._comparison_result = ui.column().classes("w-full mt-4")
 
-    def _refresh_all(self) -> None:
-        """Refresh all model lists with visual feedback."""
+    def _refresh_all(self, notify: bool = True) -> None:
+        """Refresh all model lists with visual feedback.
+
+        Args:
+            notify: Whether to show a notification. Set False when called from background.
+        """
         self._invalidate_cache()
         self._refresh_installed_section()
         self._refresh_model_list()
         self._update_download_all_btn()
-        ui.notify("Model lists refreshed", type="info")
+        if notify:
+            ui.notify("Model lists refreshed", type="info")
 
     async def _pull_custom_model(self) -> None:
         """Pull a custom model from user input."""
