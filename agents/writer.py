@@ -1,9 +1,13 @@
 """Writer Agent - Writes the actual prose."""
 
+import logging
+
 from memory.story_state import Chapter, StoryState
 from utils.prompt_builder import PromptBuilder
 
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 WRITER_SYSTEM_PROMPT = """You are the Writer, a skilled prose craftsman who brings stories to life.
 
@@ -55,6 +59,10 @@ class WriterAgent(BaseAgent):
         revision_feedback: str | None = None,
     ) -> str:
         """Write or revise a single chapter."""
+        logger.info(
+            f"Writing chapter {chapter.number}: '{chapter.title}'"
+            + (" (revision)" if revision_feedback else "")
+        )
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
 
@@ -97,7 +105,9 @@ class WriterAgent(BaseAgent):
 
         # Use lower temperature for revisions (more focused output)
         temp = self.settings.revision_temperature if revision_feedback else None
-        return self.generate(prompt, context, temperature=temp)
+        content = self.generate(prompt, context, temperature=temp)
+        logger.info(f"Chapter {chapter.number} written ({len(content)} chars)")
+        return content
 
     def write_short_story(
         self,
@@ -105,6 +115,7 @@ class WriterAgent(BaseAgent):
         revision_feedback: str | None = None,
     ) -> str:
         """Write a complete short story in one pass."""
+        logger.info("Writing complete short story" + (" (revision)" if revision_feedback else ""))
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
 
@@ -129,7 +140,9 @@ class WriterAgent(BaseAgent):
 
         # Use lower temperature for revisions (more focused output)
         temp = self.settings.revision_temperature if revision_feedback else None
-        return self.generate(prompt, context, temperature=temp)
+        content = self.generate(prompt, context, temperature=temp)
+        logger.info(f"Short story written ({len(content)} chars)")
+        return content
 
     def continue_scene(
         self,
@@ -138,6 +151,7 @@ class WriterAgent(BaseAgent):
         direction: str | None = None,
     ) -> str:
         """Continue writing from where the text left off."""
+        logger.info(f"Continuing scene from {len(current_text)} chars of existing text")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
 
@@ -159,4 +173,6 @@ class WriterAgent(BaseAgent):
         )
 
         prompt = builder.build()
-        return self.generate(prompt, context)
+        continuation = self.generate(prompt, context)
+        logger.debug(f"Scene continued ({len(continuation)} chars added)")
+        return continuation

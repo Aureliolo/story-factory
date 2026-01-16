@@ -61,6 +61,10 @@ main.py
 - Centralized UI state in `ui/state.py` (AppState class)
 - JSON extraction from LLM responses via `utils/json_parser.py`
 - Error handling decorators: `@handle_ollama_errors`, `@retry_with_fallback`
+- Thread-safe database operations with `threading.RLock`
+- LRU cache for orchestrators to prevent memory leaks
+- Rate limiting for concurrent LLM requests (max 2 concurrent)
+- Centralized exception hierarchy in `utils/exceptions.py`
 
 ## Agent Workflow
 
@@ -84,11 +88,14 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 
 ## Key Files
 
-- `settings.py`: Settings management and model registry (dataclass-based)
+- `settings.py`: Settings management, model registry, configurable timeouts
 - `settings.json`: User configuration (gitignored, copy from `settings.example.json`)
 - `ui/state.py`: Centralized UI state (AppState)
 - `services/__init__.py`: ServiceContainer for dependency injection
-- `agents/base.py`: BaseAgent with retry logic and common functionality
+- `agents/base.py`: BaseAgent with retry logic, rate limiting, configurable timeout
+- `utils/exceptions.py`: Centralized exception hierarchy (StoryFactoryError, LLMError, etc.)
+- `utils/constants.py`: Shared constants (language codes, etc.)
+- `memory/world_database.py`: SQLite + NetworkX with thread safety and schema migrations
 
 ## Testing
 

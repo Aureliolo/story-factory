@@ -1,5 +1,6 @@
 """Story Architect Agent - Creates story structure, characters, and outlines."""
 
+import logging
 import re
 
 from memory.story_state import Chapter, Character, PlotPoint, StoryState
@@ -7,6 +8,8 @@ from utils.json_parser import parse_json_list_to_models
 from utils.prompt_builder import PromptBuilder
 
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 ARCHITECT_SYSTEM_PROMPT = """You are the Story Architect, a master storyteller who designs compelling narrative structures.
 
@@ -73,6 +76,7 @@ class ArchitectAgent(BaseAgent):
 
     def create_world(self, story_state: StoryState) -> str:
         """Create the world-building document."""
+        logger.info(f"Creating world for story: {story_state.project_name or story_state.id}")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
         # Build prompt using PromptBuilder
@@ -96,10 +100,13 @@ class ArchitectAgent(BaseAgent):
         )
 
         prompt = builder.build()
-        return self.generate(prompt)
+        response = self.generate(prompt)
+        logger.debug(f"World creation complete ({len(response)} chars)")
+        return response
 
     def create_characters(self, story_state: StoryState) -> list[Character]:
         """Design the main characters."""
+        logger.info("Creating characters for story")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
         # Build prompt using PromptBuilder
@@ -117,10 +124,13 @@ class ArchitectAgent(BaseAgent):
 
         prompt = builder.build()
         response = self.generate(prompt)
-        return parse_json_list_to_models(response, Character)
+        characters = parse_json_list_to_models(response, Character)
+        logger.info(f"Created {len(characters)} characters: {[c.name for c in characters]}")
+        return characters
 
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
+        logger.info("Creating plot outline")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
         # Build prompt using PromptBuilder
@@ -157,11 +167,13 @@ class ArchitectAgent(BaseAgent):
 
         # Extract plot points
         plot_points = parse_json_list_to_models(response, PlotPoint)
+        logger.info(f"Created plot outline with {len(plot_points)} plot points")
 
         return plot_summary, plot_points
 
     def create_chapter_outline(self, story_state: StoryState) -> list[Chapter]:
         """Create detailed chapter outlines."""
+        logger.info("Creating chapter outlines")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         length_map = {
             "short_story": 1,
@@ -169,6 +181,7 @@ class ArchitectAgent(BaseAgent):
             "novel": 20,
         }
         num_chapters = length_map.get(brief.target_length, 5)
+        logger.debug(f"Target: {num_chapters} chapters for {brief.target_length}")
 
         plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
 
@@ -188,10 +201,13 @@ class ArchitectAgent(BaseAgent):
 
         prompt = builder.build()
         response = self.generate(prompt)
-        return parse_json_list_to_models(response, Chapter)
+        chapters = parse_json_list_to_models(response, Chapter)
+        logger.info(f"Created {len(chapters)} chapter outlines")
+        return chapters
 
     def build_story_structure(self, story_state: StoryState) -> StoryState:
         """Complete story structure building process."""
+        logger.info(f"Building complete story structure for: {story_state.id}")
         # Create world
         world_response = self.create_world(story_state)
         story_state.world_description = world_response
@@ -215,4 +231,8 @@ class ArchitectAgent(BaseAgent):
         story_state.chapters = self.create_chapter_outline(story_state)
 
         story_state.status = "writing"
+        logger.info(
+            f"Story structure complete: {len(story_state.characters)} characters, "
+            f"{len(story_state.chapters)} chapters"
+        )
         return story_state

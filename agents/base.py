@@ -1,33 +1,24 @@
 """Base agent class for all story factory agents."""
 
 import logging
+import threading
 import time
 
 import ollama
 
 from settings import ModelInfo, Settings, get_model_info
 from utils.error_handling import handle_ollama_errors
+from utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
 from utils.logging_config import log_performance
 
 logger = logging.getLogger(__name__)
 
+# Rate limiting: maximum concurrent LLM requests
+MAX_CONCURRENT_LLM_REQUESTS = 2
+_llm_semaphore = threading.Semaphore(MAX_CONCURRENT_LLM_REQUESTS)
 
-class LLMError(Exception):
-    """Base exception for LLM-related errors."""
-
-    pass
-
-
-class LLMConnectionError(LLMError):
-    """Raised when unable to connect to Ollama."""
-
-    pass
-
-
-class LLMGenerationError(LLMError):
-    """Raised when generation fails after retries."""
-
-    pass
+# Re-export exceptions for backward compatibility
+__all__ = ["BaseAgent", "LLMError", "LLMConnectionError", "LLMGenerationError"]
 
 
 class BaseAgent:
@@ -67,18 +58,26 @@ class BaseAgent:
         else:
             self.temperature = self.settings.get_temperature_for_agent(self.agent_role)
 
-        # Create Ollama client with timeout to prevent hanging
-        self.client = ollama.Client(host=self.settings.ollama_url, timeout=120.0)
+        # Create Ollama client with configurable timeout to prevent hanging
+        self.client = ollama.Client(
+            host=self.settings.ollama_url, timeout=float(self.settings.ollama_timeout)
+        )
 
     @classmethod
     @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)
-    def check_ollama_health(cls, ollama_url: str = "http://localhost:11434") -> tuple[bool, str]:
+    def check_ollama_health(
+        cls, ollama_url: str = "http://localhost:11434", timeout: int = 30
+    ) -> tuple[bool, str]:
         """Check if Ollama is running and accessible.
+
+        Args:
+            ollama_url: Ollama API URL.
+            timeout: Connection timeout in seconds.
 
         Returns:
             Tuple of (is_healthy, message)
         """
-        client = ollama.Client(host=ollama_url, timeout=30.0)
+        client = ollama.Client(host=ollama_url, timeout=float(timeout))
         models = client.list()
         model_count = len(models.get("models", []))
         return True, f"Ollama connected. {model_count} models available."
@@ -119,7 +118,11 @@ class BaseAgent:
         temperature: float | None = None,
         model: str | None = None,
     ) -> str:
-        """Generate a response from the agent with retry logic and performance tracking."""
+        """Generate a response from the agent with retry logic, rate limiting, and performance tracking.
+
+        Uses a semaphore to limit concurrent LLM requests and prevent overloading
+        the Ollama server.
+        """
         messages = [{"role": "system", "content": self.system_prompt}]
 
         if context:
@@ -133,57 +136,61 @@ class BaseAgent:
         last_error: Exception | None = None
         delay = self.RETRY_DELAY
 
-        with log_performance(logger, f"{self.name} generation"):
-            for attempt in range(self.MAX_RETRIES):
-                try:
-                    logger.info(
-                        f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}"
-                    )
+        # Acquire semaphore to limit concurrent requests
+        with _llm_semaphore:
+            with log_performance(logger, f"{self.name} generation"):
+                for attempt in range(self.MAX_RETRIES):
+                    try:
+                        logger.info(
+                            f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}"
+                        )
 
-                    start_time = time.time()
-                    response = self.client.chat(
-                        model=use_model,
-                        messages=messages,
-                        options={
-                            "temperature": use_temp,
-                            "num_predict": self.settings.max_tokens,
-                            "num_ctx": self.settings.context_size,
-                        },
-                    )
-                    duration = time.time() - start_time
+                        start_time = time.time()
+                        response = self.client.chat(
+                            model=use_model,
+                            messages=messages,
+                            options={
+                                "temperature": use_temp,
+                                "num_predict": self.settings.max_tokens,
+                                "num_ctx": self.settings.context_size,
+                            },
+                        )
+                        duration = time.time() - start_time
 
-                    content: str = response["message"]["content"]
-                    logger.info(
-                        f"{self.name}: LLM response received ({len(content)} chars, {duration:.2f}s)"
-                    )
-                    return content
+                        content: str = response["message"]["content"]
+                        logger.info(
+                            f"{self.name}: LLM response received ({len(content)} chars, {duration:.2f}s)"
+                        )
+                        return content
 
-                except ConnectionError as e:
-                    last_error = e
-                    logger.warning(f"{self.name}: Connection error on attempt {attempt + 1}: {e}")
-                    if attempt < self.MAX_RETRIES - 1:
-                        logger.info(f"{self.name}: Retrying in {delay}s...")
-                        time.sleep(delay)
-                        delay *= self.RETRY_BACKOFF
+                    except ConnectionError as e:
+                        last_error = e
+                        logger.warning(
+                            f"{self.name}: Connection error on attempt {attempt + 1}: {e}"
+                        )
+                        if attempt < self.MAX_RETRIES - 1:
+                            logger.info(f"{self.name}: Retrying in {delay}s...")
+                            time.sleep(delay)
+                            delay *= self.RETRY_BACKOFF
 
-                except ollama.ResponseError as e:
-                    # Model-specific errors (model not found, etc.) - don't retry
-                    logger.error(f"{self.name}: Ollama response error: {e}")
-                    raise LLMGenerationError(f"Model error: {e}") from e
+                    except ollama.ResponseError as e:
+                        # Model-specific errors (model not found, etc.) - don't retry
+                        logger.error(f"{self.name}: Ollama response error: {e}")
+                        raise LLMGenerationError(f"Model error: {e}") from e
 
-                except TimeoutError as e:
-                    last_error = e
-                    logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
-                    if attempt < self.MAX_RETRIES - 1:
-                        logger.info(f"{self.name}: Retrying in {delay}s...")
-                        time.sleep(delay)
-                        delay *= self.RETRY_BACKOFF
+                    except TimeoutError as e:
+                        last_error = e
+                        logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
+                        if attempt < self.MAX_RETRIES - 1:
+                            logger.info(f"{self.name}: Retrying in {delay}s...")
+                            time.sleep(delay)
+                            delay *= self.RETRY_BACKOFF
 
-            # All retries failed
-            logger.error(f"{self.name}: All {self.MAX_RETRIES} attempts failed")
-            raise LLMGenerationError(
-                f"Failed to generate after {self.MAX_RETRIES} attempts: {last_error}"
-            ) from last_error
+                # All retries failed
+                logger.error(f"{self.name}: All {self.MAX_RETRIES} attempts failed")
+                raise LLMGenerationError(
+                    f"Failed to generate after {self.MAX_RETRIES} attempts: {last_error}"
+                ) from last_error
 
     def get_model_info(self) -> ModelInfo:
         """Get information about the current model."""

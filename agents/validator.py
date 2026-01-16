@@ -3,15 +3,14 @@
 import logging
 import re
 
+from utils.exceptions import ResponseValidationError
+
 from .base import BaseAgent
 
 logger = logging.getLogger(__name__)
 
-
-class ResponseValidationError(Exception):
-    """Raised when an AI response fails validation."""
-
-    pass
+# Re-export exception for backward compatibility
+__all__ = ["ValidatorAgent", "ResponseValidationError", "validate_or_raise"]
 
 
 VALIDATOR_SYSTEM_PROMPT = """You are a response validator. Your ONLY job is to answer TRUE or FALSE.
@@ -94,6 +93,9 @@ class ValidatorAgent(BaseAgent):
                     raise ResponseValidationError(
                         f"AI validator rejected response. Expected language: {expected_language}"
                     )
+            except ResponseValidationError:
+                # Re-raise validation errors
+                raise
             except Exception as e:
                 # If validator fails, log but don't block (fail open)
                 logger.warning(f"Validator check failed: {e}")

@@ -1,0 +1,429 @@
+"""Tests for ContinuityAgent."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from agents.continuity import ContinuityAgent, ContinuityIssue
+from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
+from settings import Settings
+
+
+@pytest.fixture
+def settings():
+    """Create test settings."""
+    return Settings()
+
+
+@pytest.fixture
+def continuity(settings):
+    """Create ContinuityAgent with mocked Ollama client."""
+    with patch("agents.base.ollama.Client"):
+        agent = ContinuityAgent(model="test-model", settings=settings)
+        return agent
+
+
+@pytest.fixture
+def sample_story_state():
+    """Create a sample story state with chapters."""
+    brief = StoryBrief(
+        premise="A group of friends uncover an ancient mystery",
+        genre="Adventure",
+        subgenres=["Mystery", "Supernatural"],
+        tone="Thrilling",
+        themes=["Friendship", "Discovery"],
+        setting_time="Present Day",
+        setting_place="Egypt",
+        target_length="novella",
+        language="English",
+        content_rating="general",
+        content_preferences=["Puzzles", "Ancient history"],
+        content_avoid=["Gore"],
+    )
+    state = StoryState(
+        id="test-story-001",
+        project_name="The Lost Tomb",
+        brief=brief,
+        status="writing",
+        characters=[
+            Character(
+                name="Sarah Chen",
+                role="protagonist",
+                description="Brilliant archaeologist",
+                personality_traits=["intelligent", "brave", "stubborn"],
+                goals=["Find the lost tomb", "Honor her mentor's legacy"],
+                arc_notes="Learns to trust others",
+            ),
+            Character(
+                name="Marcus Wells",
+                role="supporting",
+                description="Skeptical journalist",
+                personality_traits=["cynical", "loyal", "curious"],
+                goals=["Get the story", "Protect Sarah"],
+                arc_notes="Becomes a believer",
+            ),
+        ],
+        chapters=[
+            Chapter(
+                number=1,
+                title="The Discovery",
+                outline="Sarah finds a clue",
+                content="Sarah brushed away the sand...",
+            ),
+            Chapter(number=2, title="The Journey", outline="They travel to Egypt", content=""),
+        ],
+        established_facts=[
+            "Sarah's mentor died mysteriously",
+            "The tomb is hidden in the Valley of Kings",
+            "Marcus has brown eyes",
+        ],
+        world_rules=[
+            "Ancient curses are real in this world",
+            "The tomb was built by Queen Nefertiti",
+        ],
+    )
+    return state
+
+
+class TestContinuityAgentInit:
+    """Tests for ContinuityAgent initialization."""
+
+    def test_init_with_defaults(self, settings):
+        """Test agent initializes with default settings."""
+        with patch("agents.base.ollama.Client"):
+            agent = ContinuityAgent(settings=settings)
+            assert agent.name == "Continuity Checker"
+            assert agent.role == "Consistency Guardian"
+
+    def test_init_with_custom_model(self, settings):
+        """Test agent initializes with custom model."""
+        with patch("agents.base.ollama.Client"):
+            agent = ContinuityAgent(model="continuity-model:7b", settings=settings)
+            assert agent.model == "continuity-model:7b"
+
+
+class TestContinuityCheckChapter:
+    """Tests for check_chapter method."""
+
+    def test_returns_issues_list(self, continuity, sample_story_state):
+        """Test returns list of continuity issues."""
+        json_response = """Issues found:
+```json
+[
+    {
+        "severity": "moderate",
+        "category": "character",
+        "description": "Marcus is described as having blue eyes, but was established with brown eyes",
+        "location": "Paragraph 3: 'His blue eyes sparkled'",
+        "suggestion": "Change 'blue eyes' to 'brown eyes'"
+    }
+]
+```"""
+        continuity.generate = MagicMock(return_value=json_response)
+
+        issues = continuity.check_chapter(
+            sample_story_state,
+            "The chapter content with Marcus's blue eyes sparkling...",
+            chapter_number=2,
+        )
+
+        assert len(issues) == 1
+        assert issues[0].severity == "moderate"
+        assert issues[0].category == "character"
+        assert "brown eyes" in issues[0].suggestion
+
+    def test_returns_empty_list_when_no_issues(self, continuity, sample_story_state):
+        """Test returns empty list when no issues found."""
+        json_response = """No issues found.
+```json
+[]
+```"""
+        continuity.generate = MagicMock(return_value=json_response)
+
+        issues = continuity.check_chapter(
+            sample_story_state, "Perfect chapter content...", chapter_number=1
+        )
+
+        assert issues == []
+
+    def test_includes_established_facts(self, continuity, sample_story_state):
+        """Test prompt includes established facts."""
+        continuity.generate = MagicMock(return_value="```json\n[]\n```")
+
+        continuity.check_chapter(sample_story_state, "Content", 1)
+
+        call_args = continuity.generate.call_args
+        prompt = call_args[0][0]
+        assert "ESTABLISHED FACTS" in prompt
+        assert "mentor died" in prompt
+
+    def test_raises_without_brief(self, continuity):
+        """Test raises error when brief is missing."""
+        state = StoryState(id="test", status="writing")
+
+        with pytest.raises(ValueError, match="brief"):
+            continuity.check_chapter(state, "Content", 1)
+
+
+class TestContinuityCheckFullStory:
+    """Tests for check_full_story method."""
+
+    def test_checks_entire_story(self, continuity, sample_story_state):
+        """Test checks the full story for issues."""
+        sample_story_state.chapters[0].content = "Chapter 1 content..."
+        sample_story_state.chapters[1].content = "Chapter 2 content..."
+
+        json_response = """```json
+[
+    {
+        "severity": "critical",
+        "category": "plot_hole",
+        "description": "The ancient map mentioned in chapter 1 is never found",
+        "location": "Chapter 1 vs overall plot",
+        "suggestion": "Add a scene where Sarah finds the map"
+    }
+]
+```"""
+        continuity.generate = MagicMock(return_value=json_response)
+
+        issues = continuity.check_full_story(sample_story_state)
+
+        assert len(issues) == 1
+        assert issues[0].severity == "critical"
+        assert issues[0].category == "plot_hole"
+
+    def test_returns_empty_when_no_content(self, continuity, sample_story_state):
+        """Test returns empty list when chapters have no content."""
+        sample_story_state.chapters[0].content = ""
+        sample_story_state.chapters[1].content = ""
+        continuity.generate = MagicMock(return_value="Should not be called")
+
+        issues = continuity.check_full_story(sample_story_state)
+
+        assert issues == []
+        continuity.generate.assert_not_called()
+
+
+class TestContinuityValidateAgainstOutline:
+    """Tests for validate_against_outline method."""
+
+    def test_compares_content_to_outline(self, continuity, sample_story_state):
+        """Test compares chapter content against outline."""
+        json_response = """```json
+[
+    {
+        "severity": "moderate",
+        "category": "plot_hole",
+        "description": "The discovery of the ancient coin mentioned in outline is missing",
+        "location": "outline vs content",
+        "suggestion": "Add scene where Sarah finds the coin"
+    }
+]
+```"""
+        continuity.generate = MagicMock(return_value=json_response)
+
+        issues = continuity.validate_against_outline(
+            sample_story_state,
+            chapter_content="Sarah explored the site...",
+            chapter_outline="Sarah finds an ancient coin that reveals the tomb location",
+        )
+
+        assert len(issues) == 1
+        call_args = continuity.generate.call_args
+        prompt = call_args[0][0]
+        assert "OUTLINE" in prompt
+        assert "CONTENT" in prompt
+
+
+class TestContinuityExtractNewFacts:
+    """Tests for extract_new_facts method."""
+
+    def test_extracts_facts_from_chapter(self, continuity, sample_story_state):
+        """Test extracts new established facts."""
+        response = """New facts established in this chapter:
+- Sarah can read ancient hieroglyphics
+- The tomb entrance faces east
+- Marcus carries a lucky coin from his grandfather"""
+
+        continuity.generate = MagicMock(return_value=response)
+
+        facts = continuity.extract_new_facts(
+            "Chapter content where these facts are established...", sample_story_state
+        )
+
+        assert len(facts) == 3
+        assert "Sarah can read ancient hieroglyphics" in facts
+        assert "Marcus carries a lucky coin" in facts[2]
+
+    def test_returns_empty_list_for_no_facts(self, continuity, sample_story_state):
+        """Test returns empty list when no new facts."""
+        continuity.generate = MagicMock(return_value="No new facts established.")
+
+        facts = continuity.extract_new_facts("Simple chapter...", sample_story_state)
+
+        assert facts == []
+
+
+class TestContinuityIssueHelpers:
+    """Tests for helper methods."""
+
+    def test_should_revise_with_critical(self, continuity):
+        """Test should_revise returns True for critical issues."""
+        issues = [
+            ContinuityIssue(
+                severity="critical",
+                category="language",
+                description="Wrong language",
+                location="Para 1",
+                suggestion="Fix language",
+            )
+        ]
+
+        assert continuity.should_revise(issues) is True
+
+    def test_should_revise_with_multiple_moderate(self, continuity):
+        """Test should_revise returns True for 3+ moderate issues."""
+        issues = [
+            ContinuityIssue(
+                severity="moderate",
+                category="character",
+                description="Issue 1",
+                location="",
+                suggestion="",
+            ),
+            ContinuityIssue(
+                severity="moderate",
+                category="timeline",
+                description="Issue 2",
+                location="",
+                suggestion="",
+            ),
+            ContinuityIssue(
+                severity="moderate",
+                category="setting",
+                description="Issue 3",
+                location="",
+                suggestion="",
+            ),
+        ]
+
+        assert continuity.should_revise(issues) is True
+
+    def test_should_not_revise_minor_only(self, continuity):
+        """Test should_revise returns False for minor issues only."""
+        issues = [
+            ContinuityIssue(
+                severity="minor",
+                category="logic",
+                description="Minor issue",
+                location="",
+                suggestion="",
+            ),
+        ]
+
+        assert continuity.should_revise(issues) is False
+
+    def test_format_revision_feedback(self, continuity):
+        """Test formats issues into feedback string."""
+        issues = [
+            ContinuityIssue(
+                severity="critical",
+                category="language",
+                description="Text is in German instead of English",
+                location="Paragraphs 2-5",
+                suggestion="Rewrite in English",
+            ),
+            ContinuityIssue(
+                severity="moderate",
+                category="character",
+                description="Eye color inconsistency",
+                location="Paragraph 7",
+                suggestion="Change blue to brown",
+            ),
+        ]
+
+        feedback = continuity.format_revision_feedback(issues)
+
+        assert "CRITICAL" in feedback
+        assert "MODERATE" in feedback
+        assert "German" in feedback
+        assert "Eye color" in feedback
+
+    def test_format_revision_feedback_empty(self, continuity):
+        """Test returns empty string for no issues."""
+        feedback = continuity.format_revision_feedback([])
+        assert feedback == ""
+
+
+class TestContinuityExtractCharacterArcs:
+    """Tests for extract_character_arcs method."""
+
+    def test_extracts_character_states(self, continuity, sample_story_state):
+        """Test extracts character arc information."""
+        response = """Sarah Chen: Begins to doubt her initial theories, showing growth from stubbornness to openness
+Marcus Wells: Still skeptical but starting to show curiosity about the supernatural elements"""
+
+        continuity.generate = MagicMock(return_value=response)
+
+        arcs = continuity.extract_character_arcs(
+            "Chapter content...", sample_story_state, chapter_number=3
+        )
+
+        assert "Sarah Chen" in arcs
+        assert "doubt" in arcs["Sarah Chen"].lower() or "growth" in arcs["Sarah Chen"].lower()
+        assert "Marcus Wells" in arcs
+
+    def test_returns_empty_for_no_characters(self, continuity, sample_story_state):
+        """Test returns empty dict when no characters found."""
+        sample_story_state.characters = []
+
+        arcs = continuity.extract_character_arcs("Content", sample_story_state, 1)
+
+        assert arcs == {}
+
+
+class TestContinuityCheckPlotPoints:
+    """Tests for check_plot_points_completed method."""
+
+    def test_identifies_completed_points(self, continuity, sample_story_state):
+        """Test identifies which plot points were completed."""
+        sample_story_state.plot_points = [
+            PlotPoint(description="Sarah finds the first clue", chapter=1, completed=False),
+            PlotPoint(description="They decode the map", chapter=1, completed=False),
+            PlotPoint(description="Marcus saves Sarah", chapter=None, completed=False),
+        ]
+
+        continuity.generate = MagicMock(return_value="0, 1")
+
+        completed = continuity.check_plot_points_completed(
+            "Chapter where Sarah finds the clue and they decode the map...",
+            sample_story_state,
+            chapter_number=1,
+        )
+
+        assert 0 in completed
+        assert 1 in completed
+
+    def test_returns_empty_for_no_pending_points(self, continuity, sample_story_state):
+        """Test returns empty list when no pending plot points."""
+        sample_story_state.plot_points = [
+            PlotPoint(description="Already done", chapter=1, completed=True),
+        ]
+        continuity.generate = MagicMock(return_value="Should not be called")
+
+        completed = continuity.check_plot_points_completed("Content", sample_story_state, 1)
+
+        assert completed == []
+        continuity.generate.assert_not_called()
+
+    def test_handles_none_response(self, continuity, sample_story_state):
+        """Test handles 'none' response gracefully."""
+        sample_story_state.plot_points = [
+            PlotPoint(description="Pending point", chapter=1, completed=False),
+        ]
+
+        continuity.generate = MagicMock(return_value="none")
+
+        completed = continuity.check_plot_points_completed("Content", sample_story_state, 1)
+
+        assert completed == []

@@ -217,15 +217,33 @@ class ModelService:
         Yields:
             Progress dictionaries with status, completed, total.
         """
+        logger.info(f"Starting download of model: {model_id}")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=600.0)  # 10 min for pulls
 
+            last_status = ""
             for progress in client.pull(model_id, stream=True):
+                status = progress.get("status", "")
+                # Handle None values explicitly - Ollama API may return None
+                completed = progress.get("completed") or 0
+                total = progress.get("total") or 0
+
+                # Log status changes (not every progress update)
+                if status != last_status:
+                    if total > 0:
+                        pct = (completed / total) * 100
+                        logger.debug(f"[{model_id}] {status} ({pct:.1f}%)")
+                    else:
+                        logger.debug(f"[{model_id}] {status}")
+                    last_status = status
+
                 yield {
-                    "status": progress.get("status", ""),
-                    "completed": progress.get("completed", 0),
-                    "total": progress.get("total", 0),
+                    "status": status,
+                    "completed": completed,
+                    "total": total,
                 }
+
+            logger.info(f"Download completed: {model_id}")
 
         except ollama.ResponseError as e:
             logger.error(f"Ollama API error pulling model {model_id}: {e}")
@@ -233,6 +251,9 @@ class ModelService:
         except (ConnectionError, TimeoutError) as e:
             logger.error(f"Connection error pulling model {model_id}: {e}")
             yield {"status": f"Failed to pull model: {e}", "error": True}
+        except Exception as e:
+            logger.exception(f"Unexpected error pulling model {model_id}: {e}")
+            yield {"status": f"Unexpected error: {e}", "error": True}
 
     def delete_model(self, model_id: str) -> bool:
         """Delete a model from Ollama.
@@ -272,7 +293,8 @@ class ModelService:
                 status = progress.get("status", "").lower()
 
                 # If we see actual downloading, there's an update
-                if "pulling" in status and progress.get("total", 0) > 0:
+                total = progress.get("total") or 0
+                if "pulling" in status and total > 0:
                     # Cancel by not consuming more - Ollama will continue in background
                     # but we got the info we need
                     return {

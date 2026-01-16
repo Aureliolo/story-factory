@@ -40,8 +40,8 @@ test-strict:  ## Run tests with warnings as errors
 test-all:  ## Run all tests including E2E
 	pytest tests/
 
-test-ci:  ## Run tests as in CI (coverage + strict)
-	pytest --cov=. --cov-report=term --cov-report=xml -W default tests/unit tests/smoke tests/integration
+test-ci:  ## Run tests as in CI (coverage + enforcement)
+	pytest --cov=. --cov-report=term --cov-report=xml --cov-fail-under=100 tests/unit tests/smoke tests/integration
 
 lint:  ## Run linters (ruff check and format check)
 	ruff check .

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from memory.story_state import StoryState
 from settings import STORIES_DIR, Settings
+from utils.constants import get_language_code
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ class ExportService:
         Returns:
             Markdown formatted string.
         """
+        logger.debug(f"Exporting story to markdown: {state.id}")
         brief = state.brief
         md_parts = []
 
@@ -102,6 +104,7 @@ class ExportService:
         Returns:
             Plain text formatted string.
         """
+        logger.debug(f"Exporting story to plain text: {state.id}")
         brief = state.brief
         text_parts = []
 
@@ -139,6 +142,7 @@ class ExportService:
         Returns:
             EPUB file as bytes.
         """
+        logger.info(f"Exporting story to EPUB: {state.id}")
         from ebooklib import epub
 
         book = epub.EpubBook()
@@ -146,23 +150,7 @@ class ExportService:
         # Metadata
         brief = state.brief
         title = state.project_name or (brief.premise[:50] if brief else "Untitled Story")
-
-        # Language code mapping
-        lang_map = {
-            "English": "en",
-            "German": "de",
-            "Spanish": "es",
-            "French": "fr",
-            "Italian": "it",
-            "Portuguese": "pt",
-            "Dutch": "nl",
-            "Russian": "ru",
-            "Japanese": "ja",
-            "Chinese": "zh",
-            "Korean": "ko",
-            "Arabic": "ar",
-        }
-        lang_code = lang_map.get(brief.language, "en") if brief else "en"
+        lang_code = get_language_code(brief.language) if brief else "en"
 
         book.set_identifier(state.id)
         book.set_title(title)
@@ -176,22 +164,27 @@ class ExportService:
         chapters = []
         for ch in state.chapters:
             if ch.content:
+                # Escape title for HTML (XSS prevention)
+                safe_title = html.escape(ch.title)
+
                 epub_chapter = epub.EpubHtml(
-                    title=f"Chapter {ch.number}: {ch.title}",
+                    title=f"Chapter {ch.number}: {safe_title}",
                     file_name=f"chapter_{ch.number}.xhtml",
                     lang=lang_code,
                 )
 
-                # Convert to HTML (paragraph wrapping)
+                # Convert to HTML with escaped content (XSS prevention)
                 paragraphs = ch.content.split("\n\n")
-                html_paragraphs = [f"<p>{para}</p>" for para in paragraphs if para.strip()]
+                html_paragraphs = [
+                    f"<p>{html.escape(para)}</p>" for para in paragraphs if para.strip()
+                ]
                 html_content = "<br/><br/>".join(html_paragraphs)
 
                 epub_chapter.content = f"""
                 <html>
                 <head><title>Chapter {ch.number}</title></head>
                 <body>
-                <h1>Chapter {ch.number}: {ch.title}</h1>
+                <h1>Chapter {ch.number}: {safe_title}</h1>
                 {html_content}
                 </body>
                 </html>
@@ -211,6 +204,7 @@ class ExportService:
         # Write to bytes
         output = BytesIO()
         epub.write_epub(output, book)
+        logger.debug(f"EPUB export complete: {len(chapters)} chapters")
         return output.getvalue()
 
     def to_pdf(self, state: StoryState) -> bytes:
@@ -222,6 +216,7 @@ class ExportService:
         Returns:
             PDF file as bytes.
         """
+        logger.info(f"Exporting story to PDF: {state.id}")
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import inch
@@ -292,6 +287,7 @@ class ExportService:
                 story_elements.append(PageBreak())
 
         doc.build(story_elements)
+        logger.debug("PDF export complete")
         return buffer.getvalue()
 
     def to_html(self, state: StoryState) -> str:
@@ -303,6 +299,7 @@ class ExportService:
         Returns:
             HTML formatted string.
         """
+        logger.debug(f"Exporting story to HTML: {state.id}")
         brief = state.brief
         title = state.project_name or (brief.premise[:50] if brief else "Untitled Story")
 
@@ -352,6 +349,7 @@ class ExportService:
         Returns:
             DOCX file as bytes.
         """
+        logger.info(f"Exporting story to DOCX: {state.id}")
         from docx import Document
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.shared import Inches, Pt
@@ -412,6 +410,7 @@ class ExportService:
         # Write to bytes using context manager for proper cleanup
         with BytesIO() as output:
             doc.save(output)
+            logger.debug("DOCX export complete")
             return output.getvalue()
 
     def save_to_file(

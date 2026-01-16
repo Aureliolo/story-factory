@@ -305,12 +305,15 @@ class WorldService:
         Returns:
             The new entity's ID.
         """
-        return world_db.add_entity(
+        logger.info(f"Adding {entity_type} entity: {name}")
+        entity_id = world_db.add_entity(
             entity_type=entity_type,
             name=name,
             description=description,
             attributes=attributes or {},
         )
+        logger.debug(f"Created entity {entity_id}")
+        return entity_id
 
     def update_entity(
         self,
@@ -332,12 +335,18 @@ class WorldService:
         Returns:
             True if updated, False if not found.
         """
-        return world_db.update_entity(
+        logger.info(f"Updating entity {entity_id}" + (f" -> {name}" if name else ""))
+        result = world_db.update_entity(
             entity_id=entity_id,
             name=name,
             description=description,
             attributes=attributes,
         )
+        if result:
+            logger.debug(f"Entity {entity_id} updated successfully")
+        else:
+            logger.warning(f"Entity {entity_id} not found for update")
+        return result
 
     def delete_entity(self, world_db: WorldDatabase, entity_id: str) -> bool:
         """Delete an entity and its relationships.
@@ -349,7 +358,13 @@ class WorldService:
         Returns:
             True if deleted, False if not found.
         """
-        return world_db.delete_entity(entity_id)
+        logger.info(f"Deleting entity {entity_id}")
+        result = world_db.delete_entity(entity_id)
+        if result:
+            logger.debug(f"Entity {entity_id} deleted")
+        else:
+            logger.warning(f"Entity {entity_id} not found for deletion")
+        return result
 
     def get_entity(self, world_db: WorldDatabase, entity_id: str) -> Entity | None:
         """Get an entity by ID.
@@ -421,13 +436,16 @@ class WorldService:
         Returns:
             The new relationship's ID.
         """
-        return world_db.add_relationship(
+        logger.info(f"Adding relationship: {source_id} -> {target_id} ({relation_type})")
+        rel_id = world_db.add_relationship(
             source_id=source_id,
             target_id=target_id,
             relation_type=relation_type,
             description=description,
             bidirectional=bidirectional,
         )
+        logger.debug(f"Created relationship {rel_id}")
+        return rel_id
 
     def delete_relationship(self, world_db: WorldDatabase, relationship_id: str) -> bool:
         """Delete a relationship.
@@ -439,7 +457,13 @@ class WorldService:
         Returns:
             True if deleted, False if not found.
         """
-        return world_db.delete_relationship(relationship_id)
+        logger.info(f"Deleting relationship {relationship_id}")
+        result = world_db.delete_relationship(relationship_id)
+        if result:
+            logger.debug(f"Relationship {relationship_id} deleted")
+        else:
+            logger.warning(f"Relationship {relationship_id} not found")
+        return result
 
     def get_relationships(
         self,

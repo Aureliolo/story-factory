@@ -1,9 +1,13 @@
 """Interviewer Agent - Gathers story requirements from the user."""
 
+import logging
+
 from memory.story_state import StoryBrief
 from utils.json_parser import parse_json_to_model
 
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 INTERVIEWER_SYSTEM_PROMPT = """You are the Interviewer, the first member of a creative writing team. Your job is to gather all the information needed to write a compelling story.
 
@@ -56,6 +60,7 @@ class InterviewerAgent(BaseAgent):
 
     def get_initial_questions(self) -> str:
         """Generate the initial interview questions."""
+        logger.info("Generating initial interview questions")
         prompt = """Start the interview by warmly greeting the user and asking about their story idea.
 Ask 3-4 initial questions covering:
 1. What's the basic premise or concept they have in mind?
@@ -65,7 +70,9 @@ Ask 3-4 initial questions covering:
 
 Keep it friendly and conversational. Do NOT ask about language upfront - you'll infer it from how they write."""
 
-        return self.generate(prompt)
+        response = self.generate(prompt)
+        logger.debug(f"Generated initial questions ({len(response)} chars)")
+        return response
 
     def process_response(self, user_response: str, context: str = "") -> str:
         """Process a user response and generate follow-up questions or the final brief.
@@ -74,6 +81,10 @@ Keep it friendly and conversational. Do NOT ask about language upfront - you'll 
             user_response: The user's message.
             context: Optional inference context (detected language, content rating, etc.)
         """
+        logger.info(
+            f"Processing user response ({len(user_response)} chars, "
+            f"history: {len(self.conversation_history)} messages)"
+        )
         self.conversation_history.append({"role": "user", "content": user_response})
 
         history_text = "\n".join(
@@ -131,16 +142,24 @@ IMPORTANT RULES:
 
         response = self.generate(prompt)
         self.conversation_history.append({"role": "assistant", "content": response})
+        logger.debug(f"Generated response ({len(response)} chars)")
         return response
 
     def extract_brief(self, response: str) -> StoryBrief | None:
         """Try to extract a StoryBrief from the response if it contains JSON."""
+        logger.debug("Attempting to extract story brief from response")
         # Fallback pattern for JSON without code block
         fallback = r'\{[^{}]*"premise"[^{}]*\}'
-        return parse_json_to_model(response, StoryBrief, fallback_pattern=fallback)
+        brief = parse_json_to_model(response, StoryBrief, fallback_pattern=fallback)
+        if brief:
+            logger.info(f"Extracted story brief: genre={brief.genre}, length={brief.target_length}")
+        else:
+            logger.debug("No story brief found in response")
+        return brief
 
     def finalize_brief(self, conversation_summary: str) -> StoryBrief:
         """Force generation of a final brief from the conversation."""
+        logger.info("Finalizing story brief from conversation")
         prompt = f"""Based on this conversation, create a complete story brief:
 
 {conversation_summary}
@@ -169,6 +188,7 @@ Output ONLY a JSON object in this exact format (no other text):
 
         if not brief:
             # Create a default brief if parsing fails
+            logger.warning("Failed to parse story brief, using default values")
             brief = StoryBrief(
                 premise="Story based on user conversation",
                 genre="Fiction",
@@ -179,5 +199,7 @@ Output ONLY a JSON object in this exact format (no other text):
                 language="English",
                 content_rating="mature",
             )
+        else:
+            logger.info(f"Finalized story brief: {brief.genre} / {brief.target_length}")
 
         return brief
