@@ -852,9 +852,13 @@ class WritePage:
                 # Process events for progress display
                 for event in events:
                     self.state.writing_progress = event.message
-                    if self._generation_status:
-                        with self._client:
-                            self._generation_status.update_progress(event.message)
+                    if self._generation_status and self._client:
+                        try:
+                            with self._client:
+                                self._generation_status.update_progress(event.message)
+                        except RuntimeError:
+                            # Client context not available, skip UI update
+                            logger.debug("Client context not available for progress update")
 
                 self._refresh_writing_display()
                 self.services.project.save_project(self.state.project)
@@ -931,9 +935,13 @@ class WritePage:
                 # Process events for progress display
                 for event in events:
                     self.state.writing_progress = event.message
-                    if self._generation_status:
-                        with self._client:
-                            self._generation_status.update_progress(event.message)
+                    if self._generation_status and self._client:
+                        try:
+                            with self._client:
+                                self._generation_status.update_progress(event.message)
+                        except RuntimeError:
+                            # Client context not available, skip UI update
+                            logger.debug("Client context not available for progress update")
 
                 self._refresh_writing_display()
                 self.services.project.save_project(self.state.project)

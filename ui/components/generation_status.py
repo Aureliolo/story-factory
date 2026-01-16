@@ -55,16 +55,25 @@ class GenerationStatus:
         logger.info("User requested generation cancellation")
 
     def _on_pause_click(self) -> None:
-        """Handle pause/resume button click."""
+        """Handle pause/resume button click.
+
+        Button shows the action it will perform:
+        - When paused: shows play_arrow (will resume)
+        - When running: shows pause (will pause)
+        """
         if self.state.generation_is_paused:
+            # Currently paused, so resume
             self.state.resume_generation()
             if self._pause_btn:
-                self._pause_btn.props("icon=pause")
+                # Now running, so show pause icon
+                self._pause_btn.props(remove="icon").props("icon=pause")
                 self._pause_btn.update()
         else:
+            # Currently running, so pause
             self.state.request_pause_generation()
             if self._pause_btn:
-                self._pause_btn.props("icon=play_arrow")
+                # Now paused, so show play icon
+                self._pause_btn.props(remove="icon").props("icon=play_arrow")
                 self._pause_btn.update()
 
     def show(self) -> None:

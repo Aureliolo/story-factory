@@ -486,7 +486,9 @@ class StoryService:
             # Check for cancellation
             if cancel_check and cancel_check():
                 logger.info(f"Chapter {chapter_num} generation cancelled by user")
-                raise GenerationCancelled(f"Chapter {chapter_num} generation cancelled")
+                raise GenerationCancelled(
+                    f"Chapter {chapter_num} generation cancelled", chapter_num=chapter_num
+                )
 
             yield event
             # The generator returns the content at the end
@@ -857,6 +859,27 @@ class StoryService:
 
 
 class GenerationCancelled(Exception):
-    """Exception raised when generation is cancelled by user."""
+    """Exception raised when generation is cancelled by user.
 
-    pass
+    Attributes:
+        message: Cancellation message
+        chapter_num: Chapter number being generated when cancelled (if applicable)
+        progress_state: Optional dict with progress information at cancellation
+    """
+
+    def __init__(
+        self,
+        message: str = "Generation cancelled",
+        chapter_num: int | None = None,
+        progress_state: dict[str, Any] | None = None,
+    ):
+        """Initialize GenerationCancelled exception.
+
+        Args:
+            message: Cancellation message
+            chapter_num: Chapter number being generated (optional)
+            progress_state: Progress information at cancellation (optional)
+        """
+        super().__init__(message)
+        self.chapter_num = chapter_num
+        self.progress_state = progress_state or {}
