@@ -10,7 +10,7 @@ import pytest
 from agents import ResponseValidationError
 from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
 from settings import Settings
-from workflows.orchestrator import MAX_EVENTS, StoryOrchestrator, WorkflowEvent
+from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 
 class TestExportFunctionality:
@@ -216,7 +216,7 @@ class TestStoryOrchestratorInit:
         settings = Settings()
         orchestrator = StoryOrchestrator(settings=settings)
 
-        assert orchestrator.events.maxlen == MAX_EVENTS
+        assert orchestrator.events.maxlen == settings.workflow_max_events
 
 
 class TestStoryOrchestratorCreateNewStory:

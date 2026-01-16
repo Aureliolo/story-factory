@@ -13,9 +13,29 @@ from utils.logging_config import log_performance
 
 logger = logging.getLogger(__name__)
 
-# Rate limiting: maximum concurrent LLM requests
-MAX_CONCURRENT_LLM_REQUESTS = 2
-_llm_semaphore = threading.Semaphore(MAX_CONCURRENT_LLM_REQUESTS)
+# Rate limiting: lazily initialized semaphore based on settings
+_llm_semaphore: threading.Semaphore | None = None
+_llm_semaphore_lock = threading.Lock()
+
+
+def _get_llm_semaphore(settings: Settings) -> threading.Semaphore:
+    """Get or create the LLM rate limiting semaphore.
+
+    The semaphore is created lazily on first use with the concurrency limit
+    from the provided settings. Once created, the limit cannot be changed
+    without restarting the application.
+    """
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        with _llm_semaphore_lock:
+            # Double-check after acquiring lock
+            if _llm_semaphore is None:
+                _llm_semaphore = threading.Semaphore(settings.llm_max_concurrent_requests)
+                logger.debug(
+                    f"Initialized LLM semaphore with limit {settings.llm_max_concurrent_requests}"
+                )
+    return _llm_semaphore
+
 
 # Re-export exceptions for backward compatibility
 __all__ = ["BaseAgent", "LLMError", "LLMConnectionError", "LLMGenerationError"]
@@ -24,8 +44,7 @@ __all__ = ["BaseAgent", "LLMError", "LLMConnectionError", "LLMGenerationError"]
 class BaseAgent:
     """Base class for all agents in the story factory."""
 
-    # Retry configuration
-    MAX_RETRIES = 3
+    # Retry delay configuration (counts come from settings)
     RETRY_DELAY = 2  # seconds
     RETRY_BACKOFF = 2  # multiplier
 
@@ -135,14 +154,15 @@ class BaseAgent:
 
         last_error: Exception | None = None
         delay = self.RETRY_DELAY
+        max_retries = self.settings.llm_max_retries
 
         # Acquire semaphore to limit concurrent requests
-        with _llm_semaphore:
+        with _get_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} generation"):
-                for attempt in range(self.MAX_RETRIES):
+                for attempt in range(max_retries):
                     try:
                         logger.info(
-                            f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{self.MAX_RETRIES}"
+                            f"{self.name}: Calling LLM ({use_model}) attempt {attempt + 1}/{max_retries}"
                         )
 
                         start_time = time.time()
@@ -168,7 +188,7 @@ class BaseAgent:
                         logger.warning(
                             f"{self.name}: Connection error on attempt {attempt + 1}: {e}"
                         )
-                        if attempt < self.MAX_RETRIES - 1:
+                        if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")
                             time.sleep(delay)
                             delay *= self.RETRY_BACKOFF
@@ -181,15 +201,15 @@ class BaseAgent:
                     except TimeoutError as e:
                         last_error = e
                         logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
-                        if attempt < self.MAX_RETRIES - 1:
+                        if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")
                             time.sleep(delay)
                             delay *= self.RETRY_BACKOFF
 
                 # All retries failed
-                logger.error(f"{self.name}: All {self.MAX_RETRIES} attempts failed")
+                logger.error(f"{self.name}: All {max_retries} attempts failed")
                 raise LLMGenerationError(
-                    f"Failed to generate after {self.MAX_RETRIES} attempts: {last_error}"
+                    f"Failed to generate after {max_retries} attempts: {last_error}"
                 ) from last_error
 
     def get_model_info(self) -> ModelInfo:

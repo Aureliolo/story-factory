@@ -38,10 +38,6 @@ class WorkflowEvent:
     correlation_id: str | None = None  # For tracking related events
 
 
-# Maximum events to keep in memory to prevent unbounded growth
-MAX_EVENTS = 100
-
-
 class StoryOrchestrator:
     """Orchestrates the story generation workflow."""
 
@@ -64,7 +60,7 @@ class StoryOrchestrator:
         # State
         self.story_state: StoryState | None = None
         # Use deque with maxlen to prevent unbounded memory growth
-        self.events: deque[WorkflowEvent] = deque(maxlen=MAX_EVENTS)
+        self.events: deque[WorkflowEvent] = deque(maxlen=self.settings.workflow_max_events)
         self._correlation_id: str | None = None  # Current workflow correlation ID
 
     def _validate_response(self, response: str, task: str = "") -> str:
