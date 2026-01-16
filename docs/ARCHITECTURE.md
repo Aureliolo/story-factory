@@ -23,7 +23,9 @@ story-factory/
 ├── memory/                  # Data models
 │   ├── story_state.py      # Story state model
 │   ├── entities.py         # Entity models
-│   └── world_database.py   # SQLite + NetworkX
+│   ├── world_database.py   # SQLite + NetworkX
+│   ├── mode_database.py    # Model performance scores DB
+│   └── mode_models.py      # Mode/scoring Pydantic models
 │
 ├── services/                # Business logic layer
 │   ├── __init__.py         # ServiceContainer
@@ -31,7 +33,9 @@ story-factory/
 │   ├── story_service.py    # Story generation workflow
 │   ├── world_service.py    # World/entity management
 │   ├── model_service.py    # Ollama model operations
-│   └── export_service.py   # Export to various formats
+│   ├── export_service.py   # Export to various formats
+│   ├── model_mode_service.py # Model performance tracking
+│   └── scoring_service.py  # Quality scoring logic
 │
 ├── ui/                      # NiceGUI UI layer
 │   ├── __init__.py
@@ -54,15 +58,21 @@ story-factory/
 │       ├── world.py        # World Builder
 │       ├── projects.py     # Project management
 │       ├── settings.py     # Settings
-│       └── models.py       # Model management
+│       ├── models.py       # Model management
+│       └── analytics.py    # Model performance analytics
 │
 ├── workflows/               # Orchestration
 │   └── orchestrator.py     # Coordinates agents
 │
 ├── utils/                   # Utilities
-│   ├── logging_config.py
-│   ├── json_parser.py
-│   └── error_handling.py
+│   ├── logging_config.py   # Logging setup and context
+│   ├── json_parser.py      # LLM JSON extraction
+│   ├── error_handling.py   # Decorators and helpers
+│   ├── exceptions.py       # Custom exception hierarchy
+│   ├── constants.py        # Shared constants
+│   ├── message_analyzer.py # Conversation analysis
+│   ├── model_utils.py      # Model name utilities
+│   └── prompt_builder.py   # Prompt construction
 │
 ├── tests/                   # Tests
 │   ├── unit/               # Unit tests (fast, isolated)
@@ -72,9 +82,11 @@ story-factory/
 │   └── conftest.py         # Shared pytest fixtures
 │
 ├── docs/                    # Documentation
-│   ├── ARCHITECTURE.md
-│   ├── MODELS.md
-│   └── UX_UI_IMPROVEMENTS.md
+│   ├── ARCHITECTURE.md     # This file
+│   ├── MODELS.md           # Model recommendations
+│   ├── CODE_QUALITY.md     # Code quality issues tracker
+│   ├── TEST_QUALITY.md     # Testing standards
+│   └── UX_UI_IMPROVEMENTS.md # UI/UX improvements
 │
 ├── settings.py              # Configuration
 └── main.py                  # Entry point

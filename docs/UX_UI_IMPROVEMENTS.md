@@ -133,6 +133,7 @@ Mobile breakpoint at 768px:
 | `Alt+3` | Navigate to Projects tab |
 | `Alt+4` | Navigate to Settings tab |
 | `Alt+5` | Navigate to Models tab |
+| `Alt+6` | Navigate to Analytics tab |
 
 ### Help Dialog
 Press `Ctrl+/` to see all available shortcuts in a popup dialog.
@@ -216,10 +217,10 @@ Press `Ctrl+/` to see all available shortcuts in a popup dialog.
 No new dependencies added - all improvements use existing NiceGUI and Tailwind CSS.
 
 ### Testing
-- All tests pass (110+ unit tests, component tests, integration tests)
+- All tests pass (849 unit tests with 100% coverage)
 - Code formatted with ruff
 - Linted with ruff
-- Manual testing completed
+- CI enforces 100% coverage
 
 ## 9. Future Enhancements
 
@@ -230,7 +231,7 @@ No new dependencies added - all improvements use existing NiceGUI and Tailwind C
 - [ ] High contrast mode
 - [ ] Additional loading skeleton variants
 - [ ] Toast notification queue management
-- [ ] Undo/redo functionality
+- [x] Undo/redo functionality (World page)
 - [ ] More accessibility labels (ARIA)
 
 ### Known Limitations

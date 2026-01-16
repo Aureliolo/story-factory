@@ -31,10 +31,12 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
   - **Projects Tab**: Manage multiple stories
   - **Settings Tab**: Configure models and preferences
   - **Models Tab**: Ollama model management with VRAM detection
+  - **Analytics Tab**: Model performance tracking and scoring
 
 - **Iterative Refinement**: Write -> Edit -> Check -> Revise loop for quality
 - **Flexible Output**: Short stories, novellas, or full novels
 - **Multiple Export Formats**: Markdown, Text, HTML, EPUB, PDF
+- **Model Performance Tracking**: Quality scoring, recommendations, and analytics
 - **Local & Private**: Everything runs on your machine
 
 ## Screenshots
@@ -55,6 +57,8 @@ The UI is organized into tabs:
 4. **Settings** - Model configuration, agent temperatures, preferences
 
 5. **Models** - Ollama model management with pull/delete functionality
+
+6. **Analytics** - Model performance metrics, quality scores, and recommendations
 
 ## Requirements
 
@@ -151,7 +155,8 @@ story-factory/
 │   │   ├── world.py        # World Builder page
 │   │   ├── projects.py     # Projects page
 │   │   ├── settings.py     # Settings page
-│   │   └── models.py       # Models page
+│   │   ├── models.py       # Models page
+│   │   └── analytics.py    # Analytics page
 │   └── components/         # Reusable UI components
 │       ├── header.py       # App header with project selector
 │       ├── chat.py         # Chat interface
@@ -227,7 +232,8 @@ mypy .
 
 - **Ruff**: Fast Python formatter and linter
 - **MyPy**: Type checking
-- **Pytest**: Testing framework with coverage
+- **Pytest**: 849 tests with 100% coverage on core modules
+- **CI/CD**: GitHub Actions with coverage enforcement
 
 ## Tech Stack
 
