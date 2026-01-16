@@ -410,7 +410,7 @@ class WorldDatabase:
         values = []
         for field in update_fields:
             # Double-check field is in whitelist (already filtered, but defense in depth)
-            if field not in ENTITY_UPDATE_FIELDS:
+            if field not in ENTITY_UPDATE_FIELDS:  # pragma: no cover
                 raise ValueError(f"Invalid field name: {field}")
             set_parts.append(f"{field} = ?")
             values.append(update_fields[field])

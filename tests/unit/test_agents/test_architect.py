@@ -147,6 +147,29 @@ class TestArchitectCreateCharacters:
 class TestArchitectCreatePlotOutline:
     """Tests for create_plot_outline method."""
 
+    def test_includes_world_preview_when_long(self, architect, sample_story_state):
+        """Test includes truncated world preview when world description is long."""
+        # Create a long world description (over 500 chars)
+        long_world_desc = "A " * 300  # 600 chars
+        sample_story_state.world_description = long_world_desc
+
+        response = """Plot summary here.
+
+```json
+[{"description": "Event 1", "chapter": 1}]
+```"""
+        sample_story_state.characters = [
+            Character(name="Hero", role="protagonist", description="Main char")
+        ]
+        architect.generate = MagicMock(return_value=response)
+
+        architect.create_plot_outline(sample_story_state)
+
+        # Verify the prompt includes truncated world with ellipsis
+        call_args = architect.generate.call_args[0][0]
+        assert "WORLD" in call_args
+        assert "..." in call_args
+
     def test_returns_summary_and_plot_points(self, architect, sample_story_state):
         """Test returns both plot summary and plot points."""
         response = """Oliver discovers a mysterious letter inviting him to an academy he never knew existed. This sets him on a journey of self-discovery where he must confront his fears and embrace his true nature.

@@ -280,6 +280,65 @@ class TestStoryServiceStructure:
         assert len(entities) == 1
         assert entities[0].name == "Jack Stone"
 
+    def test_extract_entities_skips_existing(
+        self, story_service, sample_story_with_chapters, world_db
+    ):
+        """Test skips extraction if entity already exists in world database."""
+        # Add the character first
+        world_db.add_entity("character", "Jack Stone", "A detective")
+
+        # Extract should skip the existing entity
+        story_service._extract_entities_to_world(sample_story_with_chapters, world_db)
+
+        # Should still be just one entity
+        entities = world_db.list_entities(entity_type="character")
+        assert len(entities) == 1
+
+    def test_extract_entities_with_relationships(self, story_service, world_db):
+        """Test extracts character relationships to world database when related entity exists."""
+        # Pre-add Bob so Alice's relationship can be created
+        bob_id = world_db.add_entity("character", "Bob", "Friend character")
+
+        state = StoryState(
+            id="test-rel",
+            project_name="Relationship Test",
+            brief=StoryBrief(
+                premise="A story",
+                genre="Drama",
+                tone="Serious",
+                setting_time="Present",
+                setting_place="City",
+                target_length="novel",
+                language="English",
+                content_rating="general",
+            ),
+            status="writing",
+            characters=[
+                Character(
+                    name="Alice",
+                    role="protagonist",
+                    description="Main character",
+                    personality_traits=["kind"],
+                    goals=["happiness"],
+                    relationships={"Bob": "friend"},
+                ),
+            ],
+        )
+
+        story_service._extract_entities_to_world(state, world_db)
+
+        entities = world_db.list_entities(entity_type="character")
+        assert len(entities) == 2
+
+        # Check relationships were added
+        alice = next((e for e in entities if e.name == "Alice"), None)
+        assert alice is not None
+
+        # Check relationship exists from Alice to Bob
+        relationships = world_db.get_relationships(alice.id)
+        assert len(relationships) > 0
+        assert any(r.target_id == bob_id or r.source_id == bob_id for r in relationships)
+
     def test_get_outline(self, story_service, sample_story_state):
         """Test gets story outline summary."""
         with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
@@ -521,3 +580,115 @@ class TestStoryServiceGenerators:
             events = list(story_service.write_short_story(sample_story_state))
 
             assert len(events) >= 1
+
+    def test_continue_chapter_generator(self, story_service, sample_story_with_chapters):
+        """Test continue_chapter yields events."""
+        sample_story_with_chapters.chapters[0].content = "Chapter content so far..."
+
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            def mock_continue(chapter_num, direction=None):
+                yield WorkflowEvent(
+                    event_type="agent_start", agent_name="Writer", message="Continuing"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="Writer",
+                    message="Done",
+                    data={"continuation": "More text..."},
+                )
+
+            mock_orch.continue_chapter = mock_continue
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            events = list(
+                story_service.continue_chapter(sample_story_with_chapters, 1, "Add action")
+            )
+
+            assert len(events) == 2
+            assert events[0].event_type == "agent_start"
+            assert events[1].event_type == "agent_complete"
+
+    def test_edit_passage_generator(self, story_service, sample_story_with_chapters):
+        """Test edit_passage yields events."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            def mock_edit(text, focus=None):
+                yield WorkflowEvent(
+                    event_type="agent_start", agent_name="Editor", message="Editing"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="Editor",
+                    message="Done",
+                    data={"edited_text": "Improved text"},
+                )
+
+            mock_orch.edit_passage = mock_edit
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            events = list(
+                story_service.edit_passage(
+                    sample_story_with_chapters, "Original text", focus="dialogue"
+                )
+            )
+
+            assert len(events) == 2
+            assert events[0].agent_name == "Editor"
+
+    def test_get_edit_suggestions_generator(self, story_service, sample_story_with_chapters):
+        """Test get_edit_suggestions yields events."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            def mock_suggestions(text):
+                yield WorkflowEvent(
+                    event_type="agent_start", agent_name="Editor", message="Reviewing"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="Editor",
+                    message="Done",
+                    data={"suggestions": "Consider adding more dialogue"},
+                )
+
+            mock_orch.get_edit_suggestions = mock_suggestions
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            events = list(
+                story_service.get_edit_suggestions(sample_story_with_chapters, "Text to review")
+            )
+
+            assert len(events) == 2
+
+    def test_review_full_story_generator(self, story_service, sample_story_with_chapters):
+        """Test review_full_story yields events."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            def mock_review():
+                yield WorkflowEvent(
+                    event_type="agent_start", agent_name="Continuity", message="Reviewing"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="Continuity",
+                    message="Done",
+                    data={
+                        "issues": [{"description": "Timeline inconsistency", "severity": "minor"}]
+                    },
+                )
+
+            mock_orch.review_full_story = mock_review
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            events = list(story_service.review_full_story(sample_story_with_chapters))
+
+            assert len(events) == 2
+            assert events[1].data["issues"][0]["description"] == "Timeline inconsistency"
