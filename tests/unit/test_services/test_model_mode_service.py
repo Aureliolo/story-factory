@@ -49,9 +49,9 @@ class TestModelModeService:
     def test_get_current_mode_default(self, service: ModelModeService) -> None:
         """Test getting the default mode."""
         mode = service.get_current_mode()
-        assert mode is not None
         assert mode.id == "balanced"
         assert mode.is_preset is True
+        assert "balanced" in mode.name.lower()
 
     def test_set_mode_preset(self, service: ModelModeService) -> None:
         """Test setting a preset mode."""
@@ -131,7 +131,7 @@ class TestModelModeService:
         # Set a mode with specific models
         service.set_mode("quality_max")
         model = service.get_model_for_agent("writer")
-        assert model is not None
+        assert isinstance(model, str) and len(model) > 0
 
     def test_get_temperature_for_agent(self, service: ModelModeService) -> None:
         """Test getting temperature for an agent."""
@@ -159,6 +159,8 @@ class TestModelModeService:
         temp = service.get_temperature_for_agent("writer")
         # Should fall back to settings
         assert temp == 0.9  # From mock_settings.agent_temperatures
+        assert isinstance(temp, float)
+        assert 0.0 < temp <= 2.0
 
     # === Score Recording Tests ===
 
@@ -979,6 +981,11 @@ class TestModelModeServiceAdditional:
         )
         service.save_custom_mode(custom)
         service.set_mode("worse_model")
+        
+        # Verify the mode is set correctly
+        current_mode = service.get_current_mode()
+        assert current_mode.id == "worse_model"
+        assert current_mode.agent_models["writer"] == "model-a"
 
         # Get recommendations - should suggest switching to model-b (lines 590-629)
         recommendations = service.get_recommendations()

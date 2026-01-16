@@ -60,9 +60,9 @@ class TestArchitectAgentInit:
 
     def test_has_schema_constants(self, architect):
         """Test agent has JSON schema constants."""
-        assert architect.CHARACTER_SCHEMA is not None
-        assert architect.PLOT_POINT_SCHEMA is not None
-        assert architect.CHAPTER_SCHEMA is not None
+        assert isinstance(architect.CHARACTER_SCHEMA, str) and len(architect.CHARACTER_SCHEMA) > 0
+        assert isinstance(architect.PLOT_POINT_SCHEMA, str) and len(architect.PLOT_POINT_SCHEMA) > 0
+        assert isinstance(architect.CHAPTER_SCHEMA, str) and len(architect.CHAPTER_SCHEMA) > 0
 
 
 class TestArchitectCreateWorld:
