@@ -1,12 +1,16 @@
 """Writer Agent - Writes the actual prose."""
 
 import logging
+from typing import TYPE_CHECKING
 
 from memory.story_state import Chapter, Scene, StoryState
 from utils.prompt_builder import PromptBuilder
 from utils.validation import validate_not_empty, validate_not_none, validate_type
 
 from .base import BaseAgent
+
+if TYPE_CHECKING:
+    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +47,7 @@ Write complete, polished prose ready for the editor."""
 class WriterAgent(BaseAgent):
     """Agent that writes the actual prose."""
 
-    def __init__(self, model: str | None = None, settings=None):
+    def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
         super().__init__(
             name="Writer",
             role="Prose Craftsman",

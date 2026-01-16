@@ -1,7 +1,6 @@
 """Keyboard shortcuts handler for Story Factory."""
 
 import logging
-
 from typing import TYPE_CHECKING
 
 from nicegui import ui

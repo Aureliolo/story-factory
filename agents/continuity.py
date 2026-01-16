@@ -2,12 +2,16 @@
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from memory.story_state import StoryState
 from utils.json_parser import extract_json_list
 from utils.validation import validate_not_empty, validate_not_none, validate_positive, validate_type
 
 from .base import BaseAgent
+
+if TYPE_CHECKING:
+    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +63,7 @@ Understand that some genre conventions (like coincidences in romance) are accept
 class ContinuityAgent(BaseAgent):
     """Agent that checks for plot holes and inconsistencies."""
 
-    def __init__(self, model: str | None = None, settings=None):
+    def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
         super().__init__(
             name="Continuity Checker",
             role="Consistency Guardian",

@@ -794,7 +794,7 @@ class ModelsPage:
         logger.info(f"Queueing download of model: {model_id}")
         await self._queue_download(model_id)
 
-    async def _async_pull(self, model_id: str) -> AsyncGenerator[dict[str, Any], None]:
+    async def _async_pull(self, model_id: str) -> AsyncGenerator[dict[str, Any]]:
         """Async wrapper for pull generator."""
         for progress in self.services.model.pull_model(model_id):
             yield progress

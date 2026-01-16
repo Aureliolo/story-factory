@@ -107,7 +107,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
 
 
 @contextmanager
-def log_context(correlation_id: str | None = None) -> Generator[str, None, None]:
+def log_context(correlation_id: str | None = None) -> Generator[str]:
     """Context manager for setting correlation ID in logs.
 
     Args:
@@ -132,7 +132,7 @@ def log_context(correlation_id: str | None = None) -> Generator[str, None, None]
 
 
 @contextmanager
-def log_performance(logger: logging.Logger, operation: str) -> Generator[None, None, None]:
+def log_performance(logger: logging.Logger, operation: str) -> Generator[None]:
     """Context manager for logging operation performance.
 
     Args:
