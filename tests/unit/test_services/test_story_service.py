@@ -7,7 +7,7 @@ import pytest
 
 from memory.story_state import Chapter, Character, StoryBrief, StoryState
 from memory.world_database import WorldDatabase
-from services.story_service import MAX_ORCHESTRATOR_CACHE_SIZE, StoryService
+from services.story_service import StoryService
 from settings import Settings
 from workflows.orchestrator import WorkflowEvent
 
@@ -122,18 +122,20 @@ class TestStoryServiceOrchestratorCache:
             assert MockOrchestrator.call_count == 1  # Only created once
             assert orch1 == orch2
 
-    def test_evicts_oldest_orchestrator_when_full(self, story_service, sample_brief):
+    def test_evicts_oldest_orchestrator_when_full(self, story_service, sample_brief, settings):
         """Test LRU eviction when cache is full."""
         with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
             MockOrchestrator.return_value = MagicMock()
 
+            cache_size = settings.orchestrator_cache_size
+
             # Fill the cache
-            for i in range(MAX_ORCHESTRATOR_CACHE_SIZE + 2):
+            for i in range(cache_size + 2):
                 state = StoryState(id=f"story-{i}", brief=sample_brief, status="interview")
                 story_service._get_orchestrator(state)
 
             # Cache should be at max size
-            assert len(story_service._orchestrators) == MAX_ORCHESTRATOR_CACHE_SIZE
+            assert len(story_service._orchestrators) == cache_size
 
             # First story should have been evicted
             assert "story-0" not in story_service._orchestrators

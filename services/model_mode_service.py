@@ -437,8 +437,7 @@ class ModelModeService:
         logger.debug(f"Using {judge_model} to judge quality for {genre}/{tone}")
 
         # Limit content size for faster judging
-        MAX_CONTENT_LENGTH = 3000
-        truncated_content = content[:MAX_CONTENT_LENGTH]
+        truncated_content = content[: self.settings.content_truncation_for_judgment]
 
         prompt = f"""You are evaluating the quality of AI-generated story content.
 

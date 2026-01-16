@@ -12,9 +12,6 @@ from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of orchestrators to keep in cache
-MAX_ORCHESTRATOR_CACHE_SIZE = 10
-
 
 class StoryService:
     """Story generation workflow service.
@@ -58,7 +55,7 @@ class StoryService:
         self._orchestrators[state.id] = orchestrator
 
         # Evict oldest if over capacity
-        if len(self._orchestrators) > MAX_ORCHESTRATOR_CACHE_SIZE:
+        if len(self._orchestrators) > self.settings.orchestrator_cache_size:
             evicted_id, _ = self._orchestrators.popitem(last=False)
             logger.debug(f"Evicted orchestrator {evicted_id} from cache (LRU)")
 
