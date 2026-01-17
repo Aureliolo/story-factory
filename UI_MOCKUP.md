@@ -86,7 +86,7 @@
 ```
 Chapter 1 Content (v1):
 ─────────────────────
-Jack Stone sat in his dimly lit office, waiting. 
+Jack Stone sat in his dimly lit office, waiting.
 The rain drummed against the window...
 
 [User reads and thinks: "This needs more dialogue and character interaction"]
@@ -204,4 +204,3 @@ Feedback: "Add more dialogue..."
 4. **All interactions show notifications** for user feedback
 
 5. **Generation can be cancelled** just like normal chapter writing
-
