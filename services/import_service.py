@@ -128,8 +128,9 @@ Be thorough - include all named characters and even unnamed roles if significant
                 model=model,
                 prompt=prompt,
                 options={
-                    "temperature": 0.3,  # Low temperature for consistent extraction
-                    "num_predict": self.settings.llm_tokens_character_create * 4,
+                    "temperature": self.settings.temp_import_extraction,
+                    "num_predict": self.settings.llm_tokens_character_create
+                    * self.settings.import_character_token_multiplier,
                 },
             )
 
@@ -147,9 +148,9 @@ Be thorough - include all named characters and even unnamed roles if significant
                             "Character extraction missing confidence field for '%s', flagging for review",
                             char.get("name", "unknown"),
                         )
-                        char["confidence"] = 0.5
+                        char["confidence"] = self.settings.import_default_confidence
                         char["needs_review"] = True
-                    elif char["confidence"] < 0.7:
+                    elif char["confidence"] < self.settings.import_confidence_threshold:
                         char["needs_review"] = True
                     else:
                         char.setdefault("needs_review", False)
@@ -245,7 +246,7 @@ Include cities, buildings, rooms, natural features - any place that matters to t
                 model=model,
                 prompt=prompt,
                 options={
-                    "temperature": 0.3,  # Low temperature for consistent extraction
+                    "temperature": self.settings.temp_import_extraction,
                     "num_predict": self.settings.llm_tokens_location_create * 3,
                 },
             )
@@ -363,7 +364,7 @@ Only include items that are actually significant - avoid mundane everyday object
                 model=model,
                 prompt=prompt,
                 options={
-                    "temperature": 0.3,  # Low temperature for consistent extraction
+                    "temperature": self.settings.temp_import_extraction,
                     "num_predict": self.settings.llm_tokens_item_create * 3,
                 },
             )
@@ -478,7 +479,7 @@ Only include relationships that are actually mentioned or clearly implied in the
                 model=model,
                 prompt=prompt,
                 options={
-                    "temperature": 0.3,  # Low temperature for consistent extraction
+                    "temperature": self.settings.temp_import_extraction,
                     "num_predict": self.settings.llm_tokens_relationship_create * 4,
                 },
             )

@@ -38,6 +38,7 @@ class ScoringService:
         """
         logger.debug("Initializing ScoringService")
         self._mode_service = mode_service
+        self.settings = mode_service.settings  # Access settings through mode_service
 
         # Track active score IDs for updates
         # Note: Use clear_chapter_tracking() when chapters are complete to prevent memory leaks
@@ -225,8 +226,10 @@ class ScoringService:
             rating: Rating from 1-5 stars.
         """
         validate_not_empty(chapter_id, "chapter_id")
-        if not 1 <= rating <= 5:
-            logger.warning(f"Invalid rating {rating}, must be 1-5")
+        if not self.settings.user_rating_min <= rating <= self.settings.user_rating_max:
+            logger.warning(
+                f"Invalid rating {rating}, must be {self.settings.user_rating_min}-{self.settings.user_rating_max}"
+            )
             return
 
         # Update all scores for this chapter

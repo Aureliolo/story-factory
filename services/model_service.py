@@ -69,7 +69,9 @@ class ModelService:
         logger.debug(f"check_health called: ollama_url={self.settings.ollama_url}")
         try:
             # Try to list models as a health check
-            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_health_check_timeout
+            )
             client.list()  # Just check connectivity
 
             # Get VRAM
@@ -105,7 +107,9 @@ class ModelService:
         """
         logger.debug("list_installed called")
         try:
-            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_list_models_timeout
+            )
             response = client.list()
             models = [model.model for model in response.models if model.model]
             logger.info(f"Found {len(models)} installed models")
@@ -122,7 +126,9 @@ class ModelService:
         """
         logger.debug("list_installed_with_sizes called")
         try:
-            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_list_models_timeout
+            )
             response = client.list()
             models = {}
             for model in response.models:
@@ -242,7 +248,9 @@ class ModelService:
         validate_not_empty(model_id, "model_id")
         logger.info(f"Starting download of model: {model_id}")
         try:
-            client = ollama.Client(host=self.settings.ollama_url, timeout=600.0)  # 10 min for pulls
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_pull_model_timeout
+            )
 
             last_status = ""
             for progress in client.pull(model_id, stream=True):
@@ -289,7 +297,9 @@ class ModelService:
         """
         validate_not_empty(model_id, "model_id")
         try:
-            client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_delete_model_timeout
+            )
             client.delete(model_id)
             logger.info(f"Deleted model: {model_id}")
             return True
@@ -311,7 +321,9 @@ class ModelService:
         """
         validate_not_empty(model_id, "model_id")
         try:
-            client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_check_update_timeout
+            )
 
             # Pull with stream to check status without full download
             # Track whether we've seen actual downloading (not just layer verification)
@@ -331,11 +343,15 @@ class ModelService:
 
                 # If pulling a layer and completed is significantly less than total,
                 # it's an actual download (not just verification)
-                if "pulling" in status and total > 0 and completed < total * 0.9:
+                if (
+                    "pulling" in status
+                    and total > 0
+                    and completed < total * self.settings.model_download_threshold
+                ):
                     # Wait a moment to confirm it's not just instant verification
                     import time
 
-                    time.sleep(0.1)
+                    time.sleep(self.settings.model_verification_sleep)
                     seen_downloading = True
                     return {
                         "has_update": True,
@@ -446,7 +462,9 @@ class ModelService:
         validate_not_empty(model_id, "model_id")
         logger.debug(f"test_model called: model_id={model_id}")
         try:
-            client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_generate_timeout
+            )
             response = client.generate(
                 model=model_id,
                 prompt="Say 'hello' in one word.",
@@ -528,7 +546,9 @@ class ModelService:
         validate_not_empty(prompt, "prompt")
         logger.debug(f"compare_models called: models={model_ids}, prompt_length={len(prompt)}")
         results = []
-        client = ollama.Client(host=self.settings.ollama_url, timeout=180.0)
+        client = ollama.Client(
+            host=self.settings.ollama_url, timeout=self.settings.ollama_capability_check_timeout
+        )
 
         for model_id in model_ids:
             try:

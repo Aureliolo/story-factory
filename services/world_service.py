@@ -303,7 +303,10 @@ class WorldService:
 
         for sentence in sentences:
             sentence = sentence.strip()
-            if len(sentence) < 20 or len(sentence) > 200:
+            if (
+                len(sentence) < self.settings.event_sentence_min_length
+                or len(sentence) > self.settings.event_sentence_max_length
+            ):
                 continue
 
             # Check if sentence contains significant action
