@@ -51,6 +51,22 @@ class KeyboardShortcuts:
                 window.__nicegui.emit('shortcut:save');
             }
 
+            // Ctrl+Z - Undo (skip in input fields to preserve browser undo)
+            if (event.ctrlKey && !event.shiftKey && event.key === 'z') {
+                if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'TEXTAREA') {
+                    event.preventDefault();
+                    window.__nicegui.emit('shortcut:undo');
+                }
+            }
+
+            // Ctrl+Y or Ctrl+Shift+Z - Redo (skip in input fields)
+            if ((event.ctrlKey && event.key === 'y') || (event.ctrlKey && event.shiftKey && event.key === 'z')) {
+                if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'TEXTAREA') {
+                    event.preventDefault();
+                    window.__nicegui.emit('shortcut:redo');
+                }
+            }
+
             // Ctrl+/ - Show shortcuts
             if (event.ctrlKey && event.key === '/') {
                 event.preventDefault();
@@ -76,6 +92,8 @@ class KeyboardShortcuts:
         # Register event handlers
         ui.on("shortcut:new-project", self._handle_new_project)
         ui.on("shortcut:save", self._handle_save)
+        ui.on("shortcut:undo", self._handle_undo)
+        ui.on("shortcut:redo", self._handle_redo)
         ui.on("shortcut:show-help", self._handle_show_help)
         ui.on("shortcut:toggle-dark-mode", self._handle_toggle_dark_mode)
         ui.on("shortcut:tab-1", lambda: self._switch_tab("write"))
@@ -108,6 +126,22 @@ class KeyboardShortcuts:
         else:
             ui.notify("No active project to save", type="info")
 
+    def _handle_undo(self) -> None:
+        """Handle undo shortcut."""
+        if self.state.can_undo():
+            self.state.trigger_undo()
+            logger.debug("Undo triggered (Ctrl+Z)")
+        else:
+            logger.debug("Undo not available")
+
+    def _handle_redo(self) -> None:
+        """Handle redo shortcut."""
+        if self.state.can_redo():
+            self.state.trigger_redo()
+            logger.debug("Redo triggered (Ctrl+Y)")
+        else:
+            logger.debug("Redo not available")
+
     def _handle_show_help(self) -> None:
         """Show keyboard shortcuts help dialog."""
         with ui.dialog() as dialog, ui.card().classes("w-96"):
@@ -116,6 +150,8 @@ class KeyboardShortcuts:
             shortcuts = [
                 ("Ctrl+N", "Create new project"),
                 ("Ctrl+S", "Save current project"),
+                ("Ctrl+Z", "Undo last action"),
+                ("Ctrl+Y", "Redo last action"),
                 ("Ctrl+D", "Toggle dark mode"),
                 ("Ctrl+/", "Show this help"),
                 ("Alt+1", "Go to Write Story tab"),
