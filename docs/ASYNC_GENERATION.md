@@ -73,8 +73,8 @@ def should_cancel() -> bool:
 
 # Pass to story service
 events = self.services.story.write_chapter(
-    project, 
-    chapter_num, 
+    project,
+    chapter_num,
     cancel_check=should_cancel
 )
 ```
