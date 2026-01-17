@@ -7,11 +7,14 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import networkx as nx
 
 from memory.entities import Entity, EventParticipant, Relationship, WorldEvent
+
+if TYPE_CHECKING:
+    from networkx import DiGraph
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +85,7 @@ class WorldDatabase:
         self.conn.execute("PRAGMA journal_mode=WAL")
 
         self._init_schema()
-        self._graph: nx.DiGraph[Any] | None = None
+        self._graph: DiGraph[Any] | None = None
         self._closed = False
 
     def __del__(self) -> None:
@@ -1082,7 +1085,7 @@ class WorldDatabase:
 
     def _rebuild_graph(self) -> None:
         """Rebuild NetworkX graph from database."""
-        self._graph = nx.DiGraph[Any]()
+        self._graph = nx.DiGraph()
 
         # Add nodes (entities)
         for entity in self.list_entities():
@@ -1121,7 +1124,7 @@ class WorldDatabase:
             f"{self._graph.number_of_edges()} edges"
         )
 
-    def get_graph(self) -> nx.DiGraph[Any]:
+    def get_graph(self) -> "DiGraph[Any]":
         """Get NetworkX graph (lazy-loaded).
 
         Returns:
