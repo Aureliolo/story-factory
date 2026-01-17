@@ -1,7 +1,5 @@
 """Tests for text analytics utilities."""
 
-import pytest
-
 from utils.text_analytics import (
     PacingMetrics,
     ReadabilityScores,
@@ -60,7 +58,7 @@ class TestReadabilityCalculation:
 
     def test_complex_text(self):
         """Test readability of complex text."""
-        text = """The implementation of sophisticated methodologies 
+        text = """The implementation of sophisticated methodologies
         necessitates comprehensive understanding of multifaceted theoretical frameworks."""
         scores = calculate_readability(text)
 
@@ -91,8 +89,8 @@ class TestReadabilityCalculation:
         """Test readability of narrative text."""
         text = """
         Sarah walked through the ancient forest, her footsteps muffled by fallen leaves.
-        The towering trees created a canopy overhead, filtering the sunlight into 
-        dappled patterns on the forest floor. She paused to listen to the birdsong, 
+        The towering trees created a canopy overhead, filtering the sunlight into
+        dappled patterns on the forest floor. She paused to listen to the birdsong,
         feeling at peace in this natural sanctuary.
         """
         scores = calculate_readability(text)
@@ -110,9 +108,9 @@ class TestPacingAnalysis:
         """Test detection of dialogue-heavy content."""
         text = """
         "Hello," she said with a smile.
-        
+
         "How are you today?" he asked cheerfully.
-        
+
         "I'm doing well, thank you for asking," she replied.
         """
         metrics = analyze_pacing(text)
@@ -124,8 +122,8 @@ class TestPacingAnalysis:
     def test_action_heavy_text(self):
         """Test detection of action-heavy content."""
         text = """
-        He jumped over the fence and ran towards the building. 
-        She grabbed her weapon and charged forward. 
+        He jumped over the fence and ran towards the building.
+        She grabbed her weapon and charged forward.
         They fought fiercely, dodging and striking with precision.
         The warrior lunged at his opponent and threw a powerful punch.
         """
@@ -150,11 +148,11 @@ class TestPacingAnalysis:
         """Test analysis of mixed content."""
         text = """
         The detective examined the crime scene carefully.
-        
+
         "What do you think happened here?" asked his partner.
-        
+
         He rushed to the door and kicked it open. Inside, clues were scattered everywhere.
-        
+
         "We need to document everything," he said, pulling out his camera.
         """
         metrics = analyze_pacing(text)
@@ -177,8 +175,8 @@ class TestPacingAnalysis:
     def test_percentages_sum_to_100(self):
         """Test that percentages sum to approximately 100."""
         text = """
-        He walked down the street. 
-        "Hello there," she said. 
+        He walked down the street.
+        "Hello there," she said.
         The car suddenly swerved and crashed into the barrier.
         """
         metrics = analyze_pacing(text)

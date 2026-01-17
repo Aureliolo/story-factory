@@ -16,15 +16,15 @@ def populate_sample_data():
     # Use a test database
     db_path = Path("output/test_analytics.db")
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Remove existing test database
     if db_path.exists():
         db_path.unlink()
-    
+
     db = ModeDatabase(db_path)
-    
+
     logger.info("Populating sample analytics data...")
-    
+
     # Sample models
     models = [
         "llama3.2:3b",
@@ -32,50 +32,52 @@ def populate_sample_data():
         "mistral:7b",
         "phi3.5:3.8b",
     ]
-    
+
     # Sample roles
     roles = ["writer", "editor", "interviewer", "architect"]
-    
+
     # Sample genres
     genres = ["fantasy", "sci-fi", "mystery", "romance"]
-    
+
     # Generate sample scores over the past 30 days
     base_time = datetime.now() - timedelta(days=30)
-    
+
     score_id_counter = 1
     for day in range(30):
         current_time = base_time + timedelta(days=day)
-        
+
         # Generate 5-10 scores per day
         import random
+
         num_scores = random.randint(5, 10)
-        
+
         for _ in range(num_scores):
             model = random.choice(models)
             role = random.choice(roles)
             genre = random.choice(genres)
-            
+
             # Quality scores tend to improve over time (simulate learning)
             time_factor = day / 30.0
             base_quality = 6.0 + (time_factor * 2.0)
-            
+
             prose_quality = base_quality + random.uniform(-1.0, 1.5)
             instruction_following = base_quality + random.uniform(-0.5, 1.0)
             consistency_score = base_quality + random.uniform(-1.0, 1.0)
-            
+
             # Clamp to 0-10 range
             prose_quality = max(0, min(10, prose_quality))
             instruction_following = max(0, min(10, instruction_following))
             consistency_score = max(0, min(10, consistency_score))
-            
+
             # Performance metrics
             tokens_generated = random.randint(500, 2000)
             time_seconds = random.uniform(10, 60)
             tokens_per_second = tokens_generated / time_seconds
-            
+
             # Insert with custom timestamp
             with db.db_path.parent:
                 import sqlite3
+
                 conn = sqlite3.connect(db.db_path)
                 cursor = conn.execute(
                     """
@@ -107,18 +109,18 @@ def populate_sample_data():
                 )
                 conn.commit()
                 conn.close()
-            
+
             score_id_counter += 1
-    
+
     logger.info(f"✓ Created {score_id_counter - 1} generation scores")
-    
+
     # Update model performance aggregates
     for model in models:
         for role in roles:
             db.update_model_performance(model, role)
-    
+
     logger.info("✓ Updated model performance aggregates")
-    
+
     # Add some world entity scores
     entity_types = ["character", "location", "faction", "item"]
     for i in range(50):
@@ -131,7 +133,7 @@ def populate_sample_data():
         }
         avg_score = sum(scores_dict.values()) / len(scores_dict)
         scores_dict["average"] = avg_score
-        
+
         db.record_world_entity_score(
             project_id=f"project_{random.randint(1, 3)}",
             entity_type=entity_type,
@@ -141,9 +143,9 @@ def populate_sample_data():
             iterations_used=random.randint(1, 3),
             generation_time_seconds=random.uniform(5, 20),
         )
-    
+
     logger.info("✓ Created 50 world entity scores")
-    
+
     # Add some recommendations
     rec_types = ["model_swap", "temperature_adjust", "prompt_refinement"]
     for i in range(10):
@@ -157,13 +159,13 @@ def populate_sample_data():
             evidence={"sample_size": random.randint(10, 50)},
             expected_improvement=f"+{random.uniform(0.5, 1.5):.1f} quality points",
         )
-    
+
     logger.info("✓ Created 10 recommendations")
-    
+
     logger.info(f"\n✅ Sample data populated successfully in {db_path}")
     logger.info(f"   Total scores: {db.get_score_count()}")
     logger.info(f"   Unique genres: {len(db.get_unique_genres())}")
-    
+
     return str(db_path)
 
 
