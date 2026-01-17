@@ -105,12 +105,12 @@ The Settings page uses snapshot-based undo/redo:
 def _save_settings(self):
     # Capture old state
     old_snapshot = self._capture_settings_snapshot()
-    
+
     # Update settings...
-    
+
     # Capture new state
     new_snapshot = self._capture_settings_snapshot()
-    
+
     # Record for undo
     self.state.record_action(
         UndoAction(
