@@ -27,6 +27,9 @@ from utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
 
+# Default value for relationship strength when creating via drag-and-drop
+DEFAULT_RELATIONSHIP_STRENGTH = 0.5
+
 
 class WorldPage:
     """World Builder page for managing entities and relationships.
@@ -1852,7 +1855,7 @@ class WorldPage:
                 min=0.0,
                 max=1.0,
                 step=0.1,
-                value=0.5,
+                value=DEFAULT_RELATIONSHIP_STRENGTH,
             ).classes("w-full")
 
             # Bidirectional checkbox
@@ -1879,15 +1882,19 @@ class WorldPage:
                             description=rel_desc_input.value,
                         )
 
+                        # Store actual values for undo
+                        final_strength = rel_strength_slider.value
+                        final_bidirectional = rel_bidir_checkbox.value
+
                         # Update strength and bidirectional if not defaults
-                        if rel_strength_slider.value != 0.5 or rel_bidir_checkbox.value:
+                        if final_strength != DEFAULT_RELATIONSHIP_STRENGTH or final_bidirectional:
                             self.state.world_db.update_relationship(
                                 relationship_id=relationship_id,
-                                strength=rel_strength_slider.value,
-                                bidirectional=rel_bidir_checkbox.value,
+                                strength=final_strength,
+                                bidirectional=final_bidirectional,
                             )
 
-                        # Record action for undo
+                        # Record action for undo with complete data
                         self.state.record_action(
                             UndoAction(
                                 action_type=ActionType.ADD_RELATIONSHIP,
@@ -1896,11 +1903,18 @@ class WorldPage:
                                     "source_id": source_id,
                                     "target_id": target_id,
                                     "relation_type": rel_type_input.value,
+                                    "description": rel_desc_input.value,
+                                    "strength": final_strength,
+                                    "bidirectional": final_bidirectional,
                                 },
                                 inverse_data={
+                                    "relationship_id": relationship_id,
                                     "source_id": source_id,
                                     "target_id": target_id,
                                     "relation_type": rel_type_input.value,
+                                    "description": rel_desc_input.value,
+                                    "strength": final_strength,
+                                    "bidirectional": final_bidirectional,
                                 },
                             )
                         )
