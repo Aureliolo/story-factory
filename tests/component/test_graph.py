@@ -122,3 +122,25 @@ class TestGraphRenderer:
         assert "new vis.Network" in result.js, "Should initialize vis.Network"
         assert "nodes:" in result.js, "Should have nodes data"
         assert "edges:" in result.js, "Should have edges data"
+
+    def test_render_graph_html_has_drag_to_connect(self, test_world_db, test_settings):
+        """Graph JavaScript includes drag-to-connect functionality."""
+        from ui.graph_renderer import render_graph_html
+
+        result = render_graph_html(
+            test_world_db,
+            test_settings,
+            container_id="test",
+            height=300,
+            create_rel_callback_id="test_callback",
+            edge_context_callback_id="test_edge_callback",
+        )
+
+        # Should have drag-to-connect variables and handlers
+        assert "dragStartNode" in result.js, "Should have dragStartNode variable"
+        assert "tempEdge" in result.js, "Should have temporary edge variable"
+        assert "shiftKey" in result.js, "Should check for Shift key"
+        assert "test_callback" in result.js, "Should use create callback ID"
+        assert "test_edge_callback" in result.js, "Should use edge callback ID"
+        assert "oncontext" in result.js, "Should have right-click context menu"
+
