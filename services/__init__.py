@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from settings import Settings
 
+from .backup_service import BackupService
 from .export_service import ExportService
 from .model_mode_service import ModelModeService
 from .model_service import ModelService
@@ -44,6 +45,7 @@ class ServiceContainer:
     world_quality: WorldQualityService
     suggestion: SuggestionService
     template: TemplateService
+    backup: BackupService
 
     def __init__(self, settings: Settings | None = None):
         """Initialize all services with shared settings.
@@ -62,6 +64,7 @@ class ServiceContainer:
         self.world_quality = WorldQualityService(self.settings, self.mode)
         self.suggestion = SuggestionService(self.settings)
         self.template = TemplateService(self.settings)
+        self.backup = BackupService(self.settings)
 
 
 __all__ = [
@@ -76,4 +79,5 @@ __all__ = [
     "WorldQualityService",
     "SuggestionService",
     "TemplateService",
+    "BackupService",
 ]
