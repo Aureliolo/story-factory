@@ -378,8 +378,17 @@ class TestSettingsGetModelForAgent:
         # Should return some model (exact model depends on registry)
         assert result is not None
 
-    def test_selects_architect_model(self):
+    def test_selects_architect_model(self, monkeypatch):
         """Test selects high-reasoning model for architect role."""
+        # Mock get_installed_models to return the architect models as installed
+        monkeypatch.setattr(
+            "settings.get_installed_models",
+            lambda timeout=None: [
+                "huihui_ai/qwen3-abliterated:30b",
+                "huihui_ai/dolphin3-abliterated:8b",
+            ],
+        )
+
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
@@ -390,8 +399,17 @@ class TestSettingsGetModelForAgent:
         # Should select Qwen3-30B as the recommended architect model
         assert result == "huihui_ai/qwen3-abliterated:30b"
 
-    def test_selects_architect_model_high_vram(self):
+    def test_selects_architect_model_high_vram(self, monkeypatch):
         """Test selects architect model with high VRAM."""
+        # Mock get_installed_models to return the architect models as installed
+        monkeypatch.setattr(
+            "settings.get_installed_models",
+            lambda timeout=None: [
+                "huihui_ai/qwen3-abliterated:30b",
+                "huihui_ai/dolphin3-abliterated:8b",
+            ],
+        )
+
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
