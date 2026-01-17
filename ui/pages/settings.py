@@ -44,6 +44,10 @@ class SettingsPage:
 
         # Settings reference
         self.settings = services.settings
+        
+        # Register undo/redo handlers for this page
+        self.state.on_undo(self._do_undo)
+        self.state.on_redo(self._do_redo)
 
     def build(self) -> None:
         """Build the settings page UI."""
@@ -548,7 +552,12 @@ class SettingsPage:
 
     def _save_settings(self) -> None:
         """Save all settings."""
+        from ui.state import ActionType, UndoAction
+        
         try:
+            # Capture old state for undo
+            old_snapshot = self._capture_settings_snapshot()
+            
             # Update settings from UI
             self.settings.ollama_url = self._ollama_url_input.value
             self.settings.default_model = self._default_model_select.value
@@ -594,6 +603,18 @@ class SettingsPage:
             self.settings.learning_min_samples = int(self._min_samples.value)
             self.settings.learning_confidence_threshold = self._confidence_slider.value
 
+            # Capture new state for redo
+            new_snapshot = self._capture_settings_snapshot()
+            
+            # Record undo action
+            self.state.record_action(
+                UndoAction(
+                    action_type=ActionType.UPDATE_SETTINGS,
+                    data=new_snapshot,
+                    inverse_data=old_snapshot,
+                )
+            )
+
             # Validate and save
             self.settings.validate()
             self.settings.save()
@@ -606,3 +627,95 @@ class SettingsPage:
         except Exception as e:
             logger.exception("Failed to save settings")
             ui.notify(f"Error saving: {e}", type="negative")
+
+    def _capture_settings_snapshot(self) -> dict[str, Any]:
+        """Capture current settings state for undo/redo.
+        
+        Returns:
+            Dictionary containing all current settings values.
+        """
+        return {
+            "ollama_url": self.settings.ollama_url,
+            "default_model": self.settings.default_model,
+            "use_per_agent_models": self.settings.use_per_agent_models,
+            "agent_models": dict(self.settings.agent_models),
+            "agent_temperatures": dict(self.settings.agent_temperatures),
+            "interaction_mode": self.settings.interaction_mode,
+            "chapters_between_checkpoints": self.settings.chapters_between_checkpoints,
+            "max_revision_iterations": self.settings.max_revision_iterations,
+            "context_size": self.settings.context_size,
+            "max_tokens": self.settings.max_tokens,
+            "previous_chapter_context_chars": self.settings.previous_chapter_context_chars,
+            "chapter_analysis_chars": self.settings.chapter_analysis_chars,
+            "use_mode_system": self.settings.use_mode_system,
+            "current_mode": self.settings.current_mode,
+            "learning_autonomy": self.settings.learning_autonomy,
+            "learning_triggers": list(self.settings.learning_triggers),
+            "learning_periodic_interval": self.settings.learning_periodic_interval,
+            "learning_min_samples": self.settings.learning_min_samples,
+            "learning_confidence_threshold": self.settings.learning_confidence_threshold,
+        }
+
+    def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
+        """Restore settings from a snapshot.
+        
+        Args:
+            snapshot: Settings snapshot to restore.
+        """
+        self.settings.ollama_url = snapshot["ollama_url"]
+        self.settings.default_model = snapshot["default_model"]
+        self.settings.use_per_agent_models = snapshot["use_per_agent_models"]
+        self.settings.agent_models = dict(snapshot["agent_models"])
+        self.settings.agent_temperatures = dict(snapshot["agent_temperatures"])
+        self.settings.interaction_mode = snapshot["interaction_mode"]
+        self.settings.chapters_between_checkpoints = snapshot["chapters_between_checkpoints"]
+        self.settings.max_revision_iterations = snapshot["max_revision_iterations"]
+        self.settings.context_size = snapshot["context_size"]
+        self.settings.max_tokens = snapshot["max_tokens"]
+        self.settings.previous_chapter_context_chars = snapshot["previous_chapter_context_chars"]
+        self.settings.chapter_analysis_chars = snapshot["chapter_analysis_chars"]
+        self.settings.use_mode_system = snapshot["use_mode_system"]
+        self.settings.current_mode = snapshot["current_mode"]
+        self.settings.learning_autonomy = snapshot["learning_autonomy"]
+        self.settings.learning_triggers = list(snapshot["learning_triggers"])
+        self.settings.learning_periodic_interval = snapshot["learning_periodic_interval"]
+        self.settings.learning_min_samples = snapshot["learning_min_samples"]
+        self.settings.learning_confidence_threshold = snapshot["learning_confidence_threshold"]
+        
+        # Save and reload page to reflect changes
+        self.settings.save()
+        ui.notify("Settings restored", type="info")
+
+    def _do_undo(self) -> None:
+        """Handle undo for settings changes."""
+        from ui.state import ActionType, UndoAction
+        
+        action = self.state.undo()
+        if not action:
+            return
+
+        try:
+            if action.action_type == ActionType.UPDATE_SETTINGS:
+                # Restore old settings
+                self._restore_settings_snapshot(action.inverse_data)
+                logger.debug("Undone settings change")
+        except Exception as e:
+            logger.exception("Undo failed for settings")
+            ui.notify(f"Undo failed: {e}", type="negative")
+
+    def _do_redo(self) -> None:
+        """Handle redo for settings changes."""
+        from ui.state import ActionType, UndoAction
+        
+        action = self.state.redo()
+        if not action:
+            return
+
+        try:
+            if action.action_type == ActionType.UPDATE_SETTINGS:
+                # Restore new settings
+                self._restore_settings_snapshot(action.data)
+                logger.debug("Redone settings change")
+        except Exception as e:
+            logger.exception("Redo failed for settings")
+            ui.notify(f"Redo failed: {e}", type="negative")

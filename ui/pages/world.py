@@ -53,6 +53,10 @@ class WorldPage:
         self.state = state
         self.services = services
 
+        # Register undo/redo handlers for this page
+        self.state.on_undo(self._do_undo)
+        self.state.on_redo(self._do_redo)
+
         # UI references
         self._graph: GraphComponent | None = None
         self._entity_list: Column | None = None

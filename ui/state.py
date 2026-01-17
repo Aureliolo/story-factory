@@ -15,12 +15,22 @@ logger = logging.getLogger(__name__)
 class ActionType(Enum):
     """Types of undoable actions."""
 
+    # World/Entity actions
     ADD_ENTITY = "add_entity"
     DELETE_ENTITY = "delete_entity"
     UPDATE_ENTITY = "update_entity"
     ADD_RELATIONSHIP = "add_relationship"
     DELETE_RELATIONSHIP = "delete_relationship"
     UPDATE_RELATIONSHIP = "update_relationship"
+    
+    # Write/Chapter actions
+    UPDATE_CHAPTER_CONTENT = "update_chapter_content"
+    DELETE_CHAPTER = "delete_chapter"
+    ADD_CHAPTER = "add_chapter"
+    UPDATE_CHAPTER_FEEDBACK = "update_chapter_feedback"
+    
+    # Settings actions
+    UPDATE_SETTINGS = "update_settings"
 
 
 @dataclass
@@ -93,6 +103,8 @@ class AppState:
     _on_project_change: Callable[[], None] | None = None
     _on_entity_select: Callable[[str], None] | None = None
     _on_chapter_change: Callable[[int], None] | None = None
+    _on_undo: Callable[[], None] | None = None  # Called when undo is requested
+    _on_redo: Callable[[], None] | None = None  # Called when redo is requested
 
     def set_project(
         self,
@@ -200,6 +212,22 @@ class AppState:
         """
         self._on_chapter_change = callback
 
+    def on_undo(self, callback: Callable[[], None]) -> None:
+        """Register callback for undo requests.
+
+        Args:
+            callback: Function to call when undo is triggered.
+        """
+        self._on_undo = callback
+
+    def on_redo(self, callback: Callable[[], None]) -> None:
+        """Register callback for redo requests.
+
+        Args:
+            callback: Function to call when redo is triggered.
+        """
+        self._on_redo = callback
+
     @property
     def has_project(self) -> bool:
         """Check if a project is currently loaded."""
@@ -303,6 +331,24 @@ class AppState:
         """Clear undo/redo history."""
         self._undo_stack.clear()
         self._redo_stack.clear()
+
+    def trigger_undo(self) -> None:
+        """Trigger undo action by calling registered callback.
+        
+        This is called by global keyboard shortcuts.
+        """
+        if self._on_undo and self.can_undo():
+            self._on_undo()
+            logger.debug("Undo triggered via global shortcut")
+
+    def trigger_redo(self) -> None:
+        """Trigger redo action by calling registered callback.
+        
+        This is called by global keyboard shortcuts.
+        """
+        if self._on_redo and self.can_redo():
+            self._on_redo()
+            logger.debug("Redo triggered via global shortcut")
 
     # ========== Generation Control Methods ==========
 
