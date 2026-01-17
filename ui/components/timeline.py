@@ -42,6 +42,7 @@ def _extract_timeline_data(story_state: StoryState | None) -> dict[str, Any]:
         Dictionary with 'items' and 'groups' for vis-timeline.
     """
     if not story_state:
+        logger.debug("No story state provided for timeline extraction")
         return {"items": [], "groups": []}
 
     items = []
@@ -118,6 +119,7 @@ def _extract_timeline_data(story_state: StoryState | None) -> dict[str, Any]:
         )
         item_id += 1
 
+    logger.debug("Extracted %d timeline items across %d groups", len(items), len(groups))
     return {"items": items, "groups": groups}
 
 

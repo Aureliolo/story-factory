@@ -184,6 +184,7 @@ class TimelinePage:
 
                 def add_event():
                     if event_input.value and self.state.project:
+                        logger.debug("Adding timeline event: %s", event_input.value[:50])
                         self.state.project.timeline.append(event_input.value)
                         self.services.project.save_project(self.state.project)
 
@@ -227,6 +228,7 @@ class TimelinePage:
 
                     def do_delete():
                         if self.state.project:
+                            logger.debug("Deleting timeline event at index %d", index)
                             del self.state.project.timeline[index]
                             self.services.project.save_project(self.state.project)
 
