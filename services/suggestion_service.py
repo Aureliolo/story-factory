@@ -171,7 +171,8 @@ Each suggestion should be 1-2 sentences, specific to this story."""
             for char in state.characters[:5]:  # Limit to main characters
                 char_desc = f"{char.name} ({char.role})"
                 if char.goals:
-                    char_desc += f" - Goals: {', '.join(char.goals[:2])}"
+                    # Ensure all goals are strings
+                    char_desc += f" - Goals: {', '.join(str(goal) for goal in char.goals[:2])}"
                 char_info.append(char_desc)
             context_parts.append(f"**Characters:** {'; '.join(char_info)}")
 

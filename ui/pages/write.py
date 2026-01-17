@@ -1,6 +1,7 @@
 """Write Story page - Fundamentals and Live Writing tabs."""
 
 import asyncio
+import html
 import logging
 from typing import Literal
 
@@ -951,7 +952,7 @@ class WritePage:
         Returns:
             HTML string for rendering.
         """
-        # Category metadata
+        # Category metadata - all values are hardcoded and safe
         category_info = {
             "plot": {"icon": "auto_stories", "title": "Plot Prompts", "color": "#8B5CF6"},
             "character": {"icon": "person", "title": "Character Prompts", "color": "#10B981"},
@@ -973,20 +974,29 @@ class WritePage:
                 category, {"icon": "star", "title": category.title(), "color": "#6B7280"}
             )
 
-            html_parts.append(f"""
+            # Escape all dynamic content for security
+            safe_icon = html.escape(info["icon"])
+            safe_title = html.escape(info["title"])
+            safe_color = html.escape(info["color"])
+
+            html_parts.append(
+                f"""
             <div style="margin-bottom: 1.5rem;">
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <span class="material-icons" style="color: {info["color"]}; font-size: 1.5rem;">{info["icon"]}</span>
-                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: {info["color"]};">{info["title"]}</h3>
+                    <span class="material-icons" style="color: {safe_color}; font-size: 1.5rem;">{safe_icon}</span>
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: {safe_color};">{safe_title}</h3>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-            """)
+            """
+            )
 
             for suggestion in items:
+                # Escape suggestion content to prevent XSS
+                safe_suggestion = html.escape(suggestion)
                 html_parts.append(
                     f"""
-                    <div style="padding: 1rem; background-color: rgba(0, 0, 0, 0.05); border-radius: 0.5rem; border-left: 3px solid {info["color"]};">
-                        <p style="margin: 0; line-height: 1.6;">{suggestion}</p>
+                    <div style="padding: 1rem; background-color: rgba(0, 0, 0, 0.05); border-radius: 0.5rem; border-left: 3px solid {safe_color};">
+                        <p style="margin: 0; line-height: 1.6;">{safe_suggestion}</p>
                     </div>
                 """
                 )
@@ -994,6 +1004,9 @@ class WritePage:
             html_parts.append("</div></div>")
 
         if not html_parts:
-            return "<p style='text-align: center; color: #6B7280; padding: 2rem;'>No suggestions available.</p>"
+            return (
+                "<p style='text-align: center; color: #6B7280; padding: 2rem;'>"
+                "No suggestions available.</p>"
+            )
 
         return "".join(html_parts)
