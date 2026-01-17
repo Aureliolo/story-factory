@@ -10,6 +10,7 @@ from difflib import SequenceMatcher
 
 from memory.mode_models import QualityScores
 from services.model_mode_service import ModelModeService
+from utils.validation import validate_not_empty, validate_positive
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,9 @@ class ScoringService:
         Returns:
             Score ID for this generation.
         """
+        validate_not_empty(project_id, "project_id")
+        validate_not_empty(agent_role, "agent_role")
+        validate_not_empty(model_id, "model_id")
         logger.debug(
             f"start_tracking called: project_id={project_id}, agent_role={agent_role}, "
             f"model_id={model_id}, chapter_id={chapter_id}"
@@ -112,6 +116,8 @@ class ScoringService:
             time_seconds: Generation time.
             chapter_id: Optional chapter ID for edit tracking.
         """
+        validate_positive(score_id, "score_id")
+        validate_not_empty(content, "content")
         logger.debug(
             f"finish_tracking called: score_id={score_id}, content_length={len(content)}, "
             f"tokens={tokens_generated}, time={time_seconds:.1f}s"
@@ -149,6 +155,7 @@ class ScoringService:
             chapter_id: The chapter that was regenerated.
             agent_role: The agent role being regenerated.
         """
+        validate_not_empty(chapter_id, "chapter_id")
         key = f"{chapter_id}:{agent_role}"
         score_id = self._active_scores.get(key)
 
@@ -170,6 +177,8 @@ class ScoringService:
             chapter_id: The chapter that was edited.
             edited_content: The content after user edits.
         """
+        validate_not_empty(chapter_id, "chapter_id")
+        validate_not_empty(edited_content, "edited_content")
         original = self._original_content.get(chapter_id)
         if not original:
             return
@@ -196,6 +205,7 @@ class ScoringService:
         Args:
             chapter_id: The chapter that was accepted.
         """
+        validate_not_empty(chapter_id, "chapter_id")
         # Find scores for this chapter and mark edit_distance as 0
         for key, score_id in self._active_scores.items():
             if key.startswith(f"{chapter_id}:"):
@@ -213,6 +223,7 @@ class ScoringService:
             chapter_id: The chapter being rated.
             rating: Rating from 1-5 stars.
         """
+        validate_not_empty(chapter_id, "chapter_id")
         if not 1 <= rating <= 5:
             logger.warning(f"Invalid rating {rating}, must be 1-5")
             return
@@ -243,6 +254,9 @@ class ScoringService:
         Returns:
             QualityScores from the judgment.
         """
+        validate_not_empty(content, "content")
+        validate_not_empty(genre, "genre")
+        validate_not_empty(tone, "tone")
         logger.debug(
             f"judge_chapter_quality called: content_length={len(content)}, "
             f"genre={genre}, score_id={score_id}"
@@ -339,6 +353,7 @@ class ScoringService:
         Returns:
             Score ID or None if not found.
         """
+        validate_not_empty(chapter_id, "chapter_id")
         return self._active_scores.get(f"{chapter_id}:{agent_role}")
 
     def clear_chapter_tracking(self, chapter_id: str) -> None:
@@ -349,6 +364,7 @@ class ScoringService:
         Args:
             chapter_id: The chapter ID to clear.
         """
+        validate_not_empty(chapter_id, "chapter_id")
         logger.debug(f"clear_chapter_tracking called: chapter_id={chapter_id}")
         # Remove from active scores
         keys_to_remove = [k for k in self._active_scores if k.startswith(f"{chapter_id}:")]

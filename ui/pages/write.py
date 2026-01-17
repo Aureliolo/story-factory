@@ -59,6 +59,7 @@ class WritePage:
         self._client: Client | None = None  # For background task safety
         self._finalize_btn: Button | None = None
         self._build_structure_btn: Button | None = None
+        self._scene_list_container: ui.column | None = None  # Container for scene list
 
     def _notify(
         self,
@@ -392,6 +393,12 @@ class WritePage:
                 "text-sm text-gray-500 dark:text-gray-400"
             )
 
+        # Scene editor section (collapsible)
+        with ui.expansion("Scene Editor", icon="view_list", value=False).classes("w-full mb-4"):
+            self._scene_list_container = ui.column().classes("w-full")
+            with self._scene_list_container:
+                self._build_scene_editor()
+
         # Writing area - use dark: prefix for automatic dark mode support
         self._writing_display = ui.markdown().classes(
             "w-full flex-grow p-4 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 prose dark:prose-invert max-w-none overflow-auto"
@@ -471,6 +478,51 @@ class WritePage:
             ui.button("TXT", on_click=lambda: self._export("text")).props("flat size=sm")
             ui.button("EPUB", on_click=lambda: self._export("epub")).props("flat size=sm")
             ui.button("PDF", on_click=lambda: self._export("pdf")).props("flat size=sm")
+
+    def _build_scene_editor(self) -> None:
+        """Build the scene editor component."""
+        from ui.components.scene_editor import SceneListComponent
+
+        if not self.state.project or self.state.current_chapter is None:
+            ui.label("Select a chapter to manage scenes.").classes(
+                "text-gray-500 dark:text-gray-400"
+            )
+            return
+
+        # Get current chapter
+        chapter = next(
+            (c for c in self.state.project.chapters if c.number == self.state.current_chapter),
+            None,
+        )
+
+        if not chapter:
+            ui.label("Chapter not found.").classes("text-gray-500 dark:text-gray-400")
+            return
+
+        # Build scene list component
+        def on_scene_updated():
+            """Handle scene updates."""
+            if self.state.project:
+                # Update chapter word count from scenes
+                chapter.update_chapter_word_count()
+                # Save project
+                self.services.project.save_project(self.state.project)
+                # Refresh displays
+                self._refresh_writing_display()
+                logger.debug(f"Scenes updated for chapter {chapter.number}")
+
+        scene_list = SceneListComponent(
+            chapter=chapter,
+            on_scene_updated=on_scene_updated,
+        )
+        scene_list.build()
+
+    def _refresh_scene_editor(self) -> None:
+        """Refresh the scene editor component."""
+        if self._scene_list_container:
+            self._scene_list_container.clear()
+            with self._scene_list_container:
+                self._build_scene_editor()
 
     # ========== Event Handlers ==========
 
@@ -698,6 +750,7 @@ class WritePage:
         """Handle chapter selection change."""
         self.state.select_chapter(e.value)
         self._refresh_writing_display()
+        self._refresh_scene_editor()
 
     def _select_chapter(self, chapter_num: int) -> None:
         """Select a chapter by number."""
@@ -705,6 +758,7 @@ class WritePage:
         if self._chapter_select:
             self._chapter_select.value = chapter_num
         self._refresh_writing_display()
+        self._refresh_scene_editor()
 
     def _refresh_writing_display(self) -> None:
         """Refresh the writing display with current chapter."""
