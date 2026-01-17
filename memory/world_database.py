@@ -7,7 +7,7 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import networkx as nx
 
@@ -82,7 +82,7 @@ class WorldDatabase:
         self.conn.execute("PRAGMA journal_mode=WAL")
 
         self._init_schema()
-        self._graph: nx.DiGraph | None = None
+        self._graph: nx.DiGraph[Any] | None = None
         self._closed = False
 
     def __del__(self) -> None:
@@ -220,11 +220,11 @@ class WorldDatabase:
                 self._closed = True
                 logger.debug(f"Database connection closed: {self.db_path}")
 
-    def __enter__(self):
+    def __enter__(self) -> "WorldDatabase":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
         """Context manager exit - ensures connection is closed."""
         self.close()
         return False  # Don't suppress exceptions
@@ -1082,7 +1082,7 @@ class WorldDatabase:
 
     def _rebuild_graph(self) -> None:
         """Rebuild NetworkX graph from database."""
-        self._graph = nx.DiGraph()
+        self._graph = nx.DiGraph[Any]()
 
         # Add nodes (entities)
         for entity in self.list_entities():
@@ -1121,7 +1121,7 @@ class WorldDatabase:
             f"{self._graph.number_of_edges()} edges"
         )
 
-    def get_graph(self) -> nx.DiGraph:
+    def get_graph(self) -> nx.DiGraph[Any]:
         """Get NetworkX graph (lazy-loaded).
 
         Returns:

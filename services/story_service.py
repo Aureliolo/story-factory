@@ -669,7 +669,7 @@ class StoryService:
     def review_full_story(
         self,
         state: StoryState,
-    ) -> Generator[WorkflowEvent, None, list]:
+    ) -> Generator[WorkflowEvent, None, list[Any]]:
         """Perform a full story continuity review.
 
         Args:
@@ -747,7 +747,7 @@ class StoryService:
 
     # ========== WORLD GENERATION ==========
 
-    def generate_more_characters(self, state: StoryState, count: int = 2) -> list:
+    def generate_more_characters(self, state: StoryState, count: int = 2) -> list[Any]:
         """Generate additional characters for the story.
 
         Args:
@@ -763,7 +763,7 @@ class StoryService:
         self._sync_state(orchestrator, state)
         return new_chars
 
-    def generate_locations(self, state: StoryState, count: int = 3) -> list:
+    def generate_locations(self, state: StoryState, count: int = 3) -> list[Any]:
         """Generate locations for the story world.
 
         Args:
@@ -785,7 +785,7 @@ class StoryService:
         entity_names: list[str],
         existing_rels: list[tuple[str, str]],
         count: int = 5,
-    ) -> list:
+    ) -> list[Any]:
         """Generate relationships between entities.
 
         Args:

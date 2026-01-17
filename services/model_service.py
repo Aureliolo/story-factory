@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Generator
 from dataclasses import dataclass
+from typing import Any
 
 import ollama
 
@@ -229,7 +230,7 @@ class ModelService:
         logger.debug(f"get_model_info called: model_id={model_id}")
         return get_model_info(model_id)
 
-    def pull_model(self, model_id: str) -> Generator[dict]:
+    def pull_model(self, model_id: str) -> Generator[dict[str, Any]]:
         """Pull a model from Ollama registry with progress updates.
 
         Args:
@@ -296,7 +297,7 @@ class ModelService:
             logger.error(f"Failed to delete model {model_id}: {e}")
             return False
 
-    def check_model_update(self, model_id: str) -> dict:
+    def check_model_update(self, model_id: str) -> dict[str, Any]:
         """Check if a model has an update available.
 
         This works by attempting a pull - if Ollama reports 'already exists'
@@ -511,7 +512,7 @@ class ModelService:
         self,
         model_ids: list[str],
         prompt: str,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Compare multiple models on the same prompt.
 
         Args:

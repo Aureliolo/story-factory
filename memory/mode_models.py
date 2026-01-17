@@ -8,7 +8,7 @@ These models define the structure for:
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -172,7 +172,7 @@ class TuningRecommendation(BaseModel):
         le=1,
         description="Confidence in recommendation (0-1)",
     )
-    evidence: dict | None = Field(
+    evidence: dict[str, Any] | None = Field(
         default=None,
         description="Supporting statistics",
     )

@@ -9,6 +9,7 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from memory.mode_models import (
     GenerationScore,
@@ -349,10 +350,10 @@ class ModeDatabase:
         agent_role: str | None = None,
         genre: str | None = None,
         limit: int = 100,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get recent scores for a model."""
         query = "SELECT * FROM generation_scores WHERE model_id = ?"
-        params: list = [model_id]
+        params: list[Any] = [model_id]
 
         if agent_role:
             query += " AND agent_role = ?"
@@ -369,7 +370,7 @@ class ModeDatabase:
             cursor = conn.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_scores_for_project(self, project_id: str) -> list[dict]:
+    def get_scores_for_project(self, project_id: str) -> list[dict[str, Any]]:
         """Get all scores for a project."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -391,7 +392,7 @@ class ModeDatabase:
     ) -> int:
         """Get total number of scores, optionally filtered."""
         query = "SELECT COUNT(*) FROM generation_scores WHERE 1=1"
-        params: list = []
+        params: list[Any] = []
 
         if model_id:
             query += " AND model_id = ?"
@@ -466,10 +467,10 @@ class ModeDatabase:
         model_id: str | None = None,
         agent_role: str | None = None,
         genre: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get aggregated model performance."""
         query = "SELECT * FROM model_performance WHERE 1=1"
-        params: list = []
+        params: list[Any] = []
 
         if model_id:
             query += " AND model_id = ?"
@@ -493,7 +494,7 @@ class ModeDatabase:
         agent_role: str,
         limit: int = 5,
         min_samples: int = 3,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get top performing models for a role."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -517,7 +518,7 @@ class ModeDatabase:
         suggested_value: str,
         reason: str,
         confidence: float,
-        evidence: dict | None = None,
+        evidence: dict[str, Any] | None = None,
         affected_role: str | None = None,
         expected_improvement: str | None = None,
     ) -> int:
@@ -574,7 +575,7 @@ class ModeDatabase:
             )
             conn.commit()
 
-    def get_pending_recommendations(self) -> list[dict]:
+    def get_pending_recommendations(self) -> list[dict[str, Any]]:
         """Get recommendations that haven't been actioned."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -587,7 +588,7 @@ class ModeDatabase:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_recommendation_history(self, limit: int = 50) -> list[dict]:
+    def get_recommendation_history(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent recommendation history."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -653,7 +654,7 @@ class ModeDatabase:
             logger.error(f"Failed to save custom mode {mode_id}: {e}", exc_info=True)
             raise
 
-    def get_custom_mode(self, mode_id: str) -> dict | None:
+    def get_custom_mode(self, mode_id: str) -> dict[str, Any] | None:
         """Get a custom mode by ID."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -669,7 +670,7 @@ class ModeDatabase:
                 return result
             return None
 
-    def list_custom_modes(self) -> list[dict]:
+    def list_custom_modes(self) -> list[dict[str, Any]]:
         """List all custom modes."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -698,7 +699,7 @@ class ModeDatabase:
         self,
         agent_role: str | None = None,
         min_samples: int = 3,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get data for quality vs speed scatter plot."""
         query = """
             SELECT
@@ -710,7 +711,7 @@ class ModeDatabase:
             FROM model_performance
             WHERE sample_count >= ?
         """
-        params: list = [min_samples]
+        params: list[Any] = [min_samples]
 
         if agent_role:
             query += " AND agent_role = ?"
@@ -721,7 +722,7 @@ class ModeDatabase:
             cursor = conn.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_genre_breakdown(self, model_id: str) -> list[dict]:
+    def get_genre_breakdown(self, model_id: str) -> list[dict[str, Any]]:
         """Get performance breakdown by genre for a model."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -775,7 +776,7 @@ class ModeDatabase:
             return None
 
         query = f"SELECT AVG({metric}) FROM generation_scores WHERE 1=1"
-        params: list = []
+        params: list[Any] = []
 
         if agent_role:
             query += " AND agent_role = ?"
@@ -799,7 +800,7 @@ class ModeDatabase:
         Returns list of ModelPerformanceSummary objects.
         """
         query = "SELECT * FROM model_performance WHERE 1=1"
-        params: list = []
+        params: list[Any] = []
 
         if agent_role:
             query += " AND agent_role = ?"
@@ -878,7 +879,7 @@ class ModeDatabase:
     ) -> list[GenerationScore]:
         """Get all scores as GenerationScore objects."""
         query = "SELECT * FROM generation_scores WHERE 1=1"
-        params: list = []
+        params: list[Any] = []
 
         if agent_role:
             query += " AND agent_role = ?"
@@ -1032,7 +1033,7 @@ class ModeDatabase:
         entity_type: str | None = None,
         model_id: str | None = None,
         limit: int = 100,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get world entity scores with optional filters.
 
         Args:
@@ -1045,7 +1046,7 @@ class ModeDatabase:
             List of score records as dictionaries.
         """
         query = "SELECT * FROM world_entity_scores WHERE 1=1"
-        params: list = []
+        params: list[Any] = []
 
         if project_id:
             query += " AND project_id = ?"
@@ -1069,7 +1070,7 @@ class ModeDatabase:
         self,
         entity_type: str | None = None,
         model_id: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Get summary statistics for world entity quality scores.
 
         Args:
@@ -1080,7 +1081,7 @@ class ModeDatabase:
             Dictionary with summary statistics.
         """
         where_clauses = ["1=1"]
-        params: list = []
+        params: list[Any] = []
 
         if entity_type:
             where_clauses.append("entity_type = ?")
@@ -1170,7 +1171,7 @@ class ModeDatabase:
             Number of matching records.
         """
         query = "SELECT COUNT(*) FROM world_entity_scores WHERE 1=1"
-        params: list = []
+        params: list[Any] = []
 
         if entity_type:
             query += " AND entity_type = ?"
