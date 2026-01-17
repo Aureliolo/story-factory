@@ -243,38 +243,36 @@ class ArchitectAgent(BaseAgent):
         count: int = 3,
     ) -> list:
         """Generate multiple variations of the story outline.
-        
+
         Each variation will have different approaches to:
         - Character dynamics and relationships
         - Plot structure and pacing
         - Chapter breakdown
         - Tone and atmosphere variations
-        
+
         Args:
             story_state: Story state with completed brief.
             count: Number of variations to generate (3-5 recommended).
-            
+
         Returns:
             List of OutlineVariation objects.
         """
-        import uuid
-        from memory.story_state import OutlineVariation
-        
+
         logger.info(f"Generating {count} outline variations")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
-        
+
         variations = []
-        
+
         for i in range(count):
             logger.debug(f"Generating variation {i + 1}/{count}")
-            
+
             # Build variation-specific prompt
             builder = PromptBuilder()
             builder.add_text(
                 f"Create variation #{i + 1} of {count} different story outline approaches."
             )
             builder.add_language_requirement(brief.language)
-            
+
             # Add differentiation guidance
             if i == 0:
                 builder.add_text(
@@ -301,11 +299,11 @@ class ArchitectAgent(BaseAgent):
                     "FOCUS: Ensemble cast with interwoven storylines. "
                     "Emphasize complex character dynamics and parallel plots."
                 )
-            
+
             builder.add_text(f"PREMISE: {brief.premise}")
             builder.add_text(f"LENGTH: {brief.target_length}")
             builder.add_brief_requirements(brief)
-            
+
             # Request complete structure
             builder.add_text(
                 "\nProvide a COMPLETE outline including:\n"
@@ -316,16 +314,16 @@ class ArchitectAgent(BaseAgent):
                 "5. Key plot points as JSON\n"
                 "6. Chapter outlines as JSON"
             )
-            
+
             prompt = builder.build()
             response = self.generate(prompt)
-            
+
             # Parse the response to extract components
             variation = self._parse_variation_response(response, i + 1, brief)
             variations.append(variation)
-            
+
             logger.info(f"Variation {i + 1} complete: {variation.name}")
-        
+
         return variations
 
     def _parse_variation_response(
@@ -335,20 +333,21 @@ class ArchitectAgent(BaseAgent):
         brief,
     ):
         """Parse LLM response into an OutlineVariation object.
-        
+
         Args:
             response: Raw LLM response.
             variation_number: Which variation number this is.
             brief: Story brief for context.
-            
+
         Returns:
             OutlineVariation object.
         """
         import re
         import uuid
+
         from memory.story_state import OutlineVariation
         from utils.json_parser import extract_json_list
-        
+
         # Extract rationale (first paragraph or section before JSON)
         rationale_match = re.search(
             r"(?:rationale|unique|approach|focus)[:\s]+(.*?)(?=\n\n|characters|world|```)",
@@ -360,7 +359,7 @@ class ArchitectAgent(BaseAgent):
             if rationale_match
             else f"Variation {variation_number} with unique narrative approach"
         )
-        
+
         # Extract world description
         world_match = re.search(
             r"(?:world description|world)[:\s]+(.*?)(?=\n\n|characters|```json|key rules)",
@@ -368,15 +367,15 @@ class ArchitectAgent(BaseAgent):
             re.IGNORECASE | re.DOTALL,
         )
         world_description = world_match.group(1).strip() if world_match else ""
-        
+
         # Extract world rules (bullet points)
         rules = []
         for line in response.split("\n"):
             if line.strip().startswith(("-", "*", "•")):
                 rule = line.strip().lstrip("-*• ")
-                if len(rule) > 10 and "rule" in response.lower()[:response.find(line)]:
+                if len(rule) > 10 and "rule" in response.lower()[: response.find(line)]:
                     rules.append(rule)
-        
+
         # Parse characters - look for CHARACTERS section specifically
         characters = []
         char_section_match = re.search(
@@ -396,7 +395,7 @@ class ArchitectAgent(BaseAgent):
                             logger.warning(f"Failed to parse character: {e}")
             except Exception as e:
                 logger.warning(f"Failed to extract characters: {e}")
-        
+
         # Extract plot summary
         plot_match = re.search(
             r"(?:plot summary|plot)[:\s]+(.*?)(?=\n\n|plot points|```json|key plot)",
@@ -404,7 +403,7 @@ class ArchitectAgent(BaseAgent):
             re.IGNORECASE | re.DOTALL,
         )
         plot_summary = plot_match.group(1).strip() if plot_match else ""
-        
+
         # Parse plot points - look for PLOT POINTS section
         plot_points = []
         pp_section_match = re.search(
@@ -424,7 +423,7 @@ class ArchitectAgent(BaseAgent):
                             logger.warning(f"Failed to parse plot point: {e}")
             except Exception as e:
                 logger.warning(f"Failed to extract plot points: {e}")
-        
+
         # Parse chapters - look for CHAPTERS section
         chapters = []
         ch_section_match = re.search(
@@ -444,7 +443,7 @@ class ArchitectAgent(BaseAgent):
                             logger.warning(f"Failed to parse chapter: {e}")
             except Exception as e:
                 logger.warning(f"Failed to extract chapters: {e}")
-        
+
         # Create variation object
         variation = OutlineVariation(
             id=str(uuid.uuid4()),
@@ -457,7 +456,7 @@ class ArchitectAgent(BaseAgent):
             chapters=chapters,
             ai_rationale=rationale,
         )
-        
+
         return variation
 
     # JSON schema for locations

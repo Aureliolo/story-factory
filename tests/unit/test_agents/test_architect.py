@@ -301,44 +301,45 @@ class TestArchitectGenerateVariations:
 
     def test_generates_multiple_variations(self, architect, sample_story_state):
         """Test generates requested number of variations."""
+
         # Mock the generate method to return variation responses
         def mock_generate(prompt):
             return """
             RATIONALE: This variation focuses on character-driven narrative.
-            
+
             WORLD DESCRIPTION: A modern magical academy hidden in London.
-            
+
             KEY RULES:
             - Magic is hereditary
             - Students sorted by affinity
-            
+
             ```json
             [
-                {"name": "Alex", "role": "protagonist", "description": "Student", 
-                 "personality_traits": ["curious"], "goals": ["master magic"], 
+                {"name": "Alex", "role": "protagonist", "description": "Student",
+                 "personality_traits": ["curious"], "goals": ["master magic"],
                  "relationships": {}, "arc_notes": "Growth"}
             ]
             ```
-            
+
             PLOT SUMMARY: Alex discovers their magical heritage and attends academy.
-            
+
             ```json
             [
                 {"description": "Discovery", "chapter": 1}
             ]
             ```
-            
+
             ```json
             [
                 {"number": 1, "title": "Discovery", "outline": "Alex finds letter"}
             ]
             ```
             """
-        
+
         architect.generate = MagicMock(side_effect=mock_generate)
-        
+
         variations = architect.generate_outline_variations(sample_story_state, count=3)
-        
+
         assert len(variations) == 3
         assert all(hasattr(v, "id") for v in variations)
         assert all(hasattr(v, "name") for v in variations)
@@ -346,12 +347,13 @@ class TestArchitectGenerateVariations:
 
     def test_variation_contains_structure(self, architect, sample_story_state):
         """Test each variation contains complete structure."""
+
         def mock_generate(prompt):
             return """
             RATIONALE: Fast-paced action variant.
-            
+
             WORLD: Modern city with hidden magic.
-            
+
             CHARACTERS:
             ```json
             [
@@ -360,24 +362,24 @@ class TestArchitectGenerateVariations:
                  "relationships": {}, "arc_notes": "Becomes leader"}
             ]
             ```
-            
+
             PLOT: Hero fights dark forces.
-            
+
             PLOT POINTS:
             ```json
             [{"description": "First battle", "chapter": 1}]
             ```
-            
+
             CHAPTERS:
             ```json
             [{"number": 1, "title": "Battle", "outline": "Fight begins"}]
             ```
             """
-        
+
         architect.generate = MagicMock(side_effect=mock_generate)
-        
+
         variations = architect.generate_outline_variations(sample_story_state, count=1)
-        
+
         assert len(variations) == 1
         var = variations[0]
         assert var.world_description != ""
@@ -389,7 +391,7 @@ class TestArchitectGenerateVariations:
     def test_variations_have_different_focus(self, architect, sample_story_state):
         """Test variations get different focus prompts."""
         prompts_used = []
-        
+
         def capture_generate(prompt):
             prompts_used.append(prompt)
             return """
@@ -407,11 +409,11 @@ class TestArchitectGenerateVariations:
             [{"number": 1, "title": "Test", "outline": "Test"}]
             ```
             """
-        
+
         architect.generate = MagicMock(side_effect=capture_generate)
-        
+
         architect.generate_outline_variations(sample_story_state, count=3)
-        
+
         assert len(prompts_used) == 3
         # Check that different focus keywords appear
         assert any("Traditional" in p for p in prompts_used)
