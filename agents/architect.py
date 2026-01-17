@@ -6,6 +6,7 @@ import re
 from memory.story_state import Chapter, Character, PlotPoint, StoryState
 from utils.json_parser import extract_json_list, parse_json_list_to_models
 from utils.prompt_builder import PromptBuilder
+from utils.validation import validate_not_none, validate_positive, validate_type
 
 from .base import BaseAgent
 
@@ -76,6 +77,9 @@ class ArchitectAgent(BaseAgent):
 
     def create_world(self, story_state: StoryState) -> str:
         """Create the world-building document."""
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+
         logger.info(f"Creating world for story: {story_state.project_name or story_state.id}")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
@@ -106,6 +110,9 @@ class ArchitectAgent(BaseAgent):
 
     def create_characters(self, story_state: StoryState) -> list[Character]:
         """Design the main characters."""
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+
         logger.info("Creating characters for story")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
@@ -130,6 +137,9 @@ class ArchitectAgent(BaseAgent):
 
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+
         logger.info("Creating plot outline")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
@@ -207,6 +217,9 @@ class ArchitectAgent(BaseAgent):
 
     def build_story_structure(self, story_state: StoryState) -> StoryState:
         """Complete story structure building process."""
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+
         logger.info(f"Building complete story structure for: {story_state.id}")
         # Create world
         world_response = self.create_world(story_state)
@@ -270,6 +283,11 @@ class ArchitectAgent(BaseAgent):
         Returns:
             List of new Character objects.
         """
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+        validate_not_none(existing_names, "existing_names")
+        validate_positive(count, "count")
+
         logger.info(f"Generating {count} more characters for story")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 

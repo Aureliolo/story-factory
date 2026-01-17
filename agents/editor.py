@@ -3,6 +3,7 @@
 import logging
 
 from memory.story_state import StoryState
+from utils.validation import validate_not_empty, validate_not_none, validate_type
 
 from .base import BaseAgent
 
@@ -50,6 +51,10 @@ class EditorAgent(BaseAgent):
 
     def edit_chapter(self, story_state: StoryState, chapter_content: str) -> str:
         """Edit and polish a chapter."""
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+        validate_not_empty(chapter_content, "chapter_content")
+
         logger.info(f"Editing chapter ({len(chapter_content)} chars)")
         brief = story_state.brief
         if not brief:
@@ -91,6 +96,9 @@ Output ONLY the edited chapter text in {brief.language} - no commentary or notes
         self, passage: str, focus: str | None = None, language: str = "English"
     ) -> str:
         """Edit a specific passage with optional focus area."""
+        validate_not_empty(passage, "passage")
+        validate_not_empty(language, "language")
+
         logger.info(
             f"Editing passage ({len(passage)} chars)" + (f" focus: {focus}" if focus else "")
         )
@@ -113,6 +121,8 @@ Output ONLY the edited text in {language} - no commentary."""
 
     def get_edit_suggestions(self, text: str) -> str:
         """Get editing suggestions without making changes."""
+        validate_not_empty(text, "text")
+
         logger.info(f"Getting edit suggestions for text ({len(text)} chars)")
         prompt = f"""Review this text and provide specific editing suggestions:
 
@@ -141,6 +151,11 @@ Be specific - quote the problematic text and suggest improvements."""
         story_state: StoryState,
     ) -> str:
         """Edit new content to ensure consistency with previous content."""
+        validate_not_empty(new_content, "new_content")
+        validate_not_empty(previous_content, "previous_content")
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+
         logger.info(
             f"Checking consistency: {len(new_content)} chars new, "
             f"{len(previous_content)} chars previous"
