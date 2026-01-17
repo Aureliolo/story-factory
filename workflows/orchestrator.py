@@ -228,13 +228,20 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
     def _calculate_progress(self) -> float:
         """Calculate overall progress as a value between 0.0 and 1.0.
 
+        Progress is calculated using weighted phases where the writer phase
+        accounts for most of the work. For multi-chapter stories, the writer,
+        editor, and continuity phases cycle per chapter.
+
         Returns:
             Progress value 0.0-1.0
         """
         if not self.story_state:
+            logger.debug("No story state, returning 0.0 progress")
             return 0.0
 
         # Phase weights (sum to 1.0)
+        # Note: writer/editor/continuity cycle per chapter, so their weights
+        # are distributed across all chapters
         phase_weights = {
             "interview": 0.10,  # 10%
             "architect": 0.15,  # 15%
@@ -250,20 +257,32 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         if self.story_state.chapters:
             completed_phases.append("architect")
 
+        # If we're in a chapter-processing phase, interview and architect are definitely done
+        if self._current_phase in ["writer", "editor", "continuity"]:
+            if "interview" not in completed_phases:
+                completed_phases.append("interview")
+            if "architect" not in completed_phases:
+                completed_phases.append("architect")
+
         base_progress = sum(phase_weights[p] for p in completed_phases)
 
         # Add progress within current phase
         current_weight = phase_weights.get(self._current_phase, 0.0)
 
         if self._current_phase in ["writer", "editor", "continuity"] and self._total_chapters > 0:
-            # Progress through chapters
+            # Progress through chapters - distribute phase weight across all chapters
             chapter_progress = self._completed_chapters / self._total_chapters
             base_progress += current_weight * chapter_progress
         elif self._current_phase not in completed_phases:
             # Phase in progress but not complete - estimate 50% done
             base_progress += current_weight * 0.5
 
-        return min(1.0, base_progress)
+        progress = min(1.0, base_progress)
+        logger.debug(
+            f"Progress: {progress:.1%} (phase={self._current_phase}, "
+            f"chapters={self._completed_chapters}/{self._total_chapters})"
+        )
+        return progress
 
     def _calculate_eta(self) -> float | None:
         """Calculate estimated time remaining in seconds.
@@ -295,22 +314,35 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             if self._current_phase in agent_role_map and self._total_chapters > 0:
                 role = agent_role_map[self._current_phase]
 
+                # Get model ID from the appropriate agent
+                model_id: str | None = None
+                if role == "writer" and hasattr(self, "writer"):
+                    model_id = getattr(self.writer, "model", None)
+                elif role == "editor" and hasattr(self, "editor"):
+                    model_id = getattr(self.editor, "model", None)
+                elif role == "continuity" and hasattr(self, "continuity"):
+                    model_id = getattr(self.continuity, "model", None)
+
+                if not model_id:
+                    logger.debug(f"No model found for role {role}, skipping historical ETA")
+                    model_id = self.settings.default_model
+
                 # Query historical performance
                 perf_data = db.get_model_performance(
-                    model_id=self.settings.writer_model,
+                    model_id=model_id,
                     agent_role=role,
                     genre=genre,
                 )
 
                 if perf_data:
                     # Use average time from historical data
-                    avg_tokens_per_sec = perf_data[0].get("avg_tokens_per_second", 20.0)
+                    avg_tokens_per_sec = float(perf_data[0].get("avg_tokens_per_second", 20.0))
                     # Estimate ~500-1000 tokens per chapter section
                     estimated_tokens_per_chapter = 750
                     time_per_chapter = estimated_tokens_per_chapter / avg_tokens_per_sec
 
                     remaining_chapters = self._total_chapters - self._completed_chapters
-                    return remaining_chapters * time_per_chapter
+                    return float(remaining_chapters * time_per_chapter)
 
             # Fallback: estimate based on elapsed time
             elapsed = (datetime.now() - self._phase_start_time).total_seconds()

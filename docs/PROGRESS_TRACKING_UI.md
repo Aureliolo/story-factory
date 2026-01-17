@@ -31,17 +31,21 @@ This document shows what the enhanced progress tracking looks like in the UI.
 
 ## Phase Indicator States
 
+**Note:** For multi-chapter stories, the Writer → Editor → Continuity phases cycle
+for each chapter. The phase indicators show the current phase within the current
+chapter's processing cycle, not a one-time global progression.
+
 1. **Completed Phase** (✅ green checkmark)
-   - Interview complete
-   - Architect complete
+   - Interview complete (runs once)
+   - Architect complete (runs once)
+   - For per-chapter phases: completed for the current chapter
 
 2. **Current Phase** (🔵 blue icon)
-   - Writer (currently active)
+   - Writer, Editor, or Continuity (currently active for current chapter)
    - Shows the actual agent icon
 
 3. **Future Phase** (⚪ grey circle)
-   - Editor (not yet started)
-   - Continuity (not yet started)
+   - Phases not yet started for the current chapter
 
 ## Progress Bar Behavior
 

@@ -44,11 +44,25 @@ phase_weights = {
 }
 ```
 
+**Important:** For multi-chapter stories, the Writer, Editor, and Continuity phases
+cycle for EACH chapter. The actual workflow is:
+```
+Interview → Architect → [Writer → Editor → Continuity] × N chapters
+```
+
+The progress bar accounts for this by distributing each phase's weight across all
+chapters. For example, with 3 chapters:
+- Interview: 0-10% (once)
+- Architect: 10-25% (once)
+- Writer Ch1: 25-41.7%, Ch2: 41.7-58.3%, Ch3: 58.3-75%
+- Editor Ch1: 75-80%, Ch2: 80-85%, Ch3: 85-90%
+- Continuity Ch1: 90-93.3%, Ch2: 93.3-96.7%, Ch3: 96.7-100%
+
 The `_calculate_progress()` method:
 1. Determines which phases are complete
 2. Adds base progress for completed phases
 3. Adds partial progress within current phase
-4. For writing phases, calculates chapter-based progress
+4. For writing phases, calculates chapter-based progress distributed across all chapters
 
 ### ETA Calculation
 
