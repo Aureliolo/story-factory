@@ -2,6 +2,8 @@
 """Demo script to populate analytics database with sample data for testing."""
 
 import logging
+import random
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -47,8 +49,6 @@ def populate_sample_data():
         current_time = base_time + timedelta(days=day)
 
         # Generate 5-10 scores per day
-        import random
-
         num_scores = random.randint(5, 10)
 
         for _ in range(num_scores):
@@ -74,41 +74,38 @@ def populate_sample_data():
             time_seconds = random.uniform(10, 60)
             tokens_per_second = tokens_generated / time_seconds
 
-            # Insert with custom timestamp
-            with db.db_path.parent:
-                import sqlite3
-
-                conn = sqlite3.connect(db.db_path)
-                cursor = conn.execute(
-                    """
-                    INSERT INTO generation_scores (
-                        timestamp, project_id, chapter_id, agent_role, model_id, mode_name, genre,
-                        tokens_generated, time_seconds, tokens_per_second,
-                        prose_quality, instruction_following, consistency_score,
-                        was_regenerated, edit_distance, user_rating
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        current_time.isoformat(),
-                        f"project_{random.randint(1, 5)}",
-                        f"chapter_{random.randint(1, 20)}",
-                        role,
-                        model,
-                        "balanced",
-                        genre,
-                        tokens_generated,
-                        time_seconds,
-                        tokens_per_second,
-                        prose_quality,
-                        instruction_following,
-                        consistency_score,
-                        random.choice([0, 0, 0, 1]),  # 25% regeneration rate
-                        random.randint(0, 100) if random.random() < 0.3 else None,
-                        random.randint(1, 5) if random.random() < 0.2 else None,
-                    ),
-                )
-                conn.commit()
-                conn.close()
+            # Insert with custom timestamp using direct SQL for demo data
+            conn = sqlite3.connect(db.db_path)
+            conn.execute(
+                """
+                INSERT INTO generation_scores (
+                    timestamp, project_id, chapter_id, agent_role, model_id, mode_name, genre,
+                    tokens_generated, time_seconds, tokens_per_second,
+                    prose_quality, instruction_following, consistency_score,
+                    was_regenerated, edit_distance, user_rating
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    current_time.isoformat(),
+                    f"project_{random.randint(1, 5)}",
+                    f"chapter_{random.randint(1, 20)}",
+                    role,
+                    model,
+                    "balanced",
+                    genre,
+                    tokens_generated,
+                    time_seconds,
+                    tokens_per_second,
+                    prose_quality,
+                    instruction_following,
+                    consistency_score,
+                    random.choice([0, 0, 0, 1]),  # 25% regeneration rate
+                    random.randint(0, 100) if random.random() < 0.3 else None,
+                    random.randint(1, 5) if random.random() < 0.2 else None,
+                ),
+            )
+            conn.commit()
+            conn.close()
 
             score_id_counter += 1
 
