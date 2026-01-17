@@ -84,10 +84,16 @@ class Header:
         if not options:
             options = {"": "No projects"}
 
+        # Validate that current project_id still exists, clear if not
+        current_value = self.state.project_id
+        if current_value and current_value not in options:
+            self.state.clear_project()
+            current_value = None
+
         self._project_select = (
             ui.select(
                 options=options,
-                value=self.state.project_id,
+                value=current_value,
                 on_change=self._on_project_change,
             )
             .classes("w-40")
