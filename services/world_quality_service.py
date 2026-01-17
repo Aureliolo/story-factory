@@ -48,10 +48,12 @@ class WorldQualityService:
             settings: Application settings.
             mode_service: Model mode service for model selection.
         """
+        logger.debug("Initializing WorldQualityService")
         self.settings = settings
         self.mode_service = mode_service
         self._client: ollama.Client | None = None
         self._analytics_db: ModeDatabase | None = None
+        logger.debug("WorldQualityService initialized successfully")
 
     @property
     def analytics_db(self) -> ModeDatabase:

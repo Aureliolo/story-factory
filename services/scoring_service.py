@@ -34,6 +34,7 @@ class ScoringService:
         Args:
             mode_service: The ModelModeService for score persistence.
         """
+        logger.debug("Initializing ScoringService")
         self._mode_service = mode_service
 
         # Track active score IDs for updates
@@ -43,6 +44,7 @@ class ScoringService:
         # Track original content for edit distance calculation
         # Note: Use clear_chapter_tracking() when chapters are complete to prevent memory leaks
         self._original_content: dict[str, str] = {}  # chapter_id -> content
+        logger.debug("ScoringService initialized successfully")
 
     def start_tracking(
         self,
@@ -67,18 +69,31 @@ class ScoringService:
         Returns:
             Score ID for this generation.
         """
-        score_id = self._mode_service.record_generation(
-            project_id=project_id,
-            agent_role=agent_role,
-            model_id=model_id,
-            chapter_id=chapter_id,
-            genre=genre,
+        logger.debug(
+            f"start_tracking called: project_id={project_id}, agent_role={agent_role}, "
+            f"model_id={model_id}, chapter_id={chapter_id}"
         )
+        try:
+            score_id = self._mode_service.record_generation(
+                project_id=project_id,
+                agent_role=agent_role,
+                model_id=model_id,
+                chapter_id=chapter_id,
+                genre=genre,
+            )
 
-        if chapter_id:
-            self._active_scores[f"{chapter_id}:{agent_role}"] = score_id
+            if chapter_id:
+                self._active_scores[f"{chapter_id}:{agent_role}"] = score_id
 
-        return score_id
+            logger.info(
+                f"Started tracking: score_id={score_id}, agent={agent_role}, model={model_id}"
+            )
+            return score_id
+        except Exception as e:
+            logger.error(
+                f"Failed to start tracking for {agent_role}/{model_id}: {e}", exc_info=True
+            )
+            raise
 
     def finish_tracking(
         self,
@@ -97,23 +112,31 @@ class ScoringService:
             time_seconds: Generation time.
             chapter_id: Optional chapter ID for edit tracking.
         """
-        # Store original content for later edit distance calculation
-        if chapter_id:
-            self._original_content[chapter_id] = content
-            # Enforce maximum tracking limit to prevent unbounded memory growth
-            self._enforce_tracking_limits()
-
-        # Persist performance metrics to database
-        self._mode_service.update_performance_metrics(
-            score_id,
-            tokens_generated=tokens_generated,
-            time_seconds=time_seconds,
-        )
-
         logger.debug(
-            f"Generation complete: score_id={score_id}, "
+            f"finish_tracking called: score_id={score_id}, content_length={len(content)}, "
             f"tokens={tokens_generated}, time={time_seconds:.1f}s"
         )
+        try:
+            # Store original content for later edit distance calculation
+            if chapter_id:
+                self._original_content[chapter_id] = content
+                # Enforce maximum tracking limit to prevent unbounded memory growth
+                self._enforce_tracking_limits()
+
+            # Persist performance metrics to database
+            self._mode_service.update_performance_metrics(
+                score_id,
+                tokens_generated=tokens_generated,
+                time_seconds=time_seconds,
+            )
+
+            logger.info(
+                f"Generation tracking complete: score_id={score_id}, "
+                f"tokens={tokens_generated}, time={time_seconds:.1f}s"
+            )
+        except Exception as e:
+            logger.error(f"Failed to finish tracking for score_id {score_id}: {e}", exc_info=True)
+            raise
 
     def on_regenerate(
         self,
@@ -220,17 +243,32 @@ class ScoringService:
         Returns:
             QualityScores from the judgment.
         """
-        scores = self._mode_service.judge_quality(
-            content=content,
-            genre=genre,
-            tone=tone,
-            themes=themes,
+        logger.debug(
+            f"judge_chapter_quality called: content_length={len(content)}, "
+            f"genre={genre}, score_id={score_id}"
         )
+        try:
+            scores = self._mode_service.judge_quality(
+                content=content,
+                genre=genre,
+                tone=tone,
+                themes=themes,
+            )
 
-        if score_id:
-            self._mode_service.update_quality_scores(score_id, scores)
+            if score_id:
+                self._mode_service.update_quality_scores(score_id, scores)
 
-        return scores
+            prose_str = f"{scores.prose_quality:.1f}" if scores.prose_quality is not None else "N/A"
+            instr_str = (
+                f"{scores.instruction_following:.1f}"
+                if scores.instruction_following is not None
+                else "N/A"
+            )
+            logger.info(f"Quality judgment complete: prose={prose_str}, instruction={instr_str}")
+            return scores
+        except Exception as e:
+            logger.error(f"Failed to judge quality: {e}", exc_info=True)
+            raise
 
     def calculate_consistency_score(
         self,
@@ -246,15 +284,23 @@ class ScoringService:
         Returns:
             Score from 0-10 (10 = perfect consistency).
         """
-        score = self._mode_service.calculate_consistency_score(issues)
+        logger.debug(
+            f"calculate_consistency_score called: issues={len(issues)}, score_id={score_id}"
+        )
+        try:
+            score = self._mode_service.calculate_consistency_score(issues)
 
-        if score_id:
-            self._mode_service.update_quality_scores(
-                score_id,
-                QualityScores(consistency_score=score),
-            )
+            if score_id:
+                self._mode_service.update_quality_scores(
+                    score_id,
+                    QualityScores(consistency_score=score),
+                )
 
-        return score
+            logger.info(f"Consistency score calculated: {score:.1f}/10 ({len(issues)} issues)")
+            return score
+        except Exception as e:
+            logger.error(f"Failed to calculate consistency score: {e}", exc_info=True)
+            raise
 
     def _calculate_edit_distance(self, original: str, edited: str) -> int:
         """Calculate edit distance between two strings.
@@ -303,6 +349,7 @@ class ScoringService:
         Args:
             chapter_id: The chapter ID to clear.
         """
+        logger.debug(f"clear_chapter_tracking called: chapter_id={chapter_id}")
         # Remove from active scores
         keys_to_remove = [k for k in self._active_scores if k.startswith(f"{chapter_id}:")]
         for key in keys_to_remove:

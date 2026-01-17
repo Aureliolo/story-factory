@@ -56,6 +56,7 @@ class ModelModeService:
             settings: Application settings.
             db_path: Path to scoring database. Defaults to output/model_scores.db
         """
+        logger.debug(f"Initializing ModelModeService: db_path={db_path}")
         self.settings = settings
         self._db_path = Path(db_path) if db_path else Path("output/model_scores.db")
         self._db = ModeDatabase(self._db_path)
@@ -71,6 +72,7 @@ class ModelModeService:
 
         # Loaded model tracking (for VRAM management)
         self._loaded_models: set[str] = set()
+        logger.debug("ModelModeService initialized successfully")
 
     # === Mode Management ===
 

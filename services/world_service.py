@@ -25,7 +25,9 @@ class WorldService:
         Args:
             settings: Application settings. If None, loads from settings.json.
         """
+        logger.debug("Initializing WorldService")
         self.settings = settings or Settings.load()
+        logger.debug("WorldService initialized successfully")
 
     # ========== ENTITY EXTRACTION ==========
 
@@ -39,56 +41,65 @@ class WorldService:
         Returns:
             Number of entities extracted.
         """
+        logger.debug(
+            f"extract_entities_from_structure called: project_id={state.id}, characters={len(state.characters)}"
+        )
         count = 0
 
-        # Extract characters
-        for char in state.characters:
-            existing = world_db.search_entities(char.name, entity_type="character")
-            if existing:
-                continue
-
-            attributes = {
-                "role": char.role,
-                "personality_traits": char.personality_traits,
-                "goals": char.goals,
-                "arc_notes": char.arc_notes,
-            }
-
-            entity_id = world_db.add_entity(
-                entity_type="character",
-                name=char.name,
-                description=char.description,
-                attributes=attributes,
-            )
-            count += 1
-
-            # Add relationships from character data
-            for related_name, relationship in char.relationships.items():
-                related_entities = world_db.search_entities(related_name, entity_type="character")
-                if related_entities:
-                    world_db.add_relationship(
-                        source_id=entity_id,
-                        target_id=related_entities[0].id,
-                        relation_type=relationship,
-                    )
-
-        # Extract locations from world description
-        if state.world_description:
-            locations = self._extract_locations_from_text(state.world_description)
-            for loc_name, loc_desc in locations:
-                existing = world_db.search_entities(loc_name, entity_type="location")
+        try:
+            # Extract characters
+            for char in state.characters:
+                existing = world_db.search_entities(char.name, entity_type="character")
                 if existing:
                     continue
 
-                world_db.add_entity(
-                    entity_type="location",
-                    name=loc_name,
-                    description=loc_desc,
+                attributes = {
+                    "role": char.role,
+                    "personality_traits": char.personality_traits,
+                    "goals": char.goals,
+                    "arc_notes": char.arc_notes,
+                }
+
+                entity_id = world_db.add_entity(
+                    entity_type="character",
+                    name=char.name,
+                    description=char.description,
+                    attributes=attributes,
                 )
                 count += 1
 
-        logger.info(f"Extracted {count} entities from story structure")
-        return count
+                # Add relationships from character data
+                for related_name, relationship in char.relationships.items():
+                    related_entities = world_db.search_entities(
+                        related_name, entity_type="character"
+                    )
+                    if related_entities:
+                        world_db.add_relationship(
+                            source_id=entity_id,
+                            target_id=related_entities[0].id,
+                            relation_type=relationship,
+                        )
+
+            # Extract locations from world description
+            if state.world_description:
+                locations = self._extract_locations_from_text(state.world_description)
+                for loc_name, loc_desc in locations:
+                    existing = world_db.search_entities(loc_name, entity_type="location")
+                    if existing:
+                        continue
+
+                    world_db.add_entity(
+                        entity_type="location",
+                        name=loc_name,
+                        description=loc_desc,
+                    )
+                    count += 1
+
+            logger.info(f"Extracted {count} entities from story structure for project {state.id}")
+            return count
+        except Exception as e:
+            logger.error(f"Failed to extract entities for project {state.id}: {e}", exc_info=True)
+            raise
 
     def extract_from_chapter(
         self,
@@ -106,50 +117,57 @@ class WorldService:
         Returns:
             Dictionary with counts of extracted items.
         """
+        logger.debug(
+            f"extract_from_chapter called: chapter={chapter_number}, content_length={len(content)}"
+        )
         counts = {
             "entities": 0,
             "relationships": 0,
             "events": 0,
         }
 
-        # Extract potential new locations mentioned
-        locations = self._extract_locations_from_text(content)
-        for loc_name, loc_desc in locations:
-            existing = world_db.search_entities(loc_name, entity_type="location")
-            if not existing:
-                world_db.add_entity(
-                    entity_type="location",
-                    name=loc_name,
-                    description=loc_desc,
-                )
-                counts["entities"] += 1
+        try:
+            # Extract potential new locations mentioned
+            locations = self._extract_locations_from_text(content)
+            for loc_name, loc_desc in locations:
+                existing = world_db.search_entities(loc_name, entity_type="location")
+                if not existing:
+                    world_db.add_entity(
+                        entity_type="location",
+                        name=loc_name,
+                        description=loc_desc,
+                    )
+                    counts["entities"] += 1
 
-        # Extract items mentioned
-        items = self._extract_items_from_text(content)
-        for item_name, item_desc in items:
-            existing = world_db.search_entities(item_name, entity_type="item")
-            if not existing:
-                world_db.add_entity(
-                    entity_type="item",
-                    name=item_name,
-                    description=item_desc,
-                )
-                counts["entities"] += 1
+            # Extract items mentioned
+            items = self._extract_items_from_text(content)
+            for item_name, item_desc in items:
+                existing = world_db.search_entities(item_name, entity_type="item")
+                if not existing:
+                    world_db.add_entity(
+                        entity_type="item",
+                        name=item_name,
+                        description=item_desc,
+                    )
+                    counts["entities"] += 1
 
-        # Extract key events
-        events = self._extract_events_from_text(content, chapter_number)
-        for event_desc in events:
-            world_db.add_event(
-                description=event_desc,
-                chapter_number=chapter_number,
+            # Extract key events
+            events = self._extract_events_from_text(content, chapter_number)
+            for event_desc in events:
+                world_db.add_event(
+                    description=event_desc,
+                    chapter_number=chapter_number,
+                )
+                counts["events"] += 1
+
+            logger.info(
+                f"Chapter {chapter_number}: extracted {counts['entities']} entities, "
+                f"{counts['events']} events"
             )
-            counts["events"] += 1
-
-        logger.info(
-            f"Chapter {chapter_number}: extracted {counts['entities']} entities, "
-            f"{counts['events']} events"
-        )
-        return counts
+            return counts
+        except Exception as e:
+            logger.error(f"Failed to extract from chapter {chapter_number}: {e}", exc_info=True)
+            raise
 
     def _extract_locations_from_text(self, text: str) -> list[tuple[str, str]]:
         """Extract location names and descriptions from text.
@@ -392,7 +410,12 @@ class WorldService:
         Returns:
             List of Entity objects.
         """
-        return world_db.list_entities(entity_type=entity_type)
+        logger.debug(f"list_entities called: entity_type={entity_type}")
+        entities = world_db.list_entities(entity_type=entity_type)
+        logger.debug(
+            f"Found {len(entities)} entities" + (f" of type {entity_type}" if entity_type else "")
+        )
+        return entities
 
     def search_entities(
         self,
@@ -410,7 +433,10 @@ class WorldService:
         Returns:
             List of matching Entity objects.
         """
-        return world_db.search_entities(query, entity_type=entity_type)
+        logger.debug(f"search_entities called: query={query}, entity_type={entity_type}")
+        results = world_db.search_entities(query, entity_type=entity_type)
+        logger.debug(f"Found {len(results)} entities matching '{query}'")
+        return results
 
     # ========== RELATIONSHIP MANAGEMENT ==========
 
@@ -575,7 +601,8 @@ class WorldService:
         Returns:
             Dictionary mapping entity type to count.
         """
-        return {
+        logger.debug("get_entity_summary called")
+        summary = {
             "character": world_db.count_entities("character"),
             "location": world_db.count_entities("location"),
             "item": world_db.count_entities("item"),
@@ -583,3 +610,5 @@ class WorldService:
             "concept": world_db.count_entities("concept"),
             "relationships": len(world_db.list_relationships()),
         }
+        logger.debug(f"Entity summary: {summary}")
+        return summary

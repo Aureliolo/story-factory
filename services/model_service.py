@@ -49,7 +49,9 @@ class ModelService:
         Args:
             settings: Application settings.
         """
+        logger.debug("Initializing ModelService")
         self.settings = settings
+        logger.debug("ModelService initialized successfully")
 
     def check_health(self) -> OllamaHealth:
         """Check Ollama service health and connectivity.
@@ -57,6 +59,7 @@ class ModelService:
         Returns:
             OllamaHealth with status information.
         """
+        logger.debug(f"check_health called: ollama_url={self.settings.ollama_url}")
         try:
             # Try to list models as a health check
             client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
@@ -65,6 +68,9 @@ class ModelService:
             # Get VRAM
             vram = get_available_vram()
 
+            logger.info(
+                f"Ollama health check successful: {self.settings.ollama_url}, VRAM={vram}GB"
+            )
             return OllamaHealth(
                 is_healthy=True,
                 message="Ollama is running",
@@ -90,10 +96,13 @@ class ModelService:
         Returns:
             List of installed model IDs.
         """
+        logger.debug("list_installed called")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
             response = client.list()
-            return [model.model for model in response.models if model.model]
+            models = [model.model for model in response.models if model.model]
+            logger.info(f"Found {len(models)} installed models")
+            return models
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning(f"Failed to list models from Ollama: {e}")
             return []
@@ -104,6 +113,7 @@ class ModelService:
         Returns:
             Dict mapping model ID to size in GB.
         """
+        logger.debug("list_installed_with_sizes called")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
             response = client.list()
@@ -114,6 +124,7 @@ class ModelService:
                     size_bytes = getattr(model, "size", 0) or 0
                     size_gb = round(size_bytes / (1024**3), 1)
                     models[model.model] = size_gb
+            logger.info(f"Found {len(models)} installed models with sizes")
             return models
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning(f"Failed to list models from Ollama: {e}")
@@ -125,6 +136,7 @@ class ModelService:
         Returns:
             List of ModelStatus objects for all known and installed models.
         """
+        logger.debug("list_available called")
         installed_with_sizes = self.list_installed_with_sizes()
         installed_ids = set(installed_with_sizes.keys())
         models = []
@@ -195,6 +207,7 @@ class ModelService:
                         )
                     )
 
+        logger.info(f"Listed {len(models)} available models ({len(installed_ids)} installed)")
         return models
 
     def get_model_info(self, model_id: str) -> ModelInfo:
@@ -206,6 +219,7 @@ class ModelService:
         Returns:
             ModelInfo dictionary.
         """
+        logger.debug(f"get_model_info called: model_id={model_id}")
         return get_model_info(model_id)
 
     def pull_model(self, model_id: str) -> Generator[dict]:
@@ -357,7 +371,10 @@ class ModelService:
         Returns:
             VRAM in gigabytes.
         """
-        return get_available_vram()
+        logger.debug("get_vram called")
+        vram = get_available_vram()
+        logger.debug(f"Available VRAM: {vram}GB")
+        return vram
 
     def get_recommended_model(self, role: str | None = None) -> str:
         """Get recommended model based on available VRAM and role.
@@ -368,18 +385,24 @@ class ModelService:
         Returns:
             Recommended model ID.
         """
+        logger.debug(f"get_recommended_model called: role={role}")
         vram = self.get_vram()
 
         if role:
-            return self.settings.get_model_for_agent(role, vram)
+            model = self.settings.get_model_for_agent(role, vram)
+            logger.info(f"Recommended model for {role} with {vram}GB VRAM: {model}")
+            return model
 
         # General recommendation based on VRAM
         if vram >= 24:
-            return "huihui_ai/llama3.3-abliterated:70b-q4_K_M"
+            model = "huihui_ai/llama3.3-abliterated:70b-q4_K_M"
         elif vram >= 14:
-            return "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+            model = "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
         else:
-            return "huihui_ai/dolphin3-abliterated:8b"
+            model = "huihui_ai/dolphin3-abliterated:8b"
+
+        logger.info(f"General recommended model for {vram}GB VRAM: {model}")
+        return model
 
     def get_models_for_vram(self, min_vram: int | None = None) -> list[ModelStatus]:
         """Get models that fit within available VRAM.
@@ -390,10 +413,13 @@ class ModelService:
         Returns:
             List of ModelStatus for models that fit.
         """
+        logger.debug(f"get_models_for_vram called: min_vram={min_vram}")
         vram = min_vram if min_vram is not None else self.get_vram()
         all_models = self.list_available()
 
-        return [m for m in all_models if m.vram_required <= vram]
+        filtered = [m for m in all_models if m.vram_required <= vram]
+        logger.info(f"Found {len(filtered)}/{len(all_models)} models that fit in {vram}GB VRAM")
+        return filtered
 
     def test_model(self, model_id: str) -> tuple[bool, str]:
         """Test if a model works by running a simple prompt.
@@ -404,6 +430,7 @@ class ModelService:
         Returns:
             Tuple of (success, message).
         """
+        logger.debug(f"test_model called: model_id={model_id}")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
             response = client.generate(
@@ -413,7 +440,10 @@ class ModelService:
             )
 
             if response.response:
+                logger.info(f"Model {model_id} test successful: {response.response[:50]}")
                 return True, f"Model working: {response.response[:50]}"
+
+            logger.warning(f"Model {model_id} test returned empty response")
             return False, "Model returned empty response"
 
         except ollama.ResponseError as e:
@@ -439,6 +469,10 @@ class ModelService:
         Returns:
             List of matching ModelStatus objects.
         """
+        logger.debug(
+            f"get_model_by_quality called: min_quality={min_quality}, "
+            f"max_vram={max_vram}, uncensored_required={uncensored_required}"
+        )
         vram = max_vram if max_vram is not None else self.get_vram()
         models = self.list_available()
 
@@ -451,6 +485,10 @@ class ModelService:
 
         # Sort by quality descending
         filtered.sort(key=lambda m: m.quality, reverse=True)
+        logger.info(
+            f"Found {len(filtered)} models matching quality>={min_quality}, "
+            f"vram<={vram}GB, uncensored={uncensored_required}"
+        )
         return filtered
 
     def compare_models(
@@ -467,6 +505,7 @@ class ModelService:
         Returns:
             List of result dictionaries with model_id, response, time.
         """
+        logger.debug(f"compare_models called: models={model_ids}, prompt_length={len(prompt)}")
         import time
 
         results = []
@@ -474,6 +513,7 @@ class ModelService:
 
         for model_id in model_ids:
             try:
+                logger.info(f"Comparing model: {model_id}")
                 start = time.time()
                 response = client.generate(
                     model=model_id,
@@ -493,6 +533,7 @@ class ModelService:
                         "success": True,
                     }
                 )
+                logger.info(f"Model {model_id} completed in {elapsed:.2f}s")
             except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
                 logger.warning(f"Failed to compare model {model_id}: {e}")
                 results.append(
@@ -504,4 +545,7 @@ class ModelService:
                     }
                 )
 
+        logger.info(
+            f"Model comparison complete: {len([r for r in results if r['success']])}/{len(model_ids)} successful"
+        )
         return results
