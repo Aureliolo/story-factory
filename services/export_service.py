@@ -495,6 +495,4 @@ class ExportService:
             "pdf": ".pdf",
             "docx": ".docx",
         }
-        extension = extensions.get(format, ".txt")
-        logger.debug(f"Returning extension: {extension}")
-        return extension
+        return extensions.get(format, ".txt")

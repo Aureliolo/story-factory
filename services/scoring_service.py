@@ -130,8 +130,8 @@ class ScoringService:
                 time_seconds=time_seconds,
             )
 
-            logger.debug(
-                f"Generation complete: score_id={score_id}, "
+            logger.info(
+                f"Generation tracking complete: score_id={score_id}, "
                 f"tokens={tokens_generated}, time={time_seconds:.1f}s"
             )
         except Exception as e:
