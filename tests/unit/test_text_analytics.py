@@ -279,31 +279,25 @@ class TestUncoveredEdgeCases:
         assert scores.word_count == 0
         assert scores.flesch_reading_ease == 0.0
 
-    def test_pacing_paragraphs_fallback_to_single_text(self):
-        """Test pacing when text doesn't split into paragraphs."""
-        # Line 184: when paragraphs list is empty, falls back to [text]
-        # A single line without double newlines
+    def test_pacing_with_single_paragraph(self):
+        """Test pacing with single paragraph (no double newlines)."""
         text = "This is a simple narrative sentence without action"
         metrics = analyze_pacing(text)
-        # Should still analyze the text
+        # Should analyze the text as narrative
         assert metrics.total_word_count > 0
         assert metrics.narrative_percentage > 0
 
-    def test_pacing_paragraph_with_empty_words_list(self):
-        """Test pacing skips paragraphs with no words."""
-        # Line 202: when words list is empty, continue to next paragraph
-        # Create text where middle paragraph has only non-word characters
-        text = "First paragraph with words.\n\n\n\nSecond paragraph with words."
+    def test_pacing_with_multiple_paragraphs(self):
+        """Test pacing correctly processes multiple paragraphs."""
+        text = "First paragraph here.\n\nSecond paragraph here.\n\nThird one too."
         metrics = analyze_pacing(text)
-        # Should process the paragraphs with words
+        # Should process all paragraphs
         assert metrics.total_word_count > 0
 
-    def test_pacing_total_words_zero_after_categorization(self):
-        """Test pacing returns zeros when no words are categorized."""
-        # Lines 222-223: when total_words == 0 after categorization
-        # This happens when all paragraphs have empty words lists
-        # Text that strips to empty paragraphs
-        text = "   \n\n   \n\n   "
+    def test_pacing_empty_text_returns_zeros(self):
+        """Test pacing returns zeros for empty/whitespace text."""
+        # Empty text hits the early return at line 169-179
+        text = "   \n\n   "
         metrics = analyze_pacing(text)
         assert metrics.total_word_count == 0
         assert metrics.dialogue_percentage == 0.0
@@ -319,11 +313,12 @@ class TestUncoveredEdgeCases:
         assert scores.sentence_count == 2
         assert scores.flesch_reading_ease == 0.0
 
-    def test_pacing_paragraph_becomes_empty_after_split(self):
-        """Test pacing handles paragraph that becomes empty after word split."""
-        # Specifically tests line 202 continue branch
-        # Create text with a paragraph that is only punctuation/symbols
+    def test_pacing_with_mixed_content_paragraphs(self):
+        """Test pacing handles paragraphs with mixed content types."""
+        # Paragraphs with normal text and punctuation-only content
         text = "Normal text here\n\n!@#$%^&*()\n\nMore normal text here"
         metrics = analyze_pacing(text)
-        # Should still process the other paragraphs
+        # Should process all paragraphs
         assert metrics.total_word_count > 0
+        # Total word count includes words from all paragraphs
+        # (punctuation paragraph has 1 "word" which is the punctuation string)

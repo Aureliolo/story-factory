@@ -71,11 +71,10 @@ class TestTemplateServiceErrorHandling:
         # Should log error
         assert "Failed to load template" in caplog.text
 
-    def test_apply_template_to_state_handles_world_db_exception(
+    def test_apply_template_to_state_sets_state_correctly(
         self, template_service, monkeypatch, caplog
     ):
-        """Test apply_template_to_state logs warning when world DB operations fail."""
-        # Lines 292-293: Exception handling in apply_template_to_state
+        """Test apply_template_to_state populates state from template."""
         import logging
 
         from memory.builtin_templates import BUILTIN_STORY_TEMPLATES
@@ -86,17 +85,16 @@ class TestTemplateServiceErrorHandling:
         # Get a built-in template
         template = list(BUILTIN_STORY_TEMPLATES.values())[0]
 
-        # Create a mock world_db that raises on operations
+        # Create a mock world_db
         mock_world_db = MagicMock()
 
-        # The apply_template_to_state doesn't actually call world_db methods in current impl
-        # but it has a try/except that catches exceptions. We just test normal flow.
         with caplog.at_level(logging.DEBUG):
             template_service.apply_template_to_state(template, state, mock_world_db)
 
         # State should be populated
         assert state.brief is not None
         assert state.brief.genre == template.genre
+        assert "Template applied with" in caplog.text
 
     def test_import_template_reassigns_id_when_collides_with_builtin(
         self, template_service, tmp_path, monkeypatch

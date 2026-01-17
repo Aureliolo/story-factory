@@ -178,10 +178,9 @@ def analyze_pacing(text: str) -> PacingMetrics:
             total_word_count=0,
         )
 
-    # Split into paragraphs
+    # Split into paragraphs (filter ensures only non-empty paragraphs remain)
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    if not paragraphs:
-        paragraphs = [text]
+    # Note: paragraphs can't be empty here because text.strip() was checked above
 
     dialogue_words = 0
     action_words = 0
@@ -197,9 +196,7 @@ def analyze_pacing(text: str) -> PacingMetrics:
     for paragraph in paragraphs:
         words = paragraph.split()
         word_count = len(words)
-
-        if not words:
-            continue
+        # Note: word_count > 0 since paragraphs are non-empty after strip()
 
         # Dialogue detection: Contains quoted text
         quote_matches = re.findall(r'"[^"]*"', paragraph)
@@ -217,18 +214,7 @@ def analyze_pacing(text: str) -> PacingMetrics:
             narrative_words += word_count
 
     total_words = dialogue_words + action_words + narrative_words
-
-    if total_words == 0:
-        logger.debug("No words categorized in pacing analysis")
-        return PacingMetrics(
-            dialogue_percentage=0.0,
-            action_percentage=0.0,
-            narrative_percentage=0.0,
-            dialogue_word_count=0,
-            action_word_count=0,
-            narrative_word_count=0,
-            total_word_count=0,
-        )
+    # Note: total_words > 0 since we have at least one non-empty paragraph
 
     # Calculate percentages
     dialogue_pct = (dialogue_words / total_words) * 100
