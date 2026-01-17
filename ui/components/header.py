@@ -17,6 +17,7 @@ NAV_ITEMS = [
     ("/", "Write", "edit"),
     ("/world", "World", "public"),
     ("/timeline", "Timeline", "timeline"),
+    ("/compare", "Compare", "compare_arrows"),
     ("/projects", "Projects", "folder"),
     ("/templates", "Templates", "book"),
     ("/analytics", "Analytics", "analytics"),
