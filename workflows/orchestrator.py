@@ -257,10 +257,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             # Progress through chapters
             chapter_progress = self._completed_chapters / self._total_chapters
             base_progress += current_weight * chapter_progress
-        elif (
-            self._current_phase == self._current_phase
-            and self._current_phase not in completed_phases
-        ):
+        elif self._current_phase not in completed_phases:
             # Phase in progress but not complete - estimate 50% done
             base_progress += current_weight * 0.5
 
