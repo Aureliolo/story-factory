@@ -521,17 +521,17 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             error_msg = f"Failed to save short story: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Cannot save story: {e}") from e
+            raise ExportError(error_msg) from e
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             error_msg = f"Failed to serialize short story: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Cannot serialize story: {e}") from e
+            raise ExportError(error_msg) from e
         except Exception as e:
             error_msg = f"Unexpected error saving short story: {e}"
             logger.exception(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Unexpected save error: {e}") from e
+            raise ExportError(error_msg) from e
 
         self._emit(
             "agent_complete", "System", f"Story complete! ({short_story_chapter.word_count} words)"
@@ -682,17 +682,17 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             error_msg = f"Failed to save chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Cannot save chapter: {e}") from e
+            raise ExportError(error_msg) from e
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             error_msg = f"Failed to serialize chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Cannot serialize chapter: {e}") from e
+            raise ExportError(error_msg) from e
         except Exception as e:
             error_msg = f"Unexpected error saving chapter {chapter_number}: {e}"
             logger.exception(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Unexpected save error: {e}") from e
+            raise ExportError(error_msg) from e
 
         self._emit(
             "agent_complete",
@@ -823,17 +823,17 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             error_msg = f"Failed to save continued chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Cannot save chapter continuation: {e}") from e
+            raise ExportError(error_msg) from e
         except (json.JSONDecodeError, ValueError, TypeError) as e:
             error_msg = f"Failed to serialize continued chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Cannot serialize chapter continuation: {e}") from e
+            raise ExportError(error_msg) from e
         except Exception as e:
             error_msg = f"Unexpected error saving continued chapter {chapter_number}: {e}"
             logger.exception(error_msg)
             self._emit("error", "System", error_msg)
-            raise ExportError(f"Unexpected save error: {e}") from e
+            raise ExportError(error_msg) from e
 
         self._emit(
             "agent_complete",

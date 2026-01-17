@@ -287,7 +287,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Character creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid character JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Character creation LLM error with model {model}: {e}")
+            logger.error(f"Character creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during character creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Character creation JSON parsing error: {e}")
@@ -465,7 +465,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Character refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid character refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Character refinement LLM error with model {model}: {e}")
+            logger.error(f"Character refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during character refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Character refinement JSON parsing error: {e}")
@@ -613,7 +613,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Location creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid location JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Location creation LLM error with model {model}: {e}")
+            logger.error(f"Location creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during location creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Location creation JSON parsing error: {e}")
@@ -756,7 +756,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Location refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid location refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Location refinement LLM error with model {model}: {e}")
+            logger.error(f"Location refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during location refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Location refinement JSON parsing error: {e}")
@@ -953,7 +953,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Relationship creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid relationship JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Relationship creation LLM error with model {model}: {e}")
+            logger.error(f"Relationship creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during relationship creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Relationship creation JSON parsing error: {e}")
@@ -1095,7 +1095,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     f"Invalid relationship refinement JSON structure: {data}"
                 )
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Relationship refinement LLM error with model {model}: {e}")
+            logger.error(f"Relationship refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during relationship refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Relationship refinement JSON parsing error: {e}")
@@ -1244,7 +1244,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Faction creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid faction JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Faction creation LLM error with model {model}: {e}")
+            logger.error(f"Faction creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during faction creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Faction creation JSON parsing error: {e}")
@@ -1388,7 +1388,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Faction refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid faction refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Faction refinement LLM error with model {model}: {e}")
+            logger.error(f"Faction refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during faction refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Faction refinement JSON parsing error: {e}")
@@ -1534,7 +1534,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Item creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid item JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Item creation LLM error with model {model}: {e}")
+            logger.error(f"Item creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during item creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Item creation JSON parsing error: {e}")
@@ -1675,7 +1675,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Item refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid item refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Item refinement LLM error with model {model}: {e}")
+            logger.error(f"Item refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during item refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Item refinement JSON parsing error: {e}")
@@ -1821,7 +1821,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Concept creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid concept JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Concept creation LLM error with model {model}: {e}")
+            logger.error(f"Concept creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during concept creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Concept creation JSON parsing error: {e}")
@@ -1954,7 +1954,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Concept refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid concept refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Concept refinement LLM error with model {model}: {e}")
+            logger.error(f"Concept refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during concept refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Concept refinement JSON parsing error: {e}")

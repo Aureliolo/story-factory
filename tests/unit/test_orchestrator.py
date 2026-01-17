@@ -961,7 +961,7 @@ class TestWritingMethods:
         object.__setattr__(orc, "save_story", MagicMock(side_effect=OSError("Disk full")))
 
         # Should raise ExportError
-        with pytest.raises(ExportError, match="Cannot save story"):
+        with pytest.raises(ExportError, match="Failed to save short story"):
             list(orc.write_short_story())
 
     def test_write_short_story_raises_without_story(self):
@@ -1301,7 +1301,7 @@ class TestWritingMethods:
         object.__setattr__(orc, "save_story", MagicMock(side_effect=OSError("Disk full")))
 
         # Should raise ExportError
-        with pytest.raises(ExportError, match="Cannot save chapter"):
+        with pytest.raises(ExportError, match="Failed to save chapter"):
             list(orc.write_chapter(1))
 
     def test_write_all_chapters_raises_without_story(self):
@@ -1554,7 +1554,7 @@ class TestContinuationMethods:
         object.__setattr__(orchestrator, "save_story", MagicMock(side_effect=OSError("Disk full")))
 
         # Should raise ExportError
-        with pytest.raises(ExportError, match="Cannot save chapter continuation"):
+        with pytest.raises(ExportError, match="Failed to save continued chapter"):
             list(orchestrator.continue_chapter(1))
 
     def test_edit_passage_raises_without_story(self):
