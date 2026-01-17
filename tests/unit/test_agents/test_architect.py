@@ -378,9 +378,9 @@ class TestArchitectGenerateVariations:
 
         architect.generate = MagicMock(side_effect=mock_generate)
 
-        variations = architect.generate_outline_variations(sample_story_state, count=1)
+        variations = architect.generate_outline_variations(sample_story_state, count=3)
 
-        assert len(variations) == 1
+        assert len(variations) == 3
         var = variations[0]
         assert var.world_description != ""
         assert len(var.characters) > 0

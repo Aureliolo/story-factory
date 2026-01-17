@@ -2,8 +2,9 @@
 
 import logging
 import re
+import uuid
 
-from memory.story_state import Chapter, Character, PlotPoint, StoryState
+from memory.story_state import Chapter, Character, OutlineVariation, PlotPoint, StoryState
 from utils.json_parser import extract_json_list, parse_json_list_to_models
 from utils.prompt_builder import PromptBuilder
 
@@ -241,7 +242,7 @@ class ArchitectAgent(BaseAgent):
         self,
         story_state: StoryState,
         count: int = 3,
-    ) -> list:
+    ) -> list[OutlineVariation]:
         """Generate multiple variations of the story outline.
 
         Each variation will have different approaches to:
@@ -252,11 +253,17 @@ class ArchitectAgent(BaseAgent):
 
         Args:
             story_state: Story state with completed brief.
-            count: Number of variations to generate (3-5 recommended).
+            count: Number of variations to generate (must be 3-5).
 
         Returns:
             List of OutlineVariation objects.
+
+        Raises:
+            ValueError: If count is not between 3 and 5.
         """
+        # Validate count parameter - must be 3-5 to match hardcoded focus prompts
+        if not 3 <= count <= 5:
+            raise ValueError(f"count must be between 3 and 5, got {count}")
 
         logger.info(f"Generating {count} outline variations")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
@@ -331,7 +338,7 @@ class ArchitectAgent(BaseAgent):
         response: str,
         variation_number: int,
         brief,
-    ):
+    ) -> OutlineVariation:
         """Parse LLM response into an OutlineVariation object.
 
         Args:
@@ -342,12 +349,6 @@ class ArchitectAgent(BaseAgent):
         Returns:
             OutlineVariation object.
         """
-        import re
-        import uuid
-
-        from memory.story_state import OutlineVariation
-        from utils.json_parser import extract_json_list
-
         # Extract rationale (first paragraph or section before JSON)
         rationale_match = re.search(
             r"(?:rationale|unique|approach|focus)[:\s]+(.*?)(?=\n\n|characters|world|```)",
@@ -368,13 +369,20 @@ class ArchitectAgent(BaseAgent):
         )
         world_description = world_match.group(1).strip() if world_match else ""
 
-        # Extract world rules (bullet points)
+        # Extract world rules (bullet points from rules section)
         rules = []
-        for line in response.split("\n"):
-            if line.strip().startswith(("-", "*", "•")):
-                rule = line.strip().lstrip("-*• ")
-                if len(rule) > 10 and "rule" in response.lower()[: response.find(line)]:
-                    rules.append(rule)
+        rules_section_match = re.search(
+            r"(?:world rules|rules|key rules)[:\s]*(.*?)(?=\n\n[A-Z]|characters|```json|plot)",
+            response,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if rules_section_match:
+            rules_text = rules_section_match.group(1)
+            for line in rules_text.split("\n"):
+                if line.strip().startswith(("-", "*", "•")):
+                    rule = line.strip().lstrip("-*• ")
+                    if len(rule) > 10:
+                        rules.append(rule)
 
         # Parse characters - look for CHARACTERS section specifically
         characters = []

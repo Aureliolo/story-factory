@@ -1,6 +1,7 @@
 """Story state management - maintains context across the generation process."""
 
 import logging
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -244,6 +245,9 @@ class StoryState(BaseModel):
         for variation in self.outline_variations:
             if variation.id == variation_id:
                 return variation
+        logger.debug(
+            f"Variation {variation_id} not found in {len(self.outline_variations)} variations"
+        )
         return None
 
     def select_variation_as_canonical(self, variation_id: str) -> bool:
@@ -289,14 +293,19 @@ class StoryState(BaseModel):
 
         Returns:
             A new OutlineVariation with merged elements.
-        """
-        import uuid
 
+        Note:
+            If the same element type appears in multiple sources, later sources
+            will overwrite earlier ones. A warning is logged when this occurs.
+        """
         merged = OutlineVariation(
             id=str(uuid.uuid4()),
             name=name,
             ai_rationale=f"Merged from {len(source_variations)} variations",
         )
+
+        # Track seen element types to warn on duplicates
+        seen_elements: set[str] = set()
 
         # Merge elements from each source
         for var_id, elements in source_variations.items():
@@ -306,6 +315,13 @@ class StoryState(BaseModel):
                 continue
 
             for element_type in elements:
+                if element_type in seen_elements:
+                    logger.warning(
+                        f"Element type '{element_type}' already merged from another variation, "
+                        f"overwriting with data from {var_id}"
+                    )
+                seen_elements.add(element_type)
+
                 if element_type == "world":
                     merged.world_description = source.world_description
                     merged.world_rules = source.world_rules.copy()
