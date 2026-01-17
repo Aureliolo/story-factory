@@ -874,7 +874,7 @@ class WritePage:
                     if self._generation_status and self._client:
                         try:
                             with self._client:
-                                self._generation_status.update_progress(event.message)
+                                self._generation_status.update_from_event(event)
                         except RuntimeError:
                             # Client context not available, skip UI update
                             logger.debug("Client context not available for progress update")
@@ -960,7 +960,7 @@ class WritePage:
                     if self._generation_status and self._client:
                         try:
                             with self._client:
-                                self._generation_status.update_progress(event.message)
+                                self._generation_status.update_from_event(event)
                         except RuntimeError:
                             # Client context not available, skip UI update
                             logger.debug("Client context not available for progress update")
@@ -1063,7 +1063,7 @@ class WritePage:
                     if self._generation_status and self._client:
                         try:
                             with self._client:
-                                self._generation_status.update_progress(event.message)
+                                self._generation_status.update_from_event(event)
                         except RuntimeError:
                             logger.debug("Client context not available for progress update")
 
