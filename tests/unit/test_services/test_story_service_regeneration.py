@@ -1,12 +1,10 @@
 """Tests for StoryService regeneration with feedback."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from memory.story_state import Chapter, Character, StoryBrief, StoryState
-from memory.world_database import WorldDatabase
 from services.story_service import GenerationCancelled, StoryService
 from settings import Settings
 from workflows.orchestrator import WorkflowEvent
@@ -85,9 +83,7 @@ class TestRegenerateChapterWithFeedback:
             chapter = sample_story_with_content.chapters[0]
             chapter.content = "Regenerated content with feedback applied."
             chapter.word_count = 6
-            yield WorkflowEvent(
-                event_type="agent_start", agent_name="Writer", message="Writing..."
-            )
+            yield WorkflowEvent(event_type="agent_start", agent_name="Writer", message="Writing...")
             yield WorkflowEvent(
                 event_type="agent_complete", agent_name="System", message="Complete"
             )
@@ -100,10 +96,8 @@ class TestRegenerateChapterWithFeedback:
 
         # Regenerate with feedback
         feedback = "Make it more exciting with action"
-        events = list(
-            story_service.regenerate_chapter_with_feedback(
-                sample_story_with_content, 1, feedback
-            )
+        list(
+            story_service.regenerate_chapter_with_feedback(sample_story_with_content, 1, feedback)
         )
 
         # Verify version was saved (original + regenerated result)
@@ -188,16 +182,13 @@ class TestRegenerateChapterWithFeedback:
         mock_orch.story_state = sample_story_with_content
 
         chapter = sample_story_with_content.chapters[0]
-        original_content = chapter.content
 
         # Track whether cancel was checked
         cancel_checked = [False]
 
         def mock_write_chapter(chapter_num, feedback=None):
             # Yield an event so the cancel check runs
-            yield WorkflowEvent(
-                event_type="agent_start", agent_name="Writer", message="Writing..."
-            )
+            yield WorkflowEvent(event_type="agent_start", agent_name="Writer", message="Writing...")
             # After the event, the service checks for cancellation
             # Since our cancel_check returns True, GenerationCancelled should be raised
 

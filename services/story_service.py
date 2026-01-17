@@ -631,9 +631,7 @@ class StoryService:
         validate_positive(chapter_num, "chapter_num")
         validate_not_empty(feedback, "feedback")
 
-        logger.info(
-            f"Regenerating chapter {chapter_num} with feedback: {feedback[:100]}..."
-        )
+        logger.info(f"Regenerating chapter {chapter_num} with feedback: {feedback[:100]}...")
 
         # Find the chapter
         chapter = next((c for c in state.chapters if c.number == chapter_num), None)
@@ -641,9 +639,7 @@ class StoryService:
             raise ValueError(f"Chapter {chapter_num} not found")
 
         if not chapter.content:
-            raise ValueError(
-                f"Chapter {chapter_num} has no content to regenerate. Write it first."
-            )
+            raise ValueError(f"Chapter {chapter_num} has no content to regenerate. Write it first.")
 
         # Save current version before regenerating
         version_id = chapter.save_current_as_version(feedback=feedback)

@@ -544,7 +544,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         self, chapter_number: int, feedback: str | None = None
     ) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with the full pipeline.
-        
+
         Args:
             chapter_number: The chapter number to write.
             feedback: Optional user feedback to incorporate into the writing.
