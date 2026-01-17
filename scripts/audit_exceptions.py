@@ -39,11 +39,14 @@ def find_exception_handlers(file_path: Path) -> list[dict[str, Any]]:
                 future_line = lines[j - 1]
                 current_indent = len(future_line) - len(future_line.lstrip())
 
-                # Stop if we've exited the except block
-                if future_line.strip() and current_indent <= block_indent:
+                # Stop if we've exited the except block (indent less than or equal to except line)
+                # BUT skip the except line itself (j == i) and empty lines
+                if j > i and future_line.strip() and current_indent <= block_indent:
                     break
 
-                if re.search(r"\blogger\.(error|exception|warning|info|debug)", future_line):
+                if re.search(
+                    r"\b(?:logger|logging)\.(error|exception|warning|info|debug)", future_line
+                ):
                     has_logging = True
                 if re.search(r"\braise\b", future_line):
                     has_reraise = True
