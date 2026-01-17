@@ -193,6 +193,11 @@ AGENT_ROLES: dict[str, AgentRoleInfo] = {
         "description": "Validates AI responses",
         "recommended_quality": 3,  # Uses small/fast model for basic sanity checks
     },
+    "suggestion": {
+        "name": "Suggestion Assistant",
+        "description": "Generates writing prompts and suggestions",
+        "recommended_quality": 7,  # Needs creativity but not highest quality
+    },
 }
 
 
@@ -226,6 +231,7 @@ class Settings:
             "editor": "auto",
             "continuity": "auto",
             "validator": "auto",  # Small, fast model for validation
+            "suggestion": "auto",  # Creative model for writing suggestions
         }
     )
 
@@ -238,6 +244,7 @@ class Settings:
             "editor": 0.6,
             "continuity": 0.3,
             "validator": 0.1,  # Very low for consistent validation
+            "suggestion": 0.8,  # Creative for writing prompts
         }
     )
 
