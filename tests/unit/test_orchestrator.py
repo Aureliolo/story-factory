@@ -1967,3 +1967,786 @@ class TestResetState:
         orchestrator.reset_state()
 
         assert orchestrator.interviewer.conversation_history == []
+
+
+class TestCalculateProgressEdgeCases:
+    """Tests for _calculate_progress edge cases covering lines 263, 265."""
+
+    def test_progress_adds_interview_phase_when_in_writer_but_no_brief(self):
+        """Test that interview is added to completed_phases when in writer phase without brief."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            # No brief - so interview wouldn't be in completed_phases initially
+            chapters=[
+                Chapter(number=1, title="Ch1", outline="Test"),
+            ],
+        )
+        orchestrator._current_phase = "writer"
+        orchestrator._total_chapters = 1
+        orchestrator._completed_chapters = 0
+
+        progress = orchestrator._calculate_progress()
+
+        # Should still include interview and architect weights since we're in writer phase
+        # Even though there's no brief, the phase being "writer" implies interview is done
+        assert progress >= 0.25  # interview (10%) + architect (15%) minimum
+
+    def test_progress_adds_architect_phase_when_in_editor_but_no_chapters_content(self):
+        """Test that architect is added to completed_phases when in editor phase."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+            # Empty chapters list - architect phase indicator check would fail
+            chapters=[],
+        )
+        orchestrator._current_phase = "editor"
+        orchestrator._total_chapters = 3
+        orchestrator._completed_chapters = 1
+
+        progress = orchestrator._calculate_progress()
+
+        # Should include interview (10%) + architect (15%) + partial editor
+        # Since we're in editor phase, architect should be considered done
+        assert progress >= 0.25
+
+    def test_progress_adds_both_phases_when_in_continuity_with_minimal_state(self):
+        """Test both interview and architect added when in continuity phase."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            # No brief, no chapters - minimal state
+        )
+        orchestrator._current_phase = "continuity"
+        orchestrator._total_chapters = 2
+        orchestrator._completed_chapters = 1
+
+        progress = orchestrator._calculate_progress()
+
+        # Should include interview (10%) + architect (15%) + partial continuity
+        assert progress >= 0.25
+
+
+class TestCalculateETAEdgeCases:
+    """Tests for _calculate_eta edge cases covering lines 327-328, 354-355."""
+
+    def test_eta_uses_default_model_when_agent_model_not_found(self):
+        """Test ETA calculation falls back to default model when agent model is None."""
+        from unittest.mock import patch
+
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+        )
+        orchestrator._current_phase = "writer"
+        orchestrator._total_chapters = 3
+        orchestrator._completed_chapters = 1
+        orchestrator._phase_start_time = datetime.now()
+
+        # Set writer model to None to trigger line 327-328
+        object.__setattr__(orchestrator.writer, "model", None)
+
+        # Mock ModeDatabase to return performance data
+        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+            mock_db = MagicMock()
+            mock_db.get_model_performance.return_value = [{"avg_tokens_per_second": 25.0}]
+            mock_db_class.return_value = mock_db
+
+            eta = orchestrator._calculate_eta()
+
+            # Should have called with default model since writer.model was None
+            assert mock_db.get_model_performance.called
+            # ETA should be calculated
+            if eta is not None:
+                assert isinstance(eta, float)
+                assert eta > 0
+
+    def test_eta_uses_default_model_for_editor_role(self):
+        """Test ETA calculation for editor role falls back to default model."""
+        from unittest.mock import patch
+
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+        )
+        orchestrator._current_phase = "editor"
+        orchestrator._total_chapters = 3
+        orchestrator._completed_chapters = 1
+        orchestrator._phase_start_time = datetime.now()
+
+        # Set editor model to None
+        object.__setattr__(orchestrator.editor, "model", None)
+
+        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+            mock_db = MagicMock()
+            mock_db.get_model_performance.return_value = [{"avg_tokens_per_second": 30.0}]
+            mock_db_class.return_value = mock_db
+
+            eta = orchestrator._calculate_eta()
+
+            assert mock_db.get_model_performance.called
+            if eta is not None:
+                assert isinstance(eta, float)
+
+    def test_eta_uses_default_model_for_continuity_role(self):
+        """Test ETA calculation for continuity role falls back to default model."""
+        from unittest.mock import patch
+
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+        )
+        orchestrator._current_phase = "continuity"
+        orchestrator._total_chapters = 3
+        orchestrator._completed_chapters = 1
+        orchestrator._phase_start_time = datetime.now()
+
+        # Set continuity model to None
+        object.__setattr__(orchestrator.continuity, "model", None)
+
+        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+            mock_db = MagicMock()
+            mock_db.get_model_performance.return_value = [{"avg_tokens_per_second": 40.0}]
+            mock_db_class.return_value = mock_db
+
+            eta = orchestrator._calculate_eta()
+
+            assert mock_db.get_model_performance.called
+            if eta is not None:
+                assert isinstance(eta, float)
+
+    def test_eta_handles_exception_gracefully(self):
+        """Test ETA calculation catches exceptions and returns None (line 354-355)."""
+        from unittest.mock import patch
+
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+        )
+        orchestrator._current_phase = "writer"
+        orchestrator._total_chapters = 3
+        orchestrator._completed_chapters = 0  # No completed chapters for fallback
+        orchestrator._phase_start_time = datetime.now()
+
+        # Make ModeDatabase raise an exception
+        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+            mock_db_class.side_effect = Exception("Database connection failed")
+
+            eta = orchestrator._calculate_eta()
+
+            # Should return None due to exception handling
+            assert eta is None
+
+
+class TestGenerateMoreCharacters:
+    """Tests for generate_more_characters method covering lines 465-484."""
+
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+    def test_generate_more_characters_raises_without_story(self):
+        """Test generate_more_characters raises when no story state."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = None
+
+        with pytest.raises(ValueError, match="No story state"):
+            orchestrator.generate_more_characters(count=2)
+
+    def test_generate_more_characters_returns_new_characters(self):
+        """Test generate_more_characters returns generated characters."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+            characters=[Character(name="Hero", role="protagonist", description="Main character")],
+        )
+
+        new_chars = [
+            Character(name="Villain", role="antagonist", description="Evil wizard"),
+            Character(name="Sidekick", role="supporting", description="Helpful friend"),
+        ]
+        object.__setattr__(
+            orchestrator.architect, "generate_more_characters", MagicMock(return_value=new_chars)
+        )
+
+        result = orchestrator.generate_more_characters(count=2)
+
+        assert len(result) == 2
+        assert result[0].name == "Villain"
+        assert result[1].name == "Sidekick"
+        # Characters should be added to story state
+        assert len(orchestrator.story_state.characters) == 3
+
+    def test_generate_more_characters_emits_events(self):
+        """Test generate_more_characters emits start and complete events."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            characters=[],
+        )
+
+        new_chars = [Character(name="NewChar", role="supporting", description="New character")]
+        object.__setattr__(
+            orchestrator.architect, "generate_more_characters", MagicMock(return_value=new_chars)
+        )
+
+        orchestrator.generate_more_characters(count=1)
+
+        # Check events were emitted
+        assert len(orchestrator.events) >= 2
+        event_types = [e.event_type for e in orchestrator.events]
+        assert "agent_start" in event_types
+        assert "agent_complete" in event_types
+
+
+class TestGenerateLocations:
+    """Tests for generate_locations method covering lines 495-512."""
+
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+    def test_generate_locations_raises_without_story(self):
+        """Test generate_locations raises when no story state."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = None
+
+        with pytest.raises(ValueError, match="No story state"):
+            orchestrator.generate_locations(count=3)
+
+    def test_generate_locations_returns_location_dicts(self):
+        """Test generate_locations returns location dictionaries."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+        )
+
+        mock_locations = [
+            {"name": "Castle", "description": "A grand castle"},
+            {"name": "Forest", "description": "Dark forest"},
+            {"name": "Village", "description": "Small village"},
+        ]
+        object.__setattr__(
+            orchestrator.architect, "generate_locations", MagicMock(return_value=mock_locations)
+        )
+
+        result = orchestrator.generate_locations(count=3)
+
+        assert len(result) == 3
+        assert result[0]["name"] == "Castle"
+        assert result[1]["name"] == "Forest"
+
+    def test_generate_locations_emits_events(self):
+        """Test generate_locations emits start and complete events."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(id="test", status="writing")
+
+        mock_locations = [{"name": "Location1", "description": "A location"}]
+        object.__setattr__(
+            orchestrator.architect, "generate_locations", MagicMock(return_value=mock_locations)
+        )
+
+        orchestrator.generate_locations(count=1)
+
+        event_types = [e.event_type for e in orchestrator.events]
+        assert "agent_start" in event_types
+        assert "agent_complete" in event_types
+
+
+class TestGenerateRelationships:
+    """Tests for generate_relationships method covering lines 527-542."""
+
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+    def test_generate_relationships_raises_without_story(self):
+        """Test generate_relationships raises when no story state."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = None
+
+        with pytest.raises(ValueError, match="No story state"):
+            orchestrator.generate_relationships(
+                entity_names=["Hero", "Villain"],
+                existing_rels=[],
+                count=5,
+            )
+
+    def test_generate_relationships_returns_relationship_dicts(self):
+        """Test generate_relationships returns relationship dictionaries."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+            characters=[
+                Character(name="Hero", role="protagonist", description="Main"),
+                Character(name="Villain", role="antagonist", description="Evil"),
+            ],
+        )
+
+        mock_relationships = [
+            {"source": "Hero", "target": "Villain", "type": "enemy"},
+            {"source": "Hero", "target": "Sidekick", "type": "friend"},
+        ]
+        object.__setattr__(
+            orchestrator.architect,
+            "generate_relationships",
+            MagicMock(return_value=mock_relationships),
+        )
+
+        result = orchestrator.generate_relationships(
+            entity_names=["Hero", "Villain", "Sidekick"],
+            existing_rels=[],
+            count=2,
+        )
+
+        assert len(result) == 2
+        assert result[0]["source"] == "Hero"
+        assert result[0]["target"] == "Villain"
+
+    def test_generate_relationships_emits_events(self):
+        """Test generate_relationships emits start and complete events."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(id="test", status="writing")
+
+        mock_rels = [{"source": "A", "target": "B", "type": "knows"}]
+        object.__setattr__(
+            orchestrator.architect, "generate_relationships", MagicMock(return_value=mock_rels)
+        )
+
+        orchestrator.generate_relationships(
+            entity_names=["A", "B"],
+            existing_rels=[],
+            count=1,
+        )
+
+        event_types = [e.event_type for e in orchestrator.events]
+        assert "agent_start" in event_types
+        assert "agent_complete" in event_types
+
+
+class TestRebuildWorld:
+    """Tests for rebuild_world method covering lines 553-571."""
+
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+    def test_rebuild_world_raises_without_story(self):
+        """Test rebuild_world raises when no story state."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = None
+
+        with pytest.raises(ValueError, match="No story state"):
+            orchestrator.rebuild_world()
+
+    def test_rebuild_world_clears_existing_content(self):
+        """Test rebuild_world clears world_description, characters, chapters, etc."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+            world_description="Old world description",
+            world_rules=["Old rule 1"],
+            characters=[Character(name="OldChar", role="protagonist", description="Old")],
+            plot_summary="Old plot",
+            plot_points=[PlotPoint(description="Old point", chapter=1)],
+            chapters=[Chapter(number=1, title="Old Chapter", outline="Old outline")],
+        )
+
+        # Mock build_story_structure to return new content
+        def mock_build(state):
+            state.world_description = "New world"
+            state.characters = [Character(name="NewChar", role="protagonist", description="New")]
+            state.chapters = [Chapter(number=1, title="New Chapter", outline="New outline")]
+            return state
+
+        object.__setattr__(orchestrator.architect, "build_story_structure", mock_build)
+
+        result = orchestrator.rebuild_world()
+
+        assert result.world_description == "New world"
+        assert len(result.characters) == 1
+        assert result.characters[0].name == "NewChar"
+
+    def test_rebuild_world_emits_events(self):
+        """Test rebuild_world emits start and complete events."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+        )
+
+        def mock_build(state):
+            return state
+
+        object.__setattr__(orchestrator.architect, "build_story_structure", mock_build)
+
+        orchestrator.rebuild_world()
+
+        event_types = [e.event_type for e in orchestrator.events]
+        assert "agent_start" in event_types
+        assert "agent_complete" in event_types
+
+
+class TestWriteShortStorySaveExceptions:
+    """Tests for write_short_story save exception handling (lines 706-715)."""
+
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+    @pytest.fixture
+    def orchestrator_ready_to_write(self):
+        """Create orchestrator ready for writing short story."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="short_story",
+                language="English",
+                content_rating="general",
+            ),
+            characters=[Character(name="Hero", role="protagonist", description="Main character")],
+            chapters=[],
+            plot_summary="A tale",
+        )
+        # Mock agent methods
+        object.__setattr__(
+            orchestrator.writer, "write_short_story", MagicMock(return_value="Story content...")
+        )
+        object.__setattr__(
+            orchestrator.editor, "edit_chapter", MagicMock(return_value="Edited content...")
+        )
+        object.__setattr__(orchestrator.continuity, "check_chapter", MagicMock(return_value=[]))
+        object.__setattr__(
+            orchestrator.continuity, "validate_against_outline", MagicMock(return_value=[])
+        )
+        object.__setattr__(orchestrator.continuity, "extract_new_facts", MagicMock(return_value=[]))
+        object.__setattr__(
+            orchestrator.validator, "validate_response", MagicMock(return_value=None)
+        )
+        return orchestrator
+
+    def test_write_short_story_raises_export_error_on_value_error(
+        self, orchestrator_ready_to_write
+    ):
+        """Test write_short_story raises ExportError when save raises ValueError."""
+        orc = orchestrator_ready_to_write
+        object.__setattr__(orc, "save_story", MagicMock(side_effect=ValueError("Invalid data")))
+
+        with pytest.raises(ExportError, match="Failed to serialize short story"):
+            list(orc.write_short_story())
+
+    def test_write_short_story_raises_export_error_on_type_error(self, orchestrator_ready_to_write):
+        """Test write_short_story raises ExportError when save raises TypeError."""
+        orc = orchestrator_ready_to_write
+        object.__setattr__(orc, "save_story", MagicMock(side_effect=TypeError("Cannot serialize")))
+
+        with pytest.raises(ExportError, match="Failed to serialize short story"):
+            list(orc.write_short_story())
+
+    def test_write_short_story_raises_export_error_on_generic_exception(
+        self, orchestrator_ready_to_write
+    ):
+        """Test write_short_story raises ExportError on unexpected exception."""
+        orc = orchestrator_ready_to_write
+        object.__setattr__(
+            orc, "save_story", MagicMock(side_effect=RuntimeError("Unexpected error"))
+        )
+
+        with pytest.raises(ExportError, match="Unexpected error saving short story"):
+            list(orc.write_short_story())
+
+
+class TestWriteChapterSaveExceptions:
+    """Tests for write_chapter save exception handling (lines 887-896)."""
+
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+    @pytest.fixture
+    def orchestrator_ready_to_write_chapter(self):
+        """Create orchestrator ready for writing chapter."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+            characters=[Character(name="Hero", role="protagonist", description="Main character")],
+            chapters=[Chapter(number=1, title="Ch1", outline="Beginning")],
+            plot_summary="A tale",
+        )
+        # Mock agent methods
+        object.__setattr__(
+            orchestrator.writer, "write_chapter", MagicMock(return_value="Chapter content...")
+        )
+        object.__setattr__(
+            orchestrator.editor, "edit_chapter", MagicMock(return_value="Edited content...")
+        )
+        object.__setattr__(orchestrator.continuity, "check_chapter", MagicMock(return_value=[]))
+        object.__setattr__(
+            orchestrator.continuity, "validate_against_outline", MagicMock(return_value=[])
+        )
+        object.__setattr__(orchestrator.continuity, "extract_new_facts", MagicMock(return_value=[]))
+        object.__setattr__(
+            orchestrator.continuity, "extract_character_arcs", MagicMock(return_value={})
+        )
+        object.__setattr__(
+            orchestrator.continuity, "check_plot_points_completed", MagicMock(return_value=[])
+        )
+        object.__setattr__(
+            orchestrator.validator, "validate_response", MagicMock(return_value=None)
+        )
+        return orchestrator
+
+    def test_write_chapter_raises_export_error_on_value_error(
+        self, orchestrator_ready_to_write_chapter
+    ):
+        """Test write_chapter raises ExportError when save raises ValueError."""
+        orc = orchestrator_ready_to_write_chapter
+        object.__setattr__(orc, "save_story", MagicMock(side_effect=ValueError("Invalid data")))
+
+        with pytest.raises(ExportError, match="Failed to serialize chapter"):
+            list(orc.write_chapter(1))
+
+    def test_write_chapter_raises_export_error_on_type_error(
+        self, orchestrator_ready_to_write_chapter
+    ):
+        """Test write_chapter raises ExportError when save raises TypeError."""
+        orc = orchestrator_ready_to_write_chapter
+        object.__setattr__(orc, "save_story", MagicMock(side_effect=TypeError("Cannot serialize")))
+
+        with pytest.raises(ExportError, match="Failed to serialize chapter"):
+            list(orc.write_chapter(1))
+
+    def test_write_chapter_raises_export_error_on_generic_exception(
+        self, orchestrator_ready_to_write_chapter
+    ):
+        """Test write_chapter raises ExportError on unexpected exception."""
+        orc = orchestrator_ready_to_write_chapter
+        object.__setattr__(
+            orc, "save_story", MagicMock(side_effect=RuntimeError("Unexpected error"))
+        )
+
+        with pytest.raises(ExportError, match="Unexpected error saving chapter"):
+            list(orc.write_chapter(1))
+
+
+class TestContinueChapterSaveExceptions:
+    """Tests for continue_chapter save exception handling (lines 1028-1037)."""
+
+    @pytest.fixture(autouse=True)
+    def use_temp_dir(self, tmp_path, monkeypatch):
+        """Use temp directory for all tests."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+    @pytest.fixture
+    def orchestrator_ready_to_continue(self):
+        """Create orchestrator ready for continuing chapter."""
+        orchestrator = StoryOrchestrator()
+        orchestrator.story_state = StoryState(
+            id="test",
+            status="writing",
+            brief=StoryBrief(
+                premise="Test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                language="English",
+                content_rating="general",
+            ),
+            chapters=[
+                Chapter(
+                    number=1, title="Ch1", outline="Beginning", content="Existing content here."
+                )
+            ],
+        )
+        # Mock agent methods
+        object.__setattr__(
+            orchestrator.writer, "continue_scene", MagicMock(return_value="Continued content...")
+        )
+        object.__setattr__(
+            orchestrator.validator, "validate_response", MagicMock(return_value=None)
+        )
+        return orchestrator
+
+    def test_continue_chapter_raises_export_error_on_value_error(
+        self, orchestrator_ready_to_continue
+    ):
+        """Test continue_chapter raises ExportError when save raises ValueError."""
+        orc = orchestrator_ready_to_continue
+        object.__setattr__(orc, "save_story", MagicMock(side_effect=ValueError("Invalid data")))
+
+        with pytest.raises(ExportError, match="Failed to serialize continued chapter"):
+            list(orc.continue_chapter(1))
+
+    def test_continue_chapter_raises_export_error_on_type_error(
+        self, orchestrator_ready_to_continue
+    ):
+        """Test continue_chapter raises ExportError when save raises TypeError."""
+        orc = orchestrator_ready_to_continue
+        object.__setattr__(orc, "save_story", MagicMock(side_effect=TypeError("Cannot serialize")))
+
+        with pytest.raises(ExportError, match="Failed to serialize continued chapter"):
+            list(orc.continue_chapter(1))
+
+    def test_continue_chapter_raises_export_error_on_generic_exception(
+        self, orchestrator_ready_to_continue
+    ):
+        """Test continue_chapter raises ExportError on unexpected exception."""
+        orc = orchestrator_ready_to_continue
+        object.__setattr__(
+            orc, "save_story", MagicMock(side_effect=RuntimeError("Unexpected error"))
+        )
+
+        with pytest.raises(ExportError, match="Unexpected error saving continued chapter"):
+            list(orc.continue_chapter(1))

@@ -419,3 +419,533 @@ class TestArchitectGenerateVariations:
         assert any("Traditional" in p for p in prompts_used)
         assert any("Non-linear" in p for p in prompts_used)
         assert any("Fast-paced" in p for p in prompts_used)
+
+    def test_generate_outline_variations_all_five(self, architect, sample_story_state):
+        """Test generates all five variation types."""
+        prompts_used = []
+
+        def capture_generate(prompt):
+            prompts_used.append(prompt)
+            return """
+            RATIONALE: Variation test.
+            WORLD: Test world.
+            CHARACTERS:
+            ```json
+            [{"name": "T", "role": "protagonist", "description": "Test",
+               "personality_traits": [], "goals": [], "relationships": {}, "arc_notes": ""}]
+            ```
+            PLOT: Test.
+            ```json
+            [{"description": "Test", "chapter": 1}]
+            ```
+            ```json
+            [{"number": 1, "title": "Test", "outline": "Test"}]
+            ```
+            """
+
+        architect.generate = MagicMock(side_effect=capture_generate)
+
+        architect.generate_outline_variations(sample_story_state, count=5)
+
+        assert len(prompts_used) == 5
+        # Check that all focus keywords appear (variations 0-4)
+        assert any("Traditional" in p for p in prompts_used)  # i=0
+        assert any("Non-linear" in p for p in prompts_used)  # i=1
+        assert any("Fast-paced" in p for p in prompts_used)  # i=2
+        assert any("Character-driven" in p for p in prompts_used)  # i=3
+        assert any("Ensemble" in p for p in prompts_used)  # i=4
+
+    def test_generate_outline_variations_count_out_of_range(self, architect, sample_story_state):
+        """Test raises ValueError when count is out of valid range."""
+        with pytest.raises(ValueError, match="count must be between"):
+            architect.generate_outline_variations(sample_story_state, count=10)
+
+
+class TestParseVariationResponseEdgeCases:
+    """Tests for _parse_variation_response method edge cases and exception handling."""
+
+    def test_character_parsing_failure_individual_item(self, architect, sample_story_state):
+        """Test handles individual character parsing failure (lines 434-437)."""
+        # Response has character JSON where one item is malformed
+        response = """
+        RATIONALE: Test variation.
+
+        WORLD DESCRIPTION: A magical world.
+
+        CHARACTERS:
+        ```json
+        [
+            {"name": "Valid", "role": "protagonist", "description": "Good"},
+            {"invalid_field_only": "This will fail Character validation"}
+        ]
+        ```
+
+        PLOT SUMMARY: Test plot.
+
+        PLOT POINTS:
+        ```json
+        [{"description": "Event", "chapter": 1}]
+        ```
+
+        CHAPTERS:
+        ```json
+        [{"number": 1, "title": "Test", "outline": "Test"}]
+        ```
+        """
+
+        brief = sample_story_state.brief
+        variation = architect._parse_variation_response(response, 1, brief)
+
+        # Should have parsed the valid character, skipped the invalid one
+        assert len(variation.characters) == 1
+        assert variation.characters[0].name == "Valid"
+
+    def test_character_extraction_failure_outer_exception(self, architect, sample_story_state):
+        """Test handles outer character extraction failure (lines 436-437)."""
+        # Response has completely broken character JSON that extract_json_list can't parse
+        response = """
+        RATIONALE: Test variation.
+
+        WORLD DESCRIPTION: A magical world.
+
+        CHARACTERS:
+        ```json
+        [{"this is not valid json at all: ]]]]
+        ```
+
+        PLOT SUMMARY: Test plot.
+
+        PLOT POINTS:
+        ```json
+        [{"description": "Event", "chapter": 1}]
+        ```
+
+        CHAPTERS:
+        ```json
+        [{"number": 1, "title": "Test", "outline": "Test"}]
+        ```
+        """
+
+        brief = sample_story_state.brief
+        variation = architect._parse_variation_response(response, 1, brief)
+
+        # Should have empty characters due to extraction failure
+        assert len(variation.characters) == 0
+
+    def test_plot_point_parsing_failure_individual_item(self, architect, sample_story_state):
+        """Test handles individual plot point parsing failure (lines 462-465)."""
+        # Response has plot points JSON where one item is malformed
+        response = """
+        RATIONALE: Test variation.
+
+        WORLD DESCRIPTION: A magical world.
+
+        CHARACTERS:
+        ```json
+        [{"name": "Hero", "role": "protagonist", "description": "Main"}]
+        ```
+
+        PLOT SUMMARY: Test plot.
+
+        PLOT POINTS:
+        ```json
+        [
+            {"description": "Valid event", "chapter": 1},
+            {"missing_description_field": "This should fail PlotPoint validation"}
+        ]
+        ```
+
+        CHAPTERS:
+        ```json
+        [{"number": 1, "title": "Test", "outline": "Test"}]
+        ```
+        """
+
+        brief = sample_story_state.brief
+        variation = architect._parse_variation_response(response, 1, brief)
+
+        # Should have parsed the valid plot point, skipped the invalid one
+        assert len(variation.plot_points) == 1
+        assert variation.plot_points[0].description == "Valid event"
+
+    def test_plot_point_extraction_failure_outer_exception(self, architect, sample_story_state):
+        """Test handles outer plot point extraction failure (lines 464-465)."""
+        # Response has broken plot points JSON
+        response = """
+        RATIONALE: Test variation.
+
+        WORLD DESCRIPTION: A magical world.
+
+        CHARACTERS:
+        ```json
+        [{"name": "Hero", "role": "protagonist", "description": "Main"}]
+        ```
+
+        PLOT SUMMARY: Test plot.
+
+        PLOT POINTS:
+        ```json
+        not valid json at all {{{{
+        ```
+
+        CHAPTERS:
+        ```json
+        [{"number": 1, "title": "Test", "outline": "Test"}]
+        ```
+        """
+
+        brief = sample_story_state.brief
+        variation = architect._parse_variation_response(response, 1, brief)
+
+        # Should have empty plot points due to extraction failure
+        assert len(variation.plot_points) == 0
+
+    def test_chapter_parsing_failure_individual_item(self, architect, sample_story_state):
+        """Test handles individual chapter parsing failure (lines 482-485)."""
+        # Response has chapters JSON where one item is malformed
+        response = """
+        RATIONALE: Test variation.
+
+        WORLD DESCRIPTION: A magical world.
+
+        CHARACTERS:
+        ```json
+        [{"name": "Hero", "role": "protagonist", "description": "Main"}]
+        ```
+
+        PLOT SUMMARY: Test plot.
+
+        PLOT POINTS:
+        ```json
+        [{"description": "Event", "chapter": 1}]
+        ```
+
+        CHAPTERS:
+        ```json
+        [
+            {"number": 1, "title": "Valid Chapter", "outline": "This is valid"},
+            {"missing_required_fields": "This should fail Chapter validation"}
+        ]
+        ```
+        """
+
+        brief = sample_story_state.brief
+        variation = architect._parse_variation_response(response, 1, brief)
+
+        # Should have parsed the valid chapter, skipped the invalid one
+        assert len(variation.chapters) == 1
+        assert variation.chapters[0].title == "Valid Chapter"
+
+    def test_chapter_extraction_failure_outer_exception(self, architect, sample_story_state):
+        """Test handles outer chapter extraction failure (lines 484-485)."""
+        # Response has broken chapters JSON
+        response = """
+        RATIONALE: Test variation.
+
+        WORLD DESCRIPTION: A magical world.
+
+        CHARACTERS:
+        ```json
+        [{"name": "Hero", "role": "protagonist", "description": "Main"}]
+        ```
+
+        PLOT SUMMARY: Test plot.
+
+        PLOT POINTS:
+        ```json
+        [{"description": "Event", "chapter": 1}]
+        ```
+
+        CHAPTERS:
+        ```json
+        [[[[[not valid at all
+        ```
+        """
+
+        brief = sample_story_state.brief
+        variation = architect._parse_variation_response(response, 1, brief)
+
+        # Should have empty chapters due to extraction failure
+        assert len(variation.chapters) == 0
+
+
+class TestGenerateMoreCharacters:
+    """Tests for generate_more_characters method (lines 535-565)."""
+
+    def test_generates_new_characters(self, architect, sample_story_state):
+        """Test generates new characters complementing existing ones."""
+        json_response = """Here are new supporting characters:
+```json
+[
+    {
+        "name": "Marcus Vale",
+        "role": "supporting",
+        "description": "A mysterious librarian with knowledge of ancient texts",
+        "personality_traits": ["secretive", "helpful", "wise"],
+        "goals": ["Protect forbidden knowledge", "Guide worthy students"],
+        "relationships": {"Oliver Grey": "Mentor figure"},
+        "arc_notes": "Reveals his true identity as a guardian"
+    },
+    {
+        "name": "Luna Frost",
+        "role": "supporting",
+        "description": "A talented student with ice magic abilities",
+        "personality_traits": ["aloof", "competitive", "loyal"],
+        "goals": ["Master her powers", "Prove herself"],
+        "relationships": {"Oliver Grey": "Rival turned ally"},
+        "arc_notes": "Learns to trust others"
+    }
+]
+```"""
+        architect.generate = MagicMock(return_value=json_response)
+        existing_names = ["Oliver Grey", "Professor Nightshade"]
+
+        characters = architect.generate_more_characters(sample_story_state, existing_names, count=2)
+
+        assert len(characters) == 2
+        assert characters[0].name == "Marcus Vale"
+        assert characters[1].name == "Luna Frost"
+        # Verify prompt includes existing names to avoid duplicates
+        call_args = architect.generate.call_args[0][0]
+        assert "Oliver Grey" in call_args
+        assert "Professor Nightshade" in call_args
+        assert "EXISTING CHARACTERS" in call_args
+
+    def test_validates_story_state_not_none(self, architect):
+        """Test raises error when story_state is None."""
+        with pytest.raises(ValueError, match="story_state"):
+            architect.generate_more_characters(None, ["Name"], count=2)
+
+    def test_validates_story_state_type(self, architect):
+        """Test raises error when story_state is wrong type."""
+        with pytest.raises(TypeError, match="story_state"):
+            architect.generate_more_characters("not a story state", ["Name"], count=2)
+
+    def test_validates_existing_names_not_none(self, architect, sample_story_state):
+        """Test raises error when existing_names is None."""
+        with pytest.raises(ValueError, match="existing_names"):
+            architect.generate_more_characters(sample_story_state, None, count=2)
+
+    def test_validates_count_positive(self, architect, sample_story_state):
+        """Test raises error when count is not positive."""
+        with pytest.raises(ValueError, match="count"):
+            architect.generate_more_characters(sample_story_state, ["Name"], count=0)
+
+    def test_includes_language_requirement(self, architect, sample_story_state):
+        """Test prompt includes language requirement from brief."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+
+        architect.generate_more_characters(sample_story_state, ["Hero"], count=1)
+
+        call_args = architect.generate.call_args[0][0]
+        assert "English" in call_args
+
+
+class TestGenerateLocations:
+    """Tests for generate_locations method (lines 580-615)."""
+
+    def test_generates_locations(self, architect, sample_story_state):
+        """Test generates location dictionaries."""
+        json_response = """Here are the key locations:
+```json
+[
+    {
+        "name": "The Hidden Library",
+        "type": "location",
+        "description": "An ancient library concealed within the academy's walls, accessible only through a secret passage.",
+        "significance": "Contains forbidden texts and serves as a meeting place for secret societies."
+    },
+    {
+        "name": "The Crystal Cavern",
+        "type": "location",
+        "description": "A vast underground cave filled with glowing crystals that amplify magical energy.",
+        "significance": "Students must pass a trial here to unlock their full potential."
+    },
+    {
+        "name": "The Twilight Tower",
+        "type": "location",
+        "description": "The tallest tower in the academy, where time seems to move differently.",
+        "significance": "The headmaster's private quarters and site of the final confrontation."
+    }
+]
+```"""
+        architect.generate = MagicMock(return_value=json_response)
+
+        locations = architect.generate_locations(sample_story_state, existing_locations=[], count=3)
+
+        assert len(locations) == 3
+        assert locations[0]["name"] == "The Hidden Library"
+        assert locations[1]["name"] == "The Crystal Cavern"
+        assert locations[2]["name"] == "The Twilight Tower"
+
+    def test_includes_world_description_when_present(self, architect, sample_story_state):
+        """Test includes world description preview in prompt."""
+        sample_story_state.world_description = "A magical academy hidden in the mountains..."
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+
+        architect.generate_locations(sample_story_state, [], count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        assert "WORLD" in call_args
+        assert "magical academy" in call_args
+
+    def test_includes_existing_locations_when_provided(self, architect, sample_story_state):
+        """Test includes existing locations to avoid duplicates."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+        existing = ["The Great Hall", "The Dungeon"]
+
+        architect.generate_locations(sample_story_state, existing, count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        assert "EXISTING LOCATIONS" in call_args
+        assert "The Great Hall" in call_args
+        assert "The Dungeon" in call_args
+
+    def test_returns_empty_list_on_parse_failure(self, architect, sample_story_state):
+        """Test returns empty list when JSON parsing fails."""
+        architect.generate = MagicMock(return_value="No valid JSON here at all")
+
+        locations = architect.generate_locations(sample_story_state, [], count=2)
+
+        assert locations == []
+
+    def test_handles_no_existing_locations(self, architect, sample_story_state):
+        """Test works correctly when no existing locations provided."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+
+        architect.generate_locations(sample_story_state, [], count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        # Should NOT include "EXISTING LOCATIONS" section when empty
+        assert "EXISTING LOCATIONS" not in call_args
+
+    def test_handles_no_world_description(self, architect, sample_story_state):
+        """Test works correctly when no world description present."""
+        sample_story_state.world_description = ""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+
+        architect.generate_locations(sample_story_state, [], count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        # Should NOT include "WORLD" section when empty
+        # The word WORLD should still appear in the premise about "world"
+        # but the section header pattern "WORLD:" should not appear
+        assert "WORLD:" not in call_args
+
+
+class TestGenerateRelationships:
+    """Tests for generate_relationships method (lines 635-667)."""
+
+    def test_generates_relationships(self, architect, sample_story_state):
+        """Test generates relationship dictionaries."""
+        json_response = """Here are the relationships:
+```json
+[
+    {
+        "source": "Oliver Grey",
+        "target": "Professor Nightshade",
+        "relation_type": "knows",
+        "description": "Professor is secretly Oliver's guardian"
+    },
+    {
+        "source": "Oliver Grey",
+        "target": "Luna Frost",
+        "relation_type": "allies_with",
+        "description": "Former rivals who became close friends"
+    },
+    {
+        "source": "Luna Frost",
+        "target": "Marcus Vale",
+        "relation_type": "hates",
+        "description": "Suspects him of dark intentions"
+    }
+]
+```"""
+        architect.generate = MagicMock(return_value=json_response)
+        entity_names = ["Oliver Grey", "Professor Nightshade", "Luna Frost", "Marcus Vale"]
+
+        relationships = architect.generate_relationships(
+            sample_story_state,
+            entity_names,
+            existing_relationships=[],
+            count=3,
+        )
+
+        assert len(relationships) == 3
+        assert relationships[0]["source"] == "Oliver Grey"
+        assert relationships[0]["target"] == "Professor Nightshade"
+        assert relationships[1]["relation_type"] == "allies_with"
+
+    def test_includes_existing_relationships(self, architect, sample_story_state):
+        """Test includes existing relationships to avoid duplicates."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+        entity_names = ["A", "B", "C"]
+        existing = [("A", "B"), ("B", "C")]
+
+        architect.generate_relationships(sample_story_state, entity_names, existing, count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        assert "EXISTING RELATIONSHIPS" in call_args
+        assert "A → B" in call_args
+        assert "B → C" in call_args
+
+    def test_handles_empty_existing_relationships(self, architect, sample_story_state):
+        """Test works correctly with no existing relationships."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+        entity_names = ["Character1", "Character2"]
+
+        architect.generate_relationships(sample_story_state, entity_names, [], count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        # Should NOT include "EXISTING RELATIONSHIPS" section when empty
+        assert "EXISTING RELATIONSHIPS" not in call_args
+
+    def test_returns_empty_list_on_parse_failure(self, architect, sample_story_state):
+        """Test returns empty list when JSON parsing fails."""
+        architect.generate = MagicMock(return_value="No valid JSON at all")
+        entity_names = ["A", "B"]
+
+        relationships = architect.generate_relationships(
+            sample_story_state, entity_names, [], count=2
+        )
+
+        assert relationships == []
+
+    def test_includes_entity_names_in_prompt(self, architect, sample_story_state):
+        """Test prompt includes all available entity names."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+        entity_names = ["Hero", "Villain", "Mentor", "Sidekick"]
+
+        architect.generate_relationships(sample_story_state, entity_names, [], count=3)
+
+        call_args = architect.generate.call_args[0][0]
+        assert "AVAILABLE ENTITIES" in call_args
+        assert "Hero" in call_args
+        assert "Villain" in call_args
+        assert "Mentor" in call_args
+        assert "Sidekick" in call_args
+
+    def test_limits_existing_relationships_display(self, architect, sample_story_state):
+        """Test limits existing relationships display to 20."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+        entity_names = ["A", "B"]
+        # Create 25 existing relationships
+        existing = [(f"Entity{i}", f"Entity{i + 1}") for i in range(25)]
+
+        architect.generate_relationships(sample_story_state, entity_names, existing, count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        # Should only show first 20 relationships
+        assert "Entity0 → Entity1" in call_args
+        assert "Entity19 → Entity20" in call_args
+        # Entity24 → Entity25 should NOT be in prompt (it's the 25th, 0-indexed 24)
+        assert "Entity24 → Entity25" not in call_args
+
+    def test_includes_language_requirement(self, architect, sample_story_state):
+        """Test prompt includes language requirement from brief."""
+        architect.generate = MagicMock(return_value="```json\n[]\n```")
+
+        architect.generate_relationships(sample_story_state, ["A", "B"], [], count=2)
+
+        call_args = architect.generate.call_args[0][0]
+        assert "English" in call_args

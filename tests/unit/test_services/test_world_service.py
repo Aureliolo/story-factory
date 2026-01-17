@@ -599,3 +599,37 @@ Inside, they found another location: the Crystal Grotto."""
 
         # Should return a list of communities
         assert isinstance(communities, list)
+
+
+class TestWorldServiceErrorHandling:
+    """Tests for WorldService error handling paths."""
+
+    def test_extract_entities_from_structure_exception(self, world_service, world_db, monkeypatch):
+        """Test exception handling in extract_entities_from_structure."""
+        from memory.story_state import Character, StoryState
+
+        state = StoryState(id="test-error")
+        state.characters = [
+            Character(name="Alice", role="protagonist", description="Test character")
+        ]
+
+        # Mock add_entity to raise an exception
+        def mock_add_entity(*args, **kwargs):
+            raise RuntimeError("Simulated database error")
+
+        monkeypatch.setattr(world_db, "add_entity", mock_add_entity)
+
+        with pytest.raises(RuntimeError, match="Simulated database error"):
+            world_service.extract_entities_from_structure(state, world_db)
+
+    def test_extract_from_chapter_exception(self, world_service, world_db, monkeypatch):
+        """Test exception handling in extract_from_chapter."""
+
+        # Mock _extract_locations_from_text to raise an exception
+        def mock_extract(*args, **kwargs):
+            raise ValueError("Simulated extraction error")
+
+        monkeypatch.setattr(world_service, "_extract_locations_from_text", mock_extract)
+
+        with pytest.raises(ValueError, match="Simulated extraction error"):
+            world_service.extract_from_chapter("Some chapter content", world_db, 1)

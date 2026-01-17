@@ -56,7 +56,7 @@ class TestValidateNotEmpty:
     def test_non_string_raises_type_error(self):
         """Test that non-string values raise TypeError."""
         with pytest.raises(TypeError, match="Parameter 'test_param' must be a string"):
-            validate_not_empty(123, "test_param")
+            validate_not_empty(123, "test_param")  # type: ignore[arg-type]
 
 
 class TestValidatePositive:
@@ -90,7 +90,7 @@ class TestValidatePositive:
     def test_non_numeric_raises_type_error(self):
         """Test that non-numeric values raise TypeError."""
         with pytest.raises(TypeError, match="Parameter 'test_param' must be numeric"):
-            validate_positive("5", "test_param")
+            validate_positive("5", "test_param")  # type: ignore[arg-type]
 
 
 class TestValidateNonNegative:
@@ -115,6 +115,11 @@ class TestValidateNonNegative:
         """Test that None raises ValueError."""
         with pytest.raises(ValueError, match="Parameter 'test_param' cannot be None"):
             validate_non_negative(None, "test_param")
+
+    def test_non_numeric_raises_type_error(self):
+        """Test that non-numeric values raise TypeError."""
+        with pytest.raises(TypeError, match="Parameter 'test_param' must be numeric"):
+            validate_non_negative("5", "test_param")  # type: ignore[arg-type]
 
 
 class TestValidateInRange:
@@ -151,6 +156,11 @@ class TestValidateInRange:
         with pytest.raises(ValueError, match="Parameter 'test_param' cannot be None"):
             validate_in_range(None, "test_param", min_val=0, max_val=10)
 
+    def test_non_numeric_raises_type_error(self):
+        """Test that non-numeric values raise TypeError."""
+        with pytest.raises(TypeError, match="Parameter 'test_param' must be numeric"):
+            validate_in_range("5", "test_param", min_val=0, max_val=10)  # type: ignore[arg-type]
+
 
 class TestValidateNotEmptyCollection:
     """Tests for validate_not_empty_collection function."""
@@ -183,7 +193,7 @@ class TestValidateNotEmptyCollection:
     def test_non_collection_raises_type_error(self):
         """Test that non-collection values raise TypeError."""
         with pytest.raises(TypeError, match="Parameter 'test_param' must be a list or dict"):
-            validate_not_empty_collection("string", "test_param")
+            validate_not_empty_collection("string", "test_param")  # type: ignore[arg-type]
 
 
 class TestValidateType:

@@ -714,3 +714,56 @@ class TestContinuityVoiceConsistency:
         assert len(patterns) == 2
         assert "Sarah Chen" in patterns
         assert "Marcus Wells" in patterns
+
+    def test_extract_dialogue_patterns_no_characters(self, continuity, sample_story_state):
+        """Test extract_dialogue_patterns returns empty dict when no characters."""
+        sample_story_state.characters = []
+
+        patterns = continuity.extract_dialogue_patterns(
+            sample_story_state, "Chapter with dialogue..."
+        )
+
+        assert patterns == {}
+
+    def test_parse_dialogue_patterns_empty_data(self, continuity):
+        """Test _parse_dialogue_patterns returns empty dict for empty response."""
+        # Empty JSON array
+        patterns = continuity._parse_dialogue_patterns("[]")
+        assert patterns == {}
+
+        # Response with no valid JSON
+        patterns = continuity._parse_dialogue_patterns("No valid JSON here")
+        assert patterns == {}
+
+    def test_parse_dialogue_patterns_malformed_items(self, continuity):
+        """Test _parse_dialogue_patterns skips malformed items gracefully."""
+        from agents.continuity import DialoguePattern
+
+        json_response = """```json
+[
+    {
+        "character_name": "Valid Character",
+        "vocabulary_level": "formal"
+    },
+    {
+        "character_name": "Error Character",
+        "vocabulary_level": "formal"
+    }
+]
+```"""
+        # Mock DialoguePattern to raise TypeError for the second item
+        original_init = DialoguePattern.__init__
+        call_count = [0]
+
+        def mock_init(self, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 2:
+                raise TypeError("Simulated type error")
+            return original_init(self, **kwargs)
+
+        with patch.object(DialoguePattern, "__init__", mock_init):
+            patterns = continuity._parse_dialogue_patterns(json_response)
+
+        # Should only have the first valid character, second was skipped due to error
+        assert len(patterns) == 1
+        assert "Valid Character" in patterns
