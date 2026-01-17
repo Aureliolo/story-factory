@@ -2,6 +2,7 @@
 
 import pytest
 
+from memory.world_database import WorldDatabase
 from services.project_service import ProjectService, _validate_path
 
 
@@ -17,10 +18,11 @@ class TestProjectService:
         service = ProjectService(tmp_settings)
         state, world_db = service.create_project("Test Story")
 
-        assert state.id is not None
+        assert isinstance(state.id, str) and len(state.id) > 0
         assert state.project_name == "Test Story"
         assert state.status == "interview"
-        assert world_db is not None
+        assert isinstance(world_db, WorldDatabase)
+        assert world_db.db_path.exists()
 
     def test_create_project_default_name(self, tmp_settings, monkeypatch, tmp_path):
         """Test creating a project with default name."""
@@ -78,7 +80,8 @@ class TestProjectService:
 
         assert loaded_state.id == project_id
         assert loaded_state.project_name == "Test Project"
-        assert loaded_db is not None
+        assert isinstance(loaded_db, WorldDatabase)
+        assert loaded_db.db_path.exists()
 
     def test_load_nonexistent_project(self, tmp_settings, monkeypatch, tmp_path):
         """Test loading a project that doesn't exist."""
@@ -265,9 +268,10 @@ class TestProjectServiceAdditional:
         state, world_db = service.load_project(project_id)
 
         # Should create world DB path
-        assert state.world_db_path is not None
+        assert isinstance(state.world_db_path, str) and len(state.world_db_path) > 0
         assert "legacy-test-id.db" in state.world_db_path
-        assert world_db is not None
+        assert isinstance(world_db, WorldDatabase)
+        assert world_db.db_path.exists()
 
     def test_update_project_name(self, tmp_settings, monkeypatch, tmp_path):
         """Test updating a project's name."""

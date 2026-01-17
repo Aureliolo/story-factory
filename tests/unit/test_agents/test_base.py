@@ -129,7 +129,7 @@ class TestBaseAgentInit:
             settings=settings,
         )
 
-        assert agent.client is not None
+        assert isinstance(agent.client, ollama.Client)
 
 
 class TestBaseAgentCheckOllamaHealth:
