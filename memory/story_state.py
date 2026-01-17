@@ -1,9 +1,13 @@
 """Story state management - maintains context across the generation process."""
 
+import logging
+import uuid
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class Character(BaseModel):
@@ -173,6 +177,48 @@ class StoryBrief(BaseModel):
     additional_notes: str = ""
 
 
+class OutlineVariation(BaseModel):
+    """A variation of the story outline with different plot/character/chapter choices."""
+
+    id: str  # Unique identifier for this variation
+    created_at: datetime = Field(default_factory=datetime.now)
+    name: str = ""  # User-friendly name (e.g., "Variation 1", "Dark Ending")
+
+    # Core story structure for this variation
+    world_description: str = ""
+    world_rules: list[str] = Field(default_factory=list)
+    characters: list[Character] = Field(default_factory=list)
+    plot_summary: str = ""
+    plot_points: list[PlotPoint] = Field(default_factory=list)
+    chapters: list[Chapter] = Field(default_factory=list)
+
+    # Metadata
+    user_rating: int = 0  # 0-5 star rating
+    user_notes: str = ""  # User feedback on this variation
+    is_favorite: bool = False  # User-marked favorite
+    ai_rationale: str = ""  # Why this variation was generated
+
+    # Selection tracking
+    selected_elements: dict[str, bool] = Field(default_factory=dict)  # element_id -> selected
+
+    def get_summary(self) -> str:
+        """Get a brief summary of this variation."""
+        parts = []
+        if self.name:
+            parts.append(f"**{self.name}**")
+        if self.plot_summary:
+            summary = (
+                self.plot_summary[:150] + "..."
+                if len(self.plot_summary) > 150
+                else self.plot_summary
+            )
+            parts.append(summary)
+        parts.append(f"{len(self.characters)} characters, {len(self.chapters)} chapters")
+        if self.user_rating > 0:
+            parts.append(f"Rating: {'⭐' * self.user_rating}")
+        return " | ".join(parts)
+
+
 class StoryState(BaseModel):
     """Complete state of a story in progress."""
 
@@ -211,6 +257,11 @@ class StoryState(BaseModel):
     # Structure
     chapters: list[Chapter] = Field(default_factory=list)
     current_chapter: int = 0
+
+    # Outline Variations
+    outline_variations: list[OutlineVariation] = Field(default_factory=list)
+    selected_variation_id: str | None = None  # The variation selected as canonical
+    variation_generation_count: int = 3  # How many variations to generate (3-5)
 
     # Continuity tracking
     timeline: list[str] = Field(default_factory=list)  # Key events in order
@@ -259,3 +310,117 @@ class StoryState(BaseModel):
             if char.name.lower() == name.lower():
                 return char
         return None
+
+    def add_outline_variation(self, variation: OutlineVariation) -> None:
+        """Add a new outline variation.
+
+        Args:
+            variation: The variation to add.
+        """
+        self.outline_variations.append(variation)
+        self.updated_at = datetime.now()
+        logger.debug(f"Added outline variation: {variation.name} (id={variation.id})")
+
+    def get_variation_by_id(self, variation_id: str) -> OutlineVariation | None:
+        """Find a variation by ID.
+
+        Args:
+            variation_id: The variation ID to find.
+
+        Returns:
+            The variation if found, None otherwise.
+        """
+        for variation in self.outline_variations:
+            if variation.id == variation_id:
+                return variation
+        logger.debug(
+            f"Variation {variation_id} not found in {len(self.outline_variations)} variations"
+        )
+        return None
+
+    def select_variation_as_canonical(self, variation_id: str) -> bool:
+        """Select a variation as the canonical outline.
+
+        This copies the variation's structure to the main story state.
+
+        Args:
+            variation_id: The ID of the variation to make canonical.
+
+        Returns:
+            True if successful, False if variation not found.
+        """
+        variation = self.get_variation_by_id(variation_id)
+        if not variation:
+            logger.warning(f"Variation {variation_id} not found")
+            return False
+
+        # Copy variation data to main state
+        self.world_description = variation.world_description
+        self.world_rules = variation.world_rules.copy()
+        self.characters = [char.model_copy(deep=True) for char in variation.characters]
+        self.plot_summary = variation.plot_summary
+        self.plot_points = [pp.model_copy(deep=True) for pp in variation.plot_points]
+        self.chapters = [ch.model_copy(deep=True) for ch in variation.chapters]
+        self.selected_variation_id = variation_id
+        self.updated_at = datetime.now()
+
+        logger.info(f"Selected variation {variation.name} as canonical")
+        return True
+
+    def create_merged_variation(
+        self,
+        name: str,
+        source_variations: dict[str, list[str]],
+    ) -> OutlineVariation:
+        """Create a new variation by merging elements from multiple variations.
+
+        Args:
+            name: Name for the merged variation.
+            source_variations: Dict mapping variation_id to list of element types
+                              e.g., {"var1": ["characters", "world"], "var2": ["plot", "chapters"]}
+
+        Returns:
+            A new OutlineVariation with merged elements.
+
+        Note:
+            If the same element type appears in multiple sources, later sources
+            will overwrite earlier ones. A warning is logged when this occurs.
+        """
+        merged = OutlineVariation(
+            id=str(uuid.uuid4()),
+            name=name,
+            ai_rationale=f"Merged from {len(source_variations)} variations",
+        )
+
+        # Track seen element types to warn on duplicates
+        seen_elements: set[str] = set()
+
+        # Merge elements from each source
+        for var_id, elements in source_variations.items():
+            source = self.get_variation_by_id(var_id)
+            if not source:
+                logger.warning(f"Source variation {var_id} not found, skipping")
+                continue
+
+            for element_type in elements:
+                if element_type in seen_elements:
+                    logger.warning(
+                        f"Element type '{element_type}' already merged from another variation, "
+                        f"overwriting with data from {var_id}"
+                    )
+                seen_elements.add(element_type)
+
+                if element_type == "world":
+                    merged.world_description = source.world_description
+                    merged.world_rules = source.world_rules.copy()
+                elif element_type == "characters":
+                    merged.characters = [char.model_copy(deep=True) for char in source.characters]
+                elif element_type == "plot":
+                    merged.plot_summary = source.plot_summary
+                    merged.plot_points = [pp.model_copy(deep=True) for pp in source.plot_points]
+                elif element_type == "chapters":
+                    merged.chapters = [ch.model_copy(deep=True) for ch in source.chapters]
+
+        self.add_outline_variation(merged)
+        logger.info(f"Created merged variation: {name}")
+        return merged
