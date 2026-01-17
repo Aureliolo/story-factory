@@ -258,10 +258,13 @@ class ScoringService:
             if score_id:
                 self._mode_service.update_quality_scores(score_id, scores)
 
-            logger.info(
-                f"Quality judgment complete: prose={scores.prose_quality:.1f}, "
-                f"instruction={scores.instruction_following:.1f}"
+            prose_str = f"{scores.prose_quality:.1f}" if scores.prose_quality is not None else "N/A"
+            instr_str = (
+                f"{scores.instruction_following:.1f}"
+                if scores.instruction_following is not None
+                else "N/A"
             )
+            logger.info(f"Quality judgment complete: prose={prose_str}, instruction={instr_str}")
             return scores
         except Exception as e:
             logger.error(f"Failed to judge quality: {e}", exc_info=True)
