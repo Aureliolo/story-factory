@@ -3,6 +3,7 @@
 import logging
 import re
 import uuid
+from typing import TYPE_CHECKING, Any
 
 from memory.story_state import Chapter, Character, OutlineVariation, PlotPoint, StoryState
 from utils.json_parser import extract_json_list, parse_json_list_to_models
@@ -10,6 +11,9 @@ from utils.prompt_builder import PromptBuilder
 from utils.validation import validate_not_none, validate_positive, validate_type
 
 from .base import BaseAgent
+
+if TYPE_CHECKING:
+    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +70,7 @@ class ArchitectAgent(BaseAgent):
     }
 ]"""
 
-    def __init__(self, model: str | None = None, settings=None):
+    def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
         super().__init__(
             name="Architect",
             role="Story Structure Designer",
@@ -547,7 +551,7 @@ class ArchitectAgent(BaseAgent):
 
     def generate_locations(
         self, story_state: StoryState, existing_locations: list[str], count: int = 3
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Generate locations for the story world.
 
         Args:
@@ -601,7 +605,7 @@ class ArchitectAgent(BaseAgent):
         entity_names: list[str],
         existing_relationships: list[tuple[str, str]],
         count: int = 5,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Generate relationships between existing entities.
 
         Args:

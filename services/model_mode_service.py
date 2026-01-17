@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 import ollama
 
@@ -511,7 +512,7 @@ Respond ONLY with JSON:
         logger.warning("Returning neutral quality scores (5.0) due to judgment failure")
         return QualityScores(prose_quality=5.0, instruction_following=5.0)
 
-    def calculate_consistency_score(self, issues: list[dict]) -> float:
+    def calculate_consistency_score(self, issues: list[dict[str, Any]]) -> float:
         """Calculate consistency score from continuity issues.
 
         Args:
@@ -743,7 +744,7 @@ Respond ONLY with JSON:
     def get_quality_vs_speed_data(
         self,
         agent_role: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get data for quality vs speed scatter plot."""
         return self._db.get_quality_vs_speed_data(agent_role)
 
@@ -751,11 +752,11 @@ Respond ONLY with JSON:
         self,
         model_id: str | None = None,
         agent_role: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get aggregated model performance."""
         return self._db.get_model_performance(model_id, agent_role)
 
-    def get_recommendation_history(self, limit: int = 50) -> list[dict]:
+    def get_recommendation_history(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recommendation history."""
         validate_positive(limit, "limit")
         return self._db.get_recommendation_history(limit)
@@ -764,6 +765,6 @@ Respond ONLY with JSON:
         """Export all scores to CSV."""
         return self._db.export_scores_csv(output_path)
 
-    def get_pending_recommendations(self) -> list[dict]:
+    def get_pending_recommendations(self) -> list[dict[str, Any]]:
         """Get recommendations awaiting user action."""
         return self._db.get_pending_recommendations()

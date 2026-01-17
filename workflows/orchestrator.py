@@ -8,6 +8,7 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from agents import (
     ArchitectAgent,
@@ -18,7 +19,8 @@ from agents import (
     ValidatorAgent,
     WriterAgent,
 )
-from memory.story_state import Chapter, StoryBrief, StoryState
+from agents.continuity import ContinuityIssue
+from memory.story_state import Chapter, Character, StoryBrief, StoryState
 from settings import STORIES_DIR, Settings
 from utils.constants import get_language_code
 from utils.message_analyzer import analyze_message, format_inference_context
@@ -33,7 +35,7 @@ class WorkflowEvent:
     event_type: str  # "agent_start", "agent_complete", "user_input_needed", "progress", "error"
     agent_name: str
     message: str
-    data: dict | None = None
+    data: dict[str, Any] | None = None
     timestamp: datetime | None = None  # When the event occurred
     correlation_id: str | None = None  # For tracking related events
 
@@ -88,7 +90,7 @@ class StoryOrchestrator:
             raise
 
     @property
-    def interaction_mode(self):
+    def interaction_mode(self) -> str:
         return self.settings.interaction_mode
 
     def create_new_story(self) -> StoryState:
@@ -171,7 +173,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Return empty list on failure - UI will handle fallback message
         return []
 
-    def _emit(self, event_type: str, agent: str, message: str, data: dict | None = None):
+    def _emit(
+        self, event_type: str, agent: str, message: str, data: dict[str, Any] | None = None
+    ) -> WorkflowEvent:
         """Emit a workflow event with timestamp and correlation ID."""
         event = WorkflowEvent(
             event_type=event_type,
@@ -185,7 +189,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         # Deque automatically trims old events when maxlen is reached
         return event
 
-    def clear_events(self):
+    def clear_events(self) -> None:
         """Clear all events (call after story completion if needed)."""
         self.events.clear()
 
@@ -267,7 +271,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         self._emit("agent_complete", "Architect", "Story structure complete!")
         return self.story_state
 
-    def generate_more_characters(self, count: int = 2) -> list:
+    def generate_more_characters(self, count: int = 2) -> list[Character]:
         """Generate additional characters for the story.
 
         Args:
@@ -297,7 +301,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         )
         return new_characters
 
-    def generate_locations(self, count: int = 3) -> list:
+    def generate_locations(self, count: int = 3) -> list[dict[str, Any]]:
         """Generate locations for the story world.
 
         Args:
@@ -327,7 +331,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def generate_relationships(
         self, entity_names: list[str], existing_rels: list[tuple[str, str]], count: int = 5
-    ) -> list:
+    ) -> list[dict[str, Any]]:
         """Generate relationships between entities.
 
         Args:
@@ -864,7 +868,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         return suggestions
 
-    def review_full_story(self) -> Generator[WorkflowEvent, None, list]:
+    def review_full_story(
+        self,
+    ) -> Generator[WorkflowEvent, None, list[ContinuityIssue]]:
         """Perform a full story continuity review.
 
         Returns:
@@ -1309,7 +1315,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         return sorted(stories, key=lambda x: x.get("created_at") or "", reverse=True)
 
-    def reset_state(self):
+    def reset_state(self) -> None:
         """Reset the orchestrator state for a new story."""
         self.story_state = None
         self.events.clear()

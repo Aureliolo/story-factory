@@ -22,7 +22,7 @@ class Character(BaseModel):
     arc_notes: str = ""  # How the character should develop
     arc_progress: dict[int, str] = Field(default_factory=dict)  # chapter_number -> arc state
 
-    def update_arc(self, chapter_number: int, state: str):
+    def update_arc(self, chapter_number: int, state: str) -> None:
         """Update character arc progress for a chapter."""
         self.arc_progress[chapter_number] = state
 
@@ -299,7 +299,7 @@ class StoryState(BaseModel):
 
         return "\n".join(summary_parts)
 
-    def add_established_fact(self, fact: str):
+    def add_established_fact(self, fact: str) -> None:
         """Add a new established fact."""
         self.established_facts.append(fact)
         self.updated_at = datetime.now()

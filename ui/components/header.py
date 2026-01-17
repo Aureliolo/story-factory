@@ -1,6 +1,7 @@
 """Header component with navigation, project selector and status."""
 
 import logging
+from typing import Any
 
 from nicegui import ui
 from nicegui.elements.label import Label
@@ -108,7 +109,7 @@ class Header:
     def _build_theme_toggle(self) -> None:
         """Build the dark mode toggle button."""
 
-        def toggle_theme():
+        def toggle_theme() -> None:
             """Toggle between dark and light mode."""
             self.state.dark_mode = not self.state.dark_mode
             self.services.settings.dark_mode = self.state.dark_mode
@@ -126,7 +127,7 @@ class Header:
             on_click=toggle_theme,
         ).props("flat round").tooltip(tooltip)
 
-    async def _on_project_change(self, e) -> None:
+    async def _on_project_change(self, e: Any) -> None:
         """Handle project selection change."""
         project_id = e.value
         if not project_id:

@@ -3,7 +3,7 @@
 import asyncio
 import html
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from nicegui import Client, context, run, ui
 from nicegui.elements.button import Button
@@ -19,6 +19,7 @@ from ui.components.chat import ChatComponent
 from ui.graph_renderer import render_entity_summary_html
 from ui.state import AppState
 from ui.theme import get_status_color
+from workflows.orchestrator import WorkflowEvent
 
 logger = logging.getLogger(__name__)
 
@@ -597,7 +598,7 @@ class WritePage:
         # Create dialog reference for the async handler
         dialog = ui.dialog()
 
-        async def do_finalize():
+        async def do_finalize() -> None:
             """Handle the actual finalization."""
             dialog.close()
             if not self.state.project:
@@ -664,7 +665,7 @@ class WritePage:
         progress_label: Label
         progress_bar: ui.linear_progress
 
-        async def do_build():
+        async def do_build() -> None:
             """Execute the build with progress updates."""
             if not self.state.project or not self.state.world_db:
                 dialog.close()
@@ -746,7 +747,7 @@ class WritePage:
 
         dialog.open()
 
-    def _on_chapter_select(self, e) -> None:
+    def _on_chapter_select(self, e: Any) -> None:
         """Handle chapter selection change."""
         self.state.select_chapter(e.value)
         self._refresh_writing_display()
@@ -793,7 +794,7 @@ class WritePage:
             self._notify(f"Writing chapter {chapter_num}...", type="info")
 
             # Run blocking generator in thread pool to avoid blocking event loop
-            def write_chapter_blocking() -> list:
+            def write_chapter_blocking() -> list[WorkflowEvent]:
                 events = []
                 for event in self.services.story.write_chapter(project, chapter_num):
                     events.append(event)
@@ -828,7 +829,7 @@ class WritePage:
             self._notify("Writing all chapters...", type="info")
 
             # Run blocking generator in thread pool to avoid blocking event loop
-            def write_all_blocking() -> list:
+            def write_all_blocking() -> list[WorkflowEvent]:
                 events = []
                 for event in self.services.story.write_all_chapters(project):
                     events.append(event)
