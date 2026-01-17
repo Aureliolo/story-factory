@@ -55,6 +55,17 @@ class BaseAgent:
         temperature: float | None = None,
         settings: Settings | None = None,
     ):
+        """Initialize a base agent.
+
+        Args:
+            name: Display name of the agent.
+            role: Agent's role description.
+            system_prompt: System prompt to guide the agent's behavior.
+            agent_role: Role identifier for auto model selection. Defaults to lowercased role.
+            model: Override model to use. If None, uses settings-based model for agent_role.
+            temperature: Override temperature. If None, uses settings-based temperature.
+            settings: Application settings. If None, loads default settings.
+        """
         validate_not_empty(name, "name")
         validate_not_empty(role, "role")
         validate_not_empty(system_prompt, "system_prompt")
@@ -220,4 +231,9 @@ class BaseAgent:
         return get_model_info(self.model)
 
     def __repr__(self) -> str:
+        """Return string representation of the agent.
+
+        Returns:
+            String showing agent class name, display name, and model.
+        """
         return f"{self.__class__.__name__}(name='{self.name}', model='{self.model}')"

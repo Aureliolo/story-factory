@@ -45,6 +45,10 @@ class SettingsPage:
         # Settings reference
         self.settings = services.settings
 
+        # Register undo/redo handlers for this page
+        self.state.on_undo(self._do_undo)
+        self.state.on_redo(self._do_redo)
+
     def build(self) -> None:
         """Build the settings page UI."""
         with ui.column().classes("w-full gap-6 p-4"):
@@ -548,7 +552,12 @@ class SettingsPage:
 
     def _save_settings(self) -> None:
         """Save all settings."""
+        from ui.state import ActionType, UndoAction
+
         try:
+            # Capture old state for undo
+            old_snapshot = self._capture_settings_snapshot()
+
             # Update settings from UI
             self.settings.ollama_url = self._ollama_url_input.value
             self.settings.default_model = self._default_model_select.value
@@ -594,9 +603,21 @@ class SettingsPage:
             self.settings.learning_min_samples = int(self._min_samples.value)
             self.settings.learning_confidence_threshold = self._confidence_slider.value
 
-            # Validate and save
+            # Validate and save first - only record undo if successful
             self.settings.validate()
             self.settings.save()
+
+            # Capture new state for redo AFTER successful save
+            new_snapshot = self._capture_settings_snapshot()
+
+            # Record undo action only after successful validation and save
+            self.state.record_action(
+                UndoAction(
+                    action_type=ActionType.UPDATE_SETTINGS,
+                    data=new_snapshot,
+                    inverse_data=old_snapshot,
+                )
+            )
 
             ui.notify("Settings saved!", type="positive")
 
@@ -606,3 +627,151 @@ class SettingsPage:
         except Exception as e:
             logger.exception("Failed to save settings")
             ui.notify(f"Error saving: {e}", type="negative")
+
+    def _capture_settings_snapshot(self) -> dict[str, Any]:
+        """Capture current settings state for undo/redo.
+
+        Returns:
+            Dictionary containing all current settings values.
+        """
+        return {
+            "ollama_url": self.settings.ollama_url,
+            "default_model": self.settings.default_model,
+            "use_per_agent_models": self.settings.use_per_agent_models,
+            "agent_models": dict(self.settings.agent_models),
+            "agent_temperatures": dict(self.settings.agent_temperatures),
+            "interaction_mode": self.settings.interaction_mode,
+            "chapters_between_checkpoints": self.settings.chapters_between_checkpoints,
+            "max_revision_iterations": self.settings.max_revision_iterations,
+            "context_size": self.settings.context_size,
+            "max_tokens": self.settings.max_tokens,
+            "previous_chapter_context_chars": self.settings.previous_chapter_context_chars,
+            "chapter_analysis_chars": self.settings.chapter_analysis_chars,
+            "use_mode_system": self.settings.use_mode_system,
+            "current_mode": self.settings.current_mode,
+            "learning_autonomy": self.settings.learning_autonomy,
+            "learning_triggers": list(self.settings.learning_triggers),
+            "learning_periodic_interval": self.settings.learning_periodic_interval,
+            "learning_min_samples": self.settings.learning_min_samples,
+            "learning_confidence_threshold": self.settings.learning_confidence_threshold,
+        }
+
+    def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
+        """Restore settings from a snapshot.
+
+        Args:
+            snapshot: Settings snapshot to restore.
+        """
+        self.settings.ollama_url = snapshot["ollama_url"]
+        self.settings.default_model = snapshot["default_model"]
+        self.settings.use_per_agent_models = snapshot["use_per_agent_models"]
+        self.settings.agent_models = dict(snapshot["agent_models"])
+        self.settings.agent_temperatures = dict(snapshot["agent_temperatures"])
+        self.settings.interaction_mode = snapshot["interaction_mode"]
+        self.settings.chapters_between_checkpoints = snapshot["chapters_between_checkpoints"]
+        self.settings.max_revision_iterations = snapshot["max_revision_iterations"]
+        self.settings.context_size = snapshot["context_size"]
+        self.settings.max_tokens = snapshot["max_tokens"]
+        self.settings.previous_chapter_context_chars = snapshot["previous_chapter_context_chars"]
+        self.settings.chapter_analysis_chars = snapshot["chapter_analysis_chars"]
+        self.settings.use_mode_system = snapshot["use_mode_system"]
+        self.settings.current_mode = snapshot["current_mode"]
+        self.settings.learning_autonomy = snapshot["learning_autonomy"]
+        self.settings.learning_triggers = list(snapshot["learning_triggers"])
+        self.settings.learning_periodic_interval = snapshot["learning_periodic_interval"]
+        self.settings.learning_min_samples = snapshot["learning_min_samples"]
+        self.settings.learning_confidence_threshold = snapshot["learning_confidence_threshold"]
+
+        # Save changes
+        self.settings.save()
+
+        # Update UI elements to reflect restored values
+        self._refresh_ui_from_settings()
+
+        ui.notify("Settings restored", type="info")
+
+    def _refresh_ui_from_settings(self) -> None:
+        """Refresh all UI input elements from current settings values."""
+        logger.debug("Refreshing UI elements from settings")
+
+        # Core settings
+        if hasattr(self, "_ollama_url_input") and self._ollama_url_input:
+            self._ollama_url_input.value = self.settings.ollama_url
+        if hasattr(self, "_default_model_select") and self._default_model_select:
+            self._default_model_select.value = self.settings.default_model
+        if hasattr(self, "_use_per_agent") and self._use_per_agent:
+            self._use_per_agent.value = self.settings.use_per_agent_models
+
+        # Per-agent model selects
+        if hasattr(self, "_agent_model_selects"):
+            for role, select in self._agent_model_selects.items():
+                if select and role in self.settings.agent_models:
+                    select.value = self.settings.agent_models[role]
+
+        # Temperature sliders
+        if hasattr(self, "_temp_sliders"):
+            for role, slider in self._temp_sliders.items():
+                if slider and role in self.settings.agent_temperatures:
+                    slider.value = self.settings.agent_temperatures[role]
+
+        # Workflow settings
+        if hasattr(self, "_interaction_mode_select") and self._interaction_mode_select:
+            self._interaction_mode_select.value = self.settings.interaction_mode
+        if hasattr(self, "_checkpoint_input") and self._checkpoint_input:
+            self._checkpoint_input.value = self.settings.chapters_between_checkpoints
+        if hasattr(self, "_revision_input") and self._revision_input:
+            self._revision_input.value = self.settings.max_revision_iterations
+
+        # Context settings
+        if hasattr(self, "_context_size_input") and self._context_size_input:
+            self._context_size_input.value = self.settings.context_size
+        if hasattr(self, "_max_tokens_input") and self._max_tokens_input:
+            self._max_tokens_input.value = self.settings.max_tokens
+
+        # Mode settings
+        if hasattr(self, "_mode_select") and self._mode_select:
+            self._mode_select.value = self.settings.current_mode
+
+        # Learning settings
+        if hasattr(self, "_autonomy_select") and self._autonomy_select:
+            self._autonomy_select.value = self.settings.learning_autonomy
+        if hasattr(self, "_confidence_slider") and self._confidence_slider:
+            self._confidence_slider.value = self.settings.learning_confidence_threshold
+        if hasattr(self, "_periodic_interval") and self._periodic_interval:
+            self._periodic_interval.value = self.settings.learning_periodic_interval
+        if hasattr(self, "_min_samples") and self._min_samples:
+            self._min_samples.value = self.settings.learning_min_samples
+
+    def _do_undo(self) -> None:
+        """Handle undo for settings changes."""
+        from ui.state import ActionType
+
+        action = self.state.undo()
+        if not action:
+            return
+
+        try:
+            if action.action_type == ActionType.UPDATE_SETTINGS:
+                # Restore old settings
+                self._restore_settings_snapshot(action.inverse_data)
+                logger.debug("Undone settings change")
+        except Exception as e:
+            logger.exception("Undo failed for settings")
+            ui.notify(f"Undo failed: {e}", type="negative")
+
+    def _do_redo(self) -> None:
+        """Handle redo for settings changes."""
+        from ui.state import ActionType
+
+        action = self.state.redo()
+        if not action:
+            return
+
+        try:
+            if action.action_type == ActionType.UPDATE_SETTINGS:
+                # Restore new settings
+                self._restore_settings_snapshot(action.data)
+                logger.debug("Redone settings change")
+        except Exception as e:
+            logger.exception("Redo failed for settings")
+            ui.notify(f"Redo failed: {e}", type="negative")

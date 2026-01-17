@@ -48,6 +48,12 @@ class WriterAgent(BaseAgent):
     """Agent that writes the actual prose."""
 
     def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+        """Initialize the Writer agent.
+
+        Args:
+            model: Override model to use. If None, uses settings-based model for writer.
+            settings: Application settings. If None, loads default settings.
+        """
         super().__init__(
             name="Writer",
             role="Prose Craftsman",

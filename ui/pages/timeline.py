@@ -183,6 +183,7 @@ class TimelinePage:
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 def add_event():
+                    """Add new event to timeline."""
                     if event_input.value and self.state.project:
                         logger.debug("Adding timeline event: %s", event_input.value[:50])
                         self.state.project.timeline.append(event_input.value)
@@ -227,6 +228,7 @@ class TimelinePage:
                     ui.button("Cancel", on_click=dialog.close).props("flat")
 
                     def do_delete():
+                        """Execute timeline event deletion."""
                         if self.state.project:
                             logger.debug("Deleting timeline event at index %d", index)
                             del self.state.project.timeline[index]

@@ -71,6 +71,12 @@ class ArchitectAgent(BaseAgent):
 ]"""
 
     def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+        """Initialize the Architect agent.
+
+        Args:
+            model: Override model to use. If None, uses settings-based model for architect.
+            settings: Application settings. If None, loads default settings.
+        """
         super().__init__(
             name="Architect",
             role="Story Structure Designer",
