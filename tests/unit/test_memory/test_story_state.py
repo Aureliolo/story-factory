@@ -10,6 +10,236 @@ from memory.story_state import (
 )
 
 
+class TestScene:
+    """Tests for Scene model."""
+
+    def test_scene_creation(self):
+        """Test creating a scene with default values."""
+        scene = Scene(id="scene-1", title="Opening Scene", outline="Hero wakes up")
+        assert scene.id == "scene-1"
+        assert scene.title == "Opening Scene"
+        assert scene.outline == "Hero wakes up"
+        assert scene.content == ""
+        assert scene.word_count == 0
+        assert scene.pov_character == ""
+        assert scene.location == ""
+        assert scene.goals == []
+        assert scene.order == 0
+        assert scene.status == "pending"
+
+    def test_scene_with_metadata(self):
+        """Test creating a scene with metadata."""
+        scene = Scene(
+            id="scene-1",
+            title="The Confrontation",
+            outline="Hero faces villain",
+            pov_character="Alice",
+            location="Dark Tower",
+            goals=["Reveal villain's motivation", "Build tension"],
+            order=2,
+        )
+        assert scene.pov_character == "Alice"
+        assert scene.location == "Dark Tower"
+        assert len(scene.goals) == 2
+        assert "Reveal villain's motivation" in scene.goals
+        assert scene.order == 2
+
+    def test_update_word_count(self):
+        """Test word count update from content."""
+        scene = Scene(
+            id="scene-1",
+            title="Test",
+            outline="Test",
+            content="This is a test scene with eight words.",
+        )
+        scene.update_word_count()
+        assert scene.word_count == 8
+
+    def test_update_word_count_empty_content(self):
+        """Test word count update with empty content."""
+        scene = Scene(id="scene-1", title="Test", outline="Test", content="")
+        scene.update_word_count()
+        assert scene.word_count == 0
+
+
+class TestChapter:
+    """Tests for Chapter model with scenes."""
+
+    def test_chapter_add_scene(self):
+        """Test adding a scene to a chapter."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+        scene = Scene(id="scene-1", title="Scene 1", outline="Opening")
+
+        chapter.add_scene(scene)
+
+        assert len(chapter.scenes) == 1
+        assert chapter.scenes[0].id == "scene-1"
+        assert chapter.scenes[0].order == 0
+
+    def test_chapter_add_multiple_scenes(self):
+        """Test adding multiple scenes maintains order."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+
+        scene1 = Scene(id="scene-1", title="Scene 1", outline="Opening")
+        scene2 = Scene(id="scene-2", title="Scene 2", outline="Development")
+        scene3 = Scene(id="scene-3", title="Scene 3", outline="Conclusion")
+
+        chapter.add_scene(scene1)
+        chapter.add_scene(scene2)
+        chapter.add_scene(scene3)
+
+        assert len(chapter.scenes) == 3
+        assert chapter.scenes[0].order == 0
+        assert chapter.scenes[1].order == 1
+        assert chapter.scenes[2].order == 2
+
+    def test_chapter_remove_scene(self):
+        """Test removing a scene from a chapter."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+
+        scene1 = Scene(id="scene-1", title="Scene 1", outline="Opening")
+        scene2 = Scene(id="scene-2", title="Scene 2", outline="Development")
+        scene3 = Scene(id="scene-3", title="Scene 3", outline="Conclusion")
+
+        chapter.add_scene(scene1)
+        chapter.add_scene(scene2)
+        chapter.add_scene(scene3)
+
+        # Remove middle scene
+        result = chapter.remove_scene("scene-2")
+
+        assert result is True
+        assert len(chapter.scenes) == 2
+        assert chapter.scenes[0].id == "scene-1"
+        assert chapter.scenes[1].id == "scene-3"
+        # Check reordering
+        assert chapter.scenes[0].order == 0
+        assert chapter.scenes[1].order == 1
+
+    def test_chapter_remove_scene_not_found(self):
+        """Test removing a non-existent scene returns False."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+        scene = Scene(id="scene-1", title="Scene 1", outline="Opening")
+        chapter.add_scene(scene)
+
+        result = chapter.remove_scene("nonexistent-scene")
+
+        assert result is False
+        assert len(chapter.scenes) == 1
+
+    def test_chapter_reorder_scenes(self):
+        """Test reordering scenes."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+
+        scene1 = Scene(id="scene-1", title="Scene 1", outline="Opening")
+        scene2 = Scene(id="scene-2", title="Scene 2", outline="Development")
+        scene3 = Scene(id="scene-3", title="Scene 3", outline="Conclusion")
+
+        chapter.add_scene(scene1)
+        chapter.add_scene(scene2)
+        chapter.add_scene(scene3)
+
+        # Reorder: 3, 1, 2
+        chapter.reorder_scenes(["scene-3", "scene-1", "scene-2"])
+
+        assert chapter.scenes[0].id == "scene-3"
+        assert chapter.scenes[0].order == 0
+        assert chapter.scenes[1].id == "scene-1"
+        assert chapter.scenes[1].order == 1
+        assert chapter.scenes[2].id == "scene-2"
+        assert chapter.scenes[2].order == 2
+
+    def test_chapter_reorder_scenes_partial(self):
+        """Test reordering with missing scene IDs."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+
+        scene1 = Scene(id="scene-1", title="Scene 1", outline="Opening")
+        scene2 = Scene(id="scene-2", title="Scene 2", outline="Development")
+        scene3 = Scene(id="scene-3", title="Scene 3", outline="Conclusion")
+
+        chapter.add_scene(scene1)
+        chapter.add_scene(scene2)
+        chapter.add_scene(scene3)
+
+        # Reorder with only 2 scenes (scene-2 is missing)
+        chapter.reorder_scenes(["scene-3", "scene-1"])
+
+        # Only the specified scenes should remain
+        assert len(chapter.scenes) == 2
+        assert chapter.scenes[0].id == "scene-3"
+        assert chapter.scenes[1].id == "scene-1"
+
+    def test_chapter_get_scene_by_id(self):
+        """Test getting a scene by ID."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+        scene = Scene(id="scene-1", title="Scene 1", outline="Opening")
+        chapter.add_scene(scene)
+
+        result = chapter.get_scene_by_id("scene-1")
+
+        assert result is not None
+        assert result.id == "scene-1"
+        assert result.title == "Scene 1"
+
+    def test_chapter_get_scene_by_id_not_found(self):
+        """Test getting a non-existent scene by ID."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+        scene = Scene(id="scene-1", title="Scene 1", outline="Opening")
+        chapter.add_scene(scene)
+
+        result = chapter.get_scene_by_id("nonexistent")
+
+        assert result is None
+
+    def test_chapter_update_word_count_from_scenes(self):
+        """Test updating chapter word count from scenes."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+
+        scene1 = Scene(
+            id="scene-1",
+            title="Scene 1",
+            outline="Opening",
+            content="This is scene one with some words.",
+        )
+        scene1.update_word_count()
+
+        scene2 = Scene(
+            id="scene-2",
+            title="Scene 2",
+            outline="Development",
+            content="This is scene two with more words here.",
+        )
+        scene2.update_word_count()
+
+        chapter.add_scene(scene1)
+        chapter.add_scene(scene2)
+        chapter.update_chapter_word_count()
+
+        expected_count = scene1.word_count + scene2.word_count
+        assert chapter.word_count == expected_count
+
+    def test_chapter_update_word_count_from_content(self):
+        """Test updating chapter word count from direct content when no scenes."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="The beginning",
+            content="This is a chapter with direct content not in scenes.",
+        )
+
+        chapter.update_chapter_word_count()
+
+        assert chapter.word_count == 10
+
+    def test_chapter_update_word_count_empty(self):
+        """Test updating chapter word count when empty."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="The beginning")
+
+        chapter.update_chapter_word_count()
+
+        assert chapter.word_count == 0
+
+
 class TestCharacter:
     """Tests for Character model."""
 

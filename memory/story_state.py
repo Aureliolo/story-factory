@@ -43,17 +43,33 @@ class PlotPoint(BaseModel):
 
 
 class Scene(BaseModel):
-    """A scene within a chapter."""
+    """A scene within a chapter.
 
-    number: int
+    Note on similar fields:
+    - `order` is the canonical position field (use for reordering)
+    - `goal` is a one-sentence purpose summary (for outline display)
+    - `goals` is a list of specific checkpoints (for progress tracking)
+    """
+
+    id: str  # Unique identifier for the scene
     title: str
-    goal: str  # What this scene aims to accomplish
-    pov_character: str = ""  # Point of view character for this scene
+    outline: str = ""  # What happens in this scene
+    goal: str = ""  # One-sentence scene purpose (for outline display)
+    content: str = ""  # Actual prose content
+    word_count: int = 0
+    pov_character: str = ""  # Point of view character name
     location: str = ""  # Where the scene takes place
     beats: list[str] = Field(default_factory=list)  # Key story beats/events in the scene
-    content: str = ""  # The actual prose content of the scene
-    word_count: int = 0
-    status: str = "pending"  # pending, drafted, edited, reviewed, final
+    goals: list[str] = Field(default_factory=list)  # Specific checkpoints to accomplish
+    order: int = 0  # Position within the chapter (for drag-drop reordering)
+    status: str = "pending"  # pending, drafted, edited, final
+
+    def update_word_count(self) -> None:
+        """Update word count from content."""
+        if self.content:
+            self.word_count = len(self.content.split())
+        else:
+            self.word_count = 0
 
 
 class Chapter(BaseModel):
@@ -66,7 +82,77 @@ class Chapter(BaseModel):
     word_count: int = 0
     status: str = "pending"  # pending, drafted, edited, reviewed, final
     revision_notes: list[str] = Field(default_factory=list)
-    scenes: list[Scene] = Field(default_factory=list)  # Optional scene-level breakdown
+    scenes: list[Scene] = Field(default_factory=list)  # Scenes within this chapter
+
+    def add_scene(self, scene: Scene) -> None:
+        """Add a scene to the chapter.
+
+        Args:
+            scene: Scene to add.
+        """
+        scene.order = len(self.scenes)
+        self.scenes.append(scene)
+
+    def remove_scene(self, scene_id: str) -> bool:
+        """Remove a scene from the chapter.
+
+        Args:
+            scene_id: ID of the scene to remove.
+
+        Returns:
+            True if scene was removed, False if not found.
+        """
+        for i, scene in enumerate(self.scenes):
+            if scene.id == scene_id:
+                self.scenes.pop(i)
+                # Reorder remaining scenes
+                for j, remaining_scene in enumerate(self.scenes):
+                    remaining_scene.order = j
+                return True
+        return False
+
+    def reorder_scenes(self, scene_ids: list[str]) -> None:
+        """Reorder scenes based on a list of scene IDs.
+
+        Args:
+            scene_ids: List of scene IDs in desired order.
+        """
+        # Create a mapping of scene_id to scene
+        scene_map = {scene.id: scene for scene in self.scenes}
+
+        # Reorder scenes and update order field
+        self.scenes = []
+        for i, scene_id in enumerate(scene_ids):
+            if scene_id in scene_map:
+                scene = scene_map[scene_id]
+                scene.order = i
+                self.scenes.append(scene)
+
+    def get_scene_by_id(self, scene_id: str) -> Scene | None:
+        """Get a scene by its ID.
+
+        Args:
+            scene_id: Scene ID to find.
+
+        Returns:
+            Scene if found, None otherwise.
+        """
+        for scene in self.scenes:
+            if scene.id == scene_id:
+                return scene
+        return None
+
+    def update_chapter_word_count(self) -> None:
+        """Update chapter word count from scenes or direct content."""
+        if self.scenes:
+            # Calculate from scenes
+            total = sum(scene.word_count for scene in self.scenes)
+            self.word_count = total
+        elif self.content:
+            # Fallback to direct content word count
+            self.word_count = len(self.content.split())
+        else:
+            self.word_count = 0
 
 
 class StoryBrief(BaseModel):
