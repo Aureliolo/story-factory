@@ -35,8 +35,8 @@ When creating or modifying AI agents, follow these guidelines:
    - Writer: 0.9 (high creativity)
    - Editor: 0.6 (balanced)
    - Continuity: 0.3 (strict, analytical)
-   - Architect: 0.7 (creative but structured)
-   - Interviewer: 0.5 (balanced)
+   - Architect: 0.85 (creative but structured)
+   - Interviewer: 0.7 (conversational)
 
 2. **Prompts**: Use structured prompts with clear instructions
    - Include role definition and constraints
@@ -68,9 +68,9 @@ When creating or modifying AI agents, follow these guidelines:
 ### Ollama Integration
 
 1. **Use Base Class Methods**: Leverage methods from BaseAgent
-   - `self._call_llm(prompt)` - Make LLM calls with retry logic
-   - `self._validate_response(response)` - Validate LLM responses
+   - `self.generate(prompt)` - Make LLM calls with retry logic (synchronous)
    - `self.settings` - Access model configuration
+   - `self.client` - Ollama client instance
 
 2. **Rate Limiting**: BaseAgent handles rate limiting (max 2 concurrent)
    - Don't implement custom rate limiting
@@ -104,10 +104,16 @@ When creating or modifying AI agents, follow these guidelines:
 
 ### State Management
 
-1. **Story State**: Update story state consistently
+1. **Story State**: Update story state by directly modifying fields (Pydantic model)
    ```python
-   story_state.add_chapter(chapter)
-   story_state.update_character(character_id, changes)
+   # Add a chapter
+   story_state.chapters.append(chapter)
+
+   # Update a character by finding and modifying it
+   for i, char in enumerate(story_state.characters):
+       if char.id == character_id:
+           story_state.characters[i] = updated_character
+           break
    ```
 
 2. **Thread Safety**: Be aware that agents may be called concurrently
@@ -118,9 +124,14 @@ When creating or modifying AI agents, follow these guidelines:
 
 1. **Mock Ollama**: Always mock Ollama API calls in tests
    ```python
+   from unittest.mock import patch, MagicMock
+
    @pytest.fixture
-   def mock_ollama(self, mocker):
-       return mocker.patch("agents.base.requests.post")
+   def mock_ollama(self):
+       with patch("agents.base.ollama.Client") as mock_client:
+           mock_instance = MagicMock()
+           mock_client.return_value = mock_instance
+           yield mock_instance
    ```
 
 2. **Test Cases**: Cover key scenarios
@@ -136,11 +147,15 @@ When creating or modifying AI agents, follow these guidelines:
 from agents.base import BaseAgent
 from settings import Settings
 from memory.story_state import StoryState
-from utils.json_parser import extract_json, parse_json_response
+from utils.json_parser import extract_json
 from utils.error_handling import handle_ollama_errors
 import logging
 
 logger = logging.getLogger(__name__)
+
+WRITER_SYSTEM_PROMPT = """You are a creative writer specializing in storytelling.
+Your task is to generate engaging prose content for stories.
+Follow the style and tone established in the story context."""
 
 class WriterAgent(BaseAgent):
     """Agent responsible for generating prose content."""
@@ -149,12 +164,13 @@ class WriterAgent(BaseAgent):
         super().__init__(
             name="Writer",
             role="writer",
+            system_prompt=WRITER_SYSTEM_PROMPT,  # Required parameter
+            agent_role="writer",  # For auto model/temperature selection
             settings=settings,
-            temperature=0.9  # High creativity
         )
 
     @handle_ollama_errors
-    async def write_chapter(
+    def write_chapter(
         self,
         story_state: StoryState,
         chapter_number: int
@@ -169,24 +185,19 @@ class WriterAgent(BaseAgent):
         prompt = self._create_prompt(context)
         logger.debug(f"Prompt: {prompt[:200]}...")
 
-        # Call LLM
-        response = await self._call_llm(prompt)
+        # Call LLM (synchronous)
+        response = self.generate(prompt, context)
 
-        # Validate and extract content
-        content = self._validate_response(response)
+        logger.info(f"Generated {len(response)} characters for chapter {chapter_number}")
+        return response
 
-        logger.info(f"Generated {len(content)} characters for chapter {chapter_number}")
-        return content
-
-    def _build_context(self, story_state: StoryState, chapter_number: int) -> dict:
+    def _build_context(self, story_state: StoryState, chapter_number: int) -> str:
         """Build context for the chapter."""
-        # Implementation
-        pass
+        return f"Chapter {chapter_number} of {story_state.title}"
 
-    def _create_prompt(self, context: dict) -> str:
+    def _create_prompt(self, context: str) -> str:
         """Create the writing prompt."""
-        # Implementation
-        pass
+        return f"Write the next chapter. Context: {context}"
 ```
 
 ### Best Practices

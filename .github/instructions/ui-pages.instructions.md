@@ -96,7 +96,7 @@ class SettingsPage:
         with ui.column().classes('flex-1'):
             ui.label('Model Settings').classes('text-xl')
 
-            models = self.services.model_service.list_models()
+            models = self.services.model.list_installed()
             ui.select(
                 models,
                 label='Default Model',
@@ -106,7 +106,7 @@ class SettingsPage:
     async def _on_model_change(self, event):
         """Handle model selection change."""
         try:
-            await self.services.model_service.validate_model(event.value)
+            await self.services.model.validate_model(event.value)
             ui.notify('Model updated successfully', type='positive')
         except Exception as e:
             ui.notify(f'Error: {str(e)}', type='negative')

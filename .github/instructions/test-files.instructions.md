@@ -33,8 +33,8 @@ When writing or modifying test files in this project, follow these guidelines:
 3. **Mocking Guidelines**:
    - **Always mock Ollama API calls** - tests should not require a running Ollama instance
    - Mock external dependencies (file system operations, network calls, etc.)
-   - Use `pytest-mock` for mocking (`mocker` fixture)
-   - Example: `mocker.patch("agents.base.requests.post")`
+   - Use `unittest.mock` for mocking (`patch`, `MagicMock`)
+   - Mock the Ollama client: `patch("agents.base.ollama.Client")`
 
 4. **Fixtures**:
    - Place shared fixtures in `tests/conftest.py`
@@ -57,21 +57,25 @@ When writing or modifying test files in this project, follow these guidelines:
 
 ```python
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 from services.story_service import StoryService
 
 class TestStoryService:
     """Tests for StoryService."""
 
     @pytest.fixture
-    def mock_ollama(self, mocker):
+    def mock_ollama(self):
         """Mock Ollama API calls."""
-        return mocker.patch("agents.base.requests.post")
+        with patch("agents.base.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.generate.return_value = {"response": "test"}
+            yield mock_instance
 
     def test_create_story_success(self, mock_ollama, tmp_path):
         """Test successful story creation."""
         # Arrange
-        mock_ollama.return_value.json.return_value = {"response": "test"}
+        settings = Settings()
         service = StoryService(settings, tmp_path)
 
         # Act
@@ -80,12 +84,12 @@ class TestStoryService:
         # Assert
         assert result is not None
         assert result.title == "Test Story"
-        mock_ollama.assert_called_once()
+        mock_ollama.generate.assert_called()
 
     def test_create_story_error(self, mock_ollama):
         """Test story creation with API error."""
         # Arrange
-        mock_ollama.side_effect = Exception("API Error")
+        mock_ollama.generate.side_effect = Exception("API Error")
 
         # Act & Assert
         with pytest.raises(Exception, match="API Error"):

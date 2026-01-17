@@ -37,9 +37,12 @@ This is a Python-based multi-agent system for generating stories using local AI 
 2. `ruff check .` - Lint code (use `ruff check --fix .` to auto-fix)
 3. `pytest` - Run tests to verify nothing broke
 4. Commit and push changes
-5. Verify CI passes on GitHub (check Actions tab)
+5. **MUST** verify CI passes on GitHub (check Actions tab) - never leave a PR with failing CI
 
-This ensures code quality and prevents broken builds.
+**MANDATORY CI VERIFICATION**: After every push, you MUST check that CI passes. If CI fails, fix the issue immediately and push again until all checks are green. Never walk away from a failing CI pipeline.
+
+### Coverage Requirements
+**100% test coverage is MANDATORY for every commit**. The CI enforces 100% coverage on core modules (`agents/`, `services/`, `workflows/`, `memory/`, `utils/`, `settings.py`). If your code reduces coverage, the CI will fail and you must add tests before the PR can be merged.
 
 ### Development Flow
 - **Install dependencies**: `pip install -r requirements.txt`
@@ -192,8 +195,8 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 - **Writer**: 0.9 (high creativity)
 - **Editor**: 0.6 (balanced)
 - **Continuity**: 0.3 (strict, analytical)
-- **Architect**: 0.7 (creative but structured)
-- **Interviewer**: 0.5 (balanced)
+- **Architect**: 0.85 (creative but structured)
+- **Interviewer**: 0.7 (conversational)
 
 ## Key Guidelines
 
