@@ -143,20 +143,19 @@ class WriterAgent(BaseAgent):
         revision_feedback: str | None = None,
     ) -> str:
         """Write chapter scene-by-scene when scenes are defined."""
-        scene_contents = []
+        scene_contents: list[str] = []
 
         for scene in chapter.scenes:
-            logger.info(
-                f"Writing scene {scene.number} of chapter {chapter.number}: '{scene.title}'"
-            )
+            scene_num = scene.order + 1  # 1-indexed for display
+            logger.info(f"Writing scene {scene_num} of chapter {chapter.number}: '{scene.title}'")
 
             # Get context from previous scene if exists
             prev_scene_context = ""
-            if scene.number > 1 and scene_contents:
+            if scene.order > 0 and scene_contents:
                 # Use last 500 chars from previous scene for continuity
                 prev_scene_context = f"PREVIOUS SCENE ENDED WITH:\n...{scene_contents[-1][-500:]}\n"
             # Get context from previous chapter if this is the first scene
-            elif scene.number == 1 and chapter.number > 1:
+            elif scene.order == 0 and chapter.number > 1:
                 prev = next(
                     (c for c in story_state.chapters if c.number == chapter.number - 1), None
                 )
@@ -171,7 +170,7 @@ class WriterAgent(BaseAgent):
                 chapter=chapter,
                 scene=scene,
                 prev_context=prev_scene_context,
-                revision_feedback=revision_feedback if scene.number == 1 else None,
+                revision_feedback=revision_feedback if scene.order == 0 else None,
             )
             scene_contents.append(scene_content)
 
@@ -196,14 +195,15 @@ class WriterAgent(BaseAgent):
         revision_feedback: str | None = None,
     ) -> str:
         """Write a single scene within a chapter."""
-        logger.debug(f"Generating scene {scene.number}: '{scene.title}'")
+        scene_num = scene.order + 1  # 1-indexed for display
+        logger.debug(f"Generating scene {scene_num}: '{scene.title}'")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
 
         # Build prompt using PromptBuilder
         builder = PromptBuilder()
         builder.add_text(
-            f'Write Scene {scene.number} of Chapter {chapter.number}: "{scene.title or "Untitled Scene"}"'
+            f'Write Scene {scene_num} of Chapter {chapter.number}: "{scene.title or "Untitled Scene"}"'
         )
         builder.add_language_requirement(brief.language)
 
@@ -247,7 +247,7 @@ class WriterAgent(BaseAgent):
         # Use lower temperature for revisions (more focused output)
         temp = self.settings.revision_temperature if revision_feedback else None
         content = self.generate(prompt, context, temperature=temp)
-        logger.debug(f"Scene {scene.number} written ({len(content)} chars)")
+        logger.debug(f"Scene {scene_num} written ({len(content)} chars)")
         return content
 
     def write_short_story(

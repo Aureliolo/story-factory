@@ -14,6 +14,7 @@ from .model_service import ModelService
 from .project_service import ProjectService
 from .scoring_service import ScoringService
 from .story_service import StoryService
+from .suggestion_service import SuggestionService
 from .template_service import TemplateService
 from .world_quality_service import WorldQualityService
 from .world_service import WorldService
@@ -41,6 +42,7 @@ class ServiceContainer:
     mode: ModelModeService
     scoring: ScoringService
     world_quality: WorldQualityService
+    suggestion: SuggestionService
     template: TemplateService
 
     def __init__(self, settings: Settings | None = None):
@@ -58,6 +60,7 @@ class ServiceContainer:
         self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
         self.world_quality = WorldQualityService(self.settings, self.mode)
+        self.suggestion = SuggestionService(self.settings)
         self.template = TemplateService(self.settings)
 
 
@@ -71,5 +74,6 @@ __all__ = [
     "ModelModeService",
     "ScoringService",
     "WorldQualityService",
+    "SuggestionService",
     "TemplateService",
 ]
