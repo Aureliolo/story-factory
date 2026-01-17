@@ -2,7 +2,7 @@
 
 import pytest
 
-from memory.story_state import Brief, StoryState
+from memory.story_state import StoryBrief, StoryState
 from services.import_service import ImportService
 from services.model_mode_service import ModelModeService
 from settings import Settings
@@ -48,7 +48,7 @@ def sample_text():
 @pytest.fixture
 def story_state():
     """Create a story state with brief."""
-    brief = Brief(
+    brief = StoryBrief(
         genre="adventure",
         premise="A quest for an ancient artifact",
         tone="mysterious",

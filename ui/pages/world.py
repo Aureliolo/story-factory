@@ -2681,7 +2681,7 @@ class WorldPage:
                         for i, loc in enumerate(locations):
                             with ui.card().classes("w-full p-3 mb-2"):
                                 with ui.row().classes("w-full items-start gap-2"):
-                                    checkbox = ui.checkbox(
+                                    ui.checkbox(
                                         value=selected_locs[i],
                                         on_change=lambda e, idx=i: selected_locs.update(
                                             {idx: e.value}
@@ -2714,7 +2714,7 @@ class WorldPage:
                         for i, item in enumerate(items):
                             with ui.card().classes("w-full p-3 mb-2"):
                                 with ui.row().classes("w-full items-start gap-2"):
-                                    checkbox = ui.checkbox(
+                                    ui.checkbox(
                                         value=selected_items[i],
                                         on_change=lambda e, idx=i: selected_items.update(
                                             {idx: e.value}
