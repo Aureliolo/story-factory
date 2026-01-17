@@ -223,3 +223,44 @@ class TestReadabilityInterpretation:
         assert get_readability_interpretation(0)
         assert get_readability_interpretation(50)
         assert get_readability_interpretation(100)
+
+
+class TestEdgeCases:
+    """Tests for edge cases in text analytics."""
+
+    def test_count_syllables_non_alphabetic_only(self):
+        """Test syllable counting with only non-alphabetic characters."""
+        # Should return 1 for words that reduce to empty string
+        assert count_syllables("!@#$%") == 1
+        assert count_syllables("12345") == 1
+        assert count_syllables("---") == 1
+
+    def test_readability_no_sentences(self):
+        """Test readability with text that has no valid sentence endings."""
+        # Text with just whitespace and punctuation but no sentence-ending marks
+        scores = calculate_readability("   ")
+        assert scores.sentence_count == 0
+        assert scores.word_count == 0
+        assert scores.flesch_reading_ease == 0.0
+
+    def test_pacing_text_with_empty_paragraphs(self):
+        """Test pacing analysis with empty paragraphs in text."""
+        # Text that splits into some empty paragraphs
+        text = "\n\n\n\n"  # Just newlines, no actual content
+        metrics = analyze_pacing(text)
+        assert metrics.total_word_count == 0
+
+    def test_pacing_paragraph_with_only_whitespace(self):
+        """Test pacing with paragraphs that are only whitespace."""
+        # Paragraph that is just whitespace (splits to empty words list)
+        text = "Hello world\n\n   \n\nGoodbye"
+        metrics = analyze_pacing(text)
+        # Should handle gracefully (whitespace paragraph skipped)
+        assert metrics.total_word_count > 0
+
+    def test_pacing_single_line_text(self):
+        """Test pacing with text that doesn't split into paragraphs."""
+        # Single line text without paragraph breaks
+        text = "Just a single line of text"
+        metrics = analyze_pacing(text)
+        assert metrics.total_word_count > 0

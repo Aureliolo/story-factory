@@ -1,5 +1,6 @@
 """Tests for comparison service."""
 
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -174,7 +175,7 @@ class TestComparisonService:
         # Create a mock comparison record
         record = ComparisonRecord(
             id="test-comparison",
-            timestamp=None,
+            timestamp=datetime.now(),
             chapter_number=1,
             models=["model-1", "model-2"],
             results={
@@ -217,7 +218,7 @@ class TestComparisonService:
         """Test selecting winner with invalid model ID."""
         record = ComparisonRecord(
             id="test-comparison",
-            timestamp=None,
+            timestamp=datetime.now(),
             chapter_number=1,
             models=["model-1"],
             results={
@@ -243,7 +244,7 @@ class TestComparisonService:
         for i in range(3):
             record = ComparisonRecord(
                 id=f"test-{i}",
-                timestamp=None,
+                timestamp=datetime.now(),
                 chapter_number=i + 1,
                 models=["model-1", "model-2"],
                 results={},
@@ -263,7 +264,7 @@ class TestComparisonService:
         """Test retrieving a specific comparison."""
         record = ComparisonRecord(
             id="test-comparison",
-            timestamp=None,
+            timestamp=datetime.now(),
             chapter_number=1,
             models=["model-1"],
             results={},
@@ -285,7 +286,7 @@ class TestComparisonService:
         for i in range(10):
             record = ComparisonRecord(
                 id=f"test-{i}",
-                timestamp=None,
+                timestamp=datetime.now(),
                 chapter_number=i + 1,
                 models=["model-1", "model-2"],
                 results={
@@ -328,7 +329,7 @@ class TestComparisonService:
         for i in range(3):
             record = ComparisonRecord(
                 id=f"test-{i}",
-                timestamp=None,
+                timestamp=datetime.now(),
                 chapter_number=i + 1,
                 models=["model-1"],
                 results={},
@@ -385,3 +386,43 @@ class TestComparisonService:
             # Should have stopped early
             # Only model-1 should have completed
             assert len([e for e in events if e.get("completed")]) <= 2
+
+    @patch("services.comparison_service.StoryOrchestrator")
+    def test_restores_agent_models_without_writer_key(self, mock_orchestrator_class, story_state):
+        """Test that agent_models is properly restored when writer key didn't exist initially."""
+        # Create settings WITHOUT a writer key in agent_models
+        settings = Settings()
+        settings.agent_models = {"editor": "test-editor-model"}  # No writer key
+
+        # Verify writer key doesn't exist
+        assert "writer" not in settings.agent_models
+
+        service = ComparisonService(settings)
+
+        # Mock orchestrator
+        mock_orchestrator = MagicMock()
+        mock_orchestrator_class.return_value = mock_orchestrator
+
+        def write_chapter_side_effect(chapter_num):
+            yield WorkflowEvent(
+                event_type="agent_complete",
+                agent_name="System",
+                message="Complete",
+                chapter_number=chapter_num,
+            )
+
+        mock_orchestrator.write_chapter.side_effect = write_chapter_side_effect
+        story_state.chapters[0].content = "Generated content"
+
+        # Generate comparison
+        generator = service.generate_chapter_comparison(
+            state=story_state,
+            chapter_num=1,
+            models=["model-1", "model-2"],
+        )
+        list(generator)
+
+        # After comparison, writer key should still not exist (it was removed)
+        assert "writer" not in settings.agent_models
+        # Editor key should still be there
+        assert settings.agent_models.get("editor") == "test-editor-model"

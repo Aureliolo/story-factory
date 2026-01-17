@@ -1299,3 +1299,23 @@ class TestWorldDatabaseGraphEdgeCases:
 
         # No error should occur, and entity should still not be in graph
         assert char_id not in graph
+
+    def test_invalidate_graph_cache(self, tmp_path):
+        """Test invalidate_graph_cache forces graph rebuild on next access."""
+        db = WorldDatabase(tmp_path / "test.db")
+        char_id = db.add_entity("character", "Alice")
+
+        # Build graph first
+        graph = db.get_graph()
+        assert char_id in graph
+
+        # Invalidate cache
+        db.invalidate_graph_cache()
+
+        # Graph should be None after invalidation
+        assert db._graph is None
+
+        # Getting graph again should rebuild it
+        graph = db.get_graph()
+        assert graph is not None
+        assert char_id in graph

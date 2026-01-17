@@ -3,6 +3,7 @@
 from memory.story_state import (
     Chapter,
     Character,
+    OutlineVariation,
     PlotPoint,
     Scene,
     StoryBrief,
@@ -704,3 +705,647 @@ class TestChapterSerialization:
         assert chapter.scenes[0].title == "Scene A"
         assert chapter.scenes[0].location == "Forest"
         assert chapter.scenes[0].beats == ["Beat 1", "Beat 2"]
+
+
+class TestChapterVersioning:
+    """Tests for Chapter versioning functionality."""
+
+    def test_save_current_as_version(self):
+        """Test saving current chapter content as a new version."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Original content here",
+            word_count=3,
+        )
+
+        version_id = chapter.save_current_as_version(feedback="Initial save")
+
+        assert version_id is not None
+        assert len(chapter.versions) == 1
+        assert chapter.current_version_id == version_id
+        assert chapter.versions[0].content == "Original content here"
+        assert chapter.versions[0].word_count == 3
+        assert chapter.versions[0].feedback == "Initial save"
+        assert chapter.versions[0].version_number == 1
+        assert chapter.versions[0].is_current is True
+
+    def test_save_multiple_versions(self):
+        """Test saving multiple versions marks only the latest as current."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Version 1 content",
+            word_count=3,
+        )
+
+        version_1_id = chapter.save_current_as_version()
+
+        # Update content and save another version
+        chapter.content = "Version 2 content with more words"
+        chapter.word_count = 6
+        version_2_id = chapter.save_current_as_version(feedback="Expanded content")
+
+        assert len(chapter.versions) == 2
+        assert chapter.current_version_id == version_2_id
+        # First version should no longer be current
+        assert chapter.versions[0].is_current is False
+        assert chapter.versions[0].id == version_1_id
+        # Second version should be current
+        assert chapter.versions[1].is_current is True
+        assert chapter.versions[1].id == version_2_id
+        assert chapter.versions[1].version_number == 2
+
+    def test_rollback_to_version_success(self):
+        """Test rolling back to a previous version."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Original content",
+            word_count=2,
+        )
+        version_1_id = chapter.save_current_as_version()
+
+        # Create a second version
+        chapter.content = "New content that we want to undo"
+        chapter.word_count = 6
+        chapter.save_current_as_version()
+
+        # Rollback to version 1
+        result = chapter.rollback_to_version(version_1_id)
+
+        assert result is True
+        assert chapter.content == "Original content"
+        assert chapter.word_count == 2
+        assert chapter.current_version_id == version_1_id
+        # Check version states
+        assert chapter.versions[0].is_current is True
+        assert chapter.versions[1].is_current is False
+
+    def test_rollback_to_version_not_found(self):
+        """Test rollback returns False when version not found."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Some content",
+        )
+        chapter.save_current_as_version()
+
+        result = chapter.rollback_to_version("nonexistent-version-id")
+
+        assert result is False
+
+    def test_get_version_by_id_found(self):
+        """Test getting a version by ID."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Content",
+        )
+        version_id = chapter.save_current_as_version()
+
+        version = chapter.get_version_by_id(version_id)
+
+        assert version is not None
+        assert version.id == version_id
+        assert version.content == "Content"
+
+    def test_get_version_by_id_not_found(self):
+        """Test getting a nonexistent version returns None."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="Test")
+
+        version = chapter.get_version_by_id("nonexistent")
+
+        assert version is None
+
+    def test_get_current_version(self):
+        """Test getting the current version."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Latest content",
+        )
+        chapter.save_current_as_version()
+
+        current = chapter.get_current_version()
+
+        assert current is not None
+        assert current.content == "Latest content"
+        assert current.is_current is True
+
+    def test_get_current_version_none(self):
+        """Test getting current version when none exists."""
+        chapter = Chapter(number=1, title="Chapter 1", outline="Test")
+
+        current = chapter.get_current_version()
+
+        assert current is None
+
+    def test_compare_versions(self):
+        """Test comparing two versions."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Short",
+            word_count=1,
+        )
+        version_1_id = chapter.save_current_as_version()
+
+        chapter.content = "A much longer piece of content here"
+        chapter.word_count = 7
+        version_2_id = chapter.save_current_as_version()
+
+        comparison = chapter.compare_versions(version_1_id, version_2_id)
+
+        assert "version_a" in comparison
+        assert "version_b" in comparison
+        assert comparison["version_a"]["word_count"] == 1
+        assert comparison["version_b"]["word_count"] == 7
+        assert comparison["word_count_diff"] == 6
+
+    def test_compare_versions_not_found(self):
+        """Test comparing versions when one or both are not found."""
+        chapter = Chapter(
+            number=1,
+            title="Chapter 1",
+            outline="Test",
+            content="Content",
+        )
+        version_id = chapter.save_current_as_version()
+
+        # One version missing
+        comparison = chapter.compare_versions(version_id, "nonexistent")
+        assert "error" in comparison
+
+        # Both versions missing
+        comparison = chapter.compare_versions("fake1", "fake2")
+        assert "error" in comparison
+
+
+class TestOutlineVariation:
+    """Tests for OutlineVariation model."""
+
+    def test_get_summary_empty(self):
+        """Test get_summary with minimal data."""
+        variation = OutlineVariation(id="var-1")
+
+        summary = variation.get_summary()
+
+        assert "0 characters, 0 chapters" in summary
+
+    def test_get_summary_with_name(self):
+        """Test get_summary includes the name when present."""
+        variation = OutlineVariation(id="var-1", name="Dark Ending")
+
+        summary = variation.get_summary()
+
+        assert "**Dark Ending**" in summary
+
+    def test_get_summary_with_short_plot_summary(self):
+        """Test get_summary includes full plot summary when short."""
+        variation = OutlineVariation(
+            id="var-1",
+            name="Test",
+            plot_summary="A hero saves the world.",
+        )
+
+        summary = variation.get_summary()
+
+        assert "A hero saves the world." in summary
+        assert "..." not in summary
+
+    def test_get_summary_with_long_plot_summary_truncates(self):
+        """Test get_summary truncates long plot summaries."""
+        long_plot = "A" * 200  # 200 characters
+        variation = OutlineVariation(
+            id="var-1",
+            name="Test",
+            plot_summary=long_plot,
+        )
+
+        summary = variation.get_summary()
+
+        # Should truncate to 150 chars + "..."
+        assert "A" * 150 + "..." in summary
+        assert len(long_plot) > 150  # Confirm it was actually long
+
+    def test_get_summary_with_characters_and_chapters(self):
+        """Test get_summary includes character and chapter counts."""
+        variation = OutlineVariation(
+            id="var-1",
+            characters=[
+                Character(name="Alice", role="protagonist", description="Hero"),
+                Character(name="Bob", role="antagonist", description="Villain"),
+            ],
+            chapters=[
+                Chapter(number=1, title="Ch1", outline="First"),
+                Chapter(number=2, title="Ch2", outline="Second"),
+                Chapter(number=3, title="Ch3", outline="Third"),
+            ],
+        )
+
+        summary = variation.get_summary()
+
+        assert "2 characters, 3 chapters" in summary
+
+    def test_get_summary_with_user_rating(self):
+        """Test get_summary includes star rating when present."""
+        variation = OutlineVariation(
+            id="var-1",
+            name="Rated Variation",
+            user_rating=4,
+        )
+
+        summary = variation.get_summary()
+
+        # Should contain 4 stars
+        assert "Rating:" in summary
+
+    def test_get_summary_with_zero_rating_excluded(self):
+        """Test get_summary excludes rating when zero."""
+        variation = OutlineVariation(
+            id="var-1",
+            name="Unrated",
+            user_rating=0,
+        )
+
+        summary = variation.get_summary()
+
+        assert "Rating:" not in summary
+
+    def test_get_summary_full(self):
+        """Test get_summary with all elements present."""
+        variation = OutlineVariation(
+            id="var-1",
+            name="Epic Fantasy",
+            plot_summary="A young wizard discovers their powers and must save the kingdom.",
+            characters=[
+                Character(name="Wizard", role="protagonist", description="Magic user"),
+            ],
+            chapters=[
+                Chapter(number=1, title="Discovery", outline="Finding powers"),
+            ],
+            user_rating=5,
+        )
+
+        summary = variation.get_summary()
+
+        assert "**Epic Fantasy**" in summary
+        assert "A young wizard discovers" in summary
+        assert "1 characters, 1 chapters" in summary
+        assert "Rating:" in summary
+
+
+class TestStoryStateVariations:
+    """Tests for StoryState outline variation methods."""
+
+    def test_add_outline_variation(self):
+        """Test adding an outline variation."""
+        state = StoryState(id="test", status="outlining")
+        variation = OutlineVariation(
+            id="var-1",
+            name="First Variation",
+            plot_summary="Test plot",
+        )
+        original_time = state.updated_at
+
+        state.add_outline_variation(variation)
+
+        assert len(state.outline_variations) == 1
+        assert state.outline_variations[0].id == "var-1"
+        assert state.outline_variations[0].name == "First Variation"
+        assert state.updated_at >= original_time
+
+    def test_add_multiple_outline_variations(self):
+        """Test adding multiple outline variations."""
+        state = StoryState(id="test", status="outlining")
+        var1 = OutlineVariation(id="var-1", name="Variation 1")
+        var2 = OutlineVariation(id="var-2", name="Variation 2")
+
+        state.add_outline_variation(var1)
+        state.add_outline_variation(var2)
+
+        assert len(state.outline_variations) == 2
+        assert state.outline_variations[0].id == "var-1"
+        assert state.outline_variations[1].id == "var-2"
+
+    def test_get_variation_by_id_found(self):
+        """Test getting a variation by ID when it exists."""
+        state = StoryState(id="test", status="outlining")
+        variation = OutlineVariation(id="var-123", name="Target Variation")
+        state.add_outline_variation(variation)
+
+        result = state.get_variation_by_id("var-123")
+
+        assert result is not None
+        assert result.id == "var-123"
+        assert result.name == "Target Variation"
+
+    def test_get_variation_by_id_not_found(self):
+        """Test getting a variation by ID when it doesn't exist."""
+        state = StoryState(id="test", status="outlining")
+        variation = OutlineVariation(id="var-1", name="Existing")
+        state.add_outline_variation(variation)
+
+        result = state.get_variation_by_id("nonexistent-id")
+
+        assert result is None
+
+    def test_get_variation_by_id_empty_list(self):
+        """Test getting a variation when no variations exist."""
+        state = StoryState(id="test", status="outlining")
+
+        result = state.get_variation_by_id("any-id")
+
+        assert result is None
+
+    def test_select_variation_as_canonical_success(self):
+        """Test selecting a variation as canonical copies its data."""
+        state = StoryState(id="test", status="outlining")
+
+        # Create a variation with full data
+        variation = OutlineVariation(
+            id="var-1",
+            name="Canonical Choice",
+            world_description="A magical realm",
+            world_rules=["Magic requires focus", "Dragons are wise"],
+            characters=[
+                Character(name="Hero", role="protagonist", description="Brave warrior"),
+                Character(name="Mentor", role="supporting", description="Old sage"),
+            ],
+            plot_summary="Hero embarks on a quest",
+            plot_points=[
+                PlotPoint(description="Hero receives the call"),
+                PlotPoint(description="Hero meets mentor"),
+            ],
+            chapters=[
+                Chapter(number=1, title="The Beginning", outline="Introduction"),
+                Chapter(number=2, title="The Journey", outline="Adventure starts"),
+            ],
+        )
+        state.add_outline_variation(variation)
+        original_time = state.updated_at
+
+        result = state.select_variation_as_canonical("var-1")
+
+        assert result is True
+        assert state.selected_variation_id == "var-1"
+        assert state.world_description == "A magical realm"
+        assert state.world_rules == ["Magic requires focus", "Dragons are wise"]
+        assert len(state.characters) == 2
+        assert state.characters[0].name == "Hero"
+        assert state.characters[1].name == "Mentor"
+        assert state.plot_summary == "Hero embarks on a quest"
+        assert len(state.plot_points) == 2
+        assert len(state.chapters) == 2
+        assert state.chapters[0].title == "The Beginning"
+        assert state.updated_at >= original_time
+
+    def test_select_variation_as_canonical_not_found(self):
+        """Test selecting nonexistent variation returns False."""
+        state = StoryState(id="test", status="outlining")
+        variation = OutlineVariation(id="var-1", name="Existing")
+        state.add_outline_variation(variation)
+
+        result = state.select_variation_as_canonical("nonexistent-id")
+
+        assert result is False
+        assert state.selected_variation_id is None
+
+    def test_select_variation_as_canonical_deep_copies_data(self):
+        """Test that selecting variation creates deep copies."""
+        state = StoryState(id="test", status="outlining")
+
+        character = Character(name="Hero", role="protagonist", description="Original")
+        variation = OutlineVariation(
+            id="var-1",
+            characters=[character],
+            chapters=[Chapter(number=1, title="Original Title", outline="Test")],
+        )
+        state.add_outline_variation(variation)
+
+        state.select_variation_as_canonical("var-1")
+
+        # Modify the original variation's data
+        variation.characters[0].description = "Modified"
+        variation.chapters[0].title = "Modified Title"
+
+        # State's data should be unchanged (deep copy)
+        assert state.characters[0].description == "Original"
+        assert state.chapters[0].title == "Original Title"
+
+    def test_create_merged_variation_basic(self):
+        """Test creating a merged variation from multiple sources."""
+        state = StoryState(id="test", status="outlining")
+
+        # Create source variations
+        var1 = OutlineVariation(
+            id="var-1",
+            name="World Source",
+            world_description="Fantasy world",
+            world_rules=["Magic exists"],
+            characters=[Character(name="Wizard", role="protagonist", description="Powerful")],
+        )
+        var2 = OutlineVariation(
+            id="var-2",
+            name="Plot Source",
+            plot_summary="Epic quest for the artifact",
+            plot_points=[PlotPoint(description="Find the artifact")],
+            chapters=[Chapter(number=1, title="Quest Begins", outline="Starting out")],
+        )
+        state.add_outline_variation(var1)
+        state.add_outline_variation(var2)
+
+        merged = state.create_merged_variation(
+            name="Best of Both",
+            source_variations={
+                "var-1": ["world", "characters"],
+                "var-2": ["plot", "chapters"],
+            },
+        )
+
+        assert merged.name == "Best of Both"
+        assert merged.world_description == "Fantasy world"
+        assert merged.world_rules == ["Magic exists"]
+        assert len(merged.characters) == 1
+        assert merged.characters[0].name == "Wizard"
+        assert merged.plot_summary == "Epic quest for the artifact"
+        assert len(merged.plot_points) == 1
+        assert len(merged.chapters) == 1
+        assert merged.chapters[0].title == "Quest Begins"
+        # Should be added to variations list
+        assert len(state.outline_variations) == 3
+        assert state.outline_variations[2].id == merged.id
+
+    def test_create_merged_variation_with_missing_source(self):
+        """Test creating merged variation with a nonexistent source ID."""
+        state = StoryState(id="test", status="outlining")
+
+        var1 = OutlineVariation(
+            id="var-1",
+            name="Existing",
+            world_description="Real world",
+        )
+        state.add_outline_variation(var1)
+
+        merged = state.create_merged_variation(
+            name="Partial Merge",
+            source_variations={
+                "var-1": ["world"],
+                "nonexistent": ["characters"],  # This should be skipped
+            },
+        )
+
+        assert merged.world_description == "Real world"
+        assert merged.characters == []  # Not merged from nonexistent
+
+    def test_create_merged_variation_overwrite_warning(self):
+        """Test that merging duplicate element types overwrites earlier values."""
+        state = StoryState(id="test", status="outlining")
+
+        var1 = OutlineVariation(
+            id="var-1",
+            name="First",
+            world_description="World from var1",
+        )
+        var2 = OutlineVariation(
+            id="var-2",
+            name="Second",
+            world_description="World from var2",
+        )
+        state.add_outline_variation(var1)
+        state.add_outline_variation(var2)
+
+        # Both sources provide "world" - var2 should overwrite var1
+        merged = state.create_merged_variation(
+            name="Overwritten",
+            source_variations={
+                "var-1": ["world"],
+                "var-2": ["world"],  # Same element type - will overwrite
+            },
+        )
+
+        # The second source should have overwritten the first
+        assert merged.world_description == "World from var2"
+
+    def test_create_merged_variation_all_element_types(self):
+        """Test merging all possible element types."""
+        state = StoryState(id="test", status="outlining")
+
+        var1 = OutlineVariation(
+            id="var-1",
+            world_description="Complete world",
+            world_rules=["Rule 1", "Rule 2"],
+            characters=[
+                Character(name="Alice", role="protagonist", description="Main"),
+                Character(name="Bob", role="antagonist", description="Evil"),
+            ],
+            plot_summary="Complete plot summary",
+            plot_points=[
+                PlotPoint(description="Point 1"),
+                PlotPoint(description="Point 2"),
+            ],
+            chapters=[
+                Chapter(number=1, title="Ch1", outline="First"),
+                Chapter(number=2, title="Ch2", outline="Second"),
+            ],
+        )
+        state.add_outline_variation(var1)
+
+        merged = state.create_merged_variation(
+            name="Full Merge",
+            source_variations={
+                "var-1": ["world", "characters", "plot", "chapters"],
+            },
+        )
+
+        assert merged.world_description == "Complete world"
+        assert len(merged.world_rules) == 2
+        assert len(merged.characters) == 2
+        assert merged.plot_summary == "Complete plot summary"
+        assert len(merged.plot_points) == 2
+        assert len(merged.chapters) == 2
+
+    def test_create_merged_variation_deep_copies(self):
+        """Test that merged variation contains deep copies."""
+        state = StoryState(id="test", status="outlining")
+
+        original_char = Character(
+            name="Hero",
+            role="protagonist",
+            description="Original description",
+        )
+        original_chapter = Chapter(
+            number=1,
+            title="Original Title",
+            outline="Original outline",
+        )
+        var1 = OutlineVariation(
+            id="var-1",
+            characters=[original_char],
+            chapters=[original_chapter],
+            world_rules=["Original rule"],
+        )
+        state.add_outline_variation(var1)
+
+        merged = state.create_merged_variation(
+            name="Deep Copy Test",
+            source_variations={"var-1": ["characters", "chapters", "world"]},
+        )
+
+        # Modify original variation
+        original_char.description = "Modified description"
+        original_chapter.title = "Modified Title"
+        var1.world_rules.append("New rule")
+
+        # Merged should be unaffected
+        assert merged.characters[0].description == "Original description"
+        assert merged.chapters[0].title == "Original Title"
+        assert len(merged.world_rules) == 1
+
+    def test_create_merged_variation_sets_rationale(self):
+        """Test that merged variation has ai_rationale set."""
+        state = StoryState(id="test", status="outlining")
+
+        var1 = OutlineVariation(id="var-1")
+        var2 = OutlineVariation(id="var-2")
+        var3 = OutlineVariation(id="var-3")
+        state.add_outline_variation(var1)
+        state.add_outline_variation(var2)
+        state.add_outline_variation(var3)
+
+        merged = state.create_merged_variation(
+            name="Triple Merge",
+            source_variations={
+                "var-1": ["world"],
+                "var-2": ["characters"],
+                "var-3": ["plot"],
+            },
+        )
+
+        assert "Merged from 3 variations" in merged.ai_rationale
+
+    def test_create_merged_variation_empty_sources(self):
+        """Test creating merged variation with no valid sources."""
+        state = StoryState(id="test", status="outlining")
+
+        merged = state.create_merged_variation(
+            name="Empty Merge",
+            source_variations={
+                "nonexistent-1": ["world"],
+                "nonexistent-2": ["characters"],
+            },
+        )
+
+        # Should still create a variation with default empty values
+        assert merged.name == "Empty Merge"
+        assert merged.world_description == ""
+        assert merged.characters == []
+        assert merged.chapters == []

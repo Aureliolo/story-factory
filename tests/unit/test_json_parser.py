@@ -59,6 +59,51 @@ More text"""
         result = extract_json(response)
         assert result == {"nested": {"key": "value"}}
 
+    def test_extracts_from_plain_code_block(self):
+        """Should extract JSON from plain ``` code block (no json marker)."""
+        response = """Here is the data:
+```
+{"name": "test", "value": 42}
+```
+That's all."""
+        result = extract_json(response)
+        assert result == {"name": "test", "value": 42}
+
+    def test_raw_json_array_invalid_returns_none(self):
+        """Should return None when raw JSON array is invalid."""
+        # Text contains what looks like a JSON array but is actually invalid
+        response = "Here is the array: [invalid json content, missing quotes]"
+        result = extract_json(response)
+        assert result is None
+
+    def test_raw_json_array_valid_returns_array(self):
+        """Should extract JSON from raw array without code block."""
+        # Valid JSON array embedded in text (no code block)
+        response = 'Here is the data: [{"name": "a"}, {"name": "b"}] - that is all.'
+        result = extract_json(response)
+        assert result == [{"name": "a"}, {"name": "b"}]
+
+    def test_fallback_pattern_invalid_json_returns_none(self):
+        """Should return None when fallback pattern matches but JSON is invalid."""
+        # Fallback pattern matches, but the content is not valid JSON
+        response = 'The result is ITEM{broken:json,no"quotes} here.'
+        fallback = r"ITEM\{[^{}]*\}"
+        result = extract_json(response, fallback_pattern=fallback)
+        assert result is None
+
+    def test_fallback_pattern_success_after_raw_strategies_fail(self):
+        """Should use fallback pattern when raw JSON strategies fail."""
+        # Strategy 3 (raw JSON object) regex is greedy - it matches from first { to last }
+        # This response has an invalid JSON when matched greedily, but a more specific
+        # fallback pattern can extract valid JSON.
+        # Strategy 3 matches: `{invalid "broken} {"valid": "json"}`
+        # This is invalid JSON (contains unbalanced quotes), so Strategy 3 fails
+        # Then fallback pattern matches just the valid JSON object
+        response = '{invalid "broken} {"valid": "json"}'
+        fallback = r'\{"valid"[^}]*\}'  # Matches just {"valid": "json"}
+        result = extract_json(response, fallback_pattern=fallback)
+        assert result == {"valid": "json"}
+
 
 class TestExtractJsonList:
     """Tests for extract_json_list function."""

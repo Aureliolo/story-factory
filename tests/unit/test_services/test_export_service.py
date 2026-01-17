@@ -630,6 +630,73 @@ class TestExportServiceFileExtension:
         assert service.get_file_extension("unknown") == ".txt"
 
 
+class TestExportServiceAdditionalEdgeCases:
+    """Test additional edge cases and error handling in export service."""
+
+    def test_get_template_unknown_raises_error(self):
+        """Test that unknown template name raises ValueError."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        with pytest.raises(ValueError, match="Unknown template"):
+            service.get_template("nonexistent_template")
+
+    def test_format_chapter_header_without_numbers(self):
+        """Test chapter header formatting without numbers."""
+        from services.export_service import ExportOptions
+
+        settings = Settings()
+        service = ExportService(settings)
+
+        options = ExportOptions(include_chapter_numbers=False)
+        header = service._format_chapter_header(1, "Test Chapter", options)
+
+        assert header == "Test Chapter"
+        assert "1" not in header
+
+    def test_to_pdf_double_spaced(self, tmp_path):
+        """Test PDF export with double spacing option."""
+        from services.export_service import ExportOptions
+
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("test-double-spaced")
+        options = ExportOptions(double_spaced=True)
+
+        # Should not raise, just verify it executes
+        pdf_bytes = service.to_pdf(state, options=options)
+        assert len(pdf_bytes) > 0
+
+    def test_save_to_file_invalid_format_validation(self, tmp_path):
+        """Test save_to_file validates format before processing."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("test-invalid-format")
+        filepath = tmp_path / "test.xyz"
+
+        with pytest.raises(ValueError, match="must be one of"):
+            service.save_to_file(state, "xyz", filepath)
+
+    def test_save_to_file_exception_handling(self, tmp_path, monkeypatch):
+        """Test save_to_file exception handling."""
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("test-exception")
+        filepath = tmp_path / "test.md"
+
+        # Mock to_markdown to raise an unexpected exception
+        def mock_to_markdown(*args, **kwargs):
+            raise RuntimeError("Simulated error")
+
+        monkeypatch.setattr(service, "to_markdown", mock_to_markdown)
+
+        with pytest.raises(RuntimeError, match="Simulated error"):
+            service.save_to_file(state, "markdown", filepath)
+
+
 def _create_test_state(state_id: str) -> StoryState:
     """Helper function to create test story state."""
     brief = StoryBrief(
