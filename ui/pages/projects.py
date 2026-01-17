@@ -43,6 +43,11 @@ class ProjectsPage:
                 ui.label("Projects").classes("text-2xl font-bold")
                 ui.space()
                 ui.button(
+                    "Manage Backups",
+                    on_click=self._show_backup_manager,
+                    icon="folder_special",
+                ).props("flat")
+                ui.button(
                     "+ New Project",
                     on_click=self._create_project,
                     icon="add",
@@ -123,6 +128,12 @@ class ProjectsPage:
                             on_click=lambda p=project: self._open_project(p.id),
                             icon="folder_open",
                         ).props("flat")
+
+                    ui.button(
+                        "Backup",
+                        on_click=lambda p=project: self._backup_project(p.id, p.name),
+                        icon="backup",
+                    ).props("flat")
 
                     ui.button(
                         "Duplicate",
@@ -288,3 +299,92 @@ class ProjectsPage:
         except Exception as e:
             logger.exception(f"Failed to delete project {project_id}")
             ui.notify(f"Error: {e}", type="negative")
+
+    async def _backup_project(self, project_id: str, project_name: str) -> None:
+        """Create a backup of a project."""
+        try:
+            backup_path = self.services.backup.create_backup(project_id, project_name)
+            ui.notify(f"Backup created: {backup_path.name}", type="positive")
+        except Exception as e:
+            logger.exception(f"Failed to backup project {project_id}")
+            ui.notify(f"Error: {e}", type="negative")
+
+    async def _show_backup_manager(self) -> None:
+        """Show the backup management dialog."""
+        with ui.dialog() as dialog, ui.card().classes("w-[800px]"):
+            ui.label("Backup Manager").classes("text-xl font-bold")
+
+            # List backups
+            backups = self.services.backup.list_backups()
+
+            if not backups:
+                ui.label("No backups found.").classes("text-gray-600 dark:text-gray-400 my-4")
+            else:
+                with ui.column().classes("w-full gap-2 my-4"):
+                    for backup in backups:
+                        with ui.card().classes("w-full"):
+                            with ui.row().classes("w-full items-center"):
+                                with ui.column().classes("flex-grow"):
+                                    ui.label(backup.project_name).classes("font-semibold")
+                                    ui.label(
+                                        f"Created: {self._format_date(backup.created_at)}"
+                                    ).classes("text-sm text-gray-600 dark:text-gray-400")
+                                    ui.label(f"Size: {backup.size_bytes / 1024:.1f} KB").classes(
+                                        "text-sm text-gray-600 dark:text-gray-400"
+                                    )
+
+                                with ui.row().classes("gap-2"):
+                                    ui.button(
+                                        "Restore",
+                                        on_click=lambda b=backup: self._restore_backup(
+                                            b.filename, dialog
+                                        ),
+                                        icon="restore",
+                                    ).props("flat color=primary")
+
+                                    ui.button(
+                                        "Delete",
+                                        on_click=lambda b=backup: self._delete_backup(
+                                            b.filename, dialog
+                                        ),
+                                        icon="delete",
+                                    ).props("flat color=negative")
+
+            with ui.row().classes("w-full justify-end mt-4"):
+                ui.button("Close", on_click=dialog.close).props("flat")
+
+        dialog.open()
+
+    async def _restore_backup(self, backup_filename: str, dialog) -> None:
+        """Restore a project from backup."""
+        try:
+            self.services.backup.restore_backup(backup_filename)
+            ui.notify("Backup restored successfully!", type="positive")
+            dialog.close()
+            self._refresh_project_list()
+        except Exception as e:
+            logger.exception(f"Failed to restore backup {backup_filename}")
+            ui.notify(f"Error: {e}", type="negative")
+
+    async def _delete_backup(self, backup_filename: str, dialog) -> None:
+        """Delete a backup file."""
+        from ui.components.common import confirmation_dialog
+
+        def delete():
+            try:
+                self.services.backup.delete_backup(backup_filename)
+                ui.notify("Backup deleted", type="positive")
+                dialog.close()
+                # Reopen backup manager to show updated list
+                self._show_backup_manager()
+            except Exception as e:
+                logger.exception(f"Failed to delete backup {backup_filename}")
+                ui.notify(f"Error: {e}", type="negative")
+
+        confirmation_dialog(
+            title="Delete Backup?",
+            message=f'Are you sure you want to delete backup "{backup_filename}"? This cannot be undone.',
+            on_confirm=delete,
+            confirm_text="Delete",
+            cancel_text="Cancel",
+        )

@@ -2,15 +2,12 @@
 
 import json
 import logging
-import shutil
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from memory.story_state import StoryState
-from memory.world_database import WorldDatabase
-from settings import BACKUPS_DIR, STORIES_DIR, WORLDS_DIR, Settings
+from settings import STORIES_DIR, WORLDS_DIR, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -222,11 +219,12 @@ class BackupService:
                 metadata_content = zf.read("backup_metadata.json")
                 metadata = json.loads(metadata_content)
 
-            original_project_id = metadata.get("project_id")
             original_name = metadata.get("project_name", "Restored Project")
 
             # Find the story state file
-            story_files = [f for f in zf.namelist() if f.endswith(".json") and f != "backup_metadata.json"]
+            story_files = [
+                f for f in zf.namelist() if f.endswith(".json") and f != "backup_metadata.json"
+            ]
             if not story_files:
                 raise ValueError(f"Invalid backup: no story state file found in {backup_filename}")
 
@@ -238,6 +236,7 @@ class BackupService:
 
             # Generate new project ID
             import uuid
+
             new_project_id = str(uuid.uuid4())
             logger.debug(f"Restoring with new project ID: {new_project_id}")
 
