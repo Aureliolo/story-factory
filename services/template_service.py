@@ -282,16 +282,10 @@ class TemplateService:
             if preset:
                 self._apply_structure_preset(preset, state)
 
-        # Add template info to world database as metadata
-        try:
-            # We could add template info to the world database if needed
-            # For now, just log it
-            logger.debug(
-                f"Template applied with {len(state.characters)} characters and {len(state.plot_points)} plot points"
-            )
-        except Exception as e:
-            logger.warning(f"Failed to add template metadata to world DB: {e}")
-
+        # Log template application summary
+        logger.debug(
+            f"Template applied with {len(state.characters)} characters and {len(state.plot_points)} plot points"
+        )
         logger.info("Successfully applied template to project")
 
     def _apply_structure_preset(self, preset: StructurePreset, state: StoryState) -> None:

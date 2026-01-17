@@ -1,7 +1,5 @@
 """Tests for the export service."""
 
-from pathlib import Path
-
 import pytest
 
 from memory.story_state import Chapter, StoryBrief, StoryState
@@ -204,17 +202,17 @@ class TestExportServiceReraise:
         self, export_service, sample_state, tmp_path, monkeypatch
     ):
         """Test save_to_file re-raises ValueError from path validation."""
-        # Line 833: ValueError re-raise
-        # We need to trigger a ValueError from _validate_export_path
-        # by providing a path outside allowed directories
+        # Line 829-830: ValueError re-raise from _validate_export_path
+        # We need to trigger a ValueError from _validate_export_path inside the try block
 
-        # Create a path that would escape the base directory
-        # Note: On Windows the path traversal check works differently
-        # We'll test with a path that triggers validation error
-        from services.export_service import _validate_export_path
+        # Mock _validate_export_path to raise ValueError
+        def mock_validate_raises(path):
+            raise ValueError("Path outside allowed directory")
 
-        # Test that ValueError from validation is raised
-        with pytest.raises(ValueError, match="outside allowed directory"):
-            # Use a path outside the base dir
-            # Root path should fail validation
-            _validate_export_path(Path("/some/other/directory/file.txt"))
+        monkeypatch.setattr("services.export_service._validate_export_path", mock_validate_raises)
+
+        filepath = tmp_path / "test.md"
+
+        # This should trigger the ValueError re-raise path
+        with pytest.raises(ValueError, match="Path outside allowed directory"):
+            export_service.save_to_file(sample_state, "markdown", filepath)

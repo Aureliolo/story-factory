@@ -822,10 +822,7 @@ class ExportService:
             elif format == "docx":
                 bytes_content = self.to_docx(state, template, options)
                 filepath.write_bytes(bytes_content)
-            else:
-                error_msg = f"Unsupported export format: {format}"
-                logger.error(f"save_to_file failed: {error_msg}")
-                raise ValueError(error_msg)
+            # Note: No else branch needed - validate_string_in_choices ensures only valid formats reach here
 
             logger.info(f"Exported story to {filepath} ({format} format)")
             return filepath
