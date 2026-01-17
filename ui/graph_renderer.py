@@ -46,6 +46,8 @@ def render_graph_html(
     height: int = 500,
     selected_entity_id: str | None = None,
     container_id: str = "graph-container",
+    create_rel_callback_id: str = "",
+    edge_context_callback_id: str = "",
 ) -> GraphRenderResult:
     """Generate vis.js graph HTML and JavaScript separately.
 
@@ -57,6 +59,8 @@ def render_graph_html(
         height: Graph container height in pixels
         selected_entity_id: ID of selected entity to highlight
         container_id: Unique ID for the graph container
+        create_rel_callback_id: Callback ID for creating relationships via drag
+        edge_context_callback_id: Callback ID for edge context menu
 
     Returns:
         GraphRenderResult with HTML and JavaScript strings.
@@ -308,6 +312,111 @@ def render_graph_html(
             // Store network reference for external control
             window.graphNetwork = network;
             window.graphNodes = nodes;
+            window.graphEdges = edges;
+
+            // Drag-to-connect relationship creation
+            var dragStartNode = null;
+            var tempEdge = null;
+
+            // Enable manipulation for adding edges via drag
+            network.on('dragStart', function(params) {{
+                if (params.nodes.length > 0 && params.event && params.event.shiftKey) {{
+                    dragStartNode = params.nodes[0];
+                    // Show visual feedback
+                    var nodeData = nodes.get(dragStartNode);
+                    if (nodeData) {{
+                        nodes.update({{
+                            id: dragStartNode,
+                            borderWidth: 4,
+                            color: {{
+                                border: '#3b82f6',
+                                background: nodeData.color.background || nodeData.color
+                            }}
+                        }});
+                    }}
+                }}
+            }});
+
+            network.on('dragging', function(params) {{
+                if (dragStartNode && params.event && params.event.shiftKey) {{
+                    // Visual feedback for drag-to-connect mode
+                    var pointer = network.getPointer(params.event);
+                    var nearestNode = network.getNodeAt(pointer);
+
+                    // Remove temporary edge if exists
+                    if (tempEdge) {{
+                        try {{ edges.remove(tempEdge); }} catch(e) {{}}
+                        tempEdge = null;
+                    }}
+
+                    // If hovering over another node, show preview edge
+                    if (nearestNode && nearestNode !== dragStartNode) {{
+                        tempEdge = 'temp_edge_' + Date.now();
+                        edges.add({{
+                            id: tempEdge,
+                            from: dragStartNode,
+                            to: nearestNode,
+                            dashes: [5, 5],
+                            color: {{ color: '#3b82f6', opacity: 0.5 }},
+                            arrows: {{ to: {{ enabled: true, scaleFactor: 0.5 }} }},
+                            width: 2
+                        }});
+                    }}
+                }}
+            }});
+
+            network.on('dragEnd', function(params) {{
+                if (dragStartNode && params.event && params.event.shiftKey) {{
+                    var pointer = network.getPointer(params.event);
+                    var targetNode = network.getNodeAt(pointer);
+
+                    // Remove temporary edge
+                    if (tempEdge) {{
+                        try {{ edges.remove(tempEdge); }} catch(e) {{}}
+                        tempEdge = null;
+                    }}
+
+                    // Reset source node styling
+                    var nodeData = nodes.get(dragStartNode);
+                    if (nodeData && nodeData._originalColor) {{
+                        nodes.update({{
+                            id: dragStartNode,
+                            borderWidth: 2,
+                            color: nodeData._originalColor
+                        }});
+                    }}
+
+                    // Create relationship if dropped on valid target
+                    if (targetNode && targetNode !== dragStartNode) {{
+                        // Emit event to create relationship
+                        if ('{create_rel_callback_id}') {{
+                            emitEvent('{create_rel_callback_id}', {{
+                                source_id: dragStartNode,
+                                target_id: targetNode
+                            }});
+                        }}
+                    }}
+
+                    dragStartNode = null;
+                }}
+            }});
+
+            // Right-click on edge for context menu
+            network.on('oncontext', function(params) {{
+                params.event.preventDefault();
+
+                if (params.edges.length > 0) {{
+                    var edgeId = params.edges[0];
+                    // Emit event for edge context menu
+                    if ('{edge_context_callback_id}') {{
+                        emitEvent('{edge_context_callback_id}', {{
+                            edge_id: edgeId,
+                            x: params.event.pageX,
+                            y: params.event.pageY
+                        }});
+                    }}
+                }}
+            }});
         }}
 
         initGraph();

@@ -44,6 +44,8 @@ class GraphComponent:
         settings: "Settings | None" = None,
         on_node_select: Callable[[str], Any] | None = None,
         on_edge_select: Callable[[str], Any] | None = None,
+        on_create_relationship: Callable[[str, str], Any] | None = None,
+        on_edge_context_menu: Callable[[str], Any] | None = None,
         height: int = 500,
     ):
         """Initialize graph component.
@@ -53,6 +55,8 @@ class GraphComponent:
             settings: Application settings for configuration values.
             on_node_select: Callback when a node is selected.
             on_edge_select: Callback when an edge is selected (passes relationship ID).
+            on_create_relationship: Callback when creating relationship via drag (source_id, target_id).
+            on_edge_context_menu: Callback for edge right-click (edge_id).
             height: Graph container height in pixels.
         """
         from settings import Settings
@@ -61,6 +65,8 @@ class GraphComponent:
         self.settings = settings or Settings.load()
         self.on_node_select = on_node_select
         self.on_edge_select = on_edge_select
+        self.on_create_relationship = on_create_relationship
+        self.on_edge_context_menu = on_edge_context_menu
         self.height = height
 
         self._container: Html | None = None
@@ -69,6 +75,8 @@ class GraphComponent:
         self._selected_entity_id: str | None = None
         self._callback_id = f"graph_node_select_{uuid.uuid4().hex[:8]}"
         self._edge_callback_id = f"graph_edge_select_{uuid.uuid4().hex[:8]}"
+        self._create_rel_callback_id = f"graph_create_relationship_{uuid.uuid4().hex[:8]}"
+        self._edge_context_callback_id = f"graph_edge_context_menu_{uuid.uuid4().hex[:8]}"
 
     def build(self) -> None:
         """Build the graph UI."""
@@ -95,6 +103,27 @@ class GraphComponent:
 
             ui.on(self._edge_callback_id, handle_edge_select)
 
+        # Register event handler for creating relationships via drag
+        if self.on_create_relationship:
+
+            def handle_create_relationship(e) -> None:
+                source_id = e.args.get("source_id") if e.args else None
+                target_id = e.args.get("target_id") if e.args else None
+                if source_id and target_id and self.on_create_relationship:
+                    self.on_create_relationship(source_id, target_id)
+
+            ui.on(self._create_rel_callback_id, handle_create_relationship)
+
+        # Register event handler for edge context menu
+        if self.on_edge_context_menu:
+
+            def handle_edge_context_menu(e) -> None:
+                edge_id = e.args.get("edge_id") if e.args else None
+                if edge_id and self.on_edge_context_menu:
+                    self.on_edge_context_menu(edge_id)
+
+            ui.on(self._edge_context_callback_id, handle_edge_context_menu)
+
         with ui.column().classes("w-full"):
             # Controls
             with ui.row().classes("w-full items-center gap-4 mb-2"):
@@ -120,6 +149,13 @@ class GraphComponent:
                     value="faction" in self._filter_types,
                     on_change=lambda e: self._toggle_filter("faction", e.value),
                 )
+
+                ui.space()
+
+                # Help text for drag-to-connect
+                ui.label("Shift+Drag to connect").classes(
+                    "text-xs text-gray-500 dark:text-gray-400"
+                ).tooltip("Hold Shift and drag from one node to another to create a relationship")
 
                 ui.space()
 
@@ -209,6 +245,12 @@ class GraphComponent:
             height=self.height - 20,  # Account for border
             selected_entity_id=self._selected_entity_id,
             container_id="graph-container-main",
+            create_rel_callback_id=self._create_rel_callback_id
+            if self.on_create_relationship
+            else "",
+            edge_context_callback_id=self._edge_context_callback_id
+            if self.on_edge_context_menu
+            else "",
         )
 
         # Set HTML content (no script tags)
