@@ -221,7 +221,7 @@ The entity list and graph are automatically updated:
 
 1. **Responsive Design**: Works on mobile (stacked) and desktop (side-by-side)
 2. **Tab-based Navigation**: Easy to switch between entity types
-3. **Visual Indicators**: 
+3. **Visual Indicators**:
    - ⚠️ for low-confidence items (orange text)
    - Confidence percentages for transparency
    - Checkboxes for selective import
@@ -235,7 +235,7 @@ The entity list and graph are automatically updated:
 - **Orange**: Low-confidence warnings (⚠️)
 - **Green**: Success notifications (✓)
 - **Gray**: Secondary text, disabled items
-- **Entity Colors**: 
+- **Entity Colors**:
   - Characters: Green
   - Locations: Blue
   - Items: Cyan
