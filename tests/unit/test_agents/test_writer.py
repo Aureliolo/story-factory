@@ -345,7 +345,9 @@ class TestWriterSceneAware:
         first_call_prompt = writer.generate.call_args_list[0][0][0]
         assert "Jack Stone" in first_call_prompt or "POV CHARACTER" in first_call_prompt
 
-    def test_includes_scene_location_in_prompt(self, writer, sample_story_state, chapter_with_scenes):
+    def test_includes_scene_location_in_prompt(
+        self, writer, sample_story_state, chapter_with_scenes
+    ):
         """Test that location is included in prompts."""
         writer.generate = MagicMock(return_value="Scene content...")
 
@@ -354,7 +356,9 @@ class TestWriterSceneAware:
         first_call_prompt = writer.generate.call_args_list[0][0][0]
         assert "office" in first_call_prompt.lower() or "LOCATION" in first_call_prompt
 
-    def test_maintains_continuity_between_scenes(self, writer, sample_story_state, chapter_with_scenes):
+    def test_maintains_continuity_between_scenes(
+        self, writer, sample_story_state, chapter_with_scenes
+    ):
         """Test that previous scene context is passed to next scene."""
         scene_contents = [
             "First scene with specific ending phrase...",
@@ -433,4 +437,3 @@ class TestWriterSceneAware:
         # First scene should include previous chapter context
         first_call_prompt = writer.generate.call_args_list[0][0][0]
         assert "PREVIOUS CHAPTER" in first_call_prompt or "ending text" in first_call_prompt
-
