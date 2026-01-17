@@ -1,5 +1,6 @@
 """Timeline visualization component using vis-timeline."""
 
+import json
 import logging
 import uuid
 from collections.abc import Callable
@@ -106,7 +107,7 @@ def _extract_timeline_data(story_state: StoryState | None) -> dict[str, Any]:
 
     # Add location introductions from world database if available
     # For now, we'll use a simple approach - locations appear at the beginning
-    if hasattr(story_state, "world_description") and story_state.world_description:
+    if story_state.world_description:
         items.append(
             {
                 "id": item_id,
@@ -148,12 +149,8 @@ def _render_timeline_html(
     html = f'<div id="{container_id}" style="height: {height}px; border: 1px solid #ccc; border-radius: 4px;"></div>'
 
     # Build JavaScript initialization
-    items_json = (
-        str(data["items"]).replace("'", '"').replace("True", "true").replace("False", "false")
-    )
-    groups_json = (
-        str(data["groups"]).replace("'", '"').replace("True", "true").replace("False", "false")
-    )
+    items_json = json.dumps(data["items"])
+    groups_json = json.dumps(data["groups"])
 
     # Timeline options
     options = {
@@ -165,7 +162,7 @@ def _render_timeline_html(
         "showCurrentTime": False,
         "margin": {"item": 10, "axis": 5},
     }
-    options_json = str(options).replace("'", '"').replace("True", "true").replace("False", "false")
+    options_json = json.dumps(options)
 
     js = f"""
     (function() {{
