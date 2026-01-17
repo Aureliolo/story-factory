@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory.story_state import Chapter, Character, StoryBrief, StoryState
+from memory.story_state import Chapter, Character, OutlineVariation, StoryBrief, StoryState
 from memory.world_database import WorldDatabase
-from services.story_service import StoryService
+from services.story_service import GenerationCancelled, StoryService
 from settings import Settings
 from workflows.orchestrator import WorkflowEvent
 
@@ -697,3 +697,563 @@ class TestStoryServiceGenerators:
 
             assert len(events) == 2
             assert events[1].data["issues"][0]["description"] == "Timeline inconsistency"
+
+
+class TestStoryServiceExceptionHandling:
+    """Tests for exception handling paths."""
+
+    def test_start_interview_raises_on_orchestrator_error(self, story_service, sample_story_state):
+        """Test start_interview propagates exceptions from orchestrator."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            mock_orch.start_interview.side_effect = RuntimeError("LLM connection failed")
+            MockOrchestrator.return_value = mock_orch
+
+            with pytest.raises(RuntimeError, match="LLM connection failed"):
+                story_service.start_interview(sample_story_state)
+
+    def test_process_interview_completes_with_is_complete_true(
+        self, story_service, sample_story_state
+    ):
+        """Test process_interview logs completion when is_complete is True."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            mock_orch.process_interview_response.return_value = (
+                "Great! Here's your brief.",
+                True,
+            )
+            mock_orch.story_state = sample_story_state
+            MockOrchestrator.return_value = mock_orch
+
+            response, is_complete = story_service.process_interview(
+                sample_story_state, "Yes, that sounds perfect"
+            )
+
+            assert is_complete is True
+            assert response == "Great! Here's your brief."
+
+    def test_process_interview_raises_on_orchestrator_error(
+        self, story_service, sample_story_state
+    ):
+        """Test process_interview propagates exceptions from orchestrator."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            mock_orch.process_interview_response.side_effect = ValueError("Invalid input")
+            MockOrchestrator.return_value = mock_orch
+
+            with pytest.raises(ValueError, match="Invalid input"):
+                story_service.process_interview(sample_story_state, "Some response")
+
+    def test_finalize_interview_raises_on_orchestrator_error(
+        self, story_service, sample_story_state
+    ):
+        """Test finalize_interview propagates exceptions from orchestrator."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            mock_orch.finalize_interview.side_effect = RuntimeError("Failed to generate brief")
+            MockOrchestrator.return_value = mock_orch
+
+            with pytest.raises(RuntimeError, match="Failed to generate brief"):
+                story_service.finalize_interview(sample_story_state)
+
+    def test_build_structure_raises_on_orchestrator_error(
+        self, story_service, sample_story_state, world_db
+    ):
+        """Test build_structure propagates exceptions from orchestrator."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            mock_orch.build_story_structure.side_effect = RuntimeError(
+                "Structure generation failed"
+            )
+            mock_orch.story_state = sample_story_state
+            MockOrchestrator.return_value = mock_orch
+
+            with pytest.raises(RuntimeError, match="Structure generation failed"):
+                story_service.build_structure(sample_story_state, world_db)
+
+
+class TestStoryServiceOutlineVariations:
+    """Tests for outline variation methods."""
+
+    def test_generate_outline_variations(self, story_service, sample_story_state):
+        """Test generates outline variations from architect."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            mock_architect = MagicMock()
+
+            # Create mock variations
+            mock_variations = [
+                OutlineVariation(
+                    id="var-1",
+                    name="Variation 1",
+                    plot_summary="A dark mystery",
+                    ai_rationale="Classic noir approach",
+                ),
+                OutlineVariation(
+                    id="var-2",
+                    name="Variation 2",
+                    plot_summary="A redemption arc",
+                    ai_rationale="Character-driven approach",
+                ),
+            ]
+            mock_architect.generate_outline_variations.return_value = mock_variations
+            mock_orch.architect = mock_architect
+            mock_orch.story_state = sample_story_state
+            MockOrchestrator.return_value = mock_orch
+
+            variations = story_service.generate_outline_variations(sample_story_state, count=2)
+
+            assert len(variations) == 2
+            assert variations[0].name == "Variation 1"
+            assert variations[1].name == "Variation 2"
+            mock_architect.generate_outline_variations.assert_called_once_with(
+                sample_story_state, count=2
+            )
+            # Verify variations were added to state
+            assert len(sample_story_state.outline_variations) == 2
+
+    def test_generate_outline_variations_raises_without_brief(self, story_service):
+        """Test generate_outline_variations raises when no brief exists."""
+        state = StoryState(id="test-no-brief", status="interview")
+
+        with pytest.raises(ValueError, match="brief"):
+            story_service.generate_outline_variations(state)
+
+    def test_select_variation_success(self, story_service, sample_story_state):
+        """Test selecting a variation as canonical."""
+        # Add a variation to the state
+        variation = OutlineVariation(
+            id="var-to-select",
+            name="Selected Variation",
+            plot_summary="The selected plot",
+            world_description="A dark world",
+            characters=[
+                Character(name="Hero", role="protagonist", description="The main character")
+            ],
+            chapters=[Chapter(number=1, title="Beginning", outline="Start")],
+        )
+        sample_story_state.outline_variations.append(variation)
+
+        result = story_service.select_variation(sample_story_state, "var-to-select")
+
+        assert result is True
+        assert sample_story_state.selected_variation_id == "var-to-select"
+        assert sample_story_state.plot_summary == "The selected plot"
+        assert sample_story_state.world_description == "A dark world"
+
+    def test_select_variation_not_found(self, story_service, sample_story_state):
+        """Test selecting a non-existent variation returns False."""
+        result = story_service.select_variation(sample_story_state, "non-existent-id")
+
+        assert result is False
+
+    def test_rate_variation_success(self, story_service, sample_story_state):
+        """Test rating a variation successfully."""
+        # Add a variation to rate
+        variation = OutlineVariation(id="var-to-rate", name="Rate Me")
+        sample_story_state.outline_variations.append(variation)
+
+        result = story_service.rate_variation(
+            sample_story_state,
+            "var-to-rate",
+            rating=4,
+            notes="Great plot twist!",
+        )
+
+        assert result is True
+        assert variation.user_rating == 4
+        assert variation.user_notes == "Great plot twist!"
+
+    def test_rate_variation_clamps_rating(self, story_service, sample_story_state):
+        """Test rating is clamped between 0 and 5."""
+        variation = OutlineVariation(id="var-clamp", name="Clamp Test")
+        sample_story_state.outline_variations.append(variation)
+
+        # Test rating above 5
+        story_service.rate_variation(sample_story_state, "var-clamp", rating=10)
+        assert variation.user_rating == 5
+
+        # Test rating below 0
+        story_service.rate_variation(sample_story_state, "var-clamp", rating=-3)
+        assert variation.user_rating == 0
+
+    def test_rate_variation_without_notes(self, story_service, sample_story_state):
+        """Test rating variation without notes doesn't overwrite existing notes."""
+        variation = OutlineVariation(
+            id="var-no-notes", name="No Notes", user_notes="Existing notes"
+        )
+        sample_story_state.outline_variations.append(variation)
+
+        result = story_service.rate_variation(sample_story_state, "var-no-notes", rating=3)
+
+        assert result is True
+        assert variation.user_rating == 3
+        assert variation.user_notes == "Existing notes"
+
+    def test_rate_variation_not_found(self, story_service, sample_story_state):
+        """Test rating non-existent variation returns False."""
+        result = story_service.rate_variation(sample_story_state, "non-existent", rating=5)
+
+        assert result is False
+
+    def test_toggle_variation_favorite_on(self, story_service, sample_story_state):
+        """Test toggling favorite on."""
+        variation = OutlineVariation(id="var-fav", name="Fav Test", is_favorite=False)
+        sample_story_state.outline_variations.append(variation)
+
+        result = story_service.toggle_variation_favorite(sample_story_state, "var-fav")
+
+        assert result is True
+        assert variation.is_favorite is True
+
+    def test_toggle_variation_favorite_off(self, story_service, sample_story_state):
+        """Test toggling favorite off."""
+        variation = OutlineVariation(id="var-unfav", name="Unfav Test", is_favorite=True)
+        sample_story_state.outline_variations.append(variation)
+
+        result = story_service.toggle_variation_favorite(sample_story_state, "var-unfav")
+
+        assert result is True
+        assert variation.is_favorite is False
+
+    def test_toggle_variation_favorite_not_found(self, story_service, sample_story_state):
+        """Test toggling favorite on non-existent variation returns False."""
+        result = story_service.toggle_variation_favorite(sample_story_state, "non-existent")
+
+        assert result is False
+
+    def test_create_merged_variation(self, story_service, sample_story_state):
+        """Test creating a merged variation."""
+        # Add source variations
+        var1 = OutlineVariation(
+            id="var-source-1",
+            name="Source 1",
+            world_description="A dark world",
+            characters=[Character(name="Hero", role="protagonist", description="The hero")],
+        )
+        var2 = OutlineVariation(
+            id="var-source-2",
+            name="Source 2",
+            plot_summary="An epic adventure",
+            chapters=[Chapter(number=1, title="Start", outline="Beginning")],
+        )
+        sample_story_state.outline_variations.extend([var1, var2])
+
+        merged = story_service.create_merged_variation(
+            sample_story_state,
+            name="Merged Story",
+            source_elements={
+                "var-source-1": ["world", "characters"],
+                "var-source-2": ["plot", "chapters"],
+            },
+        )
+
+        assert merged.name == "Merged Story"
+        assert merged.world_description == "A dark world"
+        assert len(merged.characters) == 1
+        assert merged.plot_summary == "An epic adventure"
+        assert len(merged.chapters) == 1
+
+
+class TestStoryServiceCancellation:
+    """Tests for cancellation handling in generator methods."""
+
+    def test_write_chapter_cancellation(self, story_service, sample_story_with_chapters):
+        """Test write_chapter raises GenerationCancelled when cancelled."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            # Mock generator that yields one event before cancellation check
+            def mock_write_chapter(chapter_num):
+                yield WorkflowEvent(
+                    event_type="agent_start", agent_name="Writer", message="Starting"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_progress", agent_name="Writer", message="Writing"
+                )
+
+            mock_orch.write_chapter = mock_write_chapter
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            # Create a cancel check that returns True after the first event
+            call_count = [0]
+
+            def cancel_check():
+                call_count[0] += 1
+                return call_count[0] > 1
+
+            gen = story_service.write_chapter(
+                sample_story_with_chapters, 1, cancel_check=cancel_check
+            )
+
+            # First event should be yielded
+            first_event = next(gen)
+            assert first_event.event_type == "agent_start"
+
+            # Second call should raise GenerationCancelled
+            with pytest.raises(GenerationCancelled) as exc_info:
+                next(gen)
+
+            assert exc_info.value.chapter_num == 1
+
+    def test_write_all_chapters_cancellation(self, story_service, sample_story_with_chapters):
+        """Test write_all_chapters raises GenerationCancelled when cancelled."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            def mock_write_all():
+                yield WorkflowEvent(
+                    event_type="chapter_start", agent_name="System", message="Chapter 1"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_progress", agent_name="Writer", message="Writing"
+                )
+
+            mock_orch.write_all_chapters = mock_write_all
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            call_count = [0]
+
+            def cancel_check():
+                call_count[0] += 1
+                return call_count[0] > 1
+
+            gen = story_service.write_all_chapters(
+                sample_story_with_chapters, cancel_check=cancel_check
+            )
+
+            # First event should be yielded
+            first_event = next(gen)
+            assert first_event.event_type == "chapter_start"
+
+            # Second call should raise GenerationCancelled
+            with pytest.raises(GenerationCancelled, match="Write all chapters cancelled"):
+                next(gen)
+
+
+class TestStoryServiceRegenerateChapter:
+    """Tests for regenerate_chapter_with_feedback method."""
+
+    def test_regenerate_chapter_success(self, story_service, sample_story_with_chapters):
+        """Test regenerating a chapter with feedback."""
+        # Set up chapter with existing content
+        sample_story_with_chapters.chapters[0].content = "Original chapter content here."
+        sample_story_with_chapters.chapters[0].word_count = 4
+
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            def mock_write_chapter(chapter_num, feedback=None):
+                # Simulate writing new content
+                sample_story_with_chapters.chapters[0].content = "New improved content."
+                yield WorkflowEvent(
+                    event_type="agent_start", agent_name="Writer", message="Regenerating"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_complete", agent_name="System", message="Complete"
+                )
+
+            mock_orch.write_chapter = mock_write_chapter
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            events = list(
+                story_service.regenerate_chapter_with_feedback(
+                    sample_story_with_chapters, 1, "Add more dialogue"
+                )
+            )
+
+            assert len(events) == 2
+            # Verify version was saved
+            chapter = sample_story_with_chapters.chapters[0]
+            assert len(chapter.versions) >= 1
+
+    def test_regenerate_chapter_not_found(self, story_service, sample_story_with_chapters):
+        """Test regenerating non-existent chapter raises ValueError."""
+        with pytest.raises(ValueError, match="Chapter 99 not found"):
+            list(
+                story_service.regenerate_chapter_with_feedback(
+                    sample_story_with_chapters, 99, "Some feedback"
+                )
+            )
+
+    def test_regenerate_chapter_no_content(self, story_service, sample_story_with_chapters):
+        """Test regenerating chapter without content raises ValueError."""
+        # Ensure chapter has no content
+        sample_story_with_chapters.chapters[0].content = ""
+
+        with pytest.raises(ValueError, match="has no content to regenerate"):
+            list(
+                story_service.regenerate_chapter_with_feedback(
+                    sample_story_with_chapters, 1, "Some feedback"
+                )
+            )
+
+    def test_regenerate_chapter_cancellation_rollback(
+        self, story_service, sample_story_with_chapters
+    ):
+        """Test regeneration rollback on cancellation."""
+        original_content = "Original chapter content."
+        sample_story_with_chapters.chapters[0].content = original_content
+        sample_story_with_chapters.chapters[0].word_count = 3
+
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+
+            def mock_write_chapter(chapter_num, feedback=None):
+                # Simulate partial writing
+                sample_story_with_chapters.chapters[0].content = "Partial new content..."
+                yield WorkflowEvent(
+                    event_type="agent_start", agent_name="Writer", message="Regenerating"
+                )
+                yield WorkflowEvent(
+                    event_type="agent_progress", agent_name="Writer", message="In progress"
+                )
+
+            mock_orch.write_chapter = mock_write_chapter
+            mock_orch.story_state = sample_story_with_chapters
+            MockOrchestrator.return_value = mock_orch
+
+            call_count = [0]
+
+            def cancel_check():
+                call_count[0] += 1
+                return call_count[0] > 1
+
+            gen = story_service.regenerate_chapter_with_feedback(
+                sample_story_with_chapters, 1, "Add action", cancel_check=cancel_check
+            )
+
+            # First event should be yielded
+            first_event = next(gen)
+            assert first_event.event_type == "agent_start"
+
+            # Second call should raise and rollback
+            with pytest.raises(GenerationCancelled):
+                next(gen)
+
+            # Content should be rolled back to original
+            chapter = sample_story_with_chapters.chapters[0]
+            assert chapter.content == original_content
+
+
+class TestStoryServiceWorldGeneration:
+    """Tests for world generation methods."""
+
+    def test_generate_more_characters(self, story_service, sample_story_state):
+        """Test generating additional characters."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            new_chars = [
+                Character(name="Sidekick", role="supporting", description="A helpful friend"),
+                Character(name="Villain", role="antagonist", description="The main threat"),
+            ]
+            mock_orch.generate_more_characters.return_value = new_chars
+            mock_orch.story_state = sample_story_state
+            MockOrchestrator.return_value = mock_orch
+
+            result = story_service.generate_more_characters(sample_story_state, count=2)
+
+            assert len(result) == 2
+            assert result[0].name == "Sidekick"
+            assert result[1].name == "Villain"
+            mock_orch.generate_more_characters.assert_called_once_with(2)
+
+    def test_generate_locations(self, story_service, sample_story_state):
+        """Test generating locations."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            locations = [
+                {"name": "Dark Alley", "description": "A shadowy backstreet"},
+                {"name": "Jazz Club", "description": "A smoky nightclub"},
+                {"name": "Detective Office", "description": "A cramped office"},
+            ]
+            mock_orch.generate_locations.return_value = locations
+            mock_orch.story_state = sample_story_state
+            MockOrchestrator.return_value = mock_orch
+
+            result = story_service.generate_locations(sample_story_state, count=3)
+
+            assert len(result) == 3
+            assert result[0]["name"] == "Dark Alley"
+            mock_orch.generate_locations.assert_called_once_with(3)
+
+    def test_generate_relationships(self, story_service, sample_story_state):
+        """Test generating relationships between entities."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            relationships = [
+                {"source": "Jack", "target": "Vera", "type": "romantic_interest"},
+                {"source": "Jack", "target": "Chief", "type": "reports_to"},
+            ]
+            mock_orch.generate_relationships.return_value = relationships
+            mock_orch.story_state = sample_story_state
+            MockOrchestrator.return_value = mock_orch
+
+            entity_names = ["Jack", "Vera", "Chief"]
+            existing_rels = [("Jack", "Vera")]
+
+            result = story_service.generate_relationships(
+                sample_story_state,
+                entity_names=entity_names,
+                existing_rels=existing_rels,
+                count=5,
+            )
+
+            assert len(result) == 2
+            mock_orch.generate_relationships.assert_called_once_with(entity_names, existing_rels, 5)
+
+    def test_rebuild_world(self, story_service, sample_story_state):
+        """Test rebuilding the entire world."""
+        with patch("services.story_service.StoryOrchestrator") as MockOrchestrator:
+            mock_orch = MagicMock()
+            mock_orch.story_state = sample_story_state
+            MockOrchestrator.return_value = mock_orch
+
+            result = story_service.rebuild_world(sample_story_state)
+
+            assert result == sample_story_state
+            mock_orch.rebuild_world.assert_called_once()
+
+
+class TestGenerationCancelledException:
+    """Tests for GenerationCancelled exception."""
+
+    def test_basic_initialization(self):
+        """Test basic exception initialization."""
+        exc = GenerationCancelled()
+        assert str(exc) == "Generation cancelled"
+        assert exc.chapter_num is None
+        assert exc.progress_state == {}
+
+    def test_with_message(self):
+        """Test exception with custom message."""
+        exc = GenerationCancelled("Custom cancellation message")
+        assert str(exc) == "Custom cancellation message"
+
+    def test_with_chapter_num(self):
+        """Test exception with chapter number."""
+        exc = GenerationCancelled("Chapter cancelled", chapter_num=3)
+        assert exc.chapter_num == 3
+        assert str(exc) == "Chapter cancelled"
+
+    def test_with_progress_state(self):
+        """Test exception with progress state."""
+        progress = {"words_written": 500, "percent_complete": 45}
+        exc = GenerationCancelled("Cancelled mid-write", progress_state=progress)
+        assert exc.progress_state == progress
+        assert exc.progress_state["words_written"] == 500
+
+    def test_full_initialization(self):
+        """Test exception with all parameters."""
+        progress = {"current_scene": 2, "total_scenes": 5}
+        exc = GenerationCancelled(
+            "Full cancellation",
+            chapter_num=7,
+            progress_state=progress,
+        )
+        assert str(exc) == "Full cancellation"
+        assert exc.chapter_num == 7
+        assert exc.progress_state == progress

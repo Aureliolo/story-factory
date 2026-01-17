@@ -378,8 +378,17 @@ class TestSettingsGetModelForAgent:
         # Should return some model (exact model depends on registry)
         assert result is not None
 
-    def test_selects_architect_model(self):
+    def test_selects_architect_model(self, monkeypatch):
         """Test selects high-reasoning model for architect role."""
+        # Mock get_installed_models to return the architect models as installed
+        monkeypatch.setattr(
+            "settings.get_installed_models",
+            lambda timeout=None: [
+                "huihui_ai/qwen3-abliterated:30b",
+                "huihui_ai/dolphin3-abliterated:8b",
+            ],
+        )
+
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
@@ -390,8 +399,17 @@ class TestSettingsGetModelForAgent:
         # Should select Qwen3-30B as the recommended architect model
         assert result == "huihui_ai/qwen3-abliterated:30b"
 
-    def test_selects_architect_model_high_vram(self):
+    def test_selects_architect_model_high_vram(self, monkeypatch):
         """Test selects architect model with high VRAM."""
+        # Mock get_installed_models to return the architect models as installed
+        monkeypatch.setattr(
+            "settings.get_installed_models",
+            lambda timeout=None: [
+                "huihui_ai/qwen3-abliterated:30b",
+                "huihui_ai/dolphin3-abliterated:8b",
+            ],
+        )
+
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
@@ -901,6 +919,255 @@ class TestNewSettingsValidation:
         settings.user_rating_max = 10  # Max boundary
         settings.chapters_novel = 200  # Max boundary
         settings.validate()  # Should not raise
+
+
+class TestMissingValidationCoverage:
+    """Tests for missing validation coverage lines."""
+
+    # --- Task-specific temperature validation (line 492) ---
+
+    def test_validate_raises_on_invalid_temp_brief_extraction(self):
+        """Should raise ValueError for temp_brief_extraction out of range."""
+        settings = Settings()
+        settings.temp_brief_extraction = 3.0  # Above 2.0
+        with pytest.raises(ValueError, match="temp_brief_extraction must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_temp_edit_suggestions(self):
+        """Should raise ValueError for temp_edit_suggestions out of range."""
+        settings = Settings()
+        settings.temp_edit_suggestions = -0.5  # Below 0.0
+        with pytest.raises(ValueError, match="temp_edit_suggestions must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_temp_plot_checking(self):
+        """Should raise ValueError for temp_plot_checking out of range."""
+        settings = Settings()
+        settings.temp_plot_checking = 2.5  # Above 2.0
+        with pytest.raises(ValueError, match="temp_plot_checking must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_temp_capability_check(self):
+        """Should raise ValueError for temp_capability_check out of range."""
+        settings = Settings()
+        settings.temp_capability_check = 5.0  # Above 2.0
+        with pytest.raises(ValueError, match="temp_capability_check must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_temp_model_evaluation(self):
+        """Should raise ValueError for temp_model_evaluation out of range."""
+        settings = Settings()
+        settings.temp_model_evaluation = -1.0  # Below 0.0
+        with pytest.raises(ValueError, match="temp_model_evaluation must be between"):
+            settings.validate()
+
+    # --- World quality settings (lines 531, 537, 548) ---
+
+    def test_validate_raises_on_invalid_world_quality_max_iterations(self):
+        """Should raise ValueError for world_quality_max_iterations out of range."""
+        settings = Settings()
+        settings.world_quality_max_iterations = 15  # Above 10
+        with pytest.raises(ValueError, match="world_quality_max_iterations must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_quality_threshold(self):
+        """Should raise ValueError for world_quality_threshold out of range."""
+        settings = Settings()
+        settings.world_quality_threshold = 15.0  # Above 10.0
+        with pytest.raises(ValueError, match="world_quality_threshold must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_quality_creator_temp(self):
+        """Should raise ValueError for world_quality_creator_temp out of range."""
+        settings = Settings()
+        settings.world_quality_creator_temp = 3.0  # Above 2.0
+        with pytest.raises(ValueError, match="world_quality_creator_temp must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_quality_judge_temp(self):
+        """Should raise ValueError for world_quality_judge_temp out of range."""
+        settings = Settings()
+        settings.world_quality_judge_temp = -0.5  # Below 0.0
+        with pytest.raises(ValueError, match="world_quality_judge_temp must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_quality_refinement_temp(self):
+        """Should raise ValueError for world_quality_refinement_temp out of range."""
+        settings = Settings()
+        settings.world_quality_refinement_temp = 2.5  # Above 2.0
+        with pytest.raises(ValueError, match="world_quality_refinement_temp must be between"):
+            settings.validate()
+
+    # --- World gen entity min/max validation (lines 561, 565, 569) ---
+
+    def test_validate_raises_on_invalid_world_gen_characters_min(self):
+        """Should raise ValueError for world_gen_characters_min out of range."""
+        settings = Settings()
+        settings.world_gen_characters_min = 25  # Above 20
+        with pytest.raises(ValueError, match="world_gen_characters_min must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_gen_characters_max(self):
+        """Should raise ValueError for world_gen_characters_max out of range."""
+        settings = Settings()
+        settings.world_gen_characters_max = 60  # Above 50
+        with pytest.raises(ValueError, match="world_gen_characters_max must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_world_gen_characters_min_exceeds_max(self):
+        """Should raise ValueError when world_gen_characters_min exceeds max."""
+        settings = Settings()
+        settings.world_gen_characters_min = 10
+        settings.world_gen_characters_max = 5
+        with pytest.raises(ValueError, match="world_gen_characters_min.*cannot exceed"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_gen_locations_min(self):
+        """Should raise ValueError for world_gen_locations_min out of range."""
+        settings = Settings()
+        settings.world_gen_locations_min = -1  # Below 0
+        with pytest.raises(ValueError, match="world_gen_locations_min must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_gen_locations_max(self):
+        """Should raise ValueError for world_gen_locations_max out of range."""
+        settings = Settings()
+        settings.world_gen_locations_max = 0  # Below 1
+        with pytest.raises(ValueError, match="world_gen_locations_max must be between"):
+            settings.validate()
+
+    # --- LLM token settings validation (line 598) ---
+
+    def test_validate_raises_on_invalid_llm_tokens_character_create(self):
+        """Should raise ValueError for llm_tokens_character_create out of range."""
+        settings = Settings()
+        settings.llm_tokens_character_create = 5  # Below 10
+        with pytest.raises(ValueError, match="llm_tokens_character_create must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_llm_tokens_mini_description(self):
+        """Should raise ValueError for llm_tokens_mini_description out of range."""
+        settings = Settings()
+        settings.llm_tokens_mini_description = 5000  # Above 4096
+        with pytest.raises(ValueError, match="llm_tokens_mini_description must be between"):
+            settings.validate()
+
+    # --- Entity extraction limits validation (line 607) ---
+
+    def test_validate_raises_on_invalid_entity_extract_locations_max(self):
+        """Should raise ValueError for entity_extract_locations_max out of range."""
+        settings = Settings()
+        settings.entity_extract_locations_max = 0  # Below 1
+        with pytest.raises(ValueError, match="entity_extract_locations_max must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_entity_extract_items_max(self):
+        """Should raise ValueError for entity_extract_items_max out of range."""
+        settings = Settings()
+        settings.entity_extract_items_max = 150  # Above 100
+        with pytest.raises(ValueError, match="entity_extract_items_max must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_entity_extract_events_max(self):
+        """Should raise ValueError for entity_extract_events_max out of range."""
+        settings = Settings()
+        settings.entity_extract_events_max = 200  # Above 100
+        with pytest.raises(ValueError, match="entity_extract_events_max must be between"):
+            settings.validate()
+
+    # --- Mini description settings validation (lines 611, 616) ---
+
+    def test_validate_raises_on_invalid_mini_description_words_max(self):
+        """Should raise ValueError for mini_description_words_max out of range."""
+        settings = Settings()
+        settings.mini_description_words_max = 3  # Below 5
+        with pytest.raises(ValueError, match="mini_description_words_max must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_mini_description_temperature(self):
+        """Should raise ValueError for mini_description_temperature out of range."""
+        settings = Settings()
+        settings.mini_description_temperature = 3.0  # Above 2.0
+        with pytest.raises(ValueError, match="mini_description_temperature must be between"):
+            settings.validate()
+
+    # --- Workflow limits validation (lines 623, 628) ---
+
+    def test_validate_raises_on_invalid_orchestrator_cache_size(self):
+        """Should raise ValueError for orchestrator_cache_size out of range."""
+        settings = Settings()
+        settings.orchestrator_cache_size = 0  # Below 1
+        with pytest.raises(ValueError, match="orchestrator_cache_size must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_workflow_max_events(self):
+        """Should raise ValueError for workflow_max_events out of range."""
+        settings = Settings()
+        settings.workflow_max_events = 5  # Below 10
+        with pytest.raises(ValueError, match="workflow_max_events must be between"):
+            settings.validate()
+
+    # --- LLM request limits validation (lines 634, 639) ---
+
+    def test_validate_raises_on_invalid_llm_max_concurrent_requests(self):
+        """Should raise ValueError for llm_max_concurrent_requests out of range."""
+        settings = Settings()
+        settings.llm_max_concurrent_requests = 0  # Below 1
+        with pytest.raises(ValueError, match="llm_max_concurrent_requests must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_llm_max_retries(self):
+        """Should raise ValueError for llm_max_retries out of range."""
+        settings = Settings()
+        settings.llm_max_retries = 15  # Above 10
+        with pytest.raises(ValueError, match="llm_max_retries must be between"):
+            settings.validate()
+
+    # --- Content truncation validation (line 645) ---
+
+    def test_validate_raises_on_invalid_content_truncation_for_judgment(self):
+        """Should raise ValueError for content_truncation_for_judgment out of range."""
+        settings = Settings()
+        settings.content_truncation_for_judgment = 100  # Below 500
+        with pytest.raises(ValueError, match="content_truncation_for_judgment must be between"):
+            settings.validate()
+
+
+class TestValidatorModelSelection:
+    """Tests for validator model selection (lines 957-963)."""
+
+    def test_selects_validator_model(self, monkeypatch):
+        """Test selects tiny model for validator role."""
+        monkeypatch.setattr(
+            "settings.get_installed_models",
+            lambda timeout=None: ["qwen3:0.6b"],
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"validator": "auto"}
+
+        result = settings.get_model_for_agent("validator", available_vram=24)
+
+        assert result == "qwen3:0.6b"
+
+    def test_validator_falls_through_when_model_not_installed(self, monkeypatch):
+        """Test validator falls through when preferred model not installed."""
+        monkeypatch.setattr(
+            "settings.get_installed_models",
+            lambda timeout=None: ["other-model:7b"],
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"validator": "auto"}
+        settings.default_model = "fallback:7b"
+
+        # qwen3:0.6b is not installed, should fall through
+        result = settings.get_model_for_agent("validator", available_vram=24)
+
+        # Should still return something (default or auto-selected)
+        assert result is not None
 
 
 class TestBackupCorruptedSettings:

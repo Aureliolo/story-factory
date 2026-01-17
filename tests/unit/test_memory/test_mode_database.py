@@ -753,3 +753,688 @@ class TestModeDatabase:
         # Only model-enough should be returned (has >= 3 samples)
         assert len(top) == 1
         assert top[0]["model_id"] == "model-enough"
+
+    # === World Entity Scores Tests ===
+
+    def test_record_world_entity_score(self, db: ModeDatabase) -> None:
+        """Test recording a world entity score."""
+        scores = {"depth": 8.0, "consistency": 7.5, "creativity": 9.0, "average": 8.17}
+        score_id = db.record_world_entity_score(
+            project_id="test-project",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="test-model",
+            scores=scores,
+            entity_id="char-001",
+            iterations_used=3,
+            generation_time_seconds=5.5,
+            feedback="Good character development",
+        )
+
+        assert score_id > 0
+
+        # Verify it's stored
+        entity_scores = db.get_world_entity_scores(project_id="test-project")
+        assert len(entity_scores) == 1
+        assert entity_scores[0]["entity_name"] == "Hero"
+        assert entity_scores[0]["entity_type"] == "character"
+        assert entity_scores[0]["score_1"] == 8.0
+        assert entity_scores[0]["average_score"] == 8.17
+        assert entity_scores[0]["iterations_used"] == 3
+
+    def test_record_world_entity_score_raises_on_db_error(self, db: ModeDatabase) -> None:
+        """Test record_world_entity_score raises sqlite3.Error on database failure."""
+        with patch("sqlite3.connect") as mock_connect:
+            mock_connect.side_effect = sqlite3.Error("Database write failed")
+            with pytest.raises(sqlite3.Error, match="Database write failed"):
+                db.record_world_entity_score(
+                    project_id="test",
+                    entity_type="character",
+                    entity_name="Test",
+                    model_id="model",
+                    scores={"score": 8.0},
+                )
+
+    def test_record_world_entity_score_with_fewer_scores(self, db: ModeDatabase) -> None:
+        """Test record_world_entity_score with fewer than 4 score values."""
+        # Only 2 scores
+        scores = {"depth": 7.5, "consistency": 8.0}
+        score_id = db.record_world_entity_score(
+            project_id="test-project",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="test-model",
+            scores=scores,
+        )
+
+        assert score_id > 0
+
+        entity_scores = db.get_world_entity_scores(project_id="test-project")
+        assert len(entity_scores) == 1
+        assert entity_scores[0]["score_1"] == 7.5
+        assert entity_scores[0]["score_2"] == 8.0
+        assert entity_scores[0]["score_3"] is None
+        assert entity_scores[0]["score_4"] is None
+
+    def test_get_world_entity_scores_with_all_filters(self, db: ModeDatabase) -> None:
+        """Test get_world_entity_scores with project_id, entity_type, and model_id filters."""
+        # Add various entity scores
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"quality": 8.0},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-a",
+            scores={"quality": 7.5},
+        )
+        db.record_world_entity_score(
+            project_id="project-2",
+            entity_type="character",
+            entity_name="Villain",
+            model_id="model-b",
+            scores={"quality": 9.0},
+        )
+
+        # Filter by project_id
+        scores = db.get_world_entity_scores(project_id="project-1")
+        assert len(scores) == 2
+
+        # Filter by entity_type
+        scores = db.get_world_entity_scores(entity_type="character")
+        assert len(scores) == 2
+        assert all(s["entity_type"] == "character" for s in scores)
+
+        # Filter by model_id
+        scores = db.get_world_entity_scores(model_id="model-b")
+        assert len(scores) == 1
+        assert scores[0]["entity_name"] == "Villain"
+
+        # Combined filters
+        scores = db.get_world_entity_scores(project_id="project-1", entity_type="character")
+        assert len(scores) == 1
+        assert scores[0]["entity_name"] == "Hero"
+
+    def test_get_world_entity_scores_respects_limit(self, db: ModeDatabase) -> None:
+        """Test get_world_entity_scores respects the limit parameter."""
+        for i in range(10):
+            db.record_world_entity_score(
+                project_id="project-1",
+                entity_type="character",
+                entity_name=f"Character-{i}",
+                model_id="model-a",
+                scores={"quality": 8.0},
+            )
+
+        scores = db.get_world_entity_scores(limit=5)
+        assert len(scores) == 5
+
+    def test_get_world_quality_summary_basic(self, db: ModeDatabase) -> None:
+        """Test get_world_quality_summary returns correct summary statistics."""
+        # Add various entity scores
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"average": 8.0},
+            iterations_used=2,
+            generation_time_seconds=3.0,
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Villain",
+            model_id="model-a",
+            scores={"average": 9.0},
+            iterations_used=4,
+            generation_time_seconds=5.0,
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-b",
+            scores={"average": 7.0},
+            iterations_used=3,
+            generation_time_seconds=4.0,
+        )
+
+        summary = db.get_world_quality_summary()
+
+        # Overall statistics
+        assert summary["total_entities"] == 3
+        assert summary["avg_quality"] == 8.0  # (8 + 9 + 7) / 3
+        assert summary["min_quality"] == 7.0
+        assert summary["max_quality"] == 9.0
+        assert summary["avg_iterations"] == 3.0  # (2 + 4 + 3) / 3
+        assert summary["avg_generation_time"] == 4.0  # (3 + 5 + 4) / 3
+
+        # By entity type breakdown
+        assert len(summary["by_entity_type"]) == 2
+        char_breakdown = next(
+            b for b in summary["by_entity_type"] if b["entity_type"] == "character"
+        )
+        assert char_breakdown["count"] == 2
+        assert char_breakdown["avg_quality"] == 8.5  # (8 + 9) / 2
+
+        loc_breakdown = next(b for b in summary["by_entity_type"] if b["entity_type"] == "location")
+        assert loc_breakdown["count"] == 1
+        assert loc_breakdown["avg_quality"] == 7.0
+
+        # By model breakdown
+        assert len(summary["by_model"]) == 2
+        model_a_breakdown = next(b for b in summary["by_model"] if b["model_id"] == "model-a")
+        assert model_a_breakdown["count"] == 2
+        assert model_a_breakdown["avg_quality"] == 8.5
+
+    def test_get_world_quality_summary_with_entity_type_filter(self, db: ModeDatabase) -> None:
+        """Test get_world_quality_summary with entity_type filter."""
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"average": 8.0},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-a",
+            scores={"average": 6.0},
+        )
+
+        summary = db.get_world_quality_summary(entity_type="character")
+
+        assert summary["total_entities"] == 1
+        assert summary["avg_quality"] == 8.0
+
+    def test_get_world_quality_summary_with_model_filter(self, db: ModeDatabase) -> None:
+        """Test get_world_quality_summary with model_id filter."""
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"average": 8.0},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Villain",
+            model_id="model-b",
+            scores={"average": 9.0},
+        )
+
+        summary = db.get_world_quality_summary(model_id="model-a")
+
+        assert summary["total_entities"] == 1
+        assert summary["avg_quality"] == 8.0
+
+    def test_get_world_quality_summary_empty_database(self, db: ModeDatabase) -> None:
+        """Test get_world_quality_summary with no data."""
+        summary = db.get_world_quality_summary()
+
+        assert summary["total_entities"] == 0
+        assert summary["avg_quality"] is None
+        assert summary["min_quality"] is None
+        assert summary["max_quality"] is None
+        assert summary["by_entity_type"] == []
+        assert summary["by_model"] == []
+
+    def test_get_world_entity_count_basic(self, db: ModeDatabase) -> None:
+        """Test get_world_entity_count returns correct count."""
+        for i in range(5):
+            db.record_world_entity_score(
+                project_id="project-1",
+                entity_type="character",
+                entity_name=f"Character-{i}",
+                model_id="model-a",
+                scores={"quality": 8.0},
+            )
+
+        assert db.get_world_entity_count() == 5
+
+    def test_get_world_entity_count_with_entity_type_filter(self, db: ModeDatabase) -> None:
+        """Test get_world_entity_count with entity_type filter."""
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"quality": 8.0},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-a",
+            scores={"quality": 7.5},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Villain",
+            model_id="model-a",
+            scores={"quality": 9.0},
+        )
+
+        assert db.get_world_entity_count(entity_type="character") == 2
+        assert db.get_world_entity_count(entity_type="location") == 1
+
+    def test_get_world_entity_count_with_model_filter(self, db: ModeDatabase) -> None:
+        """Test get_world_entity_count with model_id filter."""
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"quality": 8.0},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Villain",
+            model_id="model-b",
+            scores={"quality": 9.0},
+        )
+
+        assert db.get_world_entity_count(model_id="model-a") == 1
+        assert db.get_world_entity_count(model_id="model-b") == 1
+
+    def test_get_world_entity_count_combined_filters(self, db: ModeDatabase) -> None:
+        """Test get_world_entity_count with combined filters."""
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"quality": 8.0},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-a",
+            scores={"quality": 7.5},
+        )
+        db.record_world_entity_score(
+            project_id="project-1",
+            entity_type="character",
+            entity_name="Villain",
+            model_id="model-b",
+            scores={"quality": 9.0},
+        )
+
+        assert db.get_world_entity_count(entity_type="character", model_id="model-a") == 1
+
+    # === Content Statistics Tests ===
+
+    def test_get_content_statistics_basic(self, db: ModeDatabase) -> None:
+        """Test get_content_statistics returns correct statistics."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=500,
+            time_seconds=10.0,
+        )
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=300,
+            time_seconds=6.0,
+        )
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=700,
+            time_seconds=14.0,
+        )
+
+        stats = db.get_content_statistics()
+
+        assert stats["generation_count"] == 3
+        assert stats["total_tokens"] == 1500
+        assert stats["avg_tokens"] == 500.0
+        assert stats["min_tokens"] == 300
+        assert stats["max_tokens"] == 700
+        assert stats["avg_generation_time"] == 10.0
+
+    def test_get_content_statistics_with_project_filter(self, db: ModeDatabase) -> None:
+        """Test get_content_statistics with project_id filter."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=500,
+            time_seconds=10.0,
+        )
+        db.record_score(
+            project_id="project-2",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=300,
+            time_seconds=6.0,
+        )
+
+        stats = db.get_content_statistics(project_id="project-1")
+
+        assert stats["generation_count"] == 1
+        assert stats["total_tokens"] == 500
+
+    def test_get_content_statistics_with_agent_role_filter(self, db: ModeDatabase) -> None:
+        """Test get_content_statistics with agent_role filter."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=500,
+            time_seconds=10.0,
+        )
+        db.record_score(
+            project_id="project-1",
+            agent_role="editor",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=200,
+            time_seconds=4.0,
+        )
+
+        stats = db.get_content_statistics(agent_role="writer")
+
+        assert stats["generation_count"] == 1
+        assert stats["total_tokens"] == 500
+
+    def test_get_content_statistics_excludes_null_tokens(self, db: ModeDatabase) -> None:
+        """Test get_content_statistics excludes records with null tokens_generated."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            tokens_generated=500,
+        )
+        # This one has no tokens_generated
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+        )
+
+        stats = db.get_content_statistics()
+
+        assert stats["generation_count"] == 1
+        assert stats["total_tokens"] == 500
+
+    def test_get_content_statistics_empty_database(self, db: ModeDatabase) -> None:
+        """Test get_content_statistics with no data."""
+        stats = db.get_content_statistics()
+
+        assert stats["generation_count"] == 0
+        assert stats["total_tokens"] == 0
+        assert stats["avg_tokens"] is None
+
+    # === Time Series Tests ===
+
+    def test_get_quality_time_series_basic(self, db: ModeDatabase) -> None:
+        """Test get_quality_time_series returns time series data."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.0,
+        )
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=9.0,
+        )
+
+        data = db.get_quality_time_series(metric="prose_quality")
+
+        assert len(data) == 2
+        assert all("timestamp" in d and "value" in d for d in data)
+        assert data[0]["value"] == 9.0  # Most recent first (DESC order)
+        assert data[1]["value"] == 8.0
+
+    def test_get_quality_time_series_with_agent_role_filter(self, db: ModeDatabase) -> None:
+        """Test get_quality_time_series with agent_role filter."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.0,
+        )
+        db.record_score(
+            project_id="project-1",
+            agent_role="editor",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=7.0,
+        )
+
+        data = db.get_quality_time_series(agent_role="writer")
+
+        assert len(data) == 1
+        assert data[0]["value"] == 8.0
+
+    def test_get_quality_time_series_with_genre_filter(self, db: ModeDatabase) -> None:
+        """Test get_quality_time_series with genre filter."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            genre="fantasy",
+            prose_quality=8.0,
+        )
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            genre="sci-fi",
+            prose_quality=9.0,
+        )
+
+        data = db.get_quality_time_series(genre="fantasy")
+
+        assert len(data) == 1
+        assert data[0]["value"] == 8.0
+
+    def test_get_quality_time_series_invalid_metric(self, db: ModeDatabase) -> None:
+        """Test get_quality_time_series defaults to prose_quality for invalid metric."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.5,
+        )
+
+        # Invalid metric should default to prose_quality
+        data = db.get_quality_time_series(metric="invalid_metric")
+
+        assert len(data) == 1
+        assert data[0]["value"] == 8.5
+
+    def test_get_quality_time_series_respects_limit(self, db: ModeDatabase) -> None:
+        """Test get_quality_time_series respects the limit parameter."""
+        for i in range(10):
+            db.record_score(
+                project_id=f"project-{i}",
+                agent_role="writer",
+                model_id="model-a",
+                mode_name="balanced",
+                prose_quality=8.0 + i * 0.1,
+            )
+
+        data = db.get_quality_time_series(limit=5)
+
+        assert len(data) == 5
+
+    def test_get_quality_time_series_different_metrics(self, db: ModeDatabase) -> None:
+        """Test get_quality_time_series with different valid metrics."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.0,
+            instruction_following=7.5,
+            consistency_score=9.0,
+            tokens_per_second=50.0,
+        )
+
+        # Test instruction_following
+        data = db.get_quality_time_series(metric="instruction_following")
+        assert len(data) == 1
+        assert data[0]["value"] == 7.5
+
+        # Test consistency_score
+        data = db.get_quality_time_series(metric="consistency_score")
+        assert len(data) == 1
+        assert data[0]["value"] == 9.0
+
+        # Test tokens_per_second
+        data = db.get_quality_time_series(metric="tokens_per_second")
+        assert len(data) == 1
+        assert data[0]["value"] == 50.0
+
+    # === Daily Quality Averages Tests ===
+
+    def test_get_daily_quality_averages_basic(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages returns daily averages."""
+        # Record scores (they'll all be on the same day since we can't easily mock time)
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.0,
+        )
+        db.record_score(
+            project_id="project-2",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=9.0,
+        )
+
+        data = db.get_daily_quality_averages()
+
+        assert len(data) == 1
+        assert "date" in data[0]
+        assert data[0]["avg_value"] == 8.5  # (8 + 9) / 2
+        assert data[0]["sample_count"] == 2
+
+    def test_get_daily_quality_averages_with_agent_role_filter(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages with agent_role filter."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.0,
+        )
+        db.record_score(
+            project_id="project-2",
+            agent_role="editor",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=6.0,
+        )
+
+        data = db.get_daily_quality_averages(agent_role="writer")
+
+        assert len(data) == 1
+        assert data[0]["avg_value"] == 8.0
+        assert data[0]["sample_count"] == 1
+
+    def test_get_daily_quality_averages_invalid_metric(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages defaults to prose_quality for invalid metric."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.5,
+        )
+
+        # Invalid metric should default to prose_quality
+        data = db.get_daily_quality_averages(metric="invalid_metric")
+
+        assert len(data) == 1
+        assert data[0]["avg_value"] == 8.5
+
+    def test_get_daily_quality_averages_different_metrics(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages with different valid metrics."""
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.0,
+            instruction_following=7.5,
+            consistency_score=9.0,
+            tokens_per_second=50.0,
+        )
+
+        # Test instruction_following
+        data = db.get_daily_quality_averages(metric="instruction_following")
+        assert len(data) == 1
+        assert data[0]["avg_value"] == 7.5
+
+        # Test consistency_score
+        data = db.get_daily_quality_averages(metric="consistency_score")
+        assert len(data) == 1
+        assert data[0]["avg_value"] == 9.0
+
+        # Test tokens_per_second
+        data = db.get_daily_quality_averages(metric="tokens_per_second")
+        assert len(data) == 1
+        assert data[0]["avg_value"] == 50.0
+
+    def test_get_daily_quality_averages_empty_database(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages with no data."""
+        data = db.get_daily_quality_averages()
+        assert data == []
+
+    def test_get_daily_quality_averages_respects_days_param(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages filters by days parameter."""
+        # Record a score (will be within the default 30 days)
+        db.record_score(
+            project_id="project-1",
+            agent_role="writer",
+            model_id="model-a",
+            mode_name="balanced",
+            prose_quality=8.0,
+        )
+
+        # With days=30, should include today's record
+        data = db.get_daily_quality_averages(days=30)
+        assert len(data) == 1
+
+        # With days=0, should still include today's record (DATE('now', '-0 days') = today)
+        data = db.get_daily_quality_averages(days=0)
+        assert len(data) == 1
