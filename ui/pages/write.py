@@ -829,6 +829,11 @@ class WritePage:
 
             # Define cancellation check
             def should_cancel() -> bool:
+                """Check if generation should be cancelled.
+
+                Returns:
+                    True if cancellation was requested.
+                """
                 return self.state.generation_cancel_requested
 
             # Run generation in background with progressive updates
@@ -1375,6 +1380,7 @@ class WritePage:
                 ui.button("Refresh", on_click=load_suggestions, icon="refresh").props("flat")
 
                 def close_dialog():
+                    """Close the suggestions dialog."""
                     logger.debug("Closing suggestions dialog")
                     dialog.close()
 

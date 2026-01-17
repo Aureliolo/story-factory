@@ -112,11 +112,13 @@ def confirmation_dialog(
         with ui.row().classes("w-full justify-end gap-2"):
 
             def handle_cancel() -> None:
+                """Handle cancel button click."""
                 dialog.close()
                 if on_cancel:
                     on_cancel()
 
             def handle_confirm() -> None:
+                """Handle confirm button click."""
                 dialog.close()
                 on_confirm()
 

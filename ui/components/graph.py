@@ -87,6 +87,11 @@ class GraphComponent:
         if self.on_node_select:
 
             def handle_node_select(e: Any) -> None:
+                """Handle node selection event.
+
+                Args:
+                    e: Event containing node_id.
+                """
                 node_id = e.args.get("node_id") if e.args else None
                 if node_id and self.on_node_select:
                     self.on_node_select(node_id)
@@ -97,6 +102,11 @@ class GraphComponent:
         if self.on_edge_select:
 
             def handle_edge_select(e: Any) -> None:
+                """Handle edge selection event.
+
+                Args:
+                    e: Event containing edge_id.
+                """
                 edge_id = e.args.get("edge_id") if e.args else None
                 if edge_id and self.on_edge_select:
                     self.on_edge_select(edge_id)
@@ -107,6 +117,11 @@ class GraphComponent:
         if self.on_create_relationship:
 
             def handle_create_relationship(e) -> None:
+                """Handle relationship creation event.
+
+                Args:
+                    e: Event containing source_id and target_id.
+                """
                 source_id = e.args.get("source_id") if e.args else None
                 target_id = e.args.get("target_id") if e.args else None
                 if source_id and target_id and self.on_create_relationship:

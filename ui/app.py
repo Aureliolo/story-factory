@@ -110,7 +110,10 @@ class StoryFactoryApp:
 
         @ui.page("/")
         def write_page() -> None:
+            """Render the Write page."""
+
             def content() -> None:
+                """Build the Write page content."""
                 page = WritePage(self.state, self.services)
                 page.build()
 
@@ -118,7 +121,10 @@ class StoryFactoryApp:
 
         @ui.page("/world")
         def world_page() -> None:
+            """Render the World page."""
+
             def content() -> None:
+                """Build the World page content."""
                 page = WorldPage(self.state, self.services)
                 page.build()
 
@@ -126,7 +132,10 @@ class StoryFactoryApp:
 
         @ui.page("/timeline")
         def timeline_page():
+            """Render the Timeline page."""
+
             def content():
+                """Build the Timeline page content."""
                 page = TimelinePage(self.state, self.services)
                 page.build()
 
@@ -134,7 +143,10 @@ class StoryFactoryApp:
 
         @ui.page("/projects")
         def projects_page() -> None:
+            """Render the Projects page."""
+
             def content() -> None:
+                """Build the Projects page content."""
                 page = ProjectsPage(self.state, self.services)
                 page.build()
 
@@ -142,7 +154,10 @@ class StoryFactoryApp:
 
         @ui.page("/settings")
         def settings_page() -> None:
+            """Render the Settings page."""
+
             def content() -> None:
+                """Build the Settings page content."""
                 page = SettingsPage(self.state, self.services)
                 page.build()
 
@@ -150,7 +165,10 @@ class StoryFactoryApp:
 
         @ui.page("/models")
         def models_page() -> None:
+            """Render the Models page."""
+
             def content() -> None:
+                """Build the Models page content."""
                 page = ModelsPage(self.state, self.services)
                 page.build()
 
@@ -158,7 +176,10 @@ class StoryFactoryApp:
 
         @ui.page("/analytics")
         def analytics_page() -> None:
+            """Render the Analytics page."""
+
             def content() -> None:
+                """Build the Analytics page content."""
                 page = AnalyticsPage(self.state, self.services)
                 page.build()
 
@@ -166,7 +187,10 @@ class StoryFactoryApp:
 
         @ui.page("/templates")
         def templates_page():
+            """Render the Templates page."""
+
             def content():
+                """Build the Templates page content."""
                 page = TemplatesPage(self.state, self.services)
                 page.build()
 

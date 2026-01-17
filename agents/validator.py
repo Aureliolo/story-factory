@@ -35,6 +35,12 @@ class ValidatorAgent(BaseAgent):
     """Agent that validates AI responses for basic correctness."""
 
     def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+        """Initialize the Validator agent.
+
+        Args:
+            model: Override model to use. If None, uses settings-based model for validator.
+            settings: Application settings. If None, loads default settings.
+        """
         super().__init__(
             name="Validator",
             role="Response Validator",

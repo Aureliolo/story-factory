@@ -200,6 +200,7 @@ class ProjectsPage:
                 )
 
                 def on_template_change():
+                    """Handle template selection change."""
                     selected_id = template_select.value
                     if selected_id:
                         template = self.services.template.get_template(selected_id)
@@ -276,6 +277,7 @@ class ProjectsPage:
         from ui.components.common import confirmation_dialog
 
         def delete() -> None:
+            """Execute project deletion."""
             self._delete_project(project.id)
 
         confirmation_dialog(
@@ -373,6 +375,7 @@ class ProjectsPage:
         from ui.components.common import confirmation_dialog
 
         def delete():
+            """Execute backup deletion."""
             try:
                 self.services.backup.delete_backup(backup_filename)
                 ui.notify("Backup deleted", type="positive")

@@ -44,6 +44,12 @@ class EditorAgent(BaseAgent):
     """Agent that refines and polishes prose."""
 
     def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+        """Initialize the Editor agent.
+
+        Args:
+            model: Override model to use. If None, uses settings-based model for editor.
+            settings: Application settings. If None, loads default settings.
+        """
         super().__init__(
             name="Editor",
             role="Prose Polisher",
