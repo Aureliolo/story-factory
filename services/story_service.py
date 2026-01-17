@@ -6,7 +6,7 @@ from collections.abc import Generator
 from typing import Any
 
 from agents.continuity import ContinuityIssue
-from memory.story_state import StoryBrief, StoryState
+from memory.story_state import Character, StoryBrief, StoryState
 from memory.world_database import WorldDatabase
 from settings import Settings
 from utils.validation import (
@@ -748,7 +748,7 @@ class StoryService:
 
     # ========== WORLD GENERATION ==========
 
-    def generate_more_characters(self, state: StoryState, count: int = 2) -> list[Any]:
+    def generate_more_characters(self, state: StoryState, count: int = 2) -> list[Character]:
         """Generate additional characters for the story.
 
         Args:
