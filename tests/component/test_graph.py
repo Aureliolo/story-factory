@@ -143,4 +143,3 @@ class TestGraphRenderer:
         assert "test_callback" in result.js, "Should use create callback ID"
         assert "test_edge_callback" in result.js, "Should use edge callback ID"
         assert "oncontext" in result.js, "Should have right-click context menu"
-
