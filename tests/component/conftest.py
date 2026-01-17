@@ -89,12 +89,30 @@ def test_settings():
 
 
 @pytest.fixture
-def test_services(test_settings):
-    """Create test service container with mocked services."""
+def test_services(test_settings, tmp_path):
+    """Create test service container with mocked services and isolated directories.
+
+    IMPORTANT: Must patch STORIES_DIR/WORLDS_DIR to prevent tests from
+    writing to the real output directory.
+    """
     from services import ServiceContainer
 
-    # Create real services but they'll use mocked Ollama
-    return ServiceContainer(test_settings)
+    stories_dir = tmp_path / "stories"
+    worlds_dir = tmp_path / "worlds"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    worlds_dir.mkdir(parents=True, exist_ok=True)
+
+    # Patch at ALL locations where these constants are imported
+    with (
+        patch("settings.STORIES_DIR", stories_dir),
+        patch("settings.WORLDS_DIR", worlds_dir),
+        patch("services.project_service.STORIES_DIR", stories_dir),
+        patch("services.project_service.WORLDS_DIR", worlds_dir),
+        patch("services.backup_service.STORIES_DIR", stories_dir),
+        patch("services.backup_service.WORLDS_DIR", worlds_dir),
+        patch("services.export_service.STORIES_DIR", stories_dir),
+    ):
+        yield ServiceContainer(test_settings)
 
 
 @pytest.fixture

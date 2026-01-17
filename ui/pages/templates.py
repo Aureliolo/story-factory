@@ -350,7 +350,7 @@ class TemplatesPage:
             self.services.settings.save()
 
             ui.notify(f"Created project from template: {template.name}", type="positive")
-            ui.navigate.to("/write")  # Navigate to write page
+            ui.navigate.to("/")  # Navigate to write page (root)
         except Exception as e:
             logger.exception("Failed to create project from template")
             ui.notify(f"Error: {e}", type="negative")

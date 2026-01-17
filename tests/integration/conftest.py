@@ -83,12 +83,26 @@ def services(tmp_path, mock_ollama_for_agents):
 
     This fixture is shared across all integration test classes to avoid
     code duplication and ensure consistent service setup.
+
+    IMPORTANT: Must patch STORIES_DIR/WORLDS_DIR at ALL locations where they're
+    imported, not just in settings module. Python's `from X import Y` binds
+    the name at import time, so patching settings.Y won't affect already-imported
+    references.
     """
     stories_dir = tmp_path / "stories"
     worlds_dir = tmp_path / "worlds"
     stories_dir.mkdir(parents=True, exist_ok=True)
     worlds_dir.mkdir(parents=True, exist_ok=True)
 
-    with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
+    # Patch at ALL locations where these constants are imported
+    with (
+        patch("settings.STORIES_DIR", stories_dir),
+        patch("settings.WORLDS_DIR", worlds_dir),
+        patch("services.project_service.STORIES_DIR", stories_dir),
+        patch("services.project_service.WORLDS_DIR", worlds_dir),
+        patch("services.backup_service.STORIES_DIR", stories_dir),
+        patch("services.backup_service.WORLDS_DIR", worlds_dir),
+        patch("services.export_service.STORIES_DIR", stories_dir),
+    ):
         settings = Settings()
         yield ServiceContainer(settings)
