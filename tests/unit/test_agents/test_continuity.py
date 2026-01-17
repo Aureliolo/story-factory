@@ -125,6 +125,7 @@ class TestContinuityCheckChapter:
             sample_story_state,
             "The chapter content with Marcus's blue eyes sparkling...",
             chapter_number=2,
+            check_voice=False,  # Disable voice check for this test
         )
 
         assert len(issues) == 1
@@ -150,7 +151,7 @@ class TestContinuityCheckChapter:
         """Test prompt includes established facts."""
         continuity.generate = MagicMock(return_value="```json\n[]\n```")
 
-        continuity.check_chapter(sample_story_state, "Content", 1)
+        continuity.check_chapter(sample_story_state, "Content", 1, check_voice=False)
 
         call_args = continuity.generate.call_args
         prompt = call_args[0][0]
@@ -186,7 +187,7 @@ class TestContinuityCheckFullStory:
 ```"""
         continuity.generate = MagicMock(return_value=json_response)
 
-        issues = continuity.check_full_story(sample_story_state)
+        issues = continuity.check_full_story(sample_story_state, check_voice=False)
 
         assert len(issues) == 1
         assert issues[0].severity == "critical"
@@ -469,9 +470,247 @@ class TestContinuityParseIssues:
 ```"""
         continuity.generate = MagicMock(return_value=json_response)
 
-        issues = continuity.check_chapter(sample_story_state, "Content...", chapter_number=1)
+        issues = continuity.check_chapter(
+            sample_story_state, "Content...", chapter_number=1, check_voice=False
+        )
 
         # Should have 2 issues (the malformed one is skipped)
         assert len(issues) == 2
         assert issues[0].description == "Valid issue"
         assert issues[1].description == "Another valid issue"
+
+
+class TestContinuityVoiceConsistency:
+    """Tests for voice consistency checking."""
+
+    def test_extract_dialogue_patterns(self, continuity, sample_story_state):
+        """Test extracts dialogue patterns from chapter."""
+        json_response = """```json
+[
+    {
+        "character_name": "Sarah Chen",
+        "vocabulary_level": "formal",
+        "speech_patterns": ["uses archaeological terms", "speaks precisely"],
+        "typical_words": ["exactly", "precisely", "artifact"],
+        "sentence_structure": "complex"
+    },
+    {
+        "character_name": "Marcus Wells",
+        "vocabulary_level": "casual",
+        "speech_patterns": ["uses contractions frequently", "informal"],
+        "typical_words": ["yeah", "gonna", "seriously"],
+        "sentence_structure": "simple"
+    }
+]
+```"""
+        continuity.generate = MagicMock(return_value=json_response)
+
+        patterns = continuity.extract_dialogue_patterns(
+            sample_story_state, "Chapter with dialogue..."
+        )
+
+        assert len(patterns) == 2
+        assert "Sarah Chen" in patterns
+        assert patterns["Sarah Chen"].vocabulary_level == "formal"
+        assert any("archaeological" in p.lower() for p in patterns["Sarah Chen"].speech_patterns)
+        assert "Marcus Wells" in patterns
+        assert patterns["Marcus Wells"].vocabulary_level == "casual"
+
+    def test_check_character_voice_finds_issues(self, continuity, sample_story_state):
+        """Test checks character voice for inconsistencies."""
+        json_response = """```json
+[
+    {
+        "severity": "moderate",
+        "category": "voice",
+        "description": "Sarah Chen speaks too casually for her character",
+        "location": "Sarah said, 'Yeah, whatever dude.'",
+        "suggestion": "Change to more formal language: 'I understand your point.'"
+    }
+]
+```"""
+        continuity.generate = MagicMock(return_value=json_response)
+
+        issues = continuity.check_character_voice(
+            sample_story_state, "Chapter content with out-of-character dialogue..."
+        )
+
+        assert len(issues) == 1
+        assert issues[0].category == "voice"
+        assert "Sarah Chen" in issues[0].description
+        assert "formal language" in issues[0].suggestion
+
+    def test_check_character_voice_with_established_patterns(self, continuity, sample_story_state):
+        """Test voice checking uses established patterns."""
+        from agents.continuity import DialoguePattern
+
+        established_patterns = {
+            "Sarah Chen": DialoguePattern(
+                character_name="Sarah Chen",
+                vocabulary_level="formal",
+                speech_patterns=["uses archaeological terminology"],
+                typical_words=["precisely", "artifact", "excavation"],
+                sentence_structure="complex",
+            )
+        }
+
+        continuity.generate = MagicMock(return_value="```json\n[]\n```")
+
+        continuity.check_character_voice(
+            sample_story_state, "Chapter content...", established_patterns
+        )
+
+        call_args = continuity.generate.call_args
+        prompt = call_args[0][0]
+        assert "ESTABLISHED SPEECH PATTERNS" in prompt
+        assert "formal vocabulary" in prompt
+
+    def test_check_character_voice_no_characters(self, continuity, sample_story_state):
+        """Test returns empty list when no characters."""
+        sample_story_state.characters = []
+
+        issues = continuity.check_character_voice(sample_story_state, "Content...")
+
+        assert issues == []
+
+    def test_check_chapter_includes_voice_check(self, continuity, sample_story_state):
+        """Test check_chapter includes voice consistency by default."""
+        # Mock both the main check and voice check
+        main_response = """```json
+[
+    {
+        "severity": "minor",
+        "category": "timeline",
+        "description": "Timeline issue",
+        "location": "Para 1",
+        "suggestion": "Fix timeline"
+    }
+]
+```"""
+        voice_response = """```json
+[
+    {
+        "severity": "moderate",
+        "category": "voice",
+        "description": "Voice issue",
+        "location": "Para 2",
+        "suggestion": "Fix voice"
+    }
+]
+```"""
+
+        # The generate method will be called twice
+        continuity.generate = MagicMock(side_effect=[main_response, voice_response])
+
+        issues = continuity.check_chapter(sample_story_state, "Content...", chapter_number=1)
+
+        # Should have both timeline and voice issues
+        assert len(issues) == 2
+        assert any(i.category == "timeline" for i in issues)
+        assert any(i.category == "voice" for i in issues)
+
+    def test_check_chapter_can_skip_voice_check(self, continuity, sample_story_state):
+        """Test check_chapter can skip voice checking."""
+        main_response = """```json
+[
+    {
+        "severity": "minor",
+        "category": "timeline",
+        "description": "Timeline issue",
+        "location": "Para 1",
+        "suggestion": "Fix timeline"
+    }
+]
+```"""
+        continuity.generate = MagicMock(return_value=main_response)
+
+        issues = continuity.check_chapter(
+            sample_story_state, "Content...", chapter_number=1, check_voice=False
+        )
+
+        # Should only call generate once (no voice check)
+        assert continuity.generate.call_count == 1
+        assert len(issues) == 1
+        assert issues[0].category == "timeline"
+
+    def test_check_full_story_includes_voice_check(self, continuity, sample_story_state):
+        """Test check_full_story includes voice consistency by default."""
+        sample_story_state.chapters[0].content = "Chapter 1 with dialogue..."
+        sample_story_state.chapters[1].content = "Chapter 2 with more dialogue..."
+
+        # Mock responses: main check, pattern extraction, voice check
+        main_response = """```json
+[
+    {
+        "severity": "moderate",
+        "category": "plot_hole",
+        "description": "Plot issue",
+        "location": "Ch1",
+        "suggestion": "Fix plot"
+    }
+]
+```"""
+        pattern_response = """```json
+[
+    {
+        "character_name": "Sarah Chen",
+        "vocabulary_level": "formal",
+        "speech_patterns": [],
+        "typical_words": [],
+        "sentence_structure": "complex"
+    }
+]
+```"""
+        voice_response = """```json
+[
+    {
+        "severity": "moderate",
+        "category": "voice",
+        "description": "Voice issue",
+        "location": "Ch2",
+        "suggestion": "Fix voice"
+    }
+]
+```"""
+
+        continuity.generate = MagicMock(
+            side_effect=[main_response, pattern_response, voice_response]
+        )
+
+        issues = continuity.check_full_story(sample_story_state)
+
+        # Should have both plot and voice issues
+        assert len(issues) == 2
+        assert any(i.category == "plot_hole" for i in issues)
+        assert any(i.category == "voice" for i in issues)
+
+    def test_parse_dialogue_patterns_handles_malformed(self, continuity):
+        """Test parsing skips malformed dialogue patterns."""
+        json_response = """```json
+[
+    {
+        "character_name": "Sarah Chen",
+        "vocabulary_level": "formal",
+        "speech_patterns": ["pattern1"],
+        "typical_words": ["word1"],
+        "sentence_structure": "complex"
+    },
+    {
+        "wrong_field": "Invalid"
+    },
+    {
+        "character_name": "Marcus Wells",
+        "vocabulary_level": "casual",
+        "speech_patterns": [],
+        "typical_words": [],
+        "sentence_structure": "simple"
+    }
+]
+```"""
+
+        patterns = continuity._parse_dialogue_patterns(json_response)
+
+        # Should parse 2 valid patterns, skip the malformed one
+        assert len(patterns) == 2
+        assert "Sarah Chen" in patterns
+        assert "Marcus Wells" in patterns
