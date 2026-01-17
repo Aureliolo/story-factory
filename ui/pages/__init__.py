@@ -1,6 +1,7 @@
 """UI pages for Story Factory."""
 
 from .analytics import AnalyticsPage
+from .comparison import ComparisonPage
 from .models import ModelsPage
 from .projects import ProjectsPage
 from .settings import SettingsPage
@@ -14,4 +15,5 @@ __all__ = [
     "SettingsPage",
     "ModelsPage",
     "AnalyticsPage",
+    "ComparisonPage",
 ]
