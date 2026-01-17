@@ -170,9 +170,11 @@ If no issues found, output: ```json
         Returns:
             Dict mapping character names to their dialogue patterns.
         """
-        char_names = [c.name for c in story_state.characters]
-        if not char_names:
+        if not story_state.characters:
+            logger.debug("No characters defined, skipping dialogue pattern extraction")
             return {}
+
+        logger.debug("Extracting dialogue patterns for %d characters", len(story_state.characters))
 
         chars_summary = "\n".join(
             f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
@@ -230,6 +232,8 @@ Only include characters who actually speak in this chapter."""
         if not story_state.characters:
             logger.debug("No characters defined, skipping voice consistency check")
             return []
+
+        logger.debug("Checking voice consistency for %d characters", len(story_state.characters))
 
         chars_summary = "\n".join(
             f"- {c.name}: {c.description}\n  Personality: {', '.join(c.personality_traits)}"
@@ -290,10 +294,9 @@ If no voice issues found, output: ```json
 
     def _parse_dialogue_patterns(self, response: str) -> dict[str, DialoguePattern]:
         """Parse dialogue patterns from agent response."""
-        from utils.json_parser import extract_json_list
-
         data = extract_json_list(response)
         if not data:
+            logger.debug("No dialogue patterns found in response")
             return {}
 
         patterns = {}
@@ -311,6 +314,7 @@ If no voice issues found, output: ```json
             except (TypeError, KeyError) as e:
                 logger.debug(f"Skipping malformed dialogue pattern item: {e}")
 
+        logger.debug("Extracted dialogue patterns for %d characters", len(patterns))
         return patterns
 
     def check_full_story(
