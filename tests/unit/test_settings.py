@@ -1208,3 +1208,198 @@ class TestBackupCorruptedSettings:
             mock_copy.side_effect = OSError("Permission denied")
             # Should not raise, just log warning
             Settings._backup_corrupted_settings()
+
+
+class TestWriterModelSelection:
+    """Tests for writer model selection (line 941)."""
+
+    def test_selects_creative_model_for_writer_when_installed(self, monkeypatch):
+        """Test selects creative writing specialist model for writer role when installed."""
+        # Line 941: Returns creative model when writer role and model is installed
+        import settings as settings_module
+
+        # Mock get_installed_models to return the creative model
+        monkeypatch.setattr(
+            settings_module,
+            "get_installed_models",
+            lambda timeout=None: [
+                "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+                "other-model:8b",
+            ],
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"writer": "auto"}
+
+        # With 24GB VRAM (enough for Celeste 12B which needs 14GB)
+        result = settings.get_model_for_agent("writer", available_vram=24)
+
+        # Should select the Celeste creative model
+        assert result == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+
+    def test_selects_second_creative_model_for_writer_when_first_not_installed(self, monkeypatch):
+        """Test selects second creative model when first is not installed."""
+        import settings as settings_module
+
+        # Mock get_installed_models to return only the second creative model
+        monkeypatch.setattr(
+            settings_module,
+            "get_installed_models",
+            lambda timeout=None: [
+                "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit",
+            ],
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"writer": "auto"}
+
+        # With 24GB VRAM (enough for Dark Champion which needs 14GB)
+        result = settings.get_model_for_agent("writer", available_vram=24)
+
+        # Should select the Dark Champion creative model
+        assert result == "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit"
+
+
+class TestSpeedBasedModelSelection:
+    """Tests for speed-based model selection for lower quality roles (line 991)."""
+
+    def test_selects_model_by_speed_for_interviewer(self, monkeypatch):
+        """Test selects model by speed for interviewer role (quality < 9)."""
+        # Line 991: Speed-based sorting for lower quality roles
+        import settings as settings_module
+
+        # Create a custom model registry with speed differences
+        mock_models = {
+            "fast-model:8b": {
+                "name": "Fast Model",
+                "release": "2025",
+                "size_gb": 5,
+                "vram_required": 8,
+                "quality": 7,  # Meets interviewer threshold
+                "speed": 10,  # Fastest
+                "uncensored": True,
+                "description": "Fast model",
+            },
+            "slow-model:8b": {
+                "name": "Slow Model",
+                "release": "2025",
+                "size_gb": 5,
+                "vram_required": 8,
+                "quality": 8,  # Higher quality
+                "speed": 5,  # Slower
+                "uncensored": True,
+                "description": "Slow model",
+            },
+        }
+
+        with (
+            patch.object(settings_module, "AVAILABLE_MODELS", mock_models),
+            patch.object(
+                settings_module,
+                "get_installed_models",
+                return_value=["fast-model:8b", "slow-model:8b"],
+            ),
+        ):
+            settings = Settings()
+            settings.use_per_agent_models = True
+            settings.agent_models = {"interviewer": "auto"}
+
+            # Interviewer has recommended_quality = 7
+            result = settings.get_model_for_agent("interviewer", available_vram=24)
+
+            # Should select the faster model for interviewer
+            assert result == "fast-model:8b"
+
+    def test_selects_model_by_speed_for_continuity(self, monkeypatch):
+        """Test selects model by speed for continuity role (quality < 9)."""
+        import settings as settings_module
+
+        # Create a custom model registry
+        mock_models = {
+            "speedy-model:8b": {
+                "name": "Speedy Model",
+                "release": "2025",
+                "size_gb": 5,
+                "vram_required": 8,
+                "quality": 7,  # Meets continuity threshold
+                "speed": 9,  # Fast
+                "uncensored": True,
+                "description": "Speedy model",
+            },
+            "quality-model:8b": {
+                "name": "Quality Model",
+                "release": "2025",
+                "size_gb": 5,
+                "vram_required": 8,
+                "quality": 9,  # Higher quality
+                "speed": 4,  # Slower
+                "uncensored": True,
+                "description": "Quality model",
+            },
+        }
+
+        with (
+            patch.object(settings_module, "AVAILABLE_MODELS", mock_models),
+            patch.object(
+                settings_module,
+                "get_installed_models",
+                return_value=["speedy-model:8b", "quality-model:8b"],
+            ),
+        ):
+            settings = Settings()
+            settings.use_per_agent_models = True
+            settings.agent_models = {"continuity": "auto"}
+
+            # Continuity has recommended_quality = 7
+            result = settings.get_model_for_agent("continuity", available_vram=24)
+
+            # Should select the faster model for continuity
+            assert result == "speedy-model:8b"
+
+    def test_selects_model_by_speed_for_editor(self, monkeypatch):
+        """Test selects model by speed for editor role (quality = 8 < 9)."""
+        import settings as settings_module
+
+        # Create a custom model registry
+        mock_models = {
+            "fastest-model:8b": {
+                "name": "Fastest Model",
+                "release": "2025",
+                "size_gb": 5,
+                "vram_required": 8,
+                "quality": 8,  # Meets editor threshold
+                "speed": 9,  # Fastest
+                "uncensored": True,
+                "description": "Fastest model",
+            },
+            "slowest-model:8b": {
+                "name": "Slowest Model",
+                "release": "2025",
+                "size_gb": 5,
+                "vram_required": 8,
+                "quality": 9,  # Higher quality
+                "speed": 3,  # Slowest
+                "uncensored": True,
+                "description": "Slowest model",
+            },
+        }
+
+        with (
+            patch.object(settings_module, "AVAILABLE_MODELS", mock_models),
+            patch.object(
+                settings_module,
+                "get_installed_models",
+                return_value=["fastest-model:8b", "slowest-model:8b"],
+            ),
+        ):
+            settings = Settings()
+            settings.use_per_agent_models = True
+            settings.agent_models = {"editor": "auto"}
+
+            # Editor has recommended_quality = 8
+            result = settings.get_model_for_agent("editor", available_vram=24)
+
+            # Should select the faster model for editor (quality < 9)
+            assert result == "fastest-model:8b"

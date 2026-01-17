@@ -111,6 +111,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 - Mock Ollama in tests to avoid requiring running instance
 - Shared fixtures in `tests/conftest.py`
 - **Always run tests in background** to avoid blocking on long test runs when working on todo lists
+- **Never run full test suite scans** - only run tests for specific files when needed (e.g., `pytest tests/unit/test_settings.py`). Full test runs take too long and should only be done by CI.
 
 ## Ollama Integration
 

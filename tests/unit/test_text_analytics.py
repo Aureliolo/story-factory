@@ -264,3 +264,61 @@ class TestEdgeCases:
         text = "Just a single line of text"
         metrics = analyze_pacing(text)
         assert metrics.total_word_count > 0
+
+
+class TestUncoveredEdgeCases:
+    """Tests for previously uncovered edge cases in text analytics."""
+
+    def test_readability_text_with_only_sentence_punctuation(self):
+        """Test readability with text that has only sentence-ending punctuation."""
+        # Lines 103-104: sentence_count == 0 with non-empty text after stripped() passes
+        # Text with only sentence-ending punctuation produces empty segments after split
+        text = "...!!!???"
+        scores = calculate_readability(text)
+        assert scores.sentence_count == 0
+        assert scores.word_count == 0
+        assert scores.flesch_reading_ease == 0.0
+
+    def test_pacing_with_single_paragraph(self):
+        """Test pacing with single paragraph (no double newlines)."""
+        text = "This is a simple narrative sentence without action"
+        metrics = analyze_pacing(text)
+        # Should analyze the text as narrative
+        assert metrics.total_word_count > 0
+        assert metrics.narrative_percentage > 0
+
+    def test_pacing_with_multiple_paragraphs(self):
+        """Test pacing correctly processes multiple paragraphs."""
+        text = "First paragraph here.\n\nSecond paragraph here.\n\nThird one too."
+        metrics = analyze_pacing(text)
+        # Should process all paragraphs
+        assert metrics.total_word_count > 0
+
+    def test_pacing_empty_text_returns_zeros(self):
+        """Test pacing returns zeros for empty/whitespace text."""
+        # Empty text hits the early return at line 169-179
+        text = "   \n\n   "
+        metrics = analyze_pacing(text)
+        assert metrics.total_word_count == 0
+        assert metrics.dialogue_percentage == 0.0
+        assert metrics.action_percentage == 0.0
+        assert metrics.narrative_percentage == 0.0
+
+    def test_readability_text_with_sentences_but_no_alphabetic_words(self):
+        """Test readability with sentences that have no alphabetic words."""
+        # Tests the word_count == 0 branch with sentence_count > 0
+        text = "123 456. 789 012."
+        scores = calculate_readability(text)
+        assert scores.word_count == 0
+        assert scores.sentence_count == 2
+        assert scores.flesch_reading_ease == 0.0
+
+    def test_pacing_with_mixed_content_paragraphs(self):
+        """Test pacing handles paragraphs with mixed content types."""
+        # Paragraphs with normal text and punctuation-only content
+        text = "Normal text here\n\n!@#$%^&*()\n\nMore normal text here"
+        metrics = analyze_pacing(text)
+        # Should process all paragraphs
+        assert metrics.total_word_count > 0
+        # Total word count includes words from all paragraphs
+        # (punctuation paragraph has 1 "word" which is the punctuation string)

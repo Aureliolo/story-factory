@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory.story_state import Chapter, Character, StoryBrief, StoryState
+from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
 from services.suggestion_service import SuggestionService
 from settings import Settings
 
@@ -131,7 +131,7 @@ def test_generate_suggestions_success(mock_agent_class, suggestion_service, samp
     """Test successful suggestion generation."""
     # Mock agent response
     mock_agent = MagicMock()
-    mock_agent.chat.return_value = """{
+    mock_agent.generate.return_value = """{
         "plot": ["What if Sarah discovers the killer is an AI?", "A second murder complicates the investigation."],
         "character": ["Show Sarah's personal struggles with the case.", "Reveal Dr. Vale's true motivations."],
         "scene": ["Build tension through environmental details.", "Use dialogue to reveal hidden agendas."],
@@ -153,12 +153,12 @@ def test_generate_suggestions_success(mock_agent_class, suggestion_service, samp
 
 
 @patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_single_category(
+def test_generate_suggestions_single_category_list_response(
     mock_agent_class, suggestion_service, sample_story_state
 ):
-    """Test generating suggestions for a single category."""
+    """Test generating suggestions for a single category when LLM returns a list."""
     mock_agent = MagicMock()
-    mock_agent.chat.return_value = (
+    mock_agent.generate.return_value = (
         '["What if the detective becomes the suspect?", "An unexpected ally appears."]'
     )
     mock_agent_class.return_value = mock_agent
@@ -168,6 +168,45 @@ def test_generate_suggestions_single_category(
     # Should only have the requested category
     assert "plot" in suggestions
     assert isinstance(suggestions["plot"], list)
+    assert len(suggestions["plot"]) == 2
+
+
+@patch("services.suggestion_service.BaseAgent")
+def test_generate_suggestions_single_category_dict_response(
+    mock_agent_class, suggestion_service, sample_story_state
+):
+    """Test generating suggestions for a single category when LLM returns a dict with category key."""
+    mock_agent = MagicMock()
+    mock_agent.generate.return_value = (
+        '{"plot": ["A hidden conspiracy emerges.", "The suspect has an alibi."]}'
+    )
+    mock_agent_class.return_value = mock_agent
+
+    suggestions = suggestion_service.generate_suggestions(sample_story_state, category="plot")
+
+    # Should only have the requested category
+    assert "plot" in suggestions
+    assert isinstance(suggestions["plot"], list)
+    assert len(suggestions["plot"]) == 2
+    assert "A hidden conspiracy emerges." in suggestions["plot"]
+
+
+@patch("services.suggestion_service.BaseAgent")
+def test_generate_suggestions_single_category_unexpected_structure(
+    mock_agent_class, suggestion_service, sample_story_state
+):
+    """Test fallback when single category response has unexpected structure."""
+    mock_agent = MagicMock()
+    # Return a dict that doesn't contain the requested category
+    mock_agent.generate.return_value = '{"character": ["Some character suggestion"]}'
+    mock_agent_class.return_value = mock_agent
+
+    suggestions = suggestion_service.generate_suggestions(sample_story_state, category="plot")
+
+    # Should fall back to template suggestions for plot
+    assert "plot" in suggestions
+    assert isinstance(suggestions["plot"], list)
+    assert len(suggestions["plot"]) > 0
 
 
 @patch("services.suggestion_service.BaseAgent")
@@ -176,7 +215,7 @@ def test_generate_suggestions_invalid_json(
 ):
     """Test handling of invalid JSON response."""
     mock_agent = MagicMock()
-    mock_agent.chat.return_value = "This is not valid JSON at all"
+    mock_agent.generate.return_value = "This is not valid JSON at all"
     mock_agent_class.return_value = mock_agent
 
     suggestions = suggestion_service.generate_suggestions(sample_story_state)
@@ -191,7 +230,7 @@ def test_generate_suggestions_invalid_json(
 def test_generate_suggestions_llm_error(mock_agent_class, suggestion_service, sample_story_state):
     """Test handling of LLM errors."""
     mock_agent = MagicMock()
-    mock_agent.chat.side_effect = Exception("LLM connection failed")
+    mock_agent.generate.side_effect = Exception("LLM connection failed")
     mock_agent_class.return_value = mock_agent
 
     suggestions = suggestion_service.generate_suggestions(sample_story_state)
@@ -208,7 +247,7 @@ def test_generate_suggestions_partial_response(
 ):
     """Test handling of partial category response."""
     mock_agent = MagicMock()
-    mock_agent.chat.return_value = (
+    mock_agent.generate.return_value = (
         '{"plot": ["Good plot idea"], "character": ["Good character idea"]}'
     )
     mock_agent_class.return_value = mock_agent
@@ -220,3 +259,141 @@ def test_generate_suggestions_partial_response(
     assert "character" in suggestions
     assert "scene" in suggestions  # Should be filled by fallback
     assert "transition" in suggestions  # Should be filled by fallback
+
+
+@patch("services.suggestion_service.BaseAgent")
+def test_generate_suggestions_multi_category_non_dict_response(
+    mock_agent_class, suggestion_service, sample_story_state
+):
+    """Test fallback when multi-category response is not a dict."""
+    mock_agent = MagicMock()
+    # Return a list instead of a dict for multi-category request
+    mock_agent.generate.return_value = '["suggestion1", "suggestion2"]'
+    mock_agent_class.return_value = mock_agent
+
+    suggestions = suggestion_service.generate_suggestions(sample_story_state)
+
+    # Should fall back to template suggestions for all categories
+    assert "plot" in suggestions
+    assert "character" in suggestions
+    assert "scene" in suggestions
+    assert "transition" in suggestions
+    assert isinstance(suggestions["plot"], list)
+    assert len(suggestions["plot"]) > 0
+
+
+@patch("services.suggestion_service.BaseAgent")
+def test_generate_suggestions_invalid_category_value(
+    mock_agent_class, suggestion_service, sample_story_state
+):
+    """Test fallback when a category value is not a list."""
+    mock_agent = MagicMock()
+    # Return a dict where one category has a non-list value
+    mock_agent.generate.return_value = """{
+        "plot": ["Valid plot suggestion"],
+        "character": "This should be a list not a string",
+        "scene": ["Valid scene suggestion"],
+        "transition": null
+    }"""
+    mock_agent_class.return_value = mock_agent
+
+    suggestions = suggestion_service.generate_suggestions(sample_story_state)
+
+    # Should have all categories
+    assert "plot" in suggestions
+    assert "character" in suggestions
+    assert "scene" in suggestions
+    assert "transition" in suggestions
+
+    # plot and scene should have the LLM values
+    assert "Valid plot suggestion" in suggestions["plot"]
+    assert "Valid scene suggestion" in suggestions["scene"]
+
+    # character and transition should fall back to templates
+    assert isinstance(suggestions["character"], list)
+    assert isinstance(suggestions["transition"], list)
+
+
+def test_build_context_with_plot_points(suggestion_service):
+    """Test context building includes plot points."""
+    state = StoryState(
+        id="test",
+        project_name="Test Story",
+        plot_points=[
+            PlotPoint(description="The hero discovers the truth", completed=False),
+            PlotPoint(description="The villain is revealed", completed=True),
+            PlotPoint(description="Final confrontation", completed=False),
+        ],
+    )
+
+    context = suggestion_service._build_context(state)
+
+    # Should include the first uncompleted plot point
+    assert "The hero discovers the truth" in context
+    # Should not include completed plot points
+    assert "The villain is revealed" not in context
+
+
+def test_build_context_with_established_facts(suggestion_service):
+    """Test context building includes established facts."""
+    state = StoryState(
+        id="test",
+        project_name="Test Story",
+        established_facts=[
+            "The city was founded in 2050",
+            "AI gained sentience in 2080",
+            "The detective's partner was killed",
+            "The murder weapon was a laser pistol",
+            "The suspect has an alibi",
+            "There is a mole in the department",
+        ],
+    )
+
+    context = suggestion_service._build_context(state)
+
+    # Should include the most recent facts (last 5)
+    assert "AI gained sentience in 2080" in context
+    assert "The detective's partner was killed" in context
+    assert "The murder weapon was a laser pistol" in context
+    assert "The suspect has an alibi" in context
+    assert "There is a mole in the department" in context
+    # First fact should be excluded (only last 5)
+    assert "The city was founded in 2050" not in context
+
+
+def test_build_context_with_all_plot_points_completed(suggestion_service):
+    """Test context building when all plot points are completed."""
+    state = StoryState(
+        id="test",
+        project_name="Test Story",
+        plot_points=[
+            PlotPoint(description="Plot point 1", completed=True),
+            PlotPoint(description="Plot point 2", completed=True),
+        ],
+    )
+
+    context = suggestion_service._build_context(state)
+
+    # Should not include plot points section when all are completed
+    assert "Upcoming Plot Point" not in context
+
+
+@patch("services.suggestion_service.BaseAgent")
+def test_generate_suggestions_empty_json_response(
+    mock_agent_class, suggestion_service, sample_story_state
+):
+    """Test fallback when extract_json returns empty/falsy value."""
+    mock_agent = MagicMock()
+    # Return something that extract_json will parse but return empty/falsy
+    mock_agent.generate.return_value = "{}"
+    mock_agent_class.return_value = mock_agent
+
+    suggestions = suggestion_service.generate_suggestions(sample_story_state)
+
+    # Empty dict is falsy, should fall back
+    # Actually, empty dict {} is truthy in Python but will fail validation
+    # Let's verify it still works
+    assert "plot" in suggestions
+    assert "character" in suggestions
+    assert "scene" in suggestions
+    assert "transition" in suggestions

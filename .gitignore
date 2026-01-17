@@ -69,3 +69,4 @@ htmlcov/
 
 # Claude Code
 .claude/
+*coverage_report.txt
