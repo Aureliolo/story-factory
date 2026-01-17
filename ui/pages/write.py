@@ -434,6 +434,15 @@ class WritePage:
 
         ui.separator()
 
+        # Writing Suggestions
+        ui.button(
+            "Need Inspiration?",
+            on_click=self._show_suggestions,
+            icon="lightbulb",
+        ).props("outline color=amber-7").classes("w-full")
+
+        ui.separator()
+
         # Feedback mode
         ui.label("Feedback Mode").classes("text-sm font-medium")
         ui.select(
@@ -859,3 +868,132 @@ class WritePage:
         except Exception as e:
             logger.exception(f"Failed to export as {fmt}")
             self._notify(f"Export failed: {e}", type="negative")
+
+    async def _show_suggestions(self) -> None:
+        """Show AI-powered writing suggestions dialog."""
+        if not self.state.project:
+            self._notify("No project selected", type="warning")
+            return
+
+        # Create dialog
+        dialog = ui.dialog().props("maximized")
+        suggestions_html: Html | None = None
+        loading_spinner: ui.spinner | None = None
+        content_container: ui.column | None = None
+
+        async def load_suggestions():
+            """Load suggestions from the service."""
+            nonlocal suggestions_html, loading_spinner, content_container
+
+            if not self.state.project:
+                dialog.close()
+                return
+
+            try:
+                # Show loading state
+                if loading_spinner:
+                    loading_spinner.set_visibility(True)
+                if suggestions_html:
+                    suggestions_html.set_visibility(False)
+
+                # Generate suggestions
+                suggestions = await run.io_bound(
+                    self.services.suggestion.generate_suggestions, self.state.project
+                )
+
+                # Hide loading
+                if loading_spinner:
+                    loading_spinner.set_visibility(False)
+
+                # Build HTML for suggestions
+                html_content = self._build_suggestions_html(suggestions)
+
+                # Update display
+                if suggestions_html:
+                    suggestions_html.content = html_content
+                    suggestions_html.set_visibility(True)
+
+            except Exception as e:
+                logger.exception("Failed to generate suggestions")
+                if loading_spinner:
+                    loading_spinner.set_visibility(False)
+                self._notify(f"Error generating suggestions: {e}", type="negative")
+
+        with dialog, ui.card().classes("w-full h-full flex flex-col"):
+            # Header
+            with ui.row().classes("w-full items-center justify-between p-4 border-b"):
+                with ui.row().classes("items-center gap-2"):
+                    ui.icon("lightbulb", size="md").classes("text-amber-500")
+                    ui.label("Writing Suggestions").classes("text-2xl font-bold")
+                ui.button(icon="close", on_click=dialog.close).props("flat round")
+
+            # Content area
+            with ui.column().classes("flex-grow overflow-auto p-4") as content_container:
+                loading_spinner = ui.spinner(size="lg").classes("mx-auto mt-8")
+                suggestions_html = ui.html(sanitize=False)
+                suggestions_html.set_visibility(False)
+
+            # Footer
+            with ui.row().classes("w-full justify-end gap-2 p-4 border-t"):
+                ui.button("Refresh", on_click=load_suggestions, icon="refresh").props("flat")
+                ui.button("Close", on_click=dialog.close).props("color=primary")
+
+        # Open dialog and load suggestions
+        dialog.open()
+        await load_suggestions()
+
+    def _build_suggestions_html(self, suggestions: dict[str, list[str]]) -> str:
+        """Build HTML content for suggestions display.
+
+        Args:
+            suggestions: Dictionary of categorized suggestions.
+
+        Returns:
+            HTML string for rendering.
+        """
+        # Category metadata
+        category_info = {
+            "plot": {"icon": "auto_stories", "title": "Plot Prompts", "color": "#8B5CF6"},
+            "character": {"icon": "person", "title": "Character Prompts", "color": "#10B981"},
+            "scene": {"icon": "theater_comedy", "title": "Scene Prompts", "color": "#F59E0B"},
+            "transition": {
+                "icon": "arrow_forward",
+                "title": "Transition Prompts",
+                "color": "#3B82F6",
+            },
+        }
+
+        html_parts = []
+
+        for category, items in suggestions.items():
+            if not items:
+                continue
+
+            info = category_info.get(
+                category, {"icon": "star", "title": category.title(), "color": "#6B7280"}
+            )
+
+            html_parts.append(f"""
+            <div style="margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <span class="material-icons" style="color: {info["color"]}; font-size: 1.5rem;">{info["icon"]}</span>
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: {info["color"]};">{info["title"]}</h3>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            """)
+
+            for suggestion in items:
+                html_parts.append(
+                    f"""
+                    <div style="padding: 1rem; background-color: rgba(0, 0, 0, 0.05); border-radius: 0.5rem; border-left: 3px solid {info["color"]};">
+                        <p style="margin: 0; line-height: 1.6;">{suggestion}</p>
+                    </div>
+                """
+                )
+
+            html_parts.append("</div></div>")
+
+        if not html_parts:
+            return "<p style='text-align: center; color: #6B7280; padding: 2rem;'>No suggestions available.</p>"
+
+        return "".join(html_parts)
