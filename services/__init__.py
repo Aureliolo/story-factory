@@ -10,6 +10,7 @@ from settings import Settings
 
 from .backup_service import BackupService
 from .export_service import ExportService
+from .import_service import ImportService
 from .model_mode_service import ModelModeService
 from .model_service import ModelService
 from .project_service import ProjectService
@@ -46,6 +47,7 @@ class ServiceContainer:
     suggestion: SuggestionService
     template: TemplateService
     backup: BackupService
+    import_svc: ImportService
 
     def __init__(self, settings: Settings | None = None):
         """Initialize all services with shared settings.
@@ -65,6 +67,7 @@ class ServiceContainer:
         self.suggestion = SuggestionService(self.settings)
         self.template = TemplateService(self.settings)
         self.backup = BackupService(self.settings)
+        self.import_svc = ImportService(self.settings, self.mode)
 
 
 __all__ = [
@@ -80,4 +83,5 @@ __all__ = [
     "SuggestionService",
     "TemplateService",
     "BackupService",
+    "ImportService",
 ]
