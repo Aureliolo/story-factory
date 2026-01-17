@@ -52,6 +52,8 @@ class Scene(BaseModel):
     location: str = ""  # Where the scene takes place
     beats: list[str] = Field(default_factory=list)  # Key story beats/events in the scene
     content: str = ""  # The actual prose content of the scene
+    word_count: int = 0
+    status: str = "pending"  # pending, drafted, edited, reviewed, final
 
 
 class Chapter(BaseModel):
