@@ -234,6 +234,7 @@ mypy .
 - **MyPy**: Type checking
 - **Pytest**: 849 tests with 100% coverage on core modules
 - **CI/CD**: GitHub Actions with coverage enforcement
+- **GitHub Copilot**: Custom instructions configured (see [docs/COPILOT_INSTRUCTIONS.md](docs/COPILOT_INSTRUCTIONS.md))
 
 ## Tech Stack
 
