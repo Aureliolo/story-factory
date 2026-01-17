@@ -522,7 +522,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
             raise ExportError(error_msg) from e
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
+        except (ValueError, TypeError) as e:
             error_msg = f"Failed to serialize short story: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
@@ -683,7 +683,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
             raise ExportError(error_msg) from e
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
+        except (ValueError, TypeError) as e:
             error_msg = f"Failed to serialize chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
@@ -824,7 +824,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
             raise ExportError(error_msg) from e
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
+        except (ValueError, TypeError) as e:
             error_msg = f"Failed to serialize continued chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
