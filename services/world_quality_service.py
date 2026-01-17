@@ -27,6 +27,7 @@ from services.model_mode_service import ModelModeService
 from settings import Settings
 from utils.exceptions import WorldGenerationError
 from utils.json_parser import extract_json
+from utils.validation import validate_not_empty
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,9 @@ class WorldQualityService:
             iterations: Number of refinement iterations used.
             generation_time: Time in seconds to generate.
         """
+        validate_not_empty(project_id, "project_id")
+        validate_not_empty(entity_type, "entity_type")
+        validate_not_empty(entity_name, "entity_name")
         try:
             self.analytics_db.record_world_entity_score(
                 project_id=project_id,

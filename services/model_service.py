@@ -7,6 +7,12 @@ from dataclasses import dataclass
 import ollama
 
 from settings import AVAILABLE_MODELS, ModelInfo, Settings, get_available_vram, get_model_info
+from utils.validation import (
+    validate_in_range,
+    validate_non_negative,
+    validate_not_empty,
+    validate_not_empty_collection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +225,7 @@ class ModelService:
         Returns:
             ModelInfo dictionary.
         """
+        validate_not_empty(model_id, "model_id")
         logger.debug(f"get_model_info called: model_id={model_id}")
         return get_model_info(model_id)
 
@@ -231,6 +238,7 @@ class ModelService:
         Yields:
             Progress dictionaries with status, completed, total.
         """
+        validate_not_empty(model_id, "model_id")
         logger.info(f"Starting download of model: {model_id}")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=600.0)  # 10 min for pulls
@@ -278,6 +286,7 @@ class ModelService:
         Returns:
             True if deleted successfully.
         """
+        validate_not_empty(model_id, "model_id")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=30.0)
             client.delete(model_id)
@@ -299,6 +308,7 @@ class ModelService:
         Returns:
             Dict with 'has_update' (bool), 'message' (str), 'error' (bool optional).
         """
+        validate_not_empty(model_id, "model_id")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
 
@@ -413,6 +423,8 @@ class ModelService:
         Returns:
             List of ModelStatus for models that fit.
         """
+        if min_vram is not None:
+            validate_non_negative(min_vram, "min_vram")
         logger.debug(f"get_models_for_vram called: min_vram={min_vram}")
         vram = min_vram if min_vram is not None else self.get_vram()
         all_models = self.list_available()
@@ -430,6 +442,7 @@ class ModelService:
         Returns:
             Tuple of (success, message).
         """
+        validate_not_empty(model_id, "model_id")
         logger.debug(f"test_model called: model_id={model_id}")
         try:
             client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
@@ -469,6 +482,9 @@ class ModelService:
         Returns:
             List of matching ModelStatus objects.
         """
+        validate_in_range(min_quality, "min_quality", min_val=1, max_val=10)
+        if max_vram is not None:
+            validate_non_negative(max_vram, "max_vram")
         logger.debug(
             f"get_model_by_quality called: min_quality={min_quality}, "
             f"max_vram={max_vram}, uncensored_required={uncensored_required}"
@@ -508,6 +524,8 @@ class ModelService:
         logger.debug(f"compare_models called: models={model_ids}, prompt_length={len(prompt)}")
         import time
 
+        validate_not_empty_collection(model_ids, "model_ids")
+        validate_not_empty(prompt, "prompt")
         results = []
         client = ollama.Client(host=self.settings.ollama_url, timeout=180.0)
 
