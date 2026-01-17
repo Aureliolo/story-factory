@@ -264,3 +264,66 @@ class TestEdgeCases:
         text = "Just a single line of text"
         metrics = analyze_pacing(text)
         assert metrics.total_word_count > 0
+
+
+class TestUncoveredEdgeCases:
+    """Tests for previously uncovered edge cases in text analytics."""
+
+    def test_readability_text_with_only_sentence_punctuation(self):
+        """Test readability with text that has only sentence-ending punctuation."""
+        # Lines 103-104: sentence_count == 0 with non-empty text after stripped() passes
+        # Text with only sentence-ending punctuation produces empty segments after split
+        text = "...!!!???"
+        scores = calculate_readability(text)
+        assert scores.sentence_count == 0
+        assert scores.word_count == 0
+        assert scores.flesch_reading_ease == 0.0
+
+    def test_pacing_paragraphs_fallback_to_single_text(self):
+        """Test pacing when text doesn't split into paragraphs."""
+        # Line 184: when paragraphs list is empty, falls back to [text]
+        # A single line without double newlines
+        text = "This is a simple narrative sentence without action"
+        metrics = analyze_pacing(text)
+        # Should still analyze the text
+        assert metrics.total_word_count > 0
+        assert metrics.narrative_percentage > 0
+
+    def test_pacing_paragraph_with_empty_words_list(self):
+        """Test pacing skips paragraphs with no words."""
+        # Line 202: when words list is empty, continue to next paragraph
+        # Create text where middle paragraph has only non-word characters
+        text = "First paragraph with words.\n\n\n\nSecond paragraph with words."
+        metrics = analyze_pacing(text)
+        # Should process the paragraphs with words
+        assert metrics.total_word_count > 0
+
+    def test_pacing_total_words_zero_after_categorization(self):
+        """Test pacing returns zeros when no words are categorized."""
+        # Lines 222-223: when total_words == 0 after categorization
+        # This happens when all paragraphs have empty words lists
+        # Text that strips to empty paragraphs
+        text = "   \n\n   \n\n   "
+        metrics = analyze_pacing(text)
+        assert metrics.total_word_count == 0
+        assert metrics.dialogue_percentage == 0.0
+        assert metrics.action_percentage == 0.0
+        assert metrics.narrative_percentage == 0.0
+
+    def test_readability_text_with_sentences_but_no_alphabetic_words(self):
+        """Test readability with sentences that have no alphabetic words."""
+        # Tests the word_count == 0 branch with sentence_count > 0
+        text = "123 456. 789 012."
+        scores = calculate_readability(text)
+        assert scores.word_count == 0
+        assert scores.sentence_count == 2
+        assert scores.flesch_reading_ease == 0.0
+
+    def test_pacing_paragraph_becomes_empty_after_split(self):
+        """Test pacing handles paragraph that becomes empty after word split."""
+        # Specifically tests line 202 continue branch
+        # Create text with a paragraph that is only punctuation/symbols
+        text = "Normal text here\n\n!@#$%^&*()\n\nMore normal text here"
+        metrics = analyze_pacing(text)
+        # Should still process the other paragraphs
+        assert metrics.total_word_count > 0

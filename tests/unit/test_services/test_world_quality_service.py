@@ -2579,3 +2579,902 @@ class TestEdgeCases:
         assert scores.average >= 7.0
         assert iterations == 2
         mock_refine.assert_called_once()
+
+
+class TestExceptionHandlingPaths:
+    """Tests for exception handling paths that weren't covered."""
+
+    # ========== Character Creation Exception Paths ==========
+
+    def test_create_character_json_parsing_error_value_error(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test character creation handles ValueError during JSON parsing."""
+        # Return JSON that will cause ValueError during float conversion
+        mock_ollama_client.generate.return_value = {
+            "response": json.dumps(
+                {
+                    "name": "Test",
+                    "role": "protagonist",
+                    "description": "Test desc",
+                    "personality_traits": [],
+                    "goals": [],
+                    "relationships": {},
+                    "arc_notes": "",
+                }
+            )
+        }
+        service._client = mock_ollama_client
+
+        # Simulate ValueError by patching extract_json to raise ValueError
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = ValueError("Cannot convert to float")
+
+            with pytest.raises(WorldGenerationError, match="Invalid character response format"):
+                service._create_character(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_character_json_parsing_error_key_error(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test character creation handles KeyError during JSON parsing."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = KeyError("missing key")
+
+            with pytest.raises(WorldGenerationError, match="Invalid character response format"):
+                service._create_character(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_character_json_parsing_error_type_error(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test character creation handles TypeError during JSON parsing."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = TypeError("wrong type")
+
+            with pytest.raises(WorldGenerationError, match="Invalid character response format"):
+                service._create_character(story_state, existing_names=[], temperature=0.9)
+
+    # ========== Character Refinement Exception Paths ==========
+
+    def test_refine_character_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test character refinement handles JSON parsing errors (ValueError/KeyError/TypeError)."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        original_char = Character(name="Test", role="supporting", description="Test")
+        scores = CharacterQualityScores(
+            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+        )
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = ValueError("Cannot parse")
+
+            with pytest.raises(WorldGenerationError, match="Invalid character refinement"):
+                service._refine_character(original_char, scores, story_state, temperature=0.7)
+
+    def test_refine_character_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test character refinement handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected attribute error")
+        service._client = mock_ollama_client
+
+        original_char = Character(name="Test", role="supporting", description="Test")
+        scores = CharacterQualityScores(
+            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="Unexpected character refinement error"):
+            service._refine_character(original_char, scores, story_state, temperature=0.7)
+
+    # ========== Location Creation Exception Paths ==========
+
+    def test_create_location_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test location creation handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = ValueError("JSON parse error")
+
+            with pytest.raises(WorldGenerationError, match="Invalid location response format"):
+                service._create_location(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_location_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test location creation handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected error")
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="Unexpected location creation error"):
+            service._create_location(story_state, existing_names=[], temperature=0.9)
+
+    # ========== Location Judge Exception Paths ==========
+
+    def test_judge_location_quality_unexpected_error(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test location judge handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        location = {"name": "Test", "description": "Test"}
+
+        with pytest.raises(WorldGenerationError, match="Location quality judgment failed"):
+            service._judge_location_quality(location, story_state, temperature=0.1)
+
+    # ========== Location Refinement Exception Paths ==========
+
+    def test_refine_location_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test location refinement handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "significance": "Test"}
+        scores = LocationQualityScores(
+            atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
+        )
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = KeyError("missing")
+
+            with pytest.raises(WorldGenerationError, match="Invalid location refinement"):
+                service._refine_location(original, scores, story_state, temperature=0.7)
+
+    def test_refine_location_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test location refinement handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "significance": "Test"}
+        scores = LocationQualityScores(
+            atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="Unexpected location refinement error"):
+            service._refine_location(original, scores, story_state, temperature=0.7)
+
+    # ========== Relationship Creation Exception Paths ==========
+
+    def test_create_relationship_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test relationship creation handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = TypeError("type error")
+
+            with pytest.raises(WorldGenerationError, match="Invalid relationship response format"):
+                service._create_relationship(
+                    story_state, entity_names=["A", "B"], existing_rels=[], temperature=0.9
+                )
+
+    def test_create_relationship_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test relationship creation handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="Unexpected relationship creation error"):
+            service._create_relationship(
+                story_state, entity_names=["A", "B"], existing_rels=[], temperature=0.9
+            )
+
+    # ========== Relationship Judge Exception Paths ==========
+
+    def test_judge_relationship_quality_unexpected_error(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test relationship judge handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        relationship = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
+
+        with pytest.raises(WorldGenerationError, match="Relationship quality judgment failed"):
+            service._judge_relationship_quality(relationship, story_state, temperature=0.1)
+
+    # ========== Relationship Refinement Exception Paths ==========
+
+    def test_refine_relationship_llm_error(self, service, story_state, mock_ollama_client):
+        """Test relationship refinement handles LLM errors."""
+        mock_ollama_client.generate.side_effect = ollama.ResponseError("LLM error")
+        service._client = mock_ollama_client
+
+        original = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
+        scores = RelationshipQualityScores(
+            tension=6.0, dynamics=6.0, story_potential=6.0, authenticity=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="LLM error during relationship refinement"):
+            service._refine_relationship(original, scores, story_state, temperature=0.7)
+
+    def test_refine_relationship_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test relationship refinement handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        original = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
+        scores = RelationshipQualityScores(
+            tension=6.0, dynamics=6.0, story_potential=6.0, authenticity=6.0
+        )
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = ValueError("parse error")
+
+            with pytest.raises(WorldGenerationError, match="Invalid relationship refinement"):
+                service._refine_relationship(original, scores, story_state, temperature=0.7)
+
+    def test_refine_relationship_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test relationship refinement handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        original = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
+        scores = RelationshipQualityScores(
+            tension=6.0, dynamics=6.0, story_potential=6.0, authenticity=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="Unexpected relationship refinement error"):
+            service._refine_relationship(original, scores, story_state, temperature=0.7)
+
+    # ========== Faction Creation Exception Paths ==========
+
+    def test_create_faction_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test faction creation handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = ValueError("parse error")
+
+            with pytest.raises(WorldGenerationError, match="Invalid faction response format"):
+                service._create_faction(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_faction_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test faction creation handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="Unexpected faction creation error"):
+            service._create_faction(story_state, existing_names=[], temperature=0.9)
+
+    # ========== Faction Judge Exception Paths ==========
+
+    def test_judge_faction_quality_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test faction judge handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        faction = {"name": "Test", "description": "Test"}
+
+        with pytest.raises(WorldGenerationError, match="Faction quality judgment failed"):
+            service._judge_faction_quality(faction, story_state, temperature=0.1)
+
+    # ========== Faction Refinement Exception Paths ==========
+
+    def test_refine_faction_llm_error(self, service, story_state, mock_ollama_client):
+        """Test faction refinement handles LLM errors."""
+        mock_ollama_client.generate.side_effect = ConnectionError("Connection lost")
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
+        scores = FactionQualityScores(
+            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="LLM error during faction refinement"):
+            service._refine_faction(original, scores, story_state, temperature=0.7)
+
+    def test_refine_faction_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test faction refinement handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
+        scores = FactionQualityScores(
+            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+        )
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = TypeError("type error")
+
+            with pytest.raises(WorldGenerationError, match="Invalid faction refinement"):
+                service._refine_faction(original, scores, story_state, temperature=0.7)
+
+    def test_refine_faction_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test faction refinement handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
+        scores = FactionQualityScores(
+            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="Unexpected faction refinement error"):
+            service._refine_faction(original, scores, story_state, temperature=0.7)
+
+    # ========== Item Creation Exception Paths ==========
+
+    def test_create_item_llm_error(self, service, story_state, mock_ollama_client):
+        """Test item creation handles LLM errors."""
+        mock_ollama_client.generate.side_effect = ollama.ResponseError("Model error")
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="LLM error during item creation"):
+            service._create_item(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_item_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test item creation handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = KeyError("missing key")
+
+            with pytest.raises(WorldGenerationError, match="Invalid item response format"):
+                service._create_item(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_item_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test item creation handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="Unexpected item creation error"):
+            service._create_item(story_state, existing_names=[], temperature=0.9)
+
+    # ========== Item Judge Exception Paths ==========
+
+    def test_judge_item_quality_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test item judge handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        item = {"name": "Test", "description": "Test"}
+
+        with pytest.raises(WorldGenerationError, match="Item quality judgment failed"):
+            service._judge_item_quality(item, story_state, temperature=0.1)
+
+    # ========== Item Refinement Exception Paths ==========
+
+    def test_refine_item_llm_error(self, service, story_state, mock_ollama_client):
+        """Test item refinement handles LLM errors."""
+        mock_ollama_client.generate.side_effect = TimeoutError("Timeout")
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
+        scores = ItemQualityScores(
+            significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="LLM error during item refinement"):
+            service._refine_item(original, scores, story_state, temperature=0.7)
+
+    def test_refine_item_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test item refinement handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
+        scores = ItemQualityScores(
+            significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
+        )
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = ValueError("parse error")
+
+            with pytest.raises(WorldGenerationError, match="Invalid item refinement"):
+                service._refine_item(original, scores, story_state, temperature=0.7)
+
+    def test_refine_item_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test item refinement handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
+        scores = ItemQualityScores(
+            significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
+        )
+
+        with pytest.raises(WorldGenerationError, match="Unexpected item refinement error"):
+            service._refine_item(original, scores, story_state, temperature=0.7)
+
+    # ========== Concept Creation Exception Paths ==========
+
+    def test_create_concept_llm_error(self, service, story_state, mock_ollama_client):
+        """Test concept creation handles LLM errors."""
+        mock_ollama_client.generate.side_effect = ConnectionError("Connection refused")
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="LLM error during concept creation"):
+            service._create_concept(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_concept_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test concept creation handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = TypeError("type error")
+
+            with pytest.raises(WorldGenerationError, match="Invalid concept response format"):
+                service._create_concept(story_state, existing_names=[], temperature=0.9)
+
+    def test_create_concept_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test concept creation handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        with pytest.raises(WorldGenerationError, match="Unexpected concept creation error"):
+            service._create_concept(story_state, existing_names=[], temperature=0.9)
+
+    # ========== Concept Judge Exception Paths ==========
+
+    def test_judge_concept_quality_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test concept judge handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        concept = {"name": "Test", "description": "Test"}
+
+        with pytest.raises(WorldGenerationError, match="Concept quality judgment failed"):
+            service._judge_concept_quality(concept, story_state, temperature=0.1)
+
+    # ========== Concept Refinement Exception Paths ==========
+
+    def test_refine_concept_llm_error(self, service, story_state, mock_ollama_client):
+        """Test concept refinement handles LLM errors."""
+        mock_ollama_client.generate.side_effect = ollama.ResponseError("LLM error")
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "manifestations": "X"}
+        scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
+
+        with pytest.raises(WorldGenerationError, match="LLM error during concept refinement"):
+            service._refine_concept(original, scores, story_state, temperature=0.7)
+
+    def test_refine_concept_json_parsing_error(self, service, story_state, mock_ollama_client):
+        """Test concept refinement handles JSON parsing errors."""
+        mock_ollama_client.generate.return_value = {"response": "{}"}
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "manifestations": "X"}
+        scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
+
+        with patch("services.world_quality_service.extract_json") as mock_extract:
+            mock_extract.side_effect = KeyError("missing")
+
+            with pytest.raises(WorldGenerationError, match="Invalid concept refinement"):
+                service._refine_concept(original, scores, story_state, temperature=0.7)
+
+    def test_refine_concept_unexpected_error(self, service, story_state, mock_ollama_client):
+        """Test concept refinement handles unexpected errors."""
+        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
+        service._client = mock_ollama_client
+
+        original = {"name": "Test", "description": "Test", "manifestations": "X"}
+        scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
+
+        with pytest.raises(WorldGenerationError, match="Unexpected concept refinement error"):
+            service._refine_concept(original, scores, story_state, temperature=0.7)
+
+
+class TestRefinementLoopEdgeCases:
+    """Tests for refinement loop edge cases that weren't covered."""
+
+    # ========== Relationship Loop Edge Cases ==========
+
+    @patch.object(WorldQualityService, "_create_relationship")
+    @patch.object(WorldQualityService, "_judge_relationship_quality")
+    def test_generate_relationship_error_during_iteration(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test relationship generation handles errors during iteration."""
+        test_rel = {
+            "source": "Alice",
+            "target": "Bob",
+            "relation_type": "knows",
+            "description": "They know each other",
+        }
+        mock_create.return_value = test_rel
+        # First judgment succeeds but returns low score, second raises error
+        low_scores = RelationshipQualityScores(
+            tension=5.0, dynamics=5.0, story_potential=5.0, authenticity=5.0
+        )
+        mock_judge.side_effect = [low_scores, WorldGenerationError("Judge failed")]
+
+        # Should still return relationship despite error on 2nd iteration
+        # because we have valid results from 1st iteration
+        rel, scores, iterations = service.generate_relationship_with_quality(
+            story_state, entity_names=["Alice", "Bob", "Charlie"], existing_rels=[]
+        )
+
+        # We should have the result from before the error
+        assert rel["source"] == "Alice"
+        assert scores.average < 7.0
+
+    @patch.object(WorldQualityService, "_create_relationship")
+    @patch.object(WorldQualityService, "_judge_relationship_quality")
+    def test_generate_relationship_below_threshold_after_max(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test relationship generation returns below threshold after max iterations."""
+        test_rel = {
+            "source": "Alice",
+            "target": "Bob",
+            "relation_type": "knows",
+            "description": "Basic",
+        }
+        mock_create.return_value = test_rel
+
+        low_scores = RelationshipQualityScores(
+            tension=5.0, dynamics=5.0, story_potential=5.0, authenticity=5.0
+        )
+        mock_judge.return_value = low_scores
+
+        rel, scores, iterations = service.generate_relationship_with_quality(
+            story_state, entity_names=["Alice", "Bob"], existing_rels=[]
+        )
+
+        assert rel["source"] == "Alice"
+        assert scores.average < 7.0
+        assert iterations == 3  # max_iterations
+
+    # ========== Faction Loop Edge Cases ==========
+
+    @patch.object(WorldQualityService, "_create_faction")
+    @patch.object(WorldQualityService, "_judge_faction_quality")
+    @patch.object(WorldQualityService, "_refine_faction")
+    def test_generate_faction_needs_refinement(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test faction generation goes through refinement."""
+        initial_faction = {"name": "Basic Guild", "description": "Simple"}
+        mock_create.return_value = initial_faction
+
+        refined_faction = {"name": "Basic Guild", "description": "Complex guild with history"}
+        mock_refine.return_value = refined_faction
+
+        low_scores = FactionQualityScores(
+            coherence=5.0, influence=5.0, conflict_potential=5.0, distinctiveness=5.0
+        )
+        high_scores = FactionQualityScores(
+            coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+        )
+        mock_judge.side_effect = [low_scores, high_scores]
+
+        faction, scores, iterations = service.generate_faction_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert faction["description"] == "Complex guild with history"
+        assert scores.average >= 7.0
+        assert iterations == 2
+        mock_refine.assert_called_once()
+
+    @patch.object(WorldQualityService, "_create_faction")
+    def test_generate_faction_empty_name_fails(self, mock_create, service, story_state):
+        """Test faction generation fails when creation returns empty name."""
+        mock_create.return_value = {"description": "No name"}
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate faction"):
+            service.generate_faction_with_quality(story_state, existing_names=[])
+
+    @patch.object(WorldQualityService, "_create_faction")
+    @patch.object(WorldQualityService, "_judge_faction_quality")
+    def test_generate_faction_error_during_iteration(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test faction generation handles errors during iteration."""
+        test_faction = {"name": "Test Guild", "description": "Test"}
+        mock_create.return_value = test_faction
+        mock_judge.side_effect = WorldGenerationError("Judge failed")
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate faction"):
+            service.generate_faction_with_quality(story_state, existing_names=[])
+
+    @patch.object(WorldQualityService, "_create_faction")
+    @patch.object(WorldQualityService, "_judge_faction_quality")
+    def test_generate_faction_below_threshold_after_max(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test faction generation returns below threshold after max iterations."""
+        test_faction = {"name": "Test Guild", "description": "Basic"}
+        mock_create.return_value = test_faction
+
+        low_scores = FactionQualityScores(
+            coherence=5.0, influence=5.0, conflict_potential=5.0, distinctiveness=5.0
+        )
+        mock_judge.return_value = low_scores
+
+        faction, scores, iterations = service.generate_faction_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert faction["name"] == "Test Guild"
+        assert scores.average < 7.0
+        assert iterations == 3
+
+    # ========== Item Loop Edge Cases ==========
+
+    @patch.object(WorldQualityService, "_create_item")
+    @patch.object(WorldQualityService, "_judge_item_quality")
+    @patch.object(WorldQualityService, "_refine_item")
+    def test_generate_item_needs_refinement(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test item generation goes through refinement."""
+        initial_item = {"name": "Basic Sword", "description": "Simple"}
+        mock_create.return_value = initial_item
+
+        refined_item = {"name": "Basic Sword", "description": "Legendary blade with history"}
+        mock_refine.return_value = refined_item
+
+        low_scores = ItemQualityScores(
+            significance=5.0, uniqueness=5.0, narrative_potential=5.0, integration=5.0
+        )
+        high_scores = ItemQualityScores(
+            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+        )
+        mock_judge.side_effect = [low_scores, high_scores]
+
+        item, scores, iterations = service.generate_item_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert item["description"] == "Legendary blade with history"
+        assert scores.average >= 7.0
+        assert iterations == 2
+        mock_refine.assert_called_once()
+
+    @patch.object(WorldQualityService, "_create_item")
+    def test_generate_item_empty_name_fails(self, mock_create, service, story_state):
+        """Test item generation fails when creation returns empty name."""
+        mock_create.return_value = {"description": "No name"}
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate item"):
+            service.generate_item_with_quality(story_state, existing_names=[])
+
+    @patch.object(WorldQualityService, "_create_item")
+    @patch.object(WorldQualityService, "_judge_item_quality")
+    def test_generate_item_error_during_iteration(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test item generation handles errors during iteration."""
+        test_item = {"name": "Test Item", "description": "Test"}
+        mock_create.return_value = test_item
+        mock_judge.side_effect = WorldGenerationError("Judge failed")
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate item"):
+            service.generate_item_with_quality(story_state, existing_names=[])
+
+    @patch.object(WorldQualityService, "_create_item")
+    @patch.object(WorldQualityService, "_judge_item_quality")
+    def test_generate_item_below_threshold_after_max(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test item generation returns below threshold after max iterations."""
+        test_item = {"name": "Test Item", "description": "Basic"}
+        mock_create.return_value = test_item
+
+        low_scores = ItemQualityScores(
+            significance=5.0, uniqueness=5.0, narrative_potential=5.0, integration=5.0
+        )
+        mock_judge.return_value = low_scores
+
+        item, scores, iterations = service.generate_item_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert item["name"] == "Test Item"
+        assert scores.average < 7.0
+        assert iterations == 3
+
+    # ========== Concept Loop Edge Cases ==========
+
+    @patch.object(WorldQualityService, "_create_concept")
+    @patch.object(WorldQualityService, "_judge_concept_quality")
+    @patch.object(WorldQualityService, "_refine_concept")
+    def test_generate_concept_needs_refinement(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test concept generation goes through refinement."""
+        initial_concept = {"name": "Basic Theme", "description": "Simple"}
+        mock_create.return_value = initial_concept
+
+        refined_concept = {"name": "Basic Theme", "description": "Profound philosophical concept"}
+        mock_refine.return_value = refined_concept
+
+        low_scores = ConceptQualityScores(
+            relevance=5.0, depth=5.0, manifestation=5.0, resonance=5.0
+        )
+        high_scores = ConceptQualityScores(
+            relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0
+        )
+        mock_judge.side_effect = [low_scores, high_scores]
+
+        concept, scores, iterations = service.generate_concept_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert concept["description"] == "Profound philosophical concept"
+        assert scores.average >= 7.0
+        assert iterations == 2
+        mock_refine.assert_called_once()
+
+    @patch.object(WorldQualityService, "_create_concept")
+    def test_generate_concept_empty_name_fails(self, mock_create, service, story_state):
+        """Test concept generation fails when creation returns empty name."""
+        mock_create.return_value = {"description": "No name"}
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate concept"):
+            service.generate_concept_with_quality(story_state, existing_names=[])
+
+    @patch.object(WorldQualityService, "_create_concept")
+    @patch.object(WorldQualityService, "_judge_concept_quality")
+    def test_generate_concept_error_during_iteration(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test concept generation handles errors during iteration."""
+        test_concept = {"name": "Test Concept", "description": "Test"}
+        mock_create.return_value = test_concept
+        mock_judge.side_effect = WorldGenerationError("Judge failed")
+
+        with pytest.raises(WorldGenerationError, match="Failed to generate concept"):
+            service.generate_concept_with_quality(story_state, existing_names=[])
+
+    @patch.object(WorldQualityService, "_create_concept")
+    @patch.object(WorldQualityService, "_judge_concept_quality")
+    def test_generate_concept_below_threshold_after_max(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test concept generation returns below threshold after max iterations."""
+        test_concept = {"name": "Test Concept", "description": "Basic"}
+        mock_create.return_value = test_concept
+
+        low_scores = ConceptQualityScores(
+            relevance=5.0, depth=5.0, manifestation=5.0, resonance=5.0
+        )
+        mock_judge.return_value = low_scores
+
+        concept, scores, iterations = service.generate_concept_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert concept["name"] == "Test Concept"
+        assert scores.average < 7.0
+        assert iterations == 3
+
+
+class TestBatchOperationsPartialFailure:
+    """Tests for batch operations with partial failures (warning logs)."""
+
+    @patch.object(WorldQualityService, "generate_faction_with_quality")
+    @patch.object(WorldQualityService, "record_entity_quality")
+    def test_generate_factions_partial_failure_logs_warning(
+        self, mock_record, mock_gen, service, story_state
+    ):
+        """Test batch faction generation logs warning on partial failure."""
+        faction1 = {"name": "Faction One", "description": "First"}
+        scores1 = FactionQualityScores(
+            coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
+        )
+
+        mock_gen.side_effect = [
+            (faction1, scores1, 1),
+            WorldGenerationError("Second failed"),
+        ]
+
+        # Should succeed with partial results
+        results = service.generate_factions_with_quality(story_state, existing_names=[], count=2)
+
+        assert len(results) == 1
+        assert results[0][0]["name"] == "Faction One"
+
+    @patch.object(WorldQualityService, "generate_item_with_quality")
+    @patch.object(WorldQualityService, "record_entity_quality")
+    def test_generate_items_partial_failure_logs_warning(
+        self, mock_record, mock_gen, service, story_state
+    ):
+        """Test batch item generation logs warning on partial failure."""
+        item1 = {"name": "Item One", "description": "First"}
+        scores1 = ItemQualityScores(
+            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+        )
+
+        mock_gen.side_effect = [
+            (item1, scores1, 1),
+            WorldGenerationError("Second failed"),
+            WorldGenerationError("Third failed"),
+        ]
+
+        results = service.generate_items_with_quality(story_state, existing_names=[], count=3)
+
+        assert len(results) == 1
+        assert results[0][0]["name"] == "Item One"
+
+    @patch.object(WorldQualityService, "generate_concept_with_quality")
+    @patch.object(WorldQualityService, "record_entity_quality")
+    def test_generate_concepts_partial_failure_logs_warning(
+        self, mock_record, mock_gen, service, story_state
+    ):
+        """Test batch concept generation logs warning on partial failure."""
+        concept1 = {"name": "Concept One", "description": "First"}
+        scores1 = ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0)
+
+        mock_gen.side_effect = [
+            (concept1, scores1, 1),
+            WorldGenerationError("Second failed"),
+        ]
+
+        results = service.generate_concepts_with_quality(story_state, existing_names=[], count=2)
+
+        assert len(results) == 1
+        assert results[0][0]["name"] == "Concept One"
+
+    @patch.object(WorldQualityService, "generate_location_with_quality")
+    @patch.object(WorldQualityService, "record_entity_quality")
+    def test_generate_locations_partial_failure_logs_warning(
+        self, mock_record, mock_gen, service, story_state
+    ):
+        """Test batch location generation logs warning on partial failure."""
+        loc1 = {"name": "Location One", "description": "First"}
+        scores1 = LocationQualityScores(
+            atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+        )
+
+        mock_gen.side_effect = [
+            (loc1, scores1, 1),
+            WorldGenerationError("Second failed"),
+        ]
+
+        results = service.generate_locations_with_quality(story_state, existing_names=[], count=2)
+
+        assert len(results) == 1
+        assert results[0][0]["name"] == "Location One"
+
+    @patch.object(WorldQualityService, "generate_relationship_with_quality")
+    @patch.object(WorldQualityService, "record_entity_quality")
+    def test_generate_relationships_partial_failure_logs_warning(
+        self, mock_record, mock_gen, service, story_state
+    ):
+        """Test batch relationship generation logs warning on partial failure."""
+        rel1 = {"source": "A", "target": "B", "relation_type": "knows", "description": "First"}
+        scores1 = RelationshipQualityScores(
+            tension=8.0, dynamics=8.0, story_potential=8.0, authenticity=8.0
+        )
+
+        mock_gen.side_effect = [
+            (rel1, scores1, 1),
+            WorldGenerationError("Second failed"),
+        ]
+
+        results = service.generate_relationships_with_quality(
+            story_state, entity_names=["A", "B", "C"], existing_rels=[], count=2
+        )
+
+        assert len(results) == 1
+        assert results[0][0]["source"] == "A"
+
+    @patch.object(WorldQualityService, "generate_character_with_quality")
+    @patch.object(WorldQualityService, "record_entity_quality")
+    def test_generate_characters_partial_failure_logs_warning(
+        self, mock_record, mock_gen, service, story_state
+    ):
+        """Test batch character generation logs warning on partial failure."""
+        char1 = Character(name="Character One", role="protagonist", description="First")
+        scores1 = CharacterQualityScores(
+            depth=8.0, goals=8.0, flaws=8.0, uniqueness=8.0, arc_potential=8.0
+        )
+
+        mock_gen.side_effect = [
+            (char1, scores1, 1),
+            WorldGenerationError("Second failed"),
+        ]
+
+        results = service.generate_characters_with_quality(story_state, existing_names=[], count=2)
+
+        assert len(results) == 1
+        assert results[0][0].name == "Character One"
