@@ -77,11 +77,14 @@ class ProjectService:
         WORLDS_DIR.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Output directories ready: stories={STORIES_DIR}, worlds={WORLDS_DIR}")
 
-    def create_project(self, name: str = "") -> tuple[StoryState, WorldDatabase]:
+    def create_project(
+        self, name: str = "", template_id: str | None = None
+    ) -> tuple[StoryState, WorldDatabase]:
         """Create a new project with story state and world database.
 
         Args:
             name: Optional project name. Defaults to timestamp-based name.
+            template_id: Optional template ID to apply to the project.
 
         Returns:
             Tuple of (StoryState, WorldDatabase) for the new project.
@@ -108,6 +111,16 @@ class ProjectService:
                 world_db_path=str(world_db_path),
                 status="interview",
             )
+
+            # Apply template if provided
+            if template_id:
+                from services.template_service import TemplateService
+
+                template_service = TemplateService(self.settings)
+                template = template_service.get_template(template_id)
+                if template:
+                    template_service.apply_template_to_state(template, story_state, world_db)
+                    logger.info(f"Applied template {template_id} to new project")
 
             # Save immediately so it appears in project list
             self.save_project(story_state)
