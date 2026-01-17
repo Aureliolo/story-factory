@@ -14,7 +14,7 @@ When creating or modifying NiceGUI page components, follow these guidelines:
        def __init__(self, app_state: AppState, services: ServiceContainer):
            self.app_state = app_state
            self.services = services
-       
+
        def build(self):
            """Build the page UI."""
            # UI construction code here
@@ -77,32 +77,32 @@ from services import ServiceContainer
 
 class SettingsPage:
     """Settings page for configuring the application."""
-    
+
     def __init__(self, app_state: AppState, services: ServiceContainer):
         self.app_state = app_state
         self.services = services
-    
+
     def build(self):
         """Build the settings page UI."""
         with ui.card().classes('w-full'):
             ui.label('Settings').classes('text-2xl font-bold')
-            
+
             with ui.row().classes('w-full gap-4'):
                 self._build_model_settings()
                 self._build_preferences()
-    
+
     def _build_model_settings(self):
         """Build model configuration section."""
         with ui.column().classes('flex-1'):
             ui.label('Model Settings').classes('text-xl')
-            
+
             models = self.services.model_service.list_models()
             ui.select(
                 models,
                 label='Default Model',
                 on_change=self._on_model_change
             ).bind_value(self.app_state, 'selected_model')
-    
+
     async def _on_model_change(self, event):
         """Handle model selection change."""
         try:

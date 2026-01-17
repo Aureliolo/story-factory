@@ -62,31 +62,31 @@ from services.story_service import StoryService
 
 class TestStoryService:
     """Tests for StoryService."""
-    
+
     @pytest.fixture
     def mock_ollama(self, mocker):
         """Mock Ollama API calls."""
         return mocker.patch("agents.base.requests.post")
-    
+
     def test_create_story_success(self, mock_ollama, tmp_path):
         """Test successful story creation."""
         # Arrange
         mock_ollama.return_value.json.return_value = {"response": "test"}
         service = StoryService(settings, tmp_path)
-        
+
         # Act
         result = service.create_story("Test Story")
-        
+
         # Assert
         assert result is not None
         assert result.title == "Test Story"
         mock_ollama.assert_called_once()
-    
+
     def test_create_story_error(self, mock_ollama):
         """Test story creation with API error."""
         # Arrange
         mock_ollama.side_effect = Exception("API Error")
-        
+
         # Act & Assert
         with pytest.raises(Exception, match="API Error"):
             service.create_story("Test Story")

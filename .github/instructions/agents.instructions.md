@@ -11,7 +11,7 @@ When creating or modifying AI agents, follow these guidelines:
 1. **Extend BaseAgent**: All agents must extend `agents/base.py`
    ```python
    from agents.base import BaseAgent
-   
+
    class MyAgent(BaseAgent):
        def __init__(self, settings: Settings):
            super().__init__(
@@ -47,7 +47,7 @@ When creating or modifying AI agents, follow these guidelines:
 3. **Error Handling**: Use decorators from `utils/error_handling.py`
    ```python
    from utils.error_handling import handle_ollama_errors, retry_with_fallback
-   
+
    @handle_ollama_errors
    @retry_with_fallback(max_retries=3)
    async def generate_content(self, prompt: str):
@@ -58,7 +58,7 @@ When creating or modifying AI agents, follow these guidelines:
    ```python
    import logging
    logger = logging.getLogger(__name__)
-   
+
    logger.debug(f"Generating content with prompt: {prompt[:100]}...")
    logger.info(f"Successfully generated {len(result)} characters")
    logger.warning("Retrying due to incomplete response")
@@ -86,7 +86,7 @@ When creating or modifying AI agents, follow these guidelines:
 1. **JSON Extraction**: Use `utils/json_parser.py` for parsing LLM responses
    ```python
    from utils.json_parser import extract_json, parse_json_response
-   
+
    json_str = extract_json(llm_response)
    data = parse_json_response(json_str)
    ```
@@ -144,7 +144,7 @@ logger = logging.getLogger(__name__)
 
 class WriterAgent(BaseAgent):
     """Agent responsible for generating prose content."""
-    
+
     def __init__(self, settings: Settings):
         super().__init__(
             name="Writer",
@@ -152,7 +152,7 @@ class WriterAgent(BaseAgent):
             settings=settings,
             temperature=0.9  # High creativity
         )
-    
+
     @handle_ollama_errors
     async def write_chapter(
         self,
@@ -161,28 +161,28 @@ class WriterAgent(BaseAgent):
     ) -> str:
         """Generate a chapter based on story state."""
         logger.info(f"Writing chapter {chapter_number}")
-        
+
         # Build context from story state
         context = self._build_context(story_state, chapter_number)
-        
+
         # Create prompt
         prompt = self._create_prompt(context)
         logger.debug(f"Prompt: {prompt[:200]}...")
-        
+
         # Call LLM
         response = await self._call_llm(prompt)
-        
+
         # Validate and extract content
         content = self._validate_response(response)
-        
+
         logger.info(f"Generated {len(content)} characters for chapter {chapter_number}")
         return content
-    
+
     def _build_context(self, story_state: StoryState, chapter_number: int) -> dict:
         """Build context for the chapter."""
         # Implementation
         pass
-    
+
     def _create_prompt(self, context: dict) -> str:
         """Create the writing prompt."""
         # Implementation
