@@ -10,6 +10,7 @@ import pytest
 from agents import ResponseValidationError
 from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
 from settings import Settings
+from utils.exceptions import ExportError
 from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 
@@ -945,7 +946,7 @@ class TestWritingMethods:
         assert len(events) > 0
 
     def test_write_short_story_handles_save_failure(self, orchestrator_with_story, monkeypatch):
-        """Test write_short_story handles save failure gracefully."""
+        """Test write_short_story raises ExportError on save failure."""
         orc = orchestrator_with_story
         object.__setattr__(
             orc.writer, "write_short_story", MagicMock(return_value="Story content...")
@@ -959,9 +960,9 @@ class TestWritingMethods:
         # Make save_story raise
         object.__setattr__(orc, "save_story", MagicMock(side_effect=OSError("Disk full")))
 
-        # Should not raise
-        events = list(orc.write_short_story())
-        assert len(events) > 0
+        # Should raise ExportError
+        with pytest.raises(ExportError, match="Failed to save short story"):
+            list(orc.write_short_story())
 
     def test_write_short_story_raises_without_story(self):
         """Test write_short_story raises when no story state."""
@@ -1283,7 +1284,7 @@ class TestWritingMethods:
         assert orc.story_state.plot_points[0].completed is True
 
     def test_write_chapter_handles_save_failure(self, orchestrator_with_story):
-        """Test write_chapter handles save failure gracefully."""
+        """Test write_chapter raises ExportError on save failure."""
         orc = orchestrator_with_story
         object.__setattr__(
             orc.writer, "write_chapter", MagicMock(return_value="Chapter content...")
@@ -1299,9 +1300,9 @@ class TestWritingMethods:
         object.__setattr__(orc.validator, "validate_response", MagicMock(return_value=None))
         object.__setattr__(orc, "save_story", MagicMock(side_effect=OSError("Disk full")))
 
-        # Should not raise
-        events = list(orc.write_chapter(1))
-        assert len(events) > 0
+        # Should raise ExportError
+        with pytest.raises(ExportError, match="Failed to save chapter"):
+            list(orc.write_chapter(1))
 
     def test_write_all_chapters_raises_without_story(self):
         """Test write_all_chapters raises when no story state."""
@@ -1533,7 +1534,7 @@ class TestContinuationMethods:
         assert len(events) > 0
 
     def test_continue_chapter_handles_save_failure(self, tmp_path, monkeypatch):
-        """Test continue_chapter handles save failure gracefully."""
+        """Test continue_chapter raises ExportError on save failure."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
@@ -1552,9 +1553,9 @@ class TestContinuationMethods:
         )
         object.__setattr__(orchestrator, "save_story", MagicMock(side_effect=OSError("Disk full")))
 
-        # Should not raise
-        events = list(orchestrator.continue_chapter(1))
-        assert len(events) > 0
+        # Should raise ExportError
+        with pytest.raises(ExportError, match="Failed to save continued chapter"):
+            list(orchestrator.continue_chapter(1))
 
     def test_edit_passage_raises_without_story(self):
         """Test edit_passage raises when no story state."""

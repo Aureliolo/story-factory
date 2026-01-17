@@ -48,6 +48,7 @@ def check_ollama() -> tuple[bool, str]:
             return True, f"Ollama: {message} ✓"
         return False, f"Ollama: {message} ✗"
     except Exception as e:
+        logging.error(f"Ollama health check failed: {e}")
         return False, f"Ollama check failed: {e} ✗"
 
 
@@ -60,6 +61,7 @@ def check_settings() -> tuple[bool, str]:
         settings.validate()
         return True, "Settings loaded and valid ✓"
     except Exception as e:
+        logging.error(f"Settings validation failed: {e}")
         return False, f"Settings error: {e} ✗"
 
 
@@ -73,6 +75,7 @@ def check_output_directory() -> tuple[bool, str]:
         test_file.unlink()
         return True, "Output directory writable ✓"
     except Exception as e:
+        logging.error(f"Output directory check failed: {e}")
         return False, f"Output directory not writable: {e} ✗"
 
 
@@ -86,6 +89,7 @@ def check_logs_directory() -> tuple[bool, str]:
         test_file.unlink()
         return True, "Logs directory writable ✓"
     except Exception as e:
+        logging.error(f"Logs directory check failed: {e}")
         return False, f"Logs directory not writable: {e} ✗"
 
 
@@ -117,6 +121,7 @@ def run_health_check() -> bool:
             status = "✓" if passed else "✗"
             print(f"[{status}] {name}: {message}")
         except Exception as e:
+            logging.exception(f"Health check '{name}' raised unexpected exception: {e}")
             results.append(False)
             print(f"[✗] {name}: Unexpected error: {e}")
 

@@ -23,6 +23,7 @@ from agents.continuity import ContinuityIssue
 from memory.story_state import Chapter, Character, StoryBrief, StoryState
 from settings import STORIES_DIR, Settings
 from utils.constants import get_language_code
+from utils.exceptions import ExportError
 from utils.message_analyzer import analyze_message, format_inference_context
 
 logger = logging.getLogger(__name__)
@@ -516,8 +517,21 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         try:
             self.save_story()
             logger.debug("Auto-saved completed short story")
+        except (OSError, PermissionError) as e:
+            error_msg = f"Failed to save short story: {e}"
+            logger.error(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
+        except (ValueError, TypeError) as e:
+            error_msg = f"Failed to serialize short story: {e}"
+            logger.error(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
         except Exception as e:
-            logger.warning(f"Auto-save failed for short story: {e}")
+            error_msg = f"Unexpected error saving short story: {e}"
+            logger.exception(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
 
         self._emit(
             "agent_complete", "System", f"Story complete! ({short_story_chapter.word_count} words)"
@@ -664,8 +678,21 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         try:
             self.save_story()
             logger.debug(f"Auto-saved after chapter {chapter_number}")
+        except (OSError, PermissionError) as e:
+            error_msg = f"Failed to save chapter {chapter_number}: {e}"
+            logger.error(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
+        except (ValueError, TypeError) as e:
+            error_msg = f"Failed to serialize chapter {chapter_number}: {e}"
+            logger.error(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
         except Exception as e:
-            logger.warning(f"Auto-save failed after chapter {chapter_number}: {e}")
+            error_msg = f"Unexpected error saving chapter {chapter_number}: {e}"
+            logger.exception(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
 
         self._emit(
             "agent_complete",
@@ -792,8 +819,21 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         try:
             self.save_story()
             logger.debug(f"Auto-saved after continuing chapter {chapter_number}")
+        except (OSError, PermissionError) as e:
+            error_msg = f"Failed to save continued chapter {chapter_number}: {e}"
+            logger.error(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
+        except (ValueError, TypeError) as e:
+            error_msg = f"Failed to serialize continued chapter {chapter_number}: {e}"
+            logger.error(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
         except Exception as e:
-            logger.warning(f"Auto-save failed: {e}")
+            error_msg = f"Unexpected error saving continued chapter {chapter_number}: {e}"
+            logger.exception(error_msg)
+            self._emit("error", "System", error_msg)
+            raise ExportError(error_msg) from e
 
         self._emit(
             "agent_complete",
