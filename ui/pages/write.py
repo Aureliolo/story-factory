@@ -21,7 +21,6 @@ from ui.components.generation_status import GenerationStatus
 from ui.graph_renderer import render_entity_summary_html
 from ui.state import AppState
 from ui.theme import get_status_color
-from workflows.orchestrator import WorkflowEvent
 
 logger = logging.getLogger(__name__)
 

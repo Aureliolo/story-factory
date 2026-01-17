@@ -17,6 +17,10 @@ def test_imports():
     logger.info("Testing imports...")
 
     try:
+        from services.story_service import GenerationCancelled  # noqa: F401
+        from ui.components.generation_status import GenerationStatus  # noqa: F401
+        from ui.state import AppState  # noqa: F401
+
         logger.info("✓ All imports successful")
         return True
     except Exception as e:
@@ -34,20 +38,20 @@ def test_app_state():
         state = AppState()
 
         # Test initial state
-        assert state.generation_cancel_requested is False
-        assert state.generation_pause_requested is False
+        assert not state.generation_cancel_requested
+        assert not state.generation_pause_requested
 
         # Test request methods
         state.request_cancel_generation()
-        assert state.generation_cancel_requested is True
+        assert state.generation_cancel_requested
 
-        state.request_pause_generation()
-        assert state.generation_pause_requested is True
+        state.request_pause_generation()  # type: ignore[unreachable]
+        assert state.generation_pause_requested
 
         # Test reset
         state.reset_generation_flags()
-        assert state.generation_cancel_requested is False
-        assert state.generation_pause_requested is False
+        assert not state.generation_cancel_requested
+        assert not state.generation_pause_requested
 
         logger.info("✓ AppState tests passed")
         return True

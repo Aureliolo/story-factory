@@ -64,6 +64,7 @@ class GenerationStatus:
         if self.state.generation_is_paused:
             # Currently paused, so resume
             self.state.resume_generation()
+            logger.info("User resumed generation")
             if self._pause_btn:
                 # Now running, so show pause icon
                 self._pause_btn.props("icon=pause")
@@ -71,6 +72,7 @@ class GenerationStatus:
         else:
             # Currently running, so pause
             self.state.request_pause_generation()
+            logger.info("User requested generation pause")
             if self._pause_btn:
                 # Now paused, so show play icon
                 self._pause_btn.props("icon=play_arrow")
@@ -80,11 +82,13 @@ class GenerationStatus:
         """Show the generation status component."""
         if self._container:
             self._container.set_visibility(True)
+            logger.debug("Generation status component shown")
 
     def hide(self) -> None:
         """Hide the generation status component."""
         if self._container:
             self._container.set_visibility(False)
+            logger.debug("Generation status component hidden")
 
     def build(self) -> None:
         """Build the generation status UI."""
