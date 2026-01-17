@@ -297,3 +297,221 @@ class TestBackupService:
         invalid_path = tmp_path / "other" / "backup.zip"
         with pytest.raises(ValueError, match="outside"):
             _validate_backup_path(invalid_path, base_dir)
+
+    def test_list_backups_directory_does_not_exist(self, tmp_settings, tmp_path):
+        """Test listing backups when backup directory doesn't exist (line 149)."""
+        # Point to a directory that does not exist
+        nonexistent_dir = tmp_path / "nonexistent_backups"
+        tmp_settings.backup_folder = str(nonexistent_dir)
+
+        # Manually prevent directory creation by not calling BackupService constructor
+        # Instead, create service and then remove the directory
+        service = BackupService(tmp_settings)
+        # BackupService creates the directory, so remove it to test the condition
+        nonexistent_dir.rmdir()
+
+        backups = service.list_backups()
+        assert backups == []
+
+    def test_list_backups_missing_metadata_file(self, tmp_settings, tmp_path):
+        """Test listing backups when a backup is missing metadata file (lines 156-157)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip file without metadata
+        zip_path = backups_dir / "no_metadata.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+        backups = service.list_backups()
+
+        # Backup should be skipped, no entries returned
+        assert len(backups) == 0
+
+    def test_list_backups_missing_project_id_in_metadata(self, tmp_settings, tmp_path):
+        """Test listing backups when metadata is missing project_id (lines 164-167)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip with metadata missing project_id
+        zip_path = backups_dir / "missing_project_id.zip"
+        metadata = {
+            "project_name": "Test Project",
+            "backup_created_at": "2024-01-01T12:00:00",
+        }
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+        backups = service.list_backups()
+
+        # Backup should be skipped
+        assert len(backups) == 0
+
+    def test_list_backups_missing_project_name_in_metadata(self, tmp_settings, tmp_path):
+        """Test listing backups when metadata is missing project_name (lines 170-173)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip with metadata missing project_name
+        zip_path = backups_dir / "missing_project_name.zip"
+        metadata = {
+            "project_id": "test-123",
+            "backup_created_at": "2024-01-01T12:00:00",
+        }
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+        backups = service.list_backups()
+
+        # Backup should be skipped
+        assert len(backups) == 0
+
+    def test_list_backups_missing_created_at_uses_file_mtime(self, tmp_settings, tmp_path):
+        """Test listing backups falls back to file mtime when created_at is missing (line 183)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip with metadata missing backup_created_at
+        zip_path = backups_dir / "missing_created_at.zip"
+        metadata = {
+            "project_id": "test-123",
+            "project_name": "Test Project",
+            # No backup_created_at field
+        }
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+        backups = service.list_backups()
+
+        # Backup should be included with mtime as created_at
+        assert len(backups) == 1
+        assert backups[0].project_id == "test-123"
+        assert backups[0].project_name == "Test Project"
+        # The created_at should be close to file mtime
+        assert backups[0].created_at is not None
+
+    def test_list_backups_bad_zip_file(self, tmp_settings, tmp_path):
+        """Test listing backups handles BadZipFile exception (lines 194-195)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create an invalid zip file (just random content)
+        bad_zip_path = backups_dir / "corrupted.zip"
+        bad_zip_path.write_text("this is not a valid zip file")
+
+        service = BackupService(tmp_settings)
+        backups = service.list_backups()
+
+        # Should handle the error gracefully and return empty list
+        assert len(backups) == 0
+
+    def test_list_backups_json_decode_error(self, tmp_settings, tmp_path):
+        """Test listing backups handles JSONDecodeError (lines 194-195)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip with invalid JSON in metadata
+        zip_path = backups_dir / "invalid_json.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", "this is { not valid json")
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+        backups = service.list_backups()
+
+        # Should handle the error gracefully and return empty list
+        assert len(backups) == 0
+
+    def test_restore_backup_missing_metadata(self, tmp_settings, tmp_path):
+        """Test restoring backup without metadata file raises ValueError (line 235)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip without metadata
+        zip_path = backups_dir / "no_metadata.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+
+        with pytest.raises(ValueError, match="missing metadata file"):
+            service.restore_backup("no_metadata.zip")
+
+    def test_restore_backup_missing_project_name_in_metadata(
+        self, tmp_settings, monkeypatch, tmp_path
+    ):
+        """Test restoring backup with missing project_name raises ValueError (line 242)."""
+        stories_dir = tmp_path / "stories"
+        worlds_dir = tmp_path / "worlds"
+        backups_dir = tmp_path / "backups"
+
+        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("services.backup_service.WORLDS_DIR", worlds_dir)
+
+        stories_dir.mkdir(parents=True)
+        worlds_dir.mkdir(parents=True)
+        backups_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip with metadata missing project_name
+        zip_path = backups_dir / "missing_project_name.zip"
+        metadata = {
+            "project_id": "test-123",
+            # project_name is missing
+        }
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("test-123.json", json.dumps({"id": "test-123"}))
+
+        service = BackupService(tmp_settings)
+
+        with pytest.raises(ValueError, match="missing project_name"):
+            service.restore_backup("missing_project_name.zip")
+
+    def test_restore_backup_no_story_state_file(self, tmp_settings, tmp_path):
+        """Test restoring backup without story state file raises ValueError (line 253)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip with metadata but no story json file
+        zip_path = backups_dir / "no_story.zip"
+        metadata = {
+            "project_id": "test-123",
+            "project_name": "Test Project",
+        }
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            # Only metadata, no story .json file
+
+        service = BackupService(tmp_settings)
+
+        with pytest.raises(ValueError, match="no story state file found"):
+            service.restore_backup("no_story.zip")
+
+    def test_get_backup_path(self, tmp_settings, tmp_path):
+        """Test get_backup_path returns correct path (lines 340-341)."""
+        backups_dir = tmp_path / "backups"
+        tmp_settings.backup_folder = str(backups_dir)
+
+        service = BackupService(tmp_settings)
+
+        result = service.get_backup_path("test_backup.zip")
+
+        expected = backups_dir / "test_backup.zip"
+        assert result == expected

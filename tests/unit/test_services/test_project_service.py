@@ -314,3 +314,234 @@ class TestProjectServiceAdditional:
         path = service.get_world_db_path("test-uuid-123")
 
         assert path == worlds_dir / "test-uuid-123.db"
+
+
+class TestProjectServiceExceptionHandling:
+    """Tests for exception handling and edge cases in ProjectService."""
+
+    def test_create_project_with_template(self, tmp_settings, monkeypatch, tmp_path):
+        """Test creating a project with a template applies the template (lines 120-126)."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Use a built-in template
+        state, world_db = service.create_project("Templated Story", template_id="fantasy-epic")
+
+        # Verify project was created
+        assert state.project_name == "Templated Story"
+        assert state.status == "interview"
+        # Template should have been applied - brief should have genre set
+        assert state.brief is not None
+        assert state.brief.genre == "Fantasy"
+
+    def test_create_project_with_nonexistent_template(self, tmp_settings, monkeypatch, tmp_path):
+        """Test creating a project with a nonexistent template still creates the project."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Use a nonexistent template ID
+        state, world_db = service.create_project(
+            "Story Without Template", template_id="nonexistent-template"
+        )
+
+        # Project should still be created
+        assert state.project_name == "Story Without Template"
+        assert state.status == "interview"
+        # Brief should not have been set since template wasn't found
+        assert state.brief is None
+
+    def test_create_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that create_project re-raises exceptions after logging (lines 133-135)."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Mock WorldDatabase to raise an exception
+        def mock_world_db_init(*args, **kwargs):
+            raise RuntimeError("Database creation failed")
+
+        monkeypatch.setattr("services.project_service.WorldDatabase", mock_world_db_init)
+
+        with pytest.raises(RuntimeError, match="Database creation failed"):
+            service.create_project("Test Project")
+
+    def test_load_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that load_project re-raises non-FileNotFoundError exceptions (lines 187-189)."""
+        import json
+
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True)
+        worlds_dir = tmp_path / "worlds"
+        worlds_dir.mkdir(parents=True)
+        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", worlds_dir)
+
+        # Create a valid project file
+        project_id = "test-exception-id"
+        valid_data = {
+            "id": project_id,
+            "project_name": "Test Project",
+            "status": "interview",
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-01-01T00:00:00",
+            "world_db_path": str(worlds_dir / f"{project_id}.db"),
+        }
+        project_file = stories_dir / f"{project_id}.json"
+        project_file.write_text(json.dumps(valid_data), encoding="utf-8")
+
+        service = ProjectService(tmp_settings)
+
+        # Mock WorldDatabase to raise an exception (after JSON is loaded)
+        def mock_world_db_init(*args, **kwargs):
+            raise RuntimeError("World database initialization failed")
+
+        monkeypatch.setattr("services.project_service.WorldDatabase", mock_world_db_init)
+
+        with pytest.raises(RuntimeError, match="World database initialization failed"):
+            service.load_project(project_id)
+
+    def test_save_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that save_project re-raises exceptions after logging (lines 216-218)."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create a project
+        state, _ = service.create_project("Test Project")
+
+        # Make the stories directory read-only to cause a write failure
+        # Instead, mock the open function to raise an exception
+        original_open = open
+
+        def mock_open(*args, **kwargs):
+            if "w" in str(args[1:]) or kwargs.get("mode", "") == "w":
+                raise PermissionError("Cannot write to file")
+            return original_open(*args, **kwargs)
+
+        monkeypatch.setattr("builtins.open", mock_open)
+
+        with pytest.raises(PermissionError, match="Cannot write to file"):
+            service.save_project(state)
+
+    def test_delete_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that delete_project re-raises exceptions after logging (lines 313-315)."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create a project
+        state, world_db = service.create_project("Test Project")
+        project_id = state.id
+
+        # Close the database
+        world_db.close()
+
+        # Mock Path.unlink to raise an exception
+        from pathlib import Path
+
+        def mock_unlink(self):
+            raise PermissionError("Cannot delete file")
+
+        monkeypatch.setattr(Path, "unlink", mock_unlink)
+
+        with pytest.raises(PermissionError, match="Cannot delete file"):
+            service.delete_project(project_id)
+
+    def test_duplicate_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that duplicate_project re-raises exceptions after logging (lines 366-368)."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create a project
+        original, _ = service.create_project("Original Project")
+
+        # Mock shutil.copy2 to raise an exception
+        def mock_copy2(*args, **kwargs):
+            raise OSError("Cannot copy file")
+
+        monkeypatch.setattr("shutil.copy2", mock_copy2)
+
+        with pytest.raises(OSError, match="Cannot copy file"):
+            service.duplicate_project(original.id)
+
+    def test_update_project_name_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that update_project_name re-raises exceptions after logging (lines 393-395)."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create a project
+        state, _ = service.create_project("Original Name")
+        project_id = state.id
+
+        # Mock save_project to raise an exception
+        def mock_save(state):
+            raise OSError("Cannot save project")
+
+        monkeypatch.setattr(service, "save_project", mock_save)
+
+        with pytest.raises(OSError, match="Cannot save project"):
+            service.update_project_name(project_id, "New Name")
+
+    def test_duplicate_project_with_custom_name(self, tmp_settings, monkeypatch, tmp_path):
+        """Test duplicating a project with a custom name."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create original project
+        original, _ = service.create_project("Original")
+
+        # Duplicate with custom name
+        duplicate, _ = service.duplicate_project(original.id, "My Custom Copy")
+
+        assert duplicate.id != original.id
+        assert duplicate.project_name == "My Custom Copy"
+
+    def test_delete_nonexistent_project_returns_false(self, tmp_settings, monkeypatch, tmp_path):
+        """Test deleting a project that doesn't exist returns False."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        result = service.delete_project("nonexistent-project-id")
+
+        assert result is False
+
+    def test_load_project_path_traversal_rejected(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that load_project rejects path traversal attempts."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True)
+        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Attempt path traversal
+        with pytest.raises(ValueError, match="outside"):
+            service.load_project("../../../etc/passwd")
+
+    def test_delete_project_path_traversal_rejected(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that delete_project rejects path traversal attempts."""
+        stories_dir = tmp_path / "stories"
+        stories_dir.mkdir(parents=True)
+        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Attempt path traversal
+        with pytest.raises(ValueError, match="outside"):
+            service.delete_project("../../../etc/passwd")
