@@ -273,7 +273,7 @@ class TestWriterSceneAware:
             outline="Jack investigates the disappearance",
             scenes=[
                 Scene(
-                    number=1,
+                    id="scene-1",
                     title="Meeting the Client",
                     goal="Introduce Vera and establish the mystery",
                     pov_character="Jack Stone",
@@ -283,14 +283,16 @@ class TestWriterSceneAware:
                         "She shows a photo of her sister",
                         "Jack accepts the case",
                     ],
+                    order=0,
                 ),
                 Scene(
-                    number=2,
+                    id="scene-2",
                     title="First Clue",
                     goal="Jack finds the first lead",
                     pov_character="Jack Stone",
                     location="Sister's apartment",
                     beats=["Jack searches the apartment", "Discovers a hidden letter"],
+                    order=1,
                 ),
             ],
         )
