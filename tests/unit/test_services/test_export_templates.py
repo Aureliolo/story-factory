@@ -159,6 +159,29 @@ class TestHTMLExportWithTemplates:
         assert "line-height: 2.5" in html
         assert "background: red" in html
 
+    def test_html_export_with_template_and_custom_options(self):
+        """Test that custom options override template options when both are provided."""
+        service = ExportService(Settings())
+        state = _create_test_state("html-template-custom")
+
+        # Custom options should completely override template options
+        custom_options = ExportOptions(
+            font_family="Verdana, sans-serif",
+            font_size=20,
+            line_height=1.5,
+        )
+
+        # Pass both template and custom options - custom options should win
+        html = service.to_html(state, template="manuscript", options=custom_options)
+
+        # Custom options should be used, not manuscript template
+        assert "Verdana, sans-serif" in html
+        assert "font-size: 20px" in html
+        assert "line-height: 1.5" in html
+        # Manuscript template values should NOT be present
+        assert "Courier New" not in html
+        assert "font-size: 12px" not in html
+
     def test_html_export_includes_viewport_meta(self):
         """Test HTML export includes viewport meta tag."""
         service = ExportService(Settings())

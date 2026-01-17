@@ -224,6 +224,7 @@ class ExportService:
         """
         if template_name is None:
             template_name = "ebook"
+            logger.debug("No template specified, using default 'ebook' template")
 
         if template_name not in EXPORT_TEMPLATES:
             raise ValueError(
@@ -231,6 +232,7 @@ class ExportService:
                 f"Available templates: {list(EXPORT_TEMPLATES.keys())}"
             )
 
+        logger.debug(f"Retrieved export template: {template_name}")
         return EXPORT_TEMPLATES[template_name]
 
     def _format_chapter_header(
@@ -247,10 +249,13 @@ class ExportService:
             Formatted chapter header.
         """
         if not options.include_chapter_numbers:
+            logger.debug(f"Formatting chapter header without number: {chapter_title}")
             return chapter_title
 
         number_part = options.chapter_number_format.format(number=chapter_number)
-        return f"{number_part}{options.chapter_separator}{chapter_title}"
+        header = f"{number_part}{options.chapter_separator}{chapter_title}"
+        logger.debug(f"Formatted chapter header: {header}")
+        return header
 
     def to_markdown(self, state: StoryState) -> str:
         """Export story as markdown.
