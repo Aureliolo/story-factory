@@ -42,6 +42,18 @@ class PlotPoint(BaseModel):
     foreshadowing_planted: bool = False
 
 
+class Scene(BaseModel):
+    """A scene within a chapter."""
+
+    number: int
+    title: str
+    goal: str  # What this scene aims to accomplish
+    pov_character: str = ""  # Point of view character for this scene
+    location: str = ""  # Where the scene takes place
+    beats: list[str] = Field(default_factory=list)  # Key story beats/events in the scene
+    content: str = ""  # The actual prose content of the scene
+
+
 class Chapter(BaseModel):
     """A chapter in the story."""
 
@@ -52,6 +64,7 @@ class Chapter(BaseModel):
     word_count: int = 0
     status: str = "pending"  # pending, drafted, edited, reviewed, final
     revision_notes: list[str] = Field(default_factory=list)
+    scenes: list[Scene] = Field(default_factory=list)  # Optional scene-level breakdown
 
 
 class StoryBrief(BaseModel):
