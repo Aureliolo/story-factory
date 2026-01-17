@@ -44,6 +44,8 @@ class AnalyticsPage:
         # UI element references
         self._summary_section: Column | None = None
         self._model_section: Column | None = None
+        self._content_stats_section: Column | None = None
+        self._quality_trends_section: Column | None = None
         self._world_quality_section: Column | None = None
         self._recommendations_section: Column | None = None
 
@@ -63,6 +65,14 @@ class AnalyticsPage:
             # Summary cards
             self._summary_section = ui.column().classes("w-full")
             self._build_summary_section()
+
+            # Content statistics
+            self._content_stats_section = ui.column().classes("w-full")
+            self._build_content_statistics_section()
+
+            # Quality trends over time
+            self._quality_trends_section = ui.column().classes("w-full")
+            self._build_quality_trends_section()
 
             # Model performance table
             self._model_section = ui.column().classes("w-full")
@@ -281,11 +291,26 @@ class AnalyticsPage:
                     },
                     {"name": "speed", "label": "Speed (t/s)", "field": "speed", "sortable": True},
                     {"name": "samples", "label": "Samples", "field": "samples", "sortable": True},
+                    {"name": "overall", "label": "Overall", "field": "overall", "sortable": True},
                 ]
 
                 rows = []
                 for s in summaries:
                     model_name = extract_model_name(s.model_id)
+                    # Calculate overall score as average of quality metrics
+                    quality_scores = [
+                        score
+                        for score in [
+                            s.avg_prose_quality,
+                            s.avg_instruction_following,
+                            s.avg_consistency,
+                        ]
+                        if score is not None
+                    ]
+                    overall_score = (
+                        sum(quality_scores) / len(quality_scores) if quality_scores else 0
+                    )
+
                     rows.append(
                         {
                             "model": model_name,
@@ -299,12 +324,63 @@ class AnalyticsPage:
                             if s.avg_tokens_per_second
                             else "-",
                             "samples": s.sample_count,
+                            "overall": f"{overall_score:.1f}" if overall_score > 0 else "-",
                         }
                     )
 
                 # Wrap table in scrollable container for mobile
                 with ui.element("div").classes("w-full overflow-x-auto"):
                     ui.table(columns=columns, rows=rows, row_key="model").classes("w-full")
+
+                # Add model comparison insights
+                if len(summaries) >= 2:
+                    self._build_model_insights(summaries)
+
+    def _build_model_insights(self, summaries: list) -> None:
+        """Build model comparison insights.
+
+        Args:
+            summaries: List of ModelPerformanceSummary objects.
+        """
+        ui.label("Model Insights").classes("font-semibold mt-4 mb-2")
+
+        # Find best models for each metric
+        best_prose = max(
+            (s for s in summaries if s.avg_prose_quality),
+            key=lambda s: s.avg_prose_quality or 0,
+            default=None,
+        )
+        best_speed = max(
+            (s for s in summaries if s.avg_tokens_per_second),
+            key=lambda s: s.avg_tokens_per_second or 0,
+            default=None,
+        )
+        best_consistency = max(
+            (s for s in summaries if s.avg_consistency),
+            key=lambda s: s.avg_consistency or 0,
+            default=None,
+        )
+
+        insights = []
+        if best_prose:
+            insights.append(
+                f"🏆 Best Prose Quality: {extract_model_name(best_prose.model_id)} "
+                f"({best_prose.avg_prose_quality:.1f}/10) for {best_prose.agent_role}"
+            )
+        if best_speed:
+            insights.append(
+                f"⚡ Fastest: {extract_model_name(best_speed.model_id)} "
+                f"({best_speed.avg_tokens_per_second:.1f} t/s) for {best_speed.agent_role}"
+            )
+        if best_consistency:
+            insights.append(
+                f"🎯 Most Consistent: {extract_model_name(best_consistency.model_id)} "
+                f"({best_consistency.avg_consistency:.1f}/10) for {best_consistency.agent_role}"
+            )
+
+        with ui.card().classes("w-full mt-2").props("flat bordered"):
+            for insight in insights:
+                ui.label(insight).classes("text-sm mb-1")
 
     def _build_world_quality_section(self) -> None:
         """Build the world quality metrics section."""
@@ -488,9 +564,173 @@ class AnalyticsPage:
                             confidence_color = "green" if rec.confidence >= 0.8 else "orange"
                             ui.badge(f"{rec.confidence:.0%}").props(f"color={confidence_color}")
 
+    def _build_content_statistics_section(self) -> None:
+        """Build the content statistics section."""
+        if self._content_stats_section is None:
+            return
+
+        self._content_stats_section.clear()
+
+        try:
+            # Get content statistics
+            stats = self._db.get_content_statistics(agent_role=self._filter_agent_role)
+            logger.debug(f"Loaded content statistics: {stats['generation_count']} generations")
+        except Exception as e:
+            logger.error(f"Failed to load content statistics: {e}", exc_info=True)
+            with self._content_stats_section:
+                with ui.card().classes("w-full"):
+                    ui.label("Failed to load content statistics.").classes("text-red-500 p-4")
+            return
+
+        with self._content_stats_section:
+            with ui.card().classes("w-full"):
+                with ui.row().classes("w-full items-center mb-4"):
+                    ui.icon("insights").classes("text-indigo-500")
+                    ui.label("Content Statistics").classes("text-lg font-semibold")
+                    ui.space()
+                    ui.label(f"{stats['generation_count']} generations").classes(
+                        "text-sm text-gray-500"
+                    )
+
+                if stats["generation_count"] == 0:
+                    ui.label("No content generated yet. Start writing to see statistics!").classes(
+                        "text-gray-500 dark:text-gray-400 py-8 text-center"
+                    )
+                    return
+
+                # Statistics grid
+                with ui.element("div").classes("grid grid-cols-2 md:grid-cols-4 gap-4"):
+                    self._build_stat_card(
+                        "Total Tokens",
+                        f"{stats['total_tokens']:,}",
+                        "functions",
+                        "text-indigo-500",
+                    )
+                    self._build_stat_card(
+                        "Avg Tokens/Gen",
+                        f"{stats['avg_tokens']:.0f}" if stats["avg_tokens"] else "N/A",
+                        "bar_chart",
+                        "text-blue-500",
+                    )
+                    self._build_stat_card(
+                        "Token Range",
+                        f"{stats['min_tokens']}-{stats['max_tokens']}"
+                        if stats["min_tokens"] and stats["max_tokens"]
+                        else "N/A",
+                        "straighten",
+                        "text-purple-500",
+                    )
+                    self._build_stat_card(
+                        "Avg Gen Time",
+                        f"{stats['avg_generation_time']:.1f}s"
+                        if stats["avg_generation_time"]
+                        else "N/A",
+                        "schedule",
+                        "text-orange-500",
+                    )
+
+    def _build_quality_trends_section(self) -> None:
+        """Build the quality trends over time section."""
+        if self._quality_trends_section is None:
+            return
+
+        self._quality_trends_section.clear()
+
+        try:
+            # Get daily quality averages for the past 30 days
+            prose_trends = self._db.get_daily_quality_averages(
+                metric="prose_quality",
+                days=30,
+                agent_role=self._filter_agent_role,
+            )
+            speed_trends = self._db.get_daily_quality_averages(
+                metric="tokens_per_second",
+                days=30,
+                agent_role=self._filter_agent_role,
+            )
+            logger.debug(f"Loaded {len(prose_trends)} prose quality trend points")
+        except Exception as e:
+            logger.error(f"Failed to load quality trends: {e}", exc_info=True)
+            with self._quality_trends_section:
+                with ui.card().classes("w-full"):
+                    ui.label("Failed to load quality trends.").classes("text-red-500 p-4")
+            return
+
+        with self._quality_trends_section:
+            with ui.card().classes("w-full"):
+                with ui.row().classes("w-full items-center mb-4"):
+                    ui.icon("trending_up").classes("text-green-500")
+                    ui.label("Quality Trends (30 Days)").classes("text-lg font-semibold")
+
+                if not prose_trends and not speed_trends:
+                    ui.label("Not enough data yet. Generate more content to see trends!").classes(
+                        "text-gray-500 dark:text-gray-400 py-8 text-center"
+                    )
+                    return
+
+                # Create a simple text-based trend visualization
+                if prose_trends:
+                    ui.label("Prose Quality Over Time").classes("font-semibold mt-4 mb-2")
+                    with ui.element("div").classes("w-full overflow-x-auto"):
+                        # Build trend table
+                        columns = [
+                            {"name": "date", "label": "Date", "field": "date", "sortable": True},
+                            {
+                                "name": "avg_quality",
+                                "label": "Avg Quality",
+                                "field": "avg_quality",
+                                "sortable": True,
+                            },
+                            {
+                                "name": "samples",
+                                "label": "Samples",
+                                "field": "samples",
+                                "sortable": True,
+                            },
+                        ]
+                        rows = [
+                            {
+                                "date": trend["date"],
+                                "avg_quality": f"{trend['avg_value']:.1f}/10",
+                                "samples": trend["sample_count"],
+                            }
+                            for trend in prose_trends[:10]  # Show last 10 days
+                        ]
+                        ui.table(columns=columns, rows=rows).classes("w-full")
+
+                if speed_trends:
+                    ui.label("Generation Speed Over Time").classes("font-semibold mt-4 mb-2")
+                    with ui.element("div").classes("w-full overflow-x-auto"):
+                        columns = [
+                            {"name": "date", "label": "Date", "field": "date", "sortable": True},
+                            {
+                                "name": "avg_speed",
+                                "label": "Avg Speed (t/s)",
+                                "field": "avg_speed",
+                                "sortable": True,
+                            },
+                            {
+                                "name": "samples",
+                                "label": "Samples",
+                                "field": "samples",
+                                "sortable": True,
+                            },
+                        ]
+                        rows = [
+                            {
+                                "date": trend["date"],
+                                "avg_speed": f"{trend['avg_value']:.1f}",
+                                "samples": trend["sample_count"],
+                            }
+                            for trend in speed_trends[:10]
+                        ]
+                        ui.table(columns=columns, rows=rows).classes("w-full")
+
     def _refresh_all(self) -> None:
         """Refresh all sections."""
         self._build_summary_section()
+        self._build_content_statistics_section()
+        self._build_quality_trends_section()
         self._build_model_section()
         self._build_world_quality_section()
         self._build_recommendations_section()
