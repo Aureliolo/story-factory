@@ -657,10 +657,11 @@ class Settings:
             ("ollama_generate_timeout", self.ollama_generate_timeout, 5.0, 600.0),
             ("ollama_capability_check_timeout", self.ollama_capability_check_timeout, 30.0, 600.0),
         ]
-        for name, value, min_val, max_val in ollama_timeout_settings:
-            if not min_val <= value <= max_val:
+        for timeout_name, timeout_value, min_timeout, max_timeout in ollama_timeout_settings:
+            if not min_timeout <= timeout_value <= max_timeout:
                 raise ValueError(
-                    f"{name} must be between {min_val} and {max_val} seconds, got {value}"
+                    f"{timeout_name} must be between {min_timeout} and {max_timeout} seconds, "
+                    f"got {timeout_value}"
                 )
 
         # Validate retry configuration
