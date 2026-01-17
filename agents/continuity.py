@@ -16,10 +16,21 @@ class ContinuityIssue:
     """A detected continuity issue."""
 
     severity: str  # "critical", "moderate", "minor"
-    category: str  # "language", "plot_hole", "character", "timeline", "setting", "logic"
+    category: str  # "language", "plot_hole", "character", "timeline", "setting", "logic", "voice"
     description: str
     location: str  # Where in the text
     suggestion: str  # How to fix
+
+
+@dataclass
+class DialoguePattern:
+    """Character dialogue patterns for voice consistency."""
+
+    character_name: str
+    vocabulary_level: str  # formal, casual, colloquial, technical
+    speech_patterns: list[str]  # Characteristic phrases, verbal tics
+    typical_words: list[str]  # Words this character commonly uses
+    sentence_structure: str  # simple, complex, fragmented, eloquent
 
 
 CONTINUITY_SYSTEM_PROMPT = """You are the Continuity Checker, the guardian of story consistency.
@@ -30,9 +41,10 @@ Your job is to catch:
 1. LANGUAGE VIOLATIONS - Any text not in the specified language (ALWAYS check this first!)
 2. PLOT HOLES - Events that contradict earlier events, unresolved setups, impossible occurrences
 3. CHARACTER INCONSISTENCIES - Out-of-character behavior, personality shifts, forgotten traits
-4. TIMELINE ERRORS - Impossible chronology, contradictory timeframes
-5. SETTING MISTAKES - Location inconsistencies, world rule violations
-6. LOGIC PROBLEMS - Things that don't make sense within the story's rules
+4. VOICE INCONSISTENCIES - Characters speaking out of character, dialogue that doesn't match their established speech patterns
+5. TIMELINE ERRORS - Impossible chronology, contradictory timeframes
+6. SETTING MISTAKES - Location inconsistencies, world rule violations
+7. LOGIC PROBLEMS - Things that don't make sense within the story's rules
 
 You read carefully and cross-reference with established facts.
 You flag issues with specific quotes and clear explanations.
@@ -61,8 +73,21 @@ class ContinuityAgent(BaseAgent):
         story_state: StoryState,
         chapter_content: str,
         chapter_number: int,
+        check_voice: bool = True,
+        established_patterns: dict[str, DialoguePattern] | None = None,
     ) -> list[ContinuityIssue]:
-        """Check a chapter for continuity issues."""
+        """Check a chapter for continuity issues.
+
+        Args:
+            story_state: Current story state
+            chapter_content: Chapter text to check
+            chapter_number: Chapter number being checked
+            check_voice: Whether to perform voice consistency checks (default: True)
+            established_patterns: Previously established dialogue patterns (optional)
+
+        Returns:
+            List of continuity issues found.
+        """
         # Build context from previous chapters
         ctx_chars = self.settings.previous_chapter_context_chars
         previous_content = ""
@@ -123,10 +148,187 @@ If no issues found, output: ```json
 ```"""
 
         response = self.generate(prompt)
+        issues = self._parse_issues(response)
+
+        # Perform voice consistency check if requested
+        if check_voice and story_state.characters:
+            logger.debug("Performing voice consistency check")
+            voice_issues = self.check_character_voice(
+                story_state, chapter_content, established_patterns
+            )
+            issues.extend(voice_issues)
+
+        return issues
+
+    def extract_dialogue_patterns(
+        self,
+        story_state: StoryState,
+        chapter_content: str,
+    ) -> dict[str, DialoguePattern]:
+        """Extract dialogue patterns for each character from chapter content.
+
+        Returns:
+            Dict mapping character names to their dialogue patterns.
+        """
+        if not story_state.characters:
+            logger.debug("No characters defined, skipping dialogue pattern extraction")
+            return {}
+
+        logger.debug("Extracting dialogue patterns for %d characters", len(story_state.characters))
+
+        chars_summary = "\n".join(
+            f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
+            for c in story_state.characters
+        )
+
+        prompt = f"""Analyze the dialogue patterns for each character who speaks in this chapter:
+
+CHAPTER CONTENT:
+{chapter_content[: self.settings.chapter_analysis_chars]}
+
+CHARACTERS:
+{chars_summary}
+
+For each character who speaks, identify their dialogue characteristics:
+- Vocabulary level (formal/casual/colloquial/technical)
+- Speech patterns (catchphrases, verbal tics, repetitions)
+- Typical words they use frequently
+- Sentence structure (simple/complex/fragmented/eloquent)
+
+Output as JSON array:
+```json
+[
+    {{
+        "character_name": "Character Name",
+        "vocabulary_level": "formal|casual|colloquial|technical",
+        "speech_patterns": ["pattern1", "pattern2"],
+        "typical_words": ["word1", "word2"],
+        "sentence_structure": "simple|complex|fragmented|eloquent"
+    }}
+]
+```
+
+Only include characters who actually speak in this chapter."""
+
+        response = self.generate(prompt, temperature=self.settings.temp_plot_checking)
+        return self._parse_dialogue_patterns(response)
+
+    def check_character_voice(
+        self,
+        story_state: StoryState,
+        chapter_content: str,
+        established_patterns: dict[str, DialoguePattern] | None = None,
+    ) -> list[ContinuityIssue]:
+        """Check for character voice inconsistencies in dialogue.
+
+        Args:
+            story_state: Current story state with character information
+            chapter_content: Chapter text to analyze
+            established_patterns: Previously established dialogue patterns (optional)
+
+        Returns:
+            List of voice consistency issues found.
+        """
+        if not story_state.characters:
+            logger.debug("No characters defined, skipping voice consistency check")
+            return []
+
+        logger.debug("Checking voice consistency for %d characters", len(story_state.characters))
+
+        chars_summary = "\n".join(
+            f"- {c.name}: {c.description}\n  Personality: {', '.join(c.personality_traits)}"
+            for c in story_state.characters
+        )
+
+        # Build context from established patterns
+        patterns_context = ""
+        if established_patterns:
+            patterns_parts = []
+            for name, pattern in established_patterns.items():
+                patterns_parts.append(
+                    f"- {name}: {pattern.vocabulary_level} vocabulary, "
+                    f"{pattern.sentence_structure} sentences"
+                )
+                if pattern.speech_patterns:
+                    patterns_parts.append(f"  Patterns: {', '.join(pattern.speech_patterns)}")
+                if pattern.typical_words:
+                    patterns_parts.append(f"  Common words: {', '.join(pattern.typical_words[:5])}")
+            patterns_context = "\n".join(patterns_parts)
+
+        prompt = f"""Analyze dialogue for character voice consistency:
+
+ESTABLISHED CHARACTERS:
+{chars_summary}
+
+{f"ESTABLISHED SPEECH PATTERNS:{chr(10)}{patterns_context}{chr(10)}" if patterns_context else ""}
+
+CHAPTER CONTENT:
+{chapter_content[: self.settings.chapter_analysis_chars]}
+
+Check each character's dialogue for:
+1. Does vocabulary match their education/background/personality?
+2. Are speech patterns consistent with their character traits?
+3. Do formal/informal language choices fit the character?
+4. Are verbal tics or catchphrases used consistently?
+5. Does sentence complexity match their intelligence/personality?
+
+Output voice inconsistencies as JSON:
+```json
+[
+    {{
+        "severity": "moderate|minor",
+        "category": "voice",
+        "description": "Character speaks out of character",
+        "location": "Quote the problematic dialogue",
+        "suggestion": "How to rewrite the dialogue to match their voice"
+    }}
+]
+```
+
+If no voice issues found, output: ```json
+[]
+```"""
+
+        response = self.generate(prompt, temperature=self.settings.temp_plot_checking)
         return self._parse_issues(response)
 
-    def check_full_story(self, story_state: StoryState) -> list[ContinuityIssue]:
-        """Check the entire story for continuity issues."""
+    def _parse_dialogue_patterns(self, response: str) -> dict[str, DialoguePattern]:
+        """Parse dialogue patterns from agent response."""
+        data = extract_json_list(response)
+        if not data:
+            logger.debug("No dialogue patterns found in response")
+            return {}
+
+        patterns = {}
+        for item in data:
+            try:
+                pattern = DialoguePattern(
+                    character_name=item.get("character_name", ""),
+                    vocabulary_level=item.get("vocabulary_level", "casual"),
+                    speech_patterns=item.get("speech_patterns", []),
+                    typical_words=item.get("typical_words", []),
+                    sentence_structure=item.get("sentence_structure", "simple"),
+                )
+                if pattern.character_name:
+                    patterns[pattern.character_name] = pattern
+            except (TypeError, KeyError) as e:
+                logger.debug(f"Skipping malformed dialogue pattern item: {e}")
+
+        logger.debug("Extracted dialogue patterns for %d characters", len(patterns))
+        return patterns
+
+    def check_full_story(
+        self, story_state: StoryState, check_voice: bool = True
+    ) -> list[ContinuityIssue]:
+        """Check the entire story for continuity issues.
+
+        Args:
+            story_state: Current story state
+            check_voice: Whether to perform voice consistency checks (default: True)
+
+        Returns:
+            List of continuity issues found.
+        """
         full_content = "\n\n".join(
             f"[Chapter {ch.number}: {ch.title}]\n{ch.content}"
             for ch in story_state.chapters
@@ -174,7 +376,18 @@ Output as JSON:
 ```"""
 
         response = self.generate(prompt)
-        return self._parse_issues(response)
+        issues = self._parse_issues(response)
+
+        # Perform voice consistency check if requested
+        if check_voice and story_state.characters and full_content:
+            logger.debug("Performing voice consistency check on full story")
+            # Extract patterns from the full story first
+            patterns = self.extract_dialogue_patterns(story_state, full_content)
+            # Then check for voice inconsistencies using those patterns
+            voice_issues = self.check_character_voice(story_state, full_content, patterns)
+            issues.extend(voice_issues)
+
+        return issues
 
     def validate_against_outline(
         self,
