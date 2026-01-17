@@ -118,14 +118,16 @@ class BackupService:
                 logger.debug(f"Added world database to backup: {world_path.name}")
 
             # Add metadata file for easier restoration
+            files_list: list[str] = [f"{project_id}.json"]
+            if world_path.exists():
+                files_list.append(f"{project_id}.db")
+
             metadata = {
                 "project_id": project_id,
                 "project_name": project_name,
                 "backup_created_at": datetime.now().isoformat(),
-                "files": [f"{project_id}.json"],
+                "files": files_list,
             }
-            if world_path.exists():
-                metadata["files"].append(f"{project_id}.db")
 
             zf.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
             logger.debug("Added metadata to backup")
@@ -150,13 +152,28 @@ class BackupService:
             try:
                 with zipfile.ZipFile(backup_file, "r") as zf:
                     # Try to read metadata
-                    metadata = {}
-                    if "backup_metadata.json" in zf.namelist():
-                        metadata_content = zf.read("backup_metadata.json")
-                        metadata = json.loads(metadata_content)
+                    if "backup_metadata.json" not in zf.namelist():
+                        logger.warning(f"Backup {backup_file.name} missing metadata file, skipping")
+                        continue
 
-                    project_id = metadata.get("project_id", "unknown")
-                    project_name = metadata.get("project_name", "Unknown Project")
+                    metadata_content = zf.read("backup_metadata.json")
+                    metadata = json.loads(metadata_content)
+
+                    # Validate required metadata fields
+                    if "project_id" not in metadata:
+                        logger.warning(
+                            f"Backup {backup_file.name} missing project_id in metadata, skipping"
+                        )
+                        continue
+
+                    if "project_name" not in metadata:
+                        logger.warning(
+                            f"Backup {backup_file.name} missing project_name in metadata, skipping"
+                        )
+                        continue
+
+                    project_id = metadata["project_id"]
+                    project_name = metadata["project_name"]
                     created_at_str = metadata.get("backup_created_at")
 
                     if created_at_str:
@@ -213,13 +230,20 @@ class BackupService:
 
         # Extract backup contents
         with zipfile.ZipFile(backup_path, "r") as zf:
-            # Read metadata
-            metadata = {}
-            if "backup_metadata.json" in zf.namelist():
-                metadata_content = zf.read("backup_metadata.json")
-                metadata = json.loads(metadata_content)
+            # Read and validate metadata
+            if "backup_metadata.json" not in zf.namelist():
+                raise ValueError(f"Invalid backup: {backup_filename} is missing metadata file")
 
-            original_name = metadata.get("project_name", "Restored Project")
+            metadata_content = zf.read("backup_metadata.json")
+            metadata = json.loads(metadata_content)
+
+            # Validate required metadata fields
+            if "project_name" not in metadata:
+                raise ValueError(
+                    f"Invalid backup: {backup_filename} is missing project_name in metadata"
+                )
+
+            original_name = metadata["project_name"]
 
             # Find the story state file
             story_files = [
@@ -265,12 +289,12 @@ class BackupService:
             logger.debug(f"Restored story state to: {new_story_path}")
 
             # Extract world database if it exists
-            db_files = [f for f in zf.namelist() if f.endswith(".db")]
+            db_files = [fname for fname in zf.namelist() if fname.endswith(".db")]
             if db_files:
                 db_filename = db_files[0]
                 WORLDS_DIR.mkdir(parents=True, exist_ok=True)
-                with open(new_world_path, "wb") as f:
-                    f.write(zf.read(db_filename))
+                with open(new_world_path, "wb") as db_file:
+                    db_file.write(zf.read(db_filename))
                 logger.debug(f"Restored world database to: {new_world_path}")
 
         logger.info(f"Backup restored successfully as project: {new_project_id}")

@@ -1,5 +1,6 @@
 """Projects page - project management."""
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -376,7 +377,8 @@ class ProjectsPage:
                 ui.notify("Backup deleted", type="positive")
                 dialog.close()
                 # Reopen backup manager to show updated list
-                self._show_backup_manager()
+                # Use asyncio.create_task to call async method from sync callback
+                asyncio.create_task(self._show_backup_manager())
             except Exception as e:
                 logger.exception(f"Failed to delete backup {backup_filename}")
                 ui.notify(f"Error: {e}", type="negative")
