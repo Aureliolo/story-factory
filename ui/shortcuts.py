@@ -37,6 +37,7 @@ class ShortcutManager:
         """Initialize the shortcut manager."""
         self._shortcuts: dict[str, Shortcut] = {}
         self._help_dialog: ui.dialog | None = None
+        self._global_shortcuts_initialized: bool = False
 
     def _get_shortcut_key(self, key: str, modifiers: list[str]) -> str:
         """Generate a unique key for the shortcut registry."""
@@ -151,7 +152,13 @@ class ShortcutManager:
             on_undo: Callback for Ctrl+Z.
             on_redo: Callback for Ctrl+Y or Ctrl+Shift+Z.
         """
-        # Register shortcuts
+        # Guard against duplicate initialization
+        if self._global_shortcuts_initialized:
+            logger.debug("Global shortcuts already initialized, skipping")
+            return
+        self._global_shortcuts_initialized = True
+
+        # Register shortcuts for help dialog display
         self.register(
             key="s",
             modifiers=["ctrl"],
@@ -180,57 +187,55 @@ class ShortcutManager:
             action=self.show_help_dialog,
             category="Help",
         )
-        self.register(
-            key="Escape",
-            modifiers=[],
-            description="Close dialog / cancel",
-            action=None,  # Handled by NiceGUI dialogs
-            category="Navigation",
-        )
+        # Note: Escape key handling is built into NiceGUI dialogs, no registration needed
 
-        # Add JavaScript keyboard event handler
-        ui.add_body_html("""
+        # Add JavaScript keyboard event handler using NiceGUI event system
+        # Using add_head_html to ensure script is only added once per page load
+        ui.add_head_html("""
         <script>
-        document.addEventListener('keydown', function(e) {
-            // Ctrl+S - Save
-            if (e.ctrlKey && e.key === 's') {
-                e.preventDefault();
-                if (window.appShortcuts && window.appShortcuts.onSave) {
-                    window.appShortcuts.onSave();
-                }
-            }
-            // Ctrl+Z - Undo
-            if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
-                // Let browser handle in input fields
-                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-                    e.preventDefault();
-                    if (window.appShortcuts && window.appShortcuts.onUndo) {
-                        window.appShortcuts.onUndo();
-                    }
-                }
-            }
-            // Ctrl+Y or Ctrl+Shift+Z - Redo
-            if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
-                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-                    e.preventDefault();
-                    if (window.appShortcuts && window.appShortcuts.onRedo) {
-                        window.appShortcuts.onRedo();
-                    }
-                }
-            }
-            // F1 - Help
-            if (e.key === 'F1') {
-                e.preventDefault();
-                if (window.appShortcuts && window.appShortcuts.onHelp) {
-                    window.appShortcuts.onHelp();
-                }
-            }
-        });
+        (function() {
+            // Guard against duplicate listener registration
+            if (window._shortcutManagerInitialized) return;
+            window._shortcutManagerInitialized = true;
 
-        // Initialize shortcut callbacks
-        window.appShortcuts = window.appShortcuts || {};
+            document.addEventListener('keydown', function(e) {
+                // Ctrl+S - Save
+                if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    window.__nicegui.emit('shortcut:save');
+                }
+                // Ctrl+Z - Undo (skip in input fields)
+                if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                        e.preventDefault();
+                        window.__nicegui.emit('shortcut:undo');
+                    }
+                }
+                // Ctrl+Y or Ctrl+Shift+Z - Redo (skip in input fields)
+                if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                        e.preventDefault();
+                        window.__nicegui.emit('shortcut:redo');
+                    }
+                }
+                // F1 - Help
+                if (e.key === 'F1') {
+                    e.preventDefault();
+                    window.__nicegui.emit('shortcut:help');
+                }
+            });
+        })();
         </script>
         """)
+
+        # Wire up Python callbacks using NiceGUI event system
+        if on_save:
+            ui.on("shortcut:save", on_save)
+        if on_undo:
+            ui.on("shortcut:undo", on_undo)
+        if on_redo:
+            ui.on("shortcut:redo", on_redo)
+        ui.on("shortcut:help", self.show_help_dialog)
 
         logger.info("Global keyboard shortcuts initialized")
 
