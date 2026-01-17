@@ -1,6 +1,5 @@
 """Comparison service - multi-model chapter comparison."""
 
-import asyncio
 import logging
 import uuid
 from collections.abc import Callable, Generator
@@ -10,7 +9,12 @@ from typing import Any
 
 from memory.story_state import StoryState
 from settings import Settings
-from utils.validation import validate_not_empty, validate_not_none, validate_type
+from utils.validation import (
+    validate_not_empty,
+    validate_not_empty_collection,
+    validate_not_none,
+    validate_type,
+)
 from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 logger = logging.getLogger(__name__)
@@ -94,7 +98,7 @@ class ComparisonService:
         """
         validate_not_none(state, "state")
         validate_type(state, "state", StoryState)
-        validate_not_empty(models, "models")
+        validate_not_empty_collection(models, "models")
 
         if len(models) < 2:
             raise ValueError("At least 2 models required for comparison")
@@ -126,22 +130,25 @@ class ComparisonService:
             logger.debug(f"Generating chapter {chapter_num} with model: {model_id}")
 
             # Generate with this model
+            # Capture loop variables for lambda closure
+            current_model_id = model_id
+            current_index = i
+
             result = self._generate_with_model(
                 state=state,
                 chapter_num=chapter_num,
-                model_id=model_id,
+                model_id=current_model_id,
                 feedback=feedback,
                 cancel_check=cancel_check,
-                progress_callback=lambda event: {
-                    "model_id": model_id,
+                progress_callback=lambda event, mid=current_model_id, idx=current_index: {
+                    "model_id": mid,
                     "event": event,
-                    "progress": (i + 0.5) / len(models),
+                    "progress": (idx + 0.5) / len(models),
                 },
             )
 
             # Yield progress events
-            for event_dict in result["events"]:
-                yield event_dict
+            yield from result["events"]
 
             # Store result
             record.results[model_id] = result["result"]
@@ -156,9 +163,7 @@ class ComparisonService:
 
         # Add to history
         self._comparison_history.append(record)
-        logger.info(
-            f"Comparison complete: {len(record.results)}/{len(models)} models generated"
-        )
+        logger.info(f"Comparison complete: {len(record.results)}/{len(models)} models generated")
 
         return record
 
@@ -212,9 +217,7 @@ class ComparisonService:
 
                     # Extract content when chapter is complete
                     if event.event_type == "agent_complete" and event.agent_name == "System":
-                        chapter = next(
-                            (c for c in state.chapters if c.number == chapter_num), None
-                        )
+                        chapter = next((c for c in state.chapters if c.number == chapter_num), None)
                         if chapter:
                             content = chapter.content
 
@@ -235,9 +238,7 @@ class ComparisonService:
                 events=collected_events,
             )
 
-            logger.debug(
-                f"Model {model_id} generated {word_count} words in {generation_time:.1f}s"
-            )
+            logger.debug(f"Model {model_id} generated {word_count} words in {generation_time:.1f}s")
 
             return {"result": result, "events": events_to_yield}
 
@@ -256,9 +257,7 @@ class ComparisonService:
 
             return {"result": result, "events": events_to_yield}
 
-    def select_winner(
-        self, comparison_id: str, selected_model: str, user_notes: str = ""
-    ) -> None:
+    def select_winner(self, comparison_id: str, selected_model: str, user_notes: str = "") -> None:
         """Record user's selection from comparison.
 
         Args:
@@ -313,9 +312,7 @@ class ComparisonService:
         Returns:
             Win rate as percentage (0.0 to 100.0).
         """
-        comparisons_with_model = [
-            r for r in self._comparison_history if model_id in r.results
-        ]
+        comparisons_with_model = [r for r in self._comparison_history if model_id in r.results]
 
         if not comparisons_with_model:
             return 0.0

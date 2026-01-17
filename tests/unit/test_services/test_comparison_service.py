@@ -1,10 +1,11 @@
 """Tests for comparison service."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from services.comparison_service import ComparisonService, ComparisonResult, ComparisonRecord
-from memory.story_state import StoryState, Chapter
+import pytest
+
+from memory.story_state import Chapter, StoryState
+from services.comparison_service import ComparisonRecord, ComparisonResult, ComparisonService
 from settings import Settings
 from workflows.orchestrator import WorkflowEvent
 
@@ -152,9 +153,13 @@ class TestComparisonService:
             models=["model-1", "model-2"],
         )
 
-        # Get the final record
-        events = list(generator)
-        record = events[-1] if events else None
+        # Consume all events and get the return value
+        record = None
+        try:
+            while True:
+                next(generator)
+        except StopIteration as e:
+            record = e.value
 
         # Record should exist even with errors
         assert isinstance(record, ComparisonRecord)

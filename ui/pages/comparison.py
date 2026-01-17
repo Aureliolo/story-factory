@@ -5,7 +5,6 @@ from typing import Any
 
 from nicegui import ui
 from nicegui.elements.button import Button
-from nicegui.elements.markdown import Markdown
 from nicegui.elements.select import Select
 
 from services import ServiceContainer
@@ -92,9 +91,7 @@ class ComparisonPage:
         """Show message when no project is loaded."""
         with ui.card().classes("w-full p-6"):
             ui.label("No Project Loaded").classes("text-xl font-bold mb-2")
-            ui.label("Please create or load a project to compare models.").classes(
-                "text-gray-400"
-            )
+            ui.label("Please create or load a project to compare models.").classes("text-gray-400")
 
     def _build_model_selection(self) -> None:
         """Build model selection controls."""
@@ -121,9 +118,9 @@ class ComparisonPage:
             with ui.grid(columns=2).classes("w-full gap-4"):
                 for i in range(4):
                     with ui.column().classes("gap-2"):
-                        ui.label(f"Model {i + 1}{' (Required)' if i < 2 else ' (Optional)'}").classes(
-                            "text-sm font-medium"
-                        )
+                        ui.label(
+                            f"Model {i + 1}{' (Required)' if i < 2 else ' (Optional)'}"
+                        ).classes("text-sm font-medium")
                         select = (
                             ui.select(
                                 options=model_options,
@@ -150,9 +147,7 @@ class ComparisonPage:
                 # Chapter dropdown
                 chapters = self.state.project.story_state.chapters
                 if chapters:
-                    chapter_options = {
-                        c.number: f"Chapter {c.number}: {c.title}" for c in chapters
-                    }
+                    chapter_options = {c.number: f"Chapter {c.number}: {c.title}" for c in chapters}
                     self._chapter_select = (
                         ui.select(
                             options=chapter_options,
@@ -213,9 +208,7 @@ class ComparisonPage:
 
     def _update_selected_models(self) -> None:
         """Update the list of selected models."""
-        self._selected_models = [
-            select.value for select in self._model_selects if select.value
-        ]
+        self._selected_models = [select.value for select in self._model_selects if select.value]
         logger.debug(f"Selected models: {self._selected_models}")
 
     async def _generate_comparison(self) -> None:
@@ -376,9 +369,11 @@ class ComparisonPage:
             else:
                 # Content preview with expansion
                 with ui.expansion("Preview", icon="visibility").classes("w-full"):
-                    ui.markdown(result.content[:2000] + "..." if len(result.content) > 2000 else result.content).classes(
-                        "text-sm max-h-96 overflow-y-auto"
-                    )
+                    ui.markdown(
+                        result.content[:2000] + "..."
+                        if len(result.content) > 2000
+                        else result.content
+                    ).classes("text-sm max-h-96 overflow-y-auto")
 
             # Select button
             if not is_selected and not result.error:
