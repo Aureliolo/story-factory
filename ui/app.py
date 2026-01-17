@@ -11,6 +11,7 @@ from services import ServiceContainer
 from ui.components.header import Header
 from ui.keyboard_shortcuts import KeyboardShortcuts
 from ui.pages.analytics import AnalyticsPage
+from ui.pages.comparison import ComparisonPage
 from ui.pages.models import ModelsPage
 from ui.pages.projects import ProjectsPage
 from ui.pages.settings import SettingsPage
@@ -194,6 +195,14 @@ class StoryFactoryApp:
                 page.build()
 
             self._page_layout("/templates", content)
+
+        @ui.page("/compare")
+        def compare_page():
+            def content():
+                page = ComparisonPage(self.state, self.services)
+                page.build()
+
+            self._page_layout("/compare", content)
 
         # Cleanup on shutdown
         app.on_shutdown(self._on_shutdown)
