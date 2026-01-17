@@ -65,13 +65,17 @@ class ProjectService:
         Args:
             settings: Application settings.
         """
+        logger.debug("Initializing ProjectService")
         self.settings = settings
         self._ensure_directories()
+        logger.debug("ProjectService initialized successfully")
 
     def _ensure_directories(self) -> None:
         """Ensure output directories exist."""
+        logger.debug("Ensuring output directories exist")
         STORIES_DIR.mkdir(parents=True, exist_ok=True)
         WORLDS_DIR.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Output directories ready: stories={STORIES_DIR}, worlds={WORLDS_DIR}")
 
     def create_project(self, name: str = "") -> tuple[StoryState, WorldDatabase]:
         """Create a new project with story state and world database.
@@ -82,6 +86,7 @@ class ProjectService:
         Returns:
             Tuple of (StoryState, WorldDatabase) for the new project.
         """
+        logger.debug(f"create_project called: name={name}")
         now = datetime.now()
         project_id = str(uuid.uuid4())
 
@@ -89,25 +94,29 @@ class ProjectService:
         if not name:
             name = f"New Story - {now.strftime('%b %d, %Y %I:%M %p')}"
 
-        # Create world database
-        world_db_path = WORLDS_DIR / f"{project_id}.db"
-        world_db = WorldDatabase(world_db_path)
+        try:
+            # Create world database
+            world_db_path = WORLDS_DIR / f"{project_id}.db"
+            world_db = WorldDatabase(world_db_path)
 
-        # Create story state
-        story_state = StoryState(
-            id=project_id,
-            created_at=now,
-            updated_at=now,
-            project_name=name,
-            world_db_path=str(world_db_path),
-            status="interview",
-        )
+            # Create story state
+            story_state = StoryState(
+                id=project_id,
+                created_at=now,
+                updated_at=now,
+                project_name=name,
+                world_db_path=str(world_db_path),
+                status="interview",
+            )
 
-        # Save immediately so it appears in project list
-        self.save_project(story_state)
+            # Save immediately so it appears in project list
+            self.save_project(story_state)
 
-        logger.info(f"Created new project: {project_id} - {name}")
-        return story_state, world_db
+            logger.info(f"Created new project: {project_id} - {name}")
+            return story_state, world_db
+        except Exception as e:
+            logger.error(f"Failed to create project {name}: {e}", exc_info=True)
+            raise
 
     def load_project(self, project_id: str) -> tuple[StoryState, WorldDatabase]:
         """Load an existing project.
@@ -122,34 +131,45 @@ class ProjectService:
             FileNotFoundError: If project doesn't exist.
             ValueError: If path validation fails.
         """
+        logger.debug(f"load_project called: project_id={project_id}")
         story_path = STORIES_DIR / f"{project_id}.json"
-        # Validate path is within STORIES_DIR
-        story_path = _validate_path(story_path, STORIES_DIR)
 
-        if not story_path.exists():
-            raise FileNotFoundError(f"Project not found: {project_id}")
+        try:
+            # Validate path is within STORIES_DIR
+            story_path = _validate_path(story_path, STORIES_DIR)
 
-        # Load story state
-        with open(story_path, encoding="utf-8") as f:
-            data = json.load(f)
+            if not story_path.exists():
+                error_msg = f"Project not found: {project_id}"
+                logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
 
-        story_state = StoryState.model_validate(data)
+            # Load story state
+            with open(story_path, encoding="utf-8") as f:
+                data = json.load(f)
 
-        # Load or create world database
-        world_db_path = story_state.world_db_path
-        if not world_db_path:
-            # Legacy project without world DB - create one
-            world_db_path = str(WORLDS_DIR / f"{project_id}.db")
-            story_state.world_db_path = world_db_path
-            self.save_project(story_state)
+            story_state = StoryState.model_validate(data)
 
-        # Validate world DB path
-        world_db_path_obj = Path(world_db_path)
-        world_db_path_obj = _validate_path(world_db_path_obj, WORLDS_DIR)
-        world_db = WorldDatabase(world_db_path_obj)
+            # Load or create world database
+            world_db_path = story_state.world_db_path
+            if not world_db_path:
+                # Legacy project without world DB - create one
+                world_db_path = str(WORLDS_DIR / f"{project_id}.db")
+                story_state.world_db_path = world_db_path
+                self.save_project(story_state)
+                logger.info(f"Created world DB for legacy project: {project_id}")
 
-        logger.info(f"Loaded project: {project_id}")
-        return story_state, world_db
+            # Validate world DB path
+            world_db_path_obj = Path(world_db_path)
+            world_db_path_obj = _validate_path(world_db_path_obj, WORLDS_DIR)
+            world_db = WorldDatabase(world_db_path_obj)
+
+            logger.info(f"Loaded project: {project_id} - {story_state.project_name}")
+            return story_state, world_db
+        except FileNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to load project {project_id}: {e}", exc_info=True)
+            raise
 
     def save_project(self, state: StoryState) -> Path:
         """Save project to disk.
@@ -160,18 +180,23 @@ class ProjectService:
         Returns:
             Path where the project was saved.
         """
-        state.updated_at = datetime.now()
-        if not state.last_saved:
-            state.last_saved = datetime.now()
+        logger.debug(f"save_project called: project_id={state.id}, name={state.project_name}")
+        try:
+            state.updated_at = datetime.now()
+            if not state.last_saved:
+                state.last_saved = datetime.now()
 
-        output_path = STORIES_DIR / f"{state.id}.json"
-        story_data = state.model_dump(mode="json")
+            output_path = STORIES_DIR / f"{state.id}.json"
+            story_data = state.model_dump(mode="json")
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(story_data, f, indent=2, default=str)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(story_data, f, indent=2, default=str)
 
-        logger.debug(f"Saved project: {state.id}")
-        return output_path
+            logger.debug(f"Saved project: {state.id} to {output_path}")
+            return output_path
+        except Exception as e:
+            logger.error(f"Failed to save project {state.id}: {e}", exc_info=True)
+            raise
 
     def list_projects(self) -> list[ProjectSummary]:
         """List all saved projects.
@@ -179,9 +204,11 @@ class ProjectService:
         Returns:
             List of ProjectSummary objects sorted by updated_at descending.
         """
+        logger.debug("list_projects called")
         projects: list[ProjectSummary] = []
 
         if not STORIES_DIR.exists():
+            logger.debug("Stories directory does not exist, returning empty list")
             return projects
 
         for filepath in STORIES_DIR.glob("*.json"):
@@ -222,6 +249,7 @@ class ProjectService:
 
         # Sort by updated_at descending (most recent first)
         projects.sort(key=lambda p: p.updated_at, reverse=True)
+        logger.info(f"Listed {len(projects)} projects")
         return projects
 
     def delete_project(self, project_id: str) -> bool:
@@ -236,25 +264,35 @@ class ProjectService:
         Raises:
             ValueError: If path validation fails.
         """
-        story_path = STORIES_DIR / f"{project_id}.json"
-        world_path = WORLDS_DIR / f"{project_id}.db"
+        logger.debug(f"delete_project called: project_id={project_id}")
+        try:
+            story_path = STORIES_DIR / f"{project_id}.json"
+            world_path = WORLDS_DIR / f"{project_id}.db"
 
-        # Validate paths are within their respective directories
-        story_path = _validate_path(story_path, STORIES_DIR)
-        world_path = _validate_path(world_path, WORLDS_DIR)
+            # Validate paths are within their respective directories
+            story_path = _validate_path(story_path, STORIES_DIR)
+            world_path = _validate_path(world_path, WORLDS_DIR)
 
-        deleted = False
+            deleted = False
 
-        if story_path.exists():
-            story_path.unlink()
-            deleted = True
-            logger.info(f"Deleted story file: {story_path}")
+            if story_path.exists():
+                story_path.unlink()
+                deleted = True
+                logger.info(f"Deleted story file: {story_path}")
 
-        if world_path.exists():
-            world_path.unlink()
-            logger.info(f"Deleted world database: {world_path}")
+            if world_path.exists():
+                world_path.unlink()
+                logger.info(f"Deleted world database: {world_path}")
 
-        return deleted
+            if deleted:
+                logger.info(f"Successfully deleted project: {project_id}")
+            else:
+                logger.warning(f"Project not found for deletion: {project_id}")
+
+            return deleted
+        except Exception as e:
+            logger.error(f"Failed to delete project {project_id}: {e}", exc_info=True)
+            raise
 
     def duplicate_project(
         self, project_id: str, new_name: str = ""
@@ -271,36 +309,42 @@ class ProjectService:
         Raises:
             FileNotFoundError: If original project doesn't exist.
         """
-        # Load original
-        original_state, original_world = self.load_project(project_id)
+        logger.debug(f"duplicate_project called: project_id={project_id}, new_name={new_name}")
+        try:
+            # Load original
+            original_state, original_world = self.load_project(project_id)
 
-        # Create new project
-        now = datetime.now()
-        new_id = str(uuid.uuid4())
+            # Create new project
+            now = datetime.now()
+            new_id = str(uuid.uuid4())
 
-        if not new_name:
-            new_name = f"Copy of {original_state.project_name}"
+            if not new_name:
+                new_name = f"Copy of {original_state.project_name}"
 
-        # Copy world database
-        new_world_path = WORLDS_DIR / f"{new_id}.db"
-        if Path(original_state.world_db_path).exists():
-            shutil.copy2(original_state.world_db_path, new_world_path)
-        new_world = WorldDatabase(new_world_path)
+            # Copy world database
+            new_world_path = WORLDS_DIR / f"{new_id}.db"
+            if Path(original_state.world_db_path).exists():
+                shutil.copy2(original_state.world_db_path, new_world_path)
+                logger.debug(f"Copied world database to {new_world_path}")
+            new_world = WorldDatabase(new_world_path)
 
-        # Create new state based on original
-        new_state = original_state.model_copy(deep=True)
-        new_state.id = new_id
-        new_state.project_name = new_name
-        new_state.created_at = now
-        new_state.updated_at = now
-        new_state.last_saved = None
-        new_state.world_db_path = str(new_world_path)
+            # Create new state based on original
+            new_state = original_state.model_copy(deep=True)
+            new_state.id = new_id
+            new_state.project_name = new_name
+            new_state.created_at = now
+            new_state.updated_at = now
+            new_state.last_saved = None
+            new_state.world_db_path = str(new_world_path)
 
-        # Save new project
-        self.save_project(new_state)
+            # Save new project
+            self.save_project(new_state)
 
-        logger.info(f"Duplicated project {project_id} to {new_id}")
-        return new_state, new_world
+            logger.info(f"Duplicated project {project_id} to {new_id} as '{new_name}'")
+            return new_state, new_world
+        except Exception as e:
+            logger.error(f"Failed to duplicate project {project_id}: {e}", exc_info=True)
+            raise
 
     def update_project_name(self, project_id: str, name: str) -> StoryState:
         """Update a project's name.
@@ -315,10 +359,17 @@ class ProjectService:
         Raises:
             FileNotFoundError: If project doesn't exist.
         """
-        state, _ = self.load_project(project_id)
-        state.project_name = name
-        self.save_project(state)
-        return state
+        logger.debug(f"update_project_name called: project_id={project_id}, new_name={name}")
+        try:
+            state, _ = self.load_project(project_id)
+            old_name = state.project_name
+            state.project_name = name
+            self.save_project(state)
+            logger.info(f"Updated project name: {project_id} from '{old_name}' to '{name}'")
+            return state
+        except Exception as e:
+            logger.error(f"Failed to update project name for {project_id}: {e}", exc_info=True)
+            raise
 
     def get_project_path(self, project_id: str) -> Path:
         """Get the file path for a project.
@@ -329,6 +380,7 @@ class ProjectService:
         Returns:
             Path to the project JSON file.
         """
+        logger.debug(f"get_project_path called: project_id={project_id}")
         return STORIES_DIR / f"{project_id}.json"
 
     def get_world_db_path(self, project_id: str) -> Path:
@@ -340,4 +392,5 @@ class ProjectService:
         Returns:
             Path to the project's SQLite database.
         """
+        logger.debug(f"get_world_db_path called: project_id={project_id}")
         return WORLDS_DIR / f"{project_id}.db"
