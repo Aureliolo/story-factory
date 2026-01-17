@@ -96,15 +96,18 @@ class TestRegenerateChapterWithFeedback:
 
         # Regenerate with feedback
         feedback = "Make it more exciting with action"
-        list(
-            story_service.regenerate_chapter_with_feedback(sample_story_with_content, 1, feedback)
-        )
+        list(story_service.regenerate_chapter_with_feedback(sample_story_with_content, 1, feedback))
 
-        # Verify version was saved (original + regenerated result)
-        assert len(chapter.versions) >= 1
+        # Verify versions were saved (original + regenerated result)
+        # First version is original content (saved before regeneration, no feedback)
+        # Second version is regenerated content (with feedback that produced it)
+        assert len(chapter.versions) == 2
         first_version = chapter.versions[0]
         assert first_version.content == original_content
-        assert first_version.feedback == feedback
+        assert first_version.feedback == ""  # No feedback for the original version
+
+        second_version = chapter.versions[1]
+        assert second_version.feedback == feedback  # Feedback associated with the result
 
     @patch("services.story_service.StoryOrchestrator")
     def test_regenerate_calls_orchestrator_with_feedback(

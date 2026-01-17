@@ -1135,6 +1135,7 @@ class WritePage:
 
     def _refresh_version_history(self) -> None:
         """Refresh the version history display."""
+        logger.debug("Refreshing version history display")
         if self._version_history_container:
             self._version_history_container.clear()
             with self._version_history_container:
@@ -1142,6 +1143,11 @@ class WritePage:
 
     def _rollback_to_version(self, version_id: str) -> None:
         """Rollback to a previous version."""
+        logger.debug(
+            "Rolling back to version %s for chapter %s",
+            version_id,
+            self.state.current_chapter,
+        )
         if not self.state.project or self.state.current_chapter is None:
             return
 
@@ -1156,6 +1162,11 @@ class WritePage:
         # Rollback
         success = chapter.rollback_to_version(version_id)
         if success:
+            logger.info(
+                "Successfully rolled back chapter %s to version %s",
+                chapter.number,
+                version_id,
+            )
             # Update word count
             chapter.update_chapter_word_count()
             self.services.project.save_project(self.state.project)
@@ -1163,10 +1174,20 @@ class WritePage:
             self._refresh_version_history()
             self._notify("Version restored successfully", type="positive")
         else:
+            logger.warning(
+                "Failed to rollback chapter %s to version %s",
+                self.state.current_chapter,
+                version_id,
+            )
             self._notify("Failed to restore version", type="negative")
 
     def _view_version(self, version_id: str) -> None:
         """View a specific version in a dialog."""
+        logger.debug(
+            "Viewing version %s for chapter %s",
+            version_id,
+            self.state.current_chapter,
+        )
         if not self.state.project or self.state.current_chapter is None:
             return
 
@@ -1215,12 +1236,14 @@ class WritePage:
             # Footer with actions
             with ui.row().classes("w-full justify-end gap-2 p-4 border-t"):
                 if not version.is_current:
+
+                    def restore_and_close() -> None:
+                        self._rollback_to_version(version_id)
+                        dialog.close()
+
                     ui.button(
                         "Restore This Version",
-                        on_click=lambda: (
-                            self._rollback_to_version(version_id),
-                            dialog.close(),
-                        ),
+                        on_click=restore_and_close,
                         icon="restore",
                     ).props("color=primary")
                 ui.button("Close", on_click=dialog.close).props("flat")

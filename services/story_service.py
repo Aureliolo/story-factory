@@ -641,9 +641,9 @@ class StoryService:
         if not chapter.content:
             raise ValueError(f"Chapter {chapter_num} has no content to regenerate. Write it first.")
 
-        # Save current version before regenerating
-        version_id = chapter.save_current_as_version(feedback=feedback)
-        logger.debug(f"Saved current content as version {version_id}")
+        # Save current version before regenerating (without feedback - feedback applies to the NEW version)
+        version_id = chapter.save_current_as_version(feedback="")
+        logger.debug(f"Saved current content as version {version_id} before regeneration")
 
         # Get orchestrator and regenerate with feedback
         orchestrator = self._get_orchestrator(state)
@@ -666,8 +666,8 @@ class StoryService:
             if event.event_type == "agent_complete" and event.agent_name == "System":
                 content = chapter.content
 
-        # Save the new content as a version (without feedback since this is the result)
-        chapter.save_current_as_version(feedback="")
+        # Save the new content as a version with the feedback that was used to create it
+        chapter.save_current_as_version(feedback=feedback)
 
         self._sync_state(orchestrator, state)
         logger.info(f"Chapter {chapter_num} regenerated successfully")
