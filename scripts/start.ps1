@@ -82,7 +82,7 @@ function Write-Screen {
 
     # Menu
     Write-Host "  [1] Start    [2] Stop    [3] Restart" -ForegroundColor White
-    Write-Host "  [4] Logs     [5] Browser [6] Clear Logs" -ForegroundColor White
+    Write-Host "  [4] Browser  [5] Clear Logs" -ForegroundColor White
     Write-Host "  [Q] Quit" -ForegroundColor DarkGray
 
     # Logs section - visible while waiting for input
@@ -144,19 +144,6 @@ function Restart-StoryFactory {
     Set-ActionMessage "Restarted! Open http://localhost:7860" "Green"
 }
 
-function Show-Logs {
-    $logFile = Join-Path $projectRoot "logs\story_factory.log"
-
-    if (Test-Path $logFile) {
-        Clear-Host
-        Write-Host "Streaming logs (Ctrl+C to stop)..." -ForegroundColor Yellow
-        Write-Host "============================================" -ForegroundColor Gray
-        Get-Content -Path $logFile -Tail 30 -Wait
-    } else {
-        Set-ActionMessage "No log file yet." "Yellow"
-    }
-}
-
 function Open-Browser {
     Start-Process "http://localhost:7860"
     Set-ActionMessage "Opening browser..." "Magenta"
@@ -194,9 +181,8 @@ while ($true) {
             "1" { Start-StoryFactory }
             "2" { Stop-StoryFactory }
             "3" { Restart-StoryFactory }
-            "4" { Show-Logs; $script:lastAction = "" }
-            "5" { Open-Browser }
-            "6" { Clear-LogFile }
+            "4" { Open-Browser }
+            "5" { Clear-LogFile }
             "Q" { [Environment]::Exit(0) }
             default {
                 if ($choice -and $choice -ne "`r" -and $choice -ne "`n") {
