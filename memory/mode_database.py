@@ -1183,3 +1183,155 @@ class ModeDatabase:
             cursor = conn.execute(query, params)
             result = cursor.fetchone()[0]
             return int(result) if result is not None else 0
+
+    # === Content Statistics ===
+
+    def get_content_statistics(
+        self,
+        project_id: str | None = None,
+        agent_role: str | None = None,
+    ) -> dict:
+        """Get content statistics from generation scores.
+
+        Args:
+            project_id: Optional filter by project.
+            agent_role: Optional filter by agent role.
+
+        Returns:
+            Dictionary with content statistics.
+        """
+        where_clauses = ["1=1", "tokens_generated IS NOT NULL"]
+        params: list = []
+
+        if project_id:
+            where_clauses.append("project_id = ?")
+            params.append(project_id)
+        if agent_role:
+            where_clauses.append("agent_role = ?")
+            params.append(agent_role)
+
+        where_sql = " AND ".join(where_clauses)
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    COUNT(*) as generation_count,
+                    SUM(tokens_generated) as total_tokens,
+                    AVG(tokens_generated) as avg_tokens,
+                    MIN(tokens_generated) as min_tokens,
+                    MAX(tokens_generated) as max_tokens,
+                    AVG(time_seconds) as avg_time
+                FROM generation_scores
+                WHERE {where_sql}
+                """,
+                params,
+            )
+            row = cursor.fetchone()
+            return {
+                "generation_count": row[0] or 0,
+                "total_tokens": row[1] or 0,
+                "avg_tokens": row[2],
+                "min_tokens": row[3],
+                "max_tokens": row[4],
+                "avg_generation_time": row[5],
+            }
+
+    # === Time Series Data ===
+
+    def get_quality_time_series(
+        self,
+        metric: str = "prose_quality",
+        agent_role: str | None = None,
+        genre: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Get time series data for quality metrics.
+
+        Args:
+            metric: Metric to track (prose_quality, instruction_following, consistency_score).
+            agent_role: Optional filter by agent role.
+            genre: Optional filter by genre.
+            limit: Maximum number of data points.
+
+        Returns:
+            List of time series data points with timestamp and value.
+        """
+        valid_metrics = {
+            "prose_quality",
+            "instruction_following",
+            "consistency_score",
+            "tokens_per_second",
+        }
+        if metric not in valid_metrics:
+            logger.warning(f"Invalid metric {metric}, defaulting to prose_quality")
+            metric = "prose_quality"
+
+        query = f"SELECT timestamp, {metric} FROM generation_scores WHERE {metric} IS NOT NULL"
+        params: list = []
+
+        if agent_role:
+            query += " AND agent_role = ?"
+            params.append(agent_role)
+        if genre:
+            query += " AND genre = ?"
+            params.append(genre)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            return [{"timestamp": row[0], "value": row[1]} for row in cursor.fetchall()]
+
+    def get_daily_quality_averages(
+        self,
+        metric: str = "prose_quality",
+        days: int = 30,
+        agent_role: str | None = None,
+    ) -> list[dict]:
+        """Get daily average quality metrics.
+
+        Args:
+            metric: Metric to track.
+            days: Number of days to include.
+            agent_role: Optional filter by agent role.
+
+        Returns:
+            List of daily averages with date and average value.
+        """
+        valid_metrics = {
+            "prose_quality",
+            "instruction_following",
+            "consistency_score",
+            "tokens_per_second",
+        }
+        if metric not in valid_metrics:
+            logger.warning(f"Invalid metric {metric}, defaulting to prose_quality")
+            metric = "prose_quality"
+
+        query = f"""
+            SELECT
+                DATE(timestamp) as date,
+                AVG({metric}) as avg_value,
+                COUNT(*) as sample_count
+            FROM generation_scores
+            WHERE {metric} IS NOT NULL
+            AND DATE(timestamp) >= DATE('now', '-{days} days')
+        """
+        params: list = []
+
+        if agent_role:
+            query += " AND agent_role = ?"
+            params.append(agent_role)
+
+        query += " GROUP BY DATE(timestamp) ORDER BY date DESC"
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            return [
+                {"date": row[0], "avg_value": row[1], "sample_count": row[2]}
+                for row in cursor.fetchall()
+            ]
