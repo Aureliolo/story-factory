@@ -291,11 +291,26 @@ class AnalyticsPage:
                     },
                     {"name": "speed", "label": "Speed (t/s)", "field": "speed", "sortable": True},
                     {"name": "samples", "label": "Samples", "field": "samples", "sortable": True},
+                    {"name": "overall", "label": "Overall", "field": "overall", "sortable": True},
                 ]
 
                 rows = []
                 for s in summaries:
                     model_name = extract_model_name(s.model_id)
+                    # Calculate overall score as average of quality metrics
+                    quality_scores = [
+                        score
+                        for score in [
+                            s.avg_prose_quality,
+                            s.avg_instruction_following,
+                            s.avg_consistency,
+                        ]
+                        if score is not None
+                    ]
+                    overall_score = (
+                        sum(quality_scores) / len(quality_scores) if quality_scores else 0
+                    )
+
                     rows.append(
                         {
                             "model": model_name,
@@ -309,12 +324,63 @@ class AnalyticsPage:
                             if s.avg_tokens_per_second
                             else "-",
                             "samples": s.sample_count,
+                            "overall": f"{overall_score:.1f}" if overall_score > 0 else "-",
                         }
                     )
 
                 # Wrap table in scrollable container for mobile
                 with ui.element("div").classes("w-full overflow-x-auto"):
                     ui.table(columns=columns, rows=rows, row_key="model").classes("w-full")
+
+                # Add model comparison insights
+                if len(summaries) >= 2:
+                    self._build_model_insights(summaries)
+
+    def _build_model_insights(self, summaries: list) -> None:
+        """Build model comparison insights.
+
+        Args:
+            summaries: List of ModelPerformanceSummary objects.
+        """
+        ui.label("Model Insights").classes("font-semibold mt-4 mb-2")
+
+        # Find best models for each metric
+        best_prose = max(
+            (s for s in summaries if s.avg_prose_quality),
+            key=lambda s: s.avg_prose_quality or 0,
+            default=None,
+        )
+        best_speed = max(
+            (s for s in summaries if s.avg_tokens_per_second),
+            key=lambda s: s.avg_tokens_per_second or 0,
+            default=None,
+        )
+        best_consistency = max(
+            (s for s in summaries if s.avg_consistency),
+            key=lambda s: s.avg_consistency or 0,
+            default=None,
+        )
+
+        insights = []
+        if best_prose:
+            insights.append(
+                f"🏆 Best Prose Quality: {extract_model_name(best_prose.model_id)} "
+                f"({best_prose.avg_prose_quality:.1f}/10) for {best_prose.agent_role}"
+            )
+        if best_speed:
+            insights.append(
+                f"⚡ Fastest: {extract_model_name(best_speed.model_id)} "
+                f"({best_speed.avg_tokens_per_second:.1f} t/s) for {best_speed.agent_role}"
+            )
+        if best_consistency:
+            insights.append(
+                f"🎯 Most Consistent: {extract_model_name(best_consistency.model_id)} "
+                f"({best_consistency.avg_consistency:.1f}/10) for {best_consistency.agent_role}"
+            )
+
+        with ui.card().classes("w-full mt-2").props("flat bordered"):
+            for insight in insights:
+                ui.label(insight).classes("text-sm mb-1")
 
     def _build_world_quality_section(self) -> None:
         """Build the world quality metrics section."""
