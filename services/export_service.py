@@ -3,6 +3,7 @@
 import html
 import logging
 import tempfile
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 
@@ -16,6 +17,146 @@ from utils.validation import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ExportOptions:
+    """Formatting options for exports."""
+
+    # Font settings
+    font_family: str = "Georgia, serif"
+    font_size: int = 12  # in points for PDF/DOCX, pixels for HTML/EPUB
+    line_height: float = 1.6
+
+    # Spacing settings
+    paragraph_spacing: float = 1.0  # em units
+    chapter_spacing: float = 2.0  # em units
+
+    # Chapter header settings
+    chapter_number_format: str = "Chapter {number}"  # e.g., "Chapter 1" or "Ch. 1"
+    include_chapter_numbers: bool = True
+    chapter_separator: str = ": "  # separator between number and title
+
+    # Custom CSS (for HTML/EPUB)
+    custom_css: str = ""
+
+    # Page settings (for PDF/DOCX)
+    page_margin_inches: float = 1.0
+    double_spaced: bool = False  # Override line_height to 2.0 if True
+
+
+@dataclass
+class ExportTemplate:
+    """Template configuration for exports."""
+
+    name: str
+    description: str
+    options: ExportOptions
+
+
+# Built-in export templates
+MANUSCRIPT_TEMPLATE = ExportTemplate(
+    name="manuscript",
+    description="Professional manuscript format - Courier New, 12pt, double-spaced, 1-inch margins",
+    options=ExportOptions(
+        font_family="Courier New, monospace",
+        font_size=12,
+        line_height=2.0,
+        double_spaced=True,
+        paragraph_spacing=0.0,  # No extra spacing in manuscript format
+        chapter_spacing=3.0,
+        page_margin_inches=1.0,
+        chapter_number_format="Chapter {number}",
+        include_chapter_numbers=True,
+        chapter_separator=": ",
+    ),
+)
+
+EBOOK_TEMPLATE = ExportTemplate(
+    name="ebook",
+    description="Reader-friendly ebook format - Georgia, readable spacing, clean headers",
+    options=ExportOptions(
+        font_family="Georgia, serif",
+        font_size=14,
+        line_height=1.8,
+        double_spaced=False,
+        paragraph_spacing=1.2,
+        chapter_spacing=2.5,
+        page_margin_inches=0.75,
+        chapter_number_format="Chapter {number}",
+        include_chapter_numbers=True,
+        chapter_separator=": ",
+        custom_css="""
+            body { text-align: justify; }
+            h2 { page-break-before: always; }
+            p { margin-bottom: 1.2em; text-indent: 1.5em; }
+            p:first-of-type { text-indent: 0; }
+        """,
+    ),
+)
+
+WEB_SERIAL_TEMPLATE = ExportTemplate(
+    name="web_serial",
+    description="Modern web serial format - clean, responsive, optimized for online reading",
+    options=ExportOptions(
+        font_family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        font_size=16,
+        line_height=1.7,
+        double_spaced=False,
+        paragraph_spacing=1.0,
+        chapter_spacing=2.0,
+        page_margin_inches=1.0,
+        chapter_number_format="Chapter {number}",
+        include_chapter_numbers=True,
+        chapter_separator=" - ",
+        custom_css="""
+            body {
+                max-width: 650px;
+                margin: 0 auto;
+                padding: 20px;
+                background: #fafafa;
+                color: #333;
+            }
+            h1 {
+                font-size: 2.5em;
+                border-bottom: 3px solid #333;
+                padding-bottom: 15px;
+                margin-bottom: 30px;
+            }
+            h2 {
+                font-size: 1.8em;
+                margin-top: 50px;
+                margin-bottom: 25px;
+                color: #222;
+            }
+            .meta {
+                color: #666;
+                font-size: 0.9em;
+                margin-bottom: 40px;
+                padding: 15px;
+                background: #f0f0f0;
+                border-radius: 5px;
+            }
+            p {
+                margin-bottom: 1em;
+                line-height: 1.7;
+            }
+            @media (prefers-color-scheme: dark) {
+                body { background: #1a1a1a; color: #e0e0e0; }
+                h1 { border-bottom-color: #e0e0e0; }
+                h2 { color: #f0f0f0; }
+                .meta { background: #2a2a2a; color: #b0b0b0; }
+            }
+        """,
+    ),
+)
+
+# Template registry
+EXPORT_TEMPLATES: dict[str, ExportTemplate] = {
+    "manuscript": MANUSCRIPT_TEMPLATE,
+    "ebook": EBOOK_TEMPLATE,
+    "web_serial": WEB_SERIAL_TEMPLATE,
+}
 
 
 def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Path:
@@ -56,7 +197,7 @@ def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Pa
 class ExportService:
     """Export stories to various formats.
 
-    Supports markdown, plain text, HTML, EPUB, PDF, and DOCX export.
+    Supports markdown, plain text, HTML, EPUB, PDF, and DOCX export with customizable templates.
     """
 
     def __init__(self, settings: Settings | None = None):
@@ -68,6 +209,48 @@ class ExportService:
         logger.debug("Initializing ExportService")
         self.settings = settings or Settings.load()
         logger.debug("ExportService initialized successfully")
+
+    def get_template(self, template_name: str | None = None) -> ExportTemplate:
+        """Get export template by name.
+
+        Args:
+            template_name: Name of the template. If None, returns ebook template.
+
+        Returns:
+            ExportTemplate configuration.
+
+        Raises:
+            ValueError: If template name is not found.
+        """
+        if template_name is None:
+            template_name = "ebook"
+
+        if template_name not in EXPORT_TEMPLATES:
+            raise ValueError(
+                f"Unknown template '{template_name}'. "
+                f"Available templates: {list(EXPORT_TEMPLATES.keys())}"
+            )
+
+        return EXPORT_TEMPLATES[template_name]
+
+    def _format_chapter_header(
+        self, chapter_number: int, chapter_title: str, options: ExportOptions
+    ) -> str:
+        """Format chapter header according to options.
+
+        Args:
+            chapter_number: Chapter number.
+            chapter_title: Chapter title.
+            options: Export options.
+
+        Returns:
+            Formatted chapter header.
+        """
+        if not options.include_chapter_numbers:
+            return chapter_title
+
+        number_part = options.chapter_number_format.format(number=chapter_number)
+        return f"{number_part}{options.chapter_separator}{chapter_title}"
 
     def to_markdown(self, state: StoryState) -> str:
         """Export story as markdown.
@@ -144,11 +327,18 @@ class ExportService:
 
         return "\n".join(text_parts)
 
-    def to_epub(self, state: StoryState) -> bytes:
+    def to_epub(
+        self,
+        state: StoryState,
+        template: str | None = None,
+        options: ExportOptions | None = None,
+    ) -> bytes:
         """Export story as EPUB e-book.
 
         Args:
             state: The story state to export.
+            template: Template name to use. If None, uses ebook template.
+            options: Custom export options. If None, uses template defaults.
 
         Returns:
             EPUB file as bytes.
@@ -157,6 +347,10 @@ class ExportService:
         validate_type(state, "state", StoryState)
         logger.info(f"Exporting story to EPUB: {state.id}")
         from ebooklib import epub
+
+        # Get template and options
+        tmpl = self.get_template(template)
+        opts = options or tmpl.options
 
         book = epub.EpubBook()
 
@@ -173,15 +367,50 @@ class ExportService:
             book.add_metadata("DC", "description", brief.premise)
             book.add_metadata("DC", "subject", brief.genre)
 
+        # Create custom CSS for EPUB
+        custom_style = f"""
+            @namespace epub "http://www.idpf.org/2007/ops";
+
+            body {{
+                font-family: {opts.font_family};
+                font-size: {opts.font_size}px;
+                line-height: {opts.line_height};
+                margin: 1em;
+            }}
+
+            h1 {{
+                margin-top: {opts.chapter_spacing}em;
+                margin-bottom: 1em;
+                font-size: 1.5em;
+            }}
+
+            p {{
+                margin-bottom: {opts.paragraph_spacing}em;
+                text-align: justify;
+            }}
+
+            {opts.custom_css}
+        """
+
+        # Add CSS
+        css = epub.EpubItem(
+            uid="style",
+            file_name="style.css",
+            media_type="text/css",
+            content=custom_style,
+        )
+        book.add_item(css)
+
         # Create chapters
         chapters = []
         for ch in state.chapters:
             if ch.content:
-                # Escape title for HTML (XSS prevention)
-                safe_title = html.escape(ch.title)
+                # Format chapter header with options
+                chapter_header = self._format_chapter_header(ch.number, ch.title, opts)
+                safe_header = html.escape(chapter_header)
 
                 epub_chapter = epub.EpubHtml(
-                    title=f"Chapter {ch.number}: {safe_title}",
+                    title=chapter_header,
                     file_name=f"chapter_{ch.number}.xhtml",
                     lang=lang_code,
                 )
@@ -191,17 +420,21 @@ class ExportService:
                 html_paragraphs = [
                     f"<p>{html.escape(para)}</p>" for para in paragraphs if para.strip()
                 ]
-                html_content = "<br/><br/>".join(html_paragraphs)
+                html_content = "\n".join(html_paragraphs)
 
+                # Use simple HTML structure without XML declaration (ebooklib handles that)
                 epub_chapter.content = f"""
-                <html>
-                <head><title>Chapter {ch.number}</title></head>
-                <body>
-                <h1>Chapter {ch.number}: {safe_title}</h1>
-                {html_content}
-                </body>
-                </html>
-                """
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>{safe_header}</title>
+    <link rel="stylesheet" href="style.css" type="text/css"/>
+</head>
+<body>
+    <h1>{safe_header}</h1>
+    {html_content}
+</body>
+</html>
+"""
 
                 book.add_item(epub_chapter)
                 chapters.append(epub_chapter)
@@ -220,11 +453,18 @@ class ExportService:
         logger.debug(f"EPUB export complete: {len(chapters)} chapters")
         return output.getvalue()
 
-    def to_pdf(self, state: StoryState) -> bytes:
+    def to_pdf(
+        self,
+        state: StoryState,
+        template: str | None = None,
+        options: ExportOptions | None = None,
+    ) -> bytes:
         """Export story as PDF.
 
         Args:
             state: The story state to export.
+            template: Template name to use. If None, uses ebook template.
+            options: Custom export options. If None, uses template defaults.
 
         Returns:
             PDF file as bytes.
@@ -237,14 +477,21 @@ class ExportService:
         from reportlab.lib.units import inch
         from reportlab.platypus import Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
+        # Get template and options
+        tmpl = self.get_template(template)
+        opts = options or tmpl.options
+
         buffer = BytesIO()
+
+        # Use margin from options
+        margin = opts.page_margin_inches * inch
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
-            rightMargin=inch,
-            leftMargin=inch,
-            topMargin=inch,
-            bottomMargin=inch,
+            rightMargin=margin,
+            leftMargin=margin,
+            topMargin=margin,
+            bottomMargin=margin,
         )
 
         styles = getSampleStyleSheet()
@@ -256,20 +503,33 @@ class ExportService:
             spaceAfter=30,
         )
 
+        # Calculate line spacing (leading = font_size * line_height)
+        leading = opts.font_size * opts.line_height
+        if opts.double_spaced:
+            leading = opts.font_size * 2.0
+
         chapter_style = ParagraphStyle(
             "ChapterTitle",
             parent=styles["Heading2"],
             fontSize=18,
             spaceAfter=20,
-            spaceBefore=30,
+            spaceBefore=opts.chapter_spacing * opts.font_size,
         )
+
+        # Map font family to ReportLab font
+        font_map = {
+            "Courier New, monospace": "Courier",
+            "Georgia, serif": "Times-Roman",
+        }
+        font_name = font_map.get(opts.font_family, "Times-Roman")
 
         body_style = ParagraphStyle(
             "Body",
             parent=styles["Normal"],
-            fontSize=11,
-            leading=16,
-            spaceAfter=12,
+            fontName=font_name,
+            fontSize=opts.font_size,
+            leading=leading,
+            spaceAfter=opts.paragraph_spacing * opts.font_size,
         )
 
         story_elements: list[Flowable] = []
@@ -290,7 +550,8 @@ class ExportService:
         # Chapters
         for ch in state.chapters:
             if ch.content:
-                story_elements.append(Paragraph(f"Chapter {ch.number}: {ch.title}", chapter_style))
+                chapter_header = self._format_chapter_header(ch.number, ch.title, opts)
+                story_elements.append(Paragraph(html.escape(chapter_header), chapter_style))
 
                 # Split into paragraphs
                 for para in ch.content.split("\n\n"):
@@ -305,18 +566,60 @@ class ExportService:
         logger.debug("PDF export complete")
         return buffer.getvalue()
 
-    def to_html(self, state: StoryState) -> str:
+    def to_html(
+        self,
+        state: StoryState,
+        template: str | None = None,
+        options: ExportOptions | None = None,
+    ) -> str:
         """Export story as standalone HTML.
 
         Args:
             state: The story state to export.
+            template: Template name to use. If None, uses ebook template.
+            options: Custom export options. If None, uses template defaults.
 
         Returns:
             HTML formatted string.
         """
         logger.debug(f"Exporting story to HTML: {state.id}")
+
+        # Get template and options
+        tmpl = self.get_template(template)
+        opts = options or tmpl.options
+
         brief = state.brief
         title = state.project_name or (brief.premise[:50] if brief else "Untitled Story")
+
+        # Build default CSS with template options
+        default_css = f"""
+            body {{
+                font-family: {opts.font_family};
+                font-size: {opts.font_size}px;
+                line-height: {opts.line_height};
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            h1 {{
+                color: #333;
+                border-bottom: 2px solid #333;
+                padding-bottom: 10px;
+            }}
+            h2 {{
+                color: #555;
+                margin-top: {opts.chapter_spacing}em;
+                margin-bottom: 1em;
+            }}
+            .meta {{
+                color: #666;
+                font-style: italic;
+                margin-bottom: 30px;
+            }}
+            p {{
+                margin-bottom: {opts.paragraph_spacing}em;
+            }}
+        """
 
         html_parts = [
             "<!DOCTYPE html>",
@@ -324,12 +627,10 @@ class ExportService:
             "<head>",
             f"<title>{html.escape(title)}</title>",
             "<meta charset='utf-8'>",
+            "<meta name='viewport' content='width=device-width, initial-scale=1.0'>",
             "<style>",
-            "body { font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }",
-            "h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; }",
-            "h2 { color: #555; margin-top: 40px; }",
-            ".meta { color: #666; font-style: italic; margin-bottom: 30px; }",
-            "p { text-align: justify; margin-bottom: 1em; }",
+            default_css,
+            opts.custom_css,  # Add custom CSS from template
             "</style>",
             "</head>",
             "<body>",
@@ -344,9 +645,9 @@ class ExportService:
 
         for chapter in state.chapters:
             if chapter.content:
-                html_parts.append(
-                    f"<h2>Chapter {chapter.number}: {html.escape(chapter.title)}</h2>"
-                )
+                chapter_header = self._format_chapter_header(chapter.number, chapter.title, opts)
+                html_parts.append(f"<h2>{html.escape(chapter_header)}</h2>")
+
                 for para in chapter.content.split("\n\n"):
                     if para.strip():
                         safe_para = html.escape(para.strip())
@@ -355,11 +656,18 @@ class ExportService:
         html_parts.extend(["</body>", "</html>"])
         return "\n".join(html_parts)
 
-    def to_docx(self, state: StoryState) -> bytes:
+    def to_docx(
+        self,
+        state: StoryState,
+        template: str | None = None,
+        options: ExportOptions | None = None,
+    ) -> bytes:
         """Export story as DOCX (Microsoft Word).
 
         Args:
             state: The story state to export.
+            template: Template name to use. If None, uses ebook template.
+            options: Custom export options. If None, uses template defaults.
 
         Returns:
             DOCX file as bytes.
@@ -371,15 +679,20 @@ class ExportService:
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.shared import Inches, Pt
 
+        # Get template and options
+        tmpl = self.get_template(template)
+        opts = options or tmpl.options
+
         doc = Document()
 
-        # Set document margins
+        # Set document margins from options
         sections = doc.sections
         for section in sections:
-            section.top_margin = Inches(1)
-            section.bottom_margin = Inches(1)
-            section.left_margin = Inches(1)
-            section.right_margin = Inches(1)
+            margin = Inches(opts.page_margin_inches)
+            section.top_margin = margin
+            section.bottom_margin = margin
+            section.left_margin = margin
+            section.right_margin = margin
 
         # Title
         brief = state.brief
@@ -403,12 +716,20 @@ class ExportService:
 
         doc.add_paragraph()  # Spacing
 
+        # Map font family to DOCX font name
+        font_map = {
+            "Courier New, monospace": "Courier New",
+            "Georgia, serif": "Georgia",
+        }
+        font_name = font_map.get(opts.font_family, "Georgia")
+
         # Chapters
         for chapter in state.chapters:
             if chapter.content:
                 # Chapter heading
+                chapter_header = self._format_chapter_header(chapter.number, chapter.title, opts)
                 chapter_heading = doc.add_paragraph()
-                chapter_run = chapter_heading.add_run(f"Chapter {chapter.number}: {chapter.title}")
+                chapter_run = chapter_heading.add_run(chapter_header)
                 chapter_run.font.size = Pt(18)
                 chapter_run.bold = True
 
@@ -418,8 +739,15 @@ class ExportService:
                         p = doc.add_paragraph(para.strip())
                         p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                         p_format = p.paragraph_format
-                        p_format.space_after = Pt(12)
-                        p_format.line_spacing = 1.5
+
+                        # Apply font settings
+                        for run in p.runs:
+                            run.font.name = font_name
+                            run.font.size = Pt(opts.font_size)
+
+                        # Apply spacing settings
+                        p_format.space_after = Pt(opts.paragraph_spacing * opts.font_size)
+                        p_format.line_spacing = opts.line_height if not opts.double_spaced else 2.0
 
                 # Page break after each chapter
                 doc.add_page_break()
@@ -435,6 +763,8 @@ class ExportService:
         state: StoryState,
         format: str,
         filepath: str | Path,
+        template: str | None = None,
+        options: ExportOptions | None = None,
     ) -> Path:
         """Save exported story to a file.
 
@@ -442,6 +772,8 @@ class ExportService:
             state: The story state to export.
             format: Export format ('markdown', 'text', 'epub', 'pdf', 'html', 'docx').
             filepath: Output file path.
+            template: Template name to use. If None, uses ebook template.
+            options: Custom export options. If None, uses template defaults.
 
         Returns:
             Path where the file was saved.
@@ -474,16 +806,16 @@ class ExportService:
                 text_content = self.to_text(state)
                 filepath.write_text(text_content, encoding="utf-8")
             elif format == "html":
-                text_content = self.to_html(state)
+                text_content = self.to_html(state, template, options)
                 filepath.write_text(text_content, encoding="utf-8")
             elif format == "epub":
-                bytes_content = self.to_epub(state)
+                bytes_content = self.to_epub(state, template, options)
                 filepath.write_bytes(bytes_content)
             elif format == "pdf":
-                bytes_content = self.to_pdf(state)
+                bytes_content = self.to_pdf(state, template, options)
                 filepath.write_bytes(bytes_content)
             elif format == "docx":
-                bytes_content = self.to_docx(state)
+                bytes_content = self.to_docx(state, template, options)
                 filepath.write_bytes(bytes_content)
             else:
                 error_msg = f"Unsupported export format: {format}"
