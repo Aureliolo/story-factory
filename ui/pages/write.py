@@ -926,6 +926,7 @@ class WritePage:
 
     async def _show_suggestions(self) -> None:
         """Show AI-powered writing suggestions dialog."""
+        logger.debug("Opening writing suggestions dialog")
         if not self.state.project:
             self._notify("No project selected", type="warning")
             return
@@ -934,17 +935,17 @@ class WritePage:
         dialog = ui.dialog().props("maximized")
         suggestions_html: Html | None = None
         loading_spinner: ui.spinner | None = None
-        content_container: ui.column | None = None
 
         async def load_suggestions():
             """Load suggestions from the service."""
-            nonlocal suggestions_html, loading_spinner, content_container
+            nonlocal suggestions_html, loading_spinner
 
             if not self.state.project:
                 dialog.close()
                 return
 
             try:
+                logger.debug("Loading suggestions...")
                 # Show loading state
                 if loading_spinner:
                     loading_spinner.set_visibility(True)
@@ -955,6 +956,8 @@ class WritePage:
                 suggestions = await run.io_bound(
                     self.services.suggestion.generate_suggestions, self.state.project
                 )
+
+                logger.debug(f"Received suggestions with {len(suggestions)} categories")
 
                 # Hide loading
                 if loading_spinner:
@@ -967,6 +970,7 @@ class WritePage:
                 if suggestions_html:
                     suggestions_html.content = html_content
                     suggestions_html.set_visibility(True)
+                    logger.info("Suggestions loaded and displayed successfully")
 
             except Exception as e:
                 logger.exception("Failed to generate suggestions")
@@ -983,7 +987,7 @@ class WritePage:
                 ui.button(icon="close", on_click=dialog.close).props("flat round")
 
             # Content area
-            with ui.column().classes("flex-grow overflow-auto p-4") as content_container:
+            with ui.column().classes("flex-grow overflow-auto p-4"):
                 loading_spinner = ui.spinner(size="lg").classes("mx-auto mt-8")
                 suggestions_html = ui.html(sanitize=False)
                 suggestions_html.set_visibility(False)
@@ -991,9 +995,15 @@ class WritePage:
             # Footer
             with ui.row().classes("w-full justify-end gap-2 p-4 border-t"):
                 ui.button("Refresh", on_click=load_suggestions, icon="refresh").props("flat")
-                ui.button("Close", on_click=dialog.close).props("color=primary")
+
+                def close_dialog():
+                    logger.debug("Closing suggestions dialog")
+                    dialog.close()
+
+                ui.button("Close", on_click=close_dialog).props("color=primary")
 
         # Open dialog and load suggestions
+        logger.info("Opening suggestions dialog")
         dialog.open()
         await load_suggestions()
 

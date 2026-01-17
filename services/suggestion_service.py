@@ -104,7 +104,7 @@ Each suggestion should be 1-2 sentences, specific to this story."""
         try:
             # Call LLM
             agent = self._get_agent()
-            response = agent.chat([{"role": "user", "content": prompt}])
+            response = agent.generate(prompt)
 
             logger.debug(f"Raw suggestion response: {response[:200]}...")
 
@@ -155,10 +155,12 @@ Each suggestion should be 1-2 sentences, specific to this story."""
         Returns:
             Formatted context string for the LLM.
         """
+        logger.debug(f"Building context for story state (id={state.id})")
         context_parts = []
 
         # Story brief
         if state.brief:
+            logger.debug("Including story brief in context")
             context_parts.append(f"**Premise:** {state.brief.premise}")
             context_parts.append(f"**Genre:** {state.brief.genre} | **Tone:** {state.brief.tone}")
             context_parts.append(
@@ -167,6 +169,7 @@ Each suggestion should be 1-2 sentences, specific to this story."""
 
         # Characters
         if state.characters:
+            logger.debug(f"Including {len(state.characters)} characters in context")
             char_info = []
             for char in state.characters[:5]:  # Limit to main characters
                 char_desc = f"{char.name} ({char.role})"
@@ -178,6 +181,7 @@ Each suggestion should be 1-2 sentences, specific to this story."""
 
         # Current chapter/progress
         if state.current_chapter and state.chapters:
+            logger.debug(f"Including chapter {state.current_chapter} in context")
             current_ch = next(
                 (ch for ch in state.chapters if ch.number == state.current_chapter), None
             )
@@ -200,10 +204,13 @@ Each suggestion should be 1-2 sentences, specific to this story."""
 
         # Recent facts
         if state.established_facts:
+            logger.debug(f"Including {len(state.established_facts[-5:])} recent facts in context")
             recent_facts = state.established_facts[-5:]
             context_parts.append(f"**Recent Facts:** {'; '.join(recent_facts)}")
 
-        return "\n".join(context_parts)
+        context = "\n".join(context_parts)
+        logger.debug(f"Built context with {len(context_parts)} parts ({len(context)} chars)")
+        return context
 
     def _fallback_suggestions(
         self, state: StoryState, categories: list[str]
@@ -217,7 +224,7 @@ Each suggestion should be 1-2 sentences, specific to this story."""
         Returns:
             Dictionary with basic suggestions for each category.
         """
-        logger.info("Using fallback suggestions")
+        logger.info(f"Using fallback suggestions for categories: {categories}")
 
         result = {}
 
