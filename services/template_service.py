@@ -49,6 +49,7 @@ class TemplateService:
         Returns:
             List of StoryTemplate objects.
         """
+        logger.debug("Listing all templates")
         templates: list[StoryTemplate] = []
 
         # Add built-in templates
@@ -67,6 +68,9 @@ class TemplateService:
 
         # Sort: built-in first, then by name
         templates.sort(key=lambda t: (not t.is_builtin, t.name))
+        logger.debug(
+            "Found %d templates (%d built-in)", len(templates), len(BUILTIN_STORY_TEMPLATES)
+        )
         return templates
 
     def get_template(self, template_id: str) -> StoryTemplate | None:
@@ -78,6 +82,7 @@ class TemplateService:
         Returns:
             StoryTemplate if found, None otherwise.
         """
+        logger.debug("Getting template: %s", template_id)
         # Check built-in templates first
         if template_id in BUILTIN_STORY_TEMPLATES:
             return BUILTIN_STORY_TEMPLATES[template_id]
@@ -199,7 +204,11 @@ class TemplateService:
             themes=state.brief.themes.copy() if state.brief else [],
             setting_time=state.brief.setting_time if state.brief else "",
             setting_place=state.brief.setting_place if state.brief else "",
-            target_length=state.brief.target_length if state.brief else "novel",
+            target_length=(
+                state.brief.target_length  # type: ignore[arg-type]
+                if state.brief
+                else "novel"
+            ),
             structure_preset_id=None,
             world_description=state.world_description,
             world_rules=state.world_rules.copy(),
@@ -321,6 +330,7 @@ class TemplateService:
         Returns:
             StructurePreset if found, None otherwise.
         """
+        logger.debug("Getting structure preset: %s", preset_id)
         return BUILTIN_STRUCTURE_PRESETS.get(preset_id)
 
     def list_structure_presets(self) -> list[StructurePreset]:
@@ -329,6 +339,7 @@ class TemplateService:
         Returns:
             List of StructurePreset objects.
         """
+        logger.debug("Listing %d structure presets", len(BUILTIN_STRUCTURE_PRESETS))
         return list(BUILTIN_STRUCTURE_PRESETS.values())
 
     def export_template(self, template_id: str, export_path: Path) -> Path:
