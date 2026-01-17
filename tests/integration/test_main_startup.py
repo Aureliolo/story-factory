@@ -61,6 +61,7 @@ class TestMainModuleAttributes:
     def test_main_has_logger(self):
         """Test that main module has logger configured."""
         import logging
+
         import main
 
         assert hasattr(main, "logger")

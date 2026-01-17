@@ -42,7 +42,9 @@ class TestValidatorAgentInit:
             assert len(agent.model) > 0
             # Verify it's actually a model identifier (contains : or has recognizable name)
             has_version_separator = ":" in agent.model
-            has_known_model_name = any(word in agent.model.lower() for word in ["qwen", "llama", "mistral", "phi"])
+            has_known_model_name = any(
+                word in agent.model.lower() for word in ["qwen", "llama", "mistral", "phi"]
+            )
             assert has_version_separator or has_known_model_name
 
 

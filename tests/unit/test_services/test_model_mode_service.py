@@ -984,7 +984,7 @@ class TestModelModeServiceAdditional:
         )
         service.save_custom_mode(custom)
         service.set_mode("worse_model")
-        
+
         # Verify the mode is set correctly
         current_mode = service.get_current_mode()
         assert current_mode.id == "worse_model"
