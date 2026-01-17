@@ -352,11 +352,6 @@ class SceneListComponent:
         # using SortableJS library or similar
         # For now, use Edit button to manage scenes
 
-        # Add drag event handlers (simplified)
-        card.on(
-            "dragstart",
-            lambda e, sid=scene.id: logger.debug(f"Drag start: {sid}"),
-        )
 
     def _handle_add_scene(self) -> None:
         """Handle add scene button click."""
