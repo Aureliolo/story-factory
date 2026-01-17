@@ -282,6 +282,7 @@ class TemplatesPage:
                 ui.button("Close", on_click=dialog.close).props("flat")
 
                 async def use_and_close():
+                    """Close dialog and apply template."""
                     dialog.close()
                     await self._use_template(template.id)
 
@@ -448,6 +449,7 @@ class TemplatesPage:
         from ui.components.common import confirmation_dialog
 
         def do_delete():
+            """Execute template deletion."""
             try:
                 self.services.template.delete_template(template_id)
                 ui.notify("Template deleted", type="positive")

@@ -353,6 +353,7 @@ class WorldPage:
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 def save_settings() -> None:
+                    """Save quality settings to application settings."""
                     settings.world_quality_threshold = threshold_slider.value
                     settings.world_quality_max_iterations = int(iterations_slider.value)
                     settings.world_quality_creator_temp = creator_temp.value
@@ -1732,6 +1733,7 @@ class WorldPage:
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 def save_relationship() -> None:
+                    """Save relationship updates to world database."""
                     if not self.state.world_db:
                         return
 
@@ -1772,6 +1774,7 @@ class WorldPage:
                 ui.button("Save", on_click=save_relationship).props("color=primary")
 
                 def delete_relationship() -> None:
+                    """Delete relationship from world database."""
                     if not self.state.world_db:
                         return
 

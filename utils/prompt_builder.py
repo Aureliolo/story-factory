@@ -11,6 +11,10 @@ class PromptBuilder:
     """
 
     def __init__(self) -> None:
+        """Initialize an empty prompt builder.
+
+        Creates a new prompt builder with an empty sections list.
+        """
         self.sections: list[str] = []
 
     def add_language_requirement(self, language: str) -> "PromptBuilder":
