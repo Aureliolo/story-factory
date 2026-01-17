@@ -62,10 +62,6 @@ class ValidatorAgent(BaseAgent):
         validate_not_empty(response, "response")
         validate_not_empty(expected_language, "expected_language")
 
-        # Quick pre-checks before using AI
-        if not response or not response.strip():
-            raise ResponseValidationError("Empty response received")
-
         # Check for obvious wrong-language characters
         if expected_language == "English":
             # Check for CJK characters (Chinese, Japanese, Korean)

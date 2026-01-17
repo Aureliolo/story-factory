@@ -521,11 +521,11 @@ class ModelService:
         Returns:
             List of result dictionaries with model_id, response, time.
         """
-        logger.debug(f"compare_models called: models={model_ids}, prompt_length={len(prompt)}")
         import time
 
         validate_not_empty_collection(model_ids, "model_ids")
         validate_not_empty(prompt, "prompt")
+        logger.debug(f"compare_models called: models={model_ids}, prompt_length={len(prompt)}")
         results = []
         client = ollama.Client(host=self.settings.ollama_url, timeout=180.0)
 
