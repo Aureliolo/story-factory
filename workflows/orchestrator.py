@@ -517,7 +517,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         try:
             self.save_story()
             logger.debug("Auto-saved completed short story")
-        except (IOError, OSError, PermissionError) as e:
+        except (OSError, PermissionError) as e:
             error_msg = f"Failed to save short story: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
@@ -678,7 +678,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         try:
             self.save_story()
             logger.debug(f"Auto-saved after chapter {chapter_number}")
-        except (IOError, OSError, PermissionError) as e:
+        except (OSError, PermissionError) as e:
             error_msg = f"Failed to save chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)
@@ -819,7 +819,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         try:
             self.save_story()
             logger.debug(f"Auto-saved after continuing chapter {chapter_number}")
-        except (IOError, OSError, PermissionError) as e:
+        except (OSError, PermissionError) as e:
             error_msg = f"Failed to save continued chapter {chapter_number}: {e}"
             logger.error(error_msg)
             self._emit("error", "System", error_msg)

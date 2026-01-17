@@ -1091,13 +1091,17 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 return data
             else:
                 logger.error(f"Relationship refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid relationship refinement JSON structure: {data}")
+                raise WorldGenerationError(
+                    f"Invalid relationship refinement JSON structure: {data}"
+                )
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Relationship refinement LLM error with model {model}: {e}")
             raise WorldGenerationError(f"LLM error during relationship refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(f"Relationship refinement JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid relationship refinement response format: {e}") from e
+            raise WorldGenerationError(
+                f"Invalid relationship refinement response format: {e}"
+            ) from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
