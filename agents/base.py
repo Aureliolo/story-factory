@@ -45,10 +45,6 @@ __all__ = ["BaseAgent", "LLMError", "LLMConnectionError", "LLMGenerationError"]
 class BaseAgent:
     """Base class for all agents in the story factory."""
 
-    # Retry delay configuration (counts come from settings)
-    RETRY_DELAY = 2  # seconds
-    RETRY_BACKOFF = 2  # multiplier
-
     def __init__(
         self,
         name: str,
@@ -171,7 +167,7 @@ class BaseAgent:
         use_temp = temperature or self.temperature
 
         last_error: Exception | None = None
-        delay = self.RETRY_DELAY
+        delay = self.settings.llm_retry_delay
         max_retries = self.settings.llm_max_retries
 
         # Acquire semaphore to limit concurrent requests
@@ -209,7 +205,7 @@ class BaseAgent:
                         if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")
                             time.sleep(delay)
-                            delay *= self.RETRY_BACKOFF
+                            delay *= self.settings.llm_retry_backoff
 
                     except ollama.ResponseError as e:
                         # Model-specific errors (model not found, etc.) - don't retry
@@ -222,7 +218,7 @@ class BaseAgent:
                         if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")
                             time.sleep(delay)
-                            delay *= self.RETRY_BACKOFF
+                            delay *= self.settings.llm_retry_backoff
 
                 # All retries failed
                 logger.error(f"{self.name}: All {max_retries} attempts failed")

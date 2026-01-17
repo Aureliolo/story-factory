@@ -478,7 +478,9 @@ Respond ONLY with JSON:
 {{"prose_quality": X.X, "instruction_following": X.X}}"""
 
         try:
-            client = ollama.Client(host=self.settings.ollama_url, timeout=60.0)
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_capability_check_timeout
+            )
             response = client.generate(
                 model=judge_model,
                 prompt=prompt,
