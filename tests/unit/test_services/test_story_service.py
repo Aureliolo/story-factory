@@ -281,6 +281,7 @@ class TestStoryServiceStructure:
         entities = world_db.list_entities(entity_type="character")
         assert len(entities) == 1
         assert entities[0].name == "Jack Stone"
+        assert entities[0].type == "character"
 
     def test_extract_entities_skips_existing(
         self, story_service, sample_story_with_chapters, world_db
@@ -335,11 +336,13 @@ class TestStoryServiceStructure:
         # Check relationships were added
         alice = next((e for e in entities if e.name == "Alice"), None)
         assert alice is not None
+        assert alice.type == "character"
 
         # Check relationship exists from Alice to Bob
         relationships = world_db.get_relationships(alice.id)
         assert len(relationships) > 0
         assert any(r.target_id == bob_id or r.source_id == bob_id for r in relationships)
+        assert any(r.relation_type == "friend" for r in relationships)
 
     def test_get_outline(self, story_service, sample_story_state):
         """Test gets story outline summary."""

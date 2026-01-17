@@ -60,16 +60,19 @@ class TestMainModuleAttributes:
 
     def test_main_has_logger(self):
         """Test that main module has logger configured."""
+        import logging
+
         import main
 
         assert hasattr(main, "logger")
-        assert main.logger is not None
+        assert isinstance(main.logger, logging.Logger)
+        assert main.logger.name == "main"
 
     def test_main_has_docstring(self):
         """Test that main module has documentation."""
         import main
 
-        assert main.__doc__ is not None
+        assert isinstance(main.__doc__, str)
         assert len(main.__doc__) > 0
         assert "Story Factory" in main.__doc__
 
@@ -140,8 +143,8 @@ print("All imports successful")
 import main
 import logging
 # Check logger exists and has a level set
-assert main.logger is not None
 assert isinstance(main.logger, logging.Logger)
+assert main.logger.name == "main"
 print("Logging configured")
 """
         result = subprocess.run(

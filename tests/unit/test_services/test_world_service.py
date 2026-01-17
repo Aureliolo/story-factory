@@ -93,7 +93,7 @@ class TestWorldServiceInit:
     def test_init_without_settings(self):
         """Test service loads default settings when none provided."""
         service = WorldService()
-        assert service.settings is not None
+        assert isinstance(service.settings, Settings)
 
 
 class TestWorldServiceExtractEntitiesFromStructure:
@@ -219,7 +219,7 @@ class TestWorldServiceEntityCRUD:
             attributes={"role": "protagonist"},
         )
 
-        assert entity_id is not None
+        assert isinstance(entity_id, str) and len(entity_id) > 0
         entity = world_db.get_entity(entity_id)
         assert entity.name == "Test Character"
         assert entity.attributes["role"] == "protagonist"
@@ -283,8 +283,8 @@ class TestWorldServiceEntityCRUD:
 
         entity = world_service.get_entity(world_db, entity_id)
 
-        assert entity is not None
         assert entity.name == "Test Location"
+        assert entity.type == "location"
 
     def test_get_nonexistent_entity(self, world_service, world_db):
         """Test getting non-existent entity returns None."""
@@ -333,9 +333,10 @@ class TestWorldServiceRelationshipManagement:
             description="Best friends since childhood",
         )
 
-        assert rel_id is not None
+        assert isinstance(rel_id, str) and len(rel_id) > 0
         relationships = world_db.get_relationships(char1_id)
         assert len(relationships) >= 1
+        assert any(r.relation_type == "friend_of" for r in relationships)
 
     def test_add_bidirectional_relationship(self, world_service, world_db):
         """Test adding bidirectional relationship."""
@@ -396,7 +397,10 @@ class TestWorldServiceGraphAnalysis:
         path = world_service.find_path(world_db, a_id, c_id)
 
         assert path is not None
+        assert len(path) > 0
         assert len(path) == 3  # A -> B -> C
+        assert path[0] == a_id
+        assert path[-1] == c_id
 
     def test_find_path_no_connection(self, world_service, world_db):
         """Test returns empty list or None when no path exists."""

@@ -6,6 +6,9 @@ These tests verify that components work together correctly during startup.
 import json
 from unittest.mock import patch
 
+from services.model_service import ModelService
+from services.project_service import ProjectService
+
 # mock_ollama_client fixture is provided by conftest.py
 
 
@@ -23,7 +26,7 @@ class TestFullStartupSequence:
         app = StoryFactoryApp(services)
 
         assert app.services.settings == settings
-        assert app.services.model is not None
+        assert isinstance(app.services.model, ModelService)
 
     def test_startup_with_custom_settings(self, mock_ollama_client, tmp_path):
         """App starts correctly with custom settings file."""
@@ -90,7 +93,7 @@ class TestServiceInteractions:
 
         settings = Settings()
         services = ServiceContainer(settings)
-        assert services.project is not None
+        assert isinstance(services.project, ProjectService)
 
     def test_model_service_uses_settings_url(self, mock_ollama_client, tmp_path):
         """ModelService uses Ollama URL from settings."""
@@ -135,7 +138,8 @@ class TestSettingsValidation:
             settings = Settings.load()
             assert settings.ollama_url == "http://localhost:11434"
             assert settings.context_size == 32768
-            assert settings.default_model is not None
+            assert isinstance(settings.default_model, str)
+            assert len(settings.default_model) > 0
 
     def test_extra_fields_ignored(self, tmp_path):
         """Settings ignores unknown fields in config."""
