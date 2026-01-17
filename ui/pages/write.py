@@ -867,9 +867,12 @@ class WritePage:
         finally:
             self.state.is_writing = False
             self.state.reset_generation_flags()
-            if self._generation_status:
-                with self._client:
-                    self._generation_status.hide()
+            if self._generation_status and self._client:
+                try:
+                    with self._client:
+                        self._generation_status.hide()
+                except RuntimeError:
+                    logger.debug("Client context not available for hiding status")
 
     async def _write_all_chapters(self) -> None:
         """Write all chapters with background processing and live updates."""
@@ -950,9 +953,12 @@ class WritePage:
         finally:
             self.state.is_writing = False
             self.state.reset_generation_flags()
-            if self._generation_status:
-                with self._client:
-                    self._generation_status.hide()
+            if self._generation_status and self._client:
+                try:
+                    with self._client:
+                        self._generation_status.hide()
+                except RuntimeError:
+                    logger.debug("Client context not available for hiding status")
 
     def _apply_feedback(self) -> None:
         """Apply instant feedback to current chapter."""

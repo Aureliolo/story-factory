@@ -66,14 +66,14 @@ class GenerationStatus:
             self.state.resume_generation()
             if self._pause_btn:
                 # Now running, so show pause icon
-                self._pause_btn.props(remove="icon").props("icon=pause")
+                self._pause_btn.props("icon=pause")
                 self._pause_btn.update()
         else:
             # Currently running, so pause
             self.state.request_pause_generation()
             if self._pause_btn:
                 # Now paused, so show play icon
-                self._pause_btn.props(remove="icon").props("icon=play_arrow")
+                self._pause_btn.props("icon=play_arrow")
                 self._pause_btn.update()
 
     def show(self) -> None:
