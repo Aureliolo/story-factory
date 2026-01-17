@@ -102,18 +102,24 @@ class ComparisonPage:
             )
 
             # Get installed models
-            installed_models = self.services.model.list_installed_models()
-            model_options = {
-                model: f"{AVAILABLE_MODELS.get(model, {}).get('name', model)} ({model})"
-                if model in AVAILABLE_MODELS
-                else model
-                for model in installed_models
-            }
+            installed_models = self.services.model.list_installed()
+            model_options: dict[str, str] = {}
+            for model in installed_models:
+                if model in AVAILABLE_MODELS:
+                    model_info = AVAILABLE_MODELS[model]
+                    model_options[model] = f"{model_info['name']} ({model})"
+                else:
+                    model_options[model] = model
 
             # Default to comparison_models from settings if available
             default_models = self.services.settings.comparison_models[:4]
+            if not installed_models:
+                ui.label("No models installed. Install models in Settings first.").classes(
+                    "text-orange-400 text-sm mb-4"
+                )
+                return
             while len(default_models) < 2:
-                default_models.append(installed_models[0] if installed_models else "")
+                default_models.append(installed_models[0])
 
             with ui.grid(columns=2).classes("w-full gap-4"):
                 for i in range(4):
@@ -145,7 +151,7 @@ class ComparisonPage:
 
             with ui.row().classes("w-full items-center gap-4"):
                 # Chapter dropdown
-                chapters = self.state.project.story_state.chapters
+                chapters = self.state.project.chapters
                 if chapters:
                     chapter_options = {c.number: f"Chapter {c.number}: {c.title}" for c in chapters}
                     self._chapter_select = (
@@ -249,31 +255,40 @@ class ComparisonPage:
 
             # Generate comparison
             comparison_gen = self.services.comparison.generate_chapter_comparison(
-                state=self.state.project.story_state,
+                state=self.state.project,
                 chapter_num=chapter_num,
                 models=self._selected_models,
             )
 
-            # Process events
-            for event_dict in comparison_gen:
-                if event_dict.get("completed"):
-                    model_id = event_dict["model_id"]
-                    model_name = extract_model_name(model_id)
-                    if self._progress_label:
-                        self._progress_label.text = (
-                            f"✓ {model_name} complete ({event_dict['progress'] * 100:.0f}%)"
-                        )
-                else:
-                    # Update progress
-                    event = event_dict.get("event")
-                    if event and self._progress_label:
-                        model_name = extract_model_name(event_dict["model_id"])
-                        self._progress_label.text = (
-                            f"{model_name}: {event.agent_name} - {event.message[:50]}..."
-                        )
+            # Process events and capture return value via StopIteration
+            comparison_record: ComparisonRecord | None = None
+            try:
+                while True:
+                    event_dict = next(comparison_gen)
+                    if "completed" in event_dict and event_dict["completed"]:
+                        model_id = event_dict["model_id"]
+                        model_name = extract_model_name(model_id)
+                        if self._progress_label:
+                            self._progress_label.text = (
+                                f"✓ {model_name} complete ({event_dict['progress'] * 100:.0f}%)"
+                            )
+                    else:
+                        # Update progress
+                        event = event_dict.get("event")
+                        if event and self._progress_label:
+                            model_name = extract_model_name(event_dict["model_id"])
+                            self._progress_label.text = (
+                                f"{model_name}: {event.agent_name} - {event.message[:50]}..."
+                            )
+            except StopIteration as stop_exc:
+                comparison_record = stop_exc.value
 
             # Get the comparison record
-            self._current_comparison = comparison_gen  # This is the final return value
+            if comparison_record is None:
+                logger.error("Comparison generator completed without returning a record")
+                ui.notify("Comparison failed to complete", type="negative")
+                return
+            self._current_comparison = comparison_record
 
             # Display results
             self._display_comparison_results(self._current_comparison)
@@ -357,7 +372,7 @@ class ComparisonPage:
                     ui.label("Time").classes("text-xs text-gray-400")
                     ui.label(f"{result.generation_time:.1f}s").classes("font-medium")
 
-                if result.word_count > 0:
+                if result.word_count > 0 and result.generation_time > 0:
                     wpm = (result.word_count / result.generation_time) * 60
                     with ui.column().classes("gap-1"):
                         ui.label("Speed").classes("text-xs text-gray-400")

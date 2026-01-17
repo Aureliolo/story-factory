@@ -49,9 +49,12 @@ class ComparisonService:
     """Service for comparing chapter generation across multiple models.
 
     Handles:
-    - Parallel generation with multiple models
+    - Sequential generation across multiple models (one model at a time)
     - Tracking comparison results
     - Recording user selections for analytics
+
+    Note: Uses temporary modification of settings.agent_models during generation.
+    This approach is not thread-safe; concurrent comparison requests are not supported.
     """
 
     def __init__(self, settings: Settings):
@@ -134,17 +137,29 @@ class ComparisonService:
             current_model_id = model_id
             current_index = i
 
+            def make_progress_callback(
+                mid: str, idx: int, total: int
+            ) -> Callable[[WorkflowEvent], dict[str, Any]]:
+                """Create a progress callback for a specific model."""
+
+                def callback(event: WorkflowEvent) -> dict[str, Any]:
+                    return {
+                        "model_id": mid,
+                        "event": event,
+                        "progress": (idx + 0.5) / total,
+                    }
+
+                return callback
+
             result = self._generate_with_model(
                 state=state,
                 chapter_num=chapter_num,
                 model_id=current_model_id,
                 feedback=feedback,
                 cancel_check=cancel_check,
-                progress_callback=lambda event, mid=current_model_id, idx=current_index: {
-                    "model_id": mid,
-                    "event": event,
-                    "progress": (idx + 0.5) / len(models),
-                },
+                progress_callback=make_progress_callback(
+                    current_model_id, current_index, len(models)
+                ),
             )
 
             # Yield progress events
@@ -200,7 +215,9 @@ class ComparisonService:
             orchestrator.story_state = state
 
             # Override model for writer agent
-            original_model = self.settings.agent_models.get("writer", "auto")
+            # Store whether the key existed to properly restore state
+            writer_key_existed = "writer" in self.settings.agent_models
+            original_model = self.settings.agent_models["writer"] if writer_key_existed else None
             self.settings.agent_models["writer"] = model_id
 
             # Collect events
@@ -222,8 +239,12 @@ class ComparisonService:
                             content = chapter.content
 
             finally:
-                # Restore original model
-                self.settings.agent_models["writer"] = original_model
+                # Restore original model state
+                if writer_key_existed and original_model is not None:
+                    self.settings.agent_models["writer"] = original_model
+                elif not writer_key_existed:
+                    # Key didn't exist before, remove it
+                    self.settings.agent_models.pop("writer", None)
 
             # Calculate metrics
             end_time = datetime.now()
