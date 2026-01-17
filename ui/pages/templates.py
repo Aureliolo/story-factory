@@ -3,8 +3,9 @@
 import logging
 
 from nicegui import ui
+from nicegui.elements.column import Column
 
-from memory.templates import StoryTemplate
+from memory.templates import StoryTemplate, StructurePreset
 from services import ServiceContainer
 from ui.state import AppState
 from ui.theme import COLORS
@@ -31,7 +32,7 @@ class TemplatesPage:
         """
         self.state = state
         self.services = services
-        self._templates_container = None
+        self._templates_container: Column | None = None
         self._selected_tab = "templates"
 
     def build(self) -> None:
@@ -279,15 +280,20 @@ class TemplatesPage:
 
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("Close", on_click=dialog.close).props("flat")
+
+                async def use_and_close():
+                    dialog.close()
+                    await self._use_template(template.id)
+
                 ui.button(
                     "Use This Template",
-                    on_click=lambda: (dialog.close(), self._use_template(template.id)),
+                    on_click=use_and_close,
                     icon="add_circle",
                 ).props("color=primary")
 
         dialog.open()
 
-    def _show_preset_details(self, preset) -> None:
+    def _show_preset_details(self, preset: StructurePreset) -> None:
         """Show detailed preset information."""
         with ui.dialog() as dialog, ui.card().classes("w-[700px] max-w-full"):
             ui.label(preset.name).classes("text-xl font-bold")
@@ -350,7 +356,7 @@ class TemplatesPage:
 
     async def _show_create_dialog(self) -> None:
         """Show dialog to create template from current project."""
-        if not self.state.story_state:
+        if not self.state.project:
             ui.notify("No active project to create template from", type="warning")
             return
 
@@ -385,9 +391,13 @@ class TemplatesPage:
             ui.notify("Please provide name and description", type="warning")
             return
 
+        if not self.state.project:
+            ui.notify("No active project", type="warning")
+            return
+
         try:
             template = self.services.template.create_template_from_project(
-                self.state.story_state, name, description
+                self.state.project, name, description
             )
             ui.notify(f"Template created: {template.name}", type="positive")
             dialog.close()
@@ -398,12 +408,6 @@ class TemplatesPage:
 
     async def _show_import_dialog(self) -> None:
         """Show dialog to import a template."""
-
-        def handle_upload(e):
-            # In a real implementation, this would handle file upload
-            # For now, we'll show a placeholder
-            ui.notify("File upload functionality requires file picker integration", type="info")
-
         with ui.dialog() as dialog, ui.card():
             ui.label("Import Template").classes("text-lg font-bold")
             ui.separator()
