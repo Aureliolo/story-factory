@@ -8,6 +8,12 @@ from typing import Any
 from memory.story_state import StoryBrief, StoryState
 from memory.world_database import WorldDatabase
 from settings import Settings
+from utils.validation import (
+    validate_not_empty,
+    validate_not_none,
+    validate_positive,
+    validate_type,
+)
 from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 logger = logging.getLogger(__name__)
@@ -27,6 +33,8 @@ class StoryService:
         Args:
             settings: Application settings.
         """
+        validate_not_none(settings, "settings")
+        validate_type(settings, "settings", Settings)
         logger.debug("Initializing StoryService")
         self.settings = settings
         # Use OrderedDict for LRU cache behavior
@@ -95,6 +103,8 @@ class StoryService:
         Returns:
             Initial interview questions from the interviewer agent.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.debug(f"start_interview called: project_id={state.id}")
         try:
             orchestrator = self._get_orchestrator(state)
@@ -125,6 +135,9 @@ class StoryService:
             Tuple of (response_text, is_complete).
             is_complete is True when the brief has been generated.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
+        validate_not_empty(user_message, "user_message")
         logger.debug(
             f"process_interview called: project_id={state.id}, message_length={len(user_message)}"
         )
@@ -171,6 +184,8 @@ class StoryService:
         Returns:
             The generated StoryBrief.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.debug(f"finalize_interview called: project_id={state.id}")
         try:
             orchestrator = self._get_orchestrator(state)
@@ -237,6 +252,10 @@ class StoryService:
         Returns:
             Updated StoryState with structure.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
+        validate_not_none(world_db, "world_db")
+        validate_type(world_db, "world_db", WorldDatabase)
         logger.debug(f"build_structure called: project_id={state.id}")
         if not state.brief:
             error_msg = "Cannot build structure - no brief exists."
@@ -334,6 +353,9 @@ class StoryService:
         Returns:
             The completed chapter content.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
+        validate_positive(chapter_num, "chapter_num")
         orchestrator = self._get_orchestrator(state)
         orchestrator.story_state = state
 

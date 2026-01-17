@@ -51,9 +51,7 @@ def validate_positive(value: int | float | None, param_name: str) -> None:
     if value is None:
         raise ValueError(f"Parameter '{param_name}' cannot be None")
     if not isinstance(value, (int, float)):
-        raise TypeError(
-            f"Parameter '{param_name}' must be numeric, got {type(value).__name__}"
-        )
+        raise TypeError(f"Parameter '{param_name}' must be numeric, got {type(value).__name__}")
     if value <= 0:
         raise ValueError(f"Parameter '{param_name}' must be positive, got {value}")
 
@@ -72,9 +70,7 @@ def validate_non_negative(value: int | float | None, param_name: str) -> None:
     if value is None:
         raise ValueError(f"Parameter '{param_name}' cannot be None")
     if not isinstance(value, (int, float)):
-        raise TypeError(
-            f"Parameter '{param_name}' must be numeric, got {type(value).__name__}"
-        )
+        raise TypeError(f"Parameter '{param_name}' must be numeric, got {type(value).__name__}")
     if value < 0:
         raise ValueError(f"Parameter '{param_name}' must be non-negative, got {value}")
 
@@ -100,18 +96,12 @@ def validate_in_range(
     if value is None:
         raise ValueError(f"Parameter '{param_name}' cannot be None")
     if not isinstance(value, (int, float)):
-        raise TypeError(
-            f"Parameter '{param_name}' must be numeric, got {type(value).__name__}"
-        )
+        raise TypeError(f"Parameter '{param_name}' must be numeric, got {type(value).__name__}")
 
     if min_val is not None and value < min_val:
-        raise ValueError(
-            f"Parameter '{param_name}' must be >= {min_val}, got {value}"
-        )
+        raise ValueError(f"Parameter '{param_name}' must be >= {min_val}, got {value}")
     if max_val is not None and value > max_val:
-        raise ValueError(
-            f"Parameter '{param_name}' must be <= {max_val}, got {value}"
-        )
+        raise ValueError(f"Parameter '{param_name}' must be <= {max_val}, got {value}")
 
 
 def validate_not_empty_collection(value: list | dict | None, param_name: str) -> None:
@@ -148,8 +138,7 @@ def validate_type(value, param_name: str, expected_type: type) -> None:
     """
     if not isinstance(value, expected_type):
         raise TypeError(
-            f"Parameter '{param_name}' must be {expected_type.__name__}, "
-            f"got {type(value).__name__}"
+            f"Parameter '{param_name}' must be {expected_type.__name__}, got {type(value).__name__}"
         )
 
 
@@ -166,6 +155,4 @@ def validate_string_in_choices(value: str | None, param_name: str, choices: list
     """
     validate_not_empty(value, param_name)
     if value not in choices:
-        raise ValueError(
-            f"Parameter '{param_name}' must be one of {choices}, got '{value}'"
-        )
+        raise ValueError(f"Parameter '{param_name}' must be one of {choices}, got '{value}'")
