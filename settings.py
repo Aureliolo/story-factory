@@ -22,6 +22,7 @@ SETTINGS_FILE = Path(__file__).parent / "settings.json"
 # Centralized paths for story and world output files
 STORIES_DIR = Path(__file__).parent / "output" / "stories"
 WORLDS_DIR = Path(__file__).parent / "output" / "worlds"
+BACKUPS_DIR = Path(__file__).parent / "output" / "backups"
 
 
 class ModelInfo(TypedDict):
@@ -275,6 +276,9 @@ class Settings:
     # UI settings
     dark_mode: bool = True
     last_project_id: str | None = None  # Remember last opened project
+
+    # Backup settings
+    backup_folder: str = str(BACKUPS_DIR)  # Folder to store project backups
 
     # Generation mode settings
     current_mode: str = "balanced"  # ID of active generation mode
