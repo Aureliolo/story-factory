@@ -27,6 +27,9 @@ from utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
 
+# Default value for relationship strength when creating via drag-and-drop
+DEFAULT_RELATIONSHIP_STRENGTH = 0.5
+
 
 class WorldPage:
     """World Builder page for managing entities and relationships.
@@ -1246,6 +1249,8 @@ class WorldPage:
             settings=self.services.settings,
             on_node_select=self._on_node_select,
             on_edge_select=self._on_edge_select,
+            on_create_relationship=self._on_create_relationship,
+            on_edge_context_menu=self._on_edge_context_menu,
             height=450,
         )
         self._graph.build()
@@ -1782,6 +1787,163 @@ class WorldPage:
                 ui.button("Delete", on_click=delete_relationship).props("color=negative flat")
 
         dialog.open()
+
+    def _on_create_relationship(self, source_id: str, target_id: str) -> None:
+        """Handle drag-to-connect relationship creation.
+
+        Args:
+            source_id: Source entity ID.
+            target_id: Target entity ID.
+        """
+        logger.debug("Creating relationship via drag: %s -> %s", source_id, target_id)
+        if not self.state.world_db:
+            return
+
+        # Get entity names for display
+        source = self.services.world.get_entity(self.state.world_db, source_id)
+        target = self.services.world.get_entity(self.state.world_db, target_id)
+
+        if not source or not target:
+            ui.notify("Entity not found", type="negative")
+            return
+
+        source_name = source.name
+        target_name = target.name
+
+        # Show dialog to configure relationship
+        with ui.dialog() as dialog, ui.card().classes("w-96 p-4"):
+            ui.label("Create Relationship").classes("text-lg font-semibold mb-2")
+            ui.label(f"{source_name} → {target_name}").classes(
+                "text-sm text-gray-500 dark:text-gray-400 mb-4"
+            )
+
+            ui.separator()
+
+            # Relationship type
+            rel_type_input = ui.select(
+                label="Relationship Type",
+                options=[
+                    "knows",
+                    "loves",
+                    "hates",
+                    "located_in",
+                    "owns",
+                    "member_of",
+                    "enemy_of",
+                    "ally_of",
+                    "parent_of",
+                    "child_of",
+                    "works_for",
+                    "leads",
+                ],
+                value="knows",
+                new_value_mode="add",
+            ).classes("w-full")
+
+            # Description
+            rel_desc_input = (
+                ui.textarea(
+                    label="Description (optional)",
+                    placeholder="Describe this relationship...",
+                )
+                .classes("w-full")
+                .props("rows=2")
+            )
+
+            # Strength slider
+            ui.label("Strength").classes("text-sm mt-2")
+            rel_strength_slider = ui.slider(
+                min=0.0,
+                max=1.0,
+                step=0.1,
+                value=DEFAULT_RELATIONSHIP_STRENGTH,
+            ).classes("w-full")
+
+            # Bidirectional checkbox
+            rel_bidir_checkbox = ui.checkbox(
+                "Bidirectional",
+                value=False,
+            )
+
+            ui.separator()
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                def create_relationship():
+                    if not self.state.world_db:
+                        return
+
+                    try:
+                        relationship_id = self.services.world.add_relationship(
+                            self.state.world_db,
+                            source_id=source_id,
+                            target_id=target_id,
+                            relation_type=rel_type_input.value,
+                            description=rel_desc_input.value,
+                        )
+
+                        # Store actual values selected by the user
+                        final_strength = rel_strength_slider.value
+                        final_bidirectional = rel_bidir_checkbox.value
+
+                        # Always update relationship to match UI-selected values
+                        # (DB defaults differ from UI defaults, so we must always sync)
+                        self.state.world_db.update_relationship(
+                            relationship_id=relationship_id,
+                            strength=final_strength,
+                            bidirectional=final_bidirectional,
+                        )
+
+                        # Record action for undo with complete data
+                        self.state.record_action(
+                            UndoAction(
+                                action_type=ActionType.ADD_RELATIONSHIP,
+                                data={
+                                    "relationship_id": relationship_id,
+                                    "source_id": source_id,
+                                    "target_id": target_id,
+                                    "relation_type": rel_type_input.value,
+                                    "description": rel_desc_input.value,
+                                    "strength": final_strength,
+                                    "bidirectional": final_bidirectional,
+                                },
+                                inverse_data={
+                                    "relationship_id": relationship_id,
+                                    "source_id": source_id,
+                                    "target_id": target_id,
+                                    "relation_type": rel_type_input.value,
+                                    "description": rel_desc_input.value,
+                                    "strength": final_strength,
+                                    "bidirectional": final_bidirectional,
+                                },
+                            )
+                        )
+
+                        dialog.close()
+                        if self._graph:
+                            self._graph.refresh()
+                        self._update_undo_redo_buttons()
+                        ui.notify(
+                            f"Created relationship: {source_name} → {target_name}", type="positive"
+                        )
+                    except Exception as e:
+                        logger.exception("Failed to create relationship via drag")
+                        ui.notify(f"Error: {e}", type="negative")
+
+                ui.button("Create", on_click=create_relationship).props("color=primary")
+
+        dialog.open()
+
+    def _on_edge_context_menu(self, edge_id: str) -> None:
+        """Handle edge right-click context menu.
+
+        Args:
+            edge_id: Edge/relationship ID.
+        """
+        logger.debug("Edge context menu triggered for: %s", edge_id)
+        # Just trigger the existing edge select handler which shows the edit dialog
+        self._on_edge_select(edge_id)
 
     def _select_entity(self, entity: Entity) -> None:
         """Select an entity for editing."""
