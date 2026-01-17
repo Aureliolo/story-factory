@@ -4,6 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from services import ServiceContainer
+from settings import Settings
+
 
 class MockModel:
     """Mock model object returned by ollama.list().
@@ -72,3 +75,20 @@ def mock_ollama_for_agents():
         mock_ollama.Client.return_value = mock_client
 
         yield mock_client
+
+
+@pytest.fixture
+def services(tmp_path, mock_ollama_for_agents):
+    """Create service container with patched directories.
+
+    This fixture is shared across all integration test classes to avoid
+    code duplication and ensure consistent service setup.
+    """
+    stories_dir = tmp_path / "stories"
+    worlds_dir = tmp_path / "worlds"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    worlds_dir.mkdir(parents=True, exist_ok=True)
+
+    with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
+        settings = Settings()
+        yield ServiceContainer(settings)

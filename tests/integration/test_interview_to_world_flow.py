@@ -3,29 +3,13 @@
 Tests project creation, interview phase, and world building.
 """
 
-from unittest.mock import patch
-
 import pytest
 
 from memory.story_state import StoryBrief
-from services import ServiceContainer
-from settings import Settings
 
 
 class TestProjectCreation:
     """Test project creation workflow."""
-
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container with temporary directories."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
 
     def test_create_project(self, services, tmp_path):
         """Test creating a new project."""
@@ -107,18 +91,6 @@ class TestProjectCreation:
 class TestWorldDatabase:
     """Test world database operations."""
 
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container with temporary directories."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
-
     def test_add_entity_to_world(self, services):
         """Test adding entities to world database."""
         story_state, world_db = services.project.create_project("Entity Test")
@@ -168,18 +140,6 @@ class TestWorldDatabase:
 class TestInterviewValidation:
     """Test interview phase validation."""
 
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
-
     def test_build_structure_requires_brief(self, services):
         """Test that build_structure validates brief exists."""
         story_state, world_db = services.project.create_project("No Brief")
@@ -199,18 +159,6 @@ class TestInterviewValidation:
 
 class TestStoryStateManagement:
     """Test story state management across workflow."""
-
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
 
     def test_story_state_tracks_status(self, services):
         """Test that story state tracks workflow status."""

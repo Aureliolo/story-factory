@@ -8,29 +8,13 @@ Tests the full workflow combining all phases:
 - Export
 """
 
-from unittest.mock import patch
-
 import pytest
 
 from memory.story_state import Chapter, Character, StoryBrief
-from services import ServiceContainer
-from settings import Settings
 
 
 class TestCompleteWorkflow:
     """Test complete end-to-end workflows."""
-
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
 
     def test_short_story_complete_workflow(self, services, tmp_path):
         """Test complete workflow for short story."""
@@ -168,18 +152,6 @@ class TestCompleteWorkflow:
 class TestWorkflowPersistence:
     """Test state persistence across workflow phases."""
 
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
-
     def test_persist_after_each_phase(self, services):
         """Test saving and loading after each workflow phase."""
         # Phase 1: Create project
@@ -265,18 +237,6 @@ class TestWorkflowPersistence:
 class TestProjectLifecycle:
     """Test complete project lifecycle operations."""
 
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
-
     def test_full_project_lifecycle(self, services):
         """Test create, modify, save, load, delete lifecycle."""
         # Create
@@ -360,18 +320,6 @@ class TestProjectLifecycle:
 
 class TestErrorRecovery:
     """Test error recovery in complete workflows."""
-
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
 
     def test_load_nonexistent_project(self, services):
         """Test loading a project that doesn't exist."""

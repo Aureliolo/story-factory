@@ -3,29 +3,13 @@
 Tests chapter writing, editing, and exporting completed stories.
 """
 
-from unittest.mock import patch
-
 import pytest
 
 from memory.story_state import Chapter, Character, StoryBrief
-from services import ServiceContainer
-from settings import Settings
 
 
 class TestWritingWorkflow:
     """Test writing workflow integration."""
-
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
 
     @pytest.fixture
     def story_with_chapters(self, services):
@@ -117,18 +101,6 @@ class TestWritingWorkflow:
 
 class TestExportFormats:
     """Test exporting stories to various formats."""
-
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
 
     @pytest.fixture
     def completed_story(self, services):
@@ -244,18 +216,6 @@ class TestExportFormats:
 class TestChapterManagement:
     """Test chapter management operations."""
 
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
-
     def test_chapter_status_tracking(self, services):
         """Test tracking chapter status through writing process."""
         story_state, _ = services.project.create_project("Chapter Status Test")
@@ -313,18 +273,6 @@ class TestChapterManagement:
 
 class TestExportErrorHandling:
     """Test error handling in export operations."""
-
-    @pytest.fixture
-    def services(self, tmp_path, mock_ollama_for_agents):
-        """Create service container."""
-        stories_dir = tmp_path / "stories"
-        worlds_dir = tmp_path / "worlds"
-        stories_dir.mkdir(parents=True, exist_ok=True)
-        worlds_dir.mkdir(parents=True, exist_ok=True)
-
-        with patch("settings.STORIES_DIR", stories_dir), patch("settings.WORLDS_DIR", worlds_dir):
-            settings = Settings()
-            yield ServiceContainer(settings)
 
     def test_export_empty_story(self, services):
         """Test exporting story with no content."""
