@@ -1795,6 +1795,7 @@ class WorldPage:
             source_id: Source entity ID.
             target_id: Target entity ID.
         """
+        logger.debug("Creating relationship via drag: %s -> %s", source_id, target_id)
         if not self.state.world_db:
             return
 
@@ -1940,6 +1941,7 @@ class WorldPage:
         Args:
             edge_id: Edge/relationship ID.
         """
+        logger.debug("Edge context menu triggered for: %s", edge_id)
         # Just trigger the existing edge select handler which shows the edit dialog
         self._on_edge_select(edge_id)
 
