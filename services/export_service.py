@@ -60,7 +60,9 @@ class ExportService:
         Args:
             settings: Application settings. If None, loads from settings.json.
         """
+        logger.debug("Initializing ExportService")
         self.settings = settings or Settings.load()
+        logger.debug("ExportService initialized successfully")
 
     def to_markdown(self, state: StoryState) -> str:
         """Export story as markdown.
@@ -432,34 +434,48 @@ class ExportService:
         Raises:
             ValueError: If format is not supported or path is invalid.
         """
+        logger.debug(
+            f"save_to_file called: story_id={state.id}, format={format}, filepath={filepath}"
+        )
         filepath = Path(filepath)
-        # Validate export path
-        filepath = _validate_export_path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        if format == "markdown":
-            text_content = self.to_markdown(state)
-            filepath.write_text(text_content, encoding="utf-8")
-        elif format == "text":
-            text_content = self.to_text(state)
-            filepath.write_text(text_content, encoding="utf-8")
-        elif format == "html":
-            text_content = self.to_html(state)
-            filepath.write_text(text_content, encoding="utf-8")
-        elif format == "epub":
-            bytes_content = self.to_epub(state)
-            filepath.write_bytes(bytes_content)
-        elif format == "pdf":
-            bytes_content = self.to_pdf(state)
-            filepath.write_bytes(bytes_content)
-        elif format == "docx":
-            bytes_content = self.to_docx(state)
-            filepath.write_bytes(bytes_content)
-        else:
-            raise ValueError(f"Unsupported export format: {format}")
+        try:
+            # Validate export path
+            filepath = _validate_export_path(filepath)
+            filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Exported story to {filepath} ({format} format)")
-        return filepath
+            if format == "markdown":
+                text_content = self.to_markdown(state)
+                filepath.write_text(text_content, encoding="utf-8")
+            elif format == "text":
+                text_content = self.to_text(state)
+                filepath.write_text(text_content, encoding="utf-8")
+            elif format == "html":
+                text_content = self.to_html(state)
+                filepath.write_text(text_content, encoding="utf-8")
+            elif format == "epub":
+                bytes_content = self.to_epub(state)
+                filepath.write_bytes(bytes_content)
+            elif format == "pdf":
+                bytes_content = self.to_pdf(state)
+                filepath.write_bytes(bytes_content)
+            elif format == "docx":
+                bytes_content = self.to_docx(state)
+                filepath.write_bytes(bytes_content)
+            else:
+                error_msg = f"Unsupported export format: {format}"
+                logger.error(f"save_to_file failed: {error_msg}")
+                raise ValueError(error_msg)
+
+            logger.info(f"Exported story to {filepath} ({format} format)")
+            return filepath
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"save_to_file failed for story {state.id} to {filepath}: {e}", exc_info=True
+            )
+            raise
 
     def get_file_extension(self, format: str) -> str:
         """Get file extension for export format.
@@ -470,6 +486,7 @@ class ExportService:
         Returns:
             File extension including dot.
         """
+        logger.debug(f"get_file_extension called: format={format}")
         extensions = {
             "markdown": ".md",
             "text": ".txt",
@@ -478,4 +495,6 @@ class ExportService:
             "pdf": ".pdf",
             "docx": ".docx",
         }
-        return extensions.get(format, ".txt")
+        extension = extensions.get(format, ".txt")
+        logger.debug(f"Returning extension: {extension}")
+        return extension

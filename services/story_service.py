@@ -27,9 +27,11 @@ class StoryService:
         Args:
             settings: Application settings.
         """
+        logger.debug("Initializing StoryService")
         self.settings = settings
         # Use OrderedDict for LRU cache behavior
         self._orchestrators: OrderedDict[str, StoryOrchestrator] = OrderedDict()
+        logger.debug("StoryService initialized successfully")
 
     def _get_orchestrator(self, state: StoryState) -> StoryOrchestrator:
         """Get or create an orchestrator for a story state.
@@ -93,18 +95,24 @@ class StoryService:
         Returns:
             Initial interview questions from the interviewer agent.
         """
-        orchestrator = self._get_orchestrator(state)
-        questions = orchestrator.start_interview()
+        logger.debug(f"start_interview called: project_id={state.id}")
+        try:
+            orchestrator = self._get_orchestrator(state)
+            questions = orchestrator.start_interview()
 
-        # Store in interview history
-        state.interview_history.append(
-            {
-                "role": "assistant",
-                "content": questions,
-            }
-        )
+            # Store in interview history
+            state.interview_history.append(
+                {
+                    "role": "assistant",
+                    "content": questions,
+                }
+            )
 
-        return questions
+            logger.info(f"Interview started for project {state.id}")
+            return questions
+        except Exception as e:
+            logger.error(f"Failed to start interview for project {state.id}: {e}", exc_info=True)
+            raise
 
     def process_interview(self, state: StoryState, user_message: str) -> tuple[str, bool]:
         """Process a user response in the interview.
@@ -117,30 +125,42 @@ class StoryService:
             Tuple of (response_text, is_complete).
             is_complete is True when the brief has been generated.
         """
-        orchestrator = self._get_orchestrator(state)
-
-        # Store user message in history
-        state.interview_history.append(
-            {
-                "role": "user",
-                "content": user_message,
-            }
+        logger.debug(
+            f"process_interview called: project_id={state.id}, message_length={len(user_message)}"
         )
+        try:
+            orchestrator = self._get_orchestrator(state)
 
-        response, is_complete = orchestrator.process_interview_response(user_message)
+            # Store user message in history
+            state.interview_history.append(
+                {
+                    "role": "user",
+                    "content": user_message,
+                }
+            )
 
-        # Store assistant response
-        state.interview_history.append(
-            {
-                "role": "assistant",
-                "content": response,
-            }
-        )
+            response, is_complete = orchestrator.process_interview_response(user_message)
 
-        # Sync state back
-        self._sync_state(orchestrator, state)
+            # Store assistant response
+            state.interview_history.append(
+                {
+                    "role": "assistant",
+                    "content": response,
+                }
+            )
 
-        return response, is_complete
+            # Sync state back
+            self._sync_state(orchestrator, state)
+
+            if is_complete:
+                logger.info(f"Interview completed for project {state.id}")
+            else:
+                logger.debug(f"Interview in progress for project {state.id}")
+
+            return response, is_complete
+        except Exception as e:
+            logger.error(f"Failed to process interview for project {state.id}: {e}", exc_info=True)
+            raise
 
     def finalize_interview(self, state: StoryState) -> StoryBrief:
         """Force finalize the interview with current information.
@@ -151,10 +171,18 @@ class StoryService:
         Returns:
             The generated StoryBrief.
         """
-        orchestrator = self._get_orchestrator(state)
-        brief = orchestrator.finalize_interview()
-        self._sync_state(orchestrator, state)
-        return brief
+        logger.debug(f"finalize_interview called: project_id={state.id}")
+        try:
+            orchestrator = self._get_orchestrator(state)
+            brief = orchestrator.finalize_interview()
+            self._sync_state(orchestrator, state)
+            logger.info(
+                f"Interview finalized for project {state.id}: genre={brief.genre}, tone={brief.tone}"
+            )
+            return brief
+        except Exception as e:
+            logger.error(f"Failed to finalize interview for project {state.id}: {e}", exc_info=True)
+            raise
 
     def continue_interview(self, state: StoryState, additional_info: str) -> str:
         """Continue an already-completed interview with additional information.
@@ -209,17 +237,27 @@ class StoryService:
         Returns:
             Updated StoryState with structure.
         """
+        logger.debug(f"build_structure called: project_id={state.id}")
         if not state.brief:
-            raise ValueError("Cannot build structure - no brief exists.")
+            error_msg = "Cannot build structure - no brief exists."
+            logger.error(f"build_structure failed for project {state.id}: {error_msg}")
+            raise ValueError(error_msg)
 
-        orchestrator = self._get_orchestrator(state)
-        orchestrator.build_story_structure()
-        self._sync_state(orchestrator, state)
+        try:
+            orchestrator = self._get_orchestrator(state)
+            orchestrator.build_story_structure()
+            self._sync_state(orchestrator, state)
 
-        # Extract entities to world database
-        self._extract_entities_to_world(state, world_db)
+            # Extract entities to world database
+            self._extract_entities_to_world(state, world_db)
 
-        return state
+            logger.info(
+                f"Story structure built for project {state.id}: {len(state.characters)} characters, {len(state.chapters)} chapters"
+            )
+            return state
+        except Exception as e:
+            logger.error(f"Failed to build structure for project {state.id}: {e}", exc_info=True)
+            raise
 
     def _extract_entities_to_world(self, state: StoryState, world_db: WorldDatabase) -> None:
         """Extract characters and locations from story state to world database.
@@ -388,9 +426,12 @@ class StoryService:
         Returns:
             Dictionary with statistics including word count, chapters, etc.
         """
+        logger.debug(f"get_statistics called: project_id={state.id}")
         orchestrator = self._get_orchestrator(state)
         orchestrator.story_state = state
-        return orchestrator.get_statistics()
+        stats = orchestrator.get_statistics()
+        logger.debug(f"Statistics for project {state.id}: {stats}")
+        return stats
 
     # ========== CONTINUATION & EDITING ==========
 
@@ -648,6 +689,7 @@ class StoryService:
         Args:
             state: The story state.
         """
+        logger.debug(f"cleanup_orchestrator called: project_id={state.id}")
         if state.id in self._orchestrators:
             del self._orchestrators[state.id]
             logger.debug(f"Cleaned up orchestrator for story {state.id}")
