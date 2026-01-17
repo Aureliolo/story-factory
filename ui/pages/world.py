@@ -1883,17 +1883,17 @@ class WorldPage:
                             description=rel_desc_input.value,
                         )
 
-                        # Store actual values for undo
+                        # Store actual values selected by the user
                         final_strength = rel_strength_slider.value
                         final_bidirectional = rel_bidir_checkbox.value
 
-                        # Update strength and bidirectional if not defaults
-                        if final_strength != DEFAULT_RELATIONSHIP_STRENGTH or final_bidirectional:
-                            self.state.world_db.update_relationship(
-                                relationship_id=relationship_id,
-                                strength=final_strength,
-                                bidirectional=final_bidirectional,
-                            )
+                        # Always update relationship to match UI-selected values
+                        # (DB defaults differ from UI defaults, so we must always sync)
+                        self.state.world_db.update_relationship(
+                            relationship_id=relationship_id,
+                            strength=final_strength,
+                            bidirectional=final_bidirectional,
+                        )
 
                         # Record action for undo with complete data
                         self.state.record_action(

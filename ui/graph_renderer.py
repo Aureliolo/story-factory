@@ -325,13 +325,18 @@ def render_graph_html(
                     // Show visual feedback
                     var nodeData = nodes.get(dragStartNode);
                     if (nodeData) {{
+                        // Store original color so it can be restored on dragEnd
+                        if (typeof nodeData._originalColor === 'undefined') {{
+                            nodeData._originalColor = nodeData.color;
+                        }}
                         nodes.update({{
                             id: dragStartNode,
                             borderWidth: 4,
                             color: {{
                                 border: '#3b82f6',
-                                background: nodeData.color.background || nodeData.color
-                            }}
+                                background: nodeData.color && nodeData.color.background ? nodeData.color.background : nodeData.color
+                            }},
+                            _originalColor: nodeData._originalColor
                         }});
                     }}
                 }}
