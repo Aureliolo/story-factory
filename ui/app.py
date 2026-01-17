@@ -14,6 +14,7 @@ from ui.pages.analytics import AnalyticsPage
 from ui.pages.models import ModelsPage
 from ui.pages.projects import ProjectsPage
 from ui.pages.settings import SettingsPage
+from ui.pages.timeline import TimelinePage
 from ui.pages.world import WorldPage
 from ui.pages.write import WritePage
 from ui.state import AppState
@@ -120,6 +121,14 @@ class StoryFactoryApp:
                 page.build()
 
             self._page_layout("/world", content)
+
+        @ui.page("/timeline")
+        def timeline_page():
+            def content():
+                page = TimelinePage(self.state, self.services)
+                page.build()
+
+            self._page_layout("/timeline", content)
 
         @ui.page("/projects")
         def projects_page():
