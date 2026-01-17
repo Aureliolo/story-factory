@@ -155,13 +155,80 @@ class ProjectsPage:
             return dt.strftime("%b %d, %Y")
 
     async def _create_project(self) -> None:
-        """Create a new project."""
+        """Create a new project with optional template selection."""
+        # Show dialog for template selection
+        with ui.dialog() as dialog, ui.card().classes("w-[600px] max-w-full"):
+            ui.label("Create New Project").classes("text-xl font-bold")
+            ui.separator()
+
+            with ui.column().classes("gap-4 p-4"):
+                # Project name input
+                name_input = ui.input(
+                    "Project Name (optional)",
+                    placeholder="Leave blank for auto-generated name",
+                ).classes("w-full")
+
+                # Template selection
+                ui.label("Start from Template (optional)").classes("font-semibold mt-2")
+                templates = self.services.template.list_templates()
+
+                template_options = {"": "Blank Project (No Template)"}
+                template_options.update({t.id: f"{t.name} ({t.genre})" for t in templates})
+
+                template_select = ui.select(
+                    label="Template",
+                    options=template_options,
+                    value="",
+                ).classes("w-full")
+
+                # Show template description when selected
+                template_desc = ui.label("").classes(
+                    "text-sm text-gray-600 dark:text-gray-400 mt-2"
+                )
+
+                def on_template_change():
+                    selected_id = template_select.value
+                    if selected_id:
+                        template = self.services.template.get_template(selected_id)
+                        if template:
+                            template_desc.text = template.description
+                    else:
+                        template_desc.text = ""
+
+                template_select.on_value_change(on_template_change)
+
+                # Action buttons
+                with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat")
+                    ui.button(
+                        "Create",
+                        on_click=lambda: self._do_create_project(
+                            name_input.value,
+                            template_select.value if template_select.value else None,
+                            dialog,
+                        ),
+                    ).props("color=primary")
+
+        dialog.open()
+
+    async def _do_create_project(self, name: str, template_id: str | None, dialog) -> None:
+        """Actually create the project."""
         try:
-            project, world_db = self.services.project.create_project()
+            project, world_db = self.services.project.create_project(
+                name=name, template_id=template_id
+            )
             self.state.set_project(project.id, project, world_db)
             self.services.settings.last_project_id = project.id
             self.services.settings.save()
-            ui.notify("Project created!", type="positive")
+
+            template_msg = ""
+            if template_id:
+                template = self.services.template.get_template(template_id)
+                if template:
+                    template_msg = f" from template: {template.name}"
+
+            ui.notify(f"Project created{template_msg}!", type="positive")
+            dialog.close()
             # Reload to update header dropdown
             ui.navigate.reload()
         except Exception as e:
