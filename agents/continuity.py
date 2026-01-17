@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from memory.story_state import StoryState
 from utils.json_parser import extract_json_list
+from utils.validation import validate_not_empty, validate_not_none, validate_positive, validate_type
 
 from .base import BaseAgent
 
@@ -88,6 +89,11 @@ class ContinuityAgent(BaseAgent):
         Returns:
             List of continuity issues found.
         """
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+        validate_not_empty(chapter_content, "chapter_content")
+        validate_positive(chapter_number, "chapter_number")
+
         # Build context from previous chapters
         ctx_chars = self.settings.previous_chapter_context_chars
         previous_content = ""
@@ -329,6 +335,9 @@ If no voice issues found, output: ```json
         Returns:
             List of continuity issues found.
         """
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+
         full_content = "\n\n".join(
             f"[Chapter {ch.number}: {ch.title}]\n{ch.content}"
             for ch in story_state.chapters

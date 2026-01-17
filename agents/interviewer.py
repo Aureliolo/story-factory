@@ -4,6 +4,7 @@ import logging
 
 from memory.story_state import StoryBrief
 from utils.json_parser import parse_json_to_model
+from utils.validation import validate_not_empty
 
 from .base import BaseAgent
 
@@ -81,6 +82,7 @@ Keep it friendly and conversational. Do NOT ask about language upfront - you'll 
             user_response: The user's message.
             context: Optional inference context (detected language, content rating, etc.)
         """
+        validate_not_empty(user_response, "user_response")
         logger.info(
             f"Processing user response ({len(user_response)} chars, "
             f"history: {len(self.conversation_history)} messages)"
@@ -147,6 +149,7 @@ IMPORTANT RULES:
 
     def extract_brief(self, response: str) -> StoryBrief | None:
         """Try to extract a StoryBrief from the response if it contains JSON."""
+        validate_not_empty(response, "response")
         logger.debug("Attempting to extract story brief from response")
         # Fallback pattern for JSON without code block
         fallback = r'\{[^{}]*"premise"[^{}]*\}'
@@ -159,6 +162,7 @@ IMPORTANT RULES:
 
     def finalize_brief(self, conversation_summary: str) -> StoryBrief:
         """Force generation of a final brief from the conversation."""
+        validate_not_empty(conversation_summary, "conversation_summary")
         logger.info("Finalizing story brief from conversation")
         prompt = f"""Based on this conversation, create a complete story brief:
 

@@ -9,6 +9,11 @@ from pathlib import Path
 from memory.story_state import StoryState
 from settings import STORIES_DIR, Settings
 from utils.constants import get_language_code
+from utils.validation import (
+    validate_not_none,
+    validate_string_in_choices,
+    validate_type,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +78,8 @@ class ExportService:
         Returns:
             Markdown formatted string.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.debug(f"Exporting story to markdown: {state.id}")
         brief = state.brief
         md_parts = []
@@ -106,6 +113,8 @@ class ExportService:
         Returns:
             Plain text formatted string.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.debug(f"Exporting story to plain text: {state.id}")
         brief = state.brief
         text_parts = []
@@ -144,6 +153,8 @@ class ExportService:
         Returns:
             EPUB file as bytes.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.info(f"Exporting story to EPUB: {state.id}")
         from ebooklib import epub
 
@@ -218,6 +229,8 @@ class ExportService:
         Returns:
             PDF file as bytes.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.info(f"Exporting story to PDF: {state.id}")
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -351,6 +364,8 @@ class ExportService:
         Returns:
             DOCX file as bytes.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.info(f"Exporting story to DOCX: {state.id}")
         from docx import Document
         from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -434,6 +449,14 @@ class ExportService:
         Raises:
             ValueError: If format is not supported or path is invalid.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
+        validate_string_in_choices(
+            format,
+            "format",
+            ["markdown", "text", "epub", "pdf", "html", "docx"],
+        )
+        validate_not_none(filepath, "filepath")
         logger.debug(
             f"save_to_file called: story_id={state.id}, format={format}, filepath={filepath}"
         )

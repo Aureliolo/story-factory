@@ -587,7 +587,7 @@ class TestExportServiceSaveToFile:
         state = _create_test_state("invalid-test")
         output_file = tmp_path / "story.xyz"
 
-        with pytest.raises(ValueError, match="Unsupported export format"):
+        with pytest.raises(ValueError, match="Parameter 'format' must be one of"):
             service.save_to_file(state, "invalid_format", output_file)
 
 
