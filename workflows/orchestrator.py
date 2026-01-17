@@ -540,8 +540,15 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         return short_story_chapter.content
 
-    def write_chapter(self, chapter_number: int) -> Generator[WorkflowEvent, None, str]:
-        """Write a single chapter with the full pipeline."""
+    def write_chapter(
+        self, chapter_number: int, feedback: str | None = None
+    ) -> Generator[WorkflowEvent, None, str]:
+        """Write a single chapter with the full pipeline.
+        
+        Args:
+            chapter_number: The chapter number to write.
+            feedback: Optional user feedback to incorporate into the writing.
+        """
         if not self.story_state:
             raise ValueError("No story state. Call create_new_story() first.")
 
@@ -568,10 +575,13 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         chapter.status = "drafting"
 
         # Write
-        self._emit("agent_start", "Writer", f"Writing Chapter {chapter_number}...")
+        write_msg = f"Writing Chapter {chapter_number}..."
+        if feedback:
+            write_msg = f"Regenerating Chapter {chapter_number} with feedback..."
+        self._emit("agent_start", "Writer", write_msg)
         yield self.events[-1]
 
-        content = self.writer.write_chapter(self.story_state, chapter)
+        content = self.writer.write_chapter(self.story_state, chapter, revision_feedback=feedback)
 
         # Validate language/correctness
         try:

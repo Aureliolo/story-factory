@@ -76,6 +76,18 @@ class Scene(BaseModel):
             self.word_count = 0
 
 
+class ChapterVersion(BaseModel):
+    """A saved version of a chapter with metadata."""
+
+    id: str  # Unique identifier for this version
+    created_at: datetime = Field(default_factory=datetime.now)
+    content: str  # The actual prose content
+    word_count: int = 0
+    feedback: str = ""  # User feedback that prompted this version (if regenerated)
+    version_number: int = 1  # Sequential version number
+    is_current: bool = False  # True if this is the active version
+
+
 class Chapter(BaseModel):
     """A chapter in the story."""
 
@@ -87,6 +99,10 @@ class Chapter(BaseModel):
     status: str = "pending"  # pending, drafted, edited, reviewed, final
     revision_notes: list[str] = Field(default_factory=list)
     scenes: list[Scene] = Field(default_factory=list)  # Scenes within this chapter
+    
+    # Version history for regeneration and rollback
+    versions: list[ChapterVersion] = Field(default_factory=list)
+    current_version_id: str | None = None
 
     def add_scene(self, scene: Scene) -> None:
         """Add a scene to the chapter.
@@ -157,6 +173,133 @@ class Chapter(BaseModel):
             self.word_count = len(self.content.split())
         else:
             self.word_count = 0
+
+    def save_current_as_version(self, feedback: str = "") -> str:
+        """Save the current chapter content as a new version.
+        
+        Args:
+            feedback: Optional feedback that prompted this version.
+            
+        Returns:
+            The ID of the newly created version.
+        """
+        # Mark all existing versions as not current
+        for version in self.versions:
+            version.is_current = False
+        
+        # Create new version
+        version_id = str(uuid.uuid4())
+        version_number = len(self.versions) + 1
+        
+        new_version = ChapterVersion(
+            id=version_id,
+            content=self.content,
+            word_count=self.word_count,
+            feedback=feedback,
+            version_number=version_number,
+            is_current=True,
+        )
+        
+        self.versions.append(new_version)
+        self.current_version_id = version_id
+        
+        logger.debug(f"Saved chapter {self.number} version {version_number} (id={version_id})")
+        return version_id
+
+    def rollback_to_version(self, version_id: str) -> bool:
+        """Rollback to a previous version.
+        
+        Args:
+            version_id: The ID of the version to rollback to.
+            
+        Returns:
+            True if successful, False if version not found.
+        """
+        # Find the version
+        target_version = None
+        for version in self.versions:
+            if version.id == version_id:
+                target_version = version
+                break
+        
+        if not target_version:
+            logger.warning(f"Version {version_id} not found for chapter {self.number}")
+            return False
+        
+        # Mark all versions as not current
+        for version in self.versions:
+            version.is_current = False
+        
+        # Restore content from target version
+        self.content = target_version.content
+        self.word_count = target_version.word_count
+        target_version.is_current = True
+        self.current_version_id = version_id
+        
+        logger.info(
+            f"Rolled back chapter {self.number} to version {target_version.version_number}"
+        )
+        return True
+
+    def get_version_by_id(self, version_id: str) -> ChapterVersion | None:
+        """Get a version by its ID.
+        
+        Args:
+            version_id: The version ID to find.
+            
+        Returns:
+            The version if found, None otherwise.
+        """
+        for version in self.versions:
+            if version.id == version_id:
+                return version
+        return None
+
+    def get_current_version(self) -> ChapterVersion | None:
+        """Get the current version.
+        
+        Returns:
+            The current version if it exists, None otherwise.
+        """
+        if self.current_version_id:
+            return self.get_version_by_id(self.current_version_id)
+        return None
+
+    def compare_versions(self, version_id_a: str, version_id_b: str) -> dict[str, Any]:
+        """Compare two versions.
+        
+        Args:
+            version_id_a: First version ID.
+            version_id_b: Second version ID.
+            
+        Returns:
+            Dictionary with comparison data including word count differences.
+        """
+        version_a = self.get_version_by_id(version_id_a)
+        version_b = self.get_version_by_id(version_id_b)
+        
+        if not version_a or not version_b:
+            return {"error": "One or both versions not found"}
+        
+        return {
+            "version_a": {
+                "id": version_a.id,
+                "version_number": version_a.version_number,
+                "content": version_a.content,
+                "word_count": version_a.word_count,
+                "created_at": version_a.created_at.isoformat(),
+                "feedback": version_a.feedback,
+            },
+            "version_b": {
+                "id": version_b.id,
+                "version_number": version_b.version_number,
+                "content": version_b.content,
+                "word_count": version_b.word_count,
+                "created_at": version_b.created_at.isoformat(),
+                "feedback": version_b.feedback,
+            },
+            "word_count_diff": version_b.word_count - version_a.word_count,
+        }
 
 
 class StoryBrief(BaseModel):
