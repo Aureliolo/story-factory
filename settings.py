@@ -362,6 +362,60 @@ class Settings:
     # Content truncation limits
     content_truncation_for_judgment: int = 3000
 
+    # Ollama client timeouts (in seconds)
+    ollama_health_check_timeout: float = 30.0
+    ollama_list_models_timeout: float = 30.0
+    ollama_pull_model_timeout: float = 600.0  # 10 minutes for large model downloads
+    ollama_delete_model_timeout: float = 30.0
+    ollama_check_update_timeout: float = 60.0
+    ollama_generate_timeout: float = 60.0
+    ollama_capability_check_timeout: float = 180.0  # 3 minutes for capability checks
+
+    # Retry configuration
+    llm_retry_delay: float = 2.0  # Base delay in seconds between retries
+    llm_retry_backoff: float = 2.0  # Exponential backoff multiplier
+
+    # Verification delays
+    model_verification_sleep: float = 0.1  # Delay for model download verification
+
+    # Validation thresholds
+    validator_cjk_char_threshold: int = 5  # Max CJK chars allowed in English text
+    validator_printable_ratio: float = 0.9  # Min ratio of printable characters
+    validator_ai_check_min_length: int = 200  # Min response length for AI validation
+
+    # Outline generation
+    outline_variations_min: int = 3  # Min outline variations to generate
+    outline_variations_max: int = 5  # Max outline variations to generate
+
+    # Import extraction thresholds
+    import_confidence_threshold: float = 0.7  # Flag for review if confidence below this
+    import_default_confidence: float = 0.5  # Default confidence when not provided
+
+    # World/plot generation limits
+    world_description_summary_length: int = 500  # Truncate world desc if longer
+    event_sentence_min_length: int = 20  # Min length for event sentences
+    event_sentence_max_length: int = 200  # Max length for event sentences
+
+    # User rating bounds
+    user_rating_min: int = 1  # Minimum user rating value
+    user_rating_max: int = 5  # Maximum user rating value
+
+    # Model download detection
+    model_download_threshold: float = 0.9  # Completion ratio to detect actual download
+
+    # Story length chapter counts
+    chapters_short_story: int = 1  # Chapters for short story
+    chapters_novella: int = 7  # Chapters for novella
+    chapters_novel: int = 20  # Chapters for novel
+    chapters_default: int = 5  # Default if length not recognized
+
+    # Import temperatures (override agent defaults for specific operations)
+    temp_import_extraction: float = 0.3  # Low temp for consistent import extraction
+    temp_interviewer_override: float = 0.9  # Higher temp for creative interviewer prompts
+
+    # Token multipliers for extraction
+    import_character_token_multiplier: int = 4  # Multiply base tokens for character extraction
+
     def save(self) -> None:
         """Save settings to JSON file."""
         # Validate before saving
@@ -591,6 +645,164 @@ class Settings:
             raise ValueError(
                 f"content_truncation_for_judgment must be between 500 and 50000, "
                 f"got {self.content_truncation_for_judgment}"
+            )
+
+        # Validate Ollama client timeouts
+        ollama_timeout_settings = [
+            ("ollama_health_check_timeout", self.ollama_health_check_timeout, 5.0, 300.0),
+            ("ollama_list_models_timeout", self.ollama_list_models_timeout, 5.0, 300.0),
+            ("ollama_pull_model_timeout", self.ollama_pull_model_timeout, 60.0, 3600.0),
+            ("ollama_delete_model_timeout", self.ollama_delete_model_timeout, 5.0, 300.0),
+            ("ollama_check_update_timeout", self.ollama_check_update_timeout, 5.0, 300.0),
+            ("ollama_generate_timeout", self.ollama_generate_timeout, 5.0, 600.0),
+            ("ollama_capability_check_timeout", self.ollama_capability_check_timeout, 30.0, 600.0),
+        ]
+        for name, value, min_val, max_val in ollama_timeout_settings:
+            if not min_val <= value <= max_val:
+                raise ValueError(
+                    f"{name} must be between {min_val} and {max_val} seconds, got {value}"
+                )
+
+        # Validate retry configuration
+        if not 0.1 <= self.llm_retry_delay <= 60.0:
+            raise ValueError(
+                f"llm_retry_delay must be between 0.1 and 60.0 seconds, got {self.llm_retry_delay}"
+            )
+        if not 1.0 <= self.llm_retry_backoff <= 10.0:
+            raise ValueError(
+                f"llm_retry_backoff must be between 1.0 and 10.0, got {self.llm_retry_backoff}"
+            )
+
+        # Validate verification delays
+        if not 0.01 <= self.model_verification_sleep <= 5.0:
+            raise ValueError(
+                f"model_verification_sleep must be between 0.01 and 5.0 seconds, "
+                f"got {self.model_verification_sleep}"
+            )
+
+        # Validate validation thresholds
+        if not 0 <= self.validator_cjk_char_threshold <= 1000:
+            raise ValueError(
+                f"validator_cjk_char_threshold must be between 0 and 1000, "
+                f"got {self.validator_cjk_char_threshold}"
+            )
+        if not 0.0 <= self.validator_printable_ratio <= 1.0:
+            raise ValueError(
+                f"validator_printable_ratio must be between 0.0 and 1.0, "
+                f"got {self.validator_printable_ratio}"
+            )
+        if not 0 <= self.validator_ai_check_min_length <= 10000:
+            raise ValueError(
+                f"validator_ai_check_min_length must be between 0 and 10000, "
+                f"got {self.validator_ai_check_min_length}"
+            )
+
+        # Validate outline generation
+        if not 1 <= self.outline_variations_min <= 10:
+            raise ValueError(
+                f"outline_variations_min must be between 1 and 10, "
+                f"got {self.outline_variations_min}"
+            )
+        if not 1 <= self.outline_variations_max <= 20:
+            raise ValueError(
+                f"outline_variations_max must be between 1 and 20, "
+                f"got {self.outline_variations_max}"
+            )
+        if self.outline_variations_min > self.outline_variations_max:
+            raise ValueError(
+                f"outline_variations_min ({self.outline_variations_min}) cannot exceed "
+                f"outline_variations_max ({self.outline_variations_max})"
+            )
+
+        # Validate import thresholds
+        if not 0.0 <= self.import_confidence_threshold <= 1.0:
+            raise ValueError(
+                f"import_confidence_threshold must be between 0.0 and 1.0, "
+                f"got {self.import_confidence_threshold}"
+            )
+        if not 0.0 <= self.import_default_confidence <= 1.0:
+            raise ValueError(
+                f"import_default_confidence must be between 0.0 and 1.0, "
+                f"got {self.import_default_confidence}"
+            )
+
+        # Validate world/plot generation limits
+        if not 10 <= self.world_description_summary_length <= 10000:
+            raise ValueError(
+                f"world_description_summary_length must be between 10 and 10000, "
+                f"got {self.world_description_summary_length}"
+            )
+        if not 5 <= self.event_sentence_min_length <= 500:
+            raise ValueError(
+                f"event_sentence_min_length must be between 5 and 500, "
+                f"got {self.event_sentence_min_length}"
+            )
+        if not 10 <= self.event_sentence_max_length <= 5000:
+            raise ValueError(
+                f"event_sentence_max_length must be between 10 and 5000, "
+                f"got {self.event_sentence_max_length}"
+            )
+        if self.event_sentence_min_length > self.event_sentence_max_length:
+            raise ValueError(
+                f"event_sentence_min_length ({self.event_sentence_min_length}) cannot exceed "
+                f"event_sentence_max_length ({self.event_sentence_max_length})"
+            )
+
+        # Validate rating bounds
+        if not 1 <= self.user_rating_min <= 10:
+            raise ValueError(
+                f"user_rating_min must be between 1 and 10, got {self.user_rating_min}"
+            )
+        if not 1 <= self.user_rating_max <= 10:
+            raise ValueError(
+                f"user_rating_max must be between 1 and 10, got {self.user_rating_max}"
+            )
+        if self.user_rating_min > self.user_rating_max:
+            raise ValueError(
+                f"user_rating_min ({self.user_rating_min}) cannot exceed "
+                f"user_rating_max ({self.user_rating_max})"
+            )
+
+        # Validate model download threshold
+        if not 0.0 <= self.model_download_threshold <= 1.0:
+            raise ValueError(
+                f"model_download_threshold must be between 0.0 and 1.0, "
+                f"got {self.model_download_threshold}"
+            )
+
+        # Validate story chapter counts
+        if not 1 <= self.chapters_short_story <= 100:
+            raise ValueError(
+                f"chapters_short_story must be between 1 and 100, got {self.chapters_short_story}"
+            )
+        if not 1 <= self.chapters_novella <= 100:
+            raise ValueError(
+                f"chapters_novella must be between 1 and 100, got {self.chapters_novella}"
+            )
+        if not 1 <= self.chapters_novel <= 200:
+            raise ValueError(f"chapters_novel must be between 1 and 200, got {self.chapters_novel}")
+        if not 1 <= self.chapters_default <= 100:
+            raise ValueError(
+                f"chapters_default must be between 1 and 100, got {self.chapters_default}"
+            )
+
+        # Validate import temperatures
+        if not 0.0 <= self.temp_import_extraction <= 2.0:
+            raise ValueError(
+                f"temp_import_extraction must be between 0.0 and 2.0, "
+                f"got {self.temp_import_extraction}"
+            )
+        if not 0.0 <= self.temp_interviewer_override <= 2.0:
+            raise ValueError(
+                f"temp_interviewer_override must be between 0.0 and 2.0, "
+                f"got {self.temp_interviewer_override}"
+            )
+
+        # Validate token multipliers
+        if not 1 <= self.import_character_token_multiplier <= 20:
+            raise ValueError(
+                f"import_character_token_multiplier must be between 1 and 20, "
+                f"got {self.import_character_token_multiplier}"
             )
 
     @classmethod

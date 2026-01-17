@@ -71,7 +71,7 @@ class ValidatorAgent(BaseAgent):
             # Check for CJK characters (Chinese, Japanese, Korean)
             cjk_pattern = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]")
             cjk_matches = cjk_pattern.findall(response)
-            if len(cjk_matches) > 5:  # Allow a few for names/terms
+            if len(cjk_matches) > self.settings.validator_cjk_char_threshold:
                 raise ResponseValidationError(
                     f"Response contains {len(cjk_matches)} CJK characters but expected {expected_language}. "
                     f"Sample: {''.join(cjk_matches[:10])}"
@@ -79,13 +79,13 @@ class ValidatorAgent(BaseAgent):
 
         # Check for excessive non-printable characters
         printable_ratio = sum(1 for c in response if c.isprintable() or c.isspace()) / len(response)
-        if printable_ratio < 0.9:
+        if printable_ratio < self.settings.validator_printable_ratio:
             raise ResponseValidationError(
                 f"Response contains too many non-printable characters ({1 - printable_ratio:.0%})"
             )
 
         # Use AI for more nuanced validation (only for longer responses)
-        if len(response) > 200:
+        if len(response) > self.settings.validator_ai_check_min_length:
             try:
                 result = self._ai_validate(response, expected_language, task_description)
                 if not result:

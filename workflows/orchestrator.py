@@ -158,7 +158,9 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             from utils.json_parser import extract_json_list
 
             logger.info("Calling AI for title suggestions...")
-            response = self.interviewer.generate(prompt, "", temperature=0.9)
+            response = self.interviewer.generate(
+                prompt, "", temperature=self.settings.temp_interviewer_override
+            )
             logger.debug(f"Title generation response: {response[:200]}...")
 
             titles = extract_json_list(response)

@@ -158,8 +158,10 @@ class ArchitectAgent(BaseAgent):
         builder.add_character_summary(story_state.characters)
 
         if story_state.world_description:
-            world_preview = story_state.world_description[:500]
-            if len(story_state.world_description) > 500:
+            world_preview = story_state.world_description[
+                : self.settings.world_description_summary_length
+            ]
+            if len(story_state.world_description) > self.settings.world_description_summary_length:
                 world_preview += "..."
             builder.add_section("WORLD", world_preview)
 
@@ -191,11 +193,11 @@ class ArchitectAgent(BaseAgent):
         logger.info("Creating chapter outlines")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         length_map = {
-            "short_story": 1,
-            "novella": 7,
-            "novel": 20,
+            "short_story": self.settings.chapters_short_story,
+            "novella": self.settings.chapters_novella,
+            "novel": self.settings.chapters_novel,
         }
-        num_chapters = length_map.get(brief.target_length, 5)
+        num_chapters = length_map.get(brief.target_length, self.settings.chapters_default)
         logger.debug(f"Target: {num_chapters} chapters for {brief.target_length}")
 
         plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
@@ -276,11 +278,18 @@ class ArchitectAgent(BaseAgent):
             List of OutlineVariation objects.
 
         Raises:
-            ValueError: If count is not between 3 and 5.
+            ValueError: If count is not within configured range.
         """
-        # Validate count parameter - must be 3-5 to match hardcoded focus prompts
-        if not 3 <= count <= 5:
-            raise ValueError(f"count must be between 3 and 5, got {count}")
+        # Validate count parameter - must be within settings range
+        if (
+            not self.settings.outline_variations_min
+            <= count
+            <= self.settings.outline_variations_max
+        ):
+            raise ValueError(
+                f"count must be between {self.settings.outline_variations_min} and "
+                f"{self.settings.outline_variations_max}, got {count}"
+            )
 
         logger.info(f"Generating {count} outline variations")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
