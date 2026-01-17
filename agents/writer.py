@@ -4,6 +4,7 @@ import logging
 
 from memory.story_state import Chapter, Scene, StoryState
 from utils.prompt_builder import PromptBuilder
+from utils.validation import validate_not_empty, validate_not_none, validate_type
 
 from .base import BaseAgent
 
@@ -63,6 +64,10 @@ class WriterAgent(BaseAgent):
         If the chapter has scenes defined, generates content scene-by-scene.
         Otherwise, generates the entire chapter at once.
         """
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+        validate_not_none(chapter, "chapter")
+        validate_type(chapter, "chapter", Chapter)
         logger.info(
             f"Writing chapter {chapter.number}: '{chapter.title}'"
             + (" (revision)" if revision_feedback else "")
@@ -251,6 +256,9 @@ class WriterAgent(BaseAgent):
         revision_feedback: str | None = None,
     ) -> str:
         """Write a complete short story in one pass."""
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+
         logger.info("Writing complete short story" + (" (revision)" if revision_feedback else ""))
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
@@ -287,6 +295,10 @@ class WriterAgent(BaseAgent):
         direction: str | None = None,
     ) -> str:
         """Continue writing from where the text left off."""
+        validate_not_none(story_state, "story_state")
+        validate_type(story_state, "story_state", StoryState)
+        validate_not_empty(current_text, "current_text")
+
         logger.info(f"Continuing scene from {len(current_text)} chars of existing text")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
         context = story_state.get_context_summary()
