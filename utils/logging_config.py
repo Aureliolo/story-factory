@@ -17,6 +17,10 @@ class ContextFilter(logging.Filter):
     """Add context information to log records."""
 
     def __init__(self) -> None:
+        """Initialize the context filter.
+
+        Creates a filter with no correlation ID set.
+        """
         super().__init__()
         self.correlation_id: str | None = None
 
@@ -81,6 +85,11 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
             """RotatingFileHandler that flushes immediately after each log."""
 
             def emit(self, record: logging.LogRecord) -> None:
+                """Emit a log record and flush immediately.
+
+                Args:
+                    record: Log record to emit.
+                """
                 super().emit(record)
                 self.flush()
 
