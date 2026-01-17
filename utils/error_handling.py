@@ -30,8 +30,29 @@ def handle_ollama_errors(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        """Decorate function with Ollama error handling.
+
+        Args:
+            func: Function to wrap with error handling.
+
+        Returns:
+            Wrapped function.
+        """
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
+            """Execute function with error handling.
+
+            Args:
+                *args: Positional arguments to pass to function.
+                **kwargs: Keyword arguments to pass to function.
+
+            Returns:
+                Function result or default_return on error.
+
+            Raises:
+                Exception: Re-raises if raise_on_error is True.
+            """
             try:
                 return func(*args, **kwargs)
             except (ConnectionError, OSError, TimeoutError) as e:
@@ -80,8 +101,26 @@ def retry_with_fallback(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        """Decorate function with retry and fallback logic.
+
+        Args:
+            func: Function to wrap with retry logic.
+
+        Returns:
+            Wrapped function.
+        """
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
+            """Execute function with retry logic.
+
+            Args:
+                *args: Positional arguments to pass to function.
+                **kwargs: Keyword arguments to pass to function.
+
+            Returns:
+                Function result or fallback_value after all retries fail.
+            """
             last_exception = None
 
             for attempt in range(max_retries):
@@ -127,6 +166,11 @@ class ErrorBoundary:
         self.exception: BaseException | None = None
 
     def __enter__(self) -> "ErrorBoundary":
+        """Enter the error boundary context.
+
+        Returns:
+            The ErrorBoundary instance.
+        """
         return self
 
     def __exit__(
@@ -135,6 +179,16 @@ class ErrorBoundary:
         exc_val: BaseException | None,
         exc_tb: Any,
     ) -> bool:
+        """Exit the error boundary context.
+
+        Args:
+            exc_type: Exception type if an exception occurred.
+            exc_val: Exception instance if an exception occurred.
+            exc_tb: Exception traceback if an exception occurred.
+
+        Returns:
+            True to suppress exception, False to re-raise.
+        """
         if exc_type is not None:
             self.exception = exc_val
             log_func = getattr(logger, self.log_level.lower(), logger.error)

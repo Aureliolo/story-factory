@@ -49,6 +49,12 @@ class StoryOrchestrator:
         settings: Settings | None = None,
         model_override: str | None = None,  # Force specific model for all agents
     ):
+        """Initialize the story orchestrator.
+
+        Args:
+            settings: Application settings. If None, loads default settings.
+            model_override: Force specific model for all agents. If None, uses per-agent settings.
+        """
         self.settings = settings or Settings.load()
         self.model_override = model_override
 
@@ -92,6 +98,11 @@ class StoryOrchestrator:
 
     @property
     def interaction_mode(self) -> str:
+        """Get the current interaction mode from settings.
+
+        Returns:
+            The interaction mode (e.g., 'guided', 'autonomous').
+        """
         return self.settings.interaction_mode
 
     def create_new_story(self) -> StoryState:

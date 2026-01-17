@@ -64,6 +64,12 @@ class ContinuityAgent(BaseAgent):
     """Agent that checks for plot holes and inconsistencies."""
 
     def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+        """Initialize the Continuity Checker agent.
+
+        Args:
+            model: Override model to use. If None, uses settings-based model for continuity.
+            settings: Application settings. If None, loads default settings.
+        """
         super().__init__(
             name="Continuity Checker",
             role="Consistency Guardian",

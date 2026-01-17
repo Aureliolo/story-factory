@@ -53,6 +53,12 @@ class InterviewerAgent(BaseAgent):
     """Agent that interviews the user to gather story requirements."""
 
     def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+        """Initialize the Interviewer agent.
+
+        Args:
+            model: Override model to use. If None, uses settings-based model for interviewer.
+            settings: Application settings. If None, loads default settings.
+        """
         super().__init__(
             name="Interviewer",
             role="Story Requirements Gatherer",
