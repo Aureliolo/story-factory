@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agents.writer import WriterAgent
-from memory.story_state import Chapter, Character, StoryBrief, StoryState
+from memory.story_state import Chapter, Character, Scene, StoryBrief, StoryState
 from settings import Settings
 
 
@@ -259,3 +259,178 @@ A figure emerged from behind the crates. Not the killer he expected, but someone
         call_args = writer.generate.call_args
         prompt = call_args[0][0]
         assert "naturally" in prompt.lower() or "next beat" in prompt.lower()
+
+
+class TestWriterSceneAware:
+    """Tests for scene-aware writing functionality."""
+
+    @pytest.fixture
+    def chapter_with_scenes(self):
+        """Create a chapter with scene structure."""
+        return Chapter(
+            number=1,
+            title="The Investigation Begins",
+            outline="Jack investigates the disappearance",
+            scenes=[
+                Scene(
+                    number=1,
+                    title="Meeting the Client",
+                    goal="Introduce Vera and establish the mystery",
+                    pov_character="Jack Stone",
+                    location="Jack's office",
+                    beats=[
+                        "Vera enters the office",
+                        "She shows a photo of her sister",
+                        "Jack accepts the case",
+                    ],
+                ),
+                Scene(
+                    number=2,
+                    title="First Clue",
+                    goal="Jack finds the first lead",
+                    pov_character="Jack Stone",
+                    location="Sister's apartment",
+                    beats=["Jack searches the apartment", "Discovers a hidden letter"],
+                ),
+            ],
+        )
+
+    def test_detects_scene_structure(self, writer, sample_story_state, chapter_with_scenes):
+        """Test that writer detects when scenes are defined."""
+        writer.generate = MagicMock(return_value="Scene content...")
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        # Should be called once per scene
+        assert writer.generate.call_count == 2
+
+    def test_writes_scenes_sequentially(self, writer, sample_story_state, chapter_with_scenes):
+        """Test that scenes are written in order."""
+        scene_contents = ["First scene content...", "Second scene content..."]
+        writer.generate = MagicMock(side_effect=scene_contents)
+
+        result = writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        assert "First scene content" in result
+        assert "Second scene content" in result
+        # Scenes should be separated by double newlines
+        assert "\n\n" in result
+
+    def test_includes_scene_goals_in_prompt(self, writer, sample_story_state, chapter_with_scenes):
+        """Test that scene goals are included in generation prompts."""
+        writer.generate = MagicMock(return_value="Scene content...")
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        # Check first scene call
+        first_call_prompt = writer.generate.call_args_list[0][0][0]
+        assert "Introduce Vera" in first_call_prompt or "SCENE GOAL" in first_call_prompt
+
+    def test_includes_scene_beats_in_prompt(self, writer, sample_story_state, chapter_with_scenes):
+        """Test that scene beats are included in generation prompts."""
+        writer.generate = MagicMock(return_value="Scene content...")
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        # Check first scene call
+        first_call_prompt = writer.generate.call_args_list[0][0][0]
+        assert "Vera enters" in first_call_prompt or "KEY BEATS" in first_call_prompt
+
+    def test_includes_scene_pov_in_prompt(self, writer, sample_story_state, chapter_with_scenes):
+        """Test that POV character is included in prompts."""
+        writer.generate = MagicMock(return_value="Scene content...")
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        first_call_prompt = writer.generate.call_args_list[0][0][0]
+        assert "Jack Stone" in first_call_prompt or "POV CHARACTER" in first_call_prompt
+
+    def test_includes_scene_location_in_prompt(self, writer, sample_story_state, chapter_with_scenes):
+        """Test that location is included in prompts."""
+        writer.generate = MagicMock(return_value="Scene content...")
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        first_call_prompt = writer.generate.call_args_list[0][0][0]
+        assert "office" in first_call_prompt.lower() or "LOCATION" in first_call_prompt
+
+    def test_maintains_continuity_between_scenes(self, writer, sample_story_state, chapter_with_scenes):
+        """Test that previous scene context is passed to next scene."""
+        scene_contents = [
+            "First scene with specific ending phrase...",
+            "Second scene content...",
+        ]
+        writer.generate = MagicMock(side_effect=scene_contents)
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        # Check second scene call includes previous scene context
+        second_call_prompt = writer.generate.call_args_list[1][0][0]
+        assert "PREVIOUS SCENE" in second_call_prompt or "ending phrase" in second_call_prompt
+
+    def test_updates_scene_content_and_metadata(
+        self, writer, sample_story_state, chapter_with_scenes
+    ):
+        """Test that scene content and metadata are updated."""
+        scene_contents = ["First scene content...", "Second scene content..."]
+        writer.generate = MagicMock(side_effect=scene_contents)
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        # Check that scene content was updated
+        assert chapter_with_scenes.scenes[0].content == "First scene content..."
+        assert chapter_with_scenes.scenes[1].content == "Second scene content..."
+        # Check word count
+        assert chapter_with_scenes.scenes[0].word_count > 0
+        # Check status
+        assert chapter_with_scenes.scenes[0].status == "drafted"
+
+    def test_fallback_to_chapter_level_without_scenes(self, writer, sample_story_state):
+        """Test that writer falls back to chapter-level when no scenes defined."""
+        writer.generate = MagicMock(return_value="Full chapter content...")
+
+        chapter = sample_story_state.chapters[0]
+        # Ensure no scenes
+        assert len(chapter.scenes) == 0
+
+        result = writer.write_chapter(sample_story_state, chapter)
+
+        # Should only call generate once for the whole chapter
+        assert writer.generate.call_count == 1
+        assert result == "Full chapter content..."
+
+    def test_write_scene_directly(self, writer, sample_story_state, chapter_with_scenes):
+        """Test writing a single scene directly."""
+        writer.generate = MagicMock(return_value="Direct scene content...")
+
+        scene = chapter_with_scenes.scenes[0]
+        result = writer.write_scene(
+            story_state=sample_story_state,
+            chapter=chapter_with_scenes,
+            scene=scene,
+        )
+
+        assert result == "Direct scene content..."
+        assert writer.generate.call_count == 1
+
+        # Check that scene-specific info is in the prompt
+        prompt = writer.generate.call_args[0][0]
+        assert "Meeting the Client" in prompt or scene.title in prompt
+
+    def test_scene_with_previous_chapter_context(
+        self, writer, sample_story_state, chapter_with_scenes
+    ):
+        """Test first scene includes previous chapter context."""
+        # Add content to previous chapter
+        sample_story_state.chapters[0].content = "Previous chapter ending text..."
+        # Update chapter number to make it chapter 2
+        chapter_with_scenes.number = 2
+
+        writer.generate = MagicMock(return_value="Scene content...")
+
+        writer.write_chapter(sample_story_state, chapter_with_scenes)
+
+        # First scene should include previous chapter context
+        first_call_prompt = writer.generate.call_args_list[0][0][0]
+        assert "PREVIOUS CHAPTER" in first_call_prompt or "ending text" in first_call_prompt
+
