@@ -57,7 +57,8 @@ class WritePage:
         self._chapter_select: Select | None = None
         self._writing_display: Markdown | None = None
         self._word_count_label: Label | None = None
-        self._feedback_input: Textarea | None = None
+        self._regenerate_feedback_input: Textarea | None = None
+        self._version_history_container: ui.column | None = None
         self._client: Client | None = None  # For background task safety
         self._finalize_btn: Button | None = None
         self._build_structure_btn: Button | None = None
@@ -466,15 +467,27 @@ class WritePage:
             on_change=lambda e: setattr(self.state, "feedback_mode", e.value),
         ).classes("w-full")
 
-        # Instant feedback
-        with ui.expansion("Instant Feedback", icon="feedback").classes("w-full"):
-            self._feedback_input = ui.textarea(
-                placeholder="Enter feedback for the current chapter..."
-            ).classes("w-full")
+        # Regenerate with Feedback
+        with ui.expansion("Regenerate with Feedback", icon="autorenew", value=False).classes(
+            "w-full"
+        ):
+            ui.label("Provide specific feedback to improve this chapter").classes(
+                "text-sm text-gray-600 dark:text-gray-400 mb-2"
+            )
+            self._regenerate_feedback_input = ui.textarea(
+                placeholder="e.g., 'Add more dialogue between the characters' or 'Make the action sequence more suspenseful'"
+            ).classes("w-full min-h-[100px]")
             ui.button(
-                "Apply Feedback",
-                on_click=self._apply_feedback,
-            ).props("flat").classes("w-full")
+                "Regenerate Chapter",
+                on_click=self._regenerate_with_feedback,
+                icon="autorenew",
+            ).props("color=primary").classes("w-full mt-2")
+
+        # Version History
+        with ui.expansion("Version History", icon="history", value=False).classes("w-full"):
+            self._version_history_container = ui.column().classes("w-full gap-2")
+            with self._version_history_container:
+                self._build_version_history()
 
         ui.separator()
 
@@ -758,6 +771,7 @@ class WritePage:
         self.state.select_chapter(e.value)
         self._refresh_writing_display()
         self._refresh_scene_editor()
+        self._refresh_version_history()
 
     def _select_chapter(self, chapter_num: int) -> None:
         """Select a chapter by number."""
@@ -766,6 +780,7 @@ class WritePage:
             self._chapter_select.value = chapter_num
         self._refresh_writing_display()
         self._refresh_scene_editor()
+        self._refresh_version_history()
 
     def _refresh_writing_display(self) -> None:
         """Refresh the writing display with current chapter."""
@@ -959,27 +974,281 @@ class WritePage:
                 except RuntimeError:
                     logger.debug("Client context not available for hiding status")
 
-    def _apply_feedback(self) -> None:
-        """Apply instant feedback to current chapter."""
-        if not self._feedback_input or not self._feedback_input.value:
+    async def _regenerate_with_feedback(self) -> None:
+        """Regenerate the current chapter with user feedback."""
+        if not self._regenerate_feedback_input or not self._regenerate_feedback_input.value:
+            self._notify("Please enter feedback before regenerating", type="warning")
             return
         if not self.state.project or self.state.current_chapter is None:
             self._notify("No chapter selected", type="warning")
             return
 
-        feedback = self._feedback_input.value
+        # Check if chapter has content
+        chapter = next(
+            (c for c in self.state.project.chapters if c.number == self.state.current_chapter),
+            None,
+        )
+        if not chapter or not chapter.content:
+            self._notify("Chapter has no content yet. Write it first.", type="warning")
+            return
 
-        # Add as a review note for tracking and future revision
-        self.services.story.add_review(
-            self.state.project,
-            review_type="user_feedback",
-            content=feedback,
-            chapter_num=self.state.current_chapter,
+        # Prevent multiple concurrent generations
+        if self.state.is_writing:
+            self._notify("Generation already in progress", type="warning")
+            return
+
+        # Capture for closure type narrowing
+        project = self.state.project
+        chapter_num = self.state.current_chapter
+        feedback = self._regenerate_feedback_input.value
+
+        try:
+            # Reset generation flags
+            self.state.reset_generation_flags()
+            self.state.is_writing = True
+
+            # Show generation status
+            if self._generation_status:
+                self._generation_status.show()
+                self._generation_status.update_progress(
+                    f"Regenerating chapter {chapter_num} with your feedback..."
+                )
+
+            self._notify(f"Regenerating chapter {chapter_num}...", type="info")
+
+            # Define cancellation check
+            def should_cancel() -> bool:
+                return self.state.generation_cancel_requested
+
+            # Run regeneration in background with progressive updates
+            async def background_regeneration():
+                """Run regeneration in a background thread and yield events."""
+                events = []
+                try:
+                    # Run blocking generator in thread pool
+                    def regenerate_blocking():
+                        return list(
+                            self.services.story.regenerate_chapter_with_feedback(
+                                project, chapter_num, feedback, cancel_check=should_cancel
+                            )
+                        )
+
+                    events = await run.io_bound(regenerate_blocking)
+                    return events, None
+                except GenerationCancelled as e:
+                    logger.info(f"Chapter {chapter_num} regeneration cancelled")
+                    return [], e
+                except Exception as e:
+                    logger.exception(f"Failed to regenerate chapter {chapter_num}")
+                    return [], e
+
+            # Process events with UI updates
+            events, error = await background_regeneration()
+
+            # Update UI based on results
+            if error:
+                if isinstance(error, GenerationCancelled):
+                    self._notify("Regeneration cancelled by user", type="warning")
+                else:
+                    self._notify(f"Error: {error}", type="negative")
+            else:
+                # Process events for progress display
+                for event in events:
+                    self.state.writing_progress = event.message
+                    if self._generation_status and self._client:
+                        try:
+                            with self._client:
+                                self._generation_status.update_progress(event.message)
+                        except RuntimeError:
+                            logger.debug("Client context not available for progress update")
+
+                self._refresh_writing_display()
+                self._refresh_version_history()
+                self.services.project.save_project(self.state.project)
+                self._notify("Chapter regenerated successfully!", type="positive")
+                # Clear feedback input
+                self._regenerate_feedback_input.value = ""
+
+        finally:
+            self.state.is_writing = False
+            self.state.reset_generation_flags()
+            if self._generation_status and self._client:
+                try:
+                    with self._client:
+                        self._generation_status.hide()
+                except RuntimeError:
+                    logger.debug("Client context not available for hiding status")
+
+    def _build_version_history(self) -> None:
+        """Build the version history display."""
+        if not self.state.project or self.state.current_chapter is None:
+            ui.label("Select a chapter to see its version history").classes(
+                "text-gray-500 dark:text-gray-400 text-sm"
+            )
+            return
+
+        chapter = next(
+            (c for c in self.state.project.chapters if c.number == self.state.current_chapter),
+            None,
         )
 
-        self.services.project.save_project(self.state.project)
-        self._notify(f"Feedback saved for chapter {self.state.current_chapter}", type="positive")
-        self._feedback_input.value = ""
+        if not chapter or not chapter.versions:
+            ui.label("No previous versions yet").classes("text-gray-500 dark:text-gray-400 text-sm")
+            return
+
+        # Sort versions by version number (newest first)
+        sorted_versions = sorted(chapter.versions, key=lambda v: v.version_number, reverse=True)
+
+        for version in sorted_versions:
+            with ui.card().classes("w-full p-2 bg-gray-50 dark:bg-gray-800"):
+                with ui.row().classes("w-full items-center justify-between"):
+                    with ui.column().classes("gap-1 flex-grow"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.badge(f"v{version.version_number}").props("color=blue-7")
+                            if version.is_current:
+                                ui.badge("Current").props("color=green-7")
+                            ui.label(version.created_at.strftime("%b %d, %I:%M %p")).classes(
+                                "text-xs text-gray-500 dark:text-gray-400"
+                            )
+
+                        if version.feedback:
+                            ui.label(f'Feedback: "{version.feedback}"').classes(
+                                "text-xs italic text-gray-600 dark:text-gray-300 mt-1"
+                            )
+
+                        ui.label(f"{version.word_count} words").classes(
+                            "text-xs text-gray-500 dark:text-gray-400"
+                        )
+
+                    # Action buttons
+                    with ui.row().classes("gap-1"):
+                        if not version.is_current:
+                            ui.button(
+                                icon="restore",
+                                on_click=lambda v=version: self._rollback_to_version(v.id),
+                            ).props("flat round size=sm").tooltip("Restore this version")
+
+                        ui.button(
+                            icon="visibility",
+                            on_click=lambda v=version: self._view_version(v.id),
+                        ).props("flat round size=sm").tooltip("View this version")
+
+    def _refresh_version_history(self) -> None:
+        """Refresh the version history display."""
+        logger.debug("Refreshing version history display")
+        if self._version_history_container:
+            self._version_history_container.clear()
+            with self._version_history_container:
+                self._build_version_history()
+
+    def _rollback_to_version(self, version_id: str) -> None:
+        """Rollback to a previous version."""
+        logger.debug(
+            "Rolling back to version %s for chapter %s",
+            version_id,
+            self.state.current_chapter,
+        )
+        if not self.state.project or self.state.current_chapter is None:
+            return
+
+        chapter = next(
+            (c for c in self.state.project.chapters if c.number == self.state.current_chapter),
+            None,
+        )
+
+        if not chapter:
+            return
+
+        # Rollback
+        success = chapter.rollback_to_version(version_id)
+        if success:
+            logger.info(
+                "Successfully rolled back chapter %s to version %s",
+                chapter.number,
+                version_id,
+            )
+            # Update word count
+            chapter.update_chapter_word_count()
+            self.services.project.save_project(self.state.project)
+            self._refresh_writing_display()
+            self._refresh_version_history()
+            self._notify("Version restored successfully", type="positive")
+        else:
+            logger.warning(
+                "Failed to rollback chapter %s to version %s",
+                self.state.current_chapter,
+                version_id,
+            )
+            self._notify("Failed to restore version", type="negative")
+
+    def _view_version(self, version_id: str) -> None:
+        """View a specific version in a dialog."""
+        logger.debug(
+            "Viewing version %s for chapter %s",
+            version_id,
+            self.state.current_chapter,
+        )
+        if not self.state.project or self.state.current_chapter is None:
+            return
+
+        chapter = next(
+            (c for c in self.state.project.chapters if c.number == self.state.current_chapter),
+            None,
+        )
+
+        if not chapter:
+            return
+
+        version = chapter.get_version_by_id(version_id)
+        if not version:
+            return
+
+        # Create dialog to show version
+        dialog = ui.dialog().props("maximized")
+
+        with dialog, ui.card().classes("w-full h-full flex flex-col"):
+            # Header
+            with ui.row().classes("w-full items-center justify-between p-4 border-b"):
+                with ui.column().classes("gap-1"):
+                    with ui.row().classes("items-center gap-2"):
+                        ui.label(f"Chapter {chapter.number}: {chapter.title}").classes(
+                            "text-2xl font-bold"
+                        )
+                        ui.badge(f"Version {version.version_number}").props("color=blue-7")
+                        if version.is_current:
+                            ui.badge("Current").props("color=green-7")
+
+                    with ui.row().classes("items-center gap-4 text-sm text-gray-500"):
+                        ui.label(version.created_at.strftime("%B %d, %Y at %I:%M %p"))
+                        ui.label(f"{version.word_count} words")
+
+                    if version.feedback:
+                        ui.label(f'Feedback used: "{version.feedback}"').classes(
+                            "text-sm italic text-gray-600 dark:text-gray-400 mt-1"
+                        )
+
+                ui.button(icon="close", on_click=dialog.close).props("flat round")
+
+            # Content
+            with ui.column().classes("flex-grow overflow-auto p-6"):
+                ui.markdown(version.content).classes("prose dark:prose-invert max-w-none")
+
+            # Footer with actions
+            with ui.row().classes("w-full justify-end gap-2 p-4 border-t"):
+                if not version.is_current:
+
+                    def restore_and_close() -> None:
+                        self._rollback_to_version(version_id)
+                        dialog.close()
+
+                    ui.button(
+                        "Restore This Version",
+                        on_click=restore_and_close,
+                        icon="restore",
+                    ).props("color=primary")
+                ui.button("Close", on_click=dialog.close).props("flat")
+
+        dialog.open()
 
     def _add_note(self, content: str) -> None:
         """Add a review note."""
