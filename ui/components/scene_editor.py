@@ -352,7 +352,6 @@ class SceneListComponent:
         # using SortableJS library or similar
         # For now, use Edit button to manage scenes
 
-
     def _handle_add_scene(self) -> None:
         """Handle add scene button click."""
         logger.debug(f"Adding new scene to chapter {self.chapter.number}")
