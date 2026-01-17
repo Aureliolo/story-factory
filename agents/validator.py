@@ -4,6 +4,7 @@ import logging
 import re
 
 from utils.exceptions import ResponseValidationError
+from utils.validation import validate_not_empty
 
 from .base import BaseAgent
 
@@ -58,9 +59,8 @@ class ValidatorAgent(BaseAgent):
         Raises:
             ResponseValidationError: If validation fails
         """
-        # Quick pre-checks before using AI
-        if not response or not response.strip():
-            raise ResponseValidationError("Empty response received")
+        validate_not_empty(response, "response")
+        validate_not_empty(expected_language, "expected_language")
 
         # Check for obvious wrong-language characters
         if expected_language == "English":

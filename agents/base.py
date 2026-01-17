@@ -10,6 +10,7 @@ from settings import ModelInfo, Settings, get_model_info
 from utils.error_handling import handle_ollama_errors
 from utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
 from utils.logging_config import log_performance
+from utils.validation import validate_not_empty
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,10 @@ class BaseAgent:
         temperature: float | None = None,
         settings: Settings | None = None,
     ):
+        validate_not_empty(name, "name")
+        validate_not_empty(role, "role")
+        validate_not_empty(system_prompt, "system_prompt")
+
         self.name = name
         self.role = role
         self.system_prompt = system_prompt
@@ -110,6 +115,7 @@ class BaseAgent:
         Returns:
             Tuple of (is_valid, message)
         """
+        validate_not_empty(model_name, "model_name")
         try:
             models = self.client.list()
             available_models = [m["name"] for m in models.get("models", [])]
@@ -142,6 +148,7 @@ class BaseAgent:
         Uses a semaphore to limit concurrent LLM requests and prevent overloading
         the Ollama server.
         """
+        validate_not_empty(prompt, "prompt")
         messages = [{"role": "system", "content": self.system_prompt}]
 
         if context:

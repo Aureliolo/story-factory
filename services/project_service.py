@@ -11,6 +11,7 @@ from pathlib import Path
 from memory.story_state import StoryState
 from memory.world_database import WorldDatabase
 from settings import STORIES_DIR, WORLDS_DIR, Settings
+from utils.validation import validate_not_empty, validate_not_none, validate_type
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,8 @@ class ProjectService:
         Args:
             settings: Application settings.
         """
+        validate_not_none(settings, "settings")
+        validate_type(settings, "settings", Settings)
         logger.debug("Initializing ProjectService")
         self.settings = settings
         self._ensure_directories()
@@ -144,6 +147,7 @@ class ProjectService:
             FileNotFoundError: If project doesn't exist.
             ValueError: If path validation fails.
         """
+        validate_not_empty(project_id, "project_id")
         logger.debug(f"load_project called: project_id={project_id}")
         story_path = STORIES_DIR / f"{project_id}.json"
 
@@ -193,6 +197,8 @@ class ProjectService:
         Returns:
             Path where the project was saved.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.debug(f"save_project called: project_id={state.id}, name={state.project_name}")
         try:
             state.updated_at = datetime.now()
@@ -277,6 +283,7 @@ class ProjectService:
         Raises:
             ValueError: If path validation fails.
         """
+        validate_not_empty(project_id, "project_id")
         logger.debug(f"delete_project called: project_id={project_id}")
         try:
             story_path = STORIES_DIR / f"{project_id}.json"
@@ -322,6 +329,7 @@ class ProjectService:
         Raises:
             FileNotFoundError: If original project doesn't exist.
         """
+        validate_not_empty(project_id, "project_id")
         logger.debug(f"duplicate_project called: project_id={project_id}, new_name={new_name}")
         try:
             # Load original
@@ -372,6 +380,8 @@ class ProjectService:
         Raises:
             FileNotFoundError: If project doesn't exist.
         """
+        validate_not_empty(project_id, "project_id")
+        validate_not_empty(name, "name")
         logger.debug(f"update_project_name called: project_id={project_id}, new_name={name}")
         try:
             state, _ = self.load_project(project_id)
@@ -393,6 +403,7 @@ class ProjectService:
         Returns:
             Path to the project JSON file.
         """
+        validate_not_empty(project_id, "project_id")
         logger.debug(f"get_project_path called: project_id={project_id}")
         return STORIES_DIR / f"{project_id}.json"
 
@@ -405,5 +416,6 @@ class ProjectService:
         Returns:
             Path to the project's SQLite database.
         """
+        validate_not_empty(project_id, "project_id")
         logger.debug(f"get_world_db_path called: project_id={project_id}")
         return WORLDS_DIR / f"{project_id}.db"

@@ -8,6 +8,12 @@ from memory.entities import Entity, Relationship
 from memory.story_state import StoryState
 from memory.world_database import WorldDatabase
 from settings import Settings
+from utils.validation import (
+    validate_not_empty,
+    validate_not_none,
+    validate_positive,
+    validate_type,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +47,10 @@ class WorldService:
         Returns:
             Number of entities extracted.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
+        validate_not_none(world_db, "world_db")
+        validate_type(world_db, "world_db", WorldDatabase)
         logger.debug(
             f"extract_entities_from_structure called: project_id={state.id}, characters={len(state.characters)}"
         )
@@ -117,6 +127,10 @@ class WorldService:
         Returns:
             Dictionary with counts of extracted items.
         """
+        validate_not_empty(content, "content")
+        validate_not_none(world_db, "world_db")
+        validate_type(world_db, "world_db", WorldDatabase)
+        validate_positive(chapter_number, "chapter_number")
         logger.debug(
             f"extract_from_chapter called: chapter={chapter_number}, content_length={len(content)}"
         )

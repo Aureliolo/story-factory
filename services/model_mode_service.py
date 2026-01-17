@@ -30,6 +30,7 @@ from memory.mode_models import (
 )
 from settings import AVAILABLE_MODELS, Settings, get_available_vram
 from utils.json_parser import extract_json
+from utils.validation import validate_not_empty, validate_not_none, validate_positive
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ class ModelModeService:
         Raises:
             ValueError: If mode_id is not found.
         """
+        validate_not_empty(mode_id, "mode_id")
         # Check presets first
         mode = get_preset_mode(mode_id)
         if mode:
@@ -158,6 +160,7 @@ class ModelModeService:
 
     def save_custom_mode(self, mode: GenerationMode) -> None:
         """Save a custom generation mode."""
+        validate_not_none(mode, "mode")
         self._db.save_custom_mode(
             mode_id=mode.id,
             name=mode.name,
@@ -177,6 +180,7 @@ class ModelModeService:
         Returns:
             True if deleted, False if not found.
         """
+        validate_not_empty(mode_id, "mode_id")
         # Can't delete presets
         if mode_id in PRESET_MODES:
             logger.warning(f"Cannot delete preset mode: {mode_id}")
@@ -189,6 +193,7 @@ class ModelModeService:
 
         Falls back to settings auto-selection if mode doesn't specify.
         """
+        validate_not_empty(agent_role, "agent_role")
         mode = self.get_current_mode()
         model_id = mode.agent_models.get(agent_role)
 
@@ -205,6 +210,7 @@ class ModelModeService:
         Raises:
             ValueError: If agent_role is not configured in agent_temperatures.
         """
+        validate_not_empty(agent_role, "agent_role")
         mode = self.get_current_mode()
         temp = mode.agent_temperatures.get(agent_role)
         if temp is not None:
@@ -221,6 +227,7 @@ class ModelModeService:
         For parallel, keeps models loaded.
         For adaptive, unloads if VRAM is constrained.
         """
+        validate_not_empty(model_id, "model_id")
         mode = self.get_current_mode()
         strategy = mode.vram_strategy
 
@@ -279,6 +286,9 @@ class ModelModeService:
         Returns:
             The score ID for later updates.
         """
+        validate_not_empty(project_id, "project_id")
+        validate_not_empty(agent_role, "agent_role")
+        validate_not_empty(model_id, "model_id")
         mode = self.get_current_mode()
 
         # Calculate tokens/second
@@ -328,6 +338,8 @@ class ModelModeService:
         quality: QualityScores,
     ) -> None:
         """Update a score record with quality scores."""
+        validate_positive(score_id, "score_id")
+        validate_not_none(quality, "quality")
         try:
             self._db.update_score(
                 score_id,
@@ -353,6 +365,7 @@ class ModelModeService:
         user_rating: int | None = None,
     ) -> None:
         """Record an implicit quality signal."""
+        validate_positive(score_id, "score_id")
         try:
             self._db.update_score(
                 score_id,
@@ -391,6 +404,7 @@ class ModelModeService:
             tokens_per_second: Generation speed (calculated if not provided).
             vram_used_gb: VRAM used during generation.
         """
+        validate_positive(score_id, "score_id")
         # Calculate tokens_per_second if not provided
         if tokens_per_second is None and tokens_generated and time_seconds and time_seconds > 0:
             tokens_per_second = tokens_generated / time_seconds
@@ -434,6 +448,9 @@ class ModelModeService:
         Returns:
             QualityScores with prose_quality and instruction_following.
         """
+        validate_not_empty(content, "content")
+        validate_not_empty(genre, "genre")
+        validate_not_empty(tone, "tone")
         # Use validator model or smallest available
         judge_model = self.get_model_for_agent("validator")
         logger.debug(f"Using {judge_model} to judge quality for {genre}/{tone}")
@@ -740,6 +757,7 @@ Respond ONLY with JSON:
 
     def get_recommendation_history(self, limit: int = 50) -> list[dict]:
         """Get recommendation history."""
+        validate_positive(limit, "limit")
         return self._db.get_recommendation_history(limit)
 
     def export_scores_csv(self, output_path: Path | str) -> int:
