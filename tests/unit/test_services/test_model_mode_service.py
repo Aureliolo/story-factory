@@ -163,7 +163,7 @@ class TestModelModeService:
         # Temperature must be in valid range for LLM generation
         MIN_TEMPERATURE = 0.0
         MAX_TEMPERATURE = 2.0
-        assert MIN_TEMPERATURE < temp <= MAX_TEMPERATURE
+        assert MIN_TEMPERATURE <= temp <= MAX_TEMPERATURE
 
     # === Score Recording Tests ===
 
