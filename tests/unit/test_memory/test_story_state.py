@@ -426,8 +426,8 @@ class TestStoryState:
                     title="Chapter One",
                     outline="First chapter outline",
                     scenes=[
-                        Scene(number=1, title="Opening", goal="Introduce setting"),
-                        Scene(number=2, title="Inciting incident", goal="Start conflict"),
+                        Scene(id="scene-1", title="Opening", goal="Introduce setting"),
+                        Scene(id="scene-2", title="Inciting incident", goal="Start conflict"),
                     ],
                 )
             ],
@@ -450,7 +450,7 @@ class TestStoryState:
                     content="Some content",
                     scenes=[
                         Scene(
-                            number=1,
+                            id="scene-dawn",
                             title="Dawn breaks",
                             goal="Set atmosphere",
                             pov_character="Narrator",
@@ -538,32 +538,34 @@ class TestStoryState:
         assert state.chapters[0].content == "Chapter content here"
 
 
-class TestScene:
-    """Tests for Scene model."""
+class TestSceneSerialization:
+    """Tests for Scene model serialization and deserialization."""
 
     def test_scene_creation_minimal(self):
         """Test creating a scene with minimal required fields."""
-        scene = Scene(number=1, title="Opening scene", goal="Introduce protagonist")
-        assert scene.number == 1
+        scene = Scene(id="scene-1", title="Opening scene", goal="Introduce protagonist")
+        assert scene.id == "scene-1"
         assert scene.title == "Opening scene"
         assert scene.goal == "Introduce protagonist"
         assert scene.pov_character == ""
         assert scene.location == ""
         assert scene.beats == []
         assert scene.content == ""
+        assert scene.order == 0
 
     def test_scene_creation_full(self):
         """Test creating a scene with all fields populated."""
         scene = Scene(
-            number=2,
+            id="scene-2",
             title="The confrontation",
             goal="Build tension between rivals",
             pov_character="Alice",
             location="Town square",
             beats=["Alice arrives", "Bob challenges her", "Crowd gathers"],
             content="Alice stepped into the square...",
+            order=1,
         )
-        assert scene.number == 2
+        assert scene.id == "scene-2"
         assert scene.title == "The confrontation"
         assert scene.goal == "Build tension between rivals"
         assert scene.pov_character == "Alice"
@@ -571,11 +573,12 @@ class TestScene:
         assert len(scene.beats) == 3
         assert scene.beats[0] == "Alice arrives"
         assert scene.content.startswith("Alice stepped")
+        assert scene.order == 1
 
     def test_scene_serialization(self):
         """Test scene can be serialized to dict/JSON."""
         scene = Scene(
-            number=1,
+            id="scene-1",
             title="Test scene",
             goal="Test serialization",
             pov_character="Hero",
@@ -584,7 +587,7 @@ class TestScene:
             content="Some content",
         )
         data = scene.model_dump(mode="json")
-        assert data["number"] == 1
+        assert data["id"] == "scene-1"
         assert data["title"] == "Test scene"
         assert data["goal"] == "Test serialization"
         assert data["pov_character"] == "Hero"
@@ -595,7 +598,7 @@ class TestScene:
     def test_scene_deserialization(self):
         """Test scene can be deserialized from dict/JSON."""
         data = {
-            "number": 3,
+            "id": "scene-3",
             "title": "Finale",
             "goal": "Resolve conflict",
             "pov_character": "Villain",
@@ -604,13 +607,13 @@ class TestScene:
             "content": "The end is near...",
         }
         scene = Scene.model_validate(data)
-        assert scene.number == 3
+        assert scene.id == "scene-3"
         assert scene.title == "Finale"
         assert scene.pov_character == "Villain"
 
 
-class TestChapter:
-    """Tests for Chapter model."""
+class TestChapterSerialization:
+    """Tests for Chapter model serialization and backward compatibility."""
 
     def test_chapter_without_scenes(self):
         """Test creating chapter without scenes (backward compatibility)."""
@@ -632,8 +635,8 @@ class TestChapter:
             title="First Chapter",
             outline="Introduction",
             scenes=[
-                Scene(number=1, title="Scene 1", goal="Setup"),
-                Scene(number=2, title="Scene 2", goal="Development"),
+                Scene(id="scene-1", title="Scene 1", goal="Setup"),
+                Scene(id="scene-2", title="Scene 2", goal="Development"),
             ],
         )
         assert len(chapter.scenes) == 2
@@ -647,7 +650,7 @@ class TestChapter:
             title="Test Chapter",
             outline="Outline",
             scenes=[
-                Scene(number=1, title="Opening", goal="Start story", pov_character="Hero"),
+                Scene(id="scene-1", title="Opening", goal="Start story", pov_character="Hero"),
             ],
         )
         data = chapter.model_dump(mode="json")
@@ -685,7 +688,7 @@ class TestChapter:
             "revision_notes": [],
             "scenes": [
                 {
-                    "number": 1,
+                    "id": "scene-a",
                     "title": "Scene A",
                     "goal": "Goal A",
                     "pov_character": "Alice",
@@ -697,6 +700,7 @@ class TestChapter:
         }
         chapter = Chapter.model_validate(data)
         assert len(chapter.scenes) == 1
+        assert chapter.scenes[0].id == "scene-a"
         assert chapter.scenes[0].title == "Scene A"
         assert chapter.scenes[0].location == "Forest"
         assert chapter.scenes[0].beats == ["Beat 1", "Beat 2"]

@@ -59,6 +59,7 @@ class SceneEditorDialog:
 
     def build(self) -> None:
         """Build and open the dialog."""
+        assert self.scene is not None  # Always set in __init__
         self._dialog = ui.dialog().props("persistent")
 
         with self._dialog, ui.card().classes("w-[800px] max-h-[80vh] overflow-auto"):
@@ -150,6 +151,7 @@ class SceneEditorDialog:
 
     def _handle_save(self) -> None:
         """Handle save button click."""
+        assert self.scene is not None  # Always set in __init__
         if not self._title_input or not self._outline_input:
             return
 
@@ -254,7 +256,7 @@ class SceneListComponent:
             else:
                 # Create sortable container for scenes
                 with ui.column().classes("w-full gap-2") as scene_container:
-                    scene_container._props["id"] = f"scene-list-{id(scene_container)}"
+                    scene_container._props["id"] = f"scene-list-{self.chapter.number}"
                     self._build_scene_list()
 
                     # Note: Drag-drop reordering is enabled via HTML5 draggable attributes
