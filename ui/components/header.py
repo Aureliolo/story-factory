@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 NAV_ITEMS = [
     ("/", "Write", "edit"),
     ("/world", "World", "public"),
+    ("/timeline", "Timeline", "timeline"),
     ("/projects", "Projects", "folder"),
     ("/analytics", "Analytics", "analytics"),
     ("/settings", "Settings", "settings"),
