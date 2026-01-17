@@ -603,10 +603,14 @@ class SettingsPage:
             self.settings.learning_min_samples = int(self._min_samples.value)
             self.settings.learning_confidence_threshold = self._confidence_slider.value
 
-            # Capture new state for redo
+            # Validate and save first - only record undo if successful
+            self.settings.validate()
+            self.settings.save()
+
+            # Capture new state for redo AFTER successful save
             new_snapshot = self._capture_settings_snapshot()
 
-            # Record undo action
+            # Record undo action only after successful validation and save
             self.state.record_action(
                 UndoAction(
                     action_type=ActionType.UPDATE_SETTINGS,
@@ -614,10 +618,6 @@ class SettingsPage:
                     inverse_data=old_snapshot,
                 )
             )
-
-            # Validate and save
-            self.settings.validate()
-            self.settings.save()
 
             ui.notify("Settings saved!", type="positive")
 
@@ -682,9 +682,65 @@ class SettingsPage:
         self.settings.learning_min_samples = snapshot["learning_min_samples"]
         self.settings.learning_confidence_threshold = snapshot["learning_confidence_threshold"]
 
-        # Save and reload page to reflect changes
+        # Save changes
         self.settings.save()
+
+        # Update UI elements to reflect restored values
+        self._refresh_ui_from_settings()
+
         ui.notify("Settings restored", type="info")
+
+    def _refresh_ui_from_settings(self) -> None:
+        """Refresh all UI input elements from current settings values."""
+        logger.debug("Refreshing UI elements from settings")
+
+        # Core settings
+        if hasattr(self, "_ollama_url_input") and self._ollama_url_input:
+            self._ollama_url_input.value = self.settings.ollama_url
+        if hasattr(self, "_default_model_select") and self._default_model_select:
+            self._default_model_select.value = self.settings.default_model
+        if hasattr(self, "_use_per_agent") and self._use_per_agent:
+            self._use_per_agent.value = self.settings.use_per_agent_models
+
+        # Per-agent model selects
+        if hasattr(self, "_agent_model_selects"):
+            for role, select in self._agent_model_selects.items():
+                if select and role in self.settings.agent_models:
+                    select.value = self.settings.agent_models[role]
+
+        # Temperature sliders
+        if hasattr(self, "_temp_sliders"):
+            for role, slider in self._temp_sliders.items():
+                if slider and role in self.settings.agent_temperatures:
+                    slider.value = self.settings.agent_temperatures[role]
+
+        # Workflow settings
+        if hasattr(self, "_interaction_mode_select") and self._interaction_mode_select:
+            self._interaction_mode_select.value = self.settings.interaction_mode
+        if hasattr(self, "_checkpoint_input") and self._checkpoint_input:
+            self._checkpoint_input.value = self.settings.chapters_between_checkpoints
+        if hasattr(self, "_revision_input") and self._revision_input:
+            self._revision_input.value = self.settings.max_revision_iterations
+
+        # Context settings
+        if hasattr(self, "_context_size_input") and self._context_size_input:
+            self._context_size_input.value = self.settings.context_size
+        if hasattr(self, "_max_tokens_input") and self._max_tokens_input:
+            self._max_tokens_input.value = self.settings.max_tokens
+
+        # Mode settings
+        if hasattr(self, "_mode_select") and self._mode_select:
+            self._mode_select.value = self.settings.current_mode
+
+        # Learning settings
+        if hasattr(self, "_autonomy_select") and self._autonomy_select:
+            self._autonomy_select.value = self.settings.learning_autonomy
+        if hasattr(self, "_confidence_slider") and self._confidence_slider:
+            self._confidence_slider.value = self.settings.learning_confidence_threshold
+        if hasattr(self, "_periodic_interval") and self._periodic_interval:
+            self._periodic_interval.value = self.settings.learning_periodic_interval
+        if hasattr(self, "_min_samples") and self._min_samples:
+            self._min_samples.value = self.settings.learning_min_samples
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""
