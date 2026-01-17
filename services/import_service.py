@@ -138,17 +138,24 @@ Be thorough - include all named characters and even unnamed roles if significant
                 logger.error(f"Character extraction returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid character extraction response: {data}")
 
-            # Post-process: flag low confidence items
+            # Post-process: validate required fields and flag low confidence items
             for char in data:
                 if isinstance(char, dict):
-                    confidence = char.get("confidence", 0.5)
-                    if confidence < 0.7:
+                    # Validate required field exists - LLM must provide confidence
+                    if "confidence" not in char:
+                        logger.warning(
+                            "Character extraction missing confidence field for '%s', flagging for review",
+                            char.get("name", "unknown"),
+                        )
+                        char["confidence"] = 0.5
+                        char["needs_review"] = True
+                    elif char["confidence"] < 0.7:
                         char["needs_review"] = True
                     else:
                         char.setdefault("needs_review", False)
 
             logger.info(f"Extracted {len(data)} characters from text")
-            return data  # type: ignore[return-value]
+            return data
 
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Character extraction LLM error: {e}")
@@ -248,17 +255,24 @@ Include cities, buildings, rooms, natural features - any place that matters to t
                 logger.error(f"Location extraction returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid location extraction response: {data}")
 
-            # Post-process: flag low confidence items
+            # Post-process: validate required fields and flag low confidence items
             for loc in data:
                 if isinstance(loc, dict):
-                    confidence = loc.get("confidence", 0.5)
-                    if confidence < 0.7:
+                    # Validate required field exists - LLM must provide confidence
+                    if "confidence" not in loc:
+                        logger.warning(
+                            "Location extraction missing confidence field for '%s', flagging for review",
+                            loc.get("name", "unknown"),
+                        )
+                        loc["confidence"] = 0.5
+                        loc["needs_review"] = True
+                    elif loc["confidence"] < 0.7:
                         loc["needs_review"] = True
                     else:
                         loc.setdefault("needs_review", False)
 
             logger.info(f"Extracted {len(data)} locations from text")
-            return data  # type: ignore[return-value]
+            return data
 
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Location extraction LLM error: {e}")
@@ -359,17 +373,24 @@ Only include items that are actually significant - avoid mundane everyday object
                 logger.error(f"Item extraction returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid item extraction response: {data}")
 
-            # Post-process: flag low confidence items
+            # Post-process: validate required fields and flag low confidence items
             for item in data:
                 if isinstance(item, dict):
-                    confidence = item.get("confidence", 0.5)
-                    if confidence < 0.7:
+                    # Validate required field exists - LLM must provide confidence
+                    if "confidence" not in item:
+                        logger.warning(
+                            "Item extraction missing confidence field for '%s', flagging for review",
+                            item.get("name", "unknown"),
+                        )
+                        item["confidence"] = 0.5
+                        item["needs_review"] = True
+                    elif item["confidence"] < 0.7:
                         item["needs_review"] = True
                     else:
                         item.setdefault("needs_review", False)
 
             logger.info(f"Extracted {len(data)} items from text")
-            return data  # type: ignore[return-value]
+            return data
 
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Item extraction LLM error: {e}")
@@ -467,17 +488,25 @@ Only include relationships that are actually mentioned or clearly implied in the
                 logger.error(f"Relationship inference returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid relationship inference response: {data}")
 
-            # Post-process: flag low confidence items
+            # Post-process: validate required fields and flag low confidence items
             for rel in data:
                 if isinstance(rel, dict):
-                    confidence = rel.get("confidence", 0.5)
-                    if confidence < 0.7:
+                    # Validate required field exists - LLM must provide confidence
+                    if "confidence" not in rel:
+                        logger.warning(
+                            "Relationship inference missing confidence field for '%s' -> '%s', flagging for review",
+                            rel.get("source", "unknown"),
+                            rel.get("target", "unknown"),
+                        )
+                        rel["confidence"] = 0.5
+                        rel["needs_review"] = True
+                    elif rel["confidence"] < 0.7:
                         rel["needs_review"] = True
                     else:
                         rel.setdefault("needs_review", False)
 
             logger.info(f"Inferred {len(data)} relationships from text")
-            return data  # type: ignore[return-value]
+            return data
 
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Relationship inference LLM error: {e}")

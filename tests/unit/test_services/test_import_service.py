@@ -56,10 +56,10 @@ def story_state():
         setting_time="Present",
         target_length="novella",
         themes=["discovery", "rivalry"],
-        pov="third person",
         language="English",
+        content_rating="none",
     )
-    state = StoryState(id="test-project", name="Test Project")
+    state = StoryState(id="test-project", project_name="Test Project")
     state.brief = brief
     return state
 
@@ -79,26 +79,22 @@ class TestImportService:
         assert model is not None
         assert isinstance(model, str)
 
-    @pytest.mark.asyncio
-    async def test_extract_characters_empty_text(self, import_service):
+    def test_extract_characters_empty_text(self, import_service):
         """Test character extraction with empty text."""
         with pytest.raises(ValueError):
             import_service.extract_characters("")
 
-    @pytest.mark.asyncio
-    async def test_extract_locations_empty_text(self, import_service):
+    def test_extract_locations_empty_text(self, import_service):
         """Test location extraction with empty text."""
         with pytest.raises(ValueError):
             import_service.extract_locations("")
 
-    @pytest.mark.asyncio
-    async def test_extract_items_empty_text(self, import_service):
+    def test_extract_items_empty_text(self, import_service):
         """Test item extraction with empty text."""
         with pytest.raises(ValueError):
             import_service.extract_items("")
 
-    @pytest.mark.asyncio
-    async def test_infer_relationships_empty_text(self, import_service):
+    def test_infer_relationships_empty_text(self, import_service):
         """Test relationship inference with empty text."""
         characters = [{"name": "Sarah"}, {"name": "Marcus"}]
         with pytest.raises(ValueError):
@@ -109,8 +105,7 @@ class TestImportService:
         result = import_service.infer_relationships([], "some text")
         assert result == []
 
-    @pytest.mark.asyncio
-    async def test_extract_all_empty_text(self, import_service):
+    def test_extract_all_empty_text(self, import_service):
         """Test full extraction with empty text."""
         with pytest.raises(ValueError):
             import_service.extract_all("")

@@ -2529,7 +2529,7 @@ class WorldPage:
                         text_input.value = text
                         ui.notify(f"Loaded {len(text)} characters", type="positive")
                     except Exception as err:
-                        logger.exception(f"Failed to read file: {err}")
+                        logger.exception("Failed to read file during upload handling")
                         ui.notify(f"Failed to read file: {err}", type="negative")
 
                 ui.upload(
@@ -2585,10 +2585,32 @@ class WorldPage:
             )
 
             notification.dismiss()
-            logger.info(
-                f"Extraction complete: {result['summary']['total_entities']} entities, "
-                f"{result['summary']['relationships']} relationships"
-            )
+
+            # Validate extraction result structure
+            if "summary" not in result:
+                logger.error("Import service returned result without summary field")
+                ui.notify(
+                    "Import completed but response was missing summary information",
+                    type="warning",
+                )
+            else:
+                try:
+                    total_entities = result["summary"]["total_entities"]
+                    relationships = result["summary"]["relationships"]
+                    logger.info(
+                        f"Extraction complete: {total_entities} entities, "
+                        f"{relationships} relationships"
+                    )
+                except KeyError as exc:
+                    logger.error(
+                        "Import service returned unexpected result structure; "
+                        "missing summary fields: %s",
+                        exc,
+                    )
+                    ui.notify(
+                        "Import completed but response was missing summary fields",
+                        type="warning",
+                    )
 
             # Close the input dialog
             dialog.close()
