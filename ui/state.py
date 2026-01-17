@@ -22,13 +22,13 @@ class ActionType(Enum):
     ADD_RELATIONSHIP = "add_relationship"
     DELETE_RELATIONSHIP = "delete_relationship"
     UPDATE_RELATIONSHIP = "update_relationship"
-    
+
     # Write/Chapter actions
     UPDATE_CHAPTER_CONTENT = "update_chapter_content"
     DELETE_CHAPTER = "delete_chapter"
     ADD_CHAPTER = "add_chapter"
     UPDATE_CHAPTER_FEEDBACK = "update_chapter_feedback"
-    
+
     # Settings actions
     UPDATE_SETTINGS = "update_settings"
 
@@ -334,7 +334,7 @@ class AppState:
 
     def trigger_undo(self) -> None:
         """Trigger undo action by calling registered callback.
-        
+
         This is called by global keyboard shortcuts.
         """
         if self._on_undo and self.can_undo():
@@ -343,7 +343,7 @@ class AppState:
 
     def trigger_redo(self) -> None:
         """Trigger redo action by calling registered callback.
-        
+
         This is called by global keyboard shortcuts.
         """
         if self._on_redo and self.can_redo():

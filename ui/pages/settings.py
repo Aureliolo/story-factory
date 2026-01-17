@@ -44,7 +44,7 @@ class SettingsPage:
 
         # Settings reference
         self.settings = services.settings
-        
+
         # Register undo/redo handlers for this page
         self.state.on_undo(self._do_undo)
         self.state.on_redo(self._do_redo)
@@ -553,11 +553,11 @@ class SettingsPage:
     def _save_settings(self) -> None:
         """Save all settings."""
         from ui.state import ActionType, UndoAction
-        
+
         try:
             # Capture old state for undo
             old_snapshot = self._capture_settings_snapshot()
-            
+
             # Update settings from UI
             self.settings.ollama_url = self._ollama_url_input.value
             self.settings.default_model = self._default_model_select.value
@@ -605,7 +605,7 @@ class SettingsPage:
 
             # Capture new state for redo
             new_snapshot = self._capture_settings_snapshot()
-            
+
             # Record undo action
             self.state.record_action(
                 UndoAction(
@@ -630,7 +630,7 @@ class SettingsPage:
 
     def _capture_settings_snapshot(self) -> dict[str, Any]:
         """Capture current settings state for undo/redo.
-        
+
         Returns:
             Dictionary containing all current settings values.
         """
@@ -658,7 +658,7 @@ class SettingsPage:
 
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
         """Restore settings from a snapshot.
-        
+
         Args:
             snapshot: Settings snapshot to restore.
         """
@@ -681,15 +681,15 @@ class SettingsPage:
         self.settings.learning_periodic_interval = snapshot["learning_periodic_interval"]
         self.settings.learning_min_samples = snapshot["learning_min_samples"]
         self.settings.learning_confidence_threshold = snapshot["learning_confidence_threshold"]
-        
+
         # Save and reload page to reflect changes
         self.settings.save()
         ui.notify("Settings restored", type="info")
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""
-        from ui.state import ActionType, UndoAction
-        
+        from ui.state import ActionType
+
         action = self.state.undo()
         if not action:
             return
@@ -705,8 +705,8 @@ class SettingsPage:
 
     def _do_redo(self) -> None:
         """Handle redo for settings changes."""
-        from ui.state import ActionType, UndoAction
-        
+        from ui.state import ActionType
+
         action = self.state.redo()
         if not action:
             return
