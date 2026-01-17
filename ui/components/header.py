@@ -17,6 +17,7 @@ NAV_ITEMS = [
     ("/world", "World", "public"),
     ("/timeline", "Timeline", "timeline"),
     ("/projects", "Projects", "folder"),
+    ("/templates", "Templates", "book"),
     ("/analytics", "Analytics", "analytics"),
     ("/settings", "Settings", "settings"),
     ("/models", "Models", "smart_toy"),

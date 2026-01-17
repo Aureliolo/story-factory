@@ -14,6 +14,7 @@ from ui.pages.analytics import AnalyticsPage
 from ui.pages.models import ModelsPage
 from ui.pages.projects import ProjectsPage
 from ui.pages.settings import SettingsPage
+from ui.pages.templates import TemplatesPage
 from ui.pages.timeline import TimelinePage
 from ui.pages.world import WorldPage
 from ui.pages.write import WritePage
@@ -161,6 +162,14 @@ class StoryFactoryApp:
                 page.build()
 
             self._page_layout("/analytics", content)
+
+        @ui.page("/templates")
+        def templates_page():
+            def content():
+                page = TemplatesPage(self.state, self.services)
+                page.build()
+
+            self._page_layout("/templates", content)
 
         # Cleanup on shutdown
         app.on_shutdown(self._on_shutdown)
