@@ -21,6 +21,10 @@ class TestScoringService:
         mock.calculate_consistency_score.return_value = 9.0
         mock.update_quality_scores.return_value = None
         mock.update_performance_metrics.return_value = None
+        # Add settings with rating bounds
+        mock.settings = MagicMock()
+        mock.settings.user_rating_min = 1
+        mock.settings.user_rating_max = 5
         return mock
 
     @pytest.fixture

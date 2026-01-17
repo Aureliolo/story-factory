@@ -38,6 +38,7 @@ class ScoringService:
         """
         logger.debug("Initializing ScoringService")
         self._mode_service = mode_service
+        self.settings = mode_service.settings  # Access settings through mode_service
 
         # Track active score IDs for updates
         # Note: Use clear_chapter_tracking() when chapters are complete to prevent memory leaks
