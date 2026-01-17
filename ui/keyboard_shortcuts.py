@@ -1,8 +1,13 @@
 """Keyboard shortcuts handler for Story Factory."""
 
 import logging
+from typing import TYPE_CHECKING
 
 from nicegui import ui
+
+if TYPE_CHECKING:
+    from services import ServiceContainer
+    from ui.state import AppState
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +23,7 @@ class KeyboardShortcuts:
     - Alt+1-5: Switch between tabs
     """
 
-    def __init__(self, state, services):
+    def __init__(self, state: "AppState", services: "ServiceContainer") -> None:
         """Initialize keyboard shortcuts.
 
         Args:

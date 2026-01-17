@@ -5,7 +5,8 @@ from collections import OrderedDict
 from collections.abc import Generator
 from typing import Any
 
-from memory.story_state import StoryBrief, StoryState
+from agents.continuity import ContinuityIssue
+from memory.story_state import Character, StoryBrief, StoryState
 from memory.world_database import WorldDatabase
 from settings import Settings
 from utils.validation import (
@@ -669,7 +670,7 @@ class StoryService:
     def review_full_story(
         self,
         state: StoryState,
-    ) -> Generator[WorkflowEvent, None, list]:
+    ) -> Generator[WorkflowEvent, None, list[ContinuityIssue]]:
         """Perform a full story continuity review.
 
         Args:
@@ -747,7 +748,7 @@ class StoryService:
 
     # ========== WORLD GENERATION ==========
 
-    def generate_more_characters(self, state: StoryState, count: int = 2) -> list:
+    def generate_more_characters(self, state: StoryState, count: int = 2) -> list[Character]:
         """Generate additional characters for the story.
 
         Args:
@@ -763,7 +764,7 @@ class StoryService:
         self._sync_state(orchestrator, state)
         return new_chars
 
-    def generate_locations(self, state: StoryState, count: int = 3) -> list:
+    def generate_locations(self, state: StoryState, count: int = 3) -> list[Any]:
         """Generate locations for the story world.
 
         Args:
@@ -785,7 +786,7 @@ class StoryService:
         entity_names: list[str],
         existing_rels: list[tuple[str, str]],
         count: int = 5,
-    ) -> list:
+    ) -> list[Any]:
         """Generate relationships between entities.
 
         Args:

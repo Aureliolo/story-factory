@@ -2,11 +2,15 @@
 
 import logging
 import re
+from typing import TYPE_CHECKING
 
 from utils.exceptions import ResponseValidationError
 from utils.validation import validate_not_empty
 
 from .base import BaseAgent
+
+if TYPE_CHECKING:
+    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +34,7 @@ ALWAYS respond with ONLY one word: TRUE or FALSE. Nothing else."""
 class ValidatorAgent(BaseAgent):
     """Agent that validates AI responses for basic correctness."""
 
-    def __init__(self, model: str | None = None, settings=None):
+    def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
         super().__init__(
             name="Validator",
             role="Response Validator",

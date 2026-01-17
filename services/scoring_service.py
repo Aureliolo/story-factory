@@ -7,6 +7,7 @@ ModelModeService for LLM-based quality judgment.
 
 import logging
 from difflib import SequenceMatcher
+from typing import Any
 
 from memory.mode_models import QualityScores
 from services.model_mode_service import ModelModeService
@@ -286,7 +287,7 @@ class ScoringService:
 
     def calculate_consistency_score(
         self,
-        issues: list[dict],
+        issues: list[dict[str, Any]],
         score_id: int | None = None,
     ) -> float:
         """Calculate consistency score from continuity issues.

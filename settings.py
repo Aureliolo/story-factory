@@ -8,7 +8,7 @@ import logging
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 from urllib.parse import urlparse
 
 from memory.mode_models import LearningTrigger
@@ -224,7 +224,7 @@ class Settings:
 
     # Per-agent model settings
     use_per_agent_models: bool = True
-    agent_models: dict = field(
+    agent_models: dict[str, str] = field(
         default_factory=lambda: {
             "interviewer": "auto",
             "architect": "auto",
@@ -237,7 +237,7 @@ class Settings:
     )
 
     # Agent temperatures
-    agent_temperatures: dict = field(
+    agent_temperatures: dict[str, float] = field(
         default_factory=lambda: {
             "interviewer": 0.7,
             "architect": 0.85,
@@ -271,7 +271,7 @@ class Settings:
     max_revision_iterations: int = 3
 
     # Comparison mode
-    comparison_models: list = field(default_factory=list)
+    comparison_models: list[str] = field(default_factory=list)
 
     # UI settings
     dark_mode: bool = True
@@ -285,7 +285,7 @@ class Settings:
     use_mode_system: bool = True  # Whether to use mode-based model selection
 
     # Learning/tuning settings
-    learning_triggers: list = field(
+    learning_triggers: list[str] = field(
         default_factory=lambda: [
             LearningTrigger.AFTER_PROJECT.value
         ]  # off, after_project, periodic, continuous
@@ -640,7 +640,7 @@ class Settings:
                 logger.warning(f"Failed to backup settings: {e}")
 
     @classmethod
-    def _recover_partial_settings(cls, data: dict) -> "Settings":
+    def _recover_partial_settings(cls, data: dict[str, Any]) -> "Settings":
         """Attempt to recover partial settings from corrupted data.
 
         Merges valid fields from the loaded data with default values,

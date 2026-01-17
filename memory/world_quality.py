@@ -4,6 +4,8 @@ These models track quality scores from the judge/refinement loop, enabling
 iterative improvement of characters, locations, and relationships.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -27,7 +29,7 @@ class CharacterQualityScores(BaseModel):
         """Calculate average score across all dimensions."""
         return (self.depth + self.goals + self.flaws + self.uniqueness + self.arc_potential) / 5.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
         return {
             "depth": self.depth,
@@ -74,7 +76,7 @@ class LocationQualityScores(BaseModel):
             self.atmosphere + self.significance + self.story_relevance + self.distinctiveness
         ) / 4.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
         return {
             "atmosphere": self.atmosphere,
@@ -116,7 +118,7 @@ class RelationshipQualityScores(BaseModel):
         """Calculate average score across all dimensions."""
         return (self.tension + self.dynamics + self.story_potential + self.authenticity) / 4.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
         return {
             "tension": self.tension,
@@ -160,7 +162,7 @@ class FactionQualityScores(BaseModel):
             self.coherence + self.influence + self.conflict_potential + self.distinctiveness
         ) / 4.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
         return {
             "coherence": self.coherence,
@@ -204,7 +206,7 @@ class ItemQualityScores(BaseModel):
             self.significance + self.uniqueness + self.narrative_potential + self.integration
         ) / 4.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
         return {
             "significance": self.significance,
@@ -246,7 +248,7 @@ class ConceptQualityScores(BaseModel):
         """Calculate average score across all dimensions."""
         return (self.relevance + self.depth + self.manifestation + self.resonance) / 4.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
         return {
             "relevance": self.relevance,
@@ -289,7 +291,7 @@ class RefinementConfig(BaseModel):
     )
 
     @classmethod
-    def from_settings(cls, settings) -> "RefinementConfig":
+    def from_settings(cls, settings: Any) -> "RefinementConfig":
         """Create config from Settings object."""
         return cls(
             max_iterations=getattr(settings, "world_quality_max_iterations", 3),

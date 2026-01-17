@@ -2,7 +2,9 @@
 
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+from typing import Any
 
 from nicegui import ui
 from nicegui.elements.card import Card
@@ -399,7 +401,7 @@ class ModelsPage:
 
         dialog.open()
 
-    async def _confirm_download_all(self, dialog, model_ids: list[str]) -> None:
+    async def _confirm_download_all(self, dialog: ui.dialog, model_ids: list[str]) -> None:
         """Confirm and start downloading all models."""
         dialog.close()
         ui.notify(
@@ -546,7 +548,7 @@ class ModelsPage:
         if task.status == "completed":
             self._refresh_all(notify=False)
 
-    def _safe_update_label(self, label, text: str) -> None:
+    def _safe_update_label(self, label: Any, text: str) -> None:
         """Safely update a label's text, handling deleted elements."""
         try:
             if label:
@@ -554,7 +556,7 @@ class ModelsPage:
         except Exception:
             pass  # Element may have been deleted
 
-    def _safe_update_progress(self, progress_bar, value: float) -> None:
+    def _safe_update_progress(self, progress_bar: Any, value: float) -> None:
         """Safely update a progress bar's value, handling deleted elements."""
         try:
             if progress_bar:
@@ -792,7 +794,7 @@ class ModelsPage:
         logger.info(f"Queueing download of model: {model_id}")
         await self._queue_download(model_id)
 
-    async def _async_pull(self, model_id: str):
+    async def _async_pull(self, model_id: str) -> AsyncGenerator[dict[str, Any]]:
         """Async wrapper for pull generator."""
         for progress in self.services.model.pull_model(model_id):
             yield progress
@@ -829,7 +831,7 @@ class ModelsPage:
 
         dialog.open()
 
-    def _confirm_delete(self, dialog, model_id: str) -> None:
+    def _confirm_delete(self, dialog: ui.dialog, model_id: str) -> None:
         """Confirm model deletion."""
         logger.info(f"Deleting model: {model_id}")
         if self.services.model.delete_model(model_id):
@@ -898,7 +900,7 @@ class ModelsPage:
 
         update_dialog.open()
 
-    async def _download_updates(self, dialog, model_ids: list[str]) -> None:
+    async def _download_updates(self, dialog: ui.dialog, model_ids: list[str]) -> None:
         """Download updates for the given models."""
         dialog.close()
         logger.info(f"Downloading updates for {len(model_ids)} models")

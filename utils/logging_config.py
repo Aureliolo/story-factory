@@ -16,11 +16,11 @@ DEFAULT_LOG_FILE = Path(__file__).parent.parent / "logs" / "story_factory.log"
 class ContextFilter(logging.Filter):
     """Add context information to log records."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.correlation_id = None
+        self.correlation_id: str | None = None
 
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         """Add correlation ID to log record if available."""
         if self.correlation_id:
             record.correlation_id = self.correlation_id
@@ -80,7 +80,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
         class FlushingRotatingFileHandler(RotatingFileHandler):
             """RotatingFileHandler that flushes immediately after each log."""
 
-            def emit(self, record):
+            def emit(self, record: logging.LogRecord) -> None:
                 super().emit(record)
                 self.flush()
 

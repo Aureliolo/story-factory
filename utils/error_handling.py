@@ -124,12 +124,17 @@ class ErrorBoundary:
         self.fallback = fallback
         self.log_level = log_level
         self.raise_on_exit = raise_on_exit
-        self.exception = None
+        self.exception: BaseException | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> "ErrorBoundary":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
         if exc_type is not None:
             self.exception = exc_val
             log_func = getattr(logger, self.log_level.lower(), logger.error)
