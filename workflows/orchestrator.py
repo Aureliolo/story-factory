@@ -19,6 +19,7 @@ from agents import (
     ValidatorAgent,
     WriterAgent,
 )
+from agents.continuity import ContinuityIssue
 from memory.story_state import Chapter, Character, StoryBrief, StoryState
 from settings import STORIES_DIR, Settings
 from utils.constants import get_language_code
@@ -869,7 +870,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
     def review_full_story(
         self,
-    ) -> Generator[WorkflowEvent, None, list[Any]]:  # Returns list of ContinuityIssue objects
+    ) -> Generator[WorkflowEvent, None, list[ContinuityIssue]]:
         """Perform a full story continuity review.
 
         Returns:

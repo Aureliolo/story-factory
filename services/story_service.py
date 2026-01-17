@@ -5,6 +5,7 @@ from collections import OrderedDict
 from collections.abc import Generator
 from typing import Any
 
+from agents.continuity import ContinuityIssue
 from memory.story_state import StoryBrief, StoryState
 from memory.world_database import WorldDatabase
 from settings import Settings
@@ -669,7 +670,7 @@ class StoryService:
     def review_full_story(
         self,
         state: StoryState,
-    ) -> Generator[WorkflowEvent, None, list[Any]]:
+    ) -> Generator[WorkflowEvent, None, list[ContinuityIssue]]:
         """Perform a full story continuity review.
 
         Args:

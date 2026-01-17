@@ -755,7 +755,7 @@ class ExportService:
                         p_format.line_spacing = opts.line_height if not opts.double_spaced else 2.0
 
                 # Page break after each chapter
-                doc.add_page_break()  # type: ignore[no-untyped-call]
+                doc.add_page_break()  # type: ignore[no-untyped-call]  # python-docx library lacks type annotations
 
         # Write to bytes using context manager for proper cleanup
         with BytesIO() as output:
