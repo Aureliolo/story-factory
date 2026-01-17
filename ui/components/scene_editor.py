@@ -252,7 +252,69 @@ class SceneListComponent:
                         "text-sm text-gray-500 dark:text-gray-400 p-2"
                     )
             else:
-                self._build_scene_list()
+                # Create sortable container for scenes
+                with ui.column().classes("w-full gap-2") as scene_container:
+                    scene_container._props["id"] = f"scene-list-{id(scene_container)}"
+                    self._build_scene_list()
+                    
+                    # Add JavaScript for drag and drop
+                    # Note: This is a simplified implementation
+                    # A full implementation would use SortableJS or similar library
+                    ui.html(
+                        f"""
+                        <script>
+                        // Simple drag and drop for scene reordering
+                        (function() {{
+                            const container = document.getElementById('{scene_container._props["id"]}');
+                            if (!container) return;
+                            
+                            let draggedElement = null;
+                            
+                            container.addEventListener('dragstart', function(e) {{
+                                draggedElement = e.target.closest('[draggable="true"]');
+                                if (draggedElement) {{
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    e.dataTransfer.setData('text/html', draggedElement.innerHTML);
+                                    draggedElement.style.opacity = '0.5';
+                                }}
+                            }});
+                            
+                            container.addEventListener('dragend', function(e) {{
+                                if (draggedElement) {{
+                                    draggedElement.style.opacity = '1';
+                                }}
+                            }});
+                            
+                            container.addEventListener('dragover', function(e) {{
+                                e.preventDefault();
+                                const afterElement = getDragAfterElement(container, e.clientY);
+                                const draggable = draggedElement;
+                                if (afterElement == null) {{
+                                    container.appendChild(draggable);
+                                }} else {{
+                                    container.insertBefore(draggable, afterElement);
+                                }}
+                            }});
+                            
+                            function getDragAfterElement(container, y) {{
+                                const draggableElements = [...container.querySelectorAll('[draggable="true"]:not(.opacity-50)')];
+                                
+                                return draggableElements.reduce((closest, child) => {{
+                                    const box = child.getBoundingClientRect();
+                                    const offset = y - box.top - box.height / 2;
+                                    
+                                    if (offset < 0 && offset > closest.offset) {{
+                                        return {{ offset: offset, element: child }};
+                                    }} else {{
+                                        return closest;
+                                    }}
+                                }}, {{ offset: Number.NEGATIVE_INFINITY }}).element;
+                            }}
+                        }})();
+                        </script>
+                        """,
+                        sanitize=False,
+                    )
 
     def _build_scene_list(self) -> None:
         """Build the list of scene cards."""
