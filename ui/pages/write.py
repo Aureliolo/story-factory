@@ -15,11 +15,12 @@ from nicegui.elements.textarea import Textarea
 
 from memory.mode_models import PRESET_MODES
 from services import ServiceContainer
+from services.story_service import GenerationCancelled
 from ui.components.chat import ChatComponent
+from ui.components.generation_status import GenerationStatus
 from ui.graph_renderer import render_entity_summary_html
 from ui.state import AppState
 from ui.theme import get_status_color
-from workflows.orchestrator import WorkflowEvent
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class WritePage:
         self._finalize_btn: Button | None = None
         self._build_structure_btn: Button | None = None
         self._scene_list_container: ui.column | None = None  # Container for scene list
+        self._generation_status: GenerationStatus | None = None
 
     def _notify(
         self,
@@ -399,6 +401,10 @@ class WritePage:
             self._scene_list_container = ui.column().classes("w-full")
             with self._scene_list_container:
                 self._build_scene_editor()
+
+        # Generation status component
+        self._generation_status = GenerationStatus(self.state)
+        self._generation_status.build()
 
         # Writing area - use dark: prefix for automatic dark mode support
         self._writing_display = ui.markdown().classes(
@@ -780,9 +786,14 @@ class WritePage:
                 self._word_count_label.text = "0 words"
 
     async def _write_current_chapter(self) -> None:
-        """Write the current chapter."""
+        """Write the current chapter with background processing and live updates."""
         if not self.state.project or not self.state.current_chapter:
             self._notify("Select a chapter first", type="warning")
+            return
+
+        # Prevent multiple concurrent generations
+        if self.state.is_writing:
+            self._notify("Generation already in progress", type="warning")
             return
 
         # Capture for closure type narrowing
@@ -790,66 +801,163 @@ class WritePage:
         chapter_num = self.state.current_chapter
 
         try:
+            # Reset generation flags
+            self.state.reset_generation_flags()
             self.state.is_writing = True
+
+            # Show generation status
+            if self._generation_status:
+                self._generation_status.show()
+                self._generation_status.update_progress(f"Starting chapter {chapter_num}...")
+
             self._notify(f"Writing chapter {chapter_num}...", type="info")
 
-            # Run blocking generator in thread pool to avoid blocking event loop
-            def write_chapter_blocking() -> list[WorkflowEvent]:
+            # Define cancellation check
+            def should_cancel() -> bool:
+                return self.state.generation_cancel_requested
+
+            # Run generation in background with progressive updates
+            async def background_generation():
+                """Run generation in a background thread and yield events."""
                 events = []
-                for event in self.services.story.write_chapter(project, chapter_num):
-                    events.append(event)
-                return events
+                try:
+                    # Run blocking generator in thread pool
+                    def write_chapter_blocking():
+                        return list(
+                            self.services.story.write_chapter(
+                                project, chapter_num, cancel_check=should_cancel
+                            )
+                        )
 
-            events = await run.io_bound(write_chapter_blocking)
+                    events = await run.io_bound(write_chapter_blocking)
+                    return events, None
+                except GenerationCancelled as e:
+                    logger.info(f"Chapter {chapter_num} generation cancelled")
+                    return [], e
+                except Exception as e:
+                    logger.exception(f"Failed to write chapter {chapter_num}")
+                    return [], e
 
-            # Process events after completion
-            for event in events:
-                self.state.writing_progress = event.message
+            # Process events with UI updates
+            events, error = await background_generation()
 
+            # Update UI based on results
+            if error:
+                if isinstance(error, GenerationCancelled):
+                    self._notify("Generation cancelled by user", type="warning")
+                else:
+                    self._notify(f"Error: {error}", type="negative")
+            else:
+                # Process events for progress display
+                for event in events:
+                    self.state.writing_progress = event.message
+                    if self._generation_status and self._client:
+                        try:
+                            with self._client:
+                                self._generation_status.update_progress(event.message)
+                        except RuntimeError:
+                            # Client context not available, skip UI update
+                            logger.debug("Client context not available for progress update")
+
+                self._refresh_writing_display()
+                self.services.project.save_project(self.state.project)
+                self._notify("Chapter complete!", type="positive")
+
+        finally:
             self.state.is_writing = False
-            self._refresh_writing_display()
-            self.services.project.save_project(self.state.project)
-            self._notify("Chapter complete!", type="positive")
-
-        except Exception as e:
-            logger.exception(f"Failed to write chapter {chapter_num}")
-            self.state.is_writing = False
-            self._notify(f"Error: {e}", type="negative")
+            self.state.reset_generation_flags()
+            if self._generation_status and self._client:
+                try:
+                    with self._client:
+                        self._generation_status.hide()
+                except RuntimeError:
+                    logger.debug("Client context not available for hiding status")
 
     async def _write_all_chapters(self) -> None:
-        """Write all chapters."""
+        """Write all chapters with background processing and live updates."""
         if not self.state.project:
+            return
+
+        # Prevent multiple concurrent generations
+        if self.state.is_writing:
+            self._notify("Generation already in progress", type="warning")
             return
 
         # Capture for closure type narrowing
         project = self.state.project
 
         try:
+            # Reset generation flags
+            self.state.reset_generation_flags()
             self.state.is_writing = True
+
+            # Show generation status
+            if self._generation_status:
+                self._generation_status.show()
+                self._generation_status.update_progress("Starting story generation...")
+
             self._notify("Writing all chapters...", type="info")
 
-            # Run blocking generator in thread pool to avoid blocking event loop
-            def write_all_blocking() -> list[WorkflowEvent]:
+            # Define cancellation check
+            def should_cancel() -> bool:
+                return self.state.generation_cancel_requested
+
+            # Run generation in background with progressive updates
+            async def background_generation():
+                """Run generation in a background thread and yield events."""
                 events = []
-                for event in self.services.story.write_all_chapters(project):
-                    events.append(event)
-                return events
+                try:
+                    # Run blocking generator in thread pool
+                    def write_all_blocking():
+                        return list(
+                            self.services.story.write_all_chapters(
+                                project, cancel_check=should_cancel
+                            )
+                        )
 
-            events = await run.io_bound(write_all_blocking)
+                    events = await run.io_bound(write_all_blocking)
+                    return events, None
+                except GenerationCancelled as e:
+                    logger.info("Write all chapters cancelled")
+                    return [], e
+                except Exception as e:
+                    logger.exception("Failed to write all chapters")
+                    return [], e
 
-            # Process events after completion
-            for event in events:
-                self.state.writing_progress = event.message
+            # Process events with UI updates
+            events, error = await background_generation()
 
+            # Update UI based on results
+            if error:
+                if isinstance(error, GenerationCancelled):
+                    self._notify("Generation cancelled by user", type="warning")
+                else:
+                    self._notify(f"Error: {error}", type="negative")
+            else:
+                # Process events for progress display
+                for event in events:
+                    self.state.writing_progress = event.message
+                    if self._generation_status and self._client:
+                        try:
+                            with self._client:
+                                self._generation_status.update_progress(event.message)
+                        except RuntimeError:
+                            # Client context not available, skip UI update
+                            logger.debug("Client context not available for progress update")
+
+                self._refresh_writing_display()
+                self.services.project.save_project(self.state.project)
+                self._notify("All chapters complete!", type="positive")
+
+        finally:
             self.state.is_writing = False
-            self._refresh_writing_display()
-            self.services.project.save_project(self.state.project)
-            self._notify("All chapters complete!", type="positive")
-
-        except Exception as e:
-            logger.exception("Failed to write all chapters")
-            self.state.is_writing = False
-            self._notify(f"Error: {e}", type="negative")
+            self.state.reset_generation_flags()
+            if self._generation_status and self._client:
+                try:
+                    with self._client:
+                        self._generation_status.hide()
+                except RuntimeError:
+                    logger.debug("Client context not available for hiding status")
 
     def _apply_feedback(self) -> None:
         """Apply instant feedback to current chapter."""

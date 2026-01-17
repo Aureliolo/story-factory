@@ -2,7 +2,7 @@
 
 import logging
 from collections import OrderedDict
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import Any
 
 from agents.continuity import ContinuityIssue
@@ -455,6 +455,7 @@ class StoryService:
         state: StoryState,
         chapter_num: int,
         feedback: str | None = None,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with streaming events.
 
@@ -462,12 +463,16 @@ class StoryService:
             state: The story state.
             chapter_num: Chapter number to write.
             feedback: Optional feedback to incorporate.
+            cancel_check: Optional callable that returns True if cancellation is requested.
 
         Yields:
             WorkflowEvent objects for progress updates.
 
         Returns:
             The completed chapter content.
+
+        Raises:
+            GenerationCancelled: If cancellation is requested.
         """
         validate_not_none(state, "state")
         validate_type(state, "state", StoryState)
@@ -478,6 +483,13 @@ class StoryService:
         # Write the chapter
         content = ""
         for event in orchestrator.write_chapter(chapter_num):
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                logger.info(f"Chapter {chapter_num} generation cancelled by user")
+                raise GenerationCancelled(
+                    f"Chapter {chapter_num} generation cancelled", chapter_num=chapter_num
+                )
+
             yield event
             # The generator returns the content at the end
             if event.event_type == "agent_complete" and event.agent_name == "System":
@@ -489,19 +501,32 @@ class StoryService:
         self._sync_state(orchestrator, state)
         return content
 
-    def write_all_chapters(self, state: StoryState) -> Generator[WorkflowEvent]:
+    def write_all_chapters(
+        self, state: StoryState, cancel_check: Callable[[], bool] | None = None
+    ) -> Generator[WorkflowEvent]:
         """Write all chapters with streaming events.
 
         Args:
             state: The story state.
+            cancel_check: Optional callable that returns True if cancellation is requested.
 
         Yields:
             WorkflowEvent objects for progress updates.
+
+        Raises:
+            GenerationCancelled: If cancellation is requested.
         """
         orchestrator = self._get_orchestrator(state)
         orchestrator.story_state = state
 
-        yield from orchestrator.write_all_chapters()
+        for event in orchestrator.write_all_chapters():
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                logger.info("Write all chapters cancelled by user")
+                raise GenerationCancelled("Write all chapters cancelled")
+
+            yield event
+
         self._sync_state(orchestrator, state)
 
     def write_short_story(self, state: StoryState) -> Generator[WorkflowEvent, None, str]:
@@ -831,3 +856,30 @@ class StoryService:
         if state.id in self._orchestrators:
             del self._orchestrators[state.id]
             logger.debug(f"Cleaned up orchestrator for story {state.id}")
+
+
+class GenerationCancelled(Exception):
+    """Exception raised when generation is cancelled by user.
+
+    Attributes:
+        message: Cancellation message
+        chapter_num: Chapter number being generated when cancelled (if applicable)
+        progress_state: Optional dict with progress information at cancellation
+    """
+
+    def __init__(
+        self,
+        message: str = "Generation cancelled",
+        chapter_num: int | None = None,
+        progress_state: dict[str, Any] | None = None,
+    ):
+        """Initialize GenerationCancelled exception.
+
+        Args:
+            message: Cancellation message
+            chapter_num: Chapter number being generated (optional)
+            progress_state: Progress information at cancellation (optional)
+        """
+        super().__init__(message)
+        self.chapter_num = chapter_num
+        self.progress_state = progress_state or {}
