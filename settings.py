@@ -321,6 +321,11 @@ class Settings:
     world_gen_relationships_min: int = 8
     world_gen_relationships_max: int = 25
 
+    # Graph visualization settings
+    graph_filter_types: list[str] = field(
+        default_factory=lambda: ["character", "location", "item", "faction", "concept"]
+    )
+
     # LLM generation token limits (num_predict values)
     llm_tokens_character_create: int = 500
     llm_tokens_character_judge: int = 300
