@@ -419,3 +419,43 @@ class ProjectService:
         validate_not_empty(project_id, "project_id")
         logger.debug(f"get_world_db_path called: project_id={project_id}")
         return WORLDS_DIR / f"{project_id}.db"
+
+    def get_project_by_name(self, name: str) -> ProjectSummary | None:
+        """Find a project by its name.
+
+        Args:
+            name: The project name to search for.
+
+        Returns:
+            ProjectSummary if found, None otherwise.
+        """
+        validate_not_empty(name, "name")
+        logger.debug(f"get_project_by_name called: name={name}")
+
+        projects = self.list_projects()
+        for project in projects:
+            if project.name == name:
+                logger.debug(f"Found project by name: {name} -> {project.id}")
+                return project
+
+        logger.debug(f"No project found with name: {name}")
+        return None
+
+    def delete_project_by_name(self, name: str) -> bool:
+        """Delete a project by its name.
+
+        Args:
+            name: The project name to delete.
+
+        Returns:
+            True if deleted successfully, False if project not found.
+        """
+        validate_not_empty(name, "name")
+        logger.debug(f"delete_project_by_name called: name={name}")
+
+        project = self.get_project_by_name(name)
+        if not project:
+            logger.warning(f"Cannot delete - no project found with name: {name}")
+            return False
+
+        return self.delete_project(project.id)

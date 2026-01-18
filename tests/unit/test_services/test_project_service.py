@@ -545,3 +545,110 @@ class TestProjectServiceExceptionHandling:
         # Attempt path traversal
         with pytest.raises(ValueError, match="outside"):
             service.delete_project("../../../etc/passwd")
+
+
+class TestProjectServiceGetByName:
+    """Tests for get_project_by_name and delete_project_by_name methods."""
+
+    def test_get_project_by_name_found(self, tmp_settings, monkeypatch, tmp_path):
+        """Test finding a project by its name."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create a project
+        state, _ = service.create_project("My Unique Story")
+
+        # Find it by name
+        found = service.get_project_by_name("My Unique Story")
+
+        assert found is not None
+        assert found.id == state.id
+        assert found.name == "My Unique Story"
+
+    def test_get_project_by_name_not_found(self, tmp_settings, monkeypatch, tmp_path):
+        """Test getting a project by name that doesn't exist."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create some projects
+        service.create_project("Project A")
+        service.create_project("Project B")
+
+        # Try to find non-existent project
+        found = service.get_project_by_name("Nonexistent Project")
+
+        assert found is None
+
+    def test_get_project_by_name_empty_list(self, tmp_settings, monkeypatch, tmp_path):
+        """Test getting a project by name when no projects exist."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        (tmp_path / "stories").mkdir(parents=True, exist_ok=True)
+
+        service = ProjectService(tmp_settings)
+
+        found = service.get_project_by_name("Any Name")
+
+        assert found is None
+
+    def test_get_project_by_name_validates_input(self, tmp_settings, monkeypatch, tmp_path):
+        """Test get_project_by_name validates input."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        with pytest.raises(ValueError, match="name"):
+            service.get_project_by_name("")
+
+    def test_delete_project_by_name_found(self, tmp_settings, monkeypatch, tmp_path):
+        """Test deleting a project by its name."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create projects
+        state1, world_db1 = service.create_project("Delete Me")
+        state2, _ = service.create_project("Keep Me")
+
+        # Close the database to allow deletion on Windows
+        world_db1.close()
+
+        # Delete by name
+        result = service.delete_project_by_name("Delete Me")
+
+        assert result is True
+        assert len(service.list_projects()) == 1
+        assert service.list_projects()[0].name == "Keep Me"
+
+    def test_delete_project_by_name_not_found(self, tmp_settings, monkeypatch, tmp_path):
+        """Test deleting a project by name that doesn't exist."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        # Create a project
+        service.create_project("Existing Project")
+
+        # Try to delete non-existent project
+        result = service.delete_project_by_name("Nonexistent Project")
+
+        assert result is False
+        assert len(service.list_projects()) == 1
+
+    def test_delete_project_by_name_validates_input(self, tmp_settings, monkeypatch, tmp_path):
+        """Test delete_project_by_name validates input."""
+        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+
+        service = ProjectService(tmp_settings)
+
+        with pytest.raises(ValueError, match="name"):
+            service.delete_project_by_name("")

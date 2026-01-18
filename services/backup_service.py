@@ -339,3 +339,35 @@ class BackupService:
         """
         backup_dir = Path(self.settings.backup_folder)
         return backup_dir / backup_filename
+
+    def get_backup_metadata(self, backup_filename: str) -> dict | None:
+        """Get metadata from a backup file.
+
+        Args:
+            backup_filename: Name of the backup zip file.
+
+        Returns:
+            Dictionary with backup metadata, or None if invalid/not found.
+        """
+        logger.debug(f"Getting metadata for backup: {backup_filename}")
+
+        backup_dir = Path(self.settings.backup_folder)
+        backup_path = backup_dir / backup_filename
+
+        if not backup_path.exists():
+            logger.warning(f"Backup file not found: {backup_filename}")
+            return None
+
+        try:
+            with zipfile.ZipFile(backup_path, "r") as zf:
+                if "backup_metadata.json" not in zf.namelist():
+                    logger.warning(f"Backup {backup_filename} missing metadata file")
+                    return None
+
+                metadata_content = zf.read("backup_metadata.json")
+                metadata: dict = json.loads(metadata_content)
+                logger.debug(f"Retrieved metadata for backup {backup_filename}")
+                return metadata
+        except (zipfile.BadZipFile, json.JSONDecodeError) as e:
+            logger.warning(f"Could not read backup metadata from {backup_filename}: {e}")
+            return None
