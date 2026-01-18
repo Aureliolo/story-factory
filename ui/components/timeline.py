@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from memory.story_state import StoryState
+from utils.json_parser import clean_llm_text
 
 if TYPE_CHECKING:
     from settings import Settings
@@ -125,12 +126,12 @@ def _get_location_spans(story_state: StoryState) -> list[dict]:
 
     # Use world description as primary location if available
     if story_state.world_description:
+        # Clean the description to remove LLM artifacts like <think> tags
+        clean_desc = clean_llm_text(story_state.world_description)
         spans.append(
             {
                 "name": "Primary Setting",
-                "description": story_state.world_description[:100] + "..."
-                if len(story_state.world_description) > 100
-                else story_state.world_description,
+                "description": clean_desc[:100] + "..." if len(clean_desc) > 100 else clean_desc,
                 "start": 1,
                 "end": max(1, len(story_state.chapters)),
                 "color": TRACK_COLORS["locations"]["bg"],
@@ -229,8 +230,8 @@ class TimelineComponent:
 
             # Timeline container
             self._container = ui.column().classes(
-                "w-full border dark:border-gray-700 rounded-lg "
-                "bg-white dark:bg-gray-800 overflow-x-auto"
+                "w-full border border-gray-300 dark:border-gray-700 rounded-lg overflow-x-auto "
+                "bg-gray-50 dark:bg-gray-900"
             )
 
             # Initial render

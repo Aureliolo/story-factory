@@ -3,6 +3,7 @@
 from pydantic import BaseModel
 
 from utils.json_parser import (
+    clean_llm_text,
     extract_json,
     extract_json_list,
     parse_json_list_to_models,
@@ -196,3 +197,74 @@ class TestParseJsonListToModels:
         assert len(result) == 2
         assert result[0].name == "valid"
         assert result[1].name == "also_valid"
+
+
+class TestCleanLlmText:
+    """Tests for clean_llm_text function."""
+
+    def test_removes_think_tags_with_content(self):
+        """Should remove <think>...</think> blocks including content."""
+        text = "Hello <think>internal reasoning here</think> world"
+        result = clean_llm_text(text)
+        assert result == "Hello  world"
+
+    def test_removes_multiline_think_tags(self):
+        """Should remove multiline think blocks."""
+        text = """Start
+<think>
+This is
+multiline
+thinking
+</think>
+End"""
+        result = clean_llm_text(text)
+        assert "Start" in result
+        assert "End" in result
+        assert "multiline" not in result
+        assert "thinking" not in result
+
+    def test_removes_orphan_closing_think_tag(self):
+        """Should remove orphan </think> tags."""
+        text = "Some text </think> more text"
+        result = clean_llm_text(text)
+        assert result == "Some text  more text"
+
+    def test_removes_orphan_opening_think_tag(self):
+        """Should remove orphan <think> tags."""
+        text = "Some text <think> more text"
+        result = clean_llm_text(text)
+        assert result == "Some text  more text"
+
+    def test_removes_special_tokens(self):
+        """Should remove special tokens like <|endoftext|>."""
+        text = "Hello world<|endoftext|>"
+        result = clean_llm_text(text)
+        assert result == "Hello world"
+
+    def test_collapses_excessive_newlines(self):
+        """Should collapse more than 2 consecutive newlines."""
+        text = "Para 1\n\n\n\n\nPara 2"
+        result = clean_llm_text(text)
+        assert result == "Para 1\n\nPara 2"
+
+    def test_strips_whitespace(self):
+        """Should strip leading and trailing whitespace."""
+        text = "  \n  content here  \n  "
+        result = clean_llm_text(text)
+        assert result == "content here"
+
+    def test_handles_empty_string(self):
+        """Should handle empty string."""
+        result = clean_llm_text("")
+        assert result == ""
+
+    def test_handles_none_gracefully(self):
+        """Should handle None-like falsy values."""
+        result = clean_llm_text("")
+        assert result == ""
+
+    def test_preserves_normal_text(self):
+        """Should not modify normal text without LLM artifacts."""
+        text = "This is a normal paragraph.\n\nAnother paragraph."
+        result = clean_llm_text(text)
+        assert result == text

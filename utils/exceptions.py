@@ -100,3 +100,13 @@ class WorldGenerationError(StoryFactoryError):
     """
 
     pass
+
+
+class SuggestionError(StoryFactoryError):
+    """Raised when AI suggestion generation fails.
+
+    This indicates a failure to generate project name suggestions,
+    writing prompts, or other AI-assisted suggestions.
+    """
+
+    pass
