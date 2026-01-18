@@ -23,7 +23,6 @@ from ui.graph_renderer import (
     render_path_result,
 )
 from ui.state import ActionType, AppState, UndoAction
-from ui.theme import ENTITY_COLORS
 from utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
@@ -1209,21 +1208,6 @@ class WorldPage:
         with ui.card().classes("w-full h-full"):
             ui.label("Entity Browser").classes("text-lg font-semibold")
 
-            # Type filter
-            ui.label("Filter by Type").classes(
-                "text-sm font-medium text-gray-600 dark:text-gray-400 mt-2"
-            )
-
-            for entity_type in ["character", "location", "item", "faction", "concept"]:
-                color = ENTITY_COLORS[entity_type]
-                ui.checkbox(
-                    entity_type.title(),
-                    value=entity_type in self.state.entity_filter_types,
-                    on_change=lambda e, t=entity_type: self._toggle_type_filter(t, e.value),
-                ).props(f'color="{color}"')
-
-            ui.separator()
-
             # Search
             ui.input(
                 placeholder="Search entities...",
@@ -1337,124 +1321,82 @@ class WorldPage:
                 ).props("color=negative outline")
 
     def _build_type_specific_fields(self, entity: Entity) -> None:
-        """Build attribute fields specific to entity type."""
+        """Build attribute fields dynamically from entity attributes."""
         attrs = entity.attributes or {}
 
+        # Store dynamic attribute inputs for saving
+        self._dynamic_attr_inputs: dict[str, Any] = {}
+
         with ui.expansion("Attributes", icon="list", value=True).classes("w-full"):
-            if entity.type == "character":
-                # Role
-                self._attr_role_select = ui.select(
-                    label="Role",
-                    options=[
-                        "protagonist",
-                        "antagonist",
-                        "love_interest",
-                        "supporting",
-                        "mentor",
-                        "sidekick",
-                    ],
-                    value=attrs.get("role", "supporting"),
-                ).classes("w-full")
+            # Skip quality_scores - handled separately below
+            skip_keys = {"quality_scores"}
 
-                # Traits (comma-separated)
-                traits = attrs.get("traits") or attrs.get("personality_traits") or []
-                traits_str = ", ".join(traits) if isinstance(traits, list) else str(traits)
-                self._attr_traits_input = (
-                    ui.input(
-                        label="Traits (comma-separated)",
-                        value=traits_str,
-                    )
-                    .classes("w-full")
-                    .props("hint='e.g., brave, stubborn, loyal'")
-                )
+            for key, value in sorted(attrs.items()):
+                if key in skip_keys:
+                    continue
 
-                # Goals (comma-separated)
-                goals = attrs.get("goals") or []
-                goals_str = ", ".join(goals) if isinstance(goals, list) else str(goals)
-                self._attr_goals_input = ui.input(
-                    label="Goals (comma-separated)",
-                    value=goals_str,
-                ).classes("w-full")
+                # Format label nicely
+                label = key.replace("_", " ").title()
 
-                # Arc notes
-                self._attr_arc_input = (
-                    ui.textarea(
-                        label="Character Arc",
-                        value=attrs.get("arc") or attrs.get("arc_notes") or "",
-                    )
-                    .classes("w-full")
-                    .props("rows=2")
-                )
+                # Handle different value types
+                if isinstance(value, list):
+                    # Lists become comma-separated inputs
+                    value_str = ", ".join(str(v) for v in value)
+                    input_widget = ui.input(
+                        label=f"{label} (comma-separated)",
+                        value=value_str,
+                    ).classes("w-full")
+                    self._dynamic_attr_inputs[key] = ("list", input_widget)
 
-            elif entity.type == "location":
-                # Significance
-                self._attr_significance_input = (
-                    ui.textarea(
-                        label="Significance",
-                        value=attrs.get("significance", ""),
-                    )
-                    .classes("w-full")
-                    .props("rows=3 hint='Why is this location important to the story?'")
-                )
+                elif isinstance(value, dict):
+                    # Dicts shown as JSON (read-only for complex nested data)
+                    import json
 
-            elif entity.type == "faction":
-                # Leader
-                self._attr_leader_input = ui.input(
-                    label="Leader",
-                    value=attrs.get("leader", ""),
-                ).classes("w-full")
+                    json_str = json.dumps(value, indent=2)
+                    ui.label(label).classes("text-sm font-medium mt-2")
+                    ui.code(json_str, language="json").classes("w-full text-xs")
 
-                # Goals (comma-separated)
-                goals = attrs.get("goals") or []
-                goals_str = ", ".join(goals) if isinstance(goals, list) else str(goals)
-                self._attr_goals_input = ui.input(
-                    label="Goals (comma-separated)",
-                    value=goals_str,
-                ).classes("w-full")
+                elif isinstance(value, bool):
+                    # Booleans as checkboxes
+                    checkbox = ui.checkbox(label, value=value).classes("w-full")
+                    self._dynamic_attr_inputs[key] = ("bool", checkbox)
 
-                # Values (comma-separated)
-                values = attrs.get("values") or []
-                values_str = ", ".join(values) if isinstance(values, list) else str(values)
-                self._attr_values_input = ui.input(
-                    label="Values (comma-separated)",
-                    value=values_str,
-                ).classes("w-full")
+                elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                    # Numbers as number inputs
+                    number_widget = ui.number(
+                        label=label,
+                        value=value,
+                    ).classes("w-full")
+                    self._dynamic_attr_inputs[key] = ("number", number_widget)
 
-            elif entity.type == "item":
-                # Significance
-                self._attr_significance_input = (
-                    ui.textarea(
-                        label="Significance",
-                        value=attrs.get("significance", ""),
-                    )
-                    .classes("w-full")
-                    .props("rows=2 hint='Why is this item important?'")
-                )
+                elif value is None or value == "":
+                    # Empty values as text inputs
+                    input_widget = ui.input(
+                        label=label,
+                        value="",
+                    ).classes("w-full")
+                    self._dynamic_attr_inputs[key] = ("str", input_widget)
 
-                # Properties (comma-separated)
-                properties = attrs.get("properties") or []
-                props_str = (
-                    ", ".join(properties) if isinstance(properties, list) else str(properties)
-                )
-                self._attr_properties_input = (
-                    ui.input(
-                        label="Properties (comma-separated)",
-                        value=props_str,
-                    )
-                    .classes("w-full")
-                    .props("hint='e.g., indestructible, glowing, cursed'")
-                )
+                else:
+                    # Strings - use textarea if long, input if short
+                    str_value = str(value)
+                    if len(str_value) > 100 or "\n" in str_value:
+                        input_widget = (
+                            ui.textarea(label=label, value=str_value)
+                            .classes("w-full")
+                            .props("rows=3")
+                        )
+                    else:
+                        input_widget = ui.input(label=label, value=str_value).classes("w-full")
+                    self._dynamic_attr_inputs[key] = ("str", input_widget)
 
-            elif entity.type == "concept":
-                # Manifestations
-                self._attr_manifestations_input = (
-                    ui.textarea(
-                        label="Manifestations",
-                        value=attrs.get("manifestations", ""),
-                    )
-                    .classes("w-full")
-                    .props("rows=3 hint='How does this concept appear in the story?'")
-                )
+            # Add button to add new attribute
+            with ui.row().classes("w-full mt-2 gap-2"):
+                self._new_attr_key = ui.input(placeholder="New attribute name").classes("flex-1")
+                ui.button(
+                    icon="add",
+                    on_click=self._add_new_attribute,
+                ).props("flat dense")
 
             # Show quality scores if present (read-only display)
             quality_scores = attrs.get("quality_scores")
@@ -1472,6 +1414,24 @@ class WorldPage:
                     feedback = quality_scores.get("feedback", "")
                     if feedback:
                         ui.label(f"Feedback: {feedback}").classes("text-xs text-gray-500 mt-2")
+
+    def _add_new_attribute(self) -> None:
+        """Add a new attribute to the current entity."""
+        if not hasattr(self, "_new_attr_key") or not self._new_attr_key.value:
+            ui.notify("Enter an attribute name", type="warning")
+            return
+
+        key = self._new_attr_key.value.strip().lower().replace(" ", "_")
+        if not key:
+            return
+
+        # Add to entity_attrs for saving
+        if key not in self._entity_attrs:
+            self._entity_attrs[key] = ""
+            ui.notify(f"Added attribute: {key}. Click Save to persist.", type="info")
+            self._refresh_entity_editor()
+        else:
+            ui.notify(f"Attribute '{key}' already exists", type="warning")
 
     def _build_relationships_section(self) -> None:
         """Build the relationships management section."""
@@ -2052,10 +2012,10 @@ class WorldPage:
             ui.notify(f"Error: {e}", type="negative")
 
     def _collect_attrs_from_form(self, entity_type: str) -> dict[str, Any]:
-        """Collect attributes from type-specific form fields.
+        """Collect attributes from dynamic form fields.
 
         Args:
-            entity_type: The type of entity being edited.
+            entity_type: The type of entity being edited (unused, kept for compatibility).
 
         Returns:
             Dictionary of attributes collected from form fields.
@@ -2063,52 +2023,21 @@ class WorldPage:
         # Start with existing attrs to preserve fields not shown in form
         attrs = self._entity_attrs.copy() if self._entity_attrs else {}
 
-        if entity_type == "character":
-            if self._attr_role_select:
-                attrs["role"] = self._attr_role_select.value
-            if self._attr_traits_input and self._attr_traits_input.value:
-                traits_list = [
-                    t.strip() for t in self._attr_traits_input.value.split(",") if t.strip()
-                ]
-                attrs["traits"] = traits_list
-            if self._attr_goals_input and self._attr_goals_input.value:
-                goals_list = [
-                    g.strip() for g in self._attr_goals_input.value.split(",") if g.strip()
-                ]
-                attrs["goals"] = goals_list
-            if self._attr_arc_input:
-                attrs["arc"] = self._attr_arc_input.value
-
-        elif entity_type == "location":
-            if self._attr_significance_input:
-                attrs["significance"] = self._attr_significance_input.value
-
-        elif entity_type == "faction":
-            if self._attr_leader_input:
-                attrs["leader"] = self._attr_leader_input.value
-            if self._attr_goals_input and self._attr_goals_input.value:
-                goals_list = [
-                    g.strip() for g in self._attr_goals_input.value.split(",") if g.strip()
-                ]
-                attrs["goals"] = goals_list
-            if self._attr_values_input and self._attr_values_input.value:
-                values_list = [
-                    v.strip() for v in self._attr_values_input.value.split(",") if v.strip()
-                ]
-                attrs["values"] = values_list
-
-        elif entity_type == "item":
-            if self._attr_significance_input:
-                attrs["significance"] = self._attr_significance_input.value
-            if self._attr_properties_input and self._attr_properties_input.value:
-                props_list = [
-                    p.strip() for p in self._attr_properties_input.value.split(",") if p.strip()
-                ]
-                attrs["properties"] = props_list
-
-        elif entity_type == "concept":
-            if self._attr_manifestations_input:
-                attrs["manifestations"] = self._attr_manifestations_input.value
+        # Collect from dynamic attribute inputs
+        if hasattr(self, "_dynamic_attr_inputs"):
+            for key, (value_type, widget) in self._dynamic_attr_inputs.items():
+                if value_type == "list":
+                    # Parse comma-separated values back to list
+                    if widget.value:
+                        attrs[key] = [v.strip() for v in widget.value.split(",") if v.strip()]
+                    else:
+                        attrs[key] = []
+                elif value_type == "bool":
+                    attrs[key] = widget.value
+                elif value_type == "number":
+                    attrs[key] = widget.value
+                else:  # str
+                    attrs[key] = widget.value
 
         return attrs
 
