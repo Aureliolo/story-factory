@@ -240,7 +240,9 @@ def render_graph_html(
                     keyboard: true,
                     dragNodes: true,
                     dragView: true,
-                    zoomView: true
+                    zoomView: true,
+                    multiselect: false,
+                    selectionBox: false
                 }},
                 {layout_options}
             }};
