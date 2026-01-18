@@ -82,7 +82,9 @@ class AppState:
 
     # ========== World Builder State ==========
     selected_entity_id: str | None = None
-    entity_filter_types: list[str] = field(default_factory=lambda: ["character", "location"])
+    entity_filter_types: list[str] = field(
+        default_factory=lambda: ["character", "location", "item", "faction", "concept"]
+    )
     graph_layout: str = "force-directed"  # force-directed, hierarchical, circular
     entity_search_query: str = ""
     quality_refinement_enabled: bool = True  # Whether to use quality refinement for generation

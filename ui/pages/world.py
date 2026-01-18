@@ -1052,8 +1052,12 @@ class WorldPage:
             notification.message = "Step 3/4: Generating locations..."
             logger.info("Generating locations for the world...")
             try:
+                location_count = random.randint(
+                    self.services.settings.world_gen_locations_min,
+                    self.services.settings.world_gen_locations_max,
+                )
                 locations = await run.io_bound(
-                    self.services.story.generate_locations, self.state.project, 3
+                    self.services.story.generate_locations, self.state.project, location_count
                 )
                 logger.info(f"Generated {len(locations)} locations from LLM")
                 added_locs = 0
@@ -1082,12 +1086,16 @@ class WorldPage:
                 logger.info(f"Generating relationships for {len(entity_names)} entities")
 
                 if len(entity_names) >= 2:
+                    rel_count = random.randint(
+                        self.services.settings.world_gen_relationships_min,
+                        self.services.settings.world_gen_relationships_max,
+                    )
                     generated_rels: list[dict[str, Any]] = await run.io_bound(
                         self.services.story.generate_relationships,
                         self.state.project,
                         entity_names,
                         [],  # No existing relationships
-                        5,
+                        rel_count,
                     )
                     logger.info(f"Generated {len(generated_rels)} relationships from LLM")
 
