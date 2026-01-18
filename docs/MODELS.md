@@ -2,7 +2,7 @@
 
 This document provides comprehensive guidance on selecting the best LLM models for Story Factory's multi-agent story generation system.
 
-**Last Updated:** January 2026  
+**Last Updated:** January 2026
 **Hardware Reference:** RTX 4090 (24GB VRAM)
 
 ## Quick Navigation

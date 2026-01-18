@@ -39,7 +39,7 @@ curl http://localhost:11434/api/tags
 
 2. **Restart Ollama**:
    - **Windows**: Open Task Manager → Services → Right-click "Ollama" → Restart
-   - **macOS**: 
+   - **macOS**:
      ```bash
      brew services restart ollama
      ```
@@ -192,7 +192,7 @@ nvidia-smi
    ```bash
    # Check version
    ollama --version
-   
+
    # Update (varies by platform)
    # Windows: winget upgrade Ollama.Ollama
    # macOS: brew upgrade ollama
@@ -244,11 +244,11 @@ nvidia-smi
    ```bash
    # Create venv
    python -m venv venv
-   
+
    # Activate
    source venv/bin/activate  # Linux/macOS
    venv\Scripts\activate     # Windows
-   
+
    # Install dependencies
    pip install -r requirements.txt
    ```
@@ -357,7 +357,7 @@ python --version
    ```bash
    # Check available models
    ollama list
-   
+
    # Pull missing model
    ollama pull <model-name>
    ```

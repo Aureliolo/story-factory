@@ -455,7 +455,7 @@ class StoryState(BaseModel):
     title: str
     brief: StoryBrief | None = None
     chapters: list[Chapter] = Field(default_factory=list)
-    
+
     def add_chapter(self, chapter: Chapter) -> None:
         """Add chapter with validation."""
         self.chapters.append(chapter)
@@ -525,7 +525,7 @@ class AppState:
     selected_entity_id: str | None = None
     dark_mode: bool = True
     active_tab: str = "write"
-    
+
     def load_project(self, project: StoryState):
         self.current_project = project
         self.selected_entity_id = None  # Reset selection
@@ -585,7 +585,7 @@ class BaseAgent:
         result = self._call_llm(prompt)
         self._after_generate(result)
         return result
-    
+
     def _call_llm(self, prompt: str) -> str:
         # Implemented by base class
         pass

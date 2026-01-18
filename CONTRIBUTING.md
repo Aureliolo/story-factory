@@ -192,14 +192,14 @@ Use Google-style docstrings for classes and complex functions:
 ```python
 def process_story(story_state: StoryState, options: dict) -> str:
     """Process a story state and generate output.
-    
+
     Args:
         story_state: The current story state.
         options: Processing options.
-        
+
     Returns:
         The processed story content.
-        
+
     Raises:
         ValueError: If story_state is invalid.
     """
@@ -258,7 +258,7 @@ logger.error("Error messages for failures")
    def test_create_story_success():
        """Test successful story creation."""
        pass
-       
+
    def test_create_story_with_invalid_input():
        """Test story creation with invalid input."""
        pass
@@ -267,7 +267,7 @@ logger.error("Error messages for failures")
 3. **Mock external dependencies**:
    ```python
    from unittest.mock import patch, MagicMock
-   
+
    @patch("agents.base.ollama.Client")
    def test_agent_generation(mock_ollama):
        mock_ollama.return_value.generate.return_value = {"response": "test"}
@@ -277,11 +277,11 @@ logger.error("Error messages for failures")
 4. **Use fixtures** for common setup:
    ```python
    import pytest
-   
+
    @pytest.fixture
    def sample_story_state():
        return StoryState(title="Test Story")
-       
+
    def test_something(sample_story_state):
        # Use the fixture
        pass
@@ -321,21 +321,21 @@ pytest -x
 ```python
 class TestStoryService:
     """Tests for StoryService."""
-    
+
     @pytest.fixture
     def service(self, tmp_path):
         """Create a StoryService instance."""
         settings = Settings()
         return StoryService(settings, tmp_path)
-    
+
     def test_create_story_success(self, service):
         """Test successful story creation."""
         # Arrange
         title = "Test Story"
-        
+
         # Act
         result = service.create_story(title)
-        
+
         # Assert
         assert result is not None
         assert result.title == title
@@ -396,26 +396,26 @@ Format:
    ```markdown
    ## Description
    Brief description of changes
-   
+
    ## Type of Change
    - [ ] Bug fix
    - [ ] New feature
    - [ ] Documentation update
    - [ ] Refactoring
-   
+
    ## Testing
    - [ ] All tests pass
    - [ ] Added new tests
    - [ ] Manual testing completed
-   
+
    ## Checklist
    - [ ] Code follows style guidelines
    - [ ] Documentation updated
    - [ ] No breaking changes (or documented)
-   
+
    ## Screenshots (if applicable)
    [Add screenshots here]
-   
+
    Closes #issue_number
    ```
 

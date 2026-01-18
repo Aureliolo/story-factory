@@ -724,16 +724,16 @@ For more help, check:
 
 ### General Questions
 
-**Q: Do I need an internet connection?**  
+**Q: Do I need an internet connection?**
 A: No, Story Factory runs entirely locally. Internet is only needed to download models initially.
 
-**Q: Is my data private?**  
+**Q: Is my data private?**
 A: Yes, completely. All processing happens on your machine. No data is sent to external servers.
 
-**Q: Can I use this commercially?**  
+**Q: Can I use this commercially?**
 A: The software is MIT licensed (free for commercial use), but check the licenses of the LLM models you use.
 
-**Q: How long does it take to generate a story?**  
+**Q: How long does it take to generate a story?**
 A: Depends on length and hardware:
 - Short story (1 chapter): 5-15 minutes
 - Novella (7 chapters): 30-90 minutes
@@ -741,63 +741,63 @@ A: Depends on length and hardware:
 
 ### Technical Questions
 
-**Q: Can I run this without a GPU?**  
+**Q: Can I run this without a GPU?**
 A: Yes, but it will be very slow. GPU with 8GB+ VRAM is strongly recommended.
 
-**Q: What's the difference between models?**  
+**Q: What's the difference between models?**
 A: Models vary in size (parameters), quality, speed, and specialization. See [docs/MODELS.md](docs/MODELS.md) for detailed comparisons.
 
-**Q: Can I use OpenAI/Anthropic models instead of Ollama?**  
+**Q: Can I use OpenAI/Anthropic models instead of Ollama?**
 A: Not currently. The system is designed for local Ollama models only.
 
-**Q: How much disk space do I need?**  
+**Q: How much disk space do I need?**
 A: Plan for:
 - Python environment: ~500 MB
 - Each 8B model: ~5 GB
 - Each 14B model: ~8-10 GB
 - Generated stories: Variable (typically <100 MB per project)
 
-**Q: Can I run multiple stories at once?**  
+**Q: Can I run multiple stories at once?**
 A: The UI supports one active generation at a time to avoid VRAM conflicts. You can manage multiple projects.
 
 ### Feature Questions
 
-**Q: Can I edit generated text?**  
+**Q: Can I edit generated text?**
 A: Yes! The web UI allows chapter regeneration with feedback and manual editing.
 
-**Q: Can I save and resume stories?**  
+**Q: Can I save and resume stories?**
 A: Yes, projects are automatically saved and can be resumed at any checkpoint.
 
-**Q: Can I customize the agents?**  
+**Q: Can I customize the agents?**
 A: Yes, through settings.json you can:
 - Assign different models per agent
 - Adjust temperature (creativity)
 - Customize system prompts (advanced)
 
-**Q: Does it support languages other than English?**  
+**Q: Does it support languages other than English?**
 A: Primarily English. Some models support other languages, but quality varies.
 
-**Q: Can I create my own story templates?**  
+**Q: Can I create my own story templates?**
 A: Yes! The Templates tab allows importing custom templates and creating them from existing projects.
 
 ### Troubleshooting Questions
 
-**Q: Why is my GPU not being used?**  
+**Q: Why is my GPU not being used?**
 A: Check:
 1. CUDA is installed (`nvidia-smi`)
 2. Ollama detects GPU (`ollama run <model>` should show GPU info)
 3. No other apps are using all VRAM
 
-**Q: Why do I get "model not found" errors?**  
+**Q: Why do I get "model not found" errors?**
 A: The model needs to be pulled first:
 ```bash
 ollama pull <model-name>
 ```
 
-**Q: Can I use models from HuggingFace?**  
+**Q: Can I use models from HuggingFace?**
 A: Yes, but they need to be converted to GGUF format and imported to Ollama. See [docs/MODELS.md](docs/MODELS.md) for instructions.
 
-**Q: Why is the UI showing "Offline"?**  
+**Q: Why is the UI showing "Offline"?**
 A: Ollama isn't running or reachable. Check the [Troubleshooting](#troubleshooting) section.
 
 ## Contributing
