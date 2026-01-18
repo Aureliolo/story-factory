@@ -14,6 +14,17 @@ from utils.exceptions import ExportError
 from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 
+@pytest.fixture(autouse=True)
+def use_temp_stories_dir(tmp_path, monkeypatch):
+    """Use temp directory for ALL orchestrator tests to avoid polluting output/stories.
+
+    This is autouse=True at module level so every test class uses temp directories.
+    """
+    stories_dir = tmp_path / "stories"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+
 class TestExportFunctionality:
     """Tests for story export to files."""
 
@@ -1768,7 +1779,7 @@ class TestExportMethods:
     ):
         """Test export_story_to_file uses default path when not specified."""
         stories_dir = tmp_path / "stories"
-        stories_dir.mkdir()
+        stories_dir.mkdir(exist_ok=True)  # May already exist from autouse fixture
         monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
 
         orchestrator = StoryOrchestrator()
