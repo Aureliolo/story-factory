@@ -3,17 +3,15 @@
 import logging
 import re
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from memory.story_state import Chapter, Character, OutlineVariation, PlotPoint, StoryState
+from settings import Settings
 from utils.json_parser import extract_json_list, parse_json_list_to_models
 from utils.prompt_builder import PromptBuilder
 from utils.validation import validate_not_none, validate_positive, validate_type
 
 from .base import BaseAgent
-
-if TYPE_CHECKING:
-    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,7 @@ class ArchitectAgent(BaseAgent):
     }
 ]"""
 
-    def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+    def __init__(self, model: str | None = None, settings: Settings | None = None) -> None:
         """Initialize the Architect agent.
 
         Args:

@@ -291,7 +291,7 @@ class RefinementConfig(BaseModel):
     )
 
     @classmethod
-    def from_settings(cls, settings: Any) -> "RefinementConfig":
+    def from_settings(cls, settings: Any) -> RefinementConfig:
         """Create config from Settings object."""
         return cls(
             max_iterations=getattr(settings, "world_quality_max_iterations", 3),

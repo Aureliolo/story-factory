@@ -165,7 +165,7 @@ class ErrorBoundary:
         self.raise_on_exit = raise_on_exit
         self.exception: BaseException | None = None
 
-    def __enter__(self) -> "ErrorBoundary":
+    def __enter__(self) -> ErrorBoundary:
         """Enter the error boundary context.
 
         Returns:

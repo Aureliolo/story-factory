@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Aureliolo/story-factory/branch/main/graph/badge.svg)](https://codecov.io/gh/Aureliolo/story-factory)
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
@@ -140,7 +140,7 @@ The application features a comprehensive tabbed interface:
 ## Requirements
 
 ### Minimum Requirements
-- **Python**: 3.13 or higher
+- **Python**: 3.14 or higher
 - **RAM**: 16GB system RAM
 - **Storage**: 20GB free space for models and outputs
 - **OS**: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+)
@@ -679,7 +679,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture docum
    venv\Scripts\activate     # Windows
    pip install -r requirements.txt
    ```
-3. **Check Python version**: Must be 3.13+
+3. **Check Python version**: Must be 3.14+
    ```bash
    python --version
    ```
@@ -864,7 +864,7 @@ MIT License - See [LICENSE](LICENSE) file for details.
 4. **Verify your setup**:
    - Ollama is running (`curl http://localhost:11434/api/tags`)
    - Models are installed (`ollama list`)
-   - Python version is 3.13+ (`python --version`)
+   - Python version is 3.14+ (`python --version`)
    - GPU is detected (`nvidia-smi`)
 
 ### Reporting Issues
