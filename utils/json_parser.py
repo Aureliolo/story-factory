@@ -8,6 +8,34 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def clean_llm_text(text: str) -> str:
+    """Clean LLM output text by removing thinking tags and other artifacts.
+
+    Args:
+        text: Raw text from LLM output.
+
+    Returns:
+        Cleaned text suitable for display.
+    """
+    if not text:
+        return text
+
+    # Remove <think>...</think> blocks (including content)
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+
+    # Remove orphan opening/closing tags
+    cleaned = re.sub(r"</?think>", "", cleaned)
+
+    # Remove other common LLM artifacts
+    cleaned = re.sub(r"<\|.*?\|>", "", cleaned)  # Special tokens like <|endoftext|>
+
+    # Clean up excessive whitespace
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = cleaned.strip()
+
+    return cleaned
+
+
 def _try_parse_json(json_str: str) -> dict[str, Any] | list[Any] | None:
     """Try to parse a string as JSON.
 

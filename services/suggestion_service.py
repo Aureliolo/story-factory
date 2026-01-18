@@ -1,11 +1,11 @@
 """Suggestion service - provides AI-powered writing prompts and suggestions."""
 
 import logging
-import random
 
 from agents.base import BaseAgent
 from memory.story_state import StoryState
 from settings import Settings
+from utils.exceptions import SuggestionError
 from utils.json_parser import extract_json
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,9 @@ Always return your response as valid JSON."""
         Returns:
             Dictionary with category keys and lists of suggestion strings.
             Example: {"plot": ["What if...", ...], "character": [...], ...}
+
+        Raises:
+            SuggestionError: If suggestion generation fails.
         """
         logger.info(f"Generating suggestions for story '{state.project_name}'")
 
@@ -112,8 +115,8 @@ Each suggestion should be 1-2 sentences, specific to this story."""
             suggestions_data = extract_json(response)
 
             if not suggestions_data:
-                logger.warning("Failed to extract JSON from suggestions response")
-                return self._fallback_suggestions(state, categories)
+                logger.error("Failed to extract JSON from suggestions response")
+                raise SuggestionError("Failed to parse AI response for writing suggestions")
 
             # Validate structure
             if category:
@@ -123,28 +126,38 @@ Each suggestion should be 1-2 sentences, specific to this story."""
                 elif isinstance(suggestions_data, dict) and category in suggestions_data:
                     return {category: suggestions_data[category]}
                 else:
-                    logger.warning(f"Unexpected response structure for category {category}")
-                    return self._fallback_suggestions(state, categories)
+                    logger.error(f"Unexpected response structure for category {category}")
+                    raise SuggestionError(
+                        f"AI returned unexpected format for {category} suggestions"
+                    )
             else:
                 # Multi-category response
                 if not isinstance(suggestions_data, dict):
-                    logger.warning("Expected dict for multi-category suggestions")
-                    return self._fallback_suggestions(state, categories)
+                    logger.error("Expected dict for multi-category suggestions")
+                    raise SuggestionError("AI returned unexpected format for suggestions")
 
                 # Ensure all expected categories are present
                 result = {}
+                missing_categories = []
                 for cat in categories:
                     if cat in suggestions_data and isinstance(suggestions_data[cat], list):
                         result[cat] = suggestions_data[cat]
                     else:
-                        logger.warning(f"Missing or invalid category '{cat}' in response")
-                        result[cat] = self._fallback_suggestions(state, [cat])[cat]
+                        missing_categories.append(cat)
+
+                if missing_categories:
+                    logger.error(f"Missing categories in response: {missing_categories}")
+                    raise SuggestionError(
+                        f"AI response missing categories: {', '.join(missing_categories)}"
+                    )
 
                 return result
 
-        except Exception:
+        except SuggestionError:
+            raise
+        except Exception as e:
             logger.exception("Failed to generate suggestions")
-            return self._fallback_suggestions(state, categories)
+            raise SuggestionError(f"Failed to generate writing suggestions: {e}") from e
 
     def _build_context(self, state: StoryState) -> str:
         """Build context string from story state.
@@ -224,6 +237,9 @@ Each suggestion should be 1-2 sentences, specific to this story."""
 
         Returns:
             List of project name suggestions.
+
+        Raises:
+            SuggestionError: If name generation fails.
         """
         logger.info(f"Generating {count} project name suggestions for story '{state.project_name}'")
 
@@ -277,8 +293,8 @@ Do not include any explanation, just the JSON array."""
             suggestions = extract_json(response)
 
             if not suggestions:
-                logger.warning("Failed to extract JSON from name suggestions response")
-                return self._fallback_project_names(state, count)
+                logger.error("Failed to extract JSON from name suggestions response")
+                raise SuggestionError("Failed to parse AI response for project names")
 
             # Validate it's a list of strings
             if isinstance(suggestions, list):
@@ -287,90 +303,11 @@ Do not include any explanation, just the JSON array."""
                     logger.info(f"Generated {len(names)} project name suggestions")
                     return names[:count]
 
-            logger.warning("Unexpected response structure for name suggestions")
-            return self._fallback_project_names(state, count)
+            logger.error("Unexpected response structure for name suggestions")
+            raise SuggestionError("AI returned unexpected format for project names")
 
-        except Exception:
+        except SuggestionError:
+            raise
+        except Exception as e:
             logger.exception("Failed to generate project name suggestions")
-            return self._fallback_project_names(state, count)
-
-    def _fallback_project_names(self, state: StoryState, count: int) -> list[str]:
-        """Generate fallback project name suggestions when LLM fails.
-
-        Args:
-            state: Story state for context.
-            count: Number of suggestions to generate.
-
-        Returns:
-            List of simple fallback name suggestions.
-        """
-        logger.info("Using fallback project name suggestions")
-
-        # Get some context for personalization
-        genre = state.brief.genre if state.brief else "Story"
-        char_name = state.characters[0].name if state.characters else "Hero"
-
-        base_suggestions = [
-            f"The {genre} Chronicles",
-            f"{char_name}'s Journey",
-            f"Echoes of {genre}",
-            f"The Last {genre}",
-            f"Beyond the {genre}",
-            "Whispers of Fate",
-            "The Forgotten Path",
-            "Shadows and Light",
-            "The Turning Point",
-            "Untold Stories",
-            "The Rising Dawn",
-            "Threads of Destiny",
-        ]
-
-        return base_suggestions[:count]
-
-    def _fallback_suggestions(
-        self, state: StoryState, categories: list[str]
-    ) -> dict[str, list[str]]:
-        """Generate simple fallback suggestions when LLM fails.
-
-        Args:
-            state: Story state for context.
-            categories: Categories to generate suggestions for.
-
-        Returns:
-            Dictionary with basic suggestions for each category.
-        """
-        logger.info(f"Using fallback suggestions for categories: {categories}")
-
-        result = {}
-
-        # Get character names for templates
-        char_names = (
-            [c.name for c in state.characters[:3]] if state.characters else ["the protagonist"]
-        )
-
-        for category in categories:
-            if category == "plot":
-                result["plot"] = [
-                    f"What if {random.choice(char_names)} discovered a hidden secret?",
-                    f"A sudden complication forces {random.choice(char_names)} to make a difficult choice.",
-                    "An unexpected ally or enemy appears at a critical moment.",
-                ]
-            elif category == "character":
-                result["character"] = [
-                    f"How would {random.choice(char_names)} react under extreme pressure?",
-                    f"Show {random.choice(char_names)}'s vulnerability or inner conflict.",
-                    "Reveal a character's backstory through action rather than exposition.",
-                ]
-            elif category == "scene":
-                result["scene"] = [
-                    "Build tension through environmental details and atmosphere.",
-                    "Use dialogue to reveal subtext and unspoken conflicts.",
-                    "Contrast the mood with an unexpected sensory detail.",
-                ]
-            elif category == "transition":
-                result["transition"] = [
-                    "Jump forward in time to the next critical moment.",
-                    "End the scene on a cliffhanger or unanswered question.",
-                ]
-
-        return result
+            raise SuggestionError(f"Failed to generate project names: {e}") from e
