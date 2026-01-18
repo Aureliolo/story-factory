@@ -77,6 +77,9 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1.5 1 400px; min-width: 400px;"):
                     self._build_learning_section()
 
+                with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
+                    self._build_world_gen_section()
+
             # Save button
             ui.button(
                 "Save Settings",
@@ -536,6 +539,81 @@ class SettingsPage:
                         backward=lambda v: f"{v:.0%}",
                     )
 
+    def _build_world_gen_section(self) -> None:
+        """Build world generation settings section."""
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "World Generation",
+                "public",
+                "Configure entity counts for world building. "
+                "Actual counts are randomized between min and max values.",
+            )
+
+            # Store sliders for saving
+            self._world_gen_sliders: dict[str, tuple[ui.slider, ui.slider]] = {}
+
+            entity_configs = [
+                ("characters", "Characters", "people", 1, 20),
+                ("locations", "Locations", "place", 1, 15),
+                ("factions", "Factions", "groups", 0, 10),
+                ("items", "Items", "inventory", 0, 15),
+                ("concepts", "Concepts", "lightbulb", 0, 10),
+                ("relationships", "Relationships", "share", 1, 40),
+            ]
+
+            with ui.column().classes("w-full gap-3"):
+                for key, label, icon, abs_min, abs_max in entity_configs:
+                    min_attr = f"world_gen_{key}_min"
+                    max_attr = f"world_gen_{key}_max"
+                    current_min = getattr(self.settings, min_attr)
+                    current_max = getattr(self.settings, max_attr)
+
+                    with ui.column().classes("w-full gap-1"):
+                        with ui.row().classes("w-full items-center justify-between"):
+                            with ui.row().classes("items-center gap-1"):
+                                ui.icon(icon, size="xs").classes("text-gray-500")
+                                ui.label(label).classes("text-sm font-medium")
+                            value_label = ui.label(f"{current_min} - {current_max}").classes(
+                                "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
+                            )
+
+                        with ui.row().classes("w-full gap-2 items-center"):
+                            ui.label("Min").classes("text-xs text-gray-500 w-8")
+                            min_slider = ui.slider(
+                                min=abs_min,
+                                max=abs_max,
+                                step=1,
+                                value=current_min,
+                            ).classes("flex-1")
+
+                        with ui.row().classes("w-full gap-2 items-center"):
+                            ui.label("Max").classes("text-xs text-gray-500 w-8")
+                            max_slider = ui.slider(
+                                min=abs_min,
+                                max=abs_max,
+                                step=1,
+                                value=current_max,
+                            ).classes("flex-1")
+
+                        # Update label when sliders change
+                        def update_label(label_ref, min_s, max_s):
+                            def _update():
+                                # Ensure min <= max
+                                if min_s.value > max_s.value:
+                                    max_s.value = min_s.value
+                                label_ref.text = f"{int(min_s.value)} - {int(max_s.value)}"
+
+                            return _update
+
+                        min_slider.on(
+                            "update:model-value", update_label(value_label, min_slider, max_slider)
+                        )
+                        max_slider.on(
+                            "update:model-value", update_label(value_label, min_slider, max_slider)
+                        )
+
+                        self._world_gen_sliders[key] = (min_slider, max_slider)
+
     async def _test_connection(self) -> None:
         """Test Ollama connection."""
         # Update URL first
@@ -603,6 +681,16 @@ class SettingsPage:
             self.settings.learning_min_samples = int(self._min_samples.value)
             self.settings.learning_confidence_threshold = self._confidence_slider.value
 
+            # World generation settings
+            for key, (min_slider, max_slider) in self._world_gen_sliders.items():
+                min_val = int(min_slider.value)
+                max_val = int(max_slider.value)
+                # Ensure min <= max
+                if min_val > max_val:
+                    max_val = min_val
+                setattr(self.settings, f"world_gen_{key}_min", min_val)
+                setattr(self.settings, f"world_gen_{key}_max", max_val)
+
             # Validate and save first - only record undo if successful
             self.settings.validate()
             self.settings.save()
@@ -654,6 +742,19 @@ class SettingsPage:
             "learning_periodic_interval": self.settings.learning_periodic_interval,
             "learning_min_samples": self.settings.learning_min_samples,
             "learning_confidence_threshold": self.settings.learning_confidence_threshold,
+            # World generation
+            "world_gen_characters_min": self.settings.world_gen_characters_min,
+            "world_gen_characters_max": self.settings.world_gen_characters_max,
+            "world_gen_locations_min": self.settings.world_gen_locations_min,
+            "world_gen_locations_max": self.settings.world_gen_locations_max,
+            "world_gen_factions_min": self.settings.world_gen_factions_min,
+            "world_gen_factions_max": self.settings.world_gen_factions_max,
+            "world_gen_items_min": self.settings.world_gen_items_min,
+            "world_gen_items_max": self.settings.world_gen_items_max,
+            "world_gen_concepts_min": self.settings.world_gen_concepts_min,
+            "world_gen_concepts_max": self.settings.world_gen_concepts_max,
+            "world_gen_relationships_min": self.settings.world_gen_relationships_min,
+            "world_gen_relationships_max": self.settings.world_gen_relationships_max,
         }
 
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
@@ -681,6 +782,21 @@ class SettingsPage:
         self.settings.learning_periodic_interval = snapshot["learning_periodic_interval"]
         self.settings.learning_min_samples = snapshot["learning_min_samples"]
         self.settings.learning_confidence_threshold = snapshot["learning_confidence_threshold"]
+
+        # World generation (with backward compatibility for old snapshots)
+        if "world_gen_characters_min" in snapshot:
+            self.settings.world_gen_characters_min = snapshot["world_gen_characters_min"]
+            self.settings.world_gen_characters_max = snapshot["world_gen_characters_max"]
+            self.settings.world_gen_locations_min = snapshot["world_gen_locations_min"]
+            self.settings.world_gen_locations_max = snapshot["world_gen_locations_max"]
+            self.settings.world_gen_factions_min = snapshot["world_gen_factions_min"]
+            self.settings.world_gen_factions_max = snapshot["world_gen_factions_max"]
+            self.settings.world_gen_items_min = snapshot["world_gen_items_min"]
+            self.settings.world_gen_items_max = snapshot["world_gen_items_max"]
+            self.settings.world_gen_concepts_min = snapshot["world_gen_concepts_min"]
+            self.settings.world_gen_concepts_max = snapshot["world_gen_concepts_max"]
+            self.settings.world_gen_relationships_min = snapshot["world_gen_relationships_min"]
+            self.settings.world_gen_relationships_max = snapshot["world_gen_relationships_max"]
 
         # Save changes
         self.settings.save()
@@ -741,6 +857,15 @@ class SettingsPage:
             self._periodic_interval.value = self.settings.learning_periodic_interval
         if hasattr(self, "_min_samples") and self._min_samples:
             self._min_samples.value = self.settings.learning_min_samples
+
+        # World generation settings
+        if hasattr(self, "_world_gen_sliders"):
+            for key, (min_slider, max_slider) in self._world_gen_sliders.items():
+                min_attr = f"world_gen_{key}_min"
+                max_attr = f"world_gen_{key}_max"
+                if hasattr(self.settings, min_attr):
+                    min_slider.value = getattr(self.settings, min_attr)
+                    max_slider.value = getattr(self.settings, max_attr)
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""
