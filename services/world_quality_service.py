@@ -348,6 +348,7 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_character_judge,
@@ -662,6 +663,7 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_location_judge,
@@ -1003,6 +1005,7 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_relationship_judge,
@@ -1291,6 +1294,7 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_faction_judge,
@@ -1580,6 +1584,7 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_item_judge,
@@ -1866,6 +1871,7 @@ Output ONLY valid JSON:
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_concept_judge,
