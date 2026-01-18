@@ -17,9 +17,14 @@ def test_imports():
     logger.info("Testing imports...")
 
     try:
-        from services.story_service import GenerationCancelled  # noqa: F401
-        from ui.components.generation_status import GenerationStatus  # noqa: F401
-        from ui.state import AppState  # noqa: F401
+        from services.story_service import GenerationCancelled
+        from ui.components.generation_status import GenerationStatus
+        from ui.state import AppState
+
+        # Verify imported items are valid types
+        assert issubclass(GenerationCancelled, Exception)
+        assert callable(GenerationStatus)
+        assert callable(AppState)
 
         logger.info("✓ All imports successful")
         return True

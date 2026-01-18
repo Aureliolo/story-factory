@@ -13,16 +13,14 @@ Usage:
     python main.py --cli    # Run in CLI mode (basic)
 """
 
-# Environment check imports only stdlib modules, so it's safe to import first
-from utils.environment import check_environment
-
-# Check Python version and dependencies before importing anything else
-check_environment()
-
 import argparse
 import logging
 
+from utils.environment import check_environment
 from utils.logging_config import setup_logging
+
+# Check Python version and dependencies before running app logic
+check_environment()
 
 logger = logging.getLogger(__name__)
 
