@@ -1075,6 +1075,7 @@ class WorldPage:
                 logger.info(f"Added {added_locs} locations to world database")
             except Exception as e:
                 logger.exception(f"Failed to generate locations: {e}")
+                raise WorldGenerationError(f"Failed to generate locations: {e}") from e
 
             # Step 4: Generate factions for the world
             notification.message = "Step 4/7: Generating factions..."
@@ -1113,6 +1114,7 @@ class WorldPage:
                 logger.info(f"Added {added_factions} factions to world database")
             except Exception as e:
                 logger.exception(f"Failed to generate factions: {e}")
+                raise WorldGenerationError(f"Failed to generate factions: {e}") from e
 
             # Step 5: Generate items for the world
             notification.message = "Step 5/7: Generating items..."
@@ -1150,6 +1152,7 @@ class WorldPage:
                 logger.info(f"Added {added_items} items to world database")
             except Exception as e:
                 logger.exception(f"Failed to generate items: {e}")
+                raise WorldGenerationError(f"Failed to generate items: {e}") from e
 
             # Step 6: Generate concepts for the world
             notification.message = "Step 6/7: Generating concepts..."
@@ -1186,6 +1189,7 @@ class WorldPage:
                 logger.info(f"Added {added_concepts} concepts to world database")
             except Exception as e:
                 logger.exception(f"Failed to generate concepts: {e}")
+                raise WorldGenerationError(f"Failed to generate concepts: {e}") from e
 
             # Step 7: Generate relationships between all entities
             notification.message = "Step 7/7: Generating relationships..."
@@ -1243,6 +1247,7 @@ class WorldPage:
                     logger.warning("Not enough entities to generate relationships")
             except Exception as e:
                 logger.exception(f"Failed to generate relationships: {e}")
+                raise WorldGenerationError(f"Failed to generate relationships: {e}") from e
 
             # Step 5: Generate mini descriptions for tooltips
             notification.message = "Finalizing: Generating hover summaries..."
@@ -1275,6 +1280,7 @@ class WorldPage:
                 self.state.world_db.invalidate_graph_cache()
             except Exception as e:
                 logger.exception(f"Failed to generate mini descriptions: {e}")
+                raise WorldGenerationError(f"Failed to generate mini descriptions: {e}") from e
 
             # Dismiss the loading notification
             notification.dismiss()
