@@ -212,6 +212,121 @@ Each suggestion should be 1-2 sentences, specific to this story."""
         logger.debug(f"Built context with {len(context_parts)} parts ({len(context)} chars)")
         return context
 
+    def generate_project_names(self, state: StoryState, count: int = 10) -> list[str]:
+        """Generate creative project name suggestions based on story content.
+
+        Uses the LLM to generate unique, creative title suggestions based on
+        the story's premise, genre, characters, and plot points.
+
+        Args:
+            state: Story state with context for generating names.
+            count: Number of name suggestions to generate (default 10).
+
+        Returns:
+            List of project name suggestions.
+        """
+        logger.info(f"Generating {count} project name suggestions for story '{state.project_name}'")
+
+        # Build context from story state
+        context_parts = []
+
+        # Story brief
+        if state.brief:
+            context_parts.append(f"Premise: {state.brief.premise}")
+            context_parts.append(f"Genre: {state.brief.genre}")
+            context_parts.append(f"Tone: {state.brief.tone}")
+            if state.brief.setting_place:
+                context_parts.append(f"Setting: {state.brief.setting_place}")
+
+        # Characters
+        if state.characters:
+            char_names = [char.name for char in state.characters[:5]]
+            context_parts.append(f"Main Characters: {', '.join(char_names)}")
+
+        # Plot points
+        if state.plot_points:
+            key_points = [p.description for p in state.plot_points[:3]]
+            context_parts.append(f"Key Plot Points: {'; '.join(key_points)}")
+
+        context = "\n".join(context_parts)
+
+        prompt = f"""Based on this story context, generate {count} unique, creative title suggestions.
+
+Story Context:
+{context}
+
+Requirements:
+- Each title should be evocative and memorable
+- Mix different styles: some short and punchy, some poetic, some mysterious
+- Avoid generic titles like "The Journey" or "A New Beginning"
+- Consider the genre and tone when crafting titles
+- Each title should feel like it could be a published book title
+
+Return ONLY a JSON array of strings, with {count} title suggestions.
+Example format: ["Title One", "Title Two", "Title Three"]
+
+Do not include any explanation, just the JSON array."""
+
+        try:
+            agent = self._get_agent()
+            response = agent.generate(prompt)
+
+            logger.debug(f"Raw name suggestions response: {response[:200]}...")
+
+            # Parse JSON response
+            suggestions = extract_json(response)
+
+            if not suggestions:
+                logger.warning("Failed to extract JSON from name suggestions response")
+                return self._fallback_project_names(state, count)
+
+            # Validate it's a list of strings
+            if isinstance(suggestions, list):
+                names = [str(s).strip() for s in suggestions if s and str(s).strip()]
+                if names:
+                    logger.info(f"Generated {len(names)} project name suggestions")
+                    return names[:count]
+
+            logger.warning("Unexpected response structure for name suggestions")
+            return self._fallback_project_names(state, count)
+
+        except Exception:
+            logger.exception("Failed to generate project name suggestions")
+            return self._fallback_project_names(state, count)
+
+    def _fallback_project_names(self, state: StoryState, count: int) -> list[str]:
+        """Generate fallback project name suggestions when LLM fails.
+
+        Args:
+            state: Story state for context.
+            count: Number of suggestions to generate.
+
+        Returns:
+            List of simple fallback name suggestions.
+        """
+        logger.info("Using fallback project name suggestions")
+
+        # Get some context for personalization
+        genre = state.brief.genre if state.brief else "Story"
+        char_name = state.characters[0].name if state.characters else "Hero"
+
+        base_suggestions = [
+            f"The {genre} Chronicles",
+            f"{char_name}'s Journey",
+            f"Echoes of {genre}",
+            f"The Last {genre}",
+            f"Beyond the {genre}",
+            "Whispers of Fate",
+            "The Forgotten Path",
+            "Shadows and Light",
+            "The Turning Point",
+            "Untold Stories",
+            "The Rising Dawn",
+            "Threads of Destiny",
+        ]
+
+        return base_suggestions[:count]
+
     def _fallback_suggestions(
         self, state: StoryState, categories: list[str]
     ) -> dict[str, list[str]]:

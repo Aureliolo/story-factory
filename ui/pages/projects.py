@@ -132,6 +132,12 @@ class ProjectsPage:
                         ).props("flat")
 
                     ui.button(
+                        "Rename",
+                        on_click=lambda p=project: self._rename_project(p.id, p.name),
+                        icon="edit",
+                    ).props("flat")
+
+                    ui.button(
                         "Backup",
                         on_click=lambda p=project: self._backup_project(p.id, p.name),
                         icon="backup",
@@ -304,14 +310,152 @@ class ProjectsPage:
             logger.exception(f"Failed to delete project {project_id}")
             ui.notify(f"Error: {e}", type="negative")
 
+    async def _rename_project(self, project_id: str, current_name: str) -> None:
+        """Show dialog to rename a project.
+
+        Args:
+            project_id: The project UUID.
+            current_name: Current project name for default value.
+        """
+        logger.debug(f"Opening rename dialog for project {project_id}")
+
+        with ui.dialog() as dialog, ui.card().classes("w-[500px] max-w-full"):
+            ui.label("Rename Project").classes("text-xl font-bold")
+            ui.separator()
+
+            with ui.column().classes("gap-4 p-4 w-full"):
+                name_input = ui.input(
+                    "Project Name",
+                    value=current_name,
+                    placeholder="Enter new project name",
+                ).classes("w-full")
+
+                # AI suggestions button placeholder (will be expanded later)
+                suggestion_container = ui.column().classes("w-full gap-2")
+
+                async def generate_suggestions():
+                    """Generate AI name suggestions."""
+                    if not self.state.project:
+                        ui.notify("Load the project first to generate suggestions", type="warning")
+                        return
+
+                    suggestion_container.clear()
+                    with suggestion_container:
+                        ui.label("Generating suggestions...").classes(
+                            "text-sm text-gray-500 dark:text-gray-400"
+                        )
+
+                    try:
+                        suggestions = self.services.suggestion.generate_project_names(
+                            self.state.project, count=10
+                        )
+                        suggestion_container.clear()
+                        with suggestion_container:
+                            ui.label("Suggested Names:").classes("text-sm font-medium")
+                            with ui.row().classes("flex-wrap gap-2"):
+                                for suggestion in suggestions:
+                                    ui.chip(
+                                        suggestion,
+                                        on_click=lambda s=suggestion: setattr(
+                                            name_input, "value", s
+                                        ),
+                                    ).props("clickable color=primary outline")
+                    except Exception as e:
+                        logger.exception("Failed to generate name suggestions")
+                        suggestion_container.clear()
+                        with suggestion_container:
+                            ui.label(f"Failed to generate suggestions: {e}").classes(
+                                "text-sm text-red-500"
+                            )
+
+                ui.button(
+                    "AI Suggest Names",
+                    on_click=generate_suggestions,
+                    icon="auto_awesome",
+                ).props("flat color=secondary")
+
+                # Action buttons
+                with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                    async def do_rename():
+                        """Execute the rename."""
+                        new_name = name_input.value.strip()
+                        if not new_name:
+                            ui.notify("Project name cannot be empty", type="warning")
+                            return
+
+                        if new_name == current_name:
+                            dialog.close()
+                            return
+
+                        try:
+                            self.services.project.update_project_name(project_id, new_name)
+
+                            # Update state if this is the current project
+                            if self.state.project_id == project_id and self.state.project:
+                                self.state.project.project_name = new_name
+
+                            ui.notify(f"Renamed to: {new_name}", type="positive")
+                            dialog.close()
+                            self._refresh_project_list()
+                        except Exception as e:
+                            logger.exception(f"Failed to rename project {project_id}")
+                            ui.notify(f"Error: {e}", type="negative")
+
+                    ui.button("Rename", on_click=do_rename).props("color=primary")
+
+        dialog.open()
+
     async def _backup_project(self, project_id: str, project_name: str) -> None:
-        """Create a backup of a project."""
-        try:
-            backup_path = self.services.backup.create_backup(project_id, project_name)
-            ui.notify(f"Backup created: {backup_path.name}", type="positive")
-        except Exception as e:
-            logger.exception(f"Failed to backup project {project_id}")
-            ui.notify(f"Error: {e}", type="negative")
+        """Show dialog to create a backup of a project with custom name.
+
+        Args:
+            project_id: The project UUID.
+            project_name: Current project name for default backup name.
+        """
+        logger.debug(f"Opening backup dialog for project {project_id}")
+
+        with ui.dialog() as dialog, ui.card().classes("w-[500px] max-w-full"):
+            ui.label("Create Backup").classes("text-xl font-bold")
+            ui.separator()
+
+            with ui.column().classes("gap-4 p-4 w-full"):
+                ui.label(
+                    "Enter a name for this backup. This will be used in the backup filename."
+                ).classes("text-sm text-gray-600 dark:text-gray-400")
+
+                name_input = ui.input(
+                    "Backup Name",
+                    value=project_name,
+                    placeholder="Enter backup name",
+                ).classes("w-full")
+
+                # Action buttons
+                with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                    async def do_backup():
+                        """Execute the backup creation."""
+                        backup_name = name_input.value.strip()
+                        if not backup_name:
+                            backup_name = project_name  # Fallback to project name
+
+                        try:
+                            backup_path = self.services.backup.create_backup(
+                                project_id, backup_name
+                            )
+                            ui.notify(f"Backup created: {backup_path.name}", type="positive")
+                            dialog.close()
+                        except Exception as e:
+                            logger.exception(f"Failed to backup project {project_id}")
+                            ui.notify(f"Error: {e}", type="negative")
+
+                    ui.button("Create Backup", on_click=do_backup, icon="backup").props(
+                        "color=primary"
+                    )
+
+        dialog.open()
 
     async def _show_backup_manager(self) -> None:
         """Show the backup management dialog."""
@@ -359,16 +503,150 @@ class ProjectsPage:
 
         dialog.open()
 
-    async def _restore_backup(self, backup_filename: str, dialog) -> None:
-        """Restore a project from backup."""
-        try:
-            self.services.backup.restore_backup(backup_filename)
-            ui.notify("Backup restored successfully!", type="positive")
-            dialog.close()
-            self._refresh_project_list()
-        except Exception as e:
-            logger.exception(f"Failed to restore backup {backup_filename}")
-            ui.notify(f"Error: {e}", type="negative")
+    async def _restore_backup(self, backup_filename: str, parent_dialog) -> None:
+        """Show dialog to restore a project from backup with name selection.
+
+        Args:
+            backup_filename: The backup file to restore.
+            parent_dialog: The parent backup manager dialog.
+        """
+        logger.debug(f"Opening restore dialog for backup {backup_filename}")
+
+        # Get backup metadata to get original project name
+        metadata = self.services.backup.get_backup_metadata(backup_filename)
+        original_name = (
+            metadata.get("project_name", "Restored Project") if metadata else "Restored Project"
+        )
+
+        with ui.dialog() as dialog, ui.card().classes("w-[500px] max-w-full"):
+            ui.label("Restore Backup").classes("text-xl font-bold")
+            ui.separator()
+
+            with ui.column().classes("gap-4 p-4 w-full"):
+                ui.label("Enter a name for the restored project.").classes(
+                    "text-sm text-gray-600 dark:text-gray-400"
+                )
+
+                name_input = ui.input(
+                    "Project Name",
+                    value=original_name,
+                    placeholder="Enter project name",
+                ).classes("w-full")
+
+                error_label = ui.label("").classes("text-sm text-red-500 hidden")
+
+                # Action buttons
+                with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                    ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                    async def do_restore():
+                        """Execute the restore with duplicate checking."""
+                        project_name = name_input.value.strip()
+                        if not project_name:
+                            error_label.text = "Project name cannot be empty"
+                            error_label.classes(remove="hidden")
+                            return
+
+                        # Check for duplicate name
+                        existing_project = self.services.project.get_project_by_name(project_name)
+
+                        if existing_project:
+                            # Show overwrite confirmation dialog
+                            await self._show_overwrite_dialog(
+                                backup_filename,
+                                project_name,
+                                existing_project.id,
+                                dialog,
+                                parent_dialog,
+                            )
+                        else:
+                            # No duplicate, proceed with restore
+                            try:
+                                self.services.backup.restore_backup(backup_filename, project_name)
+                                ui.notify(f"Backup restored as: {project_name}", type="positive")
+                                dialog.close()
+                                parent_dialog.close()
+                                self._refresh_project_list()
+                            except Exception as e:
+                                logger.exception(f"Failed to restore backup {backup_filename}")
+                                error_label.text = f"Error: {e}"
+                                error_label.classes(remove="hidden")
+
+                    ui.button("Restore", on_click=do_restore, icon="restore").props("color=primary")
+
+        dialog.open()
+
+    async def _show_overwrite_dialog(
+        self,
+        backup_filename: str,
+        project_name: str,
+        existing_project_id: str,
+        restore_dialog,
+        parent_dialog,
+    ) -> None:
+        """Show dialog to confirm overwriting an existing project.
+
+        Args:
+            backup_filename: The backup file to restore.
+            project_name: The chosen project name.
+            existing_project_id: ID of the existing project with same name.
+            restore_dialog: The restore dialog to close on overwrite.
+            parent_dialog: The parent backup manager dialog.
+        """
+        logger.debug(f"Showing overwrite dialog for project name: {project_name}")
+
+        with ui.dialog() as dialog, ui.card().classes("w-[450px] max-w-full"):
+            ui.label("Project Already Exists").classes("text-xl font-bold text-amber-600")
+            ui.separator()
+
+            with ui.column().classes("gap-4 p-4 w-full"):
+                ui.label(
+                    f'A project named "{project_name}" already exists. What would you like to do?'
+                ).classes("text-gray-700 dark:text-gray-300")
+
+                with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                    ui.button(
+                        "Choose Different Name",
+                        on_click=dialog.close,
+                        icon="edit",
+                    ).props("flat")
+
+                    async def do_overwrite():
+                        """Delete existing and restore with same name."""
+                        try:
+                            # Clear if this is the current project
+                            if self.state.project_id == existing_project_id:
+                                self.state.clear_project()
+                                self.services.settings.last_project_id = None
+                                self.services.settings.save()
+
+                            # Delete existing project
+                            self.services.project.delete_project(existing_project_id)
+                            logger.info(
+                                f"Deleted existing project for overwrite: {existing_project_id}"
+                            )
+
+                            # Restore backup with same name
+                            self.services.backup.restore_backup(backup_filename, project_name)
+                            ui.notify(
+                                f"Backup restored (overwritten): {project_name}",
+                                type="positive",
+                            )
+                            dialog.close()
+                            restore_dialog.close()
+                            parent_dialog.close()
+                            self._refresh_project_list()
+                        except Exception as e:
+                            logger.exception(f"Failed to overwrite project {existing_project_id}")
+                            ui.notify(f"Error: {e}", type="negative")
+
+                    ui.button(
+                        "Overwrite Existing",
+                        on_click=do_overwrite,
+                        icon="warning",
+                    ).props("color=negative")
+
+        dialog.open()
 
     async def _delete_backup(self, backup_filename: str, dialog) -> None:
         """Delete a backup file."""

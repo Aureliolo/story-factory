@@ -515,3 +515,95 @@ class TestBackupService:
 
         expected = backups_dir / "test_backup.zip"
         assert result == expected
+
+
+class TestBackupServiceGetMetadata:
+    """Tests for get_backup_metadata method."""
+
+    def test_get_backup_metadata_valid(self, tmp_settings, monkeypatch, tmp_path):
+        """Test getting metadata from a valid backup."""
+        stories_dir = tmp_path / "stories"
+        backups_dir = tmp_path / "backups"
+
+        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
+        stories_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create test project and backup
+        project_id = "test-metadata-123"
+        story_data = {"id": project_id, "project_name": "Test Metadata Project"}
+        story_path = stories_dir / f"{project_id}.json"
+        story_path.write_text(json.dumps(story_data))
+
+        service = BackupService(tmp_settings)
+        backup_path = service.create_backup(project_id, "Test Metadata Project")
+
+        # Get metadata
+        metadata = service.get_backup_metadata(backup_path.name)
+
+        assert metadata is not None
+        assert metadata["project_id"] == project_id
+        assert metadata["project_name"] == "Test Metadata Project"
+        assert "backup_created_at" in metadata
+
+    def test_get_backup_metadata_not_found(self, tmp_settings, tmp_path):
+        """Test getting metadata from non-existent backup."""
+        backups_dir = tmp_path / "backups"
+        tmp_settings.backup_folder = str(backups_dir)
+
+        service = BackupService(tmp_settings)
+
+        metadata = service.get_backup_metadata("nonexistent.zip")
+
+        assert metadata is None
+
+    def test_get_backup_metadata_missing_metadata_file(self, tmp_settings, tmp_path):
+        """Test getting metadata from backup without metadata file."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip without metadata
+        zip_path = backups_dir / "no_metadata.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+
+        metadata = service.get_backup_metadata("no_metadata.zip")
+
+        assert metadata is None
+
+    def test_get_backup_metadata_bad_zip(self, tmp_settings, tmp_path):
+        """Test getting metadata from corrupted zip file."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a corrupted zip
+        bad_zip_path = backups_dir / "corrupted.zip"
+        bad_zip_path.write_text("not a valid zip file")
+
+        service = BackupService(tmp_settings)
+
+        metadata = service.get_backup_metadata("corrupted.zip")
+
+        assert metadata is None
+
+    def test_get_backup_metadata_invalid_json(self, tmp_settings, tmp_path):
+        """Test getting metadata from backup with invalid JSON metadata."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create a zip with invalid JSON metadata
+        zip_path = backups_dir / "invalid_json.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", "{ not valid json }")
+
+        service = BackupService(tmp_settings)
+
+        metadata = service.get_backup_metadata("invalid_json.zip")
+
+        assert metadata is None

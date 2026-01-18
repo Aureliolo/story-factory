@@ -397,3 +397,171 @@ def test_generate_suggestions_empty_json_response(
     assert "character" in suggestions
     assert "scene" in suggestions
     assert "transition" in suggestions
+
+
+class TestGenerateProjectNames:
+    """Tests for generate_project_names method."""
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_success(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test successful project name generation."""
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = """[
+            "Neon Shadows",
+            "The Chen Files",
+            "Circuit Breaker",
+            "Synthwave Murder",
+            "Digital Detective",
+            "Chrome and Blood",
+            "The Vale Conspiracy",
+            "Neo-Tokyo Noir",
+            "Silicon Requiem",
+            "Ghost in the Lab"
+        ]"""
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state, count=10)
+
+        assert len(names) == 10
+        assert "Neon Shadows" in names
+        assert "The Chen Files" in names
+        assert all(isinstance(n, str) for n in names)
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_limited_count(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test project name generation with limited count."""
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = """[
+            "Title One",
+            "Title Two",
+            "Title Three",
+            "Title Four",
+            "Title Five"
+        ]"""
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state, count=3)
+
+        # Should return at most 'count' names
+        assert len(names) <= 3
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_invalid_json(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test fallback when LLM returns invalid JSON."""
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = "Not valid JSON at all"
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state)
+
+        # Should return fallback suggestions
+        assert len(names) > 0
+        assert all(isinstance(n, str) for n in names)
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_llm_error(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test fallback when LLM throws error."""
+        mock_agent = MagicMock()
+        mock_agent.generate.side_effect = Exception("LLM connection failed")
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state)
+
+        # Should return fallback suggestions
+        assert len(names) > 0
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_empty_response(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test fallback when LLM returns empty list."""
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = "[]"
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state)
+
+        # Should return fallback suggestions since empty list is not useful
+        assert len(names) > 0
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_non_list_response(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test fallback when LLM returns non-list JSON."""
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = '{"title": "Single Title"}'
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state)
+
+        # Should return fallback suggestions
+        assert len(names) > 0
+
+    def test_fallback_project_names(self, suggestion_service, sample_story_state):
+        """Test fallback project names use story context."""
+        names = suggestion_service._fallback_project_names(sample_story_state, count=5)
+
+        assert len(names) == 5
+        assert all(isinstance(n, str) for n in names)
+        # Should include genre-based names
+        assert any("Science Fiction Mystery" in n for n in names)
+
+    def test_fallback_project_names_minimal_state(self, suggestion_service):
+        """Test fallback project names with minimal state."""
+        minimal_state = StoryState(id="minimal", project_name="Minimal")
+        names = suggestion_service._fallback_project_names(minimal_state, count=5)
+
+        assert len(names) == 5
+        assert all(isinstance(n, str) for n in names)
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_strips_whitespace(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test that generated names are stripped of whitespace."""
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = """[
+            "  Title with leading spaces",
+            "Title with trailing spaces   ",
+            "  Both ends  "
+        ]"""
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state, count=3)
+
+        # Names should be stripped
+        assert "Title with leading spaces" in names
+        assert "Title with trailing spaces" in names
+        assert "Both ends" in names
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_filters_empty(
+        self, mock_agent_class, suggestion_service, sample_story_state
+    ):
+        """Test that empty names are filtered out."""
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = """[
+            "Valid Title",
+            "",
+            "   ",
+            "Another Valid Title",
+            null
+        ]"""
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(sample_story_state, count=10)
+
+        # Should only contain non-empty names
+        assert "Valid Title" in names
+        assert "Another Valid Title" in names
+        assert "" not in names
+        assert "   " not in names
