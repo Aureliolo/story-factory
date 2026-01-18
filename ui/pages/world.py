@@ -96,17 +96,24 @@ class WorldPage:
         self._build_generation_toolbar()
 
         # Responsive layout: stack on mobile, 3-column on desktop
-        with ui.row().classes("w-full h-full gap-4 p-4 flex-wrap lg:flex-nowrap"):
+        # All panels should have the same height
+        with (
+            ui.row()
+            .classes("w-full gap-4 p-4 flex-wrap lg:flex-nowrap")
+            .style("min-height: calc(100vh - 250px)")
+        ):
             # Left panel - Entity browser (full width on mobile, 20% on desktop)
-            with ui.column().classes("w-full lg:w-1/5 gap-4 min-w-[250px]"):
+            with ui.column().classes("w-full lg:w-1/5 gap-4 min-w-[250px] h-full"):
                 self._build_entity_browser()
 
             # Center panel - Graph visualization (full width on mobile, 60% on desktop)
-            with ui.column().classes("w-full lg:w-3/5 gap-4 min-w-[300px]"):
+            with ui.column().classes("w-full lg:w-3/5 gap-4 min-w-[300px] h-full"):
                 self._build_graph_section()
 
             # Right panel - Entity editor (full width on mobile, 20% on desktop)
-            self._editor_container = ui.column().classes("w-full lg:w-1/5 gap-4 min-w-[250px]")
+            self._editor_container = ui.column().classes(
+                "w-full lg:w-1/5 gap-4 min-w-[250px] h-full"
+            )
             with self._editor_container:
                 self._build_entity_editor()
 
@@ -1331,9 +1338,13 @@ class WorldPage:
                 on_change=self._on_search,
             ).classes("w-full").props("outlined dense")
 
-            # Entity list with proper styling
-            self._entity_list = ui.column().classes(
-                "w-full gap-1 overflow-auto max-h-64 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg"
+            # Entity list with flexible height to match editor
+            self._entity_list = (
+                ui.column()
+                .classes(
+                    "w-full gap-1 overflow-auto flex-grow p-2 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                )
+                .style("max-height: calc(100vh - 450px); min-height: 200px")
             )
             self._refresh_entity_list()
 
@@ -1366,6 +1377,7 @@ class WorldPage:
 
     def _build_graph_section(self) -> None:
         """Build the graph visualization section."""
+        # Use larger height to match entity browser and editor
         self._graph = GraphComponent(
             world_db=self.state.world_db,
             settings=self.services.settings,
@@ -1373,7 +1385,7 @@ class WorldPage:
             on_edge_select=self._on_edge_select,
             on_create_relationship=self._on_create_relationship,
             on_edge_context_menu=self._on_edge_context_menu,
-            height=450,
+            height=600,  # Taller to match browser and editor panels
         )
         self._graph.build()
 
