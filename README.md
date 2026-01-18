@@ -55,6 +55,23 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 
 ## Features
 
+### Core Capabilities
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| 🤖 **Multi-Agent System** | 5 specialized AI agents working together | ✅ Stable |
+| 🌐 **World Building** | Graph-based entity/relationship tracking with visualization | ✅ Stable |
+| 🎨 **Modern Web UI** | NiceGUI-powered interface with dark mode | ✅ Stable |
+| 📚 **Story Templates** | Pre-built genre templates (Fantasy, Sci-Fi, Romance, etc.) | ✅ Stable |
+| 📊 **Analytics Dashboard** | Model performance tracking and recommendations | ✅ Stable |
+| 💾 **Multiple Export Formats** | Markdown, Text, HTML, EPUB, PDF | ✅ Stable |
+| ⚡ **Background Generation** | Non-blocking UI during story creation | ✅ Stable |
+| 🔄 **Version Control** | Chapter history with rollback support | ✅ Stable |
+| 🎯 **Adaptive Learning** | Auto-improves based on your preferences | ✅ Stable |
+| 🔒 **100% Local & Private** | No cloud, no tracking, complete privacy | ✅ Always |
+
+### AI Agent Production Team
+
 - **Multi-Agent Production Team**: 5 specialized AI agents working together
   - **Interviewer**: Gathers story requirements through conversation
   - **Architect**: Designs world, characters, and plot structure
@@ -814,7 +831,105 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architectural guidelines.
 
 ## License
 
-MIT License - See LICENSE file for details.
+MIT License - See [LICENSE](LICENSE) file for details.
+
+## Getting Help
+
+### Documentation
+
+- **[Quick Start Guide](#quick-start)**: Get running in 5 minutes
+- **[Installation Guide](#installation)**: Detailed setup instructions
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)**: Solutions to common problems
+- **[Model Selection Guide](docs/MODELS.md)**: Choose the best models
+- **[Architecture Documentation](docs/ARCHITECTURE.md)**: Understand the system
+- **[Contributing Guide](CONTRIBUTING.md)**: Help improve the project
+
+### Support Resources
+
+- **GitHub Issues**: [Report bugs or request features](https://github.com/Aureliolo/story-factory/issues)
+- **GitHub Discussions**: [Ask questions and share ideas](https://github.com/Aureliolo/story-factory/discussions)
+- **Logs**: Check `logs/story_factory.log` for detailed error information
+
+### Community
+
+- **LocalLLaMA subreddit**: r/LocalLLaMA for local AI discussions
+- **Ollama Community**: [Ollama GitHub](https://github.com/ollama/ollama) and [Discord](https://discord.gg/ollama)
+- **NiceGUI Documentation**: [NiceGUI Docs](https://nicegui.io) for UI questions
+
+### Before Asking for Help
+
+1. **Check the logs**: `logs/story_factory.log`
+2. **Search existing issues**: Someone may have had the same problem
+3. **Read the docs**: Check relevant documentation sections
+4. **Verify your setup**:
+   - Ollama is running (`curl http://localhost:11434/api/tags`)
+   - Models are installed (`ollama list`)
+   - Python version is 3.13+ (`python --version`)
+   - GPU is detected (`nvidia-smi`)
+
+### Reporting Issues
+
+When reporting an issue, include:
+- **Environment**: OS, Python version, Ollama version, GPU
+- **Steps to reproduce**: Exact steps that trigger the problem
+- **Error messages**: From logs or console
+- **Expected vs. actual behavior**: What should happen vs. what does happen
+- **Screenshots**: For UI-related issues
+
+## Acknowledgments
+
+This project uses and is inspired by:
+
+- **[Ollama](https://ollama.com)**: Local LLM serving made simple
+- **[NiceGUI](https://nicegui.io)**: Beautiful Python web interfaces
+- **[NetworkX](https://networkx.org)**: Graph analysis for world-building
+- **Eric Hartford**: For creating Dolphin models
+- **Qwen Team**: For excellent open-source models
+- **LocalLLaMA Community**: For model testing and recommendations
+
+Special thanks to all the model creators, AI researchers, and open-source contributors who make projects like this possible.
+
+## Project Status & Roadmap
+
+### Current Status (v1.0)
+
+✅ **Stable Features**:
+- Multi-agent story generation
+- Web UI with dark mode
+- World building with graph visualization
+- Story templates and presets
+- Multiple export formats
+- Model performance analytics
+- Adaptive learning system
+- CLI mode
+
+### Planned Features
+
+📋 **Short-term** (v1.1-v1.2):
+- Better error recovery and retry logic
+- Enhanced world import from text
+- Custom agent system prompts (UI configuration)
+- Story outline variations
+- Chapter-level regeneration with feedback
+
+🔮 **Long-term** (v2.0+):
+- Plugin system for custom agents/exporters
+- Multi-language support
+- Collaborative writing (multi-user)
+- Cloud deployment option
+- Advanced analytics and A/B testing
+- Voice narration export
+- Integration with external writing tools
+
+### Known Limitations
+
+- Single user (local application)
+- One active generation at a time (VRAM constraints)
+- Requires good GPU for reasonable performance
+- English-focused (multilingual support limited)
+- File-based storage (not suitable for large teams)
+
+See [GitHub Issues](https://github.com/Aureliolo/story-factory/issues) for active development.
 
 ## Purpose
 
