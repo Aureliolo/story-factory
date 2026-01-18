@@ -1,6 +1,7 @@
 """Story Architect Agent - Creates story structure, characters, and outlines."""
 
 import logging
+import random
 import re
 import uuid
 from typing import Any
@@ -132,8 +133,22 @@ class ArchitectAgent(BaseAgent):
         builder.add_text(f"PREMISE: {brief.premise}")
         builder.add_brief_requirements(brief)
 
+        min_chars = self.settings.world_gen_characters_min
+        max_chars = self.settings.world_gen_characters_max
+
+        # Add random naming variety hint to avoid repetitive names across generations
+        naming_styles = [
+            "Use unexpected, fresh names - avoid common fantasy names like Elara, Kael, Thorne, or Lyra.",
+            "Draw inspiration from diverse cultures for unique names.",
+            "Create memorable names that reflect each character's personality.",
+            "Use short, punchy names for some characters and longer, elaborate names for others.",
+            "Mix naming conventions - some formal, some nicknames, some titles.",
+        ]
+        naming_hint = random.choice(naming_styles)
+
         builder.add_text(
-            f"Create 2-4 main characters. For each, output JSON (all text values in {brief.language}):"
+            f"Create {min_chars}-{max_chars} main characters. {naming_hint} "
+            f"For each, output JSON (all text values in {brief.language}):"
         )
         builder.add_json_output_format(self.CHARACTER_SCHEMA)
         builder.add_text("Make them complex, with flaws and desires that create conflict.")
