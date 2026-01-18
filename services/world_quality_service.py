@@ -251,7 +251,8 @@ TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 SETTING: {brief.setting_place}, {brief.setting_time}
 
-EXISTING CHARACTERS (do NOT recreate): {", ".join(existing_names) if existing_names else "None"}
+EXISTING CHARACTERS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
+(Create a NEW character with a different name that complements these existing ones)
 
 NAMING: {naming_hint}
 
@@ -594,7 +595,8 @@ STORY PREMISE: {brief.premise}
 SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 
-EXISTING LOCATIONS (do NOT recreate): {", ".join(existing_names) if existing_names else "None"}
+EXISTING LOCATIONS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
+(Create a NEW location with a different name that complements these existing ones)
 
 Create a location with:
 1. Rich atmosphere - sensory details, mood
@@ -1235,7 +1237,8 @@ SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
-EXISTING FACTIONS (do NOT recreate): {", ".join(existing_names) if existing_names else "None"}
+EXISTING FACTIONS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
+(Create a NEW faction with a different name that complements these existing ones)
 
 Create a faction with:
 1. Internal coherence - clear structure, beliefs, and rules
@@ -1535,7 +1538,8 @@ SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
-EXISTING ITEMS (do NOT recreate): {", ".join(existing_names) if existing_names else "None"}
+EXISTING ITEMS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
+(Create a NEW item with a different name that complements these existing ones)
 
 Create an item with:
 1. Significance - meaningful role in the plot or character development
@@ -1762,10 +1766,11 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         concept: dict[str, Any] = {}
         scores: ConceptQualityScores | None = None
         last_error: str = ""
+        needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
 
         while iteration < config.max_iterations:
             try:
-                if iteration == 0:
+                if needs_fresh_creation:
                     concept = self._create_concept(
                         story_state, existing_names, config.creator_temperature
                     )
@@ -1781,10 +1786,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 if not concept.get("name"):
                     last_error = f"Concept creation returned empty on iteration {iteration + 1}"
                     logger.error(last_error)
+                    needs_fresh_creation = True  # Retry with fresh creation
                     iteration += 1
                     continue
 
                 scores = self._judge_concept_quality(concept, story_state, config.judge_temperature)
+                needs_fresh_creation = False  # Successfully created, now can refine
 
                 logger.info(
                     f"Concept '{concept.get('name')}' iteration {iteration + 1}: "
@@ -1824,21 +1831,21 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         if not brief:
             return {}
 
+        existing_str = ", ".join(existing_names) if existing_names else "None yet"
         prompt = f"""Create a thematic concept/idea for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
-EXISTING CONCEPTS (do NOT recreate): {", ".join(existing_names) if existing_names else "None"}
+EXISTING CONCEPTS IN THIS STORY: {existing_str}
+(Create a NEW concept with a different name that complements these existing ones)
 
 Create a concept that:
 1. Is relevant to the story's themes
 2. Has philosophical depth
 3. Can manifest in concrete ways in the story
 4. Resonates emotionally with readers
-
-Examples: "The Corruption of Power", "Inherited Trauma", "The Price of Immortality"
 
 Output ONLY valid JSON (all text in {brief.language}):
 {{
@@ -2426,7 +2433,6 @@ ENTITY: {name} ({entity_type})
 FULL DESCRIPTION: {full_description}
 
 Write a punchy, informative summary. NO quotes, NO formatting, just the summary text.
-Example: "Mysterious rogue haunted by past betrayals, seeking redemption through unlikely alliances"
 
 SUMMARY:"""
 
