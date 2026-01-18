@@ -70,7 +70,12 @@ class GraphComponent:
         self.height = height
 
         self._container: Html | None = None
-        self._filter_types: list[str] = ["character", "location"]
+        # Use filter types from settings if available, otherwise default to all
+        self._filter_types: list[str] = (
+            list(self.settings.graph_filter_types)
+            if hasattr(self.settings, "graph_filter_types")
+            else ["character", "location", "item", "faction", "concept"]
+        )
         self._layout = "force-directed"
         self._selected_entity_id: str | None = None
         self._callback_id = f"graph_node_select_{uuid.uuid4().hex[:8]}"
@@ -163,6 +168,11 @@ class GraphComponent:
                     "Factions",
                     value="faction" in self._filter_types,
                     on_change=lambda e: self._toggle_filter("faction", e.value),
+                )
+                ui.checkbox(
+                    "Concepts",
+                    value="concept" in self._filter_types,
+                    on_change=lambda e: self._toggle_filter("concept", e.value),
                 )
 
                 ui.space()
@@ -392,6 +402,11 @@ class GraphComponent:
             self._filter_types.append(entity_type)
         elif not enabled and entity_type in self._filter_types:
             self._filter_types.remove(entity_type)
+
+        # Persist to settings
+        if hasattr(self.settings, "graph_filter_types"):
+            self.settings.graph_filter_types = list(self._filter_types)
+            self.settings.save()
 
         self._render_graph()
 
