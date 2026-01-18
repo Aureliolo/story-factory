@@ -20,6 +20,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__ files
+"main.py" = ["E402"]  # imports after check_environment() is intentional
 
 [tool.mypy]
 python_version = "3.14"

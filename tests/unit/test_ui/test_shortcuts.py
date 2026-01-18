@@ -17,18 +17,21 @@ class TestShortcut:
 
     def test_shortcut_creation_full(self):
         """Test creating shortcut with all fields."""
-        action = lambda: None  # noqa: E731
+
+        def noop_action() -> None:
+            pass
+
         shortcut = Shortcut(
             key="z",
             modifiers=["ctrl", "shift"],
             description="Redo",
-            action=action,
+            action=noop_action,
             category="Editing",
         )
         assert shortcut.key == "z"
         assert shortcut.modifiers == ["ctrl", "shift"]
         assert shortcut.description == "Redo"
-        assert shortcut.action is action
+        assert shortcut.action is noop_action
         assert shortcut.category == "Editing"
 
 
