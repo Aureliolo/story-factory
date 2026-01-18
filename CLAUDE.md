@@ -116,7 +116,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 ## Ollama Integration
 
 - Default endpoint: `http://localhost:11434`
-- Recommended model: `huihui_ai/qwen3-abliterated:8b`
+- Recommended model: `huihui_ai/dolphin3-abliterated:8b`
 - Temperature varies by agent role (writer: 0.9, editor: 0.6, continuity: 0.3)
 - Context size: 32768 tokens default
 
