@@ -309,17 +309,17 @@ class Settings:
 
     # World generation counts (randomized within range for variety)
     world_gen_characters_min: int = 4
-    world_gen_characters_max: int = 7
+    world_gen_characters_max: int = 12
     world_gen_locations_min: int = 3
-    world_gen_locations_max: int = 6
+    world_gen_locations_max: int = 10
     world_gen_factions_min: int = 1
-    world_gen_factions_max: int = 3
+    world_gen_factions_max: int = 6
     world_gen_items_min: int = 2
-    world_gen_items_max: int = 5
+    world_gen_items_max: int = 10
     world_gen_concepts_min: int = 1
-    world_gen_concepts_max: int = 3
+    world_gen_concepts_max: int = 6
     world_gen_relationships_min: int = 8
-    world_gen_relationships_max: int = 15
+    world_gen_relationships_max: int = 25
 
     # LLM generation token limits (num_predict values)
     llm_tokens_character_create: int = 500
