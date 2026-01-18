@@ -1596,6 +1596,32 @@ class TestCreateFaction:
         assert faction["leader"] == "The Grand Master"
         assert len(faction["goals"]) == 2
 
+    def test_create_faction_with_existing_locations(self, service, story_state, mock_ollama_client):
+        """Test faction creation with existing locations for spatial grounding."""
+        faction_json = json.dumps(
+            {
+                "name": "The Shadow Council",
+                "type": "faction",
+                "description": "A secret society based in the old castle",
+                "leader": "The Grand Master",
+                "goals": ["control the kingdom"],
+                "values": ["secrecy"],
+                "base_location": "The Dark Castle",
+            }
+        )
+        mock_ollama_client.generate.return_value = {"response": faction_json}
+        service._client = mock_ollama_client
+
+        faction = service._create_faction(
+            story_state,
+            existing_names=[],
+            temperature=0.9,
+            existing_locations=["The Dark Castle", "The Royal Palace"],
+        )
+
+        assert faction["name"] == "The Shadow Council"
+        assert faction["base_location"] == "The Dark Castle"
+
     def test_create_faction_duplicate_name_returns_empty(
         self, service, story_state, mock_ollama_client
     ):

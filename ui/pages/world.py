@@ -472,6 +472,19 @@ class WorldPage:
                     )
                     logger.info(f"Generated {len(results)} characters with quality refinement")
 
+                    # Check for partial failure and notify user
+                    if len(results) < count:
+                        failed_count = count - len(results)
+                        ui.notify(
+                            f"Warning: {failed_count} of {count} characters failed to generate",
+                            type="warning",
+                            timeout=5000,
+                        )
+                    if len(results) == 0:
+                        notification.dismiss()
+                        ui.notify("Failed to generate any characters", type="negative")
+                        return
+
                     # Generate mini descriptions for hover tooltips
                     notification.message = "Generating hover summaries..."
                     entity_data = [
@@ -482,35 +495,52 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-
-                    # Add to world database with quality scores and mini descriptions
-                    for char, scores in results:
-                        attrs = {
-                            "role": char.role,
-                            "traits": char.personality_traits,
-                            "goals": char.goals,
-                            "arc": char.arc_notes,
-                            "quality_scores": scores.to_dict(),
-                        }
-                        if char.name in mini_descs:
-                            attrs["mini_description"] = mini_descs[char.name]
-                        self.services.world.add_entity(
-                            self.state.world_db,
-                            name=char.name,
-                            entity_type="character",
-                            description=char.description,
-                            attributes=attrs,
-                        )
-                        # Also add to story state
-                        self.state.project.characters.append(char)
                     notification.dismiss()
-                    avg_quality = (
-                        sum(s.average for _, s in results) / len(results) if results else 0
-                    )
-                    ui.notify(
-                        f"Added {len(results)} characters (avg quality: {avg_quality:.1f})",
-                        type="positive",
-                    )
+
+                    # Define callback to add selected characters
+                    def add_selected_characters(selected: list[tuple[Any, Any]]) -> None:
+                        if not selected:
+                            ui.notify("No characters selected", type="info")
+                            return
+                        if not self.state.world_db or not self.state.project:
+                            ui.notify("No project loaded", type="negative")
+                            return
+                        for char, scores in selected:
+                            attrs = {
+                                "role": char.role,
+                                "traits": char.personality_traits,
+                                "goals": char.goals,
+                                "arc": char.arc_notes,
+                                "quality_scores": scores.to_dict(),
+                            }
+                            if char.name in mini_descs:
+                                attrs["mini_description"] = mini_descs[char.name]
+                            self.services.world.add_entity(
+                                self.state.world_db,
+                                name=char.name,
+                                entity_type="character",
+                                description=char.description,
+                                attributes=attrs,
+                            )
+                            # Also add to story state
+                            self.state.project.characters.append(char)
+                        # Refresh UI and save
+                        self.state.world_db.invalidate_graph_cache()
+                        self._refresh_entity_list()
+                        if self._graph:
+                            self._graph.refresh()
+                        self.services.project.save_project(self.state.project)
+                        avg_quality = (
+                            sum(s.average for _, s in selected) / len(selected) if selected else 0
+                        )
+                        ui.notify(
+                            f"Added {len(selected)} characters (avg quality: {avg_quality:.1f})",
+                            type="positive",
+                        )
+
+                    # Show preview dialog
+                    self._show_entity_preview_dialog("character", results, add_selected_characters)
+                    return  # Early return - callback handles the rest
                 else:
                     # Generate characters via service (original method)
                     logger.info("Calling story service to generate characters...")
@@ -548,6 +578,19 @@ class WorldPage:
                     )
                     logger.info(f"Generated {len(loc_results)} locations with quality refinement")
 
+                    # Check for partial failure and notify user
+                    if len(loc_results) < count:
+                        failed_count = count - len(loc_results)
+                        ui.notify(
+                            f"Warning: {failed_count} of {count} locations failed to generate",
+                            type="warning",
+                            timeout=5000,
+                        )
+                    if len(loc_results) == 0:
+                        notification.dismiss()
+                        ui.notify("Failed to generate any locations", type="negative")
+                        return
+
                     # Generate mini descriptions for hover tooltips
                     notification.message = "Generating hover summaries..."
                     entity_data = [
@@ -563,33 +606,50 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-
-                    # Add to world database with quality scores and mini descriptions
-                    for loc, scores in loc_results:  # type: ignore[assignment]
-                        if isinstance(loc, dict) and "name" in loc:
-                            attrs = {
-                                "significance": loc.get("significance", ""),
-                                "quality_scores": scores.to_dict(),
-                            }
-                            if loc["name"] in mini_descs:
-                                attrs["mini_description"] = mini_descs[loc["name"]]
-                            self.services.world.add_entity(
-                                self.state.world_db,
-                                name=loc["name"],
-                                entity_type="location",
-                                description=loc.get("description", ""),
-                                attributes=attrs,
-                            )
                     notification.dismiss()
-                    avg_quality = (
-                        sum(s.average for _, s in loc_results) / len(loc_results)
-                        if loc_results
-                        else 0
+
+                    # Define callback to add selected locations
+                    def add_selected_locations(selected: list[tuple[Any, Any]]) -> None:
+                        if not selected:
+                            ui.notify("No locations selected", type="info")
+                            return
+                        if not self.state.world_db or not self.state.project:
+                            ui.notify("No project loaded", type="negative")
+                            return
+                        for loc, scores in selected:
+                            if isinstance(loc, dict) and "name" in loc:
+                                attrs = {
+                                    "significance": loc.get("significance", ""),
+                                    "quality_scores": scores.to_dict(),
+                                }
+                                if loc["name"] in mini_descs:
+                                    attrs["mini_description"] = mini_descs[loc["name"]]
+                                self.services.world.add_entity(
+                                    self.state.world_db,
+                                    name=loc["name"],
+                                    entity_type="location",
+                                    description=loc.get("description", ""),
+                                    attributes=attrs,
+                                )
+                        # Refresh UI and save
+                        self.state.world_db.invalidate_graph_cache()
+                        self._refresh_entity_list()
+                        if self._graph:
+                            self._graph.refresh()
+                        self.services.project.save_project(self.state.project)
+                        avg_quality = (
+                            sum(s.average for _, s in selected) / len(selected) if selected else 0
+                        )
+                        ui.notify(
+                            f"Added {len(selected)} locations (avg quality: {avg_quality:.1f})",
+                            type="positive",
+                        )
+
+                    # Show preview dialog
+                    self._show_entity_preview_dialog(
+                        "location", loc_results, add_selected_locations
                     )
-                    ui.notify(
-                        f"Added {len(loc_results)} locations (avg quality: {avg_quality:.1f})",
-                        type="positive",
-                    )
+                    return  # Early return - callback handles the rest
                 else:
                     # Generate locations via service (original method)
                     logger.info("Calling story service to generate locations...")
@@ -617,6 +677,13 @@ class WorldPage:
 
             elif entity_type == "factions":
                 if use_quality:
+                    # Get existing locations for spatial grounding
+                    existing_entities = self.state.world_db.list_entities()
+                    existing_locations = [e.name for e in existing_entities if e.type == "location"]
+                    logger.info(
+                        f"Found {len(existing_locations)} existing locations for faction grounding"
+                    )
+
                     # Generate factions with quality refinement
                     logger.info("Calling world quality service to generate factions...")
                     faction_results = await run.io_bound(
@@ -624,10 +691,24 @@ class WorldPage:
                         self.state.project,
                         all_existing_names,
                         count,
+                        existing_locations,
                     )
                     logger.info(
                         f"Generated {len(faction_results)} factions with quality refinement"
                     )
+
+                    # Check for partial failure and notify user
+                    if len(faction_results) < count:
+                        failed_count = count - len(faction_results)
+                        ui.notify(
+                            f"Warning: {failed_count} of {count} factions failed to generate",
+                            type="warning",
+                            timeout=5000,
+                        )
+                    if len(faction_results) == 0:
+                        notification.dismiss()
+                        ui.notify("Failed to generate any factions", type="negative")
+                        return
 
                     # Generate mini descriptions for hover tooltips
                     notification.message = "Generating hover summaries..."
@@ -644,35 +725,75 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-
-                    # Add to world database with quality scores and mini descriptions
-                    for faction, scores in faction_results:  # type: ignore[assignment]
-                        if isinstance(faction, dict) and "name" in faction:
-                            attrs = {
-                                "leader": faction.get("leader", ""),
-                                "goals": faction.get("goals", []),
-                                "values": faction.get("values", []),
-                                "quality_scores": scores.to_dict(),
-                            }
-                            if faction["name"] in mini_descs:
-                                attrs["mini_description"] = mini_descs[faction["name"]]
-                            self.services.world.add_entity(
-                                self.state.world_db,
-                                name=faction["name"],
-                                entity_type="faction",
-                                description=faction.get("description", ""),
-                                attributes=attrs,
-                            )
                     notification.dismiss()
-                    avg_quality = (
-                        sum(s.average for _, s in faction_results) / len(faction_results)
-                        if faction_results
-                        else 0
+
+                    # Define callback to add selected factions
+                    def add_selected_factions(selected: list[tuple[Any, Any]]) -> None:
+                        if not selected:
+                            ui.notify("No factions selected", type="info")
+                            return
+                        if not self.state.world_db or not self.state.project:
+                            ui.notify("No project loaded", type="negative")
+                            return
+                        for faction, scores in selected:
+                            if isinstance(faction, dict) and "name" in faction:
+                                attrs = {
+                                    "leader": faction.get("leader", ""),
+                                    "goals": faction.get("goals", []),
+                                    "values": faction.get("values", []),
+                                    "base_location": faction.get("base_location", ""),
+                                    "quality_scores": scores.to_dict(),
+                                }
+                                if faction["name"] in mini_descs:
+                                    attrs["mini_description"] = mini_descs[faction["name"]]
+                                faction_entity_id = self.services.world.add_entity(
+                                    self.state.world_db,
+                                    name=faction["name"],
+                                    entity_type="faction",
+                                    description=faction.get("description", ""),
+                                    attributes=attrs,
+                                )
+                                # Create relationship to base location if it exists
+                                base_loc = faction.get("base_location", "")
+                                if base_loc:
+                                    location_entity = next(
+                                        (
+                                            e
+                                            for e in existing_entities
+                                            if e.name == base_loc and e.type == "location"
+                                        ),
+                                        None,
+                                    )
+                                    if location_entity:
+                                        self.services.world.add_relationship(
+                                            self.state.world_db,
+                                            faction_entity_id,
+                                            location_entity.id,
+                                            "based_in",
+                                            f"{faction['name']} is headquartered in {base_loc}",
+                                        )
+                                        logger.info(
+                                            f"Created relationship: {faction['name']} -> based_in -> {base_loc}"
+                                        )
+                        # Refresh UI and save
+                        self.state.world_db.invalidate_graph_cache()
+                        self._refresh_entity_list()
+                        if self._graph:
+                            self._graph.refresh()
+                        self.services.project.save_project(self.state.project)
+                        avg_quality = (
+                            sum(s.average for _, s in selected) / len(selected) if selected else 0
+                        )
+                        ui.notify(
+                            f"Added {len(selected)} factions (avg quality: {avg_quality:.1f})",
+                            type="positive",
+                        )
+
+                    # Show preview dialog
+                    self._show_entity_preview_dialog(
+                        "faction", faction_results, add_selected_factions
                     )
-                    ui.notify(
-                        f"Added {len(faction_results)} factions (avg quality: {avg_quality:.1f})",
-                        type="positive",
-                    )
+                    return  # Early return - callback handles the rest
                 else:
                     notification.dismiss()
                     ui.notify("Enable Quality Refinement to generate factions", type="warning")
@@ -690,6 +811,19 @@ class WorldPage:
                     )
                     logger.info(f"Generated {len(item_results)} items with quality refinement")
 
+                    # Check for partial failure and notify user
+                    if len(item_results) < count:
+                        failed_count = count - len(item_results)
+                        ui.notify(
+                            f"Warning: {failed_count} of {count} items failed to generate",
+                            type="warning",
+                            timeout=5000,
+                        )
+                    if len(item_results) == 0:
+                        notification.dismiss()
+                        ui.notify("Failed to generate any items", type="negative")
+                        return
+
                     # Generate mini descriptions for hover tooltips
                     notification.message = "Generating hover summaries..."
                     entity_data = [
@@ -705,34 +839,49 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-
-                    # Add to world database with quality scores and mini descriptions
-                    for item, scores in item_results:  # type: ignore[assignment]
-                        if isinstance(item, dict) and "name" in item:
-                            attrs = {
-                                "significance": item.get("significance", ""),
-                                "properties": item.get("properties", []),
-                                "quality_scores": scores.to_dict(),
-                            }
-                            if item["name"] in mini_descs:
-                                attrs["mini_description"] = mini_descs[item["name"]]
-                            self.services.world.add_entity(
-                                self.state.world_db,
-                                name=item["name"],
-                                entity_type="item",
-                                description=item.get("description", ""),
-                                attributes=attrs,
-                            )
                     notification.dismiss()
-                    avg_quality = (
-                        sum(s.average for _, s in item_results) / len(item_results)
-                        if item_results
-                        else 0
-                    )
-                    ui.notify(
-                        f"Added {len(item_results)} items (avg quality: {avg_quality:.1f})",
-                        type="positive",
-                    )
+
+                    # Define callback to add selected items
+                    def add_selected_items(selected: list[tuple[Any, Any]]) -> None:
+                        if not selected:
+                            ui.notify("No items selected", type="info")
+                            return
+                        if not self.state.world_db or not self.state.project:
+                            ui.notify("No project loaded", type="negative")
+                            return
+                        for item, scores in selected:
+                            if isinstance(item, dict) and "name" in item:
+                                attrs = {
+                                    "significance": item.get("significance", ""),
+                                    "properties": item.get("properties", []),
+                                    "quality_scores": scores.to_dict(),
+                                }
+                                if item["name"] in mini_descs:
+                                    attrs["mini_description"] = mini_descs[item["name"]]
+                                self.services.world.add_entity(
+                                    self.state.world_db,
+                                    name=item["name"],
+                                    entity_type="item",
+                                    description=item.get("description", ""),
+                                    attributes=attrs,
+                                )
+                        # Refresh UI and save
+                        self.state.world_db.invalidate_graph_cache()
+                        self._refresh_entity_list()
+                        if self._graph:
+                            self._graph.refresh()
+                        self.services.project.save_project(self.state.project)
+                        avg_quality = (
+                            sum(s.average for _, s in selected) / len(selected) if selected else 0
+                        )
+                        ui.notify(
+                            f"Added {len(selected)} items (avg quality: {avg_quality:.1f})",
+                            type="positive",
+                        )
+
+                    # Show preview dialog
+                    self._show_entity_preview_dialog("item", item_results, add_selected_items)
+                    return  # Early return - callback handles the rest
                 else:
                     notification.dismiss()
                     ui.notify("Enable Quality Refinement to generate items", type="warning")
@@ -752,6 +901,19 @@ class WorldPage:
                         f"Generated {len(concept_results)} concepts with quality refinement"
                     )
 
+                    # Check for partial failure and notify user
+                    if len(concept_results) < count:
+                        failed_count = count - len(concept_results)
+                        ui.notify(
+                            f"Warning: {failed_count} of {count} concepts failed to generate",
+                            type="warning",
+                            timeout=5000,
+                        )
+                    if len(concept_results) == 0:
+                        notification.dismiss()
+                        ui.notify("Failed to generate any concepts", type="negative")
+                        return
+
                     # Generate mini descriptions for hover tooltips
                     notification.message = "Generating hover summaries..."
                     entity_data = [
@@ -767,33 +929,50 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-
-                    # Add to world database with quality scores and mini descriptions
-                    for concept, scores in concept_results:  # type: ignore[assignment]
-                        if isinstance(concept, dict) and "name" in concept:
-                            attrs = {
-                                "manifestations": concept.get("manifestations", ""),
-                                "quality_scores": scores.to_dict(),
-                            }
-                            if concept["name"] in mini_descs:
-                                attrs["mini_description"] = mini_descs[concept["name"]]
-                            self.services.world.add_entity(
-                                self.state.world_db,
-                                name=concept["name"],
-                                entity_type="concept",
-                                description=concept.get("description", ""),
-                                attributes=attrs,
-                            )
                     notification.dismiss()
-                    avg_quality = (
-                        sum(s.average for _, s in concept_results) / len(concept_results)
-                        if concept_results
-                        else 0
+
+                    # Define callback to add selected concepts
+                    def add_selected_concepts(selected: list[tuple[Any, Any]]) -> None:
+                        if not selected:
+                            ui.notify("No concepts selected", type="info")
+                            return
+                        if not self.state.world_db or not self.state.project:
+                            ui.notify("No project loaded", type="negative")
+                            return
+                        for concept, scores in selected:
+                            if isinstance(concept, dict) and "name" in concept:
+                                attrs = {
+                                    "manifestations": concept.get("manifestations", ""),
+                                    "quality_scores": scores.to_dict(),
+                                }
+                                if concept["name"] in mini_descs:
+                                    attrs["mini_description"] = mini_descs[concept["name"]]
+                                self.services.world.add_entity(
+                                    self.state.world_db,
+                                    name=concept["name"],
+                                    entity_type="concept",
+                                    description=concept.get("description", ""),
+                                    attributes=attrs,
+                                )
+                        # Refresh UI and save
+                        self.state.world_db.invalidate_graph_cache()
+                        self._refresh_entity_list()
+                        if self._graph:
+                            self._graph.refresh()
+                        self.services.project.save_project(self.state.project)
+                        avg_quality = (
+                            sum(s.average for _, s in selected) / len(selected) if selected else 0
+                        )
+                        ui.notify(
+                            f"Added {len(selected)} concepts (avg quality: {avg_quality:.1f})",
+                            type="positive",
+                        )
+
+                    # Show preview dialog
+                    self._show_entity_preview_dialog(
+                        "concept", concept_results, add_selected_concepts
                     )
-                    ui.notify(
-                        f"Added {len(concept_results)} concepts (avg quality: {avg_quality:.1f})",
-                        type="positive",
-                    )
+                    return  # Early return - callback handles the rest
                 else:
                     notification.dismiss()
                     ui.notify("Enable Quality Refinement to generate concepts", type="warning")
@@ -834,44 +1013,74 @@ class WorldPage:
                         f"Generated {len(rel_results)} relationships with quality refinement"
                     )
 
-                    # Add to world database with quality scores
-                    added = 0
-                    for rel_data, scores in rel_results:  # type: ignore[assignment]
-                        if (
-                            isinstance(rel_data, dict)
-                            and "source" in rel_data
-                            and "target" in rel_data
-                        ):
-                            source_entity = next(
-                                (e for e in entities if e.name == rel_data["source"]), None
-                            )
-                            target_entity = next(
-                                (e for e in entities if e.name == rel_data["target"]), None
-                            )
-                            if source_entity and target_entity:
-                                rel_id = self.services.world.add_relationship(
-                                    self.state.world_db,
-                                    source_entity.id,
-                                    target_entity.id,
-                                    rel_data.get("relation_type", "knows"),
-                                    rel_data.get("description", ""),
-                                )
-                                # Store quality scores in relationship attributes
-                                self.state.world_db.update_relationship(
-                                    relationship_id=rel_id,
-                                    attributes={"quality_scores": scores.to_dict()},
-                                )
-                                added += 1
+                    # Check for partial failure and notify user
+                    if len(rel_results) < count:
+                        failed_count = count - len(rel_results)
+                        ui.notify(
+                            f"Warning: {failed_count} of {count} relationships failed to generate",
+                            type="warning",
+                            timeout=5000,
+                        )
+                    if len(rel_results) == 0:
+                        notification.dismiss()
+                        ui.notify("Failed to generate any relationships", type="negative")
+                        return
                     notification.dismiss()
-                    avg_quality = (
-                        sum(s.average for _, s in rel_results) / len(rel_results)
-                        if rel_results
-                        else 0
+
+                    # Define callback to add selected relationships
+                    def add_selected_relationships(selected: list[tuple[Any, Any]]) -> None:
+                        if not selected:
+                            ui.notify("No relationships selected", type="info")
+                            return
+                        if not self.state.world_db or not self.state.project:
+                            ui.notify("No project loaded", type="negative")
+                            return
+                        added = 0
+                        for rel_data, scores in selected:
+                            if (
+                                isinstance(rel_data, dict)
+                                and "source" in rel_data
+                                and "target" in rel_data
+                            ):
+                                source_entity = next(
+                                    (e for e in entities if e.name == rel_data["source"]), None
+                                )
+                                target_entity = next(
+                                    (e for e in entities if e.name == rel_data["target"]), None
+                                )
+                                if source_entity and target_entity:
+                                    rel_id = self.services.world.add_relationship(
+                                        self.state.world_db,
+                                        source_entity.id,
+                                        target_entity.id,
+                                        rel_data.get("relation_type", "knows"),
+                                        rel_data.get("description", ""),
+                                    )
+                                    # Store quality scores in relationship attributes
+                                    self.state.world_db.update_relationship(
+                                        relationship_id=rel_id,
+                                        attributes={"quality_scores": scores.to_dict()},
+                                    )
+                                    added += 1
+                        # Refresh UI and save
+                        self.state.world_db.invalidate_graph_cache()
+                        self._refresh_entity_list()
+                        if self._graph:
+                            self._graph.refresh()
+                        self.services.project.save_project(self.state.project)
+                        avg_quality = (
+                            sum(s.average for _, s in selected) / len(selected) if selected else 0
+                        )
+                        ui.notify(
+                            f"Added {added} relationships (avg quality: {avg_quality:.1f})",
+                            type="positive",
+                        )
+
+                    # Show preview dialog
+                    self._show_entity_preview_dialog(
+                        "relationship", rel_results, add_selected_relationships
                     )
-                    ui.notify(
-                        f"Added {added} relationships (avg quality: {avg_quality:.1f})",
-                        type="positive",
-                    )
+                    return  # Early return - callback handles the rest
                 else:
                     # Generate relationships via service (original method)
                     logger.info("Calling story service to generate relationships...")
@@ -940,6 +1149,167 @@ class WorldPage:
             notification.dismiss()
             logger.exception(f"Unexpected error generating {entity_type}: {e}")
             ui.notify(f"Error: {e}", type="negative")
+
+    def _show_entity_preview_dialog(
+        self,
+        entity_type: str,
+        entities: list[tuple[Any, Any]],
+        on_confirm: Any,
+    ) -> None:
+        """Show a preview dialog for generated entities before adding them.
+
+        Args:
+            entity_type: Type of entity (character, location, faction, item, concept)
+            entities: List of (entity_data, quality_scores) tuples
+            on_confirm: Callback function that receives selected entities list
+        """
+        if not entities:
+            ui.notify("No entities to preview", type="warning")
+            return
+
+        logger.info(f"Showing preview dialog for {len(entities)} {entity_type}(s)")
+
+        # Track selected entities
+        selected = dict.fromkeys(range(len(entities)), True)  # All selected by default
+
+        def toggle_selection(idx: int) -> None:
+            selected[idx] = not selected[idx]
+            logger.debug(f"Toggled entity {idx}: {selected[idx]}")
+
+        def confirm_selection() -> None:
+            selected_entities = [entities[i] for i in range(len(entities)) if selected[i]]
+            logger.info(
+                f"User confirmed {len(selected_entities)} of {len(entities)} {entity_type}(s)"
+            )
+            dialog.close()
+            on_confirm(selected_entities)
+
+        def cancel_selection() -> None:
+            logger.info(f"User cancelled {entity_type} preview")
+            dialog.close()
+            ui.notify(f"Cancelled adding {entity_type}s", type="info")
+
+        with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[500px] max-w-[700px]"):
+            ui.label(f"Preview Generated {entity_type.title()}s").classes("text-lg font-bold mb-2")
+            ui.label(
+                f"Select which {entity_type}s to add to your world. Uncheck any you don't want."
+            ).classes("text-gray-600 dark:text-gray-400 mb-4")
+
+            # Scrollable container for entities
+            with ui.scroll_area().classes("w-full max-h-[400px]"):
+                for idx, (entity_data, scores) in enumerate(entities):
+                    # Get entity name and description based on type
+                    if entity_type == "character":
+                        name = (
+                            entity_data.name if hasattr(entity_data, "name") else str(entity_data)
+                        )
+                        desc = (
+                            entity_data.description[:150] + "..."
+                            if hasattr(entity_data, "description")
+                            and len(entity_data.description) > 150
+                            else getattr(entity_data, "description", "")
+                        )
+                        role = getattr(entity_data, "role", "")
+                        extra = f" ({role})" if role else ""
+                    elif entity_type == "relationship":
+                        # Relationships show source -> relation_type -> target
+                        source = (
+                            entity_data.get("source", "?") if isinstance(entity_data, dict) else "?"
+                        )
+                        target = (
+                            entity_data.get("target", "?") if isinstance(entity_data, dict) else "?"
+                        )
+                        rel_type = (
+                            entity_data.get("relation_type", "related_to")
+                            if isinstance(entity_data, dict)
+                            else "related_to"
+                        )
+                        name = f"{source} → {rel_type} → {target}"
+                        desc = (
+                            entity_data.get("description", "")[:150]
+                            if isinstance(entity_data, dict)
+                            else ""
+                        )
+                        if (
+                            len(entity_data.get("description", "")) > 150
+                            if isinstance(entity_data, dict)
+                            else False
+                        ):
+                            desc += "..."
+                        extra = ""
+                    else:
+                        name = (
+                            entity_data.get("name", "Unknown")
+                            if isinstance(entity_data, dict)
+                            else str(entity_data)
+                        )
+                        desc = (
+                            entity_data.get("description", "")[:150]
+                            if isinstance(entity_data, dict)
+                            else ""
+                        )
+                        if (
+                            len(entity_data.get("description", "")) > 150
+                            if isinstance(entity_data, dict)
+                            else False
+                        ):
+                            desc += "..."
+                        extra = ""
+                        if entity_type == "faction":
+                            base = (
+                                entity_data.get("base_location", "")
+                                if isinstance(entity_data, dict)
+                                else ""
+                            )
+                            if base:
+                                extra = f" (based in: {base})"
+
+                    quality = (
+                        f" - Quality: {scores.average:.1f}"
+                        if scores and hasattr(scores, "average")
+                        else ""
+                    )
+
+                    with ui.row().classes(
+                        "w-full items-start gap-2 py-2 border-b border-gray-200 dark:border-gray-700"
+                    ):
+                        ui.checkbox(
+                            value=True, on_change=lambda _, i=idx: toggle_selection(i)
+                        ).classes("mt-1")
+                        with ui.column().classes("flex-1"):
+                            ui.label(f"{name}{extra}").classes("font-semibold")
+                            if desc:
+                                ui.label(desc).classes("text-sm text-gray-600 dark:text-gray-400")
+                            if quality:
+                                ui.label(quality).classes(
+                                    "text-xs text-blue-600 dark:text-blue-400"
+                                )
+
+            # Helper functions for select/deselect all
+            def select_all() -> None:
+                selected.update(dict.fromkeys(range(len(entities)), True))
+                dialog.close()
+                self._show_entity_preview_dialog(entity_type, entities, on_confirm)
+
+            def deselect_all() -> None:
+                selected.update(dict.fromkeys(range(len(entities)), False))
+                dialog.close()
+                self._show_entity_preview_dialog(entity_type, entities, on_confirm)
+
+            # Action buttons
+            with ui.row().classes("w-full justify-between mt-4"):
+                with ui.row().classes("gap-2"):
+                    ui.button("Select All", on_click=select_all).props("flat dense")
+                    ui.button("Deselect All", on_click=deselect_all).props("flat dense")
+                with ui.row().classes("gap-2"):
+                    ui.button("Cancel", on_click=cancel_selection).props("flat")
+                    ui.button(
+                        "Add Selected",
+                        on_click=confirm_selection,
+                        icon="add",
+                    ).props("color=primary")
+
+        dialog.open()
 
     def _confirm_regenerate(self) -> None:
         """Show confirmation dialog before regenerating world."""
@@ -1080,6 +1450,14 @@ class WorldPage:
                     else:
                         logger.warning(f"Skipping invalid location: {loc}")
                 logger.info(f"Added {added_locs} locations to world database")
+                # Check for partial failure
+                if added_locs < location_count:
+                    failed_count = location_count - added_locs
+                    ui.notify(
+                        f"Warning: {failed_count} of {location_count} locations failed",
+                        type="warning",
+                        timeout=5000,
+                    )
             except Exception as e:
                 logger.exception(f"Failed to generate locations: {e}")
                 raise WorldGenerationError(f"Failed to generate locations: {e}") from e
@@ -1088,7 +1466,9 @@ class WorldPage:
             notification.message = "Step 4/7: Generating factions..."
             logger.info("Generating factions for the world...")
             try:
-                all_existing_names = [e.name for e in self.state.world_db.list_entities()]
+                all_entities = self.state.world_db.list_entities()
+                all_existing_names = [e.name for e in all_entities]
+                existing_locations = [e.name for e in all_entities if e.type == "location"]
                 faction_count = random.randint(
                     self.services.settings.world_gen_factions_min,
                     self.services.settings.world_gen_factions_max,
@@ -1098,12 +1478,13 @@ class WorldPage:
                     self.state.project,
                     all_existing_names,
                     faction_count,
+                    existing_locations,
                 )
                 logger.info(f"Generated {len(faction_results)} factions from LLM")
                 added_factions = 0
                 for faction, faction_scores in faction_results:
                     if isinstance(faction, dict) and "name" in faction:
-                        self.services.world.add_entity(
+                        faction_entity_id = self.services.world.add_entity(
                             self.state.world_db,
                             name=faction["name"],
                             entity_type="faction",
@@ -1112,13 +1493,44 @@ class WorldPage:
                                 "leader": faction.get("leader", ""),
                                 "goals": faction.get("goals", []),
                                 "values": faction.get("values", []),
+                                "base_location": faction.get("base_location", ""),
                                 "quality_scores": faction_scores.to_dict(),
                             },
                         )
                         added_factions += 1
+                        # Create relationship to base location if it exists
+                        base_loc = faction.get("base_location", "")
+                        if base_loc:
+                            location_entity = next(
+                                (
+                                    e
+                                    for e in all_entities
+                                    if e.name == base_loc and e.type == "location"
+                                ),
+                                None,
+                            )
+                            if location_entity:
+                                self.services.world.add_relationship(
+                                    self.state.world_db,
+                                    faction_entity_id,
+                                    location_entity.id,
+                                    "based_in",
+                                    f"{faction['name']} is headquartered in {base_loc}",
+                                )
+                                logger.info(
+                                    f"Created relationship: {faction['name']} -> based_in -> {base_loc}"
+                                )
                     else:
                         logger.warning(f"Skipping invalid faction: {faction}")
                 logger.info(f"Added {added_factions} factions to world database")
+                # Check for partial failure
+                if added_factions < faction_count:
+                    failed_count = faction_count - added_factions
+                    ui.notify(
+                        f"Warning: {failed_count} of {faction_count} factions failed",
+                        type="warning",
+                        timeout=5000,
+                    )
             except Exception as e:
                 logger.exception(f"Failed to generate factions: {e}")
                 raise WorldGenerationError(f"Failed to generate factions: {e}") from e
@@ -1157,6 +1569,14 @@ class WorldPage:
                     else:
                         logger.warning(f"Skipping invalid item: {item}")
                 logger.info(f"Added {added_items} items to world database")
+                # Check for partial failure
+                if added_items < item_count:
+                    failed_count = item_count - added_items
+                    ui.notify(
+                        f"Warning: {failed_count} of {item_count} items failed",
+                        type="warning",
+                        timeout=5000,
+                    )
             except Exception as e:
                 logger.exception(f"Failed to generate items: {e}")
                 raise WorldGenerationError(f"Failed to generate items: {e}") from e
@@ -1177,6 +1597,14 @@ class WorldPage:
                     concept_count,
                 )
                 logger.info(f"Generated {len(concept_results)} concepts from LLM")
+                # Check for partial failure and notify user
+                if len(concept_results) < concept_count:
+                    failed_count = concept_count - len(concept_results)
+                    ui.notify(
+                        f"Warning: {failed_count} of {concept_count} concepts failed to generate",
+                        type="warning",
+                        timeout=5000,
+                    )
                 added_concepts = 0
                 for concept, concept_scores in concept_results:
                     if isinstance(concept, dict) and "name" in concept:
@@ -1250,6 +1678,14 @@ class WorldPage:
                         else:
                             logger.warning(f"Skipping invalid relationship: {rel_data}")
                     logger.info(f"Added {added_rels} relationships to world database")
+                    # Check for partial failure
+                    if added_rels < rel_count:
+                        failed_count = rel_count - added_rels
+                        ui.notify(
+                            f"Warning: {failed_count} of {rel_count} relationships failed",
+                            type="warning",
+                            timeout=5000,
+                        )
                 else:
                     logger.warning("Not enough entities to generate relationships")
             except Exception as e:
