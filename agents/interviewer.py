@@ -1,16 +1,13 @@
 """Interviewer Agent - Gathers story requirements from the user."""
 
 import logging
-from typing import TYPE_CHECKING
 
 from memory.story_state import StoryBrief
+from settings import Settings
 from utils.json_parser import parse_json_to_model
 from utils.validation import validate_not_empty
 
 from .base import BaseAgent
-
-if TYPE_CHECKING:
-    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +49,7 @@ Always be respectful and non-judgmental about content preferences."""
 class InterviewerAgent(BaseAgent):
     """Agent that interviews the user to gather story requirements."""
 
-    def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+    def __init__(self, model: str | None = None, settings: Settings | None = None) -> None:
         """Initialize the Interviewer agent.
 
         Args:

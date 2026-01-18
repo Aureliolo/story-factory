@@ -812,7 +812,7 @@ class Settings:
             )
 
     @classmethod
-    def load(cls) -> "Settings":
+    def load(cls) -> Settings:
         """Load settings from JSON file, or create defaults.
 
         Attempts to repair invalid settings by merging valid fields with
@@ -858,7 +858,7 @@ class Settings:
                 logger.warning(f"Failed to backup settings: {e}")
 
     @classmethod
-    def _recover_partial_settings(cls, data: dict[str, Any]) -> "Settings":
+    def _recover_partial_settings(cls, data: dict[str, Any]) -> Settings:
         """Attempt to recover partial settings from corrupted data.
 
         Merges valid fields from the loaded data with default values,

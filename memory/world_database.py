@@ -7,14 +7,12 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import networkx as nx
+from networkx import DiGraph
 
 from memory.entities import Entity, EventParticipant, Relationship, WorldEvent
-
-if TYPE_CHECKING:
-    from networkx import DiGraph
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +221,7 @@ class WorldDatabase:
                 self._closed = True
                 logger.debug(f"Database connection closed: {self.db_path}")
 
-    def __enter__(self) -> "WorldDatabase":
+    def __enter__(self) -> WorldDatabase:
         """Context manager entry."""
         return self
 
@@ -1124,7 +1122,7 @@ class WorldDatabase:
             f"{self._graph.number_of_edges()} edges"
         )
 
-    def get_graph(self) -> "DiGraph[Any]":
+    def get_graph(self) -> DiGraph[Any]:
         """Get NetworkX graph (lazy-loaded).
 
         Returns:

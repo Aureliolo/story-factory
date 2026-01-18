@@ -5,15 +5,12 @@ A chapter-based Gantt-style timeline showing story elements across chapters.
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
 
 from nicegui import ui
 
 from memory.story_state import StoryState
+from settings import Settings
 from utils.json_parser import clean_llm_text
-
-if TYPE_CHECKING:
-    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +173,7 @@ class TimelineComponent:
     def __init__(
         self,
         story_state: StoryState | None = None,
-        settings: "Settings | None" = None,
+        settings: Settings | None = None,
         on_item_click: Callable[[str, dict], None] | None = None,
         height: int = 400,
         editable: bool = True,

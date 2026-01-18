@@ -4,13 +4,11 @@ import html
 import json
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from memory.world_database import WorldDatabase
+from settings import Settings
 from ui.theme import ENTITY_COLORS, RELATION_COLORS
-
-if TYPE_CHECKING:
-    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +38,7 @@ ENTITY_SHAPES = {
 
 def render_graph_html(
     world_db: WorldDatabase,
-    settings: "Settings",
+    settings: Settings,
     filter_types: list[str] | None = None,
     layout: str = "force-directed",
     height: int = 500,
