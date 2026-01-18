@@ -9,6 +9,14 @@ from memory.story_state import Chapter, StoryBrief, StoryState
 from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
 
 
+@pytest.fixture(autouse=True)
+def use_temp_stories_dir(tmp_path, monkeypatch):
+    """Use temp directory for ALL orchestrator tests to avoid polluting output/stories."""
+    stories_dir = tmp_path / "stories"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+
+
 class TestProgressTracking:
     """Tests for progress calculation."""
 
