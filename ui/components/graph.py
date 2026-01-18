@@ -2,16 +2,14 @@
 
 import uuid
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from nicegui import ui
 from nicegui.elements.html import Html
 
 from memory.world_database import WorldDatabase
+from settings import Settings
 from ui.graph_renderer import render_graph_html
-
-if TYPE_CHECKING:
-    from settings import Settings
 
 
 def _ensure_vis_network_loaded() -> None:
@@ -41,7 +39,7 @@ class GraphComponent:
     def __init__(
         self,
         world_db: WorldDatabase | None = None,
-        settings: "Settings | None" = None,
+        settings: Settings | None = None,
         on_node_select: Callable[[str], Any] | None = None,
         on_edge_select: Callable[[str], Any] | None = None,
         on_create_relationship: Callable[[str, str], Any] | None = None,
@@ -422,7 +420,7 @@ class GraphComponent:
 
 def mini_graph(
     world_db: WorldDatabase | None,
-    settings: "Settings | None" = None,
+    settings: Settings | None = None,
     height: int = 200,
     filter_types: list[str] | None = None,
 ) -> None:

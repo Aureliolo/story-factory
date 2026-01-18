@@ -29,7 +29,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 - Keep functions focused and single-purpose
 - Use docstrings for classes and complex functions
 - Line length: 100 characters (enforced by Ruff)
-- Python version: 3.13+
+- Python version: 3.14+
 
 ### Required Before Each Commit
 **CRITICAL**: After making code changes, always run in this order:

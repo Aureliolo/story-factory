@@ -1,15 +1,12 @@
 """Editor Agent - Refines and polishes prose."""
 
 import logging
-from typing import TYPE_CHECKING
 
 from memory.story_state import StoryState
+from settings import Settings
 from utils.validation import validate_not_empty, validate_not_none, validate_type
 
 from .base import BaseAgent
-
-if TYPE_CHECKING:
-    from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +40,7 @@ Output the improved version of the text, not a critique."""
 class EditorAgent(BaseAgent):
     """Agent that refines and polishes prose."""
 
-    def __init__(self, model: str | None = None, settings: "Settings | None" = None) -> None:
+    def __init__(self, model: str | None = None, settings: Settings | None = None) -> None:
         """Initialize the Editor agent.
 
         Args:

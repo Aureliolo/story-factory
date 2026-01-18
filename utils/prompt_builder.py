@@ -17,7 +17,7 @@ class PromptBuilder:
         """
         self.sections: list[str] = []
 
-    def add_language_requirement(self, language: str) -> "PromptBuilder":
+    def add_language_requirement(self, language: str) -> PromptBuilder:
         """Add language enforcement section.
 
         This reduces the 13+ instances of language requirement duplication
@@ -39,7 +39,7 @@ class PromptBuilder:
         include_brief: bool = True,
         include_characters: bool = True,
         include_world: bool = True,
-    ) -> "PromptBuilder":
+    ) -> PromptBuilder:
         """Add standardized story context block.
 
         Consolidates the manual context extraction patterns found across
@@ -79,7 +79,7 @@ class PromptBuilder:
 
         return self
 
-    def add_brief_requirements(self, brief: StoryBrief) -> "PromptBuilder":
+    def add_brief_requirements(self, brief: StoryBrief) -> PromptBuilder:
         """Add story brief requirements (genre, tone, content rating).
 
         Args:
@@ -102,7 +102,7 @@ class PromptBuilder:
         self.sections.append("\n".join(requirements))
         return self
 
-    def add_character_summary(self, characters: list[Character]) -> "PromptBuilder":
+    def add_character_summary(self, characters: list[Character]) -> PromptBuilder:
         """Add formatted character summary.
 
         Replaces manual formatting found in multiple agents.
@@ -128,7 +128,7 @@ class PromptBuilder:
         self.sections.append(summary)
         return self
 
-    def add_json_output_format(self, schema_example: str) -> "PromptBuilder":
+    def add_json_output_format(self, schema_example: str) -> PromptBuilder:
         """Add JSON output format instructions.
 
         Args:
@@ -141,7 +141,7 @@ class PromptBuilder:
         self.sections.append(instruction)
         return self
 
-    def add_revision_notes(self, feedback: str) -> "PromptBuilder":
+    def add_revision_notes(self, feedback: str) -> PromptBuilder:
         """Add revision instruction section.
 
         Consolidates the repeated revision note patterns found in
@@ -158,7 +158,7 @@ class PromptBuilder:
             self.sections.append(revision)
         return self
 
-    def add_section(self, title: str, content: str) -> "PromptBuilder":
+    def add_section(self, title: str, content: str) -> PromptBuilder:
         """Add a custom section with title.
 
         Args:
@@ -171,7 +171,7 @@ class PromptBuilder:
         self.sections.append(f"{title}:\n{content}")
         return self
 
-    def add_text(self, text: str) -> "PromptBuilder":
+    def add_text(self, text: str) -> PromptBuilder:
         """Add raw text as a section.
 
         Args:

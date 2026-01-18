@@ -82,7 +82,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 ## Code Style
 
 - **Line length**: 100 characters (Ruff)
-- **Python**: 3.13+
+- **Python**: 3.14+
 - **Type hints**: Encouraged but not enforced (gradual adoption)
 - **Imports**: Auto-sorted by Ruff
 
