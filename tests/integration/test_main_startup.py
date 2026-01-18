@@ -16,7 +16,7 @@ class TestMainAppStartup:
             cwd=Path(__file__).parent.parent.parent,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
         )
         # Should not crash on import
         assert result.returncode == 0, f"Import failed: {result.stderr}"
@@ -28,7 +28,7 @@ class TestMainAppStartup:
             cwd=Path(__file__).parent.parent.parent,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
         )
         assert result.returncode == 0
         assert "--cli" in result.stdout or "usage:" in result.stdout.lower()
@@ -95,7 +95,7 @@ class TestMainCommandLineInterface:
             cwd=Path(__file__).parent.parent.parent,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,  # Longer timeout for parallel test execution
         )
         # Should not crash
         assert result.returncode == 0 or "No saved stories" in result.stdout
@@ -107,7 +107,7 @@ class TestMainCommandLineInterface:
             cwd=Path(__file__).parent.parent.parent,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
         )
         assert result.returncode == 0
         assert "OK" in result.stdout
@@ -132,7 +132,7 @@ print("All imports successful")
             cwd=Path(__file__).parent.parent.parent,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
         )
         assert result.returncode == 0
         assert "All imports successful" in result.stdout
@@ -152,7 +152,7 @@ print("Logging configured")
             cwd=Path(__file__).parent.parent.parent,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
         )
         assert result.returncode == 0
         assert "Logging configured" in result.stdout

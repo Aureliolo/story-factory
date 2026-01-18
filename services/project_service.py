@@ -35,7 +35,7 @@ def _validate_path(path: Path, base_dir: Path) -> Path:
         resolved.relative_to(base_resolved)
         return resolved
     except ValueError:
-        raise ValueError(f"Invalid path: {path} is outside {base_dir}")
+        raise ValueError(f"Invalid path: {path} is outside {base_dir}") from None
 
 
 @dataclass

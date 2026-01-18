@@ -110,7 +110,7 @@ class TestErrorBoundary:
         with boundary:
             raise ValueError("Test error")
         # fallback is accessible after context exit (ErrorBoundary suppresses exceptions)
-        assert boundary.fallback == "fallback_value"  # type: ignore[unreachable]
+        assert boundary.fallback == "fallback_value"
 
     def test_stores_exception(self):
         """Should store the exception that occurred."""
@@ -118,7 +118,7 @@ class TestErrorBoundary:
         with boundary:
             raise ValueError("Test error")
         # exception is accessible after context exit (ErrorBoundary suppresses exceptions)
-        assert isinstance(boundary.exception, ValueError)  # type: ignore[unreachable]
+        assert isinstance(boundary.exception, ValueError)
         assert str(boundary.exception) == "Test error"
 
     def test_reraises_when_configured(self):

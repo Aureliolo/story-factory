@@ -15,7 +15,7 @@ from typing import Any
 
 def find_exception_handlers(file_path: Path) -> list[dict[str, Any]]:
     """Find all exception handlers in a Python file."""
-    handlers = []
+    handlers: list[dict[str, Any]] = []
 
     try:
         content = file_path.read_text(encoding="utf-8")

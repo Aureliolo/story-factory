@@ -13,14 +13,8 @@ select = [
     "UP",  # pyupgrade
 ]
 ignore = [
-    "E501",  # line too long (handled by ruff format)
-    "B008",  # do not perform function calls in argument defaults
-    "B904",  # raise without from inside except
+    "E501",  # line too long (ruff format handles code, not string literals)
 ]
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # unused imports in __init__ files
-"main.py" = ["E402"]  # imports after check_environment() is intentional
 
 [tool.mypy]
 python_version = "3.14"
