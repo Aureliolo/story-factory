@@ -13,10 +13,135 @@ Usage:
     python main.py --cli    # Run in CLI mode (basic)
 """
 
-import argparse
-import logging
+import re
+import sys
+from pathlib import Path
 
-from utils.logging_config import setup_logging
+
+def check_environment() -> None:
+    """Check Python version and dependencies meet requirements.
+
+    Reads Python version from pyproject.toml and dependencies from requirements.txt,
+    then validates the current environment meets all requirements.
+
+    Raises:
+        SystemExit: If Python version or dependencies are insufficient.
+    """
+    project_root = Path(__file__).parent
+
+    # Check Python version from pyproject.toml
+    _check_python_version(project_root)
+
+    # Check dependencies from requirements.txt
+    _check_dependencies(project_root)
+
+
+def _check_python_version(project_root: Path) -> None:
+    """Check Python version against pyproject.toml requirements."""
+    pyproject_path = project_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return
+
+    try:
+        import tomllib
+
+        with open(pyproject_path, "rb") as f:
+            config = tomllib.load(f)
+
+        required_version_str = config.get("tool", {}).get("mypy", {}).get("python_version")
+        if not required_version_str:
+            return
+
+        parts = required_version_str.split(".")
+        required_major = int(parts[0])
+        required_minor = int(parts[1]) if len(parts) > 1 else 0
+
+        current_major = sys.version_info.major
+        current_minor = sys.version_info.minor
+
+        if (current_major, current_minor) < (required_major, required_minor):
+            print(
+                f"Error: Python {required_version_str}+ is required, "
+                f"but you are running Python {current_major}.{current_minor}",
+                file=sys.stderr,
+            )
+            print(
+                f"Please upgrade Python or use a virtual environment with Python {required_version_str}+",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    except ImportError:
+        print(
+            f"Error: Python 3.11+ is required to parse pyproject.toml, "
+            f"but you are running Python {sys.version_info.major}.{sys.version_info.minor}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except (KeyError, ValueError, OSError) as e:
+        print(f"Warning: Could not parse Python version from pyproject.toml: {e}", file=sys.stderr)
+
+
+def _check_dependencies(project_root: Path) -> None:
+    """Check installed packages against requirements.txt."""
+    requirements_path = project_root / "requirements.txt"
+    if not requirements_path.exists():
+        return
+
+    try:
+        from importlib.metadata import version as get_version
+
+        from packaging.version import Version
+    except ImportError:
+        print("Warning: Cannot check dependencies (packaging not installed)", file=sys.stderr)
+        return
+
+    missing = []
+    version_mismatch = []
+
+    # Parse requirements.txt
+    with open(requirements_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            # Parse package==version format
+            match = re.match(r"^([a-zA-Z0-9_-]+)==([0-9.]+)", line)
+            if not match:
+                continue
+
+            package_name = match.group(1)
+            required_version = match.group(2)
+
+            try:
+                installed_version = get_version(package_name)
+                if Version(installed_version) < Version(required_version):
+                    version_mismatch.append(
+                        f"  {package_name}: installed {installed_version}, requires {required_version}"
+                    )
+            except Exception:
+                missing.append(f"  {package_name}=={required_version}")
+
+    if missing or version_mismatch:
+        print("Error: Missing or outdated dependencies:", file=sys.stderr)
+        if missing:
+            print("\nMissing packages:", file=sys.stderr)
+            print("\n".join(missing), file=sys.stderr)
+        if version_mismatch:
+            print("\nOutdated packages:", file=sys.stderr)
+            print("\n".join(version_mismatch), file=sys.stderr)
+        print("\nRun: pip install -r requirements.txt", file=sys.stderr)
+        sys.exit(1)
+
+
+# Check environment before importing anything else
+check_environment()
+
+import argparse  # noqa: E402
+import logging  # noqa: E402
+
+from utils.logging_config import setup_logging  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

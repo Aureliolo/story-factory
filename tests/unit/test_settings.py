@@ -301,6 +301,55 @@ class TestSettingsSaveLoad:
         # Either uses default context_size or recovers partially
         assert settings.context_size >= 1024
 
+    def test_load_caches_settings(self, tmp_path, monkeypatch):
+        """Test load() returns cached instance on subsequent calls."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        # First load creates a new instance
+        settings1 = Settings.load()
+        # Second load returns the same instance (cached)
+        settings2 = Settings.load()
+
+        assert settings1 is settings2
+
+    def test_load_with_use_cache_false_reloads(self, tmp_path, monkeypatch):
+        """Test load(use_cache=False) forces reload from disk."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        # First load
+        settings1 = Settings.load()
+
+        # Modify the cached instance
+        settings1.dark_mode = not settings1.dark_mode
+
+        # Load with use_cache=False should create a new instance
+        settings2 = Settings.load(use_cache=False)
+
+        assert settings1 is not settings2
+        # New instance has default value
+        assert settings2.dark_mode != settings1.dark_mode
+
+    def test_clear_cache_clears_cached_instance(self, tmp_path, monkeypatch):
+        """Test clear_cache() clears the cached instance."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        # First load creates a cached instance
+        settings1 = Settings.load()
+
+        # Clear cache
+        Settings.clear_cache()
+
+        # Next load creates a new instance
+        settings2 = Settings.load()
+
+        assert settings1 is not settings2
+
 
 class TestRecoverPartialSettings:
     """Tests for _recover_partial_settings method."""

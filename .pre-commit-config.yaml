@@ -53,8 +53,8 @@ repos:
   - repo: local
     hooks:
       - id: pytest-coverage
-        name: pytest with coverage
-        entry: python -m pytest tests/unit/ tests/smoke/ tests/integration/ --cov=. --cov-fail-under=100 --cov-report=term -q
+        name: pytest with coverage (parallel)
+        entry: python -m pytest tests/unit/ tests/smoke/ tests/integration/ -n auto --cov=. --cov-fail-under=100 --cov-report=term -q
         language: system
         pass_filenames: false
         always_run: true

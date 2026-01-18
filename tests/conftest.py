@@ -12,6 +12,31 @@ from settings import Settings
 pytest_plugins = ["nicegui.testing.user_plugin"]
 
 
+@pytest.fixture(autouse=True)
+def clear_settings_cache_per_test():
+    """Clear Settings cache before each test to ensure isolation.
+
+    This is autouse because caching can cause test pollution when tests
+    modify settings or patch SETTINGS_FILE to different paths.
+    """
+    Settings.clear_cache()
+    yield
+    Settings.clear_cache()
+
+
+@pytest.fixture(scope="session")
+def cached_settings() -> Settings:
+    """Create settings once per test session for performance.
+
+    Using session scope avoids repeated Settings.load() calls which take ~0.3s each.
+    Tests that need fresh settings should create them directly.
+
+    Returns:
+        Cached settings instance.
+    """
+    return Settings()
+
+
 @pytest.fixture
 def tmp_settings(tmp_path: Path) -> Settings:
     """Create settings with temporary directories.
@@ -25,6 +50,43 @@ def tmp_settings(tmp_path: Path) -> Settings:
     settings = Settings()
     # Override paths to use temp directories
     return settings
+
+
+@pytest.fixture
+def orchestrator_temp_dir(tmp_path: Path, monkeypatch):
+    """Set up temp directory for orchestrator tests.
+
+    This replaces the duplicate use_temp_dir fixtures across test classes.
+
+    Args:
+        tmp_path: Pytest temporary path fixture.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        Path to the stories directory.
+    """
+    stories_dir = tmp_path / "stories"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+    return stories_dir
+
+
+@pytest.fixture
+def fast_orchestrator(cached_settings: Settings, orchestrator_temp_dir: Path):
+    """Create a StoryOrchestrator with cached settings for fast tests.
+
+    Uses session-cached settings to avoid repeated Settings.load() calls.
+
+    Args:
+        cached_settings: Session-scoped settings fixture.
+        orchestrator_temp_dir: Temp directory for story files.
+
+    Returns:
+        StoryOrchestrator configured for testing.
+    """
+    from workflows.orchestrator import StoryOrchestrator
+
+    return StoryOrchestrator(settings=cached_settings)
 
 
 @pytest.fixture

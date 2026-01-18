@@ -8,7 +8,7 @@ import logging
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, ClassVar, TypedDict
 from urllib.parse import urlparse
 
 from memory.mode_models import LearningTrigger
@@ -811,13 +811,27 @@ class Settings:
                 f"got {self.import_character_token_multiplier}"
             )
 
+    # Class-level cache for settings (speeds up repeated load() calls)
+    _cached_instance: ClassVar[Settings | None] = None
+
     @classmethod
-    def load(cls) -> Settings:
+    def load(cls, use_cache: bool = True) -> Settings:
         """Load settings from JSON file, or create defaults.
 
         Attempts to repair invalid settings by merging valid fields with
         defaults rather than silently overwriting the entire file.
+
+        Args:
+            use_cache: If True, return cached instance if available. Set to False
+                to force reload from disk (useful after save() or in tests).
+
+        Returns:
+            Settings instance.
         """
+        # Return cached instance if available and caching enabled
+        if use_cache and cls._cached_instance is not None:
+            return cls._cached_instance
+
         if SETTINGS_FILE.exists():
             try:
                 with open(SETTINGS_FILE) as f:
@@ -825,6 +839,7 @@ class Settings:
                 settings = cls(**data)
                 # Validate loaded settings
                 settings.validate()
+                cls._cached_instance = settings
                 return settings
             except json.JSONDecodeError as e:
                 logger.error(f"Corrupted settings file (invalid JSON): {e}")
@@ -842,6 +857,7 @@ class Settings:
         # Create default settings
         settings = cls()
         settings.save()
+        cls._cached_instance = settings
         return settings
 
     @classmethod
@@ -910,7 +926,17 @@ class Settings:
 
         # Save the recovered/repaired settings
         defaults.save()
+        cls._cached_instance = defaults
         return defaults
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear the cached settings instance.
+
+        Use this in tests that need to verify settings loading behavior,
+        or after programmatically modifying settings files.
+        """
+        cls._cached_instance = None
 
     def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
         """Get the appropriate model for an agent role.
