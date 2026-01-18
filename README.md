@@ -10,7 +10,67 @@
 
 A local AI-powered multi-agent system for generating short stories, novellas, and novels with iterative refinement, self-critique, and plot-hole detection. Everything runs locally on your machine using Ollama.
 
+## Table of Contents
+
+- [Screenshots](#screenshots)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Workflow](#workflow)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Screenshots
+
+### Main Interface
+![Home Screen](https://github.com/user-attachments/assets/9056d5cb-b696-4510-89ba-3fbfd2fe067e)
+*Clean, modern interface with dark mode support and intuitive navigation*
+
+### Project Management
+![Projects Page](https://github.com/user-attachments/assets/8b3b165a-96ef-4dd8-940e-ae1917b7c232)
+*Manage multiple story projects with backup support*
+
+### Settings & Configuration
+![Settings Page](https://github.com/user-attachments/assets/42800304-97b9-43b0-9d05-a77bdedc64a9)
+*Fine-tune every aspect: models, temperatures, workflow, and more*
+
+### Model Management
+![Models Page](https://github.com/user-attachments/assets/6cf02131-5876-4b1f-9b71-e75adecf7397)
+*Download and manage Ollama models with VRAM-aware filtering*
+
+### Analytics Dashboard
+![Analytics Page](https://github.com/user-attachments/assets/1c17001c-18a9-4cd3-886f-611293508937)
+*Track model performance, quality metrics, and get recommendations*
+
+### Story Templates
+![Templates Page](https://github.com/user-attachments/assets/1bfd94aa-fa49-4db5-a985-6e6e924f1a05)
+*Built-in genre templates to jumpstart your story creation*
+
 ## Features
+
+### Core Capabilities
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| 🤖 **Multi-Agent System** | 5 specialized AI agents working together | ✅ Stable |
+| 🌐 **World Building** | Graph-based entity/relationship tracking with visualization | ✅ Stable |
+| 🎨 **Modern Web UI** | NiceGUI-powered interface with dark mode | ✅ Stable |
+| 📚 **Story Templates** | Pre-built genre templates (Fantasy, Sci-Fi, Romance, etc.) | ✅ Stable |
+| 📊 **Analytics Dashboard** | Model performance tracking and recommendations | ✅ Stable |
+| 💾 **Multiple Export Formats** | Markdown, Text, HTML, EPUB, PDF | ✅ Stable |
+| ⚡ **Background Generation** | Non-blocking UI during story creation | ✅ Stable |
+| 🔄 **Version Control** | Chapter history with rollback support | ✅ Stable |
+| 🎯 **Adaptive Learning** | Auto-improves based on your preferences | ✅ Stable |
+| 🔒 **100% Local & Private** | No cloud, no tracking, complete privacy | ✅ Always |
+
+### AI Agent Production Team
 
 - **Multi-Agent Production Team**: 5 specialized AI agents working together
   - **Interviewer**: Gathers story requirements through conversation
@@ -79,37 +139,114 @@ The application features a comprehensive tabbed interface:
 
 ## Requirements
 
-- **GPU**: NVIDIA GPU with 8GB+ VRAM (24GB recommended for larger models)
+### Minimum Requirements
+- **Python**: 3.13 or higher
+- **RAM**: 16GB system RAM
+- **Storage**: 20GB free space for models and outputs
+- **OS**: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+)
+
+### GPU Requirements (Highly Recommended)
+- **GPU**: NVIDIA GPU with 8GB+ VRAM
 - **CUDA**: 11.x or higher
-- **Python**: 3.13+
-- **Ollama**: For local LLM serving
+- **For Best Experience**: 24GB VRAM for running multiple larger models
+
+### Software Dependencies
+- **Ollama**: Required for local LLM serving ([Installation Guide](https://ollama.com/download))
+- **Python Packages**: Automatically installed via `requirements.txt`
+
+> **Note**: While CPU-only mode is possible, GPU acceleration is strongly recommended for reasonable performance.
+
+## Quick Start
+
+Get up and running in 5 minutes:
+
+```bash
+# 1. Install Ollama
+# Visit https://ollama.com/download and follow instructions for your OS
+
+# 2. Pull a recommended starter model (choose one)
+ollama pull huihui_ai/dolphin3-abliterated:8b
+
+# 3. Clone this repository
+git clone https://github.com/Aureliolo/story-factory.git
+cd story-factory
+
+# 4. Install Python dependencies
+pip install -r requirements.txt
+
+# 5. Copy example settings
+cp settings.example.json settings.json
+
+# 6. Launch the web UI
+python main.py
+
+# 7. Open your browser to http://localhost:7860
+```
+
+That's it! You're ready to create stories. See the [Installation](#installation) section for detailed setup options.
 
 ## Installation
 
 ### 1. Install Ollama
 
+Ollama provides local LLM serving. Choose your platform:
+
+#### Windows
 ```bash
-# Windows
+# Using winget (recommended)
 winget install Ollama.Ollama
 
-# macOS
+# Or download installer from https://ollama.com/download
+```
+
+#### macOS
+```bash
+# Using Homebrew
 brew install ollama
 
-# Linux
-curl -fsSL https://ollama.com/install.sh | sh
+# Or download from https://ollama.com/download
 ```
 
-### 2. Pull a Model
-
+#### Linux
 ```bash
-# Recommended starter model (8B, fits on most GPUs)
-ollama pull huihui_ai/qwen3-abliterated:8b
+# Quick install script
+curl -fsSL https://ollama.com/install.sh | sh
 
-# For better quality (requires 16GB+ VRAM)
-ollama pull huihui_ai/qwen3-abliterated:14b
+# For manual installation, see https://github.com/ollama/ollama
 ```
 
-See [docs/MODELS.md](docs/MODELS.md) for full model recommendations.
+**Verify Installation:**
+```bash
+ollama --version
+# Should output: ollama version is X.X.X
+```
+
+### 2. Pull Recommended Models
+
+Start with one of these tested model combinations:
+
+#### For 8GB VRAM (Entry Level)
+```bash
+# Best all-rounder for limited VRAM
+ollama pull huihui_ai/dolphin3-abliterated:8b
+```
+
+#### For 16GB VRAM (Recommended)
+```bash
+# Balanced quality and speed
+ollama pull huihui_ai/dolphin3-abliterated:8b     # Fast, versatile
+ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0  # Creative writing
+```
+
+#### For 24GB VRAM (Premium)
+```bash
+# Best quality multi-agent setup
+ollama pull huihui_ai/dolphin3-abliterated:8b           # Interviewer
+ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0   # Writer/Editor
+ollama pull huihui_ai/qwen3-abliterated:30b             # Architect/Continuity
+```
+
+See [docs/MODELS.md](docs/MODELS.md) for comprehensive model recommendations and performance comparisons.
 
 ### 3. Install Python Dependencies
 
@@ -118,9 +255,78 @@ cd story-factory
 pip install -r requirements.txt
 ```
 
+**Dependencies include:**
+- NiceGUI (web interface)
+- Ollama Python client
+- Pydantic (data validation)
+- NetworkX (world graph)
+- SQLite (bundled with Python)
+
+### 4. Configure Settings
+
+```bash
+# Copy the example settings file
+cp settings.example.json settings.json
+
+# Optional: Edit settings.json to customize
+# - Ollama URL (if not localhost:11434)
+# - Default models
+# - Agent temperatures
+# - Workflow preferences
+```
+
+The application will work with default settings, but you can fine-tune:
+- Model selection per agent role
+- Temperature (creativity) settings
+- Context window sizes
+- Workflow modes (checkpoint vs continuous)
+
+### 5. Verify Installation
+
+```bash
+# Check that Ollama is running
+curl http://localhost:11434/api/tags
+
+# Should return JSON listing your installed models
+```
+
+### 6. Launch Application
+
+```bash
+# Web UI (recommended)
+python main.py
+
+# CLI mode
+python main.py --cli
+
+# Custom host/port
+python main.py --host 0.0.0.0 --port 8080
+```
+
+Open your browser to **http://localhost:7860** (or your custom port).
+
+### Platform-Specific Notes
+
+#### Windows
+- Use PowerShell or Windows Terminal
+- Ollama runs as a system service
+- Check Task Manager if models don't load
+
+#### macOS
+- Ollama runs in the background
+- Check Activity Monitor for GPU usage
+- May need to approve network access
+
+#### Linux
+- Ensure CUDA drivers are installed for GPU support
+- Check `nvidia-smi` to verify GPU detection
+- Ollama service: `sudo systemctl status ollama`
+
 ## Usage
 
 ### Web UI (Recommended)
+
+The web interface provides the full feature set with an intuitive, modern UI:
 
 ```bash
 python main.py
@@ -128,11 +334,127 @@ python main.py
 
 Open http://localhost:7860 in your browser.
 
+#### Getting Started with Your First Story
+
+1. **Create a Project**: Navigate to the "Projects" tab and click "+ New Project"
+2. **Start Writing**: Go to the "Write" tab
+3. **Interview Phase**: Chat with the Interviewer agent to define your story
+   - Genre and tone
+   - Main characters
+   - Story length (short story, novella, or novel)
+   - Key plot points
+4. **Review Architecture**: The Architect will design the world and structure
+5. **Generate**: Watch as the Writer, Editor, and Continuity agents collaborate
+6. **Export**: Download your finished story in multiple formats
+
+#### UI Tabs Overview
+
+- **Write**: Story creation with interview chat and live chapter writing
+- **World**: Visual graph of characters, locations, and relationships
+- **Timeline**: Event timeline for your story
+- **Compare**: Side-by-side model comparison for testing
+- **Projects**: Manage all your story projects
+- **Templates**: Genre templates and story structure presets
+- **Analytics**: Model performance metrics and quality tracking
+- **Settings**: Configure models, temperatures, and workflow
+- **Models**: Download and manage Ollama models
+
+#### Keyboard Shortcuts
+
+Press **Ctrl+/** to see all keyboard shortcuts:
+- **Ctrl+S**: Save current project
+- **Ctrl+N**: New project
+- **Ctrl+E**: Export story
+- **Ctrl+/**: Show keyboard shortcuts
+- **Ctrl+D**: Toggle dark mode
+
 ### CLI Mode
+
+For a simpler, terminal-based experience:
 
 ```bash
 python main.py --cli
 ```
+
+The CLI mode provides:
+- Interactive interview process
+- Chapter-by-chapter progress display
+- Story generation without browser
+- Export to file on completion
+
+#### CLI Examples
+
+```bash
+# Start a new story (interactive)
+python main.py --cli
+
+# List all saved stories
+python main.py --cli --list-stories
+
+# Load and view a saved story
+python main.py --cli --load output/stories/my-story.json
+```
+
+### Advanced Usage
+
+#### Custom Host and Port
+
+```bash
+# Run on all network interfaces
+python main.py --host 0.0.0.0 --port 8080
+
+# Development mode with auto-reload
+python main.py --reload
+```
+
+#### Logging Configuration
+
+```bash
+# Enable debug logging
+python main.py --log-level DEBUG
+
+# Custom log file
+python main.py --log-file /path/to/custom.log
+
+# Disable file logging
+python main.py --log-file none
+```
+
+#### Configuration via settings.json
+
+Edit `settings.json` to customize:
+
+```json
+{
+  "default_model": "huihui_ai/dolphin3-abliterated:8b",
+  "use_per_agent_models": true,
+  "agent_models": {
+    "writer": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+    "architect": "huihui_ai/qwen3-abliterated:30b"
+  },
+  "agent_temperatures": {
+    "writer": 0.9,
+    "editor": 0.6,
+    "continuity": 0.3
+  },
+  "interaction_mode": "checkpoint",
+  "chapters_between_checkpoints": 3
+}
+```
+
+See [settings.example.json](settings.example.json) for all available options.
+
+### Export Formats
+
+Story Factory supports multiple export formats:
+
+- **Markdown** (`.md`) - Rich text with formatting
+- **Plain Text** (`.txt`) - Simple, portable format
+- **HTML** (`.html`) - Web-ready with styling
+- **EPUB** (`.epub`) - E-reader compatible
+- **PDF** (`.pdf`) - Print-ready document
+
+Export from the web UI via the "Export" button or programmatically via the export service.
 
 ## Architecture
 
@@ -253,6 +575,251 @@ mypy .
 - **CI/CD**: GitHub Actions with coverage enforcement
 - **GitHub Copilot**: Custom instructions configured (see [docs/COPILOT_INSTRUCTIONS.md](docs/COPILOT_INSTRUCTIONS.md))
 
+### Running Tests
+
+```bash
+# All tests
+pytest
+
+# Specific test file
+pytest tests/unit/test_story_service.py
+
+# With coverage report
+pytest --cov=. --cov-report=html
+
+# Fast smoke tests only
+pytest tests/smoke/
+
+# Integration tests
+pytest tests/integration/
+```
+
+### Project Structure
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture documentation.
+
+## Troubleshooting
+
+### Ollama Connection Issues
+
+**Problem**: "Ollama offline" error or connection refused
+
+**Solutions**:
+1. **Check Ollama is running**:
+   ```bash
+   curl http://localhost:11434/api/tags
+   ```
+2. **Restart Ollama**:
+   - Windows: Restart "Ollama" service in Task Manager
+   - macOS: `brew services restart ollama`
+   - Linux: `sudo systemctl restart ollama`
+3. **Verify URL in settings.json**:
+   ```json
+   {
+     "ollama_url": "http://localhost:11434"
+   }
+   ```
+4. **Check firewall**: Ensure port 11434 is not blocked
+
+### Out of Memory / VRAM Issues
+
+**Problem**: Model fails to load or system freezes
+
+**Solutions**:
+1. **Use smaller models**: Switch to 8B models instead of 14B+
+2. **Reduce context window** in settings:
+   ```json
+   {
+     "context_size": 16384
+   }
+   ```
+3. **Disable per-agent models**: Use single model for all agents
+4. **Close other GPU applications**: Free up VRAM
+5. **Use more aggressive quantization**: Q4_K_M instead of Q8_0
+
+### Slow Generation Speed
+
+**Problem**: Story generation takes too long
+
+**Solutions**:
+1. **Use faster models**: Dolphin 8B is faster than larger models
+2. **Reduce max tokens**:
+   ```json
+   {
+     "max_tokens": 4096
+   }
+   ```
+3. **Enable checkpoint mode**: Get feedback every N chapters
+4. **Check GPU utilization**: Use `nvidia-smi` to verify GPU usage
+5. **Reduce temperature**: Lower values = faster generation
+
+### Chinese Characters in Output
+
+**Problem**: Qwen models output Chinese text
+
+**Solutions**:
+1. **Switch to Dolphin**: `huihui_ai/dolphin3-abliterated:8b`
+2. **Use Qwen3 v2**: If available, has layer-0 fix
+3. **Add system prompt**: Explicitly request English output
+4. **Enable validator**: Catches non-English responses
+
+### Installation Issues
+
+**Problem**: pip install fails or missing dependencies
+
+**Solutions**:
+1. **Update pip**:
+   ```bash
+   pip install --upgrade pip
+   ```
+2. **Use virtual environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Linux/macOS
+   venv\Scripts\activate     # Windows
+   pip install -r requirements.txt
+   ```
+3. **Check Python version**: Must be 3.13+
+   ```bash
+   python --version
+   ```
+
+### UI Not Loading
+
+**Problem**: Browser shows blank page or errors
+
+**Solutions**:
+1. **Check console for errors**: Open browser DevTools (F12)
+2. **Clear browser cache**: Force refresh with Ctrl+Shift+R
+3. **Try different browser**: Chrome, Firefox, or Edge
+4. **Check port availability**:
+   ```bash
+   # Use different port if 7860 is taken
+   python main.py --port 8080
+   ```
+5. **Disable browser extensions**: Ad blockers may interfere
+
+### Story Generation Failures
+
+**Problem**: Story generation stops or produces errors
+
+**Solutions**:
+1. **Check model compatibility**: Use recommended models
+2. **Increase retry count** in settings:
+   ```json
+   {
+     "llm_max_retries": 5
+   }
+   ```
+3. **Reduce complexity**: Simpler stories are more reliable
+4. **Check Ollama logs**: Look for model loading errors
+5. **Restart Ollama**: Clear any stuck states
+
+For more help, check:
+- **Logs**: `logs/story_factory.log`
+- **GitHub Issues**: [Report a bug](https://github.com/Aureliolo/story-factory/issues)
+- **Model Guide**: [docs/MODELS.md](docs/MODELS.md)
+
+## FAQ
+
+### General Questions
+
+**Q: Do I need an internet connection?**
+A: No, Story Factory runs entirely locally. Internet is only needed to download models initially.
+
+**Q: Is my data private?**
+A: Yes, completely. All processing happens on your machine. No data is sent to external servers.
+
+**Q: Can I use this commercially?**
+A: The software is MIT licensed (free for commercial use), but check the licenses of the LLM models you use.
+
+**Q: How long does it take to generate a story?**
+A: Depends on length and hardware:
+- Short story (1 chapter): 5-15 minutes
+- Novella (7 chapters): 30-90 minutes
+- Novel (20 chapters): 2-5 hours
+
+### Technical Questions
+
+**Q: Can I run this without a GPU?**
+A: Yes, but it will be very slow. GPU with 8GB+ VRAM is strongly recommended.
+
+**Q: What's the difference between models?**
+A: Models vary in size (parameters), quality, speed, and specialization. See [docs/MODELS.md](docs/MODELS.md) for detailed comparisons.
+
+**Q: Can I use OpenAI/Anthropic models instead of Ollama?**
+A: Not currently. The system is designed for local Ollama models only.
+
+**Q: How much disk space do I need?**
+A: Plan for:
+- Python environment: ~500 MB
+- Each 8B model: ~5 GB
+- Each 14B model: ~8-10 GB
+- Generated stories: Variable (typically <100 MB per project)
+
+**Q: Can I run multiple stories at once?**
+A: The UI supports one active generation at a time to avoid VRAM conflicts. You can manage multiple projects.
+
+### Feature Questions
+
+**Q: Can I edit generated text?**
+A: Yes! The web UI allows chapter regeneration with feedback and manual editing.
+
+**Q: Can I save and resume stories?**
+A: Yes, projects are automatically saved and can be resumed at any checkpoint.
+
+**Q: Can I customize the agents?**
+A: Yes, through settings.json you can:
+- Assign different models per agent
+- Adjust temperature (creativity)
+- Customize system prompts (advanced)
+
+**Q: Does it support languages other than English?**
+A: Primarily English. Some models support other languages, but quality varies.
+
+**Q: Can I create my own story templates?**
+A: Yes! The Templates tab allows importing custom templates and creating them from existing projects.
+
+### Troubleshooting Questions
+
+**Q: Why is my GPU not being used?**
+A: Check:
+1. CUDA is installed (`nvidia-smi`)
+2. Ollama detects GPU (`ollama run <model>` should show GPU info)
+3. No other apps are using all VRAM
+
+**Q: Why do I get "model not found" errors?**
+A: The model needs to be pulled first:
+```bash
+ollama pull <model-name>
+```
+
+**Q: Can I use models from HuggingFace?**
+A: Yes, but they need to be converted to GGUF format and imported to Ollama. See [docs/MODELS.md](docs/MODELS.md) for instructions.
+
+**Q: Why is the UI showing "Offline"?**
+A: Ollama isn't running or reachable. Check the [Troubleshooting](#troubleshooting) section.
+
+## Contributing
+
+Contributions are welcome! This is a hobby project, but I appreciate:
+
+- **Bug Reports**: [Open an issue](https://github.com/Aureliolo/story-factory/issues) with details
+- **Feature Requests**: Share your ideas in discussions
+- **Code Contributions**: Fork, create a branch, and submit a PR
+- **Documentation**: Help improve guides and examples
+- **Model Testing**: Share your experiences with different models
+
+### Development Guidelines
+
+1. **Follow existing code style**: Use Ruff for formatting
+2. **Write tests**: Maintain 100% coverage on core modules
+3. **Update documentation**: Keep README and docs in sync
+4. **Test thoroughly**: Run full test suite before submitting PR
+5. **Small PRs**: Focus on one feature/fix at a time
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architectural guidelines.
+
 ## Tech Stack
 
 - **[NiceGUI](https://nicegui.io/)**: Modern Python web UI framework
@@ -264,7 +831,105 @@ mypy .
 
 ## License
 
-MIT License - See LICENSE file for details.
+MIT License - See [LICENSE](LICENSE) file for details.
+
+## Getting Help
+
+### Documentation
+
+- **[Quick Start Guide](#quick-start)**: Get running in 5 minutes
+- **[Installation Guide](#installation)**: Detailed setup instructions
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)**: Solutions to common problems
+- **[Model Selection Guide](docs/MODELS.md)**: Choose the best models
+- **[Architecture Documentation](docs/ARCHITECTURE.md)**: Understand the system
+- **[Contributing Guide](CONTRIBUTING.md)**: Help improve the project
+
+### Support Resources
+
+- **GitHub Issues**: [Report bugs or request features](https://github.com/Aureliolo/story-factory/issues)
+- **GitHub Discussions**: [Ask questions and share ideas](https://github.com/Aureliolo/story-factory/discussions)
+- **Logs**: Check `logs/story_factory.log` for detailed error information
+
+### Community
+
+- **LocalLLaMA subreddit**: r/LocalLLaMA for local AI discussions
+- **Ollama Community**: [Ollama GitHub](https://github.com/ollama/ollama) and [Discord](https://discord.gg/ollama)
+- **NiceGUI Documentation**: [NiceGUI Docs](https://nicegui.io) for UI questions
+
+### Before Asking for Help
+
+1. **Check the logs**: `logs/story_factory.log`
+2. **Search existing issues**: Someone may have had the same problem
+3. **Read the docs**: Check relevant documentation sections
+4. **Verify your setup**:
+   - Ollama is running (`curl http://localhost:11434/api/tags`)
+   - Models are installed (`ollama list`)
+   - Python version is 3.13+ (`python --version`)
+   - GPU is detected (`nvidia-smi`)
+
+### Reporting Issues
+
+When reporting an issue, include:
+- **Environment**: OS, Python version, Ollama version, GPU
+- **Steps to reproduce**: Exact steps that trigger the problem
+- **Error messages**: From logs or console
+- **Expected vs. actual behavior**: What should happen vs. what does happen
+- **Screenshots**: For UI-related issues
+
+## Acknowledgments
+
+This project uses and is inspired by:
+
+- **[Ollama](https://ollama.com)**: Local LLM serving made simple
+- **[NiceGUI](https://nicegui.io)**: Beautiful Python web interfaces
+- **[NetworkX](https://networkx.org)**: Graph analysis for world-building
+- **Eric Hartford**: For creating Dolphin models
+- **Qwen Team**: For excellent open-source models
+- **LocalLLaMA Community**: For model testing and recommendations
+
+Special thanks to all the model creators, AI researchers, and open-source contributors who make projects like this possible.
+
+## Project Status & Roadmap
+
+### Current Status (v1.0)
+
+✅ **Stable Features**:
+- Multi-agent story generation
+- Web UI with dark mode
+- World building with graph visualization
+- Story templates and presets
+- Multiple export formats
+- Model performance analytics
+- Adaptive learning system
+- CLI mode
+
+### Planned Features
+
+📋 **Short-term** (v1.1-v1.2):
+- Better error recovery and retry logic
+- Enhanced world import from text
+- Custom agent system prompts (UI configuration)
+- Story outline variations
+- Chapter-level regeneration with feedback
+
+🔮 **Long-term** (v2.0+):
+- Plugin system for custom agents/exporters
+- Multi-language support
+- Collaborative writing (multi-user)
+- Cloud deployment option
+- Advanced analytics and A/B testing
+- Voice narration export
+- Integration with external writing tools
+
+### Known Limitations
+
+- Single user (local application)
+- One active generation at a time (VRAM constraints)
+- Requires good GPU for reasonable performance
+- English-focused (multilingual support limited)
+- File-based storage (not suitable for large teams)
+
+See [GitHub Issues](https://github.com/Aureliolo/story-factory/issues) for active development.
 
 ## Purpose
 

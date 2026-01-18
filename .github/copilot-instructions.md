@@ -203,7 +203,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 1. **Ollama Integration**:
    - All AI agents use Ollama for local LLM serving
    - Default endpoint: `http://localhost:11434`
-   - Recommended model: `huihui_ai/qwen3-abliterated:8b`
+   - Recommended model: `huihui_ai/dolphin3-abliterated:8b`
    - Context size: 32768 tokens default
    - Respect existing model configuration patterns
 
