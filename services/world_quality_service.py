@@ -1144,12 +1144,14 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         self,
         story_state: StoryState,
         existing_names: list[str],
+        existing_locations: list[str] | None = None,
     ) -> tuple[dict[str, Any], FactionQualityScores, int]:
         """Generate a faction with quality refinement loop.
 
         Args:
             story_state: Current story state with brief.
             existing_names: Names of existing factions to avoid.
+            existing_locations: Names of existing locations for spatial grounding.
 
         Returns:
             Tuple of (faction_dict, QualityScores, iterations_used)
@@ -1173,7 +1175,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             try:
                 if iteration == 0:
                     faction = self._create_faction(
-                        story_state, existing_names, config.creator_temperature
+                        story_state, existing_names, config.creator_temperature, existing_locations
                     )
                 else:
                     if faction and scores:
@@ -1224,11 +1226,20 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         story_state: StoryState,
         existing_names: list[str],
         temperature: float,
+        existing_locations: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a new faction using the creator model."""
         brief = story_state.brief
         if not brief:
             return {}
+
+        # Build location context
+        location_context = ""
+        if existing_locations:
+            location_context = f"""
+EXISTING LOCATIONS IN THIS WORLD: {", ".join(existing_locations)}
+(If applicable, use one of these existing locations as the faction's base)
+"""
 
         prompt = f"""Create a compelling faction/organization for a {brief.genre} story.
 
@@ -1239,12 +1250,13 @@ THEMES: {", ".join(brief.themes)}
 
 EXISTING FACTIONS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
 (Create a NEW faction with a different name that complements these existing ones)
-
+{location_context}
 Create a faction with:
 1. Internal coherence - clear structure, beliefs, and rules
 2. World influence - meaningful impact on the setting
 3. Conflict potential - natural tensions with other groups
 4. Distinctiveness - unique identity and aesthetics
+5. Spatial grounding - connection to a specific location (headquarters, base, territory)
 
 Output ONLY valid JSON (all text in {brief.language}):
 {{
@@ -1253,7 +1265,8 @@ Output ONLY valid JSON (all text in {brief.language}):
     "description": "Description of the faction, its history, and purpose (2-3 sentences)",
     "leader": "Name or title of leader (if any)",
     "goals": ["primary goal", "secondary goal"],
-    "values": ["core value 1", "core value 2"]
+    "values": ["core value 1", "core value 2"],
+    "base_location": "Name of their headquarters/territory (use one of the existing locations listed above if applicable)"
 }}"""
 
         try:
@@ -2034,6 +2047,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         story_state: StoryState,
         existing_names: list[str],
         count: int = 2,
+        existing_locations: list[str] | None = None,
     ) -> list[tuple[dict[str, Any], FactionQualityScores]]:
         """Generate multiple factions with quality refinement.
 
@@ -2041,6 +2055,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             story_state: Current story state.
             existing_names: Names to avoid.
             count: Number of factions to generate.
+            existing_locations: Names of existing locations for spatial grounding.
 
         Returns:
             List of (faction_dict, QualityScores) tuples.
@@ -2056,7 +2071,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             try:
                 logger.info(f"Generating faction {i + 1}/{count} with quality refinement")
                 start_time = time.time()
-                faction, scores, iterations = self.generate_faction_with_quality(story_state, names)
+                faction, scores, iterations = self.generate_faction_with_quality(
+                    story_state, names, existing_locations
+                )
                 elapsed = time.time() - start_time
                 results.append((faction, scores))
                 faction_name = faction.get("name", "Unknown")
