@@ -81,8 +81,8 @@ function Write-Screen {
     Write-Host ""
 
     # Menu
-    Write-Host "  [1] Start    [2] Stop    [3] Restart" -ForegroundColor White
-    Write-Host "  [4] Browser  [5] Clear Logs" -ForegroundColor White
+    Write-Host "  [1] Start    [2] Stop      [3] Restart" -ForegroundColor White
+    Write-Host "  [4] Browser  [5] Clear Logs [6] Clear & Restart" -ForegroundColor White
     Write-Host "  [Q] Quit" -ForegroundColor DarkGray
 
     # Logs section - visible while waiting for input
@@ -161,6 +161,30 @@ function Clear-LogFile {
     }
 }
 
+function Clear-AndRestart {
+    Set-ActionMessage "Clearing logs and restarting..." "Yellow"
+
+    # Stop if running
+    $processes = Get-Process -Name python -ErrorAction SilentlyContinue
+    if ($processes) {
+        $processes | Stop-Process -Force
+    }
+
+    # Clear logs
+    $logFile = Join-Path $projectRoot "logs\story_factory.log"
+    if (Test-Path $logFile) {
+        Clear-Content -Path $logFile
+    }
+
+    Start-Sleep -Seconds 1
+
+    # Start fresh
+    Start-Process -FilePath "python" -ArgumentList "main.py" -WorkingDirectory $projectRoot -WindowStyle Hidden
+    Start-Sleep -Seconds 2
+
+    Set-ActionMessage "Logs cleared & restarted!" "Green"
+}
+
 # Main loop with auto-refresh only when logs change
 $checkInterval = 2000  # milliseconds between log checks
 $lastCheck = [DateTime]::Now
@@ -183,6 +207,7 @@ while ($true) {
             "3" { Restart-StoryFactory }
             "4" { Open-Browser }
             "5" { Clear-LogFile }
+            "6" { Clear-AndRestart }
             "Q" { [Environment]::Exit(0) }
             default {
                 if ($choice -and $choice -ne "`r" -and $choice -ne "`n") {
