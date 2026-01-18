@@ -267,6 +267,10 @@ class TestProjectLifecycle:
         loaded_state, loaded_db = services.project.load_project(project_id)
         assert loaded_state.brief is not None
 
+        # Close databases before deletion (required on Windows due to file locking)
+        world_db.close()
+        loaded_db.close()
+
         # Delete
         services.project.delete_project(project_id)
 

@@ -79,6 +79,9 @@ class TestProjectCreation:
         ids_before = [p.id for p in projects_before]
         assert project_id in ids_before
 
+        # Close database before deletion (required on Windows due to file locking)
+        world_db.close()
+
         # Delete
         services.project.delete_project(project_id)
 
