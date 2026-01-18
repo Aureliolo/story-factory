@@ -27,38 +27,55 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 
 - **Modern Web UI**: Built with NiceGUI
   - **Write Story Tab**: Interview-based story creation with live writing
+    - Chapter regeneration with feedback
+    - Version history with rollback
+    - Background generation (non-blocking UI)
   - **World Builder Tab**: Visual entity management with graph explorer
-  - **Projects Tab**: Manage multiple stories
-  - **Settings Tab**: Configure models and preferences
-  - **Models Tab**: Ollama model management with VRAM detection
-  - **Analytics Tab**: Model performance tracking and scoring
+    - Import entities from existing text
+    - Undo/redo support
+  - **Projects Tab**: Manage multiple stories (create, load, duplicate, delete)
+  - **Templates Tab**: Pre-built story structures and genre templates
+  - **Timeline Tab**: Story event timeline visualization
+  - **Comparison Tab**: Side-by-side model comparison for chapter generation
+  - **Settings Tab**: Configure models, agent temperatures, and preferences
+  - **Models Tab**: Ollama model management with pull/delete functionality
+  - **Analytics Tab**: Model performance metrics, quality scores, and recommendations
 
-- **Iterative Refinement**: Write -> Edit -> Check -> Revise loop for quality
-- **Flexible Output**: Short stories, novellas, or full novels
-- **Multiple Export Formats**: Markdown, Text, HTML, EPUB, PDF
-- **Model Performance Tracking**: Quality scoring, recommendations, and analytics
-- **Local & Private**: Everything runs on your machine
+- **Advanced Features**:
+  - **Dark Mode**: Full dark theme support with preference persistence
+  - **Keyboard Shortcuts**: Power-user navigation and actions (Ctrl+/)
+  - **Iterative Refinement**: Write -> Edit -> Check -> Revise loop for quality
+  - **Flexible Output**: Short stories, novellas, or full novels
+  - **Multiple Export Formats**: Markdown, Text, HTML, EPUB, PDF
+  - **Model Performance Tracking**: Quality scoring, recommendations, and analytics
+  - **Local & Private**: Everything runs on your machine
 
-## Screenshots
+## UI Overview
 
-The UI is organized into tabs:
+The application features a comprehensive tabbed interface:
 
-1. **Write Story** - Two sub-tabs:
+1. **Write Story** - Story creation with two sub-tabs:
    - *Fundamentals*: Interview chat, world overview, story structure
-   - *Live Writing*: Chapter-by-chapter writing with real-time feedback
+   - *Live Writing*: Chapter-by-chapter writing with version control and regeneration
 
-2. **World Builder** - Entity management:
-   - Left panel: Entity browser with type filters and search
-   - Center: Interactive vis.js graph visualization
-   - Right panel: Entity editor with attributes
+2. **World Builder** - Entity and relationship management:
+   - Visual graph explorer with filters and search
+   - Import entities from existing text
+   - Undo/redo support
 
-3. **Projects** - Project management with create, load, duplicate, delete
+3. **Projects** - Manage multiple story projects
 
-4. **Settings** - Model configuration, agent temperatures, preferences
+4. **Templates** - Genre templates and story structure presets
 
-5. **Models** - Ollama model management with pull/delete functionality
+5. **Timeline** - Visual story event timeline
 
-6. **Analytics** - Model performance metrics, quality scores, and recommendations
+6. **Comparison** - Side-by-side model performance testing
+
+7. **Settings** - Model configuration and preferences
+
+8. **Models** - Ollama model management
+
+9. **Analytics** - Model performance metrics and recommendations
 
 ## Requirements
 
