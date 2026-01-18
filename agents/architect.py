@@ -132,8 +132,10 @@ class ArchitectAgent(BaseAgent):
         builder.add_text(f"PREMISE: {brief.premise}")
         builder.add_brief_requirements(brief)
 
+        min_chars = self.settings.world_gen_characters_min
+        max_chars = self.settings.world_gen_characters_max
         builder.add_text(
-            f"Create 2-4 main characters. For each, output JSON (all text values in {brief.language}):"
+            f"Create {min_chars}-{max_chars} main characters. For each, output JSON (all text values in {brief.language}):"
         )
         builder.add_json_output_format(self.CHARACTER_SCHEMA)
         builder.add_text("Make them complex, with flaws and desires that create conflict.")
