@@ -7,6 +7,7 @@ Implements a generate-judge-refine loop using:
 """
 
 import logging
+import random
 import time
 from typing import Any
 
@@ -234,6 +235,15 @@ class WorldQualityService:
         if not brief:
             return None
 
+        # Random naming hint to encourage variety
+        naming_styles = [
+            "Use an unexpected, fresh name - avoid common fantasy names like Elara, Kael, Thorne, or Lyra.",
+            "Draw inspiration from diverse cultures for a unique name.",
+            "Create a memorable name that reflects the character's personality.",
+            "Use a short, punchy name or a longer, elaborate one - be creative.",
+        ]
+        naming_hint = random.choice(naming_styles)
+
         prompt = f"""Create a compelling NEW character for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
@@ -242,6 +252,8 @@ THEMES: {", ".join(brief.themes)}
 SETTING: {brief.setting_place}, {brief.setting_time}
 
 EXISTING CHARACTERS (do NOT recreate): {", ".join(existing_names) if existing_names else "None"}
+
+NAMING: {naming_hint}
 
 Create a character with:
 1. Deep psychological complexity - internal contradictions, layers
