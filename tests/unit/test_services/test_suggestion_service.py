@@ -565,3 +565,37 @@ class TestGenerateProjectNames:
         assert "Another Valid Title" in names
         assert "" not in names
         assert "   " not in names
+
+    @patch("services.suggestion_service.BaseAgent")
+    def test_generate_project_names_with_plot_points(self, mock_agent_class, suggestion_service):
+        """Test project name generation includes plot points in context."""
+        state = StoryState(
+            id="test-with-plot",
+            project_name="Test Story",
+            brief=StoryBrief(
+                premise="A hero's journey",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom of Eldoria",
+                target_length="novel",
+                content_rating="general",
+            ),
+            plot_points=[
+                PlotPoint(description="The hero finds the sword", completed=False),
+                PlotPoint(description="The villain strikes", completed=False),
+                PlotPoint(description="Final battle", completed=False),
+            ],
+        )
+
+        mock_agent = MagicMock()
+        mock_agent.generate.return_value = '["The Sword Edge", "Villain Shadow"]'
+        mock_agent_class.return_value = mock_agent
+
+        names = suggestion_service.generate_project_names(state, count=2)
+
+        assert len(names) == 2
+        # Verify the prompt included plot points by checking the call
+        call_args = mock_agent.generate.call_args[0][0]
+        assert "Key Plot Points" in call_args
+        assert "The hero finds the sword" in call_args
