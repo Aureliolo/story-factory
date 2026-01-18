@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from nicegui import ui
+from nicegui import run, ui
 from nicegui.elements.column import Column
 
 from services import ServiceContainer
@@ -330,25 +330,41 @@ class ProjectsPage:
                     placeholder="Enter new project name",
                 ).classes("w-full")
 
-                # AI suggestions button placeholder (will be expanded later)
+                # AI suggestions section
                 suggestion_container = ui.column().classes("w-full gap-2")
+
+                # Button reference for loading state
+                suggest_button: ui.button | None = None
 
                 async def generate_suggestions():
                     """Generate AI name suggestions."""
+                    nonlocal suggest_button
+
                     if not self.state.project:
                         ui.notify("Load the project first to generate suggestions", type="warning")
                         return
 
+                    # Show loading state on button
+                    if suggest_button:
+                        suggest_button.props("loading disabled")
+
+                    # Show loading indicator
                     suggestion_container.clear()
                     with suggestion_container:
-                        ui.label("Generating suggestions...").classes(
-                            "text-sm text-gray-500 dark:text-gray-400"
-                        )
+                        with ui.row().classes("items-center gap-2"):
+                            ui.spinner("dots", size="sm")
+                            ui.label("Generating suggestions...").classes(
+                                "text-sm text-gray-500 dark:text-gray-400"
+                            )
 
                     try:
-                        suggestions = self.services.suggestion.generate_project_names(
-                            self.state.project, count=10
+                        # Run LLM call in background to avoid blocking UI
+                        suggestions = await run.io_bound(
+                            self.services.suggestion.generate_project_names,
+                            self.state.project,
+                            10,
                         )
+
                         suggestion_container.clear()
                         with suggestion_container:
                             ui.label("Suggested Names:").classes("text-sm font-medium")
@@ -360,6 +376,7 @@ class ProjectsPage:
                                             name_input, "value", s
                                         ),
                                     ).props("clickable color=primary outline")
+
                     except Exception as e:
                         logger.exception("Failed to generate name suggestions")
                         suggestion_container.clear()
@@ -368,7 +385,12 @@ class ProjectsPage:
                                 "text-sm text-red-500"
                             )
 
-                ui.button(
+                    finally:
+                        # Reset button state
+                        if suggest_button:
+                            suggest_button.props(remove="loading disabled")
+
+                suggest_button = ui.button(
                     "AI Suggest Names",
                     on_click=generate_suggestions,
                     icon="auto_awesome",
