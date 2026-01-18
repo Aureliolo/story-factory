@@ -340,8 +340,10 @@ Rate each dimension 0-10:
 
 Provide specific, actionable feedback for improvement.
 
+IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+
 Output ONLY valid JSON:
-{{"depth": 7.5, "goals": 8.0, "flaws": 6.5, "uniqueness": 7.0, "arc_potential": 8.5, "feedback": "Specific improvement suggestions..."}}"""
+{{"depth": <your_score>, "goals": <your_score>, "flaws": <your_score>, "uniqueness": <your_score>, "arc_potential": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
             model = self._get_judge_model()
@@ -601,6 +603,7 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_location_create,
@@ -609,6 +612,11 @@ Output ONLY valid JSON (all text in {brief.language}):
 
             data = extract_json(response["response"])
             if data and isinstance(data, dict):
+                # Validate name is not a duplicate
+                name = data.get("name", "")
+                if name and name in existing_names:
+                    logger.warning(f"Location name '{name}' is duplicate, clearing to force retry")
+                    return {}  # Return empty to trigger retry
                 return data
             else:
                 logger.error(f"Location creation returned invalid JSON structure: {data}")
@@ -655,8 +663,10 @@ Rate each dimension 0-10:
 
 Provide specific improvement feedback.
 
+IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+
 Output ONLY valid JSON:
-{{"atmosphere": 7.5, "significance": 8.0, "story_relevance": 7.0, "distinctiveness": 6.5, "feedback": "Specific suggestions..."}}"""
+{{"atmosphere": <your_score>, "significance": <your_score>, "story_relevance": <your_score>, "distinctiveness": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
             model = self._get_judge_model()
@@ -997,8 +1007,10 @@ Rate each dimension 0-10:
 
 Provide specific improvement feedback.
 
+IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+
 Output ONLY valid JSON:
-{{"tension": 7.5, "dynamics": 8.0, "story_potential": 7.0, "authenticity": 8.5, "feedback": "Specific suggestions..."}}"""
+{{"tension": <your_score>, "dynamics": <your_score>, "story_potential": <your_score>, "authenticity": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
             model = self._get_judge_model()
@@ -1234,6 +1246,7 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_faction_create,
@@ -1242,6 +1255,11 @@ Output ONLY valid JSON (all text in {brief.language}):
 
             data = extract_json(response["response"])
             if data and isinstance(data, dict):
+                # Validate name is not a duplicate
+                name = data.get("name", "")
+                if name and name in existing_names:
+                    logger.warning(f"Faction name '{name}' is duplicate, clearing to force retry")
+                    return {}  # Return empty to trigger retry
                 return data
             else:
                 logger.error(f"Faction creation returned invalid JSON structure: {data}")
@@ -1286,8 +1304,10 @@ Rate each dimension 0-10:
 
 Provide specific improvement feedback.
 
+IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+
 Output ONLY valid JSON:
-{{"coherence": 7.5, "influence": 8.0, "conflict_potential": 7.0, "distinctiveness": 6.5, "feedback": "Specific suggestions..."}}"""
+{{"coherence": <your_score>, "influence": <your_score>, "conflict_potential": <your_score>, "distinctiveness": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
             model = self._get_judge_model()
@@ -1525,6 +1545,7 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_item_create,
@@ -1533,6 +1554,11 @@ Output ONLY valid JSON (all text in {brief.language}):
 
             data = extract_json(response["response"])
             if data and isinstance(data, dict):
+                # Validate name is not a duplicate
+                name = data.get("name", "")
+                if name and name in existing_names:
+                    logger.warning(f"Item name '{name}' is duplicate, clearing to force retry")
+                    return {}  # Return empty to trigger retry
                 return data
             else:
                 logger.error(f"Item creation returned invalid JSON structure: {data}")
@@ -1576,8 +1602,10 @@ Rate each dimension 0-10:
 
 Provide specific improvement feedback.
 
+IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+
 Output ONLY valid JSON:
-{{"significance": 7.5, "uniqueness": 8.0, "narrative_potential": 7.0, "integration": 6.5, "feedback": "Specific suggestions..."}}"""
+{{"significance": <your_score>, "uniqueness": <your_score>, "narrative_potential": <your_score>, "integration": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
             model = self._get_judge_model()
@@ -1813,6 +1841,7 @@ Output ONLY valid JSON (all text in {brief.language}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_concept_create,
@@ -1821,6 +1850,11 @@ Output ONLY valid JSON (all text in {brief.language}):
 
             data = extract_json(response["response"])
             if data and isinstance(data, dict):
+                # Validate name is not a duplicate
+                name = data.get("name", "")
+                if name and name in existing_names:
+                    logger.warning(f"Concept name '{name}' is duplicate, clearing to force retry")
+                    return {}  # Return empty to trigger retry
                 return data
             else:
                 logger.error(f"Concept creation returned invalid JSON structure: {data}")
@@ -1863,8 +1897,10 @@ Rate each dimension 0-10:
 
 Provide specific improvement feedback.
 
+IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+
 Output ONLY valid JSON:
-{{"relevance": 7.5, "depth": 8.0, "manifestation": 7.0, "resonance": 6.5, "feedback": "Specific suggestions..."}}"""
+{{"relevance": <your_score>, "depth": <your_score>, "manifestation": <your_score>, "resonance": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
             model = self._get_judge_model()
