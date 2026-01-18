@@ -1063,6 +1063,27 @@ class TestCreateLocation:
         assert location["type"] == "location"
         assert "Victorian" in location["description"]
 
+    def test_create_location_duplicate_name_returns_empty(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test location creation returns empty dict when name is duplicate."""
+        location_json = json.dumps(
+            {
+                "name": "Thornwood Manor",
+                "type": "location",
+                "description": "A crumbling Victorian mansion",
+                "significance": "Central setting",
+            }
+        )
+        mock_ollama_client.generate.return_value = {"response": location_json}
+        service._client = mock_ollama_client
+
+        # Pass existing name - should return empty to force retry
+        result = service._create_location(
+            story_state, existing_names=["Thornwood Manor"], temperature=0.9
+        )
+        assert result == {}
+
     def test_create_location_no_brief_returns_empty(self, service):
         """Test location creation returns empty dict without brief."""
         state = StoryState(id="test-id")
@@ -1575,6 +1596,29 @@ class TestCreateFaction:
         assert faction["leader"] == "The Grand Master"
         assert len(faction["goals"]) == 2
 
+    def test_create_faction_duplicate_name_returns_empty(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test faction creation returns empty dict when name is duplicate."""
+        faction_json = json.dumps(
+            {
+                "name": "The Shadow Council",
+                "type": "faction",
+                "description": "A secret society",
+                "leader": "The Grand Master",
+                "goals": ["control"],
+                "values": ["power"],
+            }
+        )
+        mock_ollama_client.generate.return_value = {"response": faction_json}
+        service._client = mock_ollama_client
+
+        # Pass existing name - should return empty to force retry
+        result = service._create_faction(
+            story_state, existing_names=["The Shadow Council"], temperature=0.9
+        )
+        assert result == {}
+
     def test_create_faction_no_brief_returns_empty(self, service):
         """Test faction creation returns empty dict without brief."""
         state = StoryState(id="test-id")
@@ -1762,6 +1806,28 @@ class TestCreateItem:
         assert item["name"] == "The Crimson Amulet"
         assert len(item["properties"]) == 2
 
+    def test_create_item_duplicate_name_returns_empty(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test item creation returns empty dict when name is duplicate."""
+        item_json = json.dumps(
+            {
+                "name": "The Crimson Amulet",
+                "type": "item",
+                "description": "An ancient amulet",
+                "significance": "Key item",
+                "properties": ["glows"],
+            }
+        )
+        mock_ollama_client.generate.return_value = {"response": item_json}
+        service._client = mock_ollama_client
+
+        # Pass existing name - should return empty to force retry
+        result = service._create_item(
+            story_state, existing_names=["The Crimson Amulet"], temperature=0.9
+        )
+        assert result == {}
+
     def test_create_item_no_brief_returns_empty(self, service):
         """Test item creation returns empty dict without brief."""
         state = StoryState(id="test-id")
@@ -1931,6 +1997,27 @@ class TestCreateConcept:
 
         assert concept["name"] == "The Price of Truth"
         assert concept["type"] == "concept"
+
+    def test_create_concept_duplicate_name_returns_empty(
+        self, service, story_state, mock_ollama_client
+    ):
+        """Test concept creation returns empty dict when name is duplicate."""
+        concept_json = json.dumps(
+            {
+                "name": "The Price of Truth",
+                "type": "concept",
+                "description": "Truth always comes with consequences",
+                "manifestations": "Moral dilemmas",
+            }
+        )
+        mock_ollama_client.generate.return_value = {"response": concept_json}
+        service._client = mock_ollama_client
+
+        # Pass existing name - should return empty to force retry
+        result = service._create_concept(
+            story_state, existing_names=["The Price of Truth"], temperature=0.9
+        )
+        assert result == {}
 
     def test_create_concept_no_brief_returns_empty(self, service):
         """Test concept creation returns empty dict without brief."""
