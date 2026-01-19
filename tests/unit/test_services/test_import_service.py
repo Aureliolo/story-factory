@@ -489,14 +489,20 @@ class TestExtractCharactersMocked:
         assert len(result) == 1
         assert result[0]["needs_review"] is False
 
-    def test_extract_characters_invalid_json_response(self, mock_import_service, sample_text):
-        """Test handling of non-list JSON response."""
+    def test_extract_characters_single_object_wrapped_in_list(
+        self, mock_import_service, sample_text
+    ):
+        """Test that single object response is wrapped in a list (LLM fallback)."""
         mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": '{"not": "a list"}'}
+        # Single character object instead of array - should be wrapped in list
+        mock_client.generate.return_value = {
+            "response": '{"name": "Solo Character", "role": "hero", "confidence": 0.9}'
+        }
         mock_import_service._client = mock_client
 
-        with pytest.raises(WorldGenerationError, match="Invalid character extraction response"):
-            mock_import_service.extract_characters(sample_text)
+        result = mock_import_service.extract_characters(sample_text)
+        assert len(result) == 1
+        assert result[0]["name"] == "Solo Character"
 
     def test_extract_characters_empty_list_response(self, mock_import_service, sample_text):
         """Test handling of empty list response."""
@@ -685,14 +691,20 @@ class TestExtractLocationsMocked:
         assert len(result) == 1
         assert result[0]["needs_review"] is False
 
-    def test_extract_locations_invalid_json_response(self, mock_import_service, sample_text):
-        """Test handling of non-list JSON response."""
+    def test_extract_locations_single_object_wrapped_in_list(
+        self, mock_import_service, sample_text
+    ):
+        """Test that single object response is wrapped in a list (LLM fallback)."""
         mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": '{"single": "object"}'}
+        # Single location object instead of array - should be wrapped in list
+        mock_client.generate.return_value = {
+            "response": '{"name": "Solo Location", "type": "city", "confidence": 0.9}'
+        }
         mock_import_service._client = mock_client
 
-        with pytest.raises(WorldGenerationError, match="Invalid location extraction response"):
-            mock_import_service.extract_locations(sample_text)
+        result = mock_import_service.extract_locations(sample_text)
+        assert len(result) == 1
+        assert result[0]["name"] == "Solo Location"
 
     def test_extract_locations_response_error(self, mock_import_service, sample_text):
         """Test handling of Ollama ResponseError."""
@@ -877,14 +889,18 @@ class TestExtractItemsMocked:
         assert len(result) == 1
         assert result[0]["needs_review"] is False
 
-    def test_extract_items_invalid_json_response(self, mock_import_service, sample_text):
-        """Test handling of non-list JSON response."""
+    def test_extract_items_single_object_wrapped_in_list(self, mock_import_service, sample_text):
+        """Test that single object response is wrapped in a list (LLM fallback)."""
         mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": '{"single": "object"}'}
+        # Single item object instead of array - should be wrapped in list
+        mock_client.generate.return_value = {
+            "response": '{"name": "Solo Item", "type": "artifact", "confidence": 0.9}'
+        }
         mock_import_service._client = mock_client
 
-        with pytest.raises(WorldGenerationError, match="Invalid item extraction response"):
-            mock_import_service.extract_items(sample_text)
+        result = mock_import_service.extract_items(sample_text)
+        assert len(result) == 1
+        assert result[0]["name"] == "Solo Item"
 
     def test_extract_items_response_error(self, mock_import_service, sample_text):
         """Test handling of Ollama ResponseError."""
@@ -1089,16 +1105,23 @@ class TestInferRelationshipsMocked:
 
         assert len(result) == 1
 
-    def test_infer_relationships_invalid_json_response(self, mock_import_service, sample_text):
-        """Test handling of non-list JSON response."""
+    def test_infer_relationships_single_object_wrapped_in_list(
+        self, mock_import_service, sample_text
+    ):
+        """Test that single object response is wrapped in a list (LLM fallback)."""
         characters = [{"name": "Alice"}, {"name": "Bob"}]
 
         mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": '{"not": "a list"}'}
+        # Single relationship object instead of array - should be wrapped in list
+        mock_client.generate.return_value = {
+            "response": '{"source": "Alice", "target": "Bob", "relation_type": "friends", "confidence": 0.9}'
+        }
         mock_import_service._client = mock_client
 
-        with pytest.raises(WorldGenerationError, match="Invalid relationship inference response"):
-            mock_import_service.infer_relationships(characters, sample_text)
+        result = mock_import_service.infer_relationships(characters, sample_text)
+        assert len(result) == 1
+        assert result[0]["source"] == "Alice"
+        assert result[0]["target"] == "Bob"
 
     def test_infer_relationships_response_error(self, mock_import_service, sample_text):
         """Test handling of Ollama ResponseError."""
