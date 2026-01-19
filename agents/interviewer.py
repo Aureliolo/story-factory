@@ -173,36 +173,25 @@ IMPORTANT RULES:
         """Force generation of a final brief from the conversation."""
         validate_not_empty(conversation_summary, "conversation_summary")
         logger.info("Finalizing story brief from conversation")
-        prompt = f"""Based on this conversation, create a complete story brief:
+        prompt = f"""Based on this conversation, create a complete story brief.
 
 {conversation_summary}
 
-Output ONLY a JSON object in this exact format (no other text):
-```json
-{{
-    "premise": "...",
-    "genre": "...",
-    "subgenres": ["...", "..."],
-    "tone": "...",
-    "themes": ["...", "..."],
-    "setting_time": "...",
-    "setting_place": "...",
-    "target_length": "short_story|novella|novel",
-    "language": "English|German|Spanish|French|etc.",
-    "content_rating": "general|teen|mature|adult",
-    "content_preferences": ["..."],
-    "content_avoid": ["..."],
-    "additional_notes": "..."
-}}
-```"""
+Fill in ALL fields with appropriate values based on the conversation.
+If something wasn't discussed, make a reasonable choice that fits the story."""
 
-        response = self.generate(prompt, temperature=self.settings.temp_brief_extraction)
-        brief = self.extract_brief(response)
-
-        if not brief:
-            # Create a default brief if parsing fails
-            logger.warning("Failed to parse story brief, using default values")
-            brief = StoryBrief(
+        try:
+            brief = self.generate_structured(
+                prompt,
+                StoryBrief,
+                temperature=self.settings.temp_brief_extraction,
+            )
+            logger.info(f"Finalized story brief: {brief.genre} / {brief.target_length}")
+            return brief
+        except Exception as e:
+            # Create a default brief if generation fails
+            logger.warning(f"Failed to generate story brief ({e}), using default values")
+            return StoryBrief(
                 premise="Story based on user conversation",
                 genre="Fiction",
                 tone="Engaging",
@@ -212,7 +201,3 @@ Output ONLY a JSON object in this exact format (no other text):
                 language="English",
                 content_rating="mature",
             )
-        else:
-            logger.info(f"Finalized story brief: {brief.genre} / {brief.target_length}")
-
-        return brief

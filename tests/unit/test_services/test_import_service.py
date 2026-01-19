@@ -1,13 +1,21 @@
 """Tests for import service."""
 
-import json
 from unittest.mock import MagicMock, patch
 
-import ollama
 import pytest
 
 from memory.story_state import StoryBrief, StoryState
-from services.import_service import ImportService
+from services.import_service import (
+    ExtractedCharacter,
+    ExtractedCharacterList,
+    ExtractedItem,
+    ExtractedItemList,
+    ExtractedLocation,
+    ExtractedLocationList,
+    ExtractedRelationship,
+    ExtractedRelationshipList,
+    ImportService,
+)
 from services.model_mode_service import ModelModeService
 from settings import Settings
 from utils.exceptions import WorldGenerationError
@@ -314,250 +322,130 @@ class TestImportService:
                 assert item.get("needs_review", False) is True
 
 
-class TestClientProperty:
-    """Tests for the client property lazy initialization."""
-
-    def test_client_lazy_initialization(self, mock_settings, mock_mode_service):
-        """Test that client is lazily initialized on first access."""
-        service = ImportService(mock_settings, mock_mode_service)
-
-        # Client should be None initially
-        assert service._client is None
-
-        # Access client property with mocked ollama.Client
-        with patch("services.import_service.ollama.Client") as mock_client_class:
-            mock_client_instance = MagicMock()
-            mock_client_class.return_value = mock_client_instance
-
-            client = service.client
-
-            # Verify client was created with correct parameters
-            mock_client_class.assert_called_once_with(
-                host="http://localhost:11434",
-                timeout=30.0,
-            )
-            assert client == mock_client_instance
-
-    def test_client_reuses_existing_instance(self, mock_settings, mock_mode_service):
-        """Test that client is reused on subsequent accesses."""
-        service = ImportService(mock_settings, mock_mode_service)
-
-        with patch("services.import_service.ollama.Client") as mock_client_class:
-            mock_client_instance = MagicMock()
-            mock_client_class.return_value = mock_client_instance
-
-            # Access client twice
-            client1 = service.client
-            client2 = service.client
-
-            # Should only be created once
-            mock_client_class.assert_called_once()
-            assert client1 is client2
-
-
 class TestExtractCharactersMocked:
     """Tests for extract_characters with mocked LLM."""
 
     def test_extract_characters_success(self, mock_import_service, sample_text, story_state):
         """Test successful character extraction."""
-        mock_response = [
-            {
-                "name": "Sarah Chen",
-                "role": "protagonist",
-                "description": "A determined researcher",
-                "relationships": {"Professor Williams": "mentor"},
-                "confidence": 0.95,
-                "needs_review": False,
-            },
-            {
-                "name": "Marcus Drake",
-                "role": "antagonist",
-                "description": "A rival treasure hunter",
-                "relationships": {"Sarah Chen": "rival"},
-                "confidence": 0.9,
-                "needs_review": False,
-            },
-        ]
+        mock_response = ExtractedCharacterList(
+            characters=[
+                ExtractedCharacter(
+                    name="Sarah Chen",
+                    role="protagonist",
+                    description="A determined researcher",
+                    relationships={"Professor Williams": "mentor"},
+                    confidence=0.95,
+                    needs_review=False,
+                ),
+                ExtractedCharacter(
+                    name="Marcus Drake",
+                    role="antagonist",
+                    description="A rival treasure hunter",
+                    relationships={"Sarah Chen": "rival"},
+                    confidence=0.9,
+                    needs_review=False,
+                ),
+            ]
+        )
 
-        mock_client = MagicMock()
-        # Use markdown code block format like real LLM responses
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_characters(sample_text, story_state)
 
-        result = mock_import_service.extract_characters(sample_text, story_state)
-
-        assert len(result) == 2
-        assert result[0]["name"] == "Sarah Chen"
-        assert result[0]["role"] == "protagonist"
-        assert result[1]["name"] == "Marcus Drake"
-        mock_client.generate.assert_called_once()
+            assert len(result) == 2
+            assert result[0]["name"] == "Sarah Chen"
+            assert result[0]["role"] == "protagonist"
+            assert result[1]["name"] == "Marcus Drake"
 
     def test_extract_characters_without_story_state(self, mock_import_service, sample_text):
         """Test character extraction without story state context."""
-        mock_response = [
-            {
-                "name": "Test Character",
-                "role": "supporting",
-                "description": "A test description",
-                "relationships": {},
-                "confidence": 0.8,
-                "needs_review": False,
-            }
-        ]
+        mock_response = ExtractedCharacterList(
+            characters=[
+                ExtractedCharacter(
+                    name="Test Character",
+                    role="supporting",
+                    description="A test description",
+                    relationships={},
+                    confidence=0.8,
+                    needs_review=False,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_characters(sample_text, story_state=None)
 
-        result = mock_import_service.extract_characters(sample_text, story_state=None)
-
-        assert len(result) == 1
-        assert result[0]["name"] == "Test Character"
-
-    def test_extract_characters_missing_confidence_field(self, mock_import_service, sample_text):
-        """Test character extraction when LLM response missing confidence field."""
-        mock_response = [
-            {
-                "name": "Character Without Confidence",
-                "role": "supporting",
-                "description": "No confidence provided",
-                "relationships": {},
-            }
-        ]
-
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.extract_characters(sample_text)
-
-        assert len(result) == 1
-        # Should use default confidence and flag for review
-        assert result[0]["confidence"] == 0.5  # import_default_confidence
-        assert result[0]["needs_review"] is True
+            assert len(result) == 1
+            assert result[0]["name"] == "Test Character"
 
     def test_extract_characters_low_confidence_flagged(self, mock_import_service, sample_text):
         """Test that low confidence characters are flagged for review."""
-        mock_response = [
-            {
-                "name": "Uncertain Character",
-                "role": "supporting",
-                "description": "Ambiguous description",
-                "relationships": {},
-                "confidence": 0.5,  # Below threshold of 0.7
-            }
-        ]
+        mock_response = ExtractedCharacterList(
+            characters=[
+                ExtractedCharacter(
+                    name="Uncertain Character",
+                    role="supporting",
+                    description="Ambiguous description",
+                    relationships={},
+                    confidence=0.5,  # Below threshold of 0.7
+                    needs_review=False,  # Will be set by service
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_characters(sample_text)
 
-        result = mock_import_service.extract_characters(sample_text)
-
-        assert len(result) == 1
-        assert result[0]["confidence"] == 0.5
-        assert result[0]["needs_review"] is True
+            assert len(result) == 1
+            assert result[0]["confidence"] == 0.5
+            assert result[0]["needs_review"] is True
 
     def test_extract_characters_high_confidence_not_flagged(self, mock_import_service, sample_text):
         """Test that high confidence characters are not flagged for review."""
-        mock_response = [
-            {
-                "name": "Clear Character",
-                "role": "protagonist",
-                "description": "Well-described character",
-                "relationships": {},
-                "confidence": 0.9,  # Above threshold
-            }
-        ]
+        mock_response = ExtractedCharacterList(
+            characters=[
+                ExtractedCharacter(
+                    name="Clear Character",
+                    role="protagonist",
+                    description="Well-described character",
+                    relationships={},
+                    confidence=0.9,  # Above threshold
+                    needs_review=False,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_characters(sample_text)
 
-        result = mock_import_service.extract_characters(sample_text)
+            assert len(result) == 1
+            assert result[0]["needs_review"] is False
 
-        assert len(result) == 1
-        assert result[0]["needs_review"] is False
-
-    def test_extract_characters_single_object_wrapped_in_list(
-        self, mock_import_service, sample_text
-    ):
-        """Test that single object response is wrapped in a list (LLM fallback)."""
-        mock_client = MagicMock()
-        # Single character object instead of array - should be wrapped in list
-        mock_client.generate.return_value = {
-            "response": '{"name": "Solo Character", "role": "hero", "confidence": 0.9}'
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.extract_characters(sample_text)
-        assert len(result) == 1
-        assert result[0]["name"] == "Solo Character"
-
-    def test_extract_characters_empty_list_response(self, mock_import_service, sample_text):
-        """Test handling of empty list response."""
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "[]"}
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Invalid character extraction response"):
-            mock_import_service.extract_characters(sample_text)
-
-    def test_extract_characters_response_error(self, mock_import_service, sample_text):
-        """Test handling of Ollama ResponseError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ollama.ResponseError("Model not found")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during character extraction"):
-            mock_import_service.extract_characters(sample_text)
+    def test_extract_characters_error(self, mock_import_service, sample_text):
+        """Test handling of errors during character extraction."""
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=Exception("Model error"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Character extraction failed"):
+                mock_import_service.extract_characters(sample_text)
 
     def test_extract_characters_connection_error(self, mock_import_service, sample_text):
         """Test handling of ConnectionError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ConnectionError("Connection refused")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during character extraction"):
-            mock_import_service.extract_characters(sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=ConnectionError("Connection refused"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Character extraction failed"):
+                mock_import_service.extract_characters(sample_text)
 
     def test_extract_characters_timeout_error(self, mock_import_service, sample_text):
         """Test handling of TimeoutError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = TimeoutError("Request timed out")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during character extraction"):
-            mock_import_service.extract_characters(sample_text)
-
-    def test_extract_characters_json_parsing_error(self, mock_import_service, sample_text):
-        """Test handling of JSON parsing errors (ValueError, KeyError, TypeError)."""
-        mock_client = MagicMock()
-        # Return invalid JSON that will fail to parse
-        mock_client.generate.return_value = {"response": "not valid json at all"}
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Invalid character extraction response"):
-            mock_import_service.extract_characters(sample_text)
-
-    def test_extract_characters_unexpected_error(self, mock_import_service, sample_text):
-        """Test handling of unexpected errors."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = RuntimeError("Unexpected error")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Unexpected character extraction error"):
-            mock_import_service.extract_characters(sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=TimeoutError("Request timed out"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Character extraction failed"):
+                mock_import_service.extract_characters(sample_text)
 
 
 class TestExtractLocationsMocked:
@@ -565,191 +453,123 @@ class TestExtractLocationsMocked:
 
     def test_extract_locations_success(self, mock_import_service, sample_text, story_state):
         """Test successful location extraction."""
-        mock_response = [
-            {
-                "name": "Old Library",
-                "type": "location",
-                "description": "A dusty library with ancient books",
-                "significance": "Where the search began",
-                "confidence": 0.9,
-                "needs_review": False,
-            },
-            {
-                "name": "Ruins of Atlantis",
-                "type": "location",
-                "description": "Ancient underwater ruins",
-                "significance": "Where the artifact was discovered",
-                "confidence": 0.85,
-                "needs_review": False,
-            },
-        ]
+        mock_response = ExtractedLocationList(
+            locations=[
+                ExtractedLocation(
+                    name="Old Library",
+                    type="location",
+                    description="A dusty library with ancient books",
+                    significance="Where the search began",
+                    confidence=0.9,
+                    needs_review=False,
+                ),
+                ExtractedLocation(
+                    name="Ruins of Atlantis",
+                    type="location",
+                    description="Ancient underwater ruins",
+                    significance="Where the artifact was discovered",
+                    confidence=0.85,
+                    needs_review=False,
+                ),
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_locations(sample_text, story_state)
 
-        result = mock_import_service.extract_locations(sample_text, story_state)
-
-        assert len(result) == 2
-        assert result[0]["name"] == "Old Library"
-        assert result[0]["type"] == "location"
-        assert result[1]["name"] == "Ruins of Atlantis"
+            assert len(result) == 2
+            assert result[0]["name"] == "Old Library"
+            assert result[0]["type"] == "location"
+            assert result[1]["name"] == "Ruins of Atlantis"
 
     def test_extract_locations_without_story_state(self, mock_import_service, sample_text):
         """Test location extraction without story state context."""
-        mock_response = [
-            {
-                "name": "Test Location",
-                "type": "location",
-                "description": "A test location",
-                "significance": "Test significance",
-                "confidence": 0.8,
-                "needs_review": False,
-            }
-        ]
+        mock_response = ExtractedLocationList(
+            locations=[
+                ExtractedLocation(
+                    name="Test Location",
+                    type="location",
+                    description="A test location",
+                    significance="Test significance",
+                    confidence=0.8,
+                    needs_review=False,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_locations(sample_text, story_state=None)
 
-        result = mock_import_service.extract_locations(sample_text, story_state=None)
-
-        assert len(result) == 1
-        assert result[0]["name"] == "Test Location"
-
-    def test_extract_locations_missing_confidence_field(self, mock_import_service, sample_text):
-        """Test location extraction when LLM response missing confidence field."""
-        mock_response = [
-            {
-                "name": "Location Without Confidence",
-                "type": "location",
-                "description": "No confidence provided",
-                "significance": "Unknown",
-            }
-        ]
-
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.extract_locations(sample_text)
-
-        assert len(result) == 1
-        # Should use default confidence (0.5) and flag for review
-        assert result[0]["confidence"] == 0.5
-        assert result[0]["needs_review"] is True
+            assert len(result) == 1
+            assert result[0]["name"] == "Test Location"
 
     def test_extract_locations_low_confidence_flagged(self, mock_import_service, sample_text):
         """Test that low confidence locations are flagged for review."""
-        mock_response = [
-            {
-                "name": "Uncertain Location",
-                "type": "location",
-                "description": "Vague description",
-                "significance": "Unclear",
-                "confidence": 0.4,  # Below threshold of 0.7
-            }
-        ]
+        mock_response = ExtractedLocationList(
+            locations=[
+                ExtractedLocation(
+                    name="Uncertain Location",
+                    type="location",
+                    description="Vague description",
+                    significance="Unclear",
+                    confidence=0.4,  # Below threshold of 0.7
+                    needs_review=False,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_locations(sample_text)
 
-        result = mock_import_service.extract_locations(sample_text)
-
-        assert len(result) == 1
-        assert result[0]["needs_review"] is True
+            assert len(result) == 1
+            assert result[0]["needs_review"] is True
 
     def test_extract_locations_high_confidence_not_flagged(self, mock_import_service, sample_text):
         """Test that high confidence locations are not flagged for review."""
-        mock_response = [
-            {
-                "name": "Clear Location",
-                "type": "location",
-                "description": "Well-described location",
-                "significance": "Important",
-                "confidence": 0.9,
-            }
-        ]
+        mock_response = ExtractedLocationList(
+            locations=[
+                ExtractedLocation(
+                    name="Clear Location",
+                    type="location",
+                    description="Well-described location",
+                    significance="Important",
+                    confidence=0.9,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_locations(sample_text)
 
-        result = mock_import_service.extract_locations(sample_text)
+            assert len(result) == 1
+            assert result[0]["needs_review"] is False
 
-        assert len(result) == 1
-        assert result[0]["needs_review"] is False
-
-    def test_extract_locations_single_object_wrapped_in_list(
-        self, mock_import_service, sample_text
-    ):
-        """Test that single object response is wrapped in a list (LLM fallback)."""
-        mock_client = MagicMock()
-        # Single location object instead of array - should be wrapped in list
-        mock_client.generate.return_value = {
-            "response": '{"name": "Solo Location", "type": "city", "confidence": 0.9}'
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.extract_locations(sample_text)
-        assert len(result) == 1
-        assert result[0]["name"] == "Solo Location"
-
-    def test_extract_locations_response_error(self, mock_import_service, sample_text):
-        """Test handling of Ollama ResponseError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ollama.ResponseError("Model error")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during location extraction"):
-            mock_import_service.extract_locations(sample_text)
+    def test_extract_locations_error(self, mock_import_service, sample_text):
+        """Test handling of errors during location extraction."""
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=Exception("Model error"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Location extraction failed"):
+                mock_import_service.extract_locations(sample_text)
 
     def test_extract_locations_connection_error(self, mock_import_service, sample_text):
         """Test handling of ConnectionError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ConnectionError("Connection refused")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during location extraction"):
-            mock_import_service.extract_locations(sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=ConnectionError("Connection refused"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Location extraction failed"):
+                mock_import_service.extract_locations(sample_text)
 
     def test_extract_locations_timeout_error(self, mock_import_service, sample_text):
         """Test handling of TimeoutError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = TimeoutError("Timed out")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during location extraction"):
-            mock_import_service.extract_locations(sample_text)
-
-    def test_extract_locations_json_parsing_error(self, mock_import_service, sample_text):
-        """Test handling of JSON parsing errors."""
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "invalid json content"}
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Invalid location extraction response"):
-            mock_import_service.extract_locations(sample_text)
-
-    def test_extract_locations_unexpected_error(self, mock_import_service, sample_text):
-        """Test handling of unexpected errors."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = RuntimeError("Unexpected error")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Unexpected location extraction error"):
-            mock_import_service.extract_locations(sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=TimeoutError("Timed out"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Location extraction failed"):
+                mock_import_service.extract_locations(sample_text)
 
 
 class TestExtractItemsMocked:
@@ -757,195 +577,128 @@ class TestExtractItemsMocked:
 
     def test_extract_items_success(self, mock_import_service, sample_text, story_state):
         """Test successful item extraction."""
-        mock_response = [
-            {
-                "name": "Ancient Tome",
-                "type": "item",
-                "description": "A leather-bound book with strange symbols",
-                "significance": "Contains the key to understanding the artifact",
-                "properties": ["magical", "ancient"],
-                "confidence": 0.9,
-                "needs_review": False,
-            },
-            {
-                "name": "Golden Amulet",
-                "type": "item",
-                "description": "A glowing golden amulet",
-                "significance": "Grants the power to see the future",
-                "properties": ["magical", "glowing"],
-                "confidence": 0.95,
-                "needs_review": False,
-            },
-        ]
+        mock_response = ExtractedItemList(
+            items=[
+                ExtractedItem(
+                    name="Ancient Tome",
+                    type="item",
+                    description="A leather-bound book with strange symbols",
+                    significance="Contains the key to understanding the artifact",
+                    properties=["magical", "ancient"],
+                    confidence=0.9,
+                    needs_review=False,
+                ),
+                ExtractedItem(
+                    name="Golden Amulet",
+                    type="item",
+                    description="A glowing golden amulet",
+                    significance="Grants the power to see the future",
+                    properties=["magical", "glowing"],
+                    confidence=0.95,
+                    needs_review=False,
+                ),
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_items(sample_text, story_state)
 
-        result = mock_import_service.extract_items(sample_text, story_state)
-
-        assert len(result) == 2
-        assert result[0]["name"] == "Ancient Tome"
-        assert result[0]["type"] == "item"
-        assert result[1]["name"] == "Golden Amulet"
-        assert "magical" in result[0]["properties"]
+            assert len(result) == 2
+            assert result[0]["name"] == "Ancient Tome"
+            assert result[0]["type"] == "item"
+            assert result[1]["name"] == "Golden Amulet"
+            assert "magical" in result[0]["properties"]
 
     def test_extract_items_without_story_state(self, mock_import_service, sample_text):
         """Test item extraction without story state context."""
-        mock_response = [
-            {
-                "name": "Test Item",
-                "type": "item",
-                "description": "A test item",
-                "significance": "Test",
-                "properties": [],
-                "confidence": 0.8,
-                "needs_review": False,
-            }
-        ]
+        mock_response = ExtractedItemList(
+            items=[
+                ExtractedItem(
+                    name="Test Item",
+                    type="item",
+                    description="A test item",
+                    significance="Test",
+                    properties=[],
+                    confidence=0.8,
+                    needs_review=False,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_items(sample_text, story_state=None)
 
-        result = mock_import_service.extract_items(sample_text, story_state=None)
-
-        assert len(result) == 1
-        assert result[0]["name"] == "Test Item"
-
-    def test_extract_items_missing_confidence_field(self, mock_import_service, sample_text):
-        """Test item extraction when LLM response missing confidence field."""
-        mock_response = [
-            {
-                "name": "Item Without Confidence",
-                "type": "item",
-                "description": "No confidence",
-                "significance": "Unknown",
-                "properties": [],
-            }
-        ]
-
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.extract_items(sample_text)
-
-        assert len(result) == 1
-        assert result[0]["confidence"] == 0.5
-        assert result[0]["needs_review"] is True
+            assert len(result) == 1
+            assert result[0]["name"] == "Test Item"
 
     def test_extract_items_low_confidence_flagged(self, mock_import_service, sample_text):
         """Test that low confidence items are flagged for review."""
-        mock_response = [
-            {
-                "name": "Uncertain Item",
-                "type": "item",
-                "description": "Vague",
-                "significance": "Unclear",
-                "properties": [],
-                "confidence": 0.3,
-            }
-        ]
+        mock_response = ExtractedItemList(
+            items=[
+                ExtractedItem(
+                    name="Uncertain Item",
+                    type="item",
+                    description="Vague",
+                    significance="Unclear",
+                    properties=[],
+                    confidence=0.3,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_items(sample_text)
 
-        result = mock_import_service.extract_items(sample_text)
-
-        assert len(result) == 1
-        assert result[0]["needs_review"] is True
+            assert len(result) == 1
+            assert result[0]["needs_review"] is True
 
     def test_extract_items_high_confidence_not_flagged(self, mock_import_service, sample_text):
         """Test that high confidence items are not flagged for review."""
-        mock_response = [
-            {
-                "name": "Clear Item",
-                "type": "item",
-                "description": "Well-described",
-                "significance": "Important",
-                "properties": ["unique"],
-                "confidence": 0.95,
-            }
-        ]
+        mock_response = ExtractedItemList(
+            items=[
+                ExtractedItem(
+                    name="Clear Item",
+                    type="item",
+                    description="Well-described",
+                    significance="Important",
+                    properties=["unique"],
+                    confidence=0.95,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.extract_items(sample_text)
 
-        result = mock_import_service.extract_items(sample_text)
+            assert len(result) == 1
+            assert result[0]["needs_review"] is False
 
-        assert len(result) == 1
-        assert result[0]["needs_review"] is False
-
-    def test_extract_items_single_object_wrapped_in_list(self, mock_import_service, sample_text):
-        """Test that single object response is wrapped in a list (LLM fallback)."""
-        mock_client = MagicMock()
-        # Single item object instead of array - should be wrapped in list
-        mock_client.generate.return_value = {
-            "response": '{"name": "Solo Item", "type": "artifact", "confidence": 0.9}'
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.extract_items(sample_text)
-        assert len(result) == 1
-        assert result[0]["name"] == "Solo Item"
-
-    def test_extract_items_response_error(self, mock_import_service, sample_text):
-        """Test handling of Ollama ResponseError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ollama.ResponseError("Model error")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during item extraction"):
-            mock_import_service.extract_items(sample_text)
+    def test_extract_items_error(self, mock_import_service, sample_text):
+        """Test handling of errors during item extraction."""
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=Exception("Model error"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Item extraction failed"):
+                mock_import_service.extract_items(sample_text)
 
     def test_extract_items_connection_error(self, mock_import_service, sample_text):
         """Test handling of ConnectionError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ConnectionError("Connection refused")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during item extraction"):
-            mock_import_service.extract_items(sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=ConnectionError("Connection refused"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Item extraction failed"):
+                mock_import_service.extract_items(sample_text)
 
     def test_extract_items_timeout_error(self, mock_import_service, sample_text):
         """Test handling of TimeoutError."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = TimeoutError("Timed out")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during item extraction"):
-            mock_import_service.extract_items(sample_text)
-
-    def test_extract_items_json_parsing_error(self, mock_import_service, sample_text):
-        """Test handling of JSON parsing errors."""
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "not json"}
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Invalid item extraction response"):
-            mock_import_service.extract_items(sample_text)
-
-    def test_extract_items_unexpected_error(self, mock_import_service, sample_text):
-        """Test handling of unexpected errors."""
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = RuntimeError("Unexpected")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Unexpected item extraction error"):
-            mock_import_service.extract_items(sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=TimeoutError("Timed out"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Item extraction failed"):
+                mock_import_service.extract_items(sample_text)
 
 
 class TestInferRelationshipsMocked:
@@ -959,97 +712,64 @@ class TestInferRelationshipsMocked:
             {"name": "Professor Williams"},
         ]
 
-        mock_response = [
-            {
-                "source": "Sarah Chen",
-                "target": "Professor Williams",
-                "relation_type": "mentored_by",
-                "description": "Professor Williams was Sarah's mentor",
-                "confidence": 0.9,
-                "needs_review": False,
-            },
-            {
-                "source": "Sarah Chen",
-                "target": "Marcus Drake",
-                "relation_type": "rivals_with",
-                "description": "They are competing for the same artifact",
-                "confidence": 0.95,
-                "needs_review": False,
-            },
-        ]
+        mock_response = ExtractedRelationshipList(
+            relationships=[
+                ExtractedRelationship(
+                    source="Sarah Chen",
+                    target="Professor Williams",
+                    relation_type="mentored_by",
+                    description="Professor Williams was Sarah's mentor",
+                    confidence=0.9,
+                    needs_review=False,
+                ),
+                ExtractedRelationship(
+                    source="Sarah Chen",
+                    target="Marcus Drake",
+                    relation_type="rivals_with",
+                    description="They are competing for the same artifact",
+                    confidence=0.95,
+                    needs_review=False,
+                ),
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.infer_relationships(characters, sample_text)
 
-        result = mock_import_service.infer_relationships(characters, sample_text)
-
-        assert len(result) == 2
-        assert result[0]["source"] == "Sarah Chen"
-        assert result[0]["target"] == "Professor Williams"
-        assert result[0]["relation_type"] == "mentored_by"
+            assert len(result) == 2
+            assert result[0]["source"] == "Sarah Chen"
+            assert result[0]["target"] == "Professor Williams"
+            assert result[0]["relation_type"] == "mentored_by"
 
     def test_infer_relationships_handles_empty_characters(self, mock_import_service, sample_text):
         """Test that empty characters list returns empty result without LLM call."""
-        mock_client = MagicMock()
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured") as mock_gen:
+            result = mock_import_service.infer_relationships([], sample_text)
 
-        result = mock_import_service.infer_relationships([], sample_text)
-
-        assert result == []
-        mock_client.generate.assert_not_called()
-
-    def test_infer_relationships_missing_confidence_field(self, mock_import_service, sample_text):
-        """Test relationship inference when LLM response missing confidence field."""
-        characters = [{"name": "Alice"}, {"name": "Bob"}]
-
-        mock_response = [
-            {
-                "source": "Alice",
-                "target": "Bob",
-                "relation_type": "knows",
-                "description": "They know each other",
-            }
-        ]
-
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.infer_relationships(characters, sample_text)
-
-        assert len(result) == 1
-        assert result[0]["confidence"] == 0.5
-        assert result[0]["needs_review"] is True
+            assert result == []
+            mock_gen.assert_not_called()
 
     def test_infer_relationships_low_confidence_flagged(self, mock_import_service, sample_text):
         """Test that low confidence relationships are flagged for review."""
         characters = [{"name": "A"}, {"name": "B"}]
 
-        mock_response = [
-            {
-                "source": "A",
-                "target": "B",
-                "relation_type": "knows",
-                "description": "Possible acquaintance",
-                "confidence": 0.4,
-            }
-        ]
+        mock_response = ExtractedRelationshipList(
+            relationships=[
+                ExtractedRelationship(
+                    source="A",
+                    target="B",
+                    relation_type="knows",
+                    description="Possible acquaintance",
+                    confidence=0.4,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.infer_relationships(characters, sample_text)
 
-        result = mock_import_service.infer_relationships(characters, sample_text)
-
-        assert len(result) == 1
-        assert result[0]["needs_review"] is True
+            assert len(result) == 1
+            assert result[0]["needs_review"] is True
 
     def test_infer_relationships_high_confidence_not_flagged(
         self, mock_import_service, sample_text
@@ -1057,26 +777,23 @@ class TestInferRelationshipsMocked:
         """Test that high confidence relationships are not flagged for review."""
         characters = [{"name": "A"}, {"name": "B"}]
 
-        mock_response = [
-            {
-                "source": "A",
-                "target": "B",
-                "relation_type": "parent_of",
-                "description": "Explicitly stated parent relationship",
-                "confidence": 1.0,
-            }
-        ]
+        mock_response = ExtractedRelationshipList(
+            relationships=[
+                ExtractedRelationship(
+                    source="A",
+                    target="B",
+                    relation_type="parent_of",
+                    description="Explicitly stated parent relationship",
+                    confidence=1.0,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.infer_relationships(characters, sample_text)
 
-        result = mock_import_service.infer_relationships(characters, sample_text)
-
-        assert len(result) == 1
-        assert result[0]["needs_review"] is False
+            assert len(result) == 1
+            assert result[0]["needs_review"] is False
 
     def test_infer_relationships_handles_non_dict_characters(
         self, mock_import_service, sample_text
@@ -1084,99 +801,56 @@ class TestInferRelationshipsMocked:
         """Test handling of characters list with non-dict items."""
         characters = [{"name": "Alice"}, "not a dict", {"name": "Bob"}]
 
-        mock_response = [
-            {
-                "source": "Alice",
-                "target": "Bob",
-                "relation_type": "knows",
-                "description": "They know each other",
-                "confidence": 0.8,
-                "needs_review": False,
-            }
-        ]
+        mock_response = ExtractedRelationshipList(
+            relationships=[
+                ExtractedRelationship(
+                    source="Alice",
+                    target="Bob",
+                    relation_type="knows",
+                    description="They know each other",
+                    confidence=0.8,
+                    needs_review=False,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch("services.import_service.generate_structured", return_value=mock_response):
+            result = mock_import_service.infer_relationships(characters, sample_text)
 
-        result = mock_import_service.infer_relationships(characters, sample_text)
+            assert len(result) == 1
 
-        assert len(result) == 1
-
-    def test_infer_relationships_single_object_wrapped_in_list(
-        self, mock_import_service, sample_text
-    ):
-        """Test that single object response is wrapped in a list (LLM fallback)."""
+    def test_infer_relationships_error(self, mock_import_service, sample_text):
+        """Test handling of errors during relationship inference."""
         characters = [{"name": "Alice"}, {"name": "Bob"}]
 
-        mock_client = MagicMock()
-        # Single relationship object instead of array - should be wrapped in list
-        mock_client.generate.return_value = {
-            "response": '{"source": "Alice", "target": "Bob", "relation_type": "friends", "confidence": 0.9}'
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.infer_relationships(characters, sample_text)
-        assert len(result) == 1
-        assert result[0]["source"] == "Alice"
-        assert result[0]["target"] == "Bob"
-
-    def test_infer_relationships_response_error(self, mock_import_service, sample_text):
-        """Test handling of Ollama ResponseError."""
-        characters = [{"name": "Alice"}, {"name": "Bob"}]
-
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ollama.ResponseError("Model error")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during relationship inference"):
-            mock_import_service.infer_relationships(characters, sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=Exception("Model error"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
+                mock_import_service.infer_relationships(characters, sample_text)
 
     def test_infer_relationships_connection_error(self, mock_import_service, sample_text):
         """Test handling of ConnectionError."""
         characters = [{"name": "Alice"}]
 
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = ConnectionError("Connection refused")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during relationship inference"):
-            mock_import_service.infer_relationships(characters, sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=ConnectionError("Connection refused"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
+                mock_import_service.infer_relationships(characters, sample_text)
 
     def test_infer_relationships_timeout_error(self, mock_import_service, sample_text):
         """Test handling of TimeoutError."""
         characters = [{"name": "Alice"}]
 
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = TimeoutError("Timed out")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error during relationship inference"):
-            mock_import_service.infer_relationships(characters, sample_text)
-
-    def test_infer_relationships_json_parsing_error(self, mock_import_service, sample_text):
-        """Test handling of JSON parsing errors."""
-        characters = [{"name": "Alice"}]
-
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "invalid json"}
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Invalid relationship inference response"):
-            mock_import_service.infer_relationships(characters, sample_text)
-
-    def test_infer_relationships_unexpected_error(self, mock_import_service, sample_text):
-        """Test handling of unexpected errors."""
-        characters = [{"name": "Alice"}]
-
-        mock_client = MagicMock()
-        mock_client.generate.side_effect = RuntimeError("Unexpected")
-        mock_import_service._client = mock_client
-
-        with pytest.raises(WorldGenerationError, match="Unexpected relationship inference error"):
-            mock_import_service.infer_relationships(characters, sample_text)
+        with patch(
+            "services.import_service.generate_structured",
+            side_effect=TimeoutError("Timed out"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
+                mock_import_service.infer_relationships(characters, sample_text)
 
 
 class TestExtractAllMocked:
@@ -1333,83 +1007,105 @@ class TestExtractAllMocked:
                 mock_import_service.extract_all(sample_text)
 
 
-class TestPostProcessingLogic:
-    """Tests for post-processing logic in extraction methods."""
+class TestGenerateStructuredCalls:
+    """Tests verifying generate_structured is called with correct arguments."""
 
-    def test_characters_with_non_dict_items(self, mock_import_service, sample_text):
-        """Test character extraction handles non-dict items in response."""
-        mock_response = [
-            {"name": "Valid Character", "role": "protagonist", "confidence": 0.9},
-            "not a dict",  # Should be skipped
-            123,  # Should be skipped
-            {"name": "Another Valid", "role": "supporting", "confidence": 0.8},
-        ]
+    def test_character_extraction_calls_generate_structured(
+        self, mock_import_service, sample_text, story_state
+    ):
+        """Test that extract_characters calls generate_structured with correct args."""
+        mock_response = ExtractedCharacterList(
+            characters=[
+                ExtractedCharacter(
+                    name="Test",
+                    role="protagonist",
+                    description="A test",
+                    confidence=0.9,
+                )
+            ]
+        )
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+        with patch(
+            "services.import_service.generate_structured", return_value=mock_response
+        ) as mock_gen:
+            mock_import_service.extract_characters(sample_text, story_state)
 
-        result = mock_import_service.extract_characters(sample_text)
+            mock_gen.assert_called_once()
+            call_kwargs = mock_gen.call_args.kwargs
+            assert call_kwargs["settings"] == mock_import_service.settings
+            assert call_kwargs["model"] == "test-model"
+            assert call_kwargs["response_model"] == ExtractedCharacterList
+            assert call_kwargs["temperature"] == mock_import_service.settings.temp_import_extraction
+            assert "Sarah Chen" in call_kwargs["prompt"] or sample_text in call_kwargs["prompt"]
 
-        # Should return all items, but only process dicts
-        assert len(result) == 4
-        # Only the dict items should have needs_review set
-        assert result[0].get("needs_review") is False
-        assert result[3].get("needs_review") is False
+    def test_location_extraction_calls_generate_structured(
+        self, mock_import_service, sample_text, story_state
+    ):
+        """Test that extract_locations calls generate_structured with correct args."""
+        mock_response = ExtractedLocationList(
+            locations=[
+                ExtractedLocation(
+                    name="Test Location",
+                    description="A test",
+                    confidence=0.9,
+                )
+            ]
+        )
 
-    def test_locations_with_non_dict_items(self, mock_import_service, sample_text):
-        """Test location extraction handles non-dict items in response."""
-        mock_response = [
-            {"name": "Valid Location", "type": "location", "confidence": 0.9},
-            None,  # Should be skipped
-        ]
+        with patch(
+            "services.import_service.generate_structured", return_value=mock_response
+        ) as mock_gen:
+            mock_import_service.extract_locations(sample_text, story_state)
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+            mock_gen.assert_called_once()
+            call_kwargs = mock_gen.call_args.kwargs
+            assert call_kwargs["response_model"] == ExtractedLocationList
 
-        result = mock_import_service.extract_locations(sample_text)
+    def test_item_extraction_calls_generate_structured(
+        self, mock_import_service, sample_text, story_state
+    ):
+        """Test that extract_items calls generate_structured with correct args."""
+        mock_response = ExtractedItemList(
+            items=[
+                ExtractedItem(
+                    name="Test Item",
+                    description="A test",
+                    confidence=0.9,
+                )
+            ]
+        )
 
-        assert len(result) == 2
-        assert result[0].get("needs_review") is False
+        with patch(
+            "services.import_service.generate_structured", return_value=mock_response
+        ) as mock_gen:
+            mock_import_service.extract_items(sample_text, story_state)
 
-    def test_items_with_non_dict_items(self, mock_import_service, sample_text):
-        """Test item extraction handles non-dict items in response."""
-        mock_response = [
-            {"name": "Valid Item", "type": "item", "confidence": 0.9},
-            [],  # Should be skipped
-        ]
+            mock_gen.assert_called_once()
+            call_kwargs = mock_gen.call_args.kwargs
+            assert call_kwargs["response_model"] == ExtractedItemList
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
+    def test_relationship_inference_calls_generate_structured(
+        self, mock_import_service, sample_text
+    ):
+        """Test that infer_relationships calls generate_structured with correct args."""
+        characters = [{"name": "Alice"}, {"name": "Bob"}]
+        mock_response = ExtractedRelationshipList(
+            relationships=[
+                ExtractedRelationship(
+                    source="Alice",
+                    target="Bob",
+                    relation_type="knows",
+                    description="They know each other",
+                    confidence=0.9,
+                )
+            ]
+        )
 
-        result = mock_import_service.extract_items(sample_text)
+        with patch(
+            "services.import_service.generate_structured", return_value=mock_response
+        ) as mock_gen:
+            mock_import_service.infer_relationships(characters, sample_text)
 
-        assert len(result) == 2
-        assert result[0].get("needs_review") is False
-
-    def test_relationships_with_non_dict_items(self, mock_import_service, sample_text):
-        """Test relationship inference handles non-dict items in response."""
-        characters = [{"name": "A"}, {"name": "B"}]
-        mock_response = [
-            {"source": "A", "target": "B", "relation_type": "knows", "confidence": 0.9},
-            "invalid",  # Should be skipped
-        ]
-
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {
-            "response": f"```json\n{json.dumps(mock_response)}\n```"
-        }
-        mock_import_service._client = mock_client
-
-        result = mock_import_service.infer_relationships(characters, sample_text)
-
-        assert len(result) == 2
-        assert result[0].get("needs_review") is False
+            mock_gen.assert_called_once()
+            call_kwargs = mock_gen.call_args.kwargs
+            assert call_kwargs["response_model"] == ExtractedRelationshipList

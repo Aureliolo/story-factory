@@ -518,21 +518,19 @@ class TestRecordEntityQuality:
 class TestCreateCharacter:
     """Tests for _create_character method."""
 
-    def test_create_character_success(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_success(self, mock_generate_structured, service, story_state):
         """Test successful character creation."""
-        character_json = json.dumps(
-            {
-                "name": "Dr. Eleanor Grey",
-                "role": "protagonist",
-                "description": "A brilliant detective haunted by past failures",
-                "personality_traits": ["observant", "determined", "secretive"],
-                "goals": ["solve the case", "find redemption"],
-                "relationships": {},
-                "arc_notes": "Will learn to trust others",
-            }
+        mock_character = Character(
+            name="Dr. Eleanor Grey",
+            role="protagonist",
+            description="A brilliant detective haunted by past failures",
+            personality_traits=["observant", "determined", "secretive"],
+            goals=["solve the case", "find redemption"],
+            relationships={},
+            arc_notes="Will learn to trust others",
         )
-        mock_ollama_client.generate.return_value = {"response": character_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_character
 
         character = service._create_character(story_state, existing_names=[], temperature=0.9)
 
@@ -541,21 +539,21 @@ class TestCreateCharacter:
         assert character.role == "protagonist"
         assert "observant" in character.personality_traits
 
-    def test_create_character_with_existing_names(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_with_existing_names(
+        self, mock_generate_structured, service, story_state
+    ):
         """Test character creation avoids existing names."""
-        character_json = json.dumps(
-            {
-                "name": "New Character",
-                "role": "supporting",
-                "description": "A mysterious stranger",
-                "personality_traits": ["quiet"],
-                "goals": ["unknown"],
-                "relationships": {},
-                "arc_notes": "Will reveal secrets",
-            }
+        mock_character = Character(
+            name="New Character",
+            role="supporting",
+            description="A mysterious stranger",
+            personality_traits=["quiet"],
+            goals=["unknown"],
+            relationships={},
+            arc_notes="Will reveal secrets",
         )
-        mock_ollama_client.generate.return_value = {"response": character_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_character
 
         character = service._create_character(
             story_state, existing_names=["John Doe", "Jane Doe"], temperature=0.9
@@ -563,7 +561,7 @@ class TestCreateCharacter:
 
         assert character is not None
         # Verify prompt includes existing names
-        call_args = mock_ollama_client.generate.call_args
+        call_args = mock_generate_structured.call_args
         assert "John Doe" in call_args.kwargs["prompt"]
         assert "Jane Doe" in call_args.kwargs["prompt"]
 
@@ -575,76 +573,71 @@ class TestCreateCharacter:
         result = service._create_character(state, existing_names=[], temperature=0.9)
         assert result is None
 
-    def test_create_character_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_validation_error_raises_error(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test character creation raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not valid json"}
-        service._client = mock_ollama_client
+        """Test character creation raises error on validation failure."""
+        from pydantic import ValidationError
 
-        with pytest.raises(WorldGenerationError, match="Invalid character"):
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Character", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
+
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_character_ollama_error(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_ollama_error(self, mock_generate_structured, service, story_state):
         """Test character creation handles Ollama errors."""
-        mock_ollama_client.generate.side_effect = ollama.ResponseError("Model not found")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = ollama.ResponseError("Model not found")
 
-        with pytest.raises(WorldGenerationError, match="LLM error"):
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_character_connection_error(self, service, story_state, mock_ollama_client):
-        """Test character creation handles connection errors."""
-        mock_ollama_client.generate.side_effect = ConnectionError("Connection refused")
-        service._client = mock_ollama_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error"):
-            service._create_character(story_state, existing_names=[], temperature=0.9)
-
-    def test_create_character_timeout_error(self, service, story_state, mock_ollama_client):
-        """Test character creation handles timeout errors."""
-        mock_ollama_client.generate.side_effect = TimeoutError("Request timed out")
-        service._client = mock_ollama_client
-
-        with pytest.raises(WorldGenerationError, match="LLM error"):
-            service._create_character(story_state, existing_names=[], temperature=0.9)
-
-    def test_create_character_unexpected_error(self, service, story_state, mock_ollama_client):
-        """Test character creation handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = RuntimeError("Unexpected error")
-        service._client = mock_ollama_client
-
-        with pytest.raises(WorldGenerationError, match="Unexpected"):
-            service._create_character(story_state, existing_names=[], temperature=0.9)
-
-    def test_create_character_non_dict_json_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_connection_error(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test character creation raises error when JSON is not a dict."""
-        mock_ollama_client.generate.return_value = {"response": '["not", "a", "dict"]'}
-        service._client = mock_ollama_client
+        """Test character creation handles connection errors."""
+        mock_generate_structured.side_effect = ConnectionError("Connection refused")
 
-        with pytest.raises(WorldGenerationError, match="Invalid character JSON"):
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
+            service._create_character(story_state, existing_names=[], temperature=0.9)
+
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_timeout_error(self, mock_generate_structured, service, story_state):
+        """Test character creation handles timeout errors."""
+        mock_generate_structured.side_effect = TimeoutError("Request timed out")
+
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
+            service._create_character(story_state, existing_names=[], temperature=0.9)
+
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_unexpected_error(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test character creation handles unexpected errors."""
+        mock_generate_structured.side_effect = RuntimeError("Unexpected error")
+
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
 
 class TestJudgeCharacterQuality:
     """Tests for _judge_character_quality method."""
 
-    def test_judge_character_quality_success(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_judge_character_quality_success(self, mock_generate_structured, service, story_state):
         """Test successful character quality judgment."""
-        scores_json = json.dumps(
-            {
-                "depth": 8.0,
-                "goals": 7.5,
-                "flaws": 7.0,
-                "uniqueness": 8.5,
-                "arc_potential": 8.0,
-                "feedback": "Strong character with good depth",
-            }
+        mock_generate_structured.return_value = CharacterQualityScores(
+            depth=8.0,
+            goals=7.5,
+            flaws=7.0,
+            uniqueness=8.5,
+            arc_potential=8.0,
+            feedback="Strong character with good depth",
         )
-        mock_ollama_client.generate.return_value = {"response": scores_json}
-        service._client = mock_ollama_client
 
         character = Character(
             name="Test Character",
@@ -662,39 +655,31 @@ class TestJudgeCharacterQuality:
         assert scores.feedback == "Strong character with good depth"
         assert scores.average == pytest.approx(7.8, rel=0.01)
 
-    def test_judge_character_quality_missing_fields_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_judge_character_quality_validation_error_raises(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test judge raises error when response is missing required fields."""
-        incomplete_json = json.dumps(
-            {
-                "depth": 8.0,
-                "goals": 7.5,
-                # Missing: flaws, uniqueness, arc_potential
-            }
-        )
-        mock_ollama_client.generate.return_value = {"response": incomplete_json}
-        service._client = mock_ollama_client
+        """Test judge raises error on validation failure."""
+        mock_generate_structured.side_effect = Exception("Validation failed")
 
         character = Character(name="Test", role="supporting", description="Test")
 
-        with pytest.raises(WorldGenerationError, match="missing required fields"):
+        with pytest.raises(WorldGenerationError, match="judgment failed"):
             service._judge_character_quality(character, story_state, temperature=0.1)
 
-    def test_judge_character_quality_no_brief_uses_default_genre(self, service, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_judge_character_quality_no_brief_uses_default_genre(
+        self, mock_generate_structured, service
+    ):
         """Test judge uses default genre when brief is missing."""
-        scores_json = json.dumps(
-            {
-                "depth": 7.0,
-                "goals": 7.0,
-                "flaws": 7.0,
-                "uniqueness": 7.0,
-                "arc_potential": 7.0,
-                "feedback": "Decent character",
-            }
+        mock_generate_structured.return_value = CharacterQualityScores(
+            depth=7.0,
+            goals=7.0,
+            flaws=7.0,
+            uniqueness=7.0,
+            arc_potential=7.0,
+            feedback="Decent character",
         )
-        mock_ollama_client.generate.return_value = {"response": scores_json}
-        service._client = mock_ollama_client
 
         state = StoryState(id="test-id")
         state.brief = None
@@ -704,27 +689,15 @@ class TestJudgeCharacterQuality:
 
         assert scores.average == 7.0
         # Verify prompt uses "fiction" as default genre
-        call_args = mock_ollama_client.generate.call_args
+        call_args = mock_generate_structured.call_args
         assert "fiction" in call_args.kwargs["prompt"]
 
-    def test_judge_character_quality_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test judge raises error on invalid JSON response."""
-        mock_ollama_client.generate.return_value = {"response": "not json at all"}
-        service._client = mock_ollama_client
-
-        character = Character(name="Test", role="supporting", description="Test")
-
-        with pytest.raises(WorldGenerationError, match="Failed to extract JSON"):
-            service._judge_character_quality(character, story_state, temperature=0.1)
-
+    @patch("services.world_quality_service.generate_structured")
     def test_judge_character_quality_exception_reraises(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
-        """Test judge reraises WorldGenerationError as-is."""
-        mock_ollama_client.generate.side_effect = RuntimeError("Some error")
-        service._client = mock_ollama_client
+        """Test judge reraises exceptions as WorldGenerationError."""
+        mock_generate_structured.side_effect = RuntimeError("Some error")
 
         character = Character(name="Test", role="supporting", description="Test")
 
@@ -735,21 +708,18 @@ class TestJudgeCharacterQuality:
 class TestRefineCharacter:
     """Tests for _refine_character method."""
 
-    def test_refine_character_success(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_character_success(self, mock_generate_structured, service, story_state):
         """Test successful character refinement."""
-        refined_json = json.dumps(
-            {
-                "name": "John Doe",
-                "role": "protagonist",
-                "description": "A more complex description with deeper psychology",
-                "personality_traits": ["brave", "conflicted", "hopeful"],
-                "goals": ["save the world", "overcome inner demons"],
-                "relationships": {"Mary": "ally"},
-                "arc_notes": "Will transform from bitter loner to trusting friend",
-            }
+        mock_generate_structured.return_value = Character(
+            name="John Doe",
+            role="protagonist",
+            description="A more complex description with deeper psychology",
+            personality_traits=["brave", "conflicted", "hopeful"],
+            goals=["save the world", "overcome inner demons"],
+            relationships={"Mary": "ally"},
+            arc_notes="Will transform from bitter loner to trusting friend",
         )
-        mock_ollama_client.generate.return_value = {"response": refined_json}
-        service._client = mock_ollama_client
 
         original_char = Character(
             name="John Doe",
@@ -774,62 +744,20 @@ class TestRefineCharacter:
         assert "deeper psychology" in refined.description
         assert len(refined.personality_traits) > 1
 
-    def test_refine_character_keeps_original_on_missing_fields(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test refinement keeps original values when new response is missing fields."""
-        # JSON missing some optional fields
-        partial_json = json.dumps(
-            {
-                "name": "John Doe",
-                "role": "protagonist",
-                "description": "New description",
-                # Missing personality_traits, goals, relationships, arc_notes
-            }
-        )
-        mock_ollama_client.generate.return_value = {"response": partial_json}
-        service._client = mock_ollama_client
-
-        original_char = Character(
-            name="John Doe",
-            role="protagonist",
-            description="Old description",
-            personality_traits=["brave", "kind"],
-            goals=["original goal"],
-            relationships={"Alice": "friend"},
-            arc_notes="Original arc",
-        )
-        scores = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
-        )
-
-        refined = service._refine_character(original_char, scores, story_state, temperature=0.7)
-
-        assert refined.name == "John Doe"
-        assert refined.description == "New description"
-        # Original values should be preserved for missing fields
-        assert refined.personality_traits == ["brave", "kind"]
-        assert refined.goals == ["original goal"]
-        assert refined.relationships == {"Alice": "friend"}
-        assert refined.arc_notes == "Original arc"
-
+    @patch("services.world_quality_service.generate_structured")
     def test_refine_character_includes_weak_dimensions_in_prompt(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
         """Test refinement prompt includes weak dimensions."""
-        refined_json = json.dumps(
-            {
-                "name": "Test",
-                "role": "supporting",
-                "description": "Refined",
-                "personality_traits": [],
-                "goals": [],
-                "relationships": {},
-                "arc_notes": "",
-            }
+        mock_generate_structured.return_value = Character(
+            name="Test",
+            role="supporting",
+            description="Refined",
+            personality_traits=[],
+            goals=[],
+            relationships={},
+            arc_notes="",
         )
-        mock_ollama_client.generate.return_value = {"response": refined_json}
-        service._client = mock_ollama_client
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
@@ -842,55 +770,37 @@ class TestRefineCharacter:
 
         service._refine_character(original_char, scores, story_state, temperature=0.7)
 
-        call_args = mock_ollama_client.generate.call_args
+        call_args = mock_generate_structured.call_args
         prompt = call_args.kwargs["prompt"]
-        assert "depth" in prompt
-        assert "flaws" in prompt
-        assert "arc_potential" in prompt
+        assert "depth" in prompt.lower()
+        assert "flaws" in prompt.lower()
+        assert "arc_potential" in prompt.lower()
 
-    def test_refine_character_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test refinement raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not valid json"}
-        service._client = mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_character_error_raises(self, mock_generate_structured, service, story_state):
+        """Test refinement raises error on failure."""
+        mock_generate_structured.side_effect = Exception("Generation failed")
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
             depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Invalid character refinement"):
+        with pytest.raises(WorldGenerationError, match="refinement failed"):
             service._refine_character(original_char, scores, story_state, temperature=0.7)
 
-    def test_refine_character_ollama_error(self, service, story_state, mock_ollama_client):
-        """Test refinement handles Ollama errors."""
-        mock_ollama_client.generate.side_effect = ollama.ResponseError("Error")
-        service._client = mock_ollama_client
-
-        original_char = Character(name="Test", role="supporting", description="Test")
-        scores = CharacterQualityScores(
-            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
-        )
-
-        with pytest.raises(WorldGenerationError, match="LLM error"):
-            service._refine_character(original_char, scores, story_state, temperature=0.7)
-
-    def test_refine_character_with_no_brief_uses_english(self, service, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_character_with_no_brief_uses_english(self, mock_generate_structured, service):
         """Test refinement uses English when brief is missing."""
-        refined_json = json.dumps(
-            {
-                "name": "Test",
-                "role": "supporting",
-                "description": "Refined",
-                "personality_traits": [],
-                "goals": [],
-                "relationships": {},
-                "arc_notes": "",
-            }
+        mock_generate_structured.return_value = Character(
+            name="Test",
+            role="supporting",
+            description="Refined",
+            personality_traits=[],
+            goals=[],
+            relationships={},
+            arc_notes="",
         )
-        mock_ollama_client.generate.return_value = {"response": refined_json}
-        service._client = mock_ollama_client
 
         state = StoryState(id="test-id")
         state.brief = None
@@ -901,7 +811,7 @@ class TestRefineCharacter:
 
         service._refine_character(original_char, scores, state, temperature=0.7)
 
-        call_args = mock_ollama_client.generate.call_args
+        call_args = mock_generate_structured.call_args
         prompt = call_args.kwargs["prompt"]
         assert "English" in prompt
 
@@ -1124,19 +1034,16 @@ class TestCreateLocation:
 class TestJudgeLocationQuality:
     """Tests for _judge_location_quality method."""
 
-    def test_judge_location_quality_success(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_judge_location_quality_success(self, mock_generate_structured, service, story_state):
         """Test successful location quality judgment."""
-        scores_json = json.dumps(
-            {
-                "atmosphere": 8.0,
-                "significance": 7.5,
-                "story_relevance": 8.0,
-                "distinctiveness": 8.5,
-                "feedback": "Rich atmosphere, could be more distinctive",
-            }
+        mock_generate_structured.return_value = LocationQualityScores(
+            atmosphere=8.0,
+            significance=7.5,
+            story_relevance=8.0,
+            distinctiveness=8.5,
+            feedback="Rich atmosphere, could be more distinctive",
         )
-        mock_ollama_client.generate.return_value = {"response": scores_json}
-        service._client = mock_ollama_client
 
         location = {
             "name": "Dark Forest",
@@ -1149,34 +1056,16 @@ class TestJudgeLocationQuality:
         assert scores.atmosphere == 8.0
         assert scores.average == 8.0
 
-    def test_judge_location_quality_missing_fields_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_judge_location_quality_error_raises(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test judge raises error when response is missing required fields."""
-        incomplete_json = json.dumps(
-            {
-                "atmosphere": 8.0,
-                # Missing other fields
-            }
-        )
-        mock_ollama_client.generate.return_value = {"response": incomplete_json}
-        service._client = mock_ollama_client
+        """Test judge raises error on failure."""
+        mock_generate_structured.side_effect = Exception("Generation failed")
 
         location = {"name": "Test", "description": "Test"}
 
-        with pytest.raises(WorldGenerationError, match="missing required fields"):
-            service._judge_location_quality(location, story_state, temperature=0.1)
-
-    def test_judge_location_quality_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test judge raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
-
-        location = {"name": "Test", "description": "Test"}
-
-        with pytest.raises(WorldGenerationError, match="Failed to extract JSON"):
+        with pytest.raises(WorldGenerationError, match="judgment failed"):
             service._judge_location_quality(location, story_state, temperature=0.1)
 
 
@@ -2699,88 +2588,58 @@ class TestExceptionHandlingPaths:
 
     # ========== Character Creation Exception Paths ==========
 
-    def test_create_character_json_parsing_error_value_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test character creation handles ValueError during JSON parsing."""
-        # Return JSON that will cause ValueError during float conversion
-        mock_ollama_client.generate.return_value = {
-            "response": json.dumps(
-                {
-                    "name": "Test",
-                    "role": "protagonist",
-                    "description": "Test desc",
-                    "personality_traits": [],
-                    "goals": [],
-                    "relationships": {},
-                    "arc_notes": "",
-                }
-            )
-        }
-        service._client = mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_value_error(self, mock_generate_structured, service, story_state):
+        """Test character creation handles ValueError from generate_structured."""
+        mock_generate_structured.side_effect = ValueError("Cannot convert to float")
 
-        # Simulate ValueError by patching extract_json to raise ValueError
-        with patch("services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = ValueError("Cannot convert to float")
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
+            service._create_character(story_state, existing_names=[], temperature=0.9)
 
-            with pytest.raises(WorldGenerationError, match="Invalid character response format"):
-                service._create_character(story_state, existing_names=[], temperature=0.9)
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_key_error(self, mock_generate_structured, service, story_state):
+        """Test character creation handles KeyError from generate_structured."""
+        mock_generate_structured.side_effect = KeyError("missing key")
 
-    def test_create_character_json_parsing_error_key_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test character creation handles KeyError during JSON parsing."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
+            service._create_character(story_state, existing_names=[], temperature=0.9)
 
-        with patch("services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = KeyError("missing key")
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_type_error(self, mock_generate_structured, service, story_state):
+        """Test character creation handles TypeError from generate_structured."""
+        mock_generate_structured.side_effect = TypeError("wrong type")
 
-            with pytest.raises(WorldGenerationError, match="Invalid character response format"):
-                service._create_character(story_state, existing_names=[], temperature=0.9)
-
-    def test_create_character_json_parsing_error_type_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test character creation handles TypeError during JSON parsing."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
-
-        with patch("services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = TypeError("wrong type")
-
-            with pytest.raises(WorldGenerationError, match="Invalid character response format"):
-                service._create_character(story_state, existing_names=[], temperature=0.9)
+        with pytest.raises(WorldGenerationError, match="Character creation failed"):
+            service._create_character(story_state, existing_names=[], temperature=0.9)
 
     # ========== Character Refinement Exception Paths ==========
 
-    def test_refine_character_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test character refinement handles JSON parsing errors (ValueError/KeyError/TypeError)."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_character_value_error(self, mock_generate_structured, service, story_state):
+        """Test character refinement handles ValueError from generate_structured."""
+        mock_generate_structured.side_effect = ValueError("Cannot parse")
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
             depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
         )
 
-        with patch("services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = ValueError("Cannot parse")
+        with pytest.raises(WorldGenerationError, match="Character refinement failed"):
+            service._refine_character(original_char, scores, story_state, temperature=0.7)
 
-            with pytest.raises(WorldGenerationError, match="Invalid character refinement"):
-                service._refine_character(original_char, scores, story_state, temperature=0.7)
-
-    def test_refine_character_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_character_unexpected_error(
+        self, mock_generate_structured, service, story_state
+    ):
         """Test character refinement handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected attribute error")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected attribute error")
 
         original_char = Character(name="Test", role="supporting", description="Test")
         scores = CharacterQualityScores(
             depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Unexpected character refinement error"):
+        with pytest.raises(WorldGenerationError, match="Character refinement failed"):
             service._refine_character(original_char, scores, story_state, temperature=0.7)
 
     # ========== Location Creation Exception Paths ==========
@@ -2806,12 +2665,12 @@ class TestExceptionHandlingPaths:
 
     # ========== Location Judge Exception Paths ==========
 
+    @patch("services.world_quality_service.generate_structured")
     def test_judge_location_quality_unexpected_error(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
         """Test location judge handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
         location = {"name": "Test", "description": "Test"}
 

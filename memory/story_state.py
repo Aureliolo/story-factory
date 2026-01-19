@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from memory.templates import TargetLength
+
 logger = logging.getLogger(__name__)
 
 
@@ -310,7 +312,7 @@ class StoryBrief(BaseModel):
     themes: list[str] = Field(default_factory=list)
     setting_time: str
     setting_place: str
-    target_length: str  # short_story, novella, novel
+    target_length: TargetLength  # short_story, novella, novel
     language: str = "English"  # Output language for all content
     content_rating: str  # none, mild, moderate, explicit
     content_preferences: list[str] = Field(default_factory=list)  # What to include
@@ -565,3 +567,48 @@ class StoryState(BaseModel):
         self.add_outline_variation(merged)
         logger.info(f"Created merged variation: {name}")
         return merged
+
+
+# ============================================================================
+# List Wrapper Models for Instructor Integration
+# ============================================================================
+# These wrapper models are used with the Instructor library to enforce
+# JSON schema validation when generating lists of Pydantic models.
+# Instructor requires a single Pydantic model, so we wrap lists.
+
+
+class CharacterList(BaseModel):
+    """Wrapper model for a list of characters.
+
+    Used with generate_structured() to get validated character lists from LLM.
+    """
+
+    characters: list[Character]
+
+
+class PlotPointList(BaseModel):
+    """Wrapper model for a list of plot points.
+
+    Used with generate_structured() to get validated plot point lists from LLM.
+    """
+
+    plot_points: list[PlotPoint]
+
+
+class PlotOutline(BaseModel):
+    """Complete plot outline with summary and plot points.
+
+    Used with generate_structured() for the architect's create_plot_outline method.
+    """
+
+    plot_summary: str
+    plot_points: list[PlotPoint]
+
+
+class ChapterList(BaseModel):
+    """Wrapper model for a list of chapters.
+
+    Used with generate_structured() to get validated chapter lists from LLM.
+    """
+
+    chapters: list[Chapter]

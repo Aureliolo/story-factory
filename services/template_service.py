@@ -204,11 +204,7 @@ class TemplateService:
             themes=state.brief.themes.copy() if state.brief else [],
             setting_time=state.brief.setting_time if state.brief else "",
             setting_place=state.brief.setting_place if state.brief else "",
-            target_length=(
-                state.brief.target_length  # type: ignore[arg-type]
-                if state.brief
-                else "novel"
-            ),
+            target_length=state.brief.target_length if state.brief else "novel",
             structure_preset_id=None,
             world_description=state.world_description,
             world_rules=state.world_rules.copy(),

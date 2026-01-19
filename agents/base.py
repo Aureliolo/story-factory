@@ -3,8 +3,13 @@
 import logging
 import threading
 import time
+from typing import TypeVar
 
+import instructor
 import ollama
+from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
+from pydantic import BaseModel
 
 from settings import ModelInfo, Settings, get_model_info
 from utils.error_handling import handle_ollama_errors
@@ -12,6 +17,9 @@ from utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
 from utils.json_parser import clean_llm_text
 from utils.logging_config import log_performance
 from utils.validation import validate_not_empty
+
+# Type variable for generic structured output
+T = TypeVar("T", bound=BaseModel)
 
 # Minimum response length after cleaning (to detect truncated/empty responses)
 MIN_RESPONSE_LENGTH = 10
@@ -97,6 +105,105 @@ class BaseAgent:
         self.client = ollama.Client(
             host=self.settings.ollama_url, timeout=float(self.settings.ollama_timeout)
         )
+
+        # Instructor client for structured outputs (lazily initialized)
+        self._instructor_client: instructor.Instructor | None = None
+
+    @property
+    def instructor_client(self) -> instructor.Instructor:
+        """Get or create instructor client for structured outputs.
+
+        Uses Ollama's OpenAI-compatible endpoint with JSON mode.
+        """
+        if self._instructor_client is None:
+            # Create OpenAI client pointing to Ollama's OpenAI-compatible endpoint
+            openai_client = OpenAI(
+                base_url=f"{self.settings.ollama_url}/v1",
+                api_key="ollama",  # Required but not used by Ollama
+                timeout=float(self.settings.ollama_timeout),
+            )
+            self._instructor_client = instructor.from_openai(
+                openai_client,
+                mode=instructor.Mode.JSON,
+            )
+            logger.debug(f"Created instructor client for {self.name}")
+        return self._instructor_client
+
+    def generate_structured(
+        self,
+        prompt: str,
+        response_model: type[T],
+        context: str | None = None,
+        temperature: float | None = None,
+        max_retries: int = 3,
+    ) -> T:
+        """Generate structured output with automatic validation and retry.
+
+        Uses Instructor library to enforce JSON schema at the API level,
+        with automatic retries that include validation feedback to the LLM.
+
+        Args:
+            prompt: The user prompt to send.
+            response_model: Pydantic model class defining the expected output structure.
+            context: Optional context to include as a system message.
+            temperature: Override temperature (defaults to low value for structured output).
+            max_retries: Maximum number of retries on validation failure.
+
+        Returns:
+            Instance of response_model with validated data.
+
+        Raises:
+            LLMGenerationError: If generation fails after all retries.
+        """
+        validate_not_empty(prompt, "prompt")
+
+        # Build messages
+        use_model = self.model
+        if "qwen" in use_model.lower():
+            system_content = f"/no_think\n{self.system_prompt}"
+        else:
+            system_content = self.system_prompt
+
+        messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_content}]
+
+        if context:
+            messages.append({"role": "system", "content": f"CURRENT STORY CONTEXT:\n{context}"})
+
+        messages.append({"role": "user", "content": prompt})
+
+        # Use low temperature for structured output to ensure schema adherence
+        use_temp = temperature if temperature is not None else 0.1
+
+        # Acquire semaphore to limit concurrent requests
+        with _get_llm_semaphore(self.settings):
+            with log_performance(logger, f"{self.name} structured generation"):
+                try:
+                    logger.info(
+                        f"{self.name}: Calling LLM ({use_model}) for structured output "
+                        f"(model={response_model.__name__}, max_retries={max_retries})"
+                    )
+
+                    start_time = time.time()
+                    result = self.instructor_client.chat.completions.create(
+                        model=use_model,
+                        messages=messages,
+                        response_model=response_model,
+                        max_retries=max_retries,
+                        temperature=use_temp,
+                    )
+                    duration = time.time() - start_time
+
+                    logger.info(
+                        f"{self.name}: Structured output received "
+                        f"({response_model.__name__}, {duration:.2f}s)"
+                    )
+                    return result
+
+                except Exception as e:
+                    logger.error(f"{self.name}: Structured generation failed: {e}")
+                    raise LLMGenerationError(
+                        f"Structured generation failed for {response_model.__name__}: {e}"
+                    ) from e
 
     @classmethod
     @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)
