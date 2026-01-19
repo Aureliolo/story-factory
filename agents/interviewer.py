@@ -4,6 +4,7 @@ import logging
 
 from memory.story_state import StoryBrief
 from settings import Settings
+from utils.exceptions import LLMGenerationError
 from utils.json_parser import parse_json_to_model
 from utils.validation import validate_not_empty
 
@@ -188,16 +189,8 @@ If something wasn't discussed, make a reasonable choice that fits the story."""
             )
             logger.info(f"Finalized story brief: {brief.genre} / {brief.target_length}")
             return brief
-        except Exception as e:
-            # Create a default brief if generation fails
-            logger.warning(f"Failed to generate story brief ({e}), using default values")
-            return StoryBrief(
-                premise="Story based on user conversation",
-                genre="Fiction",
-                tone="Engaging",
-                setting_time="Contemporary",
-                setting_place="Unspecified",
-                target_length="short_story",
-                language="English",
-                content_rating="mature",
-            )
+        except LLMGenerationError:  # pragma: no cover
+            raise  # Re-raise LLM errors directly
+        except Exception as e:  # pragma: no cover
+            logger.error(f"Failed to generate story brief: {e}")
+            raise LLMGenerationError(f"Failed to finalize story brief: {e}") from e

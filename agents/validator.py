@@ -132,7 +132,8 @@ Is this response:
 Answer only TRUE or FALSE."""
 
         try:
-            result = self.generate(prompt, temperature=self.temperature)
+            # Allow very short responses (TRUE/FALSE) for validator
+            result = self.generate(prompt, temperature=self.temperature, min_response_length=1)
             result_clean = result.strip().upper()
 
             # Parse response

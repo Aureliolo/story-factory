@@ -249,7 +249,7 @@ class TestBaseAgentGenerate:
     def test_generate_includes_context(self):
         """Test generate includes context in messages."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Response"}}
+        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
 
         agent.generate("Prompt", context="Story context here")
 
@@ -261,7 +261,7 @@ class TestBaseAgentGenerate:
     def test_generate_uses_custom_model(self):
         """Test generate uses custom model when provided."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Response"}}
+        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
 
         agent.generate("Prompt", model="custom-model:7b")
 
@@ -271,7 +271,7 @@ class TestBaseAgentGenerate:
     def test_generate_uses_custom_temperature(self):
         """Test generate uses custom temperature when provided."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Response"}}
+        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
 
         agent.generate("Prompt", temperature=0.9)
 
@@ -376,16 +376,17 @@ class TestBaseAgentShortResponseValidation:
         assert agent.client.chat.call_count == 2
 
     @patch("agents.base.time.sleep")
-    def test_generate_returns_short_response_after_retries_exhausted(self, mock_sleep):
-        """Test generate returns short response after all retries exhausted."""
+    def test_generate_raises_after_retries_exhausted_with_short_response(self, mock_sleep):
+        """Test generate raises LLMGenerationError after all retries exhausted with short response."""
+        from utils.exceptions import LLMGenerationError
+
         agent = create_mock_agent()
         # All attempts return short response
         agent.client.chat.return_value = {"message": {"content": "<think>"}}
 
-        result = agent.generate("Prompt")
+        with pytest.raises(LLMGenerationError, match="Response too short"):
+            agent.generate("Prompt")
 
-        # Should return the short response after exhausting retries
-        assert result == "<think>"
         assert agent.client.chat.call_count == 3  # max_retries default
 
 
@@ -395,7 +396,7 @@ class TestBaseAgentRateLimiting:
     def test_generate_respects_rate_limit(self):
         """Test generate uses semaphore for rate limiting."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Response"}}
+        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
 
         # Verify semaphore is used (indirectly by checking concurrent calls)
         results = []
@@ -411,7 +412,7 @@ class TestBaseAgentRateLimiting:
             t.join()
 
         assert len(results) == 3
-        assert all(r == "Response" for r in results)
+        assert all(r == "Valid response content" for r in results)
 
 
 class TestBaseAgentGetModelInfo:

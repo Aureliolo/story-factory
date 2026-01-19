@@ -174,20 +174,16 @@ class TestInterviewerFinalizeBrief:
         assert brief.target_length == "novel"
         interviewer.generate_structured.assert_called_once()
 
-    def test_returns_default_brief_on_generation_failure(self, interviewer):
-        """Test returns default brief when structured generation fails."""
+    def test_raises_on_generation_failure(self, interviewer):
+        """Test raises LLMGenerationError when structured generation fails."""
         from utils.exceptions import LLMGenerationError
 
         interviewer.generate_structured = MagicMock(
             side_effect=LLMGenerationError("Validation failed")
         )
 
-        brief = interviewer.finalize_brief("Some conversation summary")
-
-        assert brief is not None
-        assert brief.premise == "Story based on user conversation"
-        assert brief.genre == "Fiction"
-        assert brief.language == "English"
+        with pytest.raises(LLMGenerationError, match="Validation failed"):
+            interviewer.finalize_brief("Some conversation summary")
 
 
 class TestInterviewerConversationFlow:
