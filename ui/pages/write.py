@@ -137,6 +137,10 @@ class WritePage:
             with ui.expansion("Story Structure", icon="list_alt").classes("w-full"):
                 self._build_structure_section()
 
+            # Generation Settings Section
+            with ui.expansion("Generation Settings", icon="tune", value=False).classes("w-full"):
+                self._build_generation_settings_section()
+
             # Reviews Section
             with ui.expansion("Reviews & Notes", icon="rate_review").classes("w-full"):
                 self._build_reviews_section()
@@ -306,6 +310,99 @@ class WritePage:
                         ).classes("text-sm text-gray-600 dark:text-gray-400")
                     if chapter.word_count:
                         ui.badge(f"{chapter.word_count} words").props("color=grey-7")
+
+    def _build_generation_settings_section(self) -> None:
+        """Build the project-specific generation settings section."""
+        if not self.state.project:
+            return
+
+        project = self.state.project
+        settings = self.services.story.settings
+
+        ui.label("Override default generation settings for this project.").classes(
+            "text-sm text-gray-500 dark:text-gray-400 mb-2"
+        )
+
+        with ui.row().classes("w-full gap-4 flex-wrap"):
+            # Chapter count setting
+            with ui.column().classes("gap-1"):
+                ui.label("Target Chapters").classes("text-xs text-gray-500 dark:text-gray-400")
+                ui.label("Leave empty to use length-based default").classes(
+                    "text-xs text-gray-400 dark:text-gray-500"
+                )
+
+                def update_chapters(e: Any) -> None:
+                    value = e.value if e.value else None
+                    project.target_chapters = int(value) if value else None
+                    self.services.project.save_project(project)
+                    logger.info(f"Updated target chapters: {project.target_chapters}")
+
+                ui.number(
+                    value=project.target_chapters,
+                    min=1,
+                    max=100,
+                    step=1,
+                    on_change=update_chapters,
+                ).props("clearable").classes("w-24")
+
+                # Show what default would be used
+                if project.brief:
+                    length_map = {
+                        "short_story": settings.chapters_short_story,
+                        "novella": settings.chapters_novella,
+                        "novel": settings.chapters_novel,
+                    }
+                    default_chapters = length_map.get(
+                        project.brief.target_length, settings.chapters_default
+                    )
+                    ui.label(f"Default: {default_chapters}").classes(
+                        "text-xs text-gray-400 dark:text-gray-500"
+                    )
+
+            # Character count settings
+            with ui.column().classes("gap-1"):
+                ui.label("Character Count Range").classes(
+                    "text-xs text-gray-500 dark:text-gray-400"
+                )
+                ui.label("Leave empty to use global defaults").classes(
+                    "text-xs text-gray-400 dark:text-gray-500"
+                )
+
+                with ui.row().classes("gap-2 items-center"):
+
+                    def update_min_chars(e: Any) -> None:
+                        value = e.value if e.value else None
+                        project.target_characters_min = int(value) if value else None
+                        self.services.project.save_project(project)
+                        logger.info(f"Updated min characters: {project.target_characters_min}")
+
+                    ui.number(
+                        value=project.target_characters_min,
+                        min=1,
+                        max=50,
+                        step=1,
+                        on_change=update_min_chars,
+                    ).props("clearable label=Min").classes("w-20")
+
+                    ui.label("-").classes("text-gray-400")
+
+                    def update_max_chars(e: Any) -> None:
+                        value = e.value if e.value else None
+                        project.target_characters_max = int(value) if value else None
+                        self.services.project.save_project(project)
+                        logger.info(f"Updated max characters: {project.target_characters_max}")
+
+                    ui.number(
+                        value=project.target_characters_max,
+                        min=1,
+                        max=50,
+                        step=1,
+                        on_change=update_max_chars,
+                    ).props("clearable label=Max").classes("w-20")
+
+                ui.label(
+                    f"Default: {settings.world_gen_characters_min}-{settings.world_gen_characters_max}"
+                ).classes("text-xs text-gray-400 dark:text-gray-500")
 
     def _build_reviews_section(self) -> None:
         """Build the reviews and notes section."""

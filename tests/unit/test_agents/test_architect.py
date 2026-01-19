@@ -392,6 +392,107 @@ class TestArchitectCreateChapterOutline:
         # Only called once since first call returned enough
         assert architect.generate_structured.call_count == 1
 
+    def test_uses_project_specific_chapter_count(self, architect, sample_story_state):
+        """Test uses project-specific chapter count when set."""
+        # Set project-specific chapter count
+        sample_story_state.target_chapters = 7
+        sample_story_state.plot_summary = "An epic journey"
+        sample_story_state.plot_points = [PlotPoint(description="Beginning")]
+        sample_story_state.characters = [
+            Character(name="Hero", role="protagonist", description="Main")
+        ]
+
+        mock_result = ChapterList(
+            chapters=[
+                Chapter(number=i + 1, title=f"Chapter {i + 1}", outline=f"Outline {i + 1}")
+                for i in range(7)
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        chapters = architect.create_chapter_outline(sample_story_state)
+
+        assert len(chapters) == 7
+
+    def test_project_chapter_count_overrides_settings(self, architect, sample_story_state):
+        """Test project chapter count overrides length-based settings."""
+        # Brief says novella but project overrides to 5 chapters
+        sample_story_state.brief.target_length = "novella"
+        sample_story_state.target_chapters = 5
+        sample_story_state.plot_summary = "A story"
+        sample_story_state.plot_points = []
+        sample_story_state.characters = []
+
+        mock_result = ChapterList(
+            chapters=[
+                Chapter(number=i + 1, title=f"Ch {i + 1}", outline=f"Outline {i + 1}")
+                for i in range(5)
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        chapters = architect.create_chapter_outline(sample_story_state)
+
+        # Should use project-specific count, not novella default
+        assert len(chapters) == 5
+
+
+class TestArchitectProjectSpecificCharacterCount:
+    """Tests for project-specific character count settings."""
+
+    def test_uses_project_specific_character_min(self, architect, sample_story_state):
+        """Test uses project-specific min character count when set."""
+        sample_story_state.target_characters_min = 6
+        sample_story_state.target_characters_max = None  # Use default max
+
+        mock_result = CharacterList(
+            characters=[
+                Character(name=f"Char{i}", role="supporting", description=f"Character {i}")
+                for i in range(6)
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        characters = architect.create_characters(sample_story_state)
+
+        assert len(characters) >= 6
+
+    def test_uses_project_specific_character_max(self, architect, sample_story_state):
+        """Test uses project-specific max character count when set."""
+        sample_story_state.target_characters_min = None  # Use default min
+        sample_story_state.target_characters_max = 8
+
+        mock_result = CharacterList(
+            characters=[
+                Character(name=f"Char{i}", role="supporting", description=f"Character {i}")
+                for i in range(architect.settings.world_gen_characters_min)
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        characters = architect.create_characters(sample_story_state)
+
+        # Should succeed with default min characters
+        assert len(characters) >= architect.settings.world_gen_characters_min
+
+    def test_project_character_counts_override_settings(self, architect, sample_story_state):
+        """Test project character counts override global settings."""
+        sample_story_state.target_characters_min = 2
+        sample_story_state.target_characters_max = 3
+
+        mock_result = CharacterList(
+            characters=[
+                Character(name="Hero", role="protagonist", description="Main"),
+                Character(name="Sidekick", role="supporting", description="Helper"),
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        characters = architect.create_characters(sample_story_state)
+
+        # Should accept 2 characters (meets project-specific min of 2)
+        assert len(characters) == 2
+
 
 class TestArchitectBuildStoryStructure:
     """Tests for build_story_structure method."""

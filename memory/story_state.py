@@ -413,6 +413,11 @@ class StoryState(BaseModel):
     # Status
     status: str = "interview"  # interview, outlining, writing, editing, complete
 
+    # Project-specific generation settings (None = use global settings defaults)
+    target_chapters: int | None = None  # Override chapter count for this project
+    target_characters_min: int | None = None  # Override min characters for this project
+    target_characters_max: int | None = None  # Override max characters for this project
+
     def get_context_summary(self) -> str:
         """Generate a compressed context summary for agents."""
         summary_parts = []

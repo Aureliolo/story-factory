@@ -146,8 +146,18 @@ class ArchitectAgent(BaseAgent):
         builder.add_text(f"PREMISE: {brief.premise}")
         builder.add_brief_requirements(brief)
 
-        min_chars = self.settings.world_gen_characters_min
-        max_chars = self.settings.world_gen_characters_max
+        # Use project-specific settings if available, otherwise fall back to global settings
+        min_chars = (
+            story_state.target_characters_min
+            if story_state.target_characters_min is not None
+            else self.settings.world_gen_characters_min
+        )
+        max_chars = (
+            story_state.target_characters_max
+            if story_state.target_characters_max is not None
+            else self.settings.world_gen_characters_max
+        )
+        logger.debug(f"Character count range: {min_chars}-{max_chars}")
 
         # Add random naming variety hint to avoid repetitive names across generations
         naming_styles = [
@@ -241,13 +251,21 @@ class ArchitectAgent(BaseAgent):
         """Create detailed chapter outlines."""
         logger.info("Creating chapter outlines")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
-        length_map = {
-            "short_story": self.settings.chapters_short_story,
-            "novella": self.settings.chapters_novella,
-            "novel": self.settings.chapters_novel,
-        }
-        num_chapters = length_map.get(brief.target_length, self.settings.chapters_default)
-        logger.debug(f"Target: {num_chapters} chapters for {brief.target_length}")
+
+        # Use project-specific chapter count if available, otherwise use length-based default
+        if story_state.target_chapters is not None:
+            num_chapters = story_state.target_chapters
+            logger.debug(f"Using project-specific chapter count: {num_chapters}")
+        else:
+            length_map = {
+                "short_story": self.settings.chapters_short_story,
+                "novella": self.settings.chapters_novella,
+                "novel": self.settings.chapters_novel,
+            }
+            num_chapters = length_map.get(brief.target_length, self.settings.chapters_default)
+            logger.debug(
+                f"Using length-based chapter count: {num_chapters} for {brief.target_length}"
+            )
 
         plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
 
