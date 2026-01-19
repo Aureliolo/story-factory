@@ -1942,10 +1942,14 @@ class WorldPage:
             ).classes("w-full")
 
             # Description
-            rel_desc_input = ui.textarea(
-                "Description",
-                value=rel.description,
-            ).classes("w-full")
+            rel_desc_input = (
+                ui.textarea(
+                    "Description",
+                    value=rel.description,
+                )
+                .props("filled")
+                .classes("w-full")
+            )
 
             # Strength slider
             ui.label("Strength").classes("text-sm mt-2")
@@ -2223,7 +2227,7 @@ class WorldPage:
                 options=["character", "location", "item", "faction", "concept"],
                 value="character",
             ).classes("w-full")
-            desc_input = ui.textarea(label="Description").classes("w-full")
+            desc_input = ui.textarea(label="Description").props("filled").classes("w-full")
 
             with ui.row().classes("w-full justify-end gap-2"):
                 ui.button("Cancel", on_click=dialog.close).props("flat")

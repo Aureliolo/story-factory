@@ -106,7 +106,7 @@ class SceneEditorDialog:
                         placeholder="Describe what happens in this scene...",
                     )
                     .classes("w-full")
-                    .props("rows=3")
+                    .props("filled rows=3")
                 )
 
                 # Goals
@@ -118,7 +118,7 @@ class SceneEditorDialog:
                         placeholder="- Reveal the mystery\n- Introduce tension\n- Show character growth",
                     )
                     .classes("w-full")
-                    .props("rows=3")
+                    .props("filled rows=3")
                 )
 
                 # Content (optional)
@@ -130,7 +130,7 @@ class SceneEditorDialog:
                             placeholder="Write the actual scene prose here...",
                         )
                         .classes("w-full")
-                        .props("rows=8")
+                        .props("filled rows=8")
                     )
 
                 # Word count indicator
