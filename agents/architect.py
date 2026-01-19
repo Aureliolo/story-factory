@@ -8,7 +8,6 @@ from typing import Any
 
 from memory.story_state import Chapter, Character, OutlineVariation, PlotPoint, StoryState
 from settings import Settings
-from utils.exceptions import JSONParseError
 from utils.json_parser import extract_json_list, parse_json_list_to_models
 from utils.prompt_builder import PromptBuilder
 from utils.validation import validate_not_none, validate_positive, validate_type
@@ -439,17 +438,14 @@ class ArchitectAgent(BaseAgent):
         )
         if char_section_match:
             char_json = char_section_match.group(1)
-            try:
-                # Use strict=False for variation parsing - it's optional
-                char_data = extract_json_list(f"```json\n{char_json}\n```", strict=False)
-                if char_data:
-                    for item in char_data:
-                        try:
-                            characters.append(Character(**item))
-                        except Exception as e:
-                            logger.warning(f"Failed to parse character in variation: {e}")
-            except JSONParseError as e:
-                logger.warning(f"Failed to extract characters in variation: {e}")
+            # Use strict=False for variation parsing - it's optional (returns None on failure)
+            char_data = extract_json_list(f"```json\n{char_json}\n```", strict=False)
+            if char_data:
+                for item in char_data:
+                    try:
+                        characters.append(Character(**item))
+                    except Exception as e:
+                        logger.warning(f"Failed to parse character in variation: {e}")
 
         # Extract plot summary
         plot_match = re.search(
@@ -468,17 +464,14 @@ class ArchitectAgent(BaseAgent):
         )
         if pp_section_match:
             pp_json = pp_section_match.group(1)
-            try:
-                # Use strict=False for variation parsing - it's optional
-                pp_data = extract_json_list(f"```json\n{pp_json}\n```", strict=False)
-                if pp_data:
-                    for item in pp_data:
-                        try:
-                            plot_points.append(PlotPoint(**item))
-                        except Exception as e:
-                            logger.warning(f"Failed to parse plot point in variation: {e}")
-            except JSONParseError as e:
-                logger.warning(f"Failed to extract plot points in variation: {e}")
+            # Use strict=False for variation parsing - it's optional (returns None on failure)
+            pp_data = extract_json_list(f"```json\n{pp_json}\n```", strict=False)
+            if pp_data:
+                for item in pp_data:
+                    try:
+                        plot_points.append(PlotPoint(**item))
+                    except Exception as e:
+                        logger.warning(f"Failed to parse plot point in variation: {e}")
 
         # Parse chapters - look for CHAPTERS section
         chapters = []
@@ -489,17 +482,14 @@ class ArchitectAgent(BaseAgent):
         )
         if ch_section_match:
             ch_json = ch_section_match.group(1)
-            try:
-                # Use strict=False for variation parsing - it's optional
-                ch_data = extract_json_list(f"```json\n{ch_json}\n```", strict=False)
-                if ch_data:
-                    for item in ch_data:
-                        try:
-                            chapters.append(Chapter(**item))
-                        except Exception as e:
-                            logger.warning(f"Failed to parse chapter in variation: {e}")
-            except JSONParseError as e:
-                logger.warning(f"Failed to extract chapters in variation: {e}")
+            # Use strict=False for variation parsing - it's optional (returns None on failure)
+            ch_data = extract_json_list(f"```json\n{ch_json}\n```", strict=False)
+            if ch_data:
+                for item in ch_data:
+                    try:
+                        chapters.append(Chapter(**item))
+                    except Exception as e:
+                        logger.warning(f"Failed to parse chapter in variation: {e}")
 
         # Create variation object
         variation = OutlineVariation(
