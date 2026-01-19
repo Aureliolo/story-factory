@@ -5,6 +5,7 @@ openai==2.15.0
 nicegui==3.5.0
 pydantic==2.12.5
 networkx==3.6.1
+PyYAML==6.0.2
 ebooklib==0.20
 reportlab==4.4.9
 Pillow==12.1.0
