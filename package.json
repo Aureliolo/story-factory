@@ -4,7 +4,6 @@
   "private": true,
   "description": "CDN dependency tracking for Dependabot. Auto-synced to ui/components/graph.py via .github/workflows/sync-cdn-versions.yml",
   "dependencies": {
-    "vis-network": "10.0.2",
-    "vis-timeline": "7.7.3"
+    "vis-network": "10.0.2"
   }
 }
