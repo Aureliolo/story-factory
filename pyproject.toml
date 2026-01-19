@@ -1,3 +1,120 @@
+# Story Factory - AI-Powered Multi-Agent Story Generation System
+# https://github.com/Aureliolo/story-factory
+
+# PEP 517/518: Modern Python build system
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# PEP 621: Project metadata
+[project]
+name = "story-factory"
+version = "1.0.0"
+description = "AI-powered multi-agent system for generating stories with local LLMs via Ollama"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Aurelio", email = "aurelio@story-factory.dev"}
+]
+maintainers = [
+    {name = "Aurelio", email = "aurelio@story-factory.dev"}
+]
+keywords = [
+    "ai",
+    "llm",
+    "ollama",
+    "story-generation",
+    "multi-agent",
+    "creative-writing",
+    "local-ai",
+    "nlp"
+]
+classifiers = [
+    # Development Status
+    "Development Status :: 4 - Beta",
+    # Intended Audience
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Other Audience",
+    # License
+    "License :: OSI Approved :: MIT License",
+    # Natural Language
+    "Natural Language :: English",
+    # Operating Systems
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    # Programming Language
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    # Topics
+    "Topic :: Artistic Software",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Linguistic",
+    # Typing
+    "Typing :: Typed",
+]
+requires-python = ">=3.12"
+dependencies = [
+    # Runtime dependencies
+    "ollama>=0.6.1,<1.0.0",
+    "nicegui>=3.5.0,<4.0.0",
+    "pydantic>=2.12.5,<3.0.0",
+    "networkx>=3.6.1,<4.0.0",
+    "ebooklib>=0.20,<1.0",
+    "reportlab>=4.4.9,<5.0.0",
+    "Pillow>=12.1.0,<13.0.0",
+    "python-docx>=1.2.0,<2.0.0",
+]
+
+[project.optional-dependencies]
+# Testing dependencies
+test = [
+    "pytest>=9.0.2,<10.0.0",
+    "pytest-cov>=7.0.0,<8.0.0",
+    "pytest-asyncio>=1.3.0,<2.0.0",
+    "pytest-xdist>=3.8.0,<4.0.0",
+    "playwright>=1.57.0,<2.0.0",
+    "pytest-playwright>=0.7.2,<1.0.0",
+]
+# Code quality and development tools
+dev = [
+    "ruff>=0.14.13,<1.0.0",
+    "mypy>=1.19.1,<2.0.0",
+    "pre-commit>=4.5.1,<5.0.0",
+    # Type stubs
+    "types-networkx>=3.6.1.20251220",
+    "types-Pillow>=10.2.0.20240822",
+    "types-reportlab>=4.4.9.20260117",
+]
+# All development dependencies (test + dev)
+all = [
+    "story-factory[test,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/Aureliolo/story-factory"
+Documentation = "https://github.com/Aureliolo/story-factory#readme"
+Repository = "https://github.com/Aureliolo/story-factory"
+"Bug Tracker" = "https://github.com/Aureliolo/story-factory/issues"
+Changelog = "https://github.com/Aureliolo/story-factory/releases"
+
+[project.scripts]
+story-factory = "main:main"
+
+# Setuptools configuration for package discovery
+[tool.setuptools]
+packages = ["agents", "memory", "services", "ui", "utils", "workflows"]
+
+[tool.setuptools.package-data]
+ui = ["*.css"]
+
+# Ruff configuration
 [tool.ruff]
 line-length = 100
 target-version = "py314"
