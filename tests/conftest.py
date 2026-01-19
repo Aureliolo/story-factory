@@ -14,36 +14,31 @@ from settings import Settings
 pytest_plugins = ["nicegui.testing.user_plugin"]
 
 
-@pytest.fixture(autouse=True, scope="session")
-def disable_file_logging():
-    """Disable file logging during tests to prevent writing to production log file.
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_production_log_handlers():
+    """Remove file handlers pointing to the production log after each test.
 
-    This fixture runs once per test session and removes any file handlers
-    from the root logger to ensure tests don't pollute the actual log file.
+    This fixture runs after each test and removes any file handlers
+    that point to the production log file (logs/story_factory.log).
+    This ensures tests don't accidentally leave handlers that write to
+    the production log, while still allowing logging tests to work.
     """
-    # Remove all file handlers from root logger
-    root_logger = logging.getLogger()
-    file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
-    for handler in file_handlers:
-        root_logger.removeHandler(handler)
-        handler.close()
-
-    # Prevent setup_logging from adding file handlers during tests
-    # by patching the DEFAULT_LOG_FILE check
-    import utils.logging_config
-
-    original_setup = utils.logging_config.setup_logging
-
-    def patched_setup(level: str = "INFO", log_file: str | None = "default") -> None:
-        # Always disable file logging in tests
-        original_setup(level=level, log_file=None)
-
-    utils.logging_config.setup_logging = patched_setup
-
     yield
 
-    # Restore original
-    utils.logging_config.setup_logging = original_setup
+    # After the test, clean up any handlers pointing to production log
+    root_logger = logging.getLogger()
+    production_log_name = "story_factory.log"
+
+    handlers_to_remove = []
+    for handler in root_logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            # Check if this handler points to the production log
+            if hasattr(handler, "baseFilename") and production_log_name in handler.baseFilename:
+                handlers_to_remove.append(handler)
+
+    for handler in handlers_to_remove:
+        handler.close()
+        root_logger.removeHandler(handler)
 
 
 @pytest.fixture(autouse=True)
