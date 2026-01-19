@@ -53,28 +53,28 @@ class WorldBuildOptions:
 
     clear_existing: bool = False
     generate_structure: bool = True
-    generate_locations: bool = False
-    generate_factions: bool = False
-    generate_items: bool = False
-    generate_concepts: bool = False
-    generate_relationships: bool = False
+    generate_locations: bool = True
+    generate_factions: bool = True
+    generate_items: bool = True
+    generate_concepts: bool = True
+    generate_relationships: bool = True
 
     @classmethod
-    def minimal(cls) -> WorldBuildOptions:
-        """Create options for minimal world build (structure + character extraction only)."""
+    def full(cls) -> WorldBuildOptions:
+        """Create options for full world build (everything, keeping existing data)."""
         return cls(
             clear_existing=False,
             generate_structure=True,
-            generate_locations=False,
-            generate_factions=False,
-            generate_items=False,
-            generate_concepts=False,
-            generate_relationships=False,
+            generate_locations=True,
+            generate_factions=True,
+            generate_items=True,
+            generate_concepts=True,
+            generate_relationships=True,
         )
 
     @classmethod
     def full_rebuild(cls) -> WorldBuildOptions:
-        """Create options for full world rebuild (everything, clearing existing)."""
+        """Create options for full world rebuild (everything, clearing existing first)."""
         return cls(
             clear_existing=True,
             generate_structure=True,
@@ -141,7 +141,7 @@ class WorldService:
         if not state.brief:
             raise ValueError("Cannot build world - no brief exists.")
 
-        options = options or WorldBuildOptions.minimal()
+        options = options or WorldBuildOptions.full()
         counts: dict[str, int] = {
             "characters": 0,
             "locations": 0,
