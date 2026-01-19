@@ -4,6 +4,8 @@ Stores generation scores, model performance metrics, and tuning recommendations
 for the adaptive learning system.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import sqlite3

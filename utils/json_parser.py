@@ -1,5 +1,8 @@
 """JSON extraction utilities for parsing LLM responses."""
 
+from __future__ import annotations
+
+
 import json
 import logging
 import re

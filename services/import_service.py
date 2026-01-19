@@ -1,5 +1,8 @@
 """Import service - extract entities from existing text."""
 
+from __future__ import annotations
+
+
 import logging
 from typing import Any
 

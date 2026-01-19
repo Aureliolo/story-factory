@@ -1,4 +1,6 @@
 """World Quality Service - multi-model iteration for world building quality.
+from __future__ import annotations
+
 
 Implements a generate-judge-refine loop using:
 - Creator model: High temperature (0.9) for creative generation

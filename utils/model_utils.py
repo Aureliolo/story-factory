@@ -1,5 +1,7 @@
 """Utility functions for working with model identifiers."""
 
+from __future__ import annotations
+
 
 def extract_model_name(model_id: str) -> str:
     """Extract display name from a model ID.

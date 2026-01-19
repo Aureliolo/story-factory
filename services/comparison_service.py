@@ -1,5 +1,8 @@
 """Comparison service - multi-model chapter comparison."""
 
+from __future__ import annotations
+
+
 import logging
 import uuid
 from collections.abc import Callable, Generator

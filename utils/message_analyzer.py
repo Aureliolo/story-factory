@@ -1,5 +1,8 @@
 """Message analysis utilities for inferring user intent."""
 
+from __future__ import annotations
+
+
 import re
 
 

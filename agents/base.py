@@ -1,5 +1,8 @@
 """Base agent class for all story factory agents."""
 
+from __future__ import annotations
+
+
 import logging
 import threading
 import time

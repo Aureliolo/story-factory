@@ -1,4 +1,6 @@
 """Centralized exception hierarchy for Story Factory.
+from __future__ import annotations
+
 
 Exception Hierarchy:
 

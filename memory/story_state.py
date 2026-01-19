@@ -1,5 +1,7 @@
 """Story state management - maintains context across the generation process."""
 
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime

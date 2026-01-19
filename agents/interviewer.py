@@ -1,5 +1,8 @@
 """Interviewer Agent - Gathers story requirements from the user."""
 
+from __future__ import annotations
+
+
 import logging
 
 from memory.story_state import StoryBrief

@@ -1,5 +1,8 @@
 """Export service - handles exporting stories to various formats."""
 
+from __future__ import annotations
+
+
 import html
 import logging
 import tempfile

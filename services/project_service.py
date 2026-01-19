@@ -1,5 +1,8 @@
 """Project service - handles project CRUD operations."""
 
+from __future__ import annotations
+
+
 import json
 import logging
 import shutil

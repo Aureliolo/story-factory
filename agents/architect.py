@@ -1,5 +1,8 @@
 """Story Architect Agent - Creates story structure, characters, and outlines."""
 
+from __future__ import annotations
+
+
 import logging
 import random
 import re

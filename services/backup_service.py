@@ -1,5 +1,8 @@
 """Backup service - handles project backup and restore."""
 
+from __future__ import annotations
+
+
 import json
 import logging
 import zipfile

@@ -1,5 +1,8 @@
 """Writer Agent - Writes the actual prose."""
 
+from __future__ import annotations
+
+
 import logging
 
 from memory.story_state import Chapter, Scene, StoryState

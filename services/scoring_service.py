@@ -1,4 +1,6 @@
 """Scoring service - collects and aggregates quality signals.
+from __future__ import annotations
+
 
 This service provides a simple interface for recording implicit quality signals
 from user interactions (regenerate, edit, rating) and coordinating with the

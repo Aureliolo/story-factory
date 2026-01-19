@@ -1,4 +1,6 @@
 """Services layer - business logic separated from UI.
+from __future__ import annotations
+
 
 This module provides a clean interface between the UI and the underlying
 business logic, agents, and data storage.

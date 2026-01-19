@@ -1,5 +1,8 @@
 """Story Factory Agents."""
 
+from __future__ import annotations
+
+
 from .architect import ArchitectAgent
 from .base import BaseAgent
 from .continuity import ContinuityAgent

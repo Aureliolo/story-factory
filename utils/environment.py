@@ -1,4 +1,6 @@
 """Environment validation utilities.
+from __future__ import annotations
+
 
 This module checks that Python version and dependencies meet requirements
 before the rest of the application loads. Import this module early in main.py.

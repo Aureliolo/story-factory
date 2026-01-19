@@ -1,5 +1,8 @@
 """Suggestion service - provides AI-powered writing prompts and suggestions."""
 
+from __future__ import annotations
+
+
 import logging
 
 from agents.base import BaseAgent

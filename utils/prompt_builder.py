@@ -1,5 +1,7 @@
 """Prompt building utilities to reduce duplication across agents."""
 
+from __future__ import annotations
+
 from memory.story_state import Character, StoryBrief, StoryState
 
 

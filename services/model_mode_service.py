@@ -1,4 +1,6 @@
 """Model mode service - manages generation modes, scoring, and adaptive learning.
+from __future__ import annotations
+
 
 This service handles:
 - Mode management (presets and custom modes)

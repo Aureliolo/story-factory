@@ -1,4 +1,6 @@
 """Text analytics utilities for story content analysis.
+from __future__ import annotations
+
 
 Provides readability metrics and content analysis for generated stories.
 """
