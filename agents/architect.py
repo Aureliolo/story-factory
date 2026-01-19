@@ -277,8 +277,8 @@ class ArchitectAgent(BaseAgent):
         max_iterations = num_chapters * 2  # Safety limit
 
         for iteration in range(max_iterations):
-            if len(all_chapters) >= num_chapters:
-                break
+            if len(all_chapters) >= num_chapters:  # pragma: no cover
+                break  # Defensive check - end-of-loop check usually triggers first
 
             remaining = num_chapters - len(all_chapters)
             # Update prompt for remaining chapters
