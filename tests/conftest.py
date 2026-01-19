@@ -1,5 +1,6 @@
 """Pytest fixtures for Story Factory tests."""
 
+import logging
 from collections.abc import Generator
 from pathlib import Path
 
@@ -11,6 +12,38 @@ from settings import Settings
 
 # Enable NiceGUI testing plugin for component tests
 pytest_plugins = ["nicegui.testing.user_plugin"]
+
+
+@pytest.fixture(autouse=True, scope="session")
+def disable_file_logging():
+    """Disable file logging during tests to prevent writing to production log file.
+
+    This fixture runs once per test session and removes any file handlers
+    from the root logger to ensure tests don't pollute the actual log file.
+    """
+    # Remove all file handlers from root logger
+    root_logger = logging.getLogger()
+    file_handlers = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
+    for handler in file_handlers:
+        root_logger.removeHandler(handler)
+        handler.close()
+
+    # Prevent setup_logging from adding file handlers during tests
+    # by patching the DEFAULT_LOG_FILE check
+    import utils.logging_config
+
+    original_setup = utils.logging_config.setup_logging
+
+    def patched_setup(level: str = "INFO", log_file: str | None = "default") -> None:
+        # Always disable file logging in tests
+        original_setup(level=level, log_file=None)
+
+    utils.logging_config.setup_logging = patched_setup
+
+    yield
+
+    # Restore original
+    utils.logging_config.setup_logging = original_setup
 
 
 @pytest.fixture(autouse=True)
