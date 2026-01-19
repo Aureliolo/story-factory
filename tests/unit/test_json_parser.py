@@ -138,22 +138,21 @@ class TestExtractJsonList:
         result = extract_json_list(response)
         assert result == [{"name": "a"}, {"name": "b"}]
 
-    def test_raises_error_for_object_strict(self):
-        """Should raise JSONParseError when JSON is an object, not array, in strict mode."""
+    def test_wraps_single_object_in_list(self):
+        """Should wrap a single JSON object in a list (LLM fallback)."""
         response = """```json
 {"name": "test"}
 ```"""
-        with pytest.raises(JSONParseError) as exc_info:
-            extract_json_list(response)
-        assert "Expected JSON array but got dict" in str(exc_info.value)
+        result = extract_json_list(response)
+        assert result == [{"name": "test"}]
 
-    def test_returns_none_for_object_non_strict(self):
-        """Should return None when JSON is an object, not array, in non-strict mode."""
+    def test_wraps_single_object_in_list_non_strict(self):
+        """Should wrap a single JSON object in a list in non-strict mode too."""
         response = """```json
 {"name": "test"}
 ```"""
         result = extract_json_list(response, strict=False)
-        assert result is None
+        assert result == [{"name": "test"}]
 
     def test_raises_error_for_no_json_strict(self):
         """Should raise JSONParseError when no JSON is present in strict mode."""

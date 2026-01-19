@@ -158,15 +158,10 @@ def extract_json_list(response: str, strict: bool = True) -> list[Any] | None:
     if isinstance(result, list):
         return result
 
-    error_msg = f"Expected JSON array but got {type(result).__name__}"
-    logger.error(error_msg)
-    if strict:
-        raise JSONParseError(
-            error_msg,
-            response_preview=response[:500],
-            expected_type="list",
-        )
-    return None
+    # LLMs sometimes return a single object when they should return a list
+    # Wrap it in a list as a fallback (extract_json only returns dict, list, or None)
+    logger.warning("Expected JSON array but got dict - wrapping in list")
+    return [result]
 
 
 def parse_json_to_model[T](
