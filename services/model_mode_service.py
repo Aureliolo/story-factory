@@ -491,7 +491,8 @@ Respond ONLY with JSON:
             text = response["response"]
             logger.debug(f"LLM judge raw response: {text[:200]}")
 
-            data = extract_json(text)
+            # Use strict=False since quality judging falls back to neutral scores
+            data = extract_json(text, strict=False)
             if data and isinstance(data, dict):
                 scores = QualityScores(
                     prose_quality=float(data.get("prose_quality", 5)),

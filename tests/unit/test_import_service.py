@@ -190,16 +190,18 @@ class TestImportServiceValueErrors:
 
     def test_extract_characters_raises_on_value_error(self, import_service, monkeypatch):
         """Test extract_characters raises WorldGenerationError on ValueError."""
-        # Lines 165-166: ValueError handler - mock extract_json to raise ValueError
+        # Lines 165-166: ValueError handler - mock extract_json_list to raise ValueError
         mock_client = MagicMock()
         mock_client.generate.return_value = {"response": "valid response"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        # Mock extract_json to raise ValueError
-        def mock_extract_json_raises(response):
+        # Mock extract_json_list to raise ValueError
+        def mock_extract_json_list_raises(response, strict=True):
             raise ValueError("JSON parsing failed")
 
-        monkeypatch.setattr("services.import_service.extract_json", mock_extract_json_raises)
+        monkeypatch.setattr(
+            "services.import_service.extract_json_list", mock_extract_json_list_raises
+        )
 
         with pytest.raises(WorldGenerationError, match="Invalid character extraction"):
             import_service.extract_characters("Test text")
@@ -211,10 +213,12 @@ class TestImportServiceValueErrors:
         mock_client.generate.return_value = {"response": "valid response"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        def mock_extract_json_raises(response):
+        def mock_extract_json_list_raises(response, strict=True):
             raise KeyError("Missing required field")
 
-        monkeypatch.setattr("services.import_service.extract_json", mock_extract_json_raises)
+        monkeypatch.setattr(
+            "services.import_service.extract_json_list", mock_extract_json_list_raises
+        )
 
         with pytest.raises(WorldGenerationError, match="Invalid location extraction"):
             import_service.extract_locations("Test text")
@@ -226,10 +230,12 @@ class TestImportServiceValueErrors:
         mock_client.generate.return_value = {"response": "valid response"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        def mock_extract_json_raises(response):
+        def mock_extract_json_list_raises(response, strict=True):
             raise TypeError("Invalid type for processing")
 
-        monkeypatch.setattr("services.import_service.extract_json", mock_extract_json_raises)
+        monkeypatch.setattr(
+            "services.import_service.extract_json_list", mock_extract_json_list_raises
+        )
 
         with pytest.raises(WorldGenerationError, match="Invalid item extraction"):
             import_service.extract_items("Test text")
@@ -241,10 +247,12 @@ class TestImportServiceValueErrors:
         mock_client.generate.return_value = {"response": "valid response"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        def mock_extract_json_raises(response):
+        def mock_extract_json_list_raises(response, strict=True):
             raise ValueError("Invalid JSON structure")
 
-        monkeypatch.setattr("services.import_service.extract_json", mock_extract_json_raises)
+        monkeypatch.setattr(
+            "services.import_service.extract_json_list", mock_extract_json_list_raises
+        )
 
         with pytest.raises(WorldGenerationError, match="Invalid relationship inference"):
             import_service.infer_relationships([{"name": "Alice"}], "Test text")

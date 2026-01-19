@@ -187,7 +187,8 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             )
             logger.debug(f"Title generation response: {response[:200]}...")
 
-            titles = extract_json_list(response)
+            # Use strict=False since title suggestions are optional
+            titles = extract_json_list(response, strict=False)
             if titles and isinstance(titles, list):
                 result = [str(t) for t in titles[:5]]
                 logger.info(f"Generated {len(result)} title suggestions: {result}")

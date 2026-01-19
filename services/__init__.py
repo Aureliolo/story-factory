@@ -20,7 +20,7 @@ from .story_service import StoryService
 from .suggestion_service import SuggestionService
 from .template_service import TemplateService
 from .world_quality_service import WorldQualityService
-from .world_service import WorldService
+from .world_service import WorldBuildOptions, WorldBuildProgress, WorldService
 
 
 @dataclass
@@ -78,6 +78,8 @@ __all__ = [
     "ProjectService",
     "StoryService",
     "WorldService",
+    "WorldBuildOptions",
+    "WorldBuildProgress",
     "ModelService",
     "ExportService",
     "ModelModeService",
