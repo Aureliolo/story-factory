@@ -135,12 +135,14 @@ class WorldQualityService:
         self,
         story_state: StoryState,
         existing_names: list[str],
+        custom_instructions: str | None = None,
     ) -> tuple[Character, CharacterQualityScores, int]:
         """Generate a character with quality refinement loop.
 
         Args:
             story_state: Current story state with brief.
             existing_names: Names of existing characters to avoid.
+            custom_instructions: Optional custom instructions to refine generation.
 
         Returns:
             Tuple of (Character, QualityScores, iterations_used)
@@ -165,7 +167,7 @@ class WorldQualityService:
                 if iteration == 0:
                     # Initial generation
                     character = self._create_character(
-                        story_state, existing_names, config.creator_temperature
+                        story_state, existing_names, config.creator_temperature, custom_instructions
                     )
                 else:
                     # Refinement based on feedback
@@ -222,6 +224,7 @@ class WorldQualityService:
         story_state: StoryState,
         existing_names: list[str],
         temperature: float,
+        custom_instructions: str | None = None,
     ) -> Character | None:
         """Create a new character using the creator model.
 
@@ -229,6 +232,7 @@ class WorldQualityService:
             story_state: Current story state.
             existing_names: Names to avoid.
             temperature: Generation temperature.
+            custom_instructions: Optional custom instructions to refine generation.
 
         Returns:
             New Character or None on failure.
@@ -246,6 +250,11 @@ class WorldQualityService:
         ]
         naming_hint = random.choice(naming_styles)
 
+        # Build custom instructions section if provided
+        custom_section = ""
+        if custom_instructions:
+            custom_section = f"\n\nSPECIFIC REQUIREMENTS:\n{custom_instructions}\n"
+
         prompt = f"""Create a compelling NEW character for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
@@ -257,7 +266,7 @@ EXISTING CHARACTERS IN THIS WORLD: {", ".join(existing_names) if existing_names 
 (Create a NEW character with a different name that complements these existing ones)
 
 NAMING: {naming_hint}
-
+{custom_section}
 Create a character with:
 1. Deep psychological complexity - internal contradictions, layers
 2. Clear goals - what they want vs what they need
@@ -322,7 +331,10 @@ Rate each dimension 0-10:
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
-IMPORTANT: Evaluate honestly - provide YOUR OWN assessment scores."""
+OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
+{{"depth": <number>, "goals": <number>, "flaws": <number>, "uniqueness": <number>, "arc_potential": <number>, "feedback": "<string>"}}
+
+DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
         try:
             model = self._get_judge_model()
@@ -580,7 +592,10 @@ Rate each dimension 0-10:
 
 Provide specific improvement feedback in the feedback field.
 
-IMPORTANT: Evaluate honestly - provide YOUR OWN assessment scores."""
+OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
+{{"atmosphere": <number>, "significance": <number>, "story_relevance": <number>, "distinctiveness": <number>, "feedback": "<string>"}}
+
+DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
         try:
             model = self._get_judge_model()
@@ -2219,6 +2234,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         story_state: StoryState,
         existing_names: list[str],
         count: int = 2,
+        custom_instructions: str | None = None,
     ) -> list[tuple[Character, CharacterQualityScores]]:
         """Generate multiple characters with quality refinement.
 
@@ -2226,6 +2242,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             story_state: Current story state.
             existing_names: Names to avoid.
             count: Number of characters to generate.
+            custom_instructions: Optional custom instructions to refine generation.
 
         Returns:
             List of (Character, QualityScores) tuples.
@@ -2241,7 +2258,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             try:
                 logger.info(f"Generating character {i + 1}/{count} with quality refinement")
                 start_time = time.time()
-                char, scores, iterations = self.generate_character_with_quality(story_state, names)
+                char, scores, iterations = self.generate_character_with_quality(
+                    story_state, names, custom_instructions
+                )
                 elapsed = time.time() - start_time
                 results.append((char, scores))
                 names.append(char.name)
