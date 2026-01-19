@@ -1109,3 +1109,92 @@ class TestGenerateStructuredCalls:
             mock_gen.assert_called_once()
             call_kwargs = mock_gen.call_args.kwargs
             assert call_kwargs["response_model"] == ExtractedRelationshipList
+
+
+class TestExtractedWrapperValidators:
+    """Tests for extracted entity wrapper models that handle single object wrapping."""
+
+    def test_extracted_character_list_wraps_single_object(self):
+        """Test ExtractedCharacterList wraps a single character in a list."""
+        single_char = {
+            "name": "Hero",
+            "role": "protagonist",
+            "description": "A brave adventurer",
+        }
+        result = ExtractedCharacterList.model_validate(single_char)
+
+        assert len(result.characters) == 1
+        assert result.characters[0].name == "Hero"
+        assert result.characters[0].role == "protagonist"
+
+    def test_extracted_character_list_accepts_proper_format(self):
+        """Test ExtractedCharacterList accepts properly formatted input."""
+        proper_data = {
+            "characters": [
+                {"name": "Alice", "role": "protagonist", "description": "Hero"},
+            ]
+        }
+        result = ExtractedCharacterList.model_validate(proper_data)
+
+        assert len(result.characters) == 1
+
+    def test_extracted_location_list_wraps_single_object(self):
+        """Test ExtractedLocationList wraps a single location in a list."""
+        single_location = {
+            "name": "Dark Forest",
+            "description": "A mysterious forest shrouded in mist",
+        }
+        result = ExtractedLocationList.model_validate(single_location)
+
+        assert len(result.locations) == 1
+        assert result.locations[0].name == "Dark Forest"
+
+    def test_extracted_location_list_accepts_proper_format(self):
+        """Test ExtractedLocationList accepts properly formatted input."""
+        proper_data = {"locations": [{"name": "Castle", "description": "Ancient castle"}]}
+        result = ExtractedLocationList.model_validate(proper_data)
+
+        assert len(result.locations) == 1
+
+    def test_extracted_item_list_wraps_single_object(self):
+        """Test ExtractedItemList wraps a single item in a list."""
+        single_item = {
+            "name": "Magic Sword",
+            "description": "A legendary blade that glows blue",
+        }
+        result = ExtractedItemList.model_validate(single_item)
+
+        assert len(result.items) == 1
+        assert result.items[0].name == "Magic Sword"
+
+    def test_extracted_item_list_accepts_proper_format(self):
+        """Test ExtractedItemList accepts properly formatted input."""
+        proper_data = {"items": [{"name": "Shield", "description": "Protective shield"}]}
+        result = ExtractedItemList.model_validate(proper_data)
+
+        assert len(result.items) == 1
+
+    def test_extracted_relationship_list_wraps_single_object(self):
+        """Test ExtractedRelationshipList wraps a single relationship in a list."""
+        single_rel = {
+            "source": "Alice",
+            "target": "Bob",
+            "relation_type": "friend",
+            "description": "Childhood friends",
+        }
+        result = ExtractedRelationshipList.model_validate(single_rel)
+
+        assert len(result.relationships) == 1
+        assert result.relationships[0].source == "Alice"
+        assert result.relationships[0].target == "Bob"
+
+    def test_extracted_relationship_list_accepts_proper_format(self):
+        """Test ExtractedRelationshipList accepts properly formatted input."""
+        proper_data = {
+            "relationships": [
+                {"source": "A", "target": "B", "relation_type": "enemy", "description": "Rivals"}
+            ]
+        }
+        result = ExtractedRelationshipList.model_validate(proper_data)
+
+        assert len(result.relationships) == 1

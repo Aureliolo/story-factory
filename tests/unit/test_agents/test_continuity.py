@@ -742,3 +742,70 @@ class TestContinuityVoiceConsistency:
         )
 
         assert patterns == {}
+
+
+class TestContinuityWrapperValidators:
+    """Tests for continuity wrapper models that handle single object wrapping."""
+
+    def test_continuity_issue_list_wraps_single_object(self):
+        """Test ContinuityIssueList wraps a single issue in a list."""
+        single_issue = {
+            "severity": "critical",
+            "category": "plot_hole",
+            "description": "Character dies then reappears",
+            "location": "Chapter 3",
+            "suggestion": "Add resurrection explanation",
+        }
+        result = ContinuityIssueList.model_validate(single_issue)
+
+        assert len(result.issues) == 1
+        assert result.issues[0].severity == "critical"
+        assert result.issues[0].category == "plot_hole"
+
+    def test_continuity_issue_list_accepts_proper_format(self):
+        """Test ContinuityIssueList accepts properly formatted input."""
+        proper_data = {
+            "issues": [
+                {
+                    "severity": "minor",
+                    "category": "timeline",
+                    "description": "Date inconsistency",
+                    "location": "Chapter 1",
+                    "suggestion": "Fix the date",
+                }
+            ]
+        }
+        result = ContinuityIssueList.model_validate(proper_data)
+
+        assert len(result.issues) == 1
+
+    def test_dialogue_pattern_list_wraps_single_object(self):
+        """Test DialoguePatternList wraps a single pattern in a list."""
+        single_pattern = {
+            "character_name": "Alice",
+            "vocabulary_level": "formal",
+            "speech_patterns": ["tends to use long sentences"],
+            "typical_words": ["indeed", "precisely"],
+            "sentence_structure": "complex",
+        }
+        result = DialoguePatternList.model_validate(single_pattern)
+
+        assert len(result.patterns) == 1
+        assert result.patterns[0].character_name == "Alice"
+        assert result.patterns[0].vocabulary_level == "formal"
+
+    def test_dialogue_pattern_list_accepts_proper_format(self):
+        """Test DialoguePatternList accepts properly formatted input."""
+        proper_data = {
+            "patterns": [
+                {
+                    "character_name": "Bob",
+                    "vocabulary_level": "casual",
+                    "sentence_structure": "simple",
+                }
+            ]
+        }
+        result = DialoguePatternList.model_validate(proper_data)
+
+        assert len(result.patterns) == 1
+        assert result.patterns[0].character_name == "Bob"
