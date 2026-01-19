@@ -81,7 +81,7 @@ def extract_json(
     """
     # Strip <think>...</think> tags (some models output reasoning this way)
     response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
-    response = re.sub(r"</think>", "", response)  # orphan closing tags
+    response = re.sub(r"</?think>", "", response)  # orphan opening or closing tags
 
     # Strategy 1: Try ```json code block
     json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
