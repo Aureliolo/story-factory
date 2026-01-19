@@ -9,7 +9,7 @@ from memory.story_state import StoryState
 from services.model_mode_service import ModelModeService
 from settings import Settings
 from utils.exceptions import WorldGenerationError
-from utils.json_parser import extract_json
+from utils.json_parser import extract_json_list
 from utils.validation import validate_not_empty
 
 logger = logging.getLogger(__name__)
@@ -134,9 +134,9 @@ Be thorough - include all named characters and even unnamed roles if significant
                 },
             )
 
-            data = extract_json(response["response"], strict=False)
-            if not data or not isinstance(data, list):
-                logger.error(f"Character extraction returned non-list: {data}")
+            data = extract_json_list(response["response"], strict=False)
+            if not data:
+                logger.error(f"Character extraction returned no data: {data}")
                 raise WorldGenerationError(f"Invalid character extraction response: {data}")
 
             # Post-process: validate required fields and flag low confidence items
@@ -251,9 +251,9 @@ Include cities, buildings, rooms, natural features - any place that matters to t
                 },
             )
 
-            data = extract_json(response["response"], strict=False)
-            if not data or not isinstance(data, list):
-                logger.error(f"Location extraction returned non-list: {data}")
+            data = extract_json_list(response["response"], strict=False)
+            if not data:
+                logger.error(f"Location extraction returned no data: {data}")
                 raise WorldGenerationError(f"Invalid location extraction response: {data}")
 
             # Post-process: validate required fields and flag low confidence items
@@ -369,9 +369,9 @@ Only include items that are actually significant - avoid mundane everyday object
                 },
             )
 
-            data = extract_json(response["response"], strict=False)
-            if not data or not isinstance(data, list):
-                logger.error(f"Item extraction returned non-list: {data}")
+            data = extract_json_list(response["response"], strict=False)
+            if not data:
+                logger.error(f"Item extraction returned no data: {data}")
                 raise WorldGenerationError(f"Invalid item extraction response: {data}")
 
             # Post-process: validate required fields and flag low confidence items
@@ -484,9 +484,9 @@ Only include relationships that are actually mentioned or clearly implied in the
                 },
             )
 
-            data = extract_json(response["response"], strict=False)
-            if not data or not isinstance(data, list):
-                logger.error(f"Relationship inference returned non-list: {data}")
+            data = extract_json_list(response["response"], strict=False)
+            if not data:
+                logger.error(f"Relationship inference returned no data: {data}")
                 raise WorldGenerationError(f"Invalid relationship inference response: {data}")
 
             # Post-process: validate required fields and flag low confidence items
