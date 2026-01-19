@@ -217,19 +217,19 @@ class WorldPage:
             with ui.row().classes("gap-2 flex-wrap"):
                 ui.button(
                     "Characters",
-                    on_click=lambda: self._generate_more("characters"),
+                    on_click=lambda: self._show_generate_dialog("characters"),
                     icon="person_add",
                 ).props("outline dense").classes("text-green-600").tooltip("Add more characters")
 
                 ui.button(
                     "Locations",
-                    on_click=lambda: self._generate_more("locations"),
+                    on_click=lambda: self._show_generate_dialog("locations"),
                     icon="add_location",
                 ).props("outline dense").classes("text-blue-600").tooltip("Add more locations")
 
                 ui.button(
                     "Factions",
-                    on_click=lambda: self._generate_more("factions"),
+                    on_click=lambda: self._show_generate_dialog("factions"),
                     icon="groups",
                 ).props("outline dense").classes("text-amber-600").tooltip(
                     "Add factions/organizations"
@@ -237,13 +237,13 @@ class WorldPage:
 
                 ui.button(
                     "Items",
-                    on_click=lambda: self._generate_more("items"),
+                    on_click=lambda: self._show_generate_dialog("items"),
                     icon="category",
                 ).props("outline dense").classes("text-cyan-600").tooltip("Add significant items")
 
                 ui.button(
                     "Concepts",
-                    on_click=lambda: self._generate_more("concepts"),
+                    on_click=lambda: self._show_generate_dialog("concepts"),
                     icon="lightbulb",
                 ).props("outline dense").classes("text-pink-600").tooltip("Add thematic concepts")
 
@@ -449,13 +449,111 @@ class WorldPage:
         min_val, max_val = ranges.get(entity_type, (2, 4))
         return random.randint(min_val, max_val)
 
-    async def _generate_more(self, entity_type: str) -> None:
+    def _show_generate_dialog(self, entity_type: str) -> None:
+        """Show dialog for generating entities with count and custom prompt options.
+
+        Args:
+            entity_type: Type of entities to generate.
+        """
+        logger.info(f"Showing generate dialog for {entity_type}")
+
+        # Get default count range from settings
+        settings = self.services.settings
+        ranges = {
+            "characters": (settings.world_gen_characters_min, settings.world_gen_characters_max),
+            "locations": (settings.world_gen_locations_min, settings.world_gen_locations_max),
+            "factions": (settings.world_gen_factions_min, settings.world_gen_factions_max),
+            "items": (settings.world_gen_items_min, settings.world_gen_items_max),
+            "concepts": (settings.world_gen_concepts_min, settings.world_gen_concepts_max),
+            "relationships": (
+                settings.world_gen_relationships_min,
+                settings.world_gen_relationships_max,
+            ),
+        }
+        min_val, max_val = ranges.get(entity_type, (2, 4))
+        default_count = (min_val + max_val) // 2
+
+        # Pretty names for display
+        type_names = {
+            "characters": "Characters",
+            "locations": "Locations",
+            "factions": "Factions",
+            "items": "Items",
+            "concepts": "Concepts",
+            "relationships": "Relationships",
+        }
+        type_name = type_names.get(entity_type, entity_type.title())
+
+        # Use state-based dark mode styling
+        card_bg = "#1f2937" if self.state.dark_mode else "#ffffff"
+        inner_card_bg = "#374151" if self.state.dark_mode else "#f9fafb"
+
+        with (
+            ui.dialog() as dialog,
+            ui.card().classes("w-[450px]").style(f"background-color: {card_bg}"),
+        ):
+            ui.label(f"Generate {type_name}").classes("text-xl font-bold mb-4")
+
+            # Count input
+            with ui.card().classes("w-full mb-4 p-3").style(f"background-color: {inner_card_bg}"):
+                ui.label("How many to generate?").classes("font-medium mb-2")
+                count_input = (
+                    ui.number(
+                        value=default_count,
+                        min=1,
+                        max=20,
+                        step=1,
+                    )
+                    .props("outlined dense")
+                    .classes("w-24")
+                )
+                ui.label(f"Default range: {min_val}-{max_val}").classes(
+                    "text-xs text-gray-500 mt-1"
+                )
+
+            # Custom instructions textarea
+            with ui.card().classes("w-full mb-4 p-3").style(f"background-color: {inner_card_bg}"):
+                ui.label("Custom Instructions (optional)").classes("font-medium mb-2")
+                custom_prompt = (
+                    ui.textarea(
+                        placeholder=f"Describe specific {entity_type} you want...\n"
+                        f"e.g., 'A mysterious mentor character' or 'A haunted location'",
+                    )
+                    .props("outlined")
+                    .classes("w-full")
+                )
+                ui.label("The AI will use these instructions to refine the generation").classes(
+                    "text-xs text-gray-500 mt-1"
+                )
+
+            # Buttons
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_generate() -> None:
+                    count = int(count_input.value) if count_input.value else default_count
+                    custom = custom_prompt.value.strip() if custom_prompt.value else None
+                    dialog.close()
+                    await self._generate_more(entity_type, count=count, custom_instructions=custom)
+
+                ui.button("Generate", on_click=do_generate).props("color=primary")
+
+        dialog.open()
+
+    async def _generate_more(
+        self, entity_type: str, count: int | None = None, custom_instructions: str | None = None
+    ) -> None:
         """Generate more entities of a specific type.
 
         Args:
             entity_type: Type of entities to generate (characters, locations, factions, items, concepts, relationships)
+            count: Number of entities to generate (defaults to random from settings).
+            custom_instructions: Optional custom instructions to refine generation.
         """
-        logger.info(f"Generate more clicked: entity_type={entity_type}")
+        logger.info(
+            f"Generate more: entity_type={entity_type}, count={count}, "
+            f"custom_instructions={custom_instructions[:50] if custom_instructions else None}"
+        )
 
         if not self.state.project or not self.state.world_db:
             logger.warning("Generate more failed: no project or world_db")
@@ -470,8 +568,9 @@ class WorldPage:
         )
         logger.info(f"Quality refinement enabled: {use_quality}")
 
-        # Get count from settings (randomized within range)
-        count = self._get_random_count(entity_type)
+        # Use provided count or get random from settings
+        if count is None:
+            count = self._get_random_count(entity_type)
         logger.info(f"Will generate {count} {entity_type}")
 
         # Get ALL existing entity names to avoid duplicates
@@ -492,22 +591,28 @@ class WorldPage:
             if entity_type == "characters":
                 if use_quality:
                     # Generate characters with quality refinement
-                    logger.info("Calling world quality service to generate characters...")
+                    logger.info(
+                        f"Calling world quality service to generate characters "
+                        f"(custom_instructions: {custom_instructions is not None})..."
+                    )
                     results = await run.io_bound(
                         self.services.world_quality.generate_characters_with_quality,
                         self.state.project,
                         all_existing_names,
                         count,
+                        custom_instructions,
                     )
                     logger.info(f"Generated {len(results)} characters with quality refinement")
 
-                    # Check for partial failure and notify user
+                    # Check for partial failure and notify user LOUDLY
                     if len(results) < count:
                         failed_count = count - len(results)
                         ui.notify(
-                            f"Warning: {failed_count} of {count} characters failed to generate",
-                            type="warning",
-                            timeout=5000,
+                            f"ERROR: {failed_count} of {count} characters FAILED to generate! "
+                            "Check logs for details.",
+                            type="negative",
+                            timeout=10000,
+                            close_button=True,
                         )
                     if len(results) == 0:
                         notification.dismiss()
@@ -607,13 +712,15 @@ class WorldPage:
                     )
                     logger.info(f"Generated {len(loc_results)} locations with quality refinement")
 
-                    # Check for partial failure and notify user
+                    # Check for partial failure and notify user LOUDLY
                     if len(loc_results) < count:
                         failed_count = count - len(loc_results)
                         ui.notify(
-                            f"Warning: {failed_count} of {count} locations failed to generate",
-                            type="warning",
-                            timeout=5000,
+                            f"ERROR: {failed_count} of {count} locations FAILED to generate! "
+                            "Check logs for details.",
+                            type="negative",
+                            timeout=10000,
+                            close_button=True,
                         )
                     if len(loc_results) == 0:
                         notification.dismiss()
@@ -726,13 +833,15 @@ class WorldPage:
                         f"Generated {len(faction_results)} factions with quality refinement"
                     )
 
-                    # Check for partial failure and notify user
+                    # Check for partial failure and notify user LOUDLY
                     if len(faction_results) < count:
                         failed_count = count - len(faction_results)
                         ui.notify(
-                            f"Warning: {failed_count} of {count} factions failed to generate",
-                            type="warning",
-                            timeout=5000,
+                            f"ERROR: {failed_count} of {count} factions FAILED to generate! "
+                            "Check logs for details.",
+                            type="negative",
+                            timeout=10000,
+                            close_button=True,
                         )
                     if len(faction_results) == 0:
                         notification.dismiss()
@@ -840,13 +949,15 @@ class WorldPage:
                     )
                     logger.info(f"Generated {len(item_results)} items with quality refinement")
 
-                    # Check for partial failure and notify user
+                    # Check for partial failure and notify user LOUDLY
                     if len(item_results) < count:
                         failed_count = count - len(item_results)
                         ui.notify(
-                            f"Warning: {failed_count} of {count} items failed to generate",
-                            type="warning",
-                            timeout=5000,
+                            f"ERROR: {failed_count} of {count} items FAILED to generate! "
+                            "Check logs for details.",
+                            type="negative",
+                            timeout=10000,
+                            close_button=True,
                         )
                     if len(item_results) == 0:
                         notification.dismiss()
@@ -930,13 +1041,15 @@ class WorldPage:
                         f"Generated {len(concept_results)} concepts with quality refinement"
                     )
 
-                    # Check for partial failure and notify user
+                    # Check for partial failure and notify user LOUDLY
                     if len(concept_results) < count:
                         failed_count = count - len(concept_results)
                         ui.notify(
-                            f"Warning: {failed_count} of {count} concepts failed to generate",
-                            type="warning",
-                            timeout=5000,
+                            f"ERROR: {failed_count} of {count} concepts FAILED to generate! "
+                            "Check logs for details.",
+                            type="negative",
+                            timeout=10000,
+                            close_button=True,
                         )
                     if len(concept_results) == 0:
                         notification.dismiss()
@@ -1042,13 +1155,15 @@ class WorldPage:
                         f"Generated {len(rel_results)} relationships with quality refinement"
                     )
 
-                    # Check for partial failure and notify user
+                    # Check for partial failure and notify user LOUDLY
                     if len(rel_results) < count:
                         failed_count = count - len(rel_results)
                         ui.notify(
-                            f"Warning: {failed_count} of {count} relationships failed to generate",
-                            type="warning",
-                            timeout=5000,
+                            f"ERROR: {failed_count} of {count} relationships FAILED to generate! "
+                            "Check logs for details.",
+                            type="negative",
+                            timeout=10000,
+                            close_button=True,
                         )
                     if len(rel_results) == 0:
                         notification.dismiss()
