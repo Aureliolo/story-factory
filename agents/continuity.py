@@ -307,7 +307,8 @@ If no voice issues found, output: ```json
 
     def _parse_dialogue_patterns(self, response: str) -> dict[str, DialoguePattern]:
         """Parse dialogue patterns from agent response."""
-        data = extract_json_list(response)
+        # Use strict=False since empty patterns are valid (no issues found)
+        data = extract_json_list(response, strict=False)
         if not data:
             logger.debug("No dialogue patterns found in response")
             return {}
@@ -475,7 +476,8 @@ Output as a simple list, one fact per line, starting with "- "."""
 
     def _parse_issues(self, response: str) -> list[ContinuityIssue]:
         """Parse continuity issues from agent response."""
-        data = extract_json_list(response)
+        # Use strict=False since empty issues list is valid (no issues found)
+        data = extract_json_list(response, strict=False)
         if not data:
             return []
 

@@ -16,6 +16,7 @@ from nicegui.elements.textarea import Textarea
 from memory.mode_models import PRESET_MODES
 from services import ServiceContainer
 from services.story_service import GenerationCancelled
+from services.world_service import WorldBuildOptions
 from ui.components.chat import ChatComponent
 from ui.components.generation_status import GenerationStatus
 from ui.graph_renderer import render_entity_summary_html
@@ -691,20 +692,24 @@ class WritePage:
                 return
 
             try:
-                # Update progress
-                progress_label.text = "Building world and characters..."
-                progress_bar.value = 0.25
-                await asyncio.sleep(0.1)  # Let UI update
+                # Update progress using callback
+                def on_progress(progress) -> None:
+                    progress_label.text = progress.message
+                    # Calculate progress as fraction of total steps
+                    progress_bar.value = progress.step / progress.total_steps
 
-                # Run the actual build
+                # Run the unified world build with minimal options (no clearing)
                 await run.io_bound(
-                    self.services.story.build_structure,
+                    self.services.world.build_world,
                     self.state.project,
                     self.state.world_db,
+                    self.services,
+                    WorldBuildOptions.minimal(),
+                    on_progress,
                 )
 
                 progress_label.text = "Saving project..."
-                progress_bar.value = 0.9
+                progress_bar.value = 0.95
 
                 self.services.project.save_project(self.state.project)
 

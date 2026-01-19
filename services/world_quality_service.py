@@ -285,7 +285,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return Character(
                     name=data.get("name", "Unknown"),
@@ -370,7 +370,7 @@ Output ONLY valid JSON:
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 # Validate all required fields are present
                 required_fields = ["depth", "goals", "flaws", "uniqueness", "arc_potential"]
@@ -466,7 +466,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return Character(
                     name=data.get("name", character.name),
@@ -624,7 +624,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 # Validate name is not a duplicate
                 name = data.get("name", "")
@@ -694,7 +694,7 @@ Output ONLY valid JSON:
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 # Validate all required fields are present
                 required_fields = [
@@ -775,7 +775,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
             else:
@@ -972,7 +972,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
             else:
@@ -1038,7 +1038,7 @@ Output ONLY valid JSON:
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 # Validate all required fields are present
                 required_fields = ["tension", "dynamics", "story_potential", "authenticity"]
@@ -1115,7 +1115,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
             else:
@@ -1281,7 +1281,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 # Validate name is not a duplicate
                 name = data.get("name", "")
@@ -1349,7 +1349,7 @@ Output ONLY valid JSON:
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 required_fields = [
                     "coherence",
@@ -1433,7 +1433,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
             else:
@@ -1581,7 +1581,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 # Validate name is not a duplicate
                 name = data.get("name", "")
@@ -1648,7 +1648,7 @@ Output ONLY valid JSON:
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 required_fields = [
                     "significance",
@@ -1730,7 +1730,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
             else:
@@ -1880,7 +1880,7 @@ Output ONLY valid JSON (all text in {brief.language}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 # Validate name is not a duplicate
                 name = data.get("name", "")
@@ -1946,7 +1946,7 @@ Output ONLY valid JSON:
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 required_fields = ["relevance", "depth", "manifestation", "resonance"]
                 missing = [f for f in required_fields if f not in data]
@@ -2021,7 +2021,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
             else:

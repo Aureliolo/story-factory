@@ -149,12 +149,12 @@ class TestArchitectParseVariationResponse:
         self, architect, brief, caplog, monkeypatch
     ):
         """Test _parse_variation_response handles complete JSON extraction failure for characters."""
-        # Lines 436-437: Warning when extract_json_list raises exception
+        # When extract_json_list returns None (strict=False), no characters are added
         import agents.architect as architect_module
 
-        # Mock extract_json_list to raise an exception
-        def mock_extract_json_list(text):
-            raise ValueError("Invalid JSON format")
+        # Mock extract_json_list to return None (simulating parse failure with strict=False)
+        def mock_extract_json_list(text, strict=True):
+            return None
 
         monkeypatch.setattr(architect_module, "extract_json_list", mock_extract_json_list)
 
@@ -169,11 +169,8 @@ class TestArchitectParseVariationResponse:
         Plot summary: An epic adventure.
         """
 
-        with caplog.at_level(logging.WARNING):
-            variation = architect._parse_variation_response(response, 1, brief)
+        variation = architect._parse_variation_response(response, 1, brief)
 
-        # Should log warning about failed extraction
-        assert "Failed to extract characters" in caplog.text
         # Variation should still be created with empty characters
         assert variation is not None
         assert len(variation.characters) == 0
@@ -182,17 +179,17 @@ class TestArchitectParseVariationResponse:
         self, architect, brief, caplog, monkeypatch
     ):
         """Test _parse_variation_response handles complete JSON extraction failure for plot points."""
-        # Lines 464-465: Warning when extract_json_list raises exception for plot points
+        # When extract_json_list returns None for plot points section
         import agents.architect as architect_module
 
         call_count = [0]
 
-        def mock_extract_json_list(text):
+        def mock_extract_json_list(text, strict=True):
             call_count[0] += 1
-            # Let first call (characters) pass, fail on second call (plot points)
+            # Let first call (characters) pass, return None on second call (plot points)
             if call_count[0] == 1:
                 return []  # Empty characters
-            raise ValueError("Invalid JSON format for plot points")
+            return None  # Simulate parse failure for plot points
 
         monkeypatch.setattr(architect_module, "extract_json_list", mock_extract_json_list)
 
@@ -217,11 +214,8 @@ class TestArchitectParseVariationResponse:
         ```
         """
 
-        with caplog.at_level(logging.WARNING):
-            variation = architect._parse_variation_response(response, 1, brief)
+        variation = architect._parse_variation_response(response, 1, brief)
 
-        # Should log warning about failed extraction
-        assert "Failed to extract plot points" in caplog.text
         # Variation should still be created with empty plot points
         assert variation is not None
         assert len(variation.plot_points) == 0
@@ -230,17 +224,17 @@ class TestArchitectParseVariationResponse:
         self, architect, brief, caplog, monkeypatch
     ):
         """Test _parse_variation_response handles complete JSON extraction failure for chapters."""
-        # Lines 484-485: Warning when extract_json_list raises exception for chapters
+        # When extract_json_list returns None for chapters section
         import agents.architect as architect_module
 
         call_count = [0]
 
-        def mock_extract_json_list(text):
+        def mock_extract_json_list(text, strict=True):
             call_count[0] += 1
-            # Let first two calls pass, fail on third call (chapters)
+            # Let first two calls pass, return None on third call (chapters)
             if call_count[0] <= 2:
                 return []  # Empty for characters and plot points
-            raise ValueError("Invalid JSON format for chapters")
+            return None  # Simulate parse failure for chapters
 
         monkeypatch.setattr(architect_module, "extract_json_list", mock_extract_json_list)
 
@@ -265,11 +259,8 @@ class TestArchitectParseVariationResponse:
         ```
         """
 
-        with caplog.at_level(logging.WARNING):
-            variation = architect._parse_variation_response(response, 1, brief)
+        variation = architect._parse_variation_response(response, 1, brief)
 
-        # Should log warning about failed extraction
-        assert "Failed to extract chapters" in caplog.text
         # Variation should still be created with empty chapters
         assert variation is not None
         assert len(variation.chapters) == 0

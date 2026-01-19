@@ -1,8 +1,13 @@
 """World service - handles world/entity management."""
 
+from __future__ import annotations
+
 import logging
+import random
 import re
-from typing import Any
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from memory.entities import Entity, Relationship
 from memory.story_state import StoryState
@@ -15,7 +20,70 @@ from utils.validation import (
     validate_type,
 )
 
+if TYPE_CHECKING:
+    from services import ServiceContainer
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WorldBuildProgress:
+    """Progress information for world building operations."""
+
+    step: int
+    total_steps: int
+    message: str
+    entity_type: str | None = None
+    count: int = 0
+
+
+@dataclass
+class WorldBuildOptions:
+    """Options for world building operations.
+
+    Attributes:
+        clear_existing: Whether to clear existing world data first.
+        generate_structure: Whether to generate story structure (characters, chapters).
+        generate_locations: Whether to generate location entities.
+        generate_factions: Whether to generate faction entities.
+        generate_items: Whether to generate item entities.
+        generate_concepts: Whether to generate concept entities.
+        generate_relationships: Whether to generate relationships between entities.
+    """
+
+    clear_existing: bool = False
+    generate_structure: bool = True
+    generate_locations: bool = False
+    generate_factions: bool = False
+    generate_items: bool = False
+    generate_concepts: bool = False
+    generate_relationships: bool = False
+
+    @classmethod
+    def minimal(cls) -> WorldBuildOptions:
+        """Create options for minimal world build (structure + character extraction only)."""
+        return cls(
+            clear_existing=False,
+            generate_structure=True,
+            generate_locations=False,
+            generate_factions=False,
+            generate_items=False,
+            generate_concepts=False,
+            generate_relationships=False,
+        )
+
+    @classmethod
+    def full_rebuild(cls) -> WorldBuildOptions:
+        """Create options for full world rebuild (everything, clearing existing)."""
+        return cls(
+            clear_existing=True,
+            generate_structure=True,
+            generate_locations=True,
+            generate_factions=True,
+            generate_items=True,
+            generate_concepts=True,
+            generate_relationships=True,
+        )
 
 
 class WorldService:
@@ -34,6 +102,406 @@ class WorldService:
         logger.debug("Initializing WorldService")
         self.settings = settings or Settings.load()
         logger.debug("WorldService initialized successfully")
+
+    # ========== UNIFIED WORLD BUILDING ==========
+
+    def build_world(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+        options: WorldBuildOptions | None = None,
+        progress_callback: Callable[[WorldBuildProgress], None] | None = None,
+    ) -> dict[str, int]:
+        """Build/rebuild world with unified logic.
+
+        This is the single entry point for all world building operations.
+        Both "Build Story Structure" and "Rebuild World" use this method
+        with different options.
+
+        Args:
+            state: Story state with completed brief.
+            world_db: WorldDatabase to populate.
+            services: ServiceContainer for accessing other services.
+            options: World build options. Defaults to minimal build.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Dictionary with counts of generated entities by type.
+
+        Raises:
+            ValueError: If no brief exists.
+            WorldGenerationError: If generation fails.
+        """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
+        validate_not_none(world_db, "world_db")
+        validate_type(world_db, "world_db", WorldDatabase)
+
+        if not state.brief:
+            raise ValueError("Cannot build world - no brief exists.")
+
+        options = options or WorldBuildOptions.minimal()
+        counts: dict[str, int] = {
+            "characters": 0,
+            "locations": 0,
+            "factions": 0,
+            "items": 0,
+            "concepts": 0,
+            "relationships": 0,
+        }
+
+        # Calculate total steps for progress reporting
+        total_steps = self._calculate_total_steps(options)
+        current_step = 0
+
+        def report_progress(message: str, entity_type: str | None = None, count: int = 0) -> None:
+            nonlocal current_step
+            current_step += 1
+            if progress_callback:
+                progress_callback(
+                    WorldBuildProgress(
+                        step=current_step,
+                        total_steps=total_steps,
+                        message=message,
+                        entity_type=entity_type,
+                        count=count,
+                    )
+                )
+
+        logger.info(f"Starting world build for project {state.id} with options: {options}")
+
+        # Step 1: Clear existing data if requested
+        if options.clear_existing:
+            report_progress("Clearing existing world data...")
+            self._clear_world_db(world_db)
+            logger.info("Cleared existing world data")
+
+        # Step 2: Generate story structure (characters, chapters) if requested
+        if options.generate_structure:
+            report_progress("Generating story structure...")
+            if options.clear_existing:
+                # Full rebuild - clear story state and regenerate
+                services.story.rebuild_world(state)
+            else:
+                # Initial build - build on existing state (doesn't clear)
+                # Note: build_structure also extracts to world_db, but we handle that below
+                orchestrator = services.story._get_orchestrator(state)
+                orchestrator.build_story_structure()
+                services.story._sync_state(orchestrator, state)
+            counts["characters"] = len(state.characters)
+            logger.info(
+                f"Story structure built: {len(state.characters)} characters, "
+                f"{len(state.chapters)} chapters"
+            )
+
+        # Step 3: Extract characters to world database
+        report_progress("Adding characters to world...", "character")
+        char_count = self._extract_characters_to_world(state, world_db)
+        counts["characters"] = char_count
+        logger.info(f"Extracted {char_count} characters to world database")
+
+        # Step 4: Generate locations if requested
+        if options.generate_locations:
+            report_progress("Generating locations...", "location")
+            loc_count = self._generate_locations(state, world_db, services)
+            counts["locations"] = loc_count
+            logger.info(f"Generated {loc_count} locations")
+
+        # Step 5: Generate factions if requested
+        if options.generate_factions:
+            report_progress("Generating factions...", "faction")
+            faction_count = self._generate_factions(state, world_db, services)
+            counts["factions"] = faction_count
+            logger.info(f"Generated {faction_count} factions")
+
+        # Step 6: Generate items if requested
+        if options.generate_items:
+            report_progress("Generating items...", "item")
+            item_count = self._generate_items(state, world_db, services)
+            counts["items"] = item_count
+            logger.info(f"Generated {item_count} items")
+
+        # Step 7: Generate concepts if requested
+        if options.generate_concepts:
+            report_progress("Generating concepts...", "concept")
+            concept_count = self._generate_concepts(state, world_db, services)
+            counts["concepts"] = concept_count
+            logger.info(f"Generated {concept_count} concepts")
+
+        # Step 8: Generate relationships if requested
+        if options.generate_relationships:
+            report_progress("Generating relationships...", "relationship")
+            rel_count = self._generate_relationships(state, world_db, services)
+            counts["relationships"] = rel_count
+            logger.info(f"Generated {rel_count} relationships")
+
+        report_progress("World build complete!")
+        logger.info(f"World build complete for project {state.id}: {counts}")
+        return counts
+
+    def _calculate_total_steps(self, options: WorldBuildOptions) -> int:
+        """Calculate total number of steps for progress reporting."""
+        steps = 2  # Character extraction + completion
+        if options.clear_existing:
+            steps += 1
+        if options.generate_structure:
+            steps += 1
+        if options.generate_locations:
+            steps += 1
+        if options.generate_factions:
+            steps += 1
+        if options.generate_items:
+            steps += 1
+        if options.generate_concepts:
+            steps += 1
+        if options.generate_relationships:
+            steps += 1
+        return steps
+
+    def _clear_world_db(self, world_db: WorldDatabase) -> None:
+        """Clear all entities and relationships from world database."""
+        # Delete relationships first (they reference entities)
+        relationships = world_db.list_relationships()
+        logger.info(f"Deleting {len(relationships)} existing relationships...")
+        for rel in relationships:
+            world_db.delete_relationship(rel.id)
+
+        # Delete all entities
+        entities = world_db.list_entities()
+        logger.info(f"Deleting {len(entities)} existing entities...")
+        for entity in entities:
+            world_db.delete_entity(entity.id)
+
+    def _extract_characters_to_world(self, state: StoryState, world_db: WorldDatabase) -> int:
+        """Extract characters from story state to world database."""
+        added_count = 0
+        for char in state.characters:
+            # Check if already exists
+            existing = world_db.search_entities(char.name, entity_type="character")
+            if existing:
+                logger.debug(f"Character already exists: {char.name}")
+                continue
+
+            world_db.add_entity(
+                entity_type="character",
+                name=char.name,
+                description=char.description,
+                attributes={
+                    "role": char.role,
+                    "personality_traits": char.personality_traits,
+                    "goals": char.goals,
+                    "arc_notes": char.arc_notes,
+                },
+            )
+            added_count += 1
+
+        return added_count
+
+    def _generate_locations(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+    ) -> int:
+        """Generate and add locations to world database."""
+        location_count = random.randint(
+            self.settings.world_gen_locations_min,
+            self.settings.world_gen_locations_max,
+        )
+
+        locations = services.story.generate_locations(state, location_count)
+        added_count = 0
+
+        for loc in locations:
+            if isinstance(loc, dict) and "name" in loc:
+                world_db.add_entity(
+                    entity_type="location",
+                    name=loc["name"],
+                    description=loc.get("description", ""),
+                    attributes={"significance": loc.get("significance", "")},
+                )
+                added_count += 1
+            else:
+                logger.warning(f"Skipping invalid location: {loc}")
+
+        return added_count
+
+    def _generate_factions(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+    ) -> int:
+        """Generate and add factions to world database."""
+        all_entities = world_db.list_entities()
+        all_existing_names = [e.name for e in all_entities]
+        existing_locations = [e.name for e in all_entities if e.type == "location"]
+
+        faction_count = random.randint(
+            self.settings.world_gen_factions_min,
+            self.settings.world_gen_factions_max,
+        )
+
+        faction_results = services.world_quality.generate_factions_with_quality(
+            state, all_existing_names, faction_count, existing_locations
+        )
+        added_count = 0
+
+        for faction, faction_scores in faction_results:
+            if isinstance(faction, dict) and "name" in faction:
+                faction_entity_id = world_db.add_entity(
+                    entity_type="faction",
+                    name=faction["name"],
+                    description=faction.get("description", ""),
+                    attributes={
+                        "leader": faction.get("leader", ""),
+                        "goals": faction.get("goals", []),
+                        "values": faction.get("values", []),
+                        "base_location": faction.get("base_location", ""),
+                        "quality_scores": faction_scores.to_dict(),
+                    },
+                )
+                added_count += 1
+
+                # Create relationship to base location if it exists
+                base_loc = faction.get("base_location", "")
+                if base_loc:
+                    location_entity = next(
+                        (e for e in all_entities if e.name == base_loc and e.type == "location"),
+                        None,
+                    )
+                    if location_entity:
+                        world_db.add_relationship(
+                            source_id=faction_entity_id,
+                            target_id=location_entity.id,
+                            relation_type="based_in",
+                            description=f"{faction['name']} is headquartered in {base_loc}",
+                        )
+            else:
+                logger.warning(f"Skipping invalid faction: {faction}")
+
+        return added_count
+
+    def _generate_items(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+    ) -> int:
+        """Generate and add items to world database."""
+        all_existing_names = [e.name for e in world_db.list_entities()]
+
+        item_count = random.randint(
+            self.settings.world_gen_items_min,
+            self.settings.world_gen_items_max,
+        )
+
+        item_results = services.world_quality.generate_items_with_quality(
+            state, all_existing_names, item_count
+        )
+        added_count = 0
+
+        for item, item_scores in item_results:
+            if isinstance(item, dict) and "name" in item:
+                world_db.add_entity(
+                    entity_type="item",
+                    name=item["name"],
+                    description=item.get("description", ""),
+                    attributes={
+                        "significance": item.get("significance", ""),
+                        "owner": item.get("owner", ""),
+                        "location": item.get("location", ""),
+                        "quality_scores": item_scores.to_dict(),
+                    },
+                )
+                added_count += 1
+            else:
+                logger.warning(f"Skipping invalid item: {item}")
+
+        return added_count
+
+    def _generate_concepts(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+    ) -> int:
+        """Generate and add concepts to world database."""
+        all_existing_names = [e.name for e in world_db.list_entities()]
+
+        concept_count = random.randint(
+            self.settings.world_gen_concepts_min,
+            self.settings.world_gen_concepts_max,
+        )
+
+        concept_results = services.world_quality.generate_concepts_with_quality(
+            state, all_existing_names, concept_count
+        )
+        added_count = 0
+
+        for concept, concept_scores in concept_results:
+            if isinstance(concept, dict) and "name" in concept:
+                world_db.add_entity(
+                    entity_type="concept",
+                    name=concept["name"],
+                    description=concept.get("description", ""),
+                    attributes={
+                        "type": concept.get("type", ""),
+                        "importance": concept.get("importance", ""),
+                        "quality_scores": concept_scores.to_dict(),
+                    },
+                )
+                added_count += 1
+            else:
+                logger.warning(f"Skipping invalid concept: {concept}")
+
+        return added_count
+
+    def _generate_relationships(
+        self,
+        state: StoryState,
+        world_db: WorldDatabase,
+        services: ServiceContainer,
+    ) -> int:
+        """Generate and add relationships between entities."""
+        all_entities = world_db.list_entities()
+        entity_names = [e.name for e in all_entities]
+        existing_rels = [(r.source_id, r.target_id) for r in world_db.list_relationships()]
+
+        rel_count = random.randint(
+            self.settings.world_gen_relationships_min,
+            self.settings.world_gen_relationships_max,
+        )
+
+        relationships = services.story.generate_relationships(
+            state, entity_names, existing_rels, rel_count
+        )
+        added_count = 0
+
+        for rel in relationships:
+            if isinstance(rel, dict) and "source" in rel and "target" in rel:
+                # Find source and target entities
+                source_entity = next((e for e in all_entities if e.name == rel["source"]), None)
+                target_entity = next((e for e in all_entities if e.name == rel["target"]), None)
+
+                if source_entity and target_entity:
+                    world_db.add_relationship(
+                        source_id=source_entity.id,
+                        target_id=target_entity.id,
+                        relation_type=rel.get("relation_type", "related_to"),
+                        description=rel.get("description", ""),
+                    )
+                    added_count += 1
+                else:
+                    logger.warning(
+                        f"Could not find entities for relationship: "
+                        f"{rel.get('source')} -> {rel.get('target')}"
+                    )
+            else:
+                logger.warning(f"Skipping invalid relationship: {rel}")
+
+        return added_count
 
     # ========== ENTITY EXTRACTION ==========
 

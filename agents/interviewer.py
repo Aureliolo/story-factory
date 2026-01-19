@@ -160,7 +160,9 @@ IMPORTANT RULES:
         logger.debug("Attempting to extract story brief from response")
         # Fallback pattern for JSON without code block
         fallback = r'\{[^{}]*"premise"[^{}]*\}'
-        brief = parse_json_to_model(response, StoryBrief, fallback_pattern=fallback)
+        # Use strict=False since brief extraction during interview is optional -
+        # the finalize_brief method has fallback logic to create a default brief
+        brief = parse_json_to_model(response, StoryBrief, fallback_pattern=fallback, strict=False)
         if brief:
             logger.info(f"Extracted story brief: genre={brief.genre}, length={brief.target_length}")
         else:
