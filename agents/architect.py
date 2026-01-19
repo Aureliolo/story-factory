@@ -17,6 +17,7 @@ from memory.story_state import (
     StoryState,
 )
 from settings import Settings
+from utils.exceptions import LLMGenerationError
 from utils.json_parser import extract_json_list
 from utils.prompt_builder import PromptBuilder
 from utils.validation import validate_not_none, validate_positive, validate_type
@@ -159,18 +160,40 @@ class ArchitectAgent(BaseAgent):
         naming_hint = random.choice(naming_styles)
 
         builder.add_text(
-            f"Create {min_chars}-{max_chars} main characters. {naming_hint} "
-            f"For each, output JSON (all text values in {brief.language}):"
+            f"Create EXACTLY {min_chars} to {max_chars} main characters. You MUST output at least "
+            f"{min_chars} characters. {naming_hint} "
+            f"Output a JSON object with a 'characters' array. Each character needs "
+            f"(all text values in {brief.language}):"
         )
         builder.add_json_output_format(self.CHARACTER_SCHEMA)
-        builder.add_text("Make them complex, with flaws and desires that create conflict.")
+        builder.add_text(
+            "Make them complex, with flaws and desires that create conflict. "
+            f"Remember: output at least {min_chars} characters."
+        )
 
         prompt = builder.build()
-        result = self.generate_structured(prompt, CharacterList)
-        logger.info(
-            f"Created {len(result.characters)} characters: {[c.name for c in result.characters]}"
+
+        # Try up to 3 times if we don't get enough characters
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            result = self.generate_structured(prompt, CharacterList)
+            if len(result.characters) >= min_chars:
+                logger.info(
+                    f"Created {len(result.characters)} characters: "
+                    f"{[c.name for c in result.characters]}"
+                )
+                return result.characters
+            logger.warning(
+                f"Attempt {attempt}: Got {len(result.characters)} characters, expected {min_chars}. "
+                f"{'Retrying...' if attempt < max_attempts else 'Giving up.'}"
+            )
+
+        # If we still don't have enough after retries, raise an error
+        raise LLMGenerationError(
+            f"Failed to generate enough characters after {max_attempts} attempts. "
+            f"Got {len(result.characters)}, needed at least {min_chars}. "
+            f"Try using a different model or adjusting the settings."
         )
-        return result.characters
 
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
@@ -228,24 +251,86 @@ class ArchitectAgent(BaseAgent):
 
         plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)
 
-        # Build prompt using PromptBuilder
+        # Build prompt with stronger emphasis on generating exactly the right number of chapters
         builder = PromptBuilder()
-        builder.add_text(f"Create a {num_chapters}-chapter outline for this story.")
+        builder.add_text(
+            f"Create EXACTLY {num_chapters} chapter outlines for this {brief.target_length}. "
+            f"You MUST output {num_chapters} chapters - no more, no less."
+        )
         builder.add_language_requirement(brief.language)
         builder.add_section("PLOT SUMMARY", story_state.plot_summary)
         builder.add_section("KEY PLOT POINTS", plot_points_text)
         builder.add_text(f"CHARACTERS: {', '.join(c.name for c in story_state.characters)}")
 
-        builder.add_text(f"For each chapter, output JSON (all text in {brief.language}):")
+        builder.add_text(
+            f"Output a JSON object with a 'chapters' array containing EXACTLY {num_chapters} chapters. "
+            f"Each chapter needs (all text in {brief.language}):"
+        )
         builder.add_json_output_format(self.CHAPTER_SCHEMA)
         builder.add_text(
-            "Ensure good pacing - build tension, vary intensity, place climactic moments appropriately."
+            "Ensure good pacing - build tension, vary intensity, place climactic moments appropriately. "
+            f"Remember: output EXACTLY {num_chapters} chapters."
         )
 
-        prompt = builder.build()
-        result = self.generate_structured(prompt, ChapterList)
-        logger.info(f"Created {len(result.chapters)} chapter outlines")
-        return result.chapters
+        # Generate chapters iteratively if needed (LLM may not produce all at once)
+        all_chapters: list[Chapter] = []
+        max_iterations = num_chapters * 2  # Safety limit
+
+        for iteration in range(max_iterations):
+            if len(all_chapters) >= num_chapters:
+                break
+
+            remaining = num_chapters - len(all_chapters)
+            # Update prompt for remaining chapters
+            if len(all_chapters) > 0:
+                builder_iter = PromptBuilder()
+                builder_iter.add_text(
+                    f"Continue the chapter outline. You have {len(all_chapters)} chapters so far. "
+                    f"Create the next {remaining} chapter(s) to complete the {num_chapters}-chapter outline."
+                )
+                builder_iter.add_language_requirement(brief.language)
+                builder_iter.add_section(
+                    "EXISTING CHAPTERS",
+                    "\n".join(f"- Ch{c.number}: {c.title}" for c in all_chapters),
+                )
+                builder_iter.add_section("PLOT SUMMARY", story_state.plot_summary)
+                builder_iter.add_text(
+                    f"Create chapters {len(all_chapters) + 1} through {num_chapters}. "
+                    f"Output JSON with a 'chapters' array:"
+                )
+                builder_iter.add_json_output_format(self.CHAPTER_SCHEMA)
+                prompt = builder_iter.build()
+            else:
+                prompt = builder.build()
+
+            result = self.generate_structured(prompt, ChapterList)
+
+            if len(result.chapters) == 0:
+                logger.warning(f"Iteration {iteration + 1}: Got 0 chapters, retrying...")
+                continue
+
+            # Renumber chapters to continue from where we left off
+            for i, chapter in enumerate(result.chapters):
+                chapter.number = len(all_chapters) + i + 1
+            all_chapters.extend(result.chapters)
+            logger.info(
+                f"Iteration {iteration + 1}: Got {len(result.chapters)} chapters, total: {len(all_chapters)}"
+            )
+
+            if len(all_chapters) >= num_chapters:
+                break
+
+        if len(all_chapters) < num_chapters:
+            raise LLMGenerationError(
+                f"Failed to generate enough chapters after {max_iterations} iterations. "
+                f"Got {len(all_chapters)}, needed {num_chapters}. "
+                f"Try using a different model or adjusting the settings."
+            )
+
+        # Trim to exact count if we got more
+        chapters = all_chapters[:num_chapters]
+        logger.info(f"Created {len(chapters)} chapter outlines")
+        return chapters
 
     def build_story_structure(self, story_state: StoryState) -> StoryState:
         """Complete story structure building process."""

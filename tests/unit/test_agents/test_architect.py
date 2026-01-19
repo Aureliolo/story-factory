@@ -132,13 +132,31 @@ class TestArchitectCreateCharacters:
                     relationships={"Oliver Grey": "Mentor"},
                     arc_notes="Reveals hidden connection to Oliver's past",
                 ),
+                Character(
+                    name="Luna Swift",
+                    role="love_interest",
+                    description="Quick-witted student with a mysterious past",
+                    personality_traits=["clever", "secretive", "loyal"],
+                    goals=["Uncover family secrets", "Master rare magic"],
+                    relationships={"Oliver Grey": "Friend"},
+                    arc_notes="Becomes Oliver's closest ally",
+                ),
+                Character(
+                    name="Marcus Thorn",
+                    role="antagonist",
+                    description="Ambitious rival with hidden motives",
+                    personality_traits=["ambitious", "cunning", "jealous"],
+                    goals=["Become top student", "Gain power"],
+                    relationships={"Oliver Grey": "Rival"},
+                    arc_notes="Reveals deeper vulnerability",
+                ),
             ]
         )
         architect.generate_structured = MagicMock(return_value=mock_characters)
 
         characters = architect.create_characters(sample_story_state)
 
-        assert len(characters) == 2
+        assert len(characters) == 4
         assert characters[0].name == "Oliver Grey"
         assert characters[0].role == "protagonist"
         assert "curious" in characters[0].personality_traits
