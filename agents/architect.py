@@ -253,6 +253,7 @@ class ArchitectAgent(BaseAgent):
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
         # Use project-specific chapter count if available, otherwise use length-based default
+        num_chapters: int
         if story_state.target_chapters is not None:
             num_chapters = story_state.target_chapters
             logger.debug(f"Using project-specific chapter count: {num_chapters}")
@@ -262,7 +263,14 @@ class ArchitectAgent(BaseAgent):
                 "novella": self.settings.chapters_novella,
                 "novel": self.settings.chapters_novel,
             }
-            num_chapters = length_map.get(brief.target_length, self.settings.chapters_default)
+            chapter_count = length_map.get(brief.target_length)
+            if chapter_count is None:
+                logger.warning(
+                    f"Unknown target_length '{brief.target_length}', using novella chapter count"
+                )
+                num_chapters = self.settings.chapters_novella
+            else:
+                num_chapters = chapter_count
             logger.debug(
                 f"Using length-based chapter count: {num_chapters} for {brief.target_length}"
             )

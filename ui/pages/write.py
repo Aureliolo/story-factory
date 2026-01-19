@@ -3,6 +3,7 @@
 import asyncio
 import html
 import logging
+import threading
 from typing import Any, Literal
 
 from nicegui import Client, context, run, ui
@@ -22,6 +23,7 @@ from ui.components.generation_status import GenerationStatus
 from ui.graph_renderer import render_entity_summary_html
 from ui.state import AppState
 from ui.theme import get_status_color
+from utils.exceptions import GenerationCancelledError
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +180,7 @@ class WritePage:
             # Start interview if fresh
             asyncio.create_task(self._start_interview())
 
-        # Action buttons - stored as instance vars for dynamic visibility
+        # Finalize button - right-aligned
         with ui.row().classes("w-full justify-end gap-2 mt-2"):
             self._finalize_btn = ui.button(
                 "Finalize Interview",
@@ -186,10 +188,13 @@ class WritePage:
             ).props("flat")
             self._finalize_btn.set_visibility(not self.state.interview_complete)
 
+        # Build Structure button - centered
+        with ui.row().classes("w-full justify-center mt-4"):
             self._build_structure_btn = ui.button(
                 "Build Story Structure",
                 on_click=self._build_structure,
-            ).props("color=primary")
+                icon="auto_fix_high",
+            ).props("color=primary size=lg")
             show_build = bool(
                 self.state.interview_complete
                 and self.state.project
@@ -352,12 +357,11 @@ class WritePage:
                         "novella": settings.chapters_novella,
                         "novel": settings.chapters_novel,
                     }
-                    default_chapters = length_map.get(
-                        project.brief.target_length, settings.chapters_default
-                    )
-                    ui.label(f"Default: {default_chapters}").classes(
-                        "text-xs text-gray-400 dark:text-gray-500"
-                    )
+                    default_chapters = length_map.get(project.brief.target_length)
+                    if default_chapters:
+                        ui.label(f"Default: {default_chapters}").classes(
+                            "text-xs text-gray-400 dark:text-gray-500"
+                        )
 
             # Character count settings
             with ui.column().classes("gap-1"):
@@ -764,7 +768,8 @@ class WritePage:
                 logger.exception("Failed to finalize interview")
                 self._notify(f"Error: {e}", type="negative")
 
-        with dialog, ui.card().classes("w-96 bg-white dark:bg-gray-800"):
+        dialog_bg = "#1f2937" if self.state.dark_mode else "#ffffff"
+        with dialog, ui.card().classes("w-96").style(f"background-color: {dialog_bg}"):
             ui.label("Finalize Interview?").classes("text-xl font-bold mb-2")
             ui.label(
                 "This will generate a story brief based on the conversation so far. "
@@ -798,16 +803,39 @@ class WritePage:
             self._notify("No story brief found. Complete the interview first.", type="warning")
             return
 
+        # Create cancellation event for stopping generation
+        cancel_event = threading.Event()
+
         # Create progress dialog
         dialog = ui.dialog().props("persistent")
         progress_label: Label
         progress_bar: ui.linear_progress
+        cancel_btn: Button
+        build_btn: Button
+        is_building = False
+
+        def do_cancel() -> None:
+            """Handle cancel button click."""
+            nonlocal is_building
+            if is_building:
+                # Signal cancellation
+                cancel_event.set()
+                progress_label.text = "Cancelling..."
+                cancel_btn.disable()
+            else:
+                # Not started yet, just close
+                dialog.close()
 
         async def do_build() -> None:
             """Execute the build with progress updates."""
+            nonlocal is_building
             if not self.state.project or not self.state.world_db:
                 dialog.close()
                 return
+
+            is_building = True
+            build_btn.disable()
+            cancel_btn.text = "Stop"
 
             try:
                 # Update progress using callback
@@ -816,13 +844,13 @@ class WritePage:
                     # Calculate progress as fraction of total steps
                     progress_bar.value = progress.step / progress.total_steps
 
-                # Run the unified world build with full options (no clearing)
+                # Run the unified world build with cancellation support
                 await run.io_bound(
                     self.services.world.build_world,
                     self.state.project,
                     self.state.world_db,
                     self.services,
-                    WorldBuildOptions.full(),
+                    WorldBuildOptions.full(cancellation_event=cancel_event),
                     on_progress,
                 )
 
@@ -849,6 +877,12 @@ class WritePage:
                     type="positive",
                 )
 
+            except GenerationCancelledError:
+                logger.info("Story structure build cancelled by user")
+                dialog.close()
+                self._update_interview_buttons()
+                self._notify("Build cancelled.", type="warning")
+
             except Exception as e:
                 logger.exception("Failed to build story structure")
                 dialog.close()
@@ -856,11 +890,15 @@ class WritePage:
                 self._update_interview_buttons()
                 self._notify(f"Error: {e}", type="negative")
 
-        with dialog, ui.card().classes("w-[500px] bg-white dark:bg-gray-800"):
+        # Use state-based dark mode styling
+        card_bg = "#1f2937" if self.state.dark_mode else "#ffffff"
+        inner_card_bg = "#374151" if self.state.dark_mode else "#f9fafb"
+
+        with dialog, ui.card().classes("w-[500px]").style(f"background-color: {card_bg}"):
             ui.label("Building Story Structure").classes("text-xl font-bold mb-4")
 
             # Show what we're building
-            with ui.card().classes("w-full bg-gray-50 dark:bg-gray-700 mb-4"):
+            with ui.card().classes("w-full mb-4").style(f"background-color: {inner_card_bg}"):
                 ui.label("Story Overview:").classes("font-medium mb-2")
                 ui.label(f"Genre: {brief.genre} • Tone: {brief.tone}").classes(
                     "text-sm text-gray-600 dark:text-gray-400"
@@ -881,14 +919,101 @@ class WritePage:
                 ui.label("• Outline chapter structure and plot points").classes("text-sm")
                 ui.label("• Establish story rules and timeline").classes("text-sm")
 
+            # Generation settings section
+            ui.separator().classes("my-2")
+            ui.label("Generation Settings").classes("font-medium mb-2")
+
+            settings = self.services.settings
+            project = self.state.project
+
+            # Calculate default chapters based on length
+            length_map = {
+                "short_story": settings.chapters_short_story,
+                "novella": settings.chapters_novella,
+                "novel": settings.chapters_novel,
+            }
+            default_chapters = length_map.get(brief.target_length, settings.chapters_novella)
+
+            with ui.row().classes("w-full gap-4 flex-wrap mb-4"):
+                # Chapter count
+                with ui.column().classes("gap-1"):
+                    ui.label("Chapters").classes("text-xs text-gray-500")
+                    chapter_input = (
+                        ui.number(
+                            value=project.target_chapters or default_chapters,
+                            min=1,
+                            max=100,
+                            step=1,
+                        )
+                        .props("dense outlined")
+                        .classes("w-20")
+                    )
+                    ui.label(f"Default: {default_chapters}").classes("text-xs text-gray-400")
+
+                # Character count range
+                with ui.column().classes("gap-1"):
+                    ui.label("Characters (min-max)").classes("text-xs text-gray-500")
+                    with ui.row().classes("gap-1 items-center"):
+                        char_min_input = (
+                            ui.number(
+                                value=(
+                                    project.target_characters_min
+                                    or settings.world_gen_characters_min
+                                ),
+                                min=1,
+                                max=50,
+                                step=1,
+                            )
+                            .props("dense outlined")
+                            .classes("w-16")
+                        )
+                        ui.label("-").classes("text-gray-400")
+                        char_max_input = (
+                            ui.number(
+                                value=(
+                                    project.target_characters_max
+                                    or settings.world_gen_characters_max
+                                ),
+                                min=1,
+                                max=50,
+                                step=1,
+                            )
+                            .props("dense outlined")
+                            .classes("w-16")
+                        )
+                    ui.label(
+                        f"Default: {settings.world_gen_characters_min}-"
+                        f"{settings.world_gen_characters_max}"
+                    ).classes("text-xs text-gray-400")
+
+            # Function to save settings before building
+            async def save_settings_and_build() -> None:
+                # Update project with dialog values
+                project.target_chapters = int(chapter_input.value) if chapter_input.value else None
+                project.target_characters_min = (
+                    int(char_min_input.value) if char_min_input.value else None
+                )
+                project.target_characters_max = (
+                    int(char_max_input.value) if char_max_input.value else None
+                )
+                self.services.project.save_project(project)
+                logger.info(
+                    f"Updated generation settings: chapters={project.target_chapters}, "
+                    f"chars={project.target_characters_min}-{project.target_characters_max}"
+                )
+                # Now start the build
+                await do_build()
+
             progress_label = ui.label("Ready to build...").classes(
                 "text-sm text-gray-500 dark:text-gray-400 mb-2"
             )
             progress_bar = ui.linear_progress(value=0, show_value=False).classes("w-full mb-4")
 
             with ui.row().classes("w-full justify-end gap-2"):
-                ui.button("Cancel", on_click=dialog.close).props("flat")
-                ui.button("Build Structure", on_click=do_build).props("color=primary")
+                cancel_btn = ui.button("Cancel", on_click=do_cancel).props("flat")
+                build_btn = ui.button("Build Structure", on_click=save_settings_and_build).props(
+                    "color=primary"
+                )
 
         dialog.open()
 

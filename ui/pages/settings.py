@@ -80,6 +80,9 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
                     self._build_world_gen_section()
 
+                with ui.element("div").style("flex: 1 1 350px; min-width: 350px;"):
+                    self._build_story_structure_section()
+
             # Save button
             ui.button(
                 "Save Settings",
@@ -614,6 +617,55 @@ class SettingsPage:
 
                         self._world_gen_sliders[key] = (min_slider, max_slider)
 
+    def _build_story_structure_section(self) -> None:
+        """Build story structure settings section."""
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Story Structure",
+                "menu_book",
+                "Default chapter counts for different story lengths. "
+                "Projects can override these values individually.",
+            )
+
+            # Store inputs for saving
+            self._chapter_inputs: dict[str, ui.number] = {}
+
+            length_configs = [
+                ("short_story", "Short Story", "Quick reads", 1, 5),
+                ("novella", "Novella", "Medium length", 3, 15),
+                ("novel", "Novel", "Full length", 10, 50),
+            ]
+
+            with ui.column().classes("w-full gap-4"):
+                for key, label, hint, min_val, max_val in length_configs:
+                    attr_name = f"chapters_{key}"
+                    current_val = getattr(self.settings, attr_name)
+
+                    with ui.row().classes("w-full items-center gap-3"):
+                        with ui.column().classes("flex-grow"):
+                            ui.label(label).classes("text-sm font-medium")
+                            ui.label(hint).classes("text-xs text-gray-500")
+
+                        self._chapter_inputs[key] = (
+                            ui.number(
+                                value=current_val,
+                                min=min_val,
+                                max=max_val,
+                                step=1,
+                            )
+                            .props("outlined dense")
+                            .classes("w-20")
+                        )
+
+                ui.separator().classes("my-2")
+
+                # Info about per-project overrides
+                with ui.row().classes("items-center gap-2"):
+                    ui.icon("info", size="xs").classes("text-blue-500")
+                    ui.label(
+                        "Individual projects can override these in 'Generation Settings'"
+                    ).classes("text-xs text-gray-500 dark:text-gray-400")
+
     async def _test_connection(self) -> None:
         """Test Ollama connection."""
         # Update URL first
@@ -690,6 +742,11 @@ class SettingsPage:
                     max_val = min_val
                 setattr(self.settings, f"world_gen_{key}_min", min_val)
                 setattr(self.settings, f"world_gen_{key}_max", max_val)
+
+            # Story structure settings (chapter counts)
+            if hasattr(self, "_chapter_inputs"):
+                for key, input_widget in self._chapter_inputs.items():
+                    setattr(self.settings, f"chapters_{key}", int(input_widget.value))
 
             # Validate and save first - only record undo if successful
             self.settings.validate()

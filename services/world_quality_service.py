@@ -22,6 +22,7 @@ from memory.world_quality import (
     ItemQualityScores,
     LocationQualityScores,
     RefinementConfig,
+    RefinementHistory,
     RelationshipQualityScores,
 )
 from services.llm_client import generate_structured
@@ -1015,6 +1016,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
     ) -> tuple[dict[str, Any], FactionQualityScores, int]:
         """Generate a faction with quality refinement loop.
 
+        Tracks all iterations and returns the BEST one, not necessarily the last.
+
         Args:
             story_state: Current story state with brief.
             existing_names: Names of existing factions to avoid.
@@ -1033,6 +1036,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         logger.info(f"Generating faction with quality threshold {config.quality_threshold}")
 
+        # Track all iterations for best-selection
+        history = RefinementHistory(entity_type="faction", entity_name="")
         iteration = 0
         faction: dict[str, Any] = {}
         scores: FactionQualityScores | None = None
@@ -1059,15 +1064,33 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     iteration += 1
                     continue
 
+                # Update history entity name
+                if not history.entity_name:
+                    history.entity_name = faction.get("name", "Unknown")
+
                 scores = self._judge_faction_quality(faction, story_state, config.judge_temperature)
+
+                # Track this iteration
+                history.add_iteration(
+                    iteration=iteration + 1,
+                    entity_data=faction.copy(),
+                    scores=scores.to_dict(),
+                    average_score=scores.average,
+                    feedback=scores.feedback,
+                )
 
                 logger.info(
                     f"Faction '{faction.get('name')}' iteration {iteration + 1}: "
-                    f"score {scores.average:.1f}"
+                    f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
+                    f"at iteration {history.best_iteration})"
                 )
 
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Faction '{faction.get('name')}' met quality threshold")
+                    history.final_iteration = iteration + 1
+                    history.final_score = scores.average
+                    # Log analytics
+                    self._log_refinement_analytics(history, story_state.id)
                     return faction, scores, iteration + 1
 
             except WorldGenerationError as e:
@@ -1076,17 +1099,94 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
             iteration += 1
 
-        if not faction.get("name") or scores is None:
+        # Didn't meet threshold - return BEST iteration, not last
+        if not history.iterations:
             raise WorldGenerationError(
                 f"Failed to generate faction after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
 
+        # Pick best iteration (not necessarily the last one)
+        best_entity = history.get_best_entity()
+
+        if best_entity and history.best_iteration != len(history.iterations):
+            # We have a better iteration than the last one
+            logger.warning(
+                f"Faction '{history.entity_name}' iterations got WORSE after peak. "
+                f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
+                f"Final: iteration {len(history.iterations)} ({history.iterations[-1].average_score:.1f}). "
+                f"Returning best iteration."
+            )
+            faction = best_entity
+            # Reconstruct scores from best iteration
+            best_record = history.iterations[history.best_iteration - 1]
+            scores = FactionQualityScores(
+                coherence=best_record.scores.get("coherence", 0),
+                influence=best_record.scores.get("influence", 0),
+                conflict_potential=best_record.scores.get("conflict_potential", 0),
+                distinctiveness=best_record.scores.get("distinctiveness", 0),
+                feedback=best_record.feedback,
+            )
+            history.final_iteration = history.best_iteration
+            history.final_score = history.peak_score
+        else:
+            history.final_iteration = len(history.iterations)
+            # Reconstruct scores from last iteration if not available
+            if scores is None:
+                last_record = history.iterations[-1]
+                scores = FactionQualityScores(
+                    coherence=last_record.scores.get("coherence", 0),
+                    influence=last_record.scores.get("influence", 0),
+                    conflict_potential=last_record.scores.get("conflict_potential", 0),
+                    distinctiveness=last_record.scores.get("distinctiveness", 0),
+                    feedback=last_record.feedback,
+                )
+            history.final_score = scores.average
+
         logger.warning(
-            f"Faction '{faction.get('name')}' did not meet quality threshold "
-            f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+            f"Faction '{history.entity_name}' did not meet quality threshold "
+            f"({history.final_score:.1f} < {config.quality_threshold}), "
+            f"returning iteration {history.final_iteration}"
         )
-        return faction, scores, iteration
+
+        # Log analytics
+        self._log_refinement_analytics(history, story_state.id)
+
+        return faction, scores, history.final_iteration
+
+    def _log_refinement_analytics(self, history: RefinementHistory, project_id: str) -> None:
+        """Log refinement iteration analytics for analysis."""
+        analysis = history.analyze_improvement()
+
+        logger.info(
+            f"REFINEMENT ANALYTICS [{history.entity_type}] '{history.entity_name}':\n"
+            f"  - Total iterations: {analysis['total_iterations']}\n"
+            f"  - Score progression: {' -> '.join(f'{s:.1f}' for s in analysis['score_progression'])}\n"
+            f"  - Best iteration: {analysis['best_iteration']} ({history.peak_score:.1f})\n"
+            f"  - Final returned: iteration {history.final_iteration} ({history.final_score:.1f})\n"
+            f"  - Improved over first: {analysis['improved']}\n"
+            f"  - Worsened after peak: {analysis.get('worsened_after_peak', False)}"
+        )
+
+        # Record to analytics database with extended scores info
+        # Convert list to string for SQLite compatibility
+        progression_str = " -> ".join(f"{s:.1f}" for s in analysis["score_progression"])
+        extended_scores = {
+            "final_score": history.final_score,
+            "peak_score": history.peak_score,
+            "score_progression": progression_str,
+            "best_iteration": analysis["best_iteration"],
+            "improved": analysis["improved"],
+            "worsened_after_peak": analysis.get("worsened_after_peak", False),
+        }
+        self.record_entity_quality(
+            project_id=project_id,
+            entity_type=history.entity_type,
+            entity_name=history.entity_name,
+            scores=extended_scores,
+            iterations=analysis["total_iterations"],
+            generation_time=0.0,  # Not tracked at this level
+        )
 
     def _create_faction(
         self,
@@ -1182,7 +1282,7 @@ Output ONLY valid JSON (all text in {brief.language}):
         brief = story_state.brief
         genre = brief.genre if brief else "fiction"
 
-        prompt = f"""You are evaluating a faction for a {genre} story.
+        prompt = f"""You are a strict quality judge evaluating a faction for a {genre} story.
 
 FACTION TO EVALUATE:
 Name: {faction.get("name", "Unknown")}
@@ -1191,18 +1291,24 @@ Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
 
-Rate each dimension 0-10:
-- COHERENCE: Internal consistency, clear structure
-- INFLUENCE: World impact, power level
-- CONFLICT_POTENTIAL: Story conflict opportunities
-- DISTINCTIVENESS: Memorable, unique qualities
+SCORING GUIDE (use the FULL range):
+- 9-10: EXCEPTIONAL - publishable quality, deeply compelling, no improvements needed
+- 7-8: GOOD - solid foundation, minor improvements possible
+- 5-6: ACCEPTABLE - functional but generic, needs more depth
+- 3-4: WEAK - major issues, significant rework needed
+- 1-2: POOR - fundamentally flawed, start over
 
-Provide specific improvement feedback.
+Rate each dimension using this calibration:
+- COHERENCE: Internal consistency, clear structure (9+ = seamless logic, no contradictions)
+- INFLUENCE: World impact, power level (9+ = shapes entire world, major player)
+- CONFLICT_POTENTIAL: Story conflict opportunities (9+ = multiple compelling story hooks)
+- DISTINCTIVENESS: Memorable, unique qualities (9+ = unlike any other faction, iconic)
 
-IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+BE HONEST: Award 9-10 ONLY for truly exceptional work. Most factions score 6-8.
+Provide SPECIFIC feedback on exactly what would raise each dimension's score.
 
 Output ONLY valid JSON:
-{{"coherence": <your_score>, "influence": <your_score>, "conflict_potential": <your_score>, "distinctiveness": <your_score>, "feedback": "<your_specific_feedback>"}}"""
+{{"coherence": <score>, "influence": <score>, "conflict_potential": <score>, "distinctiveness": <score>, "feedback": "<specific_actionable_feedback>"}}"""
 
         try:
             model = self._get_judge_model()
@@ -1257,9 +1363,19 @@ Output ONLY valid JSON:
     ) -> dict[str, Any]:
         """Refine a faction based on quality feedback."""
         brief = story_state.brief
-        weak = scores.weak_dimensions(self.get_config().quality_threshold)
 
-        prompt = f"""Improve this faction based on quality feedback.
+        # Build specific improvement instructions from feedback
+        improvement_focus = []
+        if scores.coherence < 8:
+            improvement_focus.append("Make internal logic more consistent")
+        if scores.influence < 8:
+            improvement_focus.append("Increase world impact and power level")
+        if scores.conflict_potential < 8:
+            improvement_focus.append("Add more story conflict opportunities")
+        if scores.distinctiveness < 8:
+            improvement_focus.append("Make more unique and memorable")
+
+        prompt = f"""TASK: Improve this faction to score HIGHER on the weak dimensions.
 
 ORIGINAL FACTION:
 Name: {faction.get("name", "Unknown")}
@@ -1268,32 +1384,31 @@ Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
 
-QUALITY SCORES (0-10):
-- Coherence: {scores.coherence}
-- Influence: {scores.influence}
-- Conflict Potential: {scores.conflict_potential}
-- Distinctiveness: {scores.distinctiveness}
+CURRENT SCORES (need 9+ in all areas):
+- Coherence: {scores.coherence}/10
+- Influence: {scores.influence}/10
+- Conflict Potential: {scores.conflict_potential}/10
+- Distinctiveness: {scores.distinctiveness}/10
 
-FEEDBACK: {scores.feedback}
-WEAK AREAS: {", ".join(weak) if weak else "None"}
+JUDGE'S FEEDBACK: {scores.feedback}
 
-Keep the name, enhance the weak areas.
+SPECIFIC IMPROVEMENTS NEEDED:
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
-Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
-{{
-    "name": "{faction.get("name", "Unknown")}",
-    "type": "faction",
-    "description": "Improved description",
-    "leader": "Improved leader",
-    "goals": ["improved goals"],
-    "values": ["improved values"]
-}}"""
+REQUIREMENTS:
+1. Keep the exact name: "{faction.get("name", "Unknown")}"
+2. Make SUBSTANTIAL improvements to weak areas
+3. Add concrete details, not vague generalities
+4. Output in {brief.language if brief else "English"}
+
+Return ONLY the improved faction as JSON."""
 
         try:
             model = self._get_creator_model()
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",  # Force JSON output
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_faction_refine,
@@ -1302,6 +1417,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
             data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
+                # Ensure name is preserved
+                data["name"] = faction.get("name", "Unknown")
+                data["type"] = "faction"
                 return data
             else:
                 logger.error(f"Faction refinement returned invalid JSON structure: {data}")

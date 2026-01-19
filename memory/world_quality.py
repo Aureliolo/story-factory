@@ -9,6 +9,91 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class IterationRecord(BaseModel):
+    """Record of a single refinement iteration for analytics."""
+
+    iteration: int = Field(description="1-indexed iteration number")
+    entity_data: dict[str, Any] = Field(description="Entity state at this iteration")
+    scores: dict[str, Any] = Field(description="Quality scores for this iteration")
+    average_score: float = Field(description="Average score for quick comparison")
+    feedback: str = Field(default="", description="Judge feedback for this iteration")
+
+
+class RefinementHistory(BaseModel):
+    """Full history of refinement iterations for an entity."""
+
+    entity_type: str = Field(description="Type of entity (faction, item, etc.)")
+    entity_name: str = Field(description="Name of the entity")
+    iterations: list[IterationRecord] = Field(default_factory=list)
+    best_iteration: int = Field(default=0, description="1-indexed best iteration (0 = none)")
+    final_iteration: int = Field(default=0, description="Which iteration was returned")
+    improvement_detected: bool = Field(default=False, description="Did iterations improve quality")
+    peak_score: float = Field(default=0.0, description="Highest score achieved")
+    final_score: float = Field(default=0.0, description="Score of returned entity")
+
+    def add_iteration(
+        self,
+        iteration: int,
+        entity_data: dict[str, Any],
+        scores: dict[str, Any],
+        average_score: float,
+        feedback: str = "",
+    ) -> None:
+        """Add an iteration record."""
+        self.iterations.append(
+            IterationRecord(
+                iteration=iteration,
+                entity_data=entity_data,
+                scores=scores,
+                average_score=average_score,
+                feedback=feedback,
+            )
+        )
+        if average_score > self.peak_score:
+            self.peak_score = average_score
+            self.best_iteration = iteration
+
+    def get_best_entity(self) -> dict[str, Any] | None:
+        """Return entity data from the best-scoring iteration."""
+        if self.best_iteration == 0 or not self.iterations:
+            return None
+        for record in self.iterations:
+            if record.iteration == self.best_iteration:
+                return record.entity_data
+        return None
+
+    def analyze_improvement(self) -> dict[str, Any]:
+        """Analyze whether iterations improved quality."""
+        if len(self.iterations) < 2:
+            first_score = self.iterations[0].average_score if self.iterations else 0.0
+            return {
+                "improved": False,
+                "reason": "Not enough iterations to compare",
+                "best_iteration": self.best_iteration,
+                "total_iterations": len(self.iterations),
+                "score_progression": [r.average_score for r in self.iterations],
+                "first_score": first_score,
+                "peak_score": self.peak_score,
+                "final_score": first_score,
+                "worsened_after_peak": False,
+            }
+
+        first_score = self.iterations[0].average_score
+        last_score = self.iterations[-1].average_score
+        self.improvement_detected = self.peak_score > first_score
+
+        return {
+            "improved": self.improvement_detected,
+            "first_score": first_score,
+            "peak_score": self.peak_score,
+            "final_score": last_score,
+            "best_iteration": self.best_iteration,
+            "total_iterations": len(self.iterations),
+            "score_progression": [r.average_score for r in self.iterations],
+            "worsened_after_peak": last_score < self.peak_score,
+        }
+
+
 class CharacterQualityScores(BaseModel):
     """Quality scores for a character (0-10 scale).
 
