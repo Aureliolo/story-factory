@@ -268,6 +268,21 @@ class WorldPage:
                 icon="refresh",
             ).props("outline color=negative")
 
+            # Clear World button - only show if no story content written yet
+            has_written_content = (
+                self.state.project
+                and self.state.project.chapters
+                and any(c.content for c in self.state.project.chapters)
+            )
+            if not has_written_content:
+                ui.button(
+                    "Clear World",
+                    on_click=self._confirm_clear_world,
+                    icon="delete_sweep",
+                ).props("outline color=warning").tooltip(
+                    "Remove all entities and relationships (only available before writing)"
+                )
+
     def _show_quality_settings_dialog(self) -> None:
         """Show dialog to configure quality refinement settings."""
         settings = self.services.settings
@@ -1431,6 +1446,81 @@ class WorldPage:
         except Exception as e:
             notification.dismiss()
             logger.exception(f"Error rebuilding world: {e}")
+            ui.notify(f"Error: {e}", type="negative")
+
+    def _confirm_clear_world(self) -> None:
+        """Show confirmation dialog before clearing world data."""
+        logger.info("Clear World button clicked - showing confirmation dialog")
+
+        if not self.state.world_db:
+            ui.notify("No world data to clear", type="info")
+            return
+
+        # Count existing data
+        entity_count = self.state.world_db.count_entities()
+        rel_count = len(self.state.world_db.list_relationships())
+
+        if entity_count == 0 and rel_count == 0:
+            ui.notify("World is already empty", type="info")
+            return
+
+        with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[400px]"):
+            ui.label("Clear World?").classes("text-lg font-bold")
+            ui.label(
+                f"This will permanently delete all world data:\n"
+                f"• {entity_count} entities\n"
+                f"• {rel_count} relationships\n\n"
+                f"This action cannot be undone."
+            ).classes("text-gray-600 dark:text-gray-400 whitespace-pre-line")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Clear All",
+                    on_click=lambda: self._do_clear_world(dialog),
+                    icon="delete_sweep",
+                ).props("color=warning")
+
+        dialog.open()
+
+    def _do_clear_world(self, dialog: ui.dialog) -> None:
+        """Execute world clear - removes all entities and relationships."""
+        logger.info("User confirmed clear - removing all world data")
+        dialog.close()
+
+        if not self.state.world_db:
+            logger.warning("Clear failed: no world_db available")
+            ui.notify("No world database available", type="negative")
+            return
+
+        try:
+            # Delete all relationships first (they reference entities)
+            relationships = self.state.world_db.list_relationships()
+            for rel in relationships:
+                self.state.world_db.delete_relationship(rel.id)
+            logger.info(f"Deleted {len(relationships)} relationships")
+
+            # Delete all entities
+            entities = self.state.world_db.list_entities()
+            for entity in entities:
+                self.state.world_db.delete_entity(entity.id)
+            logger.info(f"Deleted {len(entities)} entities")
+
+            # Refresh UI
+            self._refresh_entity_list()
+            if self._graph:
+                self._graph.refresh()
+
+            ui.notify(
+                f"World cleared: removed {len(entities)} entities and {len(relationships)} relationships",
+                type="positive",
+            )
+
+            # Reload page to update toolbar (Clear button visibility)
+            ui.navigate.reload()
+
+        except Exception as e:
+            logger.exception(f"Error clearing world: {e}")
             ui.notify(f"Error: {e}", type="negative")
 
     async def _generate_mini_descriptions(self) -> None:
