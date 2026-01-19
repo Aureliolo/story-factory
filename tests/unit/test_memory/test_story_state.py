@@ -2,9 +2,12 @@
 
 from memory.story_state import (
     Chapter,
+    ChapterList,
     Character,
+    CharacterList,
     OutlineVariation,
     PlotPoint,
+    PlotPointList,
     Scene,
     StoryBrief,
     StoryState,
@@ -1349,3 +1352,73 @@ class TestStoryStateVariations:
         assert merged.world_description == ""
         assert merged.characters == []
         assert merged.chapters == []
+
+
+class TestWrapperModelValidators:
+    """Tests for list wrapper models that handle single object wrapping."""
+
+    def test_character_list_wraps_single_object(self):
+        """Test CharacterList wraps a single Character object in a list."""
+        single_char = {"name": "Hero", "role": "protagonist", "description": "A brave hero"}
+        result = CharacterList.model_validate(single_char)
+
+        assert len(result.characters) == 1
+        assert result.characters[0].name == "Hero"
+        assert result.characters[0].role == "protagonist"
+
+    def test_character_list_accepts_proper_format(self):
+        """Test CharacterList accepts properly formatted input."""
+        proper_data = {
+            "characters": [
+                {"name": "Alice", "role": "protagonist", "description": "Hero"},
+                {"name": "Bob", "role": "antagonist", "description": "Villain"},
+            ]
+        }
+        result = CharacterList.model_validate(proper_data)
+
+        assert len(result.characters) == 2
+        assert result.characters[0].name == "Alice"
+        assert result.characters[1].name == "Bob"
+
+    def test_plot_point_list_wraps_single_object(self):
+        """Test PlotPointList wraps a single PlotPoint object in a list."""
+        single_plot = {"description": "Hero discovers the truth"}
+        result = PlotPointList.model_validate(single_plot)
+
+        assert len(result.plot_points) == 1
+        assert result.plot_points[0].description == "Hero discovers the truth"
+
+    def test_plot_point_list_accepts_proper_format(self):
+        """Test PlotPointList accepts properly formatted input."""
+        proper_data = {
+            "plot_points": [
+                {"description": "Plot point 1"},
+                {"description": "Plot point 2"},
+            ]
+        }
+        result = PlotPointList.model_validate(proper_data)
+
+        assert len(result.plot_points) == 2
+
+    def test_chapter_list_wraps_single_object(self):
+        """Test ChapterList wraps a single Chapter object in a list."""
+        single_chapter = {"number": 1, "title": "The Beginning", "outline": "Opening"}
+        result = ChapterList.model_validate(single_chapter)
+
+        assert len(result.chapters) == 1
+        assert result.chapters[0].number == 1
+        assert result.chapters[0].title == "The Beginning"
+
+    def test_chapter_list_accepts_proper_format(self):
+        """Test ChapterList accepts properly formatted input."""
+        proper_data = {
+            "chapters": [
+                {"number": 1, "title": "Ch1", "outline": "First"},
+                {"number": 2, "title": "Ch2", "outline": "Second"},
+            ]
+        }
+        result = ChapterList.model_validate(proper_data)
+
+        assert len(result.chapters) == 2
+        assert result.chapters[0].title == "Ch1"
+        assert result.chapters[1].title == "Ch2"
