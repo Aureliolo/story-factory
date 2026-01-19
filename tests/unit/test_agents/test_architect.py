@@ -5,7 +5,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agents.architect import ArchitectAgent
-from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
+from memory.story_state import (
+    Chapter,
+    ChapterList,
+    Character,
+    CharacterList,
+    PlotOutline,
+    PlotPoint,
+    StoryBrief,
+    StoryState,
+)
 from settings import Settings
 
 
@@ -101,32 +110,31 @@ The atmosphere is one of wonder and mystery, with ancient stone corridors and fl
 class TestArchitectCreateCharacters:
     """Tests for create_characters method."""
 
-    def test_parses_character_json(self, architect, sample_story_state):
-        """Test parses character JSON from response."""
-        json_response = """Here are the characters:
-```json
-[
-    {
-        "name": "Oliver Grey",
-        "role": "protagonist",
-        "description": "A curious 16-year-old with untapped magical potential",
-        "personality_traits": ["curious", "brave", "loyal"],
-        "goals": ["Master magic", "Find belonging"],
-        "relationships": {},
-        "arc_notes": "Grows from uncertain outsider to confident wizard"
-    },
-    {
-        "name": "Professor Nightshade",
-        "role": "supporting",
-        "description": "Stern but caring headmaster of the academy",
-        "personality_traits": ["wise", "stern", "protective"],
-        "goals": ["Guide students", "Protect the academy"],
-        "relationships": {"Oliver Grey": "Mentor"},
-        "arc_notes": "Reveals hidden connection to Oliver's past"
-    }
-]
-```"""
-        architect.generate = MagicMock(return_value=json_response)
+    def test_creates_characters_via_structured_generation(self, architect, sample_story_state):
+        """Test creates characters using generate_structured."""
+        mock_characters = CharacterList(
+            characters=[
+                Character(
+                    name="Oliver Grey",
+                    role="protagonist",
+                    description="A curious 16-year-old with untapped magical potential",
+                    personality_traits=["curious", "brave", "loyal"],
+                    goals=["Master magic", "Find belonging"],
+                    relationships={},
+                    arc_notes="Grows from uncertain outsider to confident wizard",
+                ),
+                Character(
+                    name="Professor Nightshade",
+                    role="supporting",
+                    description="Stern but caring headmaster of the academy",
+                    personality_traits=["wise", "stern", "protective"],
+                    goals=["Guide students", "Protect the academy"],
+                    relationships={"Oliver Grey": "Mentor"},
+                    arc_notes="Reveals hidden connection to Oliver's past",
+                ),
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_characters)
 
         characters = architect.create_characters(sample_story_state)
 
@@ -134,14 +142,17 @@ class TestArchitectCreateCharacters:
         assert characters[0].name == "Oliver Grey"
         assert characters[0].role == "protagonist"
         assert "curious" in characters[0].personality_traits
+        architect.generate_structured.assert_called_once()
 
-    def test_raises_error_on_parse_failure(self, architect, sample_story_state):
-        """Test raises JSONParseError when JSON parsing fails."""
-        from utils.exceptions import JSONParseError
+    def test_raises_error_on_generation_failure(self, architect, sample_story_state):
+        """Test raises error when structured generation fails."""
+        from utils.exceptions import LLMGenerationError
 
-        architect.generate = MagicMock(return_value="No valid JSON here")
+        architect.generate_structured = MagicMock(
+            side_effect=LLMGenerationError("Validation failed")
+        )
 
-        with pytest.raises(JSONParseError, match="No valid JSON found"):
+        with pytest.raises(LLMGenerationError):
             architect.create_characters(sample_story_state)
 
 
@@ -154,40 +165,38 @@ class TestArchitectCreatePlotOutline:
         long_world_desc = "A " * 300  # 600 chars
         sample_story_state.world_description = long_world_desc
 
-        response = """Plot summary here.
-
-```json
-[{"description": "Event 1", "chapter": 1}]
-```"""
+        mock_result = PlotOutline(
+            plot_summary="Plot summary here.",
+            plot_points=[PlotPoint(description="Event 1", chapter=1)],
+        )
         sample_story_state.characters = [
             Character(name="Hero", role="protagonist", description="Main char")
         ]
-        architect.generate = MagicMock(return_value=response)
+        architect.generate_structured = MagicMock(return_value=mock_result)
 
         architect.create_plot_outline(sample_story_state)
 
         # Verify the prompt includes truncated world with ellipsis
-        call_args = architect.generate.call_args[0][0]
+        call_args = architect.generate_structured.call_args[0][0]
         assert "WORLD" in call_args
         assert "..." in call_args
 
     def test_returns_summary_and_plot_points(self, architect, sample_story_state):
         """Test returns both plot summary and plot points."""
-        response = """Oliver discovers a mysterious letter inviting him to an academy he never knew existed. This sets him on a journey of self-discovery where he must confront his fears and embrace his true nature.
-
-```json
-[
-    {"description": "Oliver receives the mysterious invitation", "chapter": 1},
-    {"description": "First day at the magical academy", "chapter": 2},
-    {"description": "Oliver discovers a hidden power within himself", "chapter": 4},
-    {"description": "The final confrontation with the dark force", "chapter": 7},
-    {"description": "Oliver accepts his role as protector", "chapter": 7}
-]
-```"""
+        mock_result = PlotOutline(
+            plot_summary="Oliver discovers a mysterious letter inviting him to an academy he never knew existed. This sets him on a journey of self-discovery.",
+            plot_points=[
+                PlotPoint(description="Oliver receives the mysterious invitation", chapter=1),
+                PlotPoint(description="First day at the magical academy", chapter=2),
+                PlotPoint(description="Oliver discovers a hidden power within himself", chapter=4),
+                PlotPoint(description="The final confrontation with the dark force", chapter=7),
+                PlotPoint(description="Oliver accepts his role as protector", chapter=7),
+            ],
+        )
         sample_story_state.characters = [
             Character(name="Oliver Grey", role="protagonist", description="Young wizard")
         ]
-        architect.generate = MagicMock(return_value=response)
+        architect.generate_structured = MagicMock(return_value=mock_result)
 
         summary, plot_points = architect.create_plot_outline(sample_story_state)
 
@@ -203,23 +212,23 @@ class TestArchitectCreateChapterOutline:
     def test_creates_correct_number_of_chapters(self, architect, sample_story_state):
         """Test creates chapters based on target length."""
         # Novella should create 7 chapters
-        json_response = """```json
-[
-    {"number": 1, "title": "The Letter", "outline": "Oliver receives the mysterious invitation"},
-    {"number": 2, "title": "The Journey", "outline": "Travel to the hidden academy"},
-    {"number": 3, "title": "First Day", "outline": "Introduction to the magical world"},
-    {"number": 4, "title": "The Discovery", "outline": "Oliver finds his unique power"},
-    {"number": 5, "title": "The Training", "outline": "Intensive magical training begins"},
-    {"number": 6, "title": "The Revelation", "outline": "Dark secrets are revealed"},
-    {"number": 7, "title": "The Final Test", "outline": "Oliver faces his ultimate challenge"}
-]
-```"""
+        mock_result = ChapterList(
+            chapters=[
+                Chapter(number=1, title="The Letter", outline="Oliver receives the invitation"),
+                Chapter(number=2, title="The Journey", outline="Travel to the hidden academy"),
+                Chapter(number=3, title="First Day", outline="Introduction to the magical world"),
+                Chapter(number=4, title="The Discovery", outline="Oliver finds his unique power"),
+                Chapter(number=5, title="The Training", outline="Intensive magical training"),
+                Chapter(number=6, title="The Revelation", outline="Dark secrets are revealed"),
+                Chapter(number=7, title="The Final Test", outline="Oliver faces his challenge"),
+            ]
+        )
         sample_story_state.plot_summary = "An epic journey of discovery"
         sample_story_state.plot_points = [PlotPoint(description="Beginning", chapter=1)]
         sample_story_state.characters = [
             Character(name="Oliver", role="protagonist", description="Young wizard")
         ]
-        architect.generate = MagicMock(return_value=json_response)
+        architect.generate_structured = MagicMock(return_value=mock_result)
 
         chapters = architect.create_chapter_outline(sample_story_state)
 
@@ -230,15 +239,15 @@ class TestArchitectCreateChapterOutline:
     def test_short_story_creates_one_chapter(self, architect, sample_story_state):
         """Test short story creates single chapter."""
         sample_story_state.brief.target_length = "short_story"
-        json_response = """```json
-[
-    {"number": 1, "title": "The Complete Story", "outline": "The entire narrative in one chapter"}
-]
-```"""
+        mock_result = ChapterList(
+            chapters=[
+                Chapter(number=1, title="The Complete Story", outline="The entire narrative in one")
+            ]
+        )
         sample_story_state.plot_summary = "A complete story"
         sample_story_state.plot_points = []
         sample_story_state.characters = []
-        architect.generate = MagicMock(return_value=json_response)
+        architect.generate_structured = MagicMock(return_value=mock_result)
 
         chapters = architect.create_chapter_outline(sample_story_state)
 
@@ -675,30 +684,29 @@ class TestGenerateMoreCharacters:
 
     def test_generates_new_characters(self, architect, sample_story_state):
         """Test generates new characters complementing existing ones."""
-        json_response = """Here are new supporting characters:
-```json
-[
-    {
-        "name": "Marcus Vale",
-        "role": "supporting",
-        "description": "A mysterious librarian with knowledge of ancient texts",
-        "personality_traits": ["secretive", "helpful", "wise"],
-        "goals": ["Protect forbidden knowledge", "Guide worthy students"],
-        "relationships": {"Oliver Grey": "Mentor figure"},
-        "arc_notes": "Reveals his true identity as a guardian"
-    },
-    {
-        "name": "Luna Frost",
-        "role": "supporting",
-        "description": "A talented student with ice magic abilities",
-        "personality_traits": ["aloof", "competitive", "loyal"],
-        "goals": ["Master her powers", "Prove herself"],
-        "relationships": {"Oliver Grey": "Rival turned ally"},
-        "arc_notes": "Learns to trust others"
-    }
-]
-```"""
-        architect.generate = MagicMock(return_value=json_response)
+        mock_result = CharacterList(
+            characters=[
+                Character(
+                    name="Marcus Vale",
+                    role="supporting",
+                    description="A mysterious librarian with knowledge of ancient texts",
+                    personality_traits=["secretive", "helpful", "wise"],
+                    goals=["Protect forbidden knowledge", "Guide worthy students"],
+                    relationships={"Oliver Grey": "Mentor figure"},
+                    arc_notes="Reveals his true identity as a guardian",
+                ),
+                Character(
+                    name="Luna Frost",
+                    role="supporting",
+                    description="A talented student with ice magic abilities",
+                    personality_traits=["aloof", "competitive", "loyal"],
+                    goals=["Master her powers", "Prove herself"],
+                    relationships={"Oliver Grey": "Rival turned ally"},
+                    arc_notes="Learns to trust others",
+                ),
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
         existing_names = ["Oliver Grey", "Professor Nightshade"]
 
         characters = architect.generate_more_characters(sample_story_state, existing_names, count=2)
@@ -707,7 +715,7 @@ class TestGenerateMoreCharacters:
         assert characters[0].name == "Marcus Vale"
         assert characters[1].name == "Luna Frost"
         # Verify prompt includes existing names to avoid duplicates
-        call_args = architect.generate.call_args[0][0]
+        call_args = architect.generate_structured.call_args[0][0]
         assert "Oliver Grey" in call_args
         assert "Professor Nightshade" in call_args
         assert "EXISTING CHARACTERS" in call_args
@@ -734,15 +742,24 @@ class TestGenerateMoreCharacters:
 
     def test_includes_language_requirement(self, architect, sample_story_state):
         """Test prompt includes language requirement from brief."""
-        # Return valid character JSON to avoid parse failure
-        valid_char_json = """```json
-[{"name": "Test", "role": "supporting", "description": "A test character", "personality_traits": ["brave"], "goals": ["survive"], "arc_notes": "none", "relationships": {}}]
-```"""
-        architect.generate = MagicMock(return_value=valid_char_json)
+        mock_result = CharacterList(
+            characters=[
+                Character(
+                    name="Test",
+                    role="supporting",
+                    description="A test character",
+                    personality_traits=["brave"],
+                    goals=["survive"],
+                    arc_notes="none",
+                    relationships={},
+                )
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
 
         architect.generate_more_characters(sample_story_state, ["Hero"], count=1)
 
-        call_args = architect.generate.call_args[0][0]
+        call_args = architect.generate_structured.call_args[0][0]
         assert "English" in call_args
 
 

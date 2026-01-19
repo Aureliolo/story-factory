@@ -681,35 +681,29 @@ class TestModelModeServiceAdditional:
         """Test judge_quality with successful LLM response."""
         from unittest.mock import patch
 
-        mock_response = {"response": '{"prose_quality": 8.5, "instruction_following": 9.0}'}
+        with patch("services.model_mode_service.generate_structured") as mock_generate_structured:
+            mock_generate_structured.return_value = QualityScores(
+                prose_quality=8.5, instruction_following=9.0
+            )
 
-        with patch("services.model_mode_service.ollama.Client") as mock_client:
-            with patch("services.model_mode_service.extract_json") as mock_extract:
-                mock_extract.return_value = {"prose_quality": 8.5, "instruction_following": 9.0}
-                mock_instance = MagicMock()
-                mock_client.return_value = mock_instance
-                mock_instance.generate.return_value = mock_response
+            scores = service.judge_quality(
+                content="A great story...",
+                genre="fantasy",
+                tone="epic",
+                themes=["adventure", "courage"],
+            )
 
-                scores = service.judge_quality(
-                    content="A great story...",
-                    genre="fantasy",
-                    tone="epic",
-                    themes=["adventure", "courage"],
-                )
-
-                assert scores.prose_quality == 8.5
-                assert scores.instruction_following == 9.0
+            assert scores.prose_quality == 8.5
+            assert scores.instruction_following == 9.0
+            mock_generate_structured.assert_called_once()
 
     def test_judge_quality_invalid_json(self, service: ModelModeService) -> None:
-        """Test judge_quality handles invalid JSON response."""
+        """Test judge_quality handles validation failure."""
         from unittest.mock import patch
 
-        mock_response = {"response": "This is not JSON at all"}
-
-        with patch("services.model_mode_service.ollama.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_client.return_value = mock_instance
-            mock_instance.generate.return_value = mock_response
+        with patch("services.model_mode_service.generate_structured") as mock_generate_structured:
+            # Simulate validation/parsing failure
+            mock_generate_structured.side_effect = ValueError("Validation failed")
 
             scores = service.judge_quality(
                 content="A story...",
@@ -726,10 +720,8 @@ class TestModelModeServiceAdditional:
         """Test judge_quality handles exceptions gracefully."""
         from unittest.mock import patch
 
-        with patch("services.model_mode_service.ollama.Client") as mock_client:
-            mock_instance = MagicMock()
-            mock_client.return_value = mock_instance
-            mock_instance.generate.side_effect = ConnectionError("LLM unavailable")
+        with patch("services.model_mode_service.generate_structured") as mock_generate_structured:
+            mock_generate_structured.side_effect = ConnectionError("LLM unavailable")
 
             scores = service.judge_quality(
                 content="A story...",
@@ -877,29 +869,23 @@ class TestModelModeServiceAdditional:
 
     def test_judge_quality_json_decode_error(self, service: ModelModeService) -> None:
         """Test judge_quality handles JSON decode error specifically."""
+        import json
         from unittest.mock import patch
 
-        # Return something that looks like JSON but is malformed
-        mock_response = {
-            "response": '{"prose_quality": 8.5, "instruction_following": }'
-        }  # Invalid JSON
+        with patch("services.model_mode_service.generate_structured") as mock_generate_structured:
+            # Simulate JSON decode error from instructor/pydantic
+            mock_generate_structured.side_effect = json.JSONDecodeError("test error", "doc", 0)
 
-        with patch("services.model_mode_service.ollama.Client") as mock_client:
-            with patch("services.model_mode_service.extract_json", return_value=None):
-                mock_instance = MagicMock()
-                mock_client.return_value = mock_instance
-                mock_instance.generate.return_value = mock_response
+            scores = service.judge_quality(
+                content="A story...",
+                genre="fantasy",
+                tone="epic",
+                themes=["adventure"],
+            )
 
-                scores = service.judge_quality(
-                    content="A story...",
-                    genre="fantasy",
-                    tone="epic",
-                    themes=["adventure"],
-                )
-
-                # Should return neutral scores (line 484 path)
-                assert scores.prose_quality == 5.0
-                assert scores.instruction_following == 5.0
+            # Should return neutral scores
+            assert scores.prose_quality == 5.0
+            assert scores.instruction_following == 5.0
 
     def test_get_recommendations_with_missing_model_for_role(
         self, service: ModelModeService
@@ -1113,26 +1099,30 @@ class TestModelModeServiceAdditional:
 
     def test_judge_quality_with_direct_json_decode_error(self, service: ModelModeService) -> None:
         """Test judge_quality catches json.JSONDecodeError directly."""
-        import json
         from unittest.mock import patch
 
-        # Mock extract_json to raise JSONDecodeError
-        with patch("services.model_mode_service.ollama.Client") as mock_client:
-            with patch(
-                "services.model_mode_service.extract_json",
-                side_effect=json.JSONDecodeError("test error", "doc", 0),
-            ):
-                mock_instance = MagicMock()
-                mock_client.return_value = mock_instance
-                mock_instance.generate.return_value = {"response": "some response"}
+        from pydantic import ValidationError
 
-                scores = service.judge_quality(
-                    content="A story...",
-                    genre="fantasy",
-                    tone="epic",
-                    themes=["adventure"],
-                )
+        with patch("services.model_mode_service.generate_structured") as mock_generate_structured:
+            # Simulate a Pydantic validation error from instructor
+            mock_generate_structured.side_effect = ValidationError.from_exception_data(
+                title="QualityScores",
+                line_errors=[
+                    {
+                        "type": "missing",
+                        "loc": ("prose_quality",),
+                        "input": {},
+                    }
+                ],
+            )
 
-                # Should return neutral scores (line 484)
-                assert scores.prose_quality == 5.0
-                assert scores.instruction_following == 5.0
+            scores = service.judge_quality(
+                content="A story...",
+                genre="fantasy",
+                tone="epic",
+                themes=["adventure"],
+            )
+
+            # Should return neutral scores
+            assert scores.prose_quality == 5.0
+            assert scores.instruction_following == 5.0
