@@ -18,7 +18,7 @@ function Set-ActionMessage {
 }
 
 function Get-RecentLogLines {
-    param([int]$Lines = 6)
+    param([int]$Lines = 12)
 
     $logFile = Join-Path $projectRoot "logs\story_factory.log"
     $result = @()
@@ -28,8 +28,8 @@ function Get-RecentLogLines {
         if ($logs) {
             foreach ($line in $logs) {
                 # Truncate long lines
-                if ($line.Length -gt 100) {
-                    $line = $line.Substring(0, 97) + "..."
+                if ($line.Length -gt 150) {
+                    $line = $line.Substring(0, 147) + "..."
                 }
                 $result += $line
             }
@@ -89,7 +89,7 @@ function Write-Screen {
     Write-Host ""
     Write-Host "--------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  Recent Logs:" -ForegroundColor DarkCyan
-    $logs = Get-RecentLogLines -Lines 6
+    $logs = Get-RecentLogLines -Lines 12
     if ($logs.Count -eq 0) {
         Write-Host "  (no logs yet)" -ForegroundColor DarkGray
     } else {
@@ -190,7 +190,7 @@ $checkInterval = 2000  # milliseconds between log checks
 $lastCheck = [DateTime]::Now
 
 Write-Screen
-$script:previousLogs = Get-RecentLogLines -Lines 6
+$script:previousLogs = Get-RecentLogLines -Lines 12
 Write-Host "  Choice: " -NoNewline
 
 while ($true) {
@@ -218,7 +218,7 @@ while ($true) {
 
         # Redraw screen after action
         Write-Screen
-        $script:previousLogs = Get-RecentLogLines -Lines 6
+        $script:previousLogs = Get-RecentLogLines -Lines 12
         Write-Host "  Choice: " -NoNewline
         $lastCheck = [DateTime]::Now
     }
@@ -226,7 +226,7 @@ while ($true) {
     # Check for log changes periodically
     $elapsed = ([DateTime]::Now - $lastCheck).TotalMilliseconds
     if ($elapsed -ge $checkInterval) {
-        $currentLogs = Get-RecentLogLines -Lines 6
+        $currentLogs = Get-RecentLogLines -Lines 12
         $logsChanged = ($currentLogs -join "`n") -ne ($script:previousLogs -join "`n")
 
         if ($logsChanged) {
