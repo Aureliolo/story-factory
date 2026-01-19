@@ -516,10 +516,11 @@ class WritePage:
         self._generation_status = GenerationStatus(self.state)
         self._generation_status.build()
 
-        # Writing area - use dark: prefix for automatic dark mode support
-        self._writing_display = ui.markdown().classes(
-            "w-full flex-grow p-4 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 prose dark:prose-invert max-w-none overflow-auto"
-        )
+        # Writing area - wrap in container for reliable dark mode support
+        with ui.element("div").classes(
+            "w-full flex-grow p-4 rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 overflow-auto"
+        ):
+            self._writing_display = ui.markdown().classes("prose dark:prose-invert max-w-none")
 
         # Load current chapter content
         self._refresh_writing_display()
