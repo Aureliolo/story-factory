@@ -713,13 +713,13 @@ class WritePage:
                     # Calculate progress as fraction of total steps
                     progress_bar.value = progress.step / progress.total_steps
 
-                # Run the unified world build with minimal options (no clearing)
+                # Run the unified world build with full options (no clearing)
                 await run.io_bound(
                     self.services.world.build_world,
                     self.state.project,
                     self.state.world_db,
                     self.services,
-                    WorldBuildOptions.minimal(),
+                    WorldBuildOptions.full(),
                     on_progress,
                 )
 

@@ -22,22 +22,22 @@ class TestWorldBuildOptions:
         options = WorldBuildOptions()
         assert options.clear_existing is False
         assert options.generate_structure is True
-        assert options.generate_locations is False
-        assert options.generate_factions is False
-        assert options.generate_items is False
-        assert options.generate_concepts is False
-        assert options.generate_relationships is False
+        assert options.generate_locations is True
+        assert options.generate_factions is True
+        assert options.generate_items is True
+        assert options.generate_concepts is True
+        assert options.generate_relationships is True
 
-    def test_minimal_factory(self):
-        """Test minimal() factory method."""
-        options = WorldBuildOptions.minimal()
+    def test_full_factory(self):
+        """Test full() factory method."""
+        options = WorldBuildOptions.full()
         assert options.clear_existing is False
         assert options.generate_structure is True
-        assert options.generate_locations is False
-        assert options.generate_factions is False
-        assert options.generate_items is False
-        assert options.generate_concepts is False
-        assert options.generate_relationships is False
+        assert options.generate_locations is True
+        assert options.generate_factions is True
+        assert options.generate_items is True
+        assert options.generate_concepts is True
+        assert options.generate_relationships is True
 
     def test_full_rebuild_factory(self):
         """Test full_rebuild() factory method."""
@@ -185,11 +185,13 @@ def mock_services():
 class TestCalculateTotalSteps:
     """Tests for _calculate_total_steps method."""
 
-    def test_minimal_options(self, world_service):
-        """Test step count for minimal options."""
-        options = WorldBuildOptions.minimal()
-        # Structure (1) + character extraction (1) + completion (1) = 3
-        assert world_service._calculate_total_steps(options) == 3
+    def test_full_options(self, world_service):
+        """Test step count for full options."""
+        options = WorldBuildOptions.full()
+        # Base (2: character extraction + completion)
+        # + structure (1) + locations (1) + factions (1)
+        # + items (1) + concepts (1) + relationships (1) = 8
+        assert world_service._calculate_total_steps(options) == 8
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
@@ -584,24 +586,35 @@ class TestBuildWorld:
         with pytest.raises(ValueError, match="no brief"):
             world_service.build_world(state, mock_world_db, mock_services)
 
-    def test_minimal_build(self, world_service, mock_world_db, sample_story_state, mock_services):
-        """Test minimal build extracts characters only."""
-        # Mock the orchestrator path for non-clearing build
-        mock_orchestrator = MagicMock()
-        mock_services.story._get_orchestrator.return_value = mock_orchestrator
-        mock_services.story._sync_state = MagicMock()
+    def test_full_build_keeps_existing(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test full build keeps existing data and generates new."""
+        # Pre-populate database with an existing character
+        mock_world_db.add_entity("character", "ExistingChar", "Should be kept")
+
+        # Setup mocks for generation
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.story.generate_locations.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.story.generate_relationships.return_value = []
 
         counts = world_service.build_world(
             sample_story_state,
             mock_world_db,
             mock_services,
-            WorldBuildOptions.minimal(),
+            WorldBuildOptions.full(),
         )
 
-        # Should have extracted characters
-        assert counts["characters"] == 2
-        assert counts["locations"] == 0
-        assert counts["factions"] == 0
+        # Should have extracted characters (existing + new from state)
+        assert counts["characters"] >= 2
+        # Existing character should still be there
+        existing = mock_world_db.search_entities("ExistingChar")
+        assert len(existing) > 0
 
     def test_full_rebuild_clears_first(
         self, world_service, mock_world_db, sample_story_state, mock_services
@@ -630,16 +643,21 @@ class TestBuildWorld:
         def on_progress(progress):
             progress_updates.append(progress)
 
-        # Mock orchestrator for non-clearing build
-        mock_orchestrator = MagicMock()
-        mock_services.story._get_orchestrator.return_value = mock_orchestrator
-        mock_services.story._sync_state = MagicMock()
+        # Setup mocks for generation
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.story.generate_locations.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.story.generate_relationships.return_value = []
 
         world_service.build_world(
             sample_story_state,
             mock_world_db,
             mock_services,
-            WorldBuildOptions.minimal(),
+            WorldBuildOptions.full(),
             on_progress,
         )
 
