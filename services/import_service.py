@@ -134,7 +134,7 @@ Be thorough - include all named characters and even unnamed roles if significant
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if not data or not isinstance(data, list):
                 logger.error(f"Character extraction returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid character extraction response: {data}")
@@ -251,7 +251,7 @@ Include cities, buildings, rooms, natural features - any place that matters to t
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if not data or not isinstance(data, list):
                 logger.error(f"Location extraction returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid location extraction response: {data}")
@@ -369,7 +369,7 @@ Only include items that are actually significant - avoid mundane everyday object
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if not data or not isinstance(data, list):
                 logger.error(f"Item extraction returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid item extraction response: {data}")
@@ -484,7 +484,7 @@ Only include relationships that are actually mentioned or clearly implied in the
                 },
             )
 
-            data = extract_json(response["response"])
+            data = extract_json(response["response"], strict=False)
             if not data or not isinstance(data, list):
                 logger.error(f"Relationship inference returned non-list: {data}")
                 raise WorldGenerationError(f"Invalid relationship inference response: {data}")

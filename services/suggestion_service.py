@@ -111,8 +111,8 @@ Each suggestion should be 1-2 sentences, specific to this story."""
 
             logger.debug(f"Raw suggestion response: {response[:200]}...")
 
-            # Parse JSON response
-            suggestions_data = extract_json(response)
+            # Parse JSON response - use strict=False to handle failure with SuggestionError
+            suggestions_data = extract_json(response, strict=False)
 
             if not suggestions_data:
                 logger.error("Failed to extract JSON from suggestions response")
@@ -289,8 +289,8 @@ Do not include any explanation, just the JSON array."""
 
             logger.debug(f"Raw name suggestions response: {response[:200]}...")
 
-            # Parse JSON response
-            suggestions = extract_json(response)
+            # Parse JSON response - use strict=False to handle failure with SuggestionError
+            suggestions = extract_json(response, strict=False)
 
             if not suggestions:
                 logger.error("Failed to extract JSON from name suggestions response")

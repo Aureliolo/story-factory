@@ -1,7 +1,9 @@
 """Tests for the JSON parsing utility."""
 
+import pytest
 from pydantic import BaseModel
 
+from utils.exceptions import JSONParseError
 from utils.json_parser import (
     clean_llm_text,
     extract_json,
@@ -29,10 +31,17 @@ That's all."""
         result = extract_json(response)
         assert result == {"name": "test", "value": 42}
 
-    def test_returns_none_for_no_json(self):
-        """Should return None when no JSON is present."""
+    def test_raises_error_for_no_json_strict(self):
+        """Should raise JSONParseError when no JSON is present in strict mode."""
         response = "This is just plain text without any JSON."
-        result = extract_json(response)
+        with pytest.raises(JSONParseError) as exc_info:
+            extract_json(response)
+        assert "No valid JSON found" in str(exc_info.value)
+
+    def test_returns_none_for_no_json_non_strict(self):
+        """Should return None when no JSON is present in non-strict mode."""
+        response = "This is just plain text without any JSON."
+        result = extract_json(response, strict=False)
         assert result is None
 
     def test_uses_fallback_pattern(self):
@@ -42,12 +51,20 @@ That's all."""
         result = extract_json(response, fallback_pattern=fallback)
         assert result == {"name": "fallback", "value": 99}
 
-    def test_returns_none_for_invalid_json(self):
-        """Should return None for invalid JSON."""
+    def test_raises_error_for_invalid_json_strict(self):
+        """Should raise JSONParseError for invalid JSON in strict mode."""
         response = """```json
 {"name": "test", value: 42}
 ```"""
-        result = extract_json(response)
+        with pytest.raises(JSONParseError):
+            extract_json(response)
+
+    def test_returns_none_for_invalid_json_non_strict(self):
+        """Should return None for invalid JSON in non-strict mode."""
+        response = """```json
+{"name": "test", value: 42}
+```"""
+        result = extract_json(response, strict=False)
         assert result is None
 
     def test_handles_nested_code_blocks(self):
@@ -70,38 +87,42 @@ That's all."""
         result = extract_json(response)
         assert result == {"name": "test", "value": 42}
 
-    def test_raw_json_array_invalid_returns_none(self):
-        """Should return None when raw JSON array is invalid."""
-        # Text contains what looks like a JSON array but is actually invalid
+    def test_raw_json_array_invalid_raises_strict(self):
+        """Should raise JSONParseError when raw JSON array is invalid in strict mode."""
         response = "Here is the array: [invalid json content, missing quotes]"
-        result = extract_json(response)
+        with pytest.raises(JSONParseError):
+            extract_json(response)
+
+    def test_raw_json_array_invalid_returns_none_non_strict(self):
+        """Should return None when raw JSON array is invalid in non-strict mode."""
+        response = "Here is the array: [invalid json content, missing quotes]"
+        result = extract_json(response, strict=False)
         assert result is None
 
     def test_raw_json_array_valid_returns_array(self):
         """Should extract JSON from raw array without code block."""
-        # Valid JSON array embedded in text (no code block)
         response = 'Here is the data: [{"name": "a"}, {"name": "b"}] - that is all.'
         result = extract_json(response)
         assert result == [{"name": "a"}, {"name": "b"}]
 
-    def test_fallback_pattern_invalid_json_returns_none(self):
-        """Should return None when fallback pattern matches but JSON is invalid."""
-        # Fallback pattern matches, but the content is not valid JSON
+    def test_fallback_pattern_invalid_json_raises_strict(self):
+        """Should raise JSONParseError when fallback matches but JSON is invalid in strict mode."""
         response = 'The result is ITEM{broken:json,no"quotes} here.'
         fallback = r"ITEM\{[^{}]*\}"
-        result = extract_json(response, fallback_pattern=fallback)
+        with pytest.raises(JSONParseError):
+            extract_json(response, fallback_pattern=fallback)
+
+    def test_fallback_pattern_invalid_json_returns_none_non_strict(self):
+        """Should return None when fallback matches but JSON is invalid in non-strict mode."""
+        response = 'The result is ITEM{broken:json,no"quotes} here.'
+        fallback = r"ITEM\{[^{}]*\}"
+        result = extract_json(response, fallback_pattern=fallback, strict=False)
         assert result is None
 
     def test_fallback_pattern_success_after_raw_strategies_fail(self):
         """Should use fallback pattern when raw JSON strategies fail."""
-        # Strategy 3 (raw JSON object) regex is greedy - it matches from first { to last }
-        # This response has an invalid JSON when matched greedily, but a more specific
-        # fallback pattern can extract valid JSON.
-        # Strategy 3 matches: `{invalid "broken} {"valid": "json"}`
-        # This is invalid JSON (contains unbalanced quotes), so Strategy 3 fails
-        # Then fallback pattern matches just the valid JSON object
         response = '{invalid "broken} {"valid": "json"}'
-        fallback = r'\{"valid"[^}]*\}'  # Matches just {"valid": "json"}
+        fallback = r'\{"valid"[^}]*\}'
         result = extract_json(response, fallback_pattern=fallback)
         assert result == {"valid": "json"}
 
@@ -117,18 +138,33 @@ class TestExtractJsonList:
         result = extract_json_list(response)
         assert result == [{"name": "a"}, {"name": "b"}]
 
-    def test_returns_none_for_object(self):
-        """Should return None when JSON is an object, not array."""
+    def test_raises_error_for_object_strict(self):
+        """Should raise JSONParseError when JSON is an object, not array, in strict mode."""
         response = """```json
 {"name": "test"}
 ```"""
-        result = extract_json_list(response)
+        with pytest.raises(JSONParseError) as exc_info:
+            extract_json_list(response)
+        assert "Expected JSON array but got dict" in str(exc_info.value)
+
+    def test_returns_none_for_object_non_strict(self):
+        """Should return None when JSON is an object, not array, in non-strict mode."""
+        response = """```json
+{"name": "test"}
+```"""
+        result = extract_json_list(response, strict=False)
         assert result is None
 
-    def test_returns_none_for_no_json(self):
-        """Should return None when no JSON is present."""
+    def test_raises_error_for_no_json_strict(self):
+        """Should raise JSONParseError when no JSON is present in strict mode."""
         response = "No JSON here."
-        result = extract_json_list(response)
+        with pytest.raises(JSONParseError):
+            extract_json_list(response)
+
+    def test_returns_none_for_no_json_non_strict(self):
+        """Should return None when no JSON is present in non-strict mode."""
+        response = "No JSON here."
+        result = extract_json_list(response, strict=False)
         assert result is None
 
 
@@ -145,26 +181,50 @@ class TestParseJsonToModel:
         assert result.name == "test"
         assert result.value == 42
 
-    def test_returns_none_for_invalid_data(self):
-        """Should return None when data doesn't match model."""
+    def test_raises_error_for_invalid_data_strict(self):
+        """Should raise JSONParseError when data doesn't match model in strict mode."""
         response = """```json
 {"name": "test", "wrong_field": 42}
 ```"""
-        result = parse_json_to_model(response, SampleModel)
+        with pytest.raises(JSONParseError) as exc_info:
+            parse_json_to_model(response, SampleModel)
+        assert "Failed to create SampleModel" in str(exc_info.value)
+
+    def test_returns_none_for_invalid_data_non_strict(self):
+        """Should return None when data doesn't match model in non-strict mode."""
+        response = """```json
+{"name": "test", "wrong_field": 42}
+```"""
+        result = parse_json_to_model(response, SampleModel, strict=False)
         assert result is None
 
-    def test_returns_none_for_no_json(self):
-        """Should return None when no JSON found."""
+    def test_raises_error_for_no_json_strict(self):
+        """Should raise JSONParseError when no JSON found in strict mode."""
         response = "No JSON here."
-        result = parse_json_to_model(response, SampleModel)
+        with pytest.raises(JSONParseError):
+            parse_json_to_model(response, SampleModel)
+
+    def test_returns_none_for_no_json_non_strict(self):
+        """Should return None when no JSON found in non-strict mode."""
+        response = "No JSON here."
+        result = parse_json_to_model(response, SampleModel, strict=False)
         assert result is None
 
-    def test_returns_none_when_json_is_list_not_object(self):
-        """Should return None and log warning when JSON is a list, not object."""
+    def test_raises_error_when_json_is_list_strict(self):
+        """Should raise JSONParseError when JSON is a list, not object, in strict mode."""
         response = """```json
 [{"name": "a"}, {"name": "b"}]
 ```"""
-        result = parse_json_to_model(response, SampleModel)
+        with pytest.raises(JSONParseError) as exc_info:
+            parse_json_to_model(response, SampleModel)
+        assert "Expected JSON object but got list" in str(exc_info.value)
+
+    def test_returns_none_when_json_is_list_non_strict(self):
+        """Should return None when JSON is a list, not object, in non-strict mode."""
+        response = """```json
+[{"name": "a"}, {"name": "b"}]
+```"""
+        result = parse_json_to_model(response, SampleModel, strict=False)
         assert result is None
 
 
@@ -181,22 +241,45 @@ class TestParseJsonListToModels:
         assert result[0].name == "a"
         assert result[1].name == "b"
 
-    def test_returns_empty_list_for_no_json(self):
-        """Should return empty list when no JSON found."""
+    def test_raises_error_for_no_json_strict(self):
+        """Should raise JSONParseError when no JSON found in strict mode."""
         response = "No JSON here."
-        result = parse_json_list_to_models(response, SampleModel)
+        with pytest.raises(JSONParseError):
+            parse_json_list_to_models(response, SampleModel)
+
+    def test_returns_empty_list_for_no_json_non_strict(self):
+        """Should return empty list when no JSON found in non-strict mode."""
+        response = "No JSON here."
+        result = parse_json_list_to_models(response, SampleModel, strict=False)
         assert result == []
 
-    def test_skips_invalid_items_in_list(self):
-        """Should skip items that don't match model and continue."""
+    def test_skips_invalid_items_partial_success(self):
+        """Should skip invalid items but succeed if min_count met."""
         response = """```json
 [{"name": "valid", "value": 1}, {"wrong_field": "invalid"}, {"name": "also_valid", "value": 3}]
 ```"""
+        # Default min_count=1, so should succeed with 2 valid items
         result = parse_json_list_to_models(response, SampleModel)
-        # Should have 2 valid items, skipping the invalid one
         assert len(result) == 2
         assert result[0].name == "valid"
         assert result[1].name == "also_valid"
+
+    def test_raises_when_min_count_not_met_strict(self):
+        """Should raise JSONParseError when min_count not met in strict mode."""
+        response = """```json
+[{"wrong_field": "invalid"}]
+```"""
+        with pytest.raises(JSONParseError) as exc_info:
+            parse_json_list_to_models(response, SampleModel, min_count=1)
+        assert "need at least 1" in str(exc_info.value)
+
+    def test_succeeds_when_min_count_zero(self):
+        """Should succeed with empty result when min_count=0."""
+        response = """```json
+[{"wrong_field": "invalid"}]
+```"""
+        result = parse_json_list_to_models(response, SampleModel, min_count=0)
+        assert result == []
 
 
 class TestCleanLlmText:

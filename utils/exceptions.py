@@ -110,3 +110,25 @@ class SuggestionError(StoryFactoryError):
     """
 
     pass
+
+
+class JSONParseError(StoryFactoryError):
+    """Raised when JSON extraction or parsing fails.
+
+    This indicates the LLM response could not be parsed as valid JSON,
+    or the JSON structure did not match the expected format.
+
+    Attributes:
+        response_preview: First 500 chars of the raw response for debugging.
+        expected_type: The expected type (dict, list, or model class name).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        response_preview: str | None = None,
+        expected_type: str | None = None,
+    ):
+        super().__init__(message)
+        self.response_preview = response_preview
+        self.expected_type = expected_type
