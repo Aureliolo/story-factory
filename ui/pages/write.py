@@ -733,6 +733,8 @@ class WritePage:
             except Exception as e:
                 logger.exception("Failed to build story structure")
                 dialog.close()
+                # Update button visibility even on failure (structure may be partially built)
+                self._update_interview_buttons()
                 self._notify(f"Error: {e}", type="negative")
 
         with dialog, ui.card().classes("w-[500px]"):

@@ -9,8 +9,12 @@ import ollama
 from settings import ModelInfo, Settings, get_model_info
 from utils.error_handling import handle_ollama_errors
 from utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
+from utils.json_parser import clean_llm_text
 from utils.logging_config import log_performance
 from utils.validation import validate_not_empty
+
+# Minimum response length after cleaning (to detect truncated/empty responses)
+MIN_RESPONSE_LENGTH = 10
 
 logger = logging.getLogger(__name__)
 
@@ -156,14 +160,21 @@ class BaseAgent:
         the Ollama server.
         """
         validate_not_empty(prompt, "prompt")
-        messages = [{"role": "system", "content": self.system_prompt}]
+
+        # Add /no_think prefix for Qwen models to disable thinking mode
+        # This prevents models from outputting <think>...</think> tags instead of actual content
+        use_model = model or self.model
+        if "qwen" in use_model.lower():
+            system_content = f"/no_think\n{self.system_prompt}"
+        else:
+            system_content = self.system_prompt
+        messages = [{"role": "system", "content": system_content}]
 
         if context:
             messages.append({"role": "system", "content": f"CURRENT STORY CONTEXT:\n{context}"})
 
         messages.append({"role": "user", "content": prompt})
 
-        use_model = model or self.model
         use_temp = temperature or self.temperature
 
         last_error: Exception | None = None
@@ -195,6 +206,27 @@ class BaseAgent:
                         logger.info(
                             f"{self.name}: LLM response received ({len(content)} chars, {duration:.2f}s)"
                         )
+
+                        # Validate response isn't just thinking tokens or truncated
+                        cleaned_content = clean_llm_text(content)
+                        if len(cleaned_content) < MIN_RESPONSE_LENGTH:
+                            logger.warning(
+                                f"{self.name}: Response too short after cleaning "
+                                f"({len(cleaned_content)} chars < {MIN_RESPONSE_LENGTH}), "
+                                f"raw: {content[:50]!r}..."
+                            )
+                            if attempt < max_retries - 1:
+                                logger.info(f"{self.name}: Retrying in {delay}s...")
+                                time.sleep(delay)
+                                delay *= self.settings.llm_retry_backoff
+                                continue  # Retry
+                            else:
+                                # Last attempt - return what we have
+                                logger.warning(
+                                    f"{self.name}: Returning short response after all retries"
+                                )
+                                return content
+
                         return content
 
                     except ConnectionError as e:
