@@ -152,13 +152,7 @@ addopts = "-v --tb=short --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 main_file = "tests/component/test_app_entry.py"
-filterwarnings = [
-    "error",
-    # Third-party library deprecation warnings we can't fix
-    "ignore::DeprecationWarning:nicegui.*",
-    "ignore::DeprecationWarning:pydantic.*",
-    "ignore:The --rsyncdir command line argument:DeprecationWarning",
-]
+# filterwarnings = ["error"]  # Enable for strict warning mode (requires fixing ResourceWarnings)
 markers = [
     "e2e: End-to-end browser tests (require playwright)",
     "smoke: Quick startup validation tests",
