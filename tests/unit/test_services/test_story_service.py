@@ -83,7 +83,9 @@ def sample_story_with_chapters(sample_brief):
 @pytest.fixture
 def world_db(tmp_path: Path):
     """Create a temporary WorldDatabase."""
-    return WorldDatabase(tmp_path / "test_world.db")
+    db = WorldDatabase(tmp_path / "test_world.db")
+    yield db
+    db.close()
 
 
 class TestStoryServiceInit:

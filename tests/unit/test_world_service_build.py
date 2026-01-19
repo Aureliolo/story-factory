@@ -118,7 +118,9 @@ def world_service(settings):
 def mock_world_db(tmp_path):
     """Create a mock WorldDatabase."""
     db_path = tmp_path / "test_world.db"
-    return WorldDatabase(str(db_path))
+    db = WorldDatabase(str(db_path))
+    yield db
+    db.close()
 
 
 @pytest.fixture

@@ -138,7 +138,8 @@ def test_world_db(tmp_path: Path):
 
     db.add_relationship(char_id, loc_id, "located_in")
 
-    return db
+    yield db
+    db.close()
 
 
 @pytest.fixture

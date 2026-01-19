@@ -25,7 +25,9 @@ def world_service(settings):
 @pytest.fixture
 def world_db(tmp_path: Path):
     """Create a temporary WorldDatabase."""
-    return WorldDatabase(tmp_path / "test_world.db")
+    db = WorldDatabase(tmp_path / "test_world.db")
+    yield db
+    db.close()
 
 
 @pytest.fixture
