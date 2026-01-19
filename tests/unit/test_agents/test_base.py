@@ -320,6 +320,65 @@ class TestBaseAgentGenerate:
         assert agent.client.chat.call_count == 1
 
 
+class TestBaseAgentQwenNoThink:
+    """Tests for Qwen model /no_think handling."""
+
+    def test_generate_adds_no_think_for_qwen_model(self):
+        """Test /no_think is added to system prompt for Qwen models."""
+        agent = create_mock_agent(model="huihui_ai/qwen3-abliterated:8b")
+        agent.client.chat.return_value = {"message": {"content": "Valid response text"}}
+
+        agent.generate("Test prompt")
+
+        call_args = agent.client.chat.call_args
+        messages = call_args.kwargs["messages"]
+        system_msg = messages[0]["content"]
+        assert system_msg.startswith("/no_think\n")
+
+    def test_generate_no_think_not_added_for_non_qwen(self):
+        """Test /no_think is NOT added for non-Qwen models."""
+        agent = create_mock_agent(model="huihui_ai/dolphin3-abliterated:8b")
+        agent.client.chat.return_value = {"message": {"content": "Valid response text"}}
+
+        agent.generate("Test prompt")
+
+        call_args = agent.client.chat.call_args
+        messages = call_args.kwargs["messages"]
+        system_msg = messages[0]["content"]
+        assert not system_msg.startswith("/no_think")
+
+
+class TestBaseAgentShortResponseValidation:
+    """Tests for short response validation and retry."""
+
+    @patch("agents.base.time.sleep")
+    def test_generate_retries_on_short_response(self, mock_sleep):
+        """Test generate retries when response is too short after cleaning."""
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            {"message": {"content": "<think>"}},  # Too short after cleaning
+            {"message": {"content": "Valid response with enough content"}},
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Valid response with enough content"
+        assert agent.client.chat.call_count == 2
+
+    @patch("agents.base.time.sleep")
+    def test_generate_returns_short_response_after_retries_exhausted(self, mock_sleep):
+        """Test generate returns short response after all retries exhausted."""
+        agent = create_mock_agent()
+        # All attempts return short response
+        agent.client.chat.return_value = {"message": {"content": "<think>"}}
+
+        result = agent.generate("Prompt")
+
+        # Should return the short response after exhausting retries
+        assert result == "<think>"
+        assert agent.client.chat.call_count == 3  # max_retries default
+
+
 class TestBaseAgentRateLimiting:
     """Tests for rate limiting in generate method."""
 
