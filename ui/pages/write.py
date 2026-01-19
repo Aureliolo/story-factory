@@ -516,11 +516,16 @@ class WritePage:
         self._generation_status = GenerationStatus(self.state)
         self._generation_status.build()
 
-        # Writing area - wrap in container for reliable dark mode support
-        with ui.element("div").classes(
-            "w-full flex-grow p-4 rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 overflow-auto"
+        # Writing area - use state-based dark mode detection for reliable styling
+        bg_color = "#1f2937" if self.state.dark_mode else "#ffffff"
+        border_color = "#374151" if self.state.dark_mode else "#e5e7eb"
+        text_class = "prose-invert" if self.state.dark_mode else ""
+        with (
+            ui.element("div")
+            .classes("w-full flex-grow p-4 rounded-lg border overflow-auto")
+            .style(f"background-color: {bg_color}; border-color: {border_color}")
         ):
-            self._writing_display = ui.markdown().classes("prose dark:prose-invert max-w-none")
+            self._writing_display = ui.markdown().classes(f"prose {text_class} max-w-none")
 
         # Load current chapter content
         self._refresh_writing_display()
