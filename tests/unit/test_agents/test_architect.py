@@ -135,13 +135,14 @@ class TestArchitectCreateCharacters:
         assert characters[0].role == "protagonist"
         assert "curious" in characters[0].personality_traits
 
-    def test_returns_empty_list_on_parse_failure(self, architect, sample_story_state):
-        """Test returns empty list when JSON parsing fails."""
+    def test_raises_error_on_parse_failure(self, architect, sample_story_state):
+        """Test raises JSONParseError when JSON parsing fails."""
+        from utils.exceptions import JSONParseError
+
         architect.generate = MagicMock(return_value="No valid JSON here")
 
-        characters = architect.create_characters(sample_story_state)
-
-        assert characters == []
+        with pytest.raises(JSONParseError, match="No valid JSON found"):
+            architect.create_characters(sample_story_state)
 
 
 class TestArchitectCreatePlotOutline:
@@ -733,7 +734,11 @@ class TestGenerateMoreCharacters:
 
     def test_includes_language_requirement(self, architect, sample_story_state):
         """Test prompt includes language requirement from brief."""
-        architect.generate = MagicMock(return_value="```json\n[]\n```")
+        # Return valid character JSON to avoid parse failure
+        valid_char_json = """```json
+[{"name": "Test", "role": "supporting", "description": "A test character", "personality_traits": ["brave"], "goals": ["survive"], "arc_notes": "none", "relationships": {}}]
+```"""
+        architect.generate = MagicMock(return_value=valid_char_json)
 
         architect.generate_more_characters(sample_story_state, ["Hero"], count=1)
 
