@@ -91,7 +91,7 @@ class TestMainCommandLineInterface:
     def test_cli_accepts_list_flag(self):
         """Test that CLI accepts --list-stories flag."""
         result = subprocess.run(
-            [sys.executable, "main.py", "--cli", "--list-stories"],
+            [sys.executable, "main.py", "--cli", "--list-stories", "--log-file", "none"],
             cwd=Path(__file__).parent.parent.parent,
             capture_output=True,
             text=True,
