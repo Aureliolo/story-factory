@@ -3,16 +3,88 @@
 import logging
 from typing import Any
 
-import ollama
+from pydantic import BaseModel, Field
 
 from memory.story_state import StoryState
+from services.llm_client import generate_structured
 from services.model_mode_service import ModelModeService
 from settings import Settings
 from utils.exceptions import WorldGenerationError
-from utils.json_parser import extract_json_list
 from utils.validation import validate_not_empty
 
 logger = logging.getLogger(__name__)
+
+
+# Pydantic models for extracted entities
+
+
+class ExtractedCharacter(BaseModel):
+    """A character extracted from prose text."""
+
+    name: str
+    role: str  # protagonist, antagonist, supporting
+    description: str
+    relationships: dict[str, str] = Field(default_factory=dict)
+    confidence: float = 0.7
+    needs_review: bool = False
+
+
+class ExtractedCharacterList(BaseModel):
+    """Wrapper for list of extracted characters."""
+
+    characters: list[ExtractedCharacter]
+
+
+class ExtractedLocation(BaseModel):
+    """A location extracted from prose text."""
+
+    name: str
+    type: str = "location"
+    description: str
+    significance: str = ""
+    confidence: float = 0.7
+    needs_review: bool = False
+
+
+class ExtractedLocationList(BaseModel):
+    """Wrapper for list of extracted locations."""
+
+    locations: list[ExtractedLocation]
+
+
+class ExtractedItem(BaseModel):
+    """An item extracted from prose text."""
+
+    name: str
+    type: str = "item"
+    description: str
+    significance: str = ""
+    properties: list[str] = Field(default_factory=list)
+    confidence: float = 0.7
+    needs_review: bool = False
+
+
+class ExtractedItemList(BaseModel):
+    """Wrapper for list of extracted items."""
+
+    items: list[ExtractedItem]
+
+
+class ExtractedRelationship(BaseModel):
+    """A relationship between characters/entities."""
+
+    source: str
+    target: str
+    relation_type: str
+    description: str
+    confidence: float = 0.7
+    needs_review: bool = False
+
+
+class ExtractedRelationshipList(BaseModel):
+    """Wrapper for list of extracted relationships."""
+
+    relationships: list[ExtractedRelationship]
 
 
 class ImportService:
@@ -32,18 +104,7 @@ class ImportService:
         logger.debug("Initializing ImportService")
         self.settings = settings
         self.mode_service = mode_service
-        self._client: ollama.Client | None = None
         logger.debug("ImportService initialized successfully")
-
-    @property
-    def client(self) -> ollama.Client:
-        """Get or create Ollama client."""
-        if self._client is None:
-            self._client = ollama.Client(
-                host=self.settings.ollama_url,
-                timeout=float(self.settings.ollama_timeout),
-            )
-        return self._client
 
     def _get_model(self) -> str:
         """Get the model to use for entity extraction."""
@@ -105,70 +166,36 @@ For each character, determine:
    - 0.4-0.6: Mentioned but ambiguous or unclear
    - Below 0.4: Very uncertain
 
-Return ONLY valid JSON array with NO markdown formatting:
-[
-  {{
-    "name": "Character Name",
-    "role": "protagonist|antagonist|supporting",
-    "description": "Physical and personality description from the text",
-    "relationships": {{"other_character_name": "relationship_type"}},
-    "confidence": 0.9,
-    "needs_review": false
-  }}
-]
-
-If a character lacks details, include what you have and flag with needs_review: true if confidence < 0.7.
-Be thorough - include all named characters and even unnamed roles if significant (e.g., "the guard").
-"""
+Set needs_review to true if confidence < 0.7.
+Be thorough - include all named characters and even unnamed roles if significant (e.g., "the guard")."""
 
         try:
             model = self._get_model()
             logger.debug(f"Using model {model} for character extraction")
-            response = self.client.generate(
+
+            result = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                options={
-                    "temperature": self.settings.temp_import_extraction,
-                    "num_predict": self.settings.llm_tokens_character_create
-                    * self.settings.import_character_token_multiplier,
-                },
+                response_model=ExtractedCharacterList,
+                temperature=self.settings.temp_import_extraction,
             )
 
-            data = extract_json_list(response["response"], strict=False)
-            if not data:
-                logger.error(f"Character extraction returned no data: {data}")
-                raise WorldGenerationError(f"Invalid character extraction response: {data}")
-
-            # Post-process: validate required fields and flag low confidence items
-            for char in data:
-                if isinstance(char, dict):
-                    # Validate required field exists - LLM must provide confidence
-                    if "confidence" not in char:
-                        logger.warning(
-                            "Character extraction missing confidence field for '%s', flagging for review",
-                            char.get("name", "unknown"),
-                        )
-                        char["confidence"] = self.settings.import_default_confidence
-                        char["needs_review"] = True
-                    elif char["confidence"] < self.settings.import_confidence_threshold:
-                        char["needs_review"] = True
-                    else:
-                        char.setdefault("needs_review", False)
+            # Convert to dict format and apply confidence threshold
+            data = []
+            for char in result.characters:
+                char_dict = char.model_dump()
+                # Apply confidence threshold
+                if char_dict["confidence"] < self.settings.import_confidence_threshold:
+                    char_dict["needs_review"] = True
+                data.append(char_dict)
 
             logger.info(f"Extracted {len(data)} characters from text")
             return data
 
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Character extraction LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during character extraction: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Character extraction JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid character extraction response: {e}") from e
-        except WorldGenerationError:
-            raise
         except Exception as e:
-            logger.exception(f"Unexpected error in character extraction: {e}")
-            raise WorldGenerationError(f"Unexpected character extraction error: {e}") from e
+            logger.error(f"Character extraction error: {e}")
+            raise WorldGenerationError(f"Character extraction failed: {e}") from e
 
     def extract_locations(
         self,
@@ -223,69 +250,35 @@ For each location, determine:
    - 0.4-0.6: Mentioned but limited detail
    - Below 0.4: Very uncertain
 
-Return ONLY valid JSON array with NO markdown formatting:
-[
-  {{
-    "name": "Location Name",
-    "type": "location",
-    "description": "Description based on the text",
-    "significance": "Why this place matters",
-    "confidence": 0.9,
-    "needs_review": false
-  }}
-]
-
-If a location lacks details, include what you have and flag with needs_review: true if confidence < 0.7.
-Include cities, buildings, rooms, natural features - any place that matters to the story.
-"""
+Set needs_review to true if confidence < 0.7.
+Include cities, buildings, rooms, natural features - any place that matters to the story."""
 
         try:
             model = self._get_model()
             logger.debug(f"Using model {model} for location extraction")
-            response = self.client.generate(
+
+            result = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                options={
-                    "temperature": self.settings.temp_import_extraction,
-                    "num_predict": self.settings.llm_tokens_location_create * 3,
-                },
+                response_model=ExtractedLocationList,
+                temperature=self.settings.temp_import_extraction,
             )
 
-            data = extract_json_list(response["response"], strict=False)
-            if not data:
-                logger.error(f"Location extraction returned no data: {data}")
-                raise WorldGenerationError(f"Invalid location extraction response: {data}")
-
-            # Post-process: validate required fields and flag low confidence items
-            for loc in data:
-                if isinstance(loc, dict):
-                    # Validate required field exists - LLM must provide confidence
-                    if "confidence" not in loc:
-                        logger.warning(
-                            "Location extraction missing confidence field for '%s', flagging for review",
-                            loc.get("name", "unknown"),
-                        )
-                        loc["confidence"] = 0.5
-                        loc["needs_review"] = True
-                    elif loc["confidence"] < 0.7:
-                        loc["needs_review"] = True
-                    else:
-                        loc.setdefault("needs_review", False)
+            # Convert to dict format and apply confidence threshold
+            data = []
+            for loc in result.locations:
+                loc_dict = loc.model_dump()
+                if loc_dict["confidence"] < 0.7:
+                    loc_dict["needs_review"] = True
+                data.append(loc_dict)
 
             logger.info(f"Extracted {len(data)} locations from text")
             return data
 
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Location extraction LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during location extraction: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Location extraction JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid location extraction response: {e}") from e
-        except WorldGenerationError:
-            raise
         except Exception as e:
-            logger.exception(f"Unexpected error in location extraction: {e}")
-            raise WorldGenerationError(f"Unexpected location extraction error: {e}") from e
+            logger.error(f"Location extraction error: {e}")
+            raise WorldGenerationError(f"Location extraction failed: {e}") from e
 
     def extract_items(
         self,
@@ -340,70 +333,35 @@ For each item, determine:
 4. Special properties (if any)
 5. Your confidence (0.0-1.0)
 
-Return ONLY valid JSON array with NO markdown formatting:
-[
-  {{
-    "name": "Item Name",
-    "type": "item",
-    "description": "Physical description from text",
-    "significance": "Why this item matters",
-    "properties": ["property1", "property2"],
-    "confidence": 0.9,
-    "needs_review": false
-  }}
-]
-
-Flag with needs_review: true if confidence < 0.7.
-Only include items that are actually significant - avoid mundane everyday objects unless they're plot-relevant.
-"""
+Set needs_review to true if confidence < 0.7.
+Only include items that are actually significant - avoid mundane everyday objects unless they're plot-relevant."""
 
         try:
             model = self._get_model()
             logger.debug(f"Using model {model} for item extraction")
-            response = self.client.generate(
+
+            result = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                options={
-                    "temperature": self.settings.temp_import_extraction,
-                    "num_predict": self.settings.llm_tokens_item_create * 3,
-                },
+                response_model=ExtractedItemList,
+                temperature=self.settings.temp_import_extraction,
             )
 
-            data = extract_json_list(response["response"], strict=False)
-            if not data:
-                logger.error(f"Item extraction returned no data: {data}")
-                raise WorldGenerationError(f"Invalid item extraction response: {data}")
-
-            # Post-process: validate required fields and flag low confidence items
-            for item in data:
-                if isinstance(item, dict):
-                    # Validate required field exists - LLM must provide confidence
-                    if "confidence" not in item:
-                        logger.warning(
-                            "Item extraction missing confidence field for '%s', flagging for review",
-                            item.get("name", "unknown"),
-                        )
-                        item["confidence"] = 0.5
-                        item["needs_review"] = True
-                    elif item["confidence"] < 0.7:
-                        item["needs_review"] = True
-                    else:
-                        item.setdefault("needs_review", False)
+            # Convert to dict format and apply confidence threshold
+            data = []
+            for item in result.items:
+                item_dict = item.model_dump()
+                if item_dict["confidence"] < 0.7:
+                    item_dict["needs_review"] = True
+                data.append(item_dict)
 
             logger.info(f"Extracted {len(data)} items from text")
             return data
 
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Item extraction LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during item extraction: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Item extraction JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid item extraction response: {e}") from e
-        except WorldGenerationError:
-            raise
         except Exception as e:
-            logger.exception(f"Unexpected error in item extraction: {e}")
-            raise WorldGenerationError(f"Unexpected item extraction error: {e}") from e
+            logger.error(f"Item extraction error: {e}")
+            raise WorldGenerationError(f"Item extraction failed: {e}") from e
 
     def infer_relationships(
         self,
@@ -456,70 +414,35 @@ For each relationship you find, provide:
    - 0.4-0.6: Weakly implied
    - Below 0.4: Uncertain
 
-Return ONLY valid JSON array with NO markdown formatting:
-[
-  {{
-    "source": "Character A",
-    "target": "Character B",
-    "relation_type": "relationship_type",
-    "description": "Description from the text",
-    "confidence": 0.9,
-    "needs_review": false
-  }}
-]
-
-Flag with needs_review: true if confidence < 0.7.
-Only include relationships that are actually mentioned or clearly implied in the text.
-"""
+Set needs_review to true if confidence < 0.7.
+Only include relationships that are actually mentioned or clearly implied in the text."""
 
         try:
             model = self._get_model()
             logger.debug(f"Using model {model} for relationship inference")
-            response = self.client.generate(
+
+            result = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                options={
-                    "temperature": self.settings.temp_import_extraction,
-                    "num_predict": self.settings.llm_tokens_relationship_create * 4,
-                },
+                response_model=ExtractedRelationshipList,
+                temperature=self.settings.temp_import_extraction,
             )
 
-            data = extract_json_list(response["response"], strict=False)
-            if not data:
-                logger.error(f"Relationship inference returned no data: {data}")
-                raise WorldGenerationError(f"Invalid relationship inference response: {data}")
-
-            # Post-process: validate required fields and flag low confidence items
-            for rel in data:
-                if isinstance(rel, dict):
-                    # Validate required field exists - LLM must provide confidence
-                    if "confidence" not in rel:
-                        logger.warning(
-                            "Relationship inference missing confidence field for '%s' -> '%s', flagging for review",
-                            rel.get("source", "unknown"),
-                            rel.get("target", "unknown"),
-                        )
-                        rel["confidence"] = 0.5
-                        rel["needs_review"] = True
-                    elif rel["confidence"] < 0.7:
-                        rel["needs_review"] = True
-                    else:
-                        rel.setdefault("needs_review", False)
+            # Convert to dict format and apply confidence threshold
+            data = []
+            for rel in result.relationships:
+                rel_dict = rel.model_dump()
+                if rel_dict["confidence"] < 0.7:
+                    rel_dict["needs_review"] = True
+                data.append(rel_dict)
 
             logger.info(f"Inferred {len(data)} relationships from text")
             return data
 
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Relationship inference LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during relationship inference: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Relationship inference JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid relationship inference response: {e}") from e
-        except WorldGenerationError:
-            raise
         except Exception as e:
-            logger.exception(f"Unexpected error in relationship inference: {e}")
-            raise WorldGenerationError(f"Unexpected relationship inference error: {e}") from e
+            logger.error(f"Relationship inference error: {e}")
+            raise WorldGenerationError(f"Relationship inference failed: {e}") from e
 
     def extract_all(
         self,

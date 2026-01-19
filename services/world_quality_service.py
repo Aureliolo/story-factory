@@ -12,6 +12,7 @@ import time
 from typing import Any
 
 import ollama
+from pydantic import BaseModel, Field
 
 from memory.mode_database import ModeDatabase
 from memory.story_state import Character, StoryState
@@ -24,11 +25,86 @@ from memory.world_quality import (
     RefinementConfig,
     RelationshipQualityScores,
 )
+from services.llm_client import generate_structured
 from services.model_mode_service import ModelModeService
 from settings import Settings
 from utils.exceptions import WorldGenerationError
 from utils.json_parser import extract_json
 from utils.validation import validate_not_empty
+
+# Pydantic models for entity generation
+
+
+class GeneratedCharacter(BaseModel):
+    """A generated character entity."""
+
+    name: str
+    role: str
+    description: str
+    personality_traits: list[str] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+    flaws: list[str] = Field(default_factory=list)
+    backstory: str = ""
+
+
+class GeneratedLocation(BaseModel):
+    """A generated location entity."""
+
+    name: str
+    type: str = "location"
+    description: str
+    atmosphere: str = ""
+    significance: str = ""
+    sensory_details: list[str] = Field(default_factory=list)
+    story_hooks: list[str] = Field(default_factory=list)
+
+
+class GeneratedFaction(BaseModel):
+    """A generated faction entity."""
+
+    name: str
+    type: str = "faction"
+    description: str
+    beliefs: str = ""
+    goals: list[str] = Field(default_factory=list)
+    structure: str = ""
+    notable_members: list[str] = Field(default_factory=list)
+    story_hooks: list[str] = Field(default_factory=list)
+
+
+class GeneratedItem(BaseModel):
+    """A generated item entity."""
+
+    name: str
+    type: str = "item"
+    description: str
+    origin: str = ""
+    significance: str = ""
+    properties: list[str] = Field(default_factory=list)
+    story_hooks: list[str] = Field(default_factory=list)
+
+
+class GeneratedConcept(BaseModel):
+    """A generated concept entity."""
+
+    name: str
+    type: str = "concept"
+    description: str
+    manifestation: str = ""
+    implications: list[str] = Field(default_factory=list)
+    story_hooks: list[str] = Field(default_factory=list)
+
+
+class GeneratedRelationship(BaseModel):
+    """A generated relationship entity."""
+
+    source: str
+    target: str
+    relation_type: str
+    description: str
+    dynamics: str = ""
+    history: str = ""
+
 
 logger = logging.getLogger(__name__)
 
@@ -263,54 +339,21 @@ Create a character with:
 4. Uniqueness - not a genre archetype
 5. Arc potential - room for transformation
 
-Output ONLY valid JSON (all text in {brief.language}):
-{{
-    "name": "Full Name",
-    "role": "protagonist|antagonist|love_interest|supporting",
-    "description": "Physical and personality description (2-3 sentences)",
-    "personality_traits": ["trait1", "trait2", "trait3"],
-    "goals": ["external want", "internal need"],
-    "relationships": {{}},
-    "arc_notes": "How this character should change through the story"
-}}"""
+Write all text in {brief.language}."""
 
         try:
             model = self._get_creator_model()
-            response = self.client.generate(
+            character = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_character_create,
-                },
+                response_model=Character,
+                temperature=temperature,
             )
-
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                return Character(
-                    name=data.get("name", "Unknown"),
-                    role=data.get("role", "supporting"),
-                    description=data.get("description", ""),
-                    personality_traits=data.get("personality_traits", []),
-                    goals=data.get("goals", []),
-                    relationships=data.get("relationships", {}),
-                    arc_notes=data.get("arc_notes", ""),
-                )
-            else:
-                logger.error(f"Character creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid character JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Character creation LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during character creation: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Character creation JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid character response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+            return character
         except Exception as e:
-            logger.exception(f"Unexpected error in character creation: {e}")
-            raise WorldGenerationError(f"Unexpected character creation error: {e}") from e
+            logger.error(f"Character creation error: {e}")
+            raise WorldGenerationError(f"Character creation failed: {e}") from e
 
     def _judge_character_quality(
         self,

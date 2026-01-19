@@ -33,6 +33,12 @@ def test_imports():
         return False
 
 
+def _verify_flag(value: bool, expected: bool, name: str) -> None:
+    """Helper to verify flag value without triggering mypy's narrow-type analysis."""
+    if value != expected:
+        raise AssertionError(f"{name} was {value}, expected {expected}")
+
+
 def test_app_state():
     """Test AppState generation control methods."""
     logger.info("Testing AppState...")
@@ -43,20 +49,21 @@ def test_app_state():
         state = AppState()
 
         # Test initial state
-        assert not state.generation_cancel_requested
-        assert not state.generation_pause_requested
+        _verify_flag(state.generation_cancel_requested, False, "cancel_requested initial")
+        _verify_flag(state.generation_pause_requested, False, "pause_requested initial")
 
-        # Test request methods
+        # Test cancel request
         state.request_cancel_generation()
-        assert state.generation_cancel_requested
+        _verify_flag(state.generation_cancel_requested, True, "cancel_requested after request")
 
-        state.request_pause_generation()  # type: ignore[unreachable]
-        assert state.generation_pause_requested
+        # Test pause request
+        state.request_pause_generation()
+        _verify_flag(state.generation_pause_requested, True, "pause_requested after request")
 
         # Test reset
         state.reset_generation_flags()
-        assert not state.generation_cancel_requested
-        assert not state.generation_pause_requested
+        _verify_flag(state.generation_cancel_requested, False, "cancel_requested after reset")
+        _verify_flag(state.generation_pause_requested, False, "pause_requested after reset")
 
         logger.info("✓ AppState tests passed")
         return True
