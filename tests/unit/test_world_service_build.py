@@ -383,6 +383,28 @@ class TestGenerateFactions:
         assert len(relationships) == 1
         assert relationships[0].relation_type == "based_in"
 
+    def test_skips_invalid_factions(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test skips factions without name field and logs warning."""
+        import logging
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_factions_with_quality.return_value = [
+            ({"description": "Missing name"}, mock_quality_scores),  # Invalid
+            ("just a string", mock_quality_scores),  # Invalid
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            count = world_service._generate_factions(
+                sample_story_state, mock_world_db, mock_services
+            )
+
+        assert count == 0
+        assert "Skipping invalid faction" in caplog.text
+
 
 class TestGenerateItems:
     """Tests for _generate_items method."""
@@ -405,6 +427,26 @@ class TestGenerateItems:
         items = mock_world_db.list_entities(entity_type="item")
         assert len(items) == 1
         assert items[0].name == "Sword"
+
+    def test_skips_invalid_items(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test skips items without name field and logs warning."""
+        import logging
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_items_with_quality.return_value = [
+            ({"description": "Missing name"}, mock_quality_scores),  # Invalid
+            ("just a string", mock_quality_scores),  # Invalid
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            count = world_service._generate_items(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 0
+        assert "Skipping invalid item" in caplog.text
 
 
 class TestGenerateConcepts:
@@ -430,6 +472,28 @@ class TestGenerateConcepts:
         concepts = mock_world_db.list_entities(entity_type="concept")
         assert len(concepts) == 1
         assert concepts[0].name == "Magic"
+
+    def test_skips_invalid_concepts(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test skips concepts without name field and logs warning."""
+        import logging
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_concepts_with_quality.return_value = [
+            ({"description": "Missing name"}, mock_quality_scores),  # Invalid
+            ("just a string", mock_quality_scores),  # Invalid
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            count = world_service._generate_concepts(
+                sample_story_state, mock_world_db, mock_services
+            )
+
+        assert count == 0
+        assert "Skipping invalid concept" in caplog.text
 
 
 class TestGenerateRelationships:
@@ -481,6 +545,25 @@ class TestGenerateRelationships:
         )
 
         assert count == 0
+
+    def test_skips_malformed_relationships(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test skips relationships that are not proper dicts and logs warning."""
+        import logging
+
+        mock_services.story.generate_relationships.return_value = [
+            "just a string",  # Invalid - not a dict
+            {"missing": "required_fields"},  # Invalid - missing source/target
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            count = world_service._generate_relationships(
+                sample_story_state, mock_world_db, mock_services
+            )
+
+        assert count == 0
+        assert "Skipping invalid relationship" in caplog.text
 
 
 class TestBuildWorld:
