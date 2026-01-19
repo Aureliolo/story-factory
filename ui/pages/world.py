@@ -1904,31 +1904,49 @@ class WorldPage:
         card_bg = "#1f2937" if self.state.dark_mode else "#ffffff"
         inner_card_bg = "#374151" if self.state.dark_mode else "#f9fafb"
 
-        with dialog, ui.card().classes("w-[500px]").style(f"background-color: {card_bg}"):
+        # Responsive dialog: wider on larger screens, max 800px
+        with (
+            dialog,
+            ui.card().classes("w-[95vw] max-w-[800px] p-6").style(f"background-color: {card_bg}"),
+        ):
             ui.label("Building Story Structure").classes("text-xl font-bold mb-4")
 
-            # Show what we're building
-            with ui.card().classes("w-full mb-4").style(f"background-color: {inner_card_bg}"):
-                ui.label("Story Overview:").classes("font-medium mb-2")
-                ui.label(f"Genre: {brief.genre} • Tone: {brief.tone}").classes(
-                    "text-sm text-gray-600 dark:text-gray-400"
-                )
-                ui.label(f"Length: {brief.target_length.replace('_', ' ').title()}").classes(
-                    "text-sm text-gray-600 dark:text-gray-400"
-                )
-                premise_text = (
-                    f"Premise: {brief.premise[:150]}..."
-                    if len(brief.premise) > 150
-                    else f"Premise: {brief.premise}"
-                )
-                ui.label(premise_text).classes("text-sm text-gray-600 dark:text-gray-400 mt-2")
+            # Two-column layout for overview and AI actions
+            with ui.row().classes("w-full gap-6 mb-4 flex-wrap"):
+                # Story Overview
+                with (
+                    ui.card()
+                    .classes("flex-1 min-w-[250px]")
+                    .style(f"background-color: {inner_card_bg}")
+                ):
+                    ui.label("Story Overview:").classes("font-medium mb-2")
+                    ui.label(f"Genre: {brief.genre}").classes(
+                        "text-sm text-gray-600 dark:text-gray-400"
+                    )
+                    ui.label(f"Tone: {brief.tone}").classes(
+                        "text-sm text-gray-600 dark:text-gray-400"
+                    )
+                    ui.label(f"Length: {brief.target_length.replace('_', ' ').title()}").classes(
+                        "text-sm text-gray-600 dark:text-gray-400"
+                    )
+                    premise_text = (
+                        brief.premise[:120] + "..." if len(brief.premise) > 120 else brief.premise
+                    )
+                    ui.label(f"Premise: {premise_text}").classes(
+                        "text-sm text-gray-600 dark:text-gray-400 mt-2"
+                    )
 
-            ui.label("The AI will now:").classes("font-medium mb-2")
-            with ui.column().classes("gap-1 mb-4"):
-                ui.label("• Create detailed world description").classes("text-sm")
-                ui.label("• Design main characters with backstories").classes("text-sm")
-                ui.label("• Outline chapter structure and plot points").classes("text-sm")
-                ui.label("• Establish story rules and timeline").classes("text-sm")
+                # AI Actions
+                with (
+                    ui.card()
+                    .classes("flex-1 min-w-[250px]")
+                    .style(f"background-color: {inner_card_bg}")
+                ):
+                    ui.label("The AI will:").classes("font-medium mb-2")
+                    ui.label("• Create detailed world description").classes("text-sm")
+                    ui.label("• Design main characters with backstories").classes("text-sm")
+                    ui.label("• Outline chapter structure and plot points").classes("text-sm")
+                    ui.label("• Establish story rules and timeline").classes("text-sm")
 
             # Generation settings section
             ui.separator().classes("my-2")
@@ -1983,7 +2001,10 @@ class WorldPage:
                     )
                 return min_input, max_input
 
-            with ui.row().classes("w-full gap-4 flex-wrap mb-2"):
+            # Use grid for consistent spacing across all settings
+            with ui.element("div").classes(
+                "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-4"
+            ):
                 # Chapter count
                 with ui.column().classes("gap-1"):
                     ui.label("Chapters").classes("text-xs text-gray-500")
@@ -2017,7 +2038,9 @@ class WorldPage:
                     settings.world_gen_locations_max,
                 )
 
-            with ui.row().classes("w-full gap-4 flex-wrap mb-4"):
+            with ui.element("div").classes(
+                "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4"
+            ):
                 # Factions count range
                 fac_min_input, fac_max_input = create_minmax_input(
                     "Factions",

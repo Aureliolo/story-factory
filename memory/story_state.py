@@ -24,6 +24,30 @@ class Character(BaseModel):
     arc_notes: str = ""  # How the character should develop
     arc_progress: dict[int, str] = Field(default_factory=dict)  # chapter_number -> arc state
 
+    @model_validator(mode="before")
+    @classmethod
+    def clean_arc_progress(cls, data: Any) -> Any:
+        """Clean arc_progress if LLM returns invalid format.
+
+        LLMs sometimes return string keys like {"Embracing Power": "..."} instead of
+        integer chapter numbers {1: "..."}. Since arc_progress is filled during writing,
+        we just clear invalid data rather than fail character creation.
+        """
+        if isinstance(data, dict) and "arc_progress" in data:
+            arc_progress = data.get("arc_progress")
+            if isinstance(arc_progress, dict):
+                # Check if keys are valid integers
+                cleaned = {}
+                for key, value in arc_progress.items():
+                    try:
+                        int_key = int(key)
+                        cleaned[int_key] = str(value)
+                    except (ValueError, TypeError):
+                        # Invalid key - skip this entry
+                        pass
+                data["arc_progress"] = cleaned
+        return data
+
     def update_arc(self, chapter_number: int, state: str) -> None:
         """Update character arc progress for a chapter."""
         self.arc_progress[chapter_number] = state
