@@ -1,6 +1,9 @@
-"""Tests for the import service."""
+"""Tests for the import service - error handling paths.
 
-from unittest.mock import MagicMock
+These tests verify error handling when structured generation fails.
+"""
+
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -9,8 +12,8 @@ from settings import Settings
 from utils.exceptions import WorldGenerationError
 
 
-class TestImportServiceJsonParsingErrors:
-    """Tests for JSON parsing error handling in ImportService."""
+class TestImportServiceStructuredGenerationErrors:
+    """Tests for structured generation error handling in ImportService."""
 
     @pytest.fixture
     def settings(self):
@@ -38,129 +41,107 @@ class TestImportServiceJsonParsingErrors:
         """Create an ImportService with mocked dependencies."""
         return ImportService(settings, mock_mode_service)
 
-    def test_extract_characters_raises_on_json_parsing_error(
-        self, import_service, monkeypatch, caplog
-    ):
-        """Test extract_characters raises WorldGenerationError on JSON parsing error."""
-        # Lines 165-166: JSON parsing error handling in extract_characters
+    def test_extract_characters_raises_on_generation_error(self, import_service, caplog):
+        """Test extract_characters raises WorldGenerationError on generation failure."""
         import logging
 
-        mock_client = MagicMock()
-        # Return something that causes extract_json to fail (non-JSON response)
-        mock_client.generate.return_value = {"response": "This is not JSON at all"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("LLM validation failed")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError, match="Invalid character extraction"):
-                import_service.extract_characters("Some story text with characters.")
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError, match="Character extraction failed"):
+                    import_service.extract_characters("Some story text with characters.")
 
-    def test_extract_locations_raises_on_json_parsing_error(
-        self, import_service, monkeypatch, caplog
-    ):
-        """Test extract_locations raises WorldGenerationError on JSON parsing error."""
-        # Lines 282-283: JSON parsing error handling in extract_locations
+    def test_extract_locations_raises_on_generation_error(self, import_service, caplog):
+        """Test extract_locations raises WorldGenerationError on generation failure."""
         import logging
 
-        mock_client = MagicMock()
-        # Return response that causes extract_json to return None or non-list
-        mock_client.generate.return_value = {"response": "no json here"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("LLM validation failed")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError, match="Invalid location extraction"):
-                import_service.extract_locations("Some story text with locations.")
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError, match="Location extraction failed"):
+                    import_service.extract_locations("Some story text with locations.")
 
-    def test_extract_items_raises_on_json_parsing_error(self, import_service, monkeypatch, caplog):
-        """Test extract_items raises WorldGenerationError on JSON parsing error."""
-        # Lines 400-401: JSON parsing error handling in extract_items
+    def test_extract_items_raises_on_generation_error(self, import_service, caplog):
+        """Test extract_items raises WorldGenerationError on generation failure."""
         import logging
 
-        mock_client = MagicMock()
-        # Return response that causes extract_json to return None
-        mock_client.generate.return_value = {"response": "not a json response"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("LLM validation failed")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError, match="Invalid item extraction"):
-                import_service.extract_items("Some story text with items.")
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError, match="Item extraction failed"):
+                    import_service.extract_items("Some story text with items.")
 
-    def test_infer_relationships_raises_on_json_parsing_error(
-        self, import_service, monkeypatch, caplog
-    ):
-        """Test infer_relationships raises WorldGenerationError on JSON parsing error."""
-        # Lines 516-517: JSON parsing error handling in infer_relationships
+    def test_infer_relationships_raises_on_generation_error(self, import_service, caplog):
+        """Test infer_relationships raises WorldGenerationError on generation failure."""
         import logging
-
-        mock_client = MagicMock()
-        # Return response that causes extract_json to return None
-        mock_client.generate.return_value = {"response": "invalid response"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
 
         characters = [{"name": "Alice"}, {"name": "Bob"}]
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError, match="Invalid relationship inference"):
-                import_service.infer_relationships(characters, "Alice and Bob are friends.")
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("LLM validation failed")
 
-    def test_extract_characters_logs_json_parsing_error(self, import_service, monkeypatch, caplog):
-        """Test extract_characters logs the JSON parsing error."""
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
+                    import_service.infer_relationships(characters, "Alice and Bob are friends.")
+
+    def test_extract_characters_logs_generation_error(self, import_service, caplog):
+        """Test extract_characters logs the generation error."""
         import logging
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "not json"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("Validation error")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.extract_characters("Test text")
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError):
+                    import_service.extract_characters("Test text")
 
-        assert "Character extraction" in caplog.text or "Invalid character" in caplog.text
+            assert "Character extraction" in caplog.text or "extraction failed" in caplog.text
 
-    def test_extract_locations_logs_json_parsing_error(self, import_service, monkeypatch, caplog):
-        """Test extract_locations logs the JSON parsing error."""
+    def test_extract_locations_logs_generation_error(self, import_service, caplog):
+        """Test extract_locations logs the generation error."""
         import logging
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "not json"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("Validation error")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.extract_locations("Test text")
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError):
+                    import_service.extract_locations("Test text")
 
-        assert "Location extraction" in caplog.text or "Invalid location" in caplog.text
+            assert "Location extraction" in caplog.text or "extraction failed" in caplog.text
 
-    def test_extract_items_logs_json_parsing_error(self, import_service, monkeypatch, caplog):
-        """Test extract_items logs the JSON parsing error."""
+    def test_extract_items_logs_generation_error(self, import_service, caplog):
+        """Test extract_items logs the generation error."""
         import logging
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "not json"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("Validation error")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.extract_items("Test text")
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError):
+                    import_service.extract_items("Test text")
 
-        assert "Item extraction" in caplog.text or "Invalid item" in caplog.text
+            assert "Item extraction" in caplog.text or "extraction failed" in caplog.text
 
-    def test_infer_relationships_logs_json_parsing_error(self, import_service, monkeypatch, caplog):
-        """Test infer_relationships logs the JSON parsing error."""
+    def test_infer_relationships_logs_generation_error(self, import_service, caplog):
+        """Test infer_relationships logs the generation error."""
         import logging
 
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "not json"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = Exception("Validation error")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.infer_relationships([{"name": "Alice"}], "Test text")
+            with caplog.at_level(logging.ERROR):
+                with pytest.raises(WorldGenerationError):
+                    import_service.infer_relationships([{"name": "Alice"}], "Test text")
 
-        assert "Relationship inference" in caplog.text or "Invalid relationship" in caplog.text
+            assert "Relationship inference" in caplog.text or "inference failed" in caplog.text
 
 
-class TestImportServiceValueErrors:
-    """Tests for ValueError/KeyError/TypeError handling in extraction methods."""
+class TestImportServiceConnectionErrors:
+    """Tests for connection error handling in extraction methods."""
 
     @pytest.fixture
     def settings(self):
@@ -188,71 +169,34 @@ class TestImportServiceValueErrors:
         """Create an ImportService with mocked dependencies."""
         return ImportService(settings, mock_mode_service)
 
-    def test_extract_characters_raises_on_value_error(self, import_service, monkeypatch):
-        """Test extract_characters raises WorldGenerationError on ValueError."""
-        # Lines 165-166: ValueError handler - mock extract_json_list to raise ValueError
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "valid response"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+    def test_extract_characters_raises_on_connection_error(self, import_service):
+        """Test extract_characters raises WorldGenerationError on ConnectionError."""
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = ConnectionError("Connection refused")
 
-        # Mock extract_json_list to raise ValueError
-        def mock_extract_json_list_raises(response, strict=True):
-            raise ValueError("JSON parsing failed")
+            with pytest.raises(WorldGenerationError, match="Character extraction failed"):
+                import_service.extract_characters("Test text")
 
-        monkeypatch.setattr(
-            "services.import_service.extract_json_list", mock_extract_json_list_raises
-        )
+    def test_extract_locations_raises_on_connection_error(self, import_service):
+        """Test extract_locations raises WorldGenerationError on ConnectionError."""
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = ConnectionError("Connection refused")
 
-        with pytest.raises(WorldGenerationError, match="Invalid character extraction"):
-            import_service.extract_characters("Test text")
+            with pytest.raises(WorldGenerationError, match="Location extraction failed"):
+                import_service.extract_locations("Test text")
 
-    def test_extract_locations_raises_on_value_error(self, import_service, monkeypatch):
-        """Test extract_locations raises WorldGenerationError on ValueError."""
-        # Lines 282-283: ValueError handler
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "valid response"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
+    def test_extract_items_raises_on_connection_error(self, import_service):
+        """Test extract_items raises WorldGenerationError on ConnectionError."""
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = ConnectionError("Connection refused")
 
-        def mock_extract_json_list_raises(response, strict=True):
-            raise KeyError("Missing required field")
+            with pytest.raises(WorldGenerationError, match="Item extraction failed"):
+                import_service.extract_items("Test text")
 
-        monkeypatch.setattr(
-            "services.import_service.extract_json_list", mock_extract_json_list_raises
-        )
+    def test_infer_relationships_raises_on_connection_error(self, import_service):
+        """Test infer_relationships raises WorldGenerationError on ConnectionError."""
+        with patch("services.import_service.generate_structured") as mock_gen:
+            mock_gen.side_effect = ConnectionError("Connection refused")
 
-        with pytest.raises(WorldGenerationError, match="Invalid location extraction"):
-            import_service.extract_locations("Test text")
-
-    def test_extract_items_raises_on_value_error(self, import_service, monkeypatch):
-        """Test extract_items raises WorldGenerationError on ValueError."""
-        # Lines 400-401: ValueError handler
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "valid response"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
-
-        def mock_extract_json_list_raises(response, strict=True):
-            raise TypeError("Invalid type for processing")
-
-        monkeypatch.setattr(
-            "services.import_service.extract_json_list", mock_extract_json_list_raises
-        )
-
-        with pytest.raises(WorldGenerationError, match="Invalid item extraction"):
-            import_service.extract_items("Test text")
-
-    def test_infer_relationships_raises_on_value_error(self, import_service, monkeypatch):
-        """Test infer_relationships raises WorldGenerationError on ValueError."""
-        # Lines 516-517: ValueError handler
-        mock_client = MagicMock()
-        mock_client.generate.return_value = {"response": "valid response"}
-        monkeypatch.setattr(import_service, "_client", mock_client)
-
-        def mock_extract_json_list_raises(response, strict=True):
-            raise ValueError("Invalid JSON structure")
-
-        monkeypatch.setattr(
-            "services.import_service.extract_json_list", mock_extract_json_list_raises
-        )
-
-        with pytest.raises(WorldGenerationError, match="Invalid relationship inference"):
-            import_service.infer_relationships([{"name": "Alice"}], "Test text")
+            with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
+                import_service.infer_relationships([{"name": "Alice"}], "Test text")

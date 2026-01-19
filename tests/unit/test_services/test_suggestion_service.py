@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
-from services.suggestion_service import SuggestionService
+from services.suggestion_service import (
+    CategorySuggestions,
+    ProjectNames,
+    SuggestionService,
+    WritingSuggestions,
+)
 from settings import Settings
 from utils.exceptions import SuggestionError
 
@@ -95,14 +100,23 @@ def test_build_context_minimal_state(suggestion_service):
 @patch("services.suggestion_service.BaseAgent")
 def test_generate_suggestions_success(mock_agent_class, suggestion_service, sample_story_state):
     """Test successful suggestion generation."""
-    # Mock agent response
+    # Mock agent response with Pydantic model
     mock_agent = MagicMock()
-    mock_agent.generate.return_value = """{
-        "plot": ["What if Sarah discovers the killer is an AI?", "A second murder complicates the investigation."],
-        "character": ["Show Sarah's personal struggles with the case.", "Reveal Dr. Vale's true motivations."],
-        "scene": ["Build tension through environmental details.", "Use dialogue to reveal hidden agendas."],
-        "transition": ["Jump to the next crime scene.", "End on a cliffhanger."]
-    }"""
+    mock_agent.generate_structured.return_value = WritingSuggestions(
+        plot=[
+            "What if Sarah discovers the killer is an AI?",
+            "A second murder complicates the investigation.",
+        ],
+        character=[
+            "Show Sarah's personal struggles with the case.",
+            "Reveal Dr. Vale's true motivations.",
+        ],
+        scene=[
+            "Build tension through environmental details.",
+            "Use dialogue to reveal hidden agendas.",
+        ],
+        transition=["Jump to the next crime scene.", "End on a cliffhanger."],
+    )
     mock_agent_class.return_value = mock_agent
 
     suggestions = suggestion_service.generate_suggestions(sample_story_state)
@@ -119,13 +133,13 @@ def test_generate_suggestions_success(mock_agent_class, suggestion_service, samp
 
 
 @patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_single_category_list_response(
+def test_generate_suggestions_single_category_success(
     mock_agent_class, suggestion_service, sample_story_state
 ):
-    """Test generating suggestions for a single category when LLM returns a list."""
+    """Test generating suggestions for a single category."""
     mock_agent = MagicMock()
-    mock_agent.generate.return_value = (
-        '["What if the detective becomes the suspect?", "An unexpected ally appears."]'
+    mock_agent.generate_structured.return_value = CategorySuggestions(
+        suggestions=["What if the detective becomes the suspect?", "An unexpected ally appears."]
     )
     mock_agent_class.return_value = mock_agent
 
@@ -135,57 +149,6 @@ def test_generate_suggestions_single_category_list_response(
     assert "plot" in suggestions
     assert isinstance(suggestions["plot"], list)
     assert len(suggestions["plot"]) == 2
-
-
-@patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_single_category_dict_response(
-    mock_agent_class, suggestion_service, sample_story_state
-):
-    """Test generating suggestions for a single category when LLM returns a dict with category key."""
-    mock_agent = MagicMock()
-    mock_agent.generate.return_value = (
-        '{"plot": ["A hidden conspiracy emerges.", "The suspect has an alibi."]}'
-    )
-    mock_agent_class.return_value = mock_agent
-
-    suggestions = suggestion_service.generate_suggestions(sample_story_state, category="plot")
-
-    # Should only have the requested category
-    assert "plot" in suggestions
-    assert isinstance(suggestions["plot"], list)
-    assert len(suggestions["plot"]) == 2
-    assert "A hidden conspiracy emerges." in suggestions["plot"]
-
-
-@patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_single_category_unexpected_structure_raises(
-    mock_agent_class, suggestion_service, sample_story_state
-):
-    """Test SuggestionError raised when single category response has unexpected structure."""
-    mock_agent = MagicMock()
-    # Return a dict that doesn't contain the requested category
-    mock_agent.generate.return_value = '{"character": ["Some character suggestion"]}'
-    mock_agent_class.return_value = mock_agent
-
-    with pytest.raises(SuggestionError) as exc_info:
-        suggestion_service.generate_suggestions(sample_story_state, category="plot")
-
-    assert "unexpected format" in str(exc_info.value).lower()
-
-
-@patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_invalid_json_raises(
-    mock_agent_class, suggestion_service, sample_story_state
-):
-    """Test SuggestionError raised for invalid JSON response."""
-    mock_agent = MagicMock()
-    mock_agent.generate.return_value = "This is not valid JSON at all"
-    mock_agent_class.return_value = mock_agent
-
-    with pytest.raises(SuggestionError) as exc_info:
-        suggestion_service.generate_suggestions(sample_story_state)
-
-    assert "failed to parse" in str(exc_info.value).lower()
 
 
 @patch("services.suggestion_service.BaseAgent")
@@ -194,69 +157,13 @@ def test_generate_suggestions_llm_error_raises(
 ):
     """Test SuggestionError raised when LLM throws error."""
     mock_agent = MagicMock()
-    mock_agent.generate.side_effect = Exception("LLM connection failed")
+    mock_agent.generate_structured.side_effect = Exception("LLM connection failed")
     mock_agent_class.return_value = mock_agent
 
     with pytest.raises(SuggestionError) as exc_info:
         suggestion_service.generate_suggestions(sample_story_state)
 
     assert "LLM connection failed" in str(exc_info.value)
-
-
-@patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_partial_response_raises(
-    mock_agent_class, suggestion_service, sample_story_state
-):
-    """Test SuggestionError raised for partial category response (missing categories)."""
-    mock_agent = MagicMock()
-    mock_agent.generate.return_value = (
-        '{"plot": ["Good plot idea"], "character": ["Good character idea"]}'
-    )
-    mock_agent_class.return_value = mock_agent
-
-    with pytest.raises(SuggestionError) as exc_info:
-        suggestion_service.generate_suggestions(sample_story_state)
-
-    # Should mention missing categories
-    assert "missing categories" in str(exc_info.value).lower()
-
-
-@patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_multi_category_non_dict_response_raises(
-    mock_agent_class, suggestion_service, sample_story_state
-):
-    """Test SuggestionError raised when multi-category response is not a dict."""
-    mock_agent = MagicMock()
-    # Return a list instead of a dict for multi-category request
-    mock_agent.generate.return_value = '["suggestion1", "suggestion2"]'
-    mock_agent_class.return_value = mock_agent
-
-    with pytest.raises(SuggestionError) as exc_info:
-        suggestion_service.generate_suggestions(sample_story_state)
-
-    assert "unexpected format" in str(exc_info.value).lower()
-
-
-@patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_invalid_category_value_raises(
-    mock_agent_class, suggestion_service, sample_story_state
-):
-    """Test SuggestionError raised when a category value is not a list."""
-    mock_agent = MagicMock()
-    # Return a dict where one category has a non-list value
-    mock_agent.generate.return_value = """{
-        "plot": ["Valid plot suggestion"],
-        "character": "This should be a list not a string",
-        "scene": ["Valid scene suggestion"],
-        "transition": null
-    }"""
-    mock_agent_class.return_value = mock_agent
-
-    with pytest.raises(SuggestionError) as exc_info:
-        suggestion_service.generate_suggestions(sample_story_state)
-
-    # Should mention missing categories (character and transition are invalid)
-    assert "missing categories" in str(exc_info.value).lower()
 
 
 def test_build_context_with_plot_points(suggestion_service):
@@ -323,23 +230,6 @@ def test_build_context_with_all_plot_points_completed(suggestion_service):
     assert "Upcoming Plot Point" not in context
 
 
-@patch("services.suggestion_service.BaseAgent")
-def test_generate_suggestions_empty_json_response_raises(
-    mock_agent_class, suggestion_service, sample_story_state
-):
-    """Test SuggestionError raised when extract_json returns empty dict."""
-    mock_agent = MagicMock()
-    # Return empty dict which is falsy and gets caught as parse failure
-    mock_agent.generate.return_value = "{}"
-    mock_agent_class.return_value = mock_agent
-
-    with pytest.raises(SuggestionError) as exc_info:
-        suggestion_service.generate_suggestions(sample_story_state)
-
-    # Empty dict {} is falsy in Python, so caught as parse failure
-    assert "failed to parse" in str(exc_info.value).lower()
-
-
 class TestGenerateProjectNames:
     """Tests for generate_project_names method."""
 
@@ -349,18 +239,20 @@ class TestGenerateProjectNames:
     ):
         """Test successful project name generation."""
         mock_agent = MagicMock()
-        mock_agent.generate.return_value = """[
-            "Neon Shadows",
-            "The Chen Files",
-            "Circuit Breaker",
-            "Synthwave Murder",
-            "Digital Detective",
-            "Chrome and Blood",
-            "The Vale Conspiracy",
-            "Neo-Tokyo Noir",
-            "Silicon Requiem",
-            "Ghost in the Lab"
-        ]"""
+        mock_agent.generate_structured.return_value = ProjectNames(
+            titles=[
+                "Neon Shadows",
+                "The Chen Files",
+                "Circuit Breaker",
+                "Synthwave Murder",
+                "Digital Detective",
+                "Chrome and Blood",
+                "The Vale Conspiracy",
+                "Neo-Tokyo Noir",
+                "Silicon Requiem",
+                "Ghost in the Lab",
+            ]
+        )
         mock_agent_class.return_value = mock_agent
 
         names = suggestion_service.generate_project_names(sample_story_state, count=10)
@@ -376,13 +268,9 @@ class TestGenerateProjectNames:
     ):
         """Test project name generation with limited count."""
         mock_agent = MagicMock()
-        mock_agent.generate.return_value = """[
-            "Title One",
-            "Title Two",
-            "Title Three",
-            "Title Four",
-            "Title Five"
-        ]"""
+        mock_agent.generate_structured.return_value = ProjectNames(
+            titles=["Title One", "Title Two", "Title Three", "Title Four", "Title Five"]
+        )
         mock_agent_class.return_value = mock_agent
 
         names = suggestion_service.generate_project_names(sample_story_state, count=3)
@@ -391,26 +279,12 @@ class TestGenerateProjectNames:
         assert len(names) <= 3
 
     @patch("services.suggestion_service.BaseAgent")
-    def test_generate_project_names_invalid_json_raises(
-        self, mock_agent_class, suggestion_service, sample_story_state
-    ):
-        """Test SuggestionError raised when LLM returns invalid JSON."""
-        mock_agent = MagicMock()
-        mock_agent.generate.return_value = "Not valid JSON at all"
-        mock_agent_class.return_value = mock_agent
-
-        with pytest.raises(SuggestionError) as exc_info:
-            suggestion_service.generate_project_names(sample_story_state)
-
-        assert "failed to parse" in str(exc_info.value).lower()
-
-    @patch("services.suggestion_service.BaseAgent")
     def test_generate_project_names_llm_error_raises(
         self, mock_agent_class, suggestion_service, sample_story_state
     ):
         """Test SuggestionError raised when LLM throws error."""
         mock_agent = MagicMock()
-        mock_agent.generate.side_effect = Exception("LLM connection failed")
+        mock_agent.generate_structured.side_effect = Exception("LLM connection failed")
         mock_agent_class.return_value = mock_agent
 
         with pytest.raises(SuggestionError) as exc_info:
@@ -419,45 +293,18 @@ class TestGenerateProjectNames:
         assert "LLM connection failed" in str(exc_info.value)
 
     @patch("services.suggestion_service.BaseAgent")
-    def test_generate_project_names_empty_response_raises(
-        self, mock_agent_class, suggestion_service, sample_story_state
-    ):
-        """Test SuggestionError raised when LLM returns empty list."""
-        mock_agent = MagicMock()
-        mock_agent.generate.return_value = "[]"
-        mock_agent_class.return_value = mock_agent
-
-        with pytest.raises(SuggestionError) as exc_info:
-            suggestion_service.generate_project_names(sample_story_state)
-
-        # Empty list [] is falsy in Python, so caught as parse failure
-        assert "failed to parse" in str(exc_info.value).lower()
-
-    @patch("services.suggestion_service.BaseAgent")
-    def test_generate_project_names_non_list_response_raises(
-        self, mock_agent_class, suggestion_service, sample_story_state
-    ):
-        """Test SuggestionError raised when LLM returns non-list JSON."""
-        mock_agent = MagicMock()
-        mock_agent.generate.return_value = '{"title": "Single Title"}'
-        mock_agent_class.return_value = mock_agent
-
-        with pytest.raises(SuggestionError) as exc_info:
-            suggestion_service.generate_project_names(sample_story_state)
-
-        assert "unexpected format" in str(exc_info.value).lower()
-
-    @patch("services.suggestion_service.BaseAgent")
     def test_generate_project_names_strips_whitespace(
         self, mock_agent_class, suggestion_service, sample_story_state
     ):
         """Test that generated names are stripped of whitespace."""
         mock_agent = MagicMock()
-        mock_agent.generate.return_value = """[
-            "  Title with leading spaces",
-            "Title with trailing spaces   ",
-            "  Both ends  "
-        ]"""
+        mock_agent.generate_structured.return_value = ProjectNames(
+            titles=[
+                "  Title with leading spaces",
+                "Title with trailing spaces   ",
+                "  Both ends  ",
+            ]
+        )
         mock_agent_class.return_value = mock_agent
 
         names = suggestion_service.generate_project_names(sample_story_state, count=3)
@@ -473,13 +320,9 @@ class TestGenerateProjectNames:
     ):
         """Test that empty names are filtered out."""
         mock_agent = MagicMock()
-        mock_agent.generate.return_value = """[
-            "Valid Title",
-            "",
-            "   ",
-            "Another Valid Title",
-            null
-        ]"""
+        mock_agent.generate_structured.return_value = ProjectNames(
+            titles=["Valid Title", "", "   ", "Another Valid Title"]
+        )
         mock_agent_class.return_value = mock_agent
 
         names = suggestion_service.generate_project_names(sample_story_state, count=10)
@@ -513,13 +356,15 @@ class TestGenerateProjectNames:
         )
 
         mock_agent = MagicMock()
-        mock_agent.generate.return_value = '["The Sword Edge", "Villain Shadow"]'
+        mock_agent.generate_structured.return_value = ProjectNames(
+            titles=["The Sword Edge", "Villain Shadow"]
+        )
         mock_agent_class.return_value = mock_agent
 
         names = suggestion_service.generate_project_names(state, count=2)
 
         assert len(names) == 2
         # Verify the prompt included plot points by checking the call
-        call_args = mock_agent.generate.call_args[0][0]
+        call_args = mock_agent.generate_structured.call_args[0][0]
         assert "Key Plot Points" in call_args
         assert "The hero finds the sword" in call_args

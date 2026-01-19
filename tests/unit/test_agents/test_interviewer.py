@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agents.interviewer import InterviewerAgent
+from memory.story_state import StoryBrief
 from settings import Settings
 
 
@@ -147,24 +148,22 @@ class TestInterviewerFinalizeBrief:
 
     def test_generates_and_extracts_brief(self, interviewer):
         """Test generates brief from conversation summary."""
-        json_response = """```json
-{
-    "premise": "An epic fantasy adventure",
-    "genre": "Fantasy",
-    "subgenres": ["Epic"],
-    "tone": "Grand",
-    "themes": ["Heroism"],
-    "setting_time": "Medieval",
-    "setting_place": "Magical Kingdom",
-    "target_length": "novel",
-    "language": "English",
-    "content_rating": "general",
-    "content_preferences": [],
-    "content_avoid": [],
-    "additional_notes": ""
-}
-```"""
-        interviewer.generate = MagicMock(return_value=json_response)
+        mock_brief = StoryBrief(
+            premise="An epic fantasy adventure",
+            genre="Fantasy",
+            subgenres=["Epic"],
+            tone="Grand",
+            themes=["Heroism"],
+            setting_time="Medieval",
+            setting_place="Magical Kingdom",
+            target_length="novel",
+            language="English",
+            content_rating="general",
+            content_preferences=[],
+            content_avoid=[],
+            additional_notes="",
+        )
+        interviewer.generate_structured = MagicMock(return_value=mock_brief)
 
         brief = interviewer.finalize_brief(
             "User wants fantasy, epic adventure, magic kingdom setting"
@@ -173,12 +172,15 @@ class TestInterviewerFinalizeBrief:
         assert brief is not None
         assert brief.genre == "Fantasy"
         assert brief.target_length == "novel"
-        # Verify low temperature was used
-        assert interviewer.generate.call_args[1]["temperature"] == 0.3
+        interviewer.generate_structured.assert_called_once()
 
-    def test_returns_default_brief_on_parse_failure(self, interviewer):
-        """Test returns default brief when parsing fails."""
-        interviewer.generate = MagicMock(return_value="I couldn't create a proper brief")
+    def test_returns_default_brief_on_generation_failure(self, interviewer):
+        """Test returns default brief when structured generation fails."""
+        from utils.exceptions import LLMGenerationError
+
+        interviewer.generate_structured = MagicMock(
+            side_effect=LLMGenerationError("Validation failed")
+        )
 
         brief = interviewer.finalize_brief("Some conversation summary")
 
@@ -208,25 +210,23 @@ class TestInterviewerConversationFlow:
         interviewer.process_response("The main character is a brave captain")
         assert len(interviewer.conversation_history) == 4
 
-        # Fourth: Generate final brief
-        json_response = """```json
-{
-    "premise": "Space explorers discover alien life",
-    "genre": "Science Fiction",
-    "subgenres": ["Space Opera"],
-    "tone": "Adventurous",
-    "themes": ["Exploration", "First Contact"],
-    "setting_time": "Future",
-    "setting_place": "Deep Space",
-    "target_length": "novella",
-    "language": "English",
-    "content_rating": "general",
-    "content_preferences": [],
-    "content_avoid": [],
-    "additional_notes": ""
-}
-```"""
-        interviewer.generate = MagicMock(return_value=json_response)
+        # Fourth: Generate final brief using structured generation
+        mock_brief = StoryBrief(
+            premise="Space explorers discover alien life",
+            genre="Science Fiction",
+            subgenres=["Space Opera"],
+            tone="Adventurous",
+            themes=["Exploration", "First Contact"],
+            setting_time="Future",
+            setting_place="Deep Space",
+            target_length="novella",
+            language="English",
+            content_rating="general",
+            content_preferences=[],
+            content_avoid=[],
+            additional_notes="",
+        )
+        interviewer.generate_structured = MagicMock(return_value=mock_brief)
         brief = interviewer.finalize_brief(str(interviewer.conversation_history))
 
         assert brief.genre == "Science Fiction"

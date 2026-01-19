@@ -8,12 +8,9 @@ This service handles:
 """
 
 import hashlib
-import json
 import logging
 from pathlib import Path
 from typing import Any
-
-import ollama
 
 from memory.mode_database import ModeDatabase
 from memory.mode_models import (
@@ -29,8 +26,8 @@ from memory.mode_models import (
     get_preset_mode,
     list_preset_modes,
 )
+from services.llm_client import generate_structured
 from settings import AVAILABLE_MODELS, Settings, get_available_vram
-from utils.json_parser import extract_json
 from utils.validation import validate_not_empty, validate_not_none, validate_positive
 
 logger = logging.getLogger(__name__)
@@ -471,43 +468,22 @@ Themes: {", ".join(themes)}
 
 Rate each dimension from 0-10:
 
-1. PROSE_QUALITY: Creativity, flow, engagement, vocabulary variety
-2. INSTRUCTION_FOLLOWING: Adherence to genre, tone, themes
-
-Respond ONLY with JSON:
-{{"prose_quality": X.X, "instruction_following": X.X}}"""
+1. prose_quality: Creativity, flow, engagement, vocabulary variety
+2. instruction_following: Adherence to genre, tone, themes"""
 
         try:
-            client = ollama.Client(
-                host=self.settings.ollama_url, timeout=self.settings.ollama_capability_check_timeout
-            )
-            response = client.generate(
+            scores = generate_structured(
+                settings=self.settings,
                 model=judge_model,
                 prompt=prompt,
-                options={"num_predict": 100, "temperature": self.settings.temp_capability_check},
+                response_model=QualityScores,
+                temperature=self.settings.temp_capability_check,
             )
-
-            # Parse response using extract_json utility
-            text = response["response"]
-            logger.debug(f"LLM judge raw response: {text[:200]}")
-
-            # Use strict=False since quality judging falls back to neutral scores
-            data = extract_json(text, strict=False)
-            if data and isinstance(data, dict):
-                scores = QualityScores(
-                    prose_quality=float(data.get("prose_quality", 5)),
-                    instruction_following=float(data.get("instruction_following", 5)),
-                )
-                logger.info(
-                    f"Quality judged: prose={scores.prose_quality:.1f}, "
-                    f"instruction={scores.instruction_following:.1f}"
-                )
-                return scores
-            else:
-                logger.warning(f"No valid JSON dict found in judge response: {text}")
-
-        except json.JSONDecodeError as e:
-            logger.warning(f"Quality judgment JSON parse error: {e}")
+            logger.info(
+                f"Quality judged: prose={scores.prose_quality:.1f}, "
+                f"instruction={scores.instruction_following:.1f}"
+            )
+            return scores
         except Exception as e:
             logger.error(f"Quality judgment failed: {e}", exc_info=True)
 

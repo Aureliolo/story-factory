@@ -6,9 +6,18 @@ import re
 import uuid
 from typing import Any
 
-from memory.story_state import Chapter, Character, OutlineVariation, PlotPoint, StoryState
+from memory.story_state import (
+    Chapter,
+    ChapterList,
+    Character,
+    CharacterList,
+    OutlineVariation,
+    PlotOutline,
+    PlotPoint,
+    StoryState,
+)
 from settings import Settings
-from utils.json_parser import extract_json_list, parse_json_list_to_models
+from utils.json_parser import extract_json_list
 from utils.prompt_builder import PromptBuilder
 from utils.validation import validate_not_none, validate_positive, validate_type
 
@@ -52,14 +61,17 @@ class ArchitectAgent(BaseAgent):
     }
 ]"""
 
-    PLOT_POINT_SCHEMA = """[
-    {"description": "Inciting incident - ...", "chapter": 1},
-    {"description": "First plot point - ...", "chapter": 2},
-    {"description": "Midpoint twist - ...", "chapter": null},
-    {"description": "Crisis - ...", "chapter": null},
-    {"description": "Climax - ...", "chapter": null},
-    {"description": "Resolution - ...", "chapter": null}
-]"""
+    PLOT_POINT_SCHEMA = """{
+    "plot_summary": "A compelling 1-2 paragraph summary of the story...",
+    "plot_points": [
+        {"description": "Inciting incident - ...", "chapter": 1},
+        {"description": "First plot point - ...", "chapter": 2},
+        {"description": "Midpoint twist - ...", "chapter": null},
+        {"description": "Crisis - ...", "chapter": null},
+        {"description": "Climax - ...", "chapter": null},
+        {"description": "Resolution - ...", "chapter": null}
+    ]
+}"""
 
     CHAPTER_SCHEMA = """[
     {
@@ -154,10 +166,11 @@ class ArchitectAgent(BaseAgent):
         builder.add_text("Make them complex, with flaws and desires that create conflict.")
 
         prompt = builder.build()
-        response = self.generate(prompt)
-        characters = parse_json_list_to_models(response, Character)
-        logger.info(f"Created {len(characters)} characters: {[c.name for c in characters]}")
-        return characters
+        result = self.generate_structured(prompt, CharacterList)
+        logger.info(
+            f"Created {len(result.characters)} characters: {[c.name for c in result.characters]}"
+        )
+        return result.characters
 
     def create_plot_outline(self, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
         """Create the main plot outline and key plot points."""
@@ -185,9 +198,9 @@ class ArchitectAgent(BaseAgent):
             builder.add_section("WORLD", world_preview)
 
         builder.add_text(
-            f"Create:\n"
-            f"1. A compelling plot summary (1-2 paragraphs) in {brief.language}\n"
-            f"2. Key plot points as JSON (descriptions in {brief.language}):"
+            f"Create a complete plot outline with summary and key plot points.\n"
+            f"Write all text in {brief.language}.\n"
+            f"Output as JSON:"
         )
         builder.add_json_output_format(self.PLOT_POINT_SCHEMA)
         builder.add_text(
@@ -196,16 +209,10 @@ class ArchitectAgent(BaseAgent):
         )
 
         prompt = builder.build()
-        response = self.generate(prompt)
+        result = self.generate_structured(prompt, PlotOutline)
+        logger.info(f"Created plot outline with {len(result.plot_points)} plot points")
 
-        # Extract plot summary (everything before JSON)
-        plot_summary = re.split(r"```json", response)[0].strip()
-
-        # Extract plot points
-        plot_points = parse_json_list_to_models(response, PlotPoint)
-        logger.info(f"Created plot outline with {len(plot_points)} plot points")
-
-        return plot_summary, plot_points
+        return result.plot_summary, result.plot_points
 
     def create_chapter_outline(self, story_state: StoryState) -> list[Chapter]:
         """Create detailed chapter outlines."""
@@ -236,10 +243,9 @@ class ArchitectAgent(BaseAgent):
         )
 
         prompt = builder.build()
-        response = self.generate(prompt)
-        chapters = parse_json_list_to_models(response, Chapter)
-        logger.info(f"Created {len(chapters)} chapter outlines")
-        return chapters
+        result = self.generate_structured(prompt, ChapterList)
+        logger.info(f"Created {len(result.chapters)} chapter outlines")
+        return result.chapters
 
     def build_story_structure(self, story_state: StoryState) -> StoryState:
         """Complete story structure building process."""
@@ -566,10 +572,11 @@ class ArchitectAgent(BaseAgent):
         )
 
         prompt = builder.build()
-        response = self.generate(prompt)
-        characters = parse_json_list_to_models(response, Character)
-        logger.info(f"Generated {len(characters)} new characters: {[c.name for c in characters]}")
-        return characters
+        result = self.generate_structured(prompt, CharacterList)
+        logger.info(
+            f"Generated {len(result.characters)} new characters: {[c.name for c in result.characters]}"
+        )
+        return result.characters
 
     def generate_locations(
         self, story_state: StoryState, existing_locations: list[str], count: int = 3

@@ -1,11 +1,11 @@
 """Continuity Checker Agent - Detects plot holes and inconsistencies."""
 
 import logging
-from dataclasses import dataclass
+
+from pydantic import BaseModel, Field
 
 from memory.story_state import StoryState
 from settings import Settings
-from utils.json_parser import extract_json_list
 from utils.validation import validate_not_empty, validate_not_none, validate_positive, validate_type
 
 from .base import BaseAgent
@@ -13,8 +13,7 @@ from .base import BaseAgent
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ContinuityIssue:
+class ContinuityIssue(BaseModel):
     """A detected continuity issue."""
 
     severity: str  # "critical", "moderate", "minor"
@@ -24,15 +23,32 @@ class ContinuityIssue:
     suggestion: str  # How to fix
 
 
-@dataclass
-class DialoguePattern:
+class ContinuityIssueList(BaseModel):
+    """Wrapper for a list of continuity issues.
+
+    Used with generate_structured() to get validated issue lists from LLM.
+    """
+
+    issues: list[ContinuityIssue] = Field(default_factory=list)
+
+
+class DialoguePattern(BaseModel):
     """Character dialogue patterns for voice consistency."""
 
     character_name: str
     vocabulary_level: str  # formal, casual, colloquial, technical
-    speech_patterns: list[str]  # Characteristic phrases, verbal tics
-    typical_words: list[str]  # Words this character commonly uses
+    speech_patterns: list[str] = Field(default_factory=list)  # Characteristic phrases, verbal tics
+    typical_words: list[str] = Field(default_factory=list)  # Words this character commonly uses
     sentence_structure: str  # simple, complex, fragmented, eloquent
+
+
+class DialoguePatternList(BaseModel):
+    """Wrapper for a list of dialogue patterns.
+
+    Used with generate_structured() to get validated pattern lists from LLM.
+    """
+
+    patterns: list[DialoguePattern] = Field(default_factory=list)
 
 
 CONTINUITY_SYSTEM_PROMPT = """You are the Continuity Checker, the guardian of story consistency.
@@ -143,25 +159,14 @@ Find any:
 - Setting/world rule violations
 - Logic problems
 
-Output as JSON:
-```json
-[
-    {{
-        "severity": "critical|moderate|minor",
-        "category": "language|plot_hole|character|timeline|setting|logic",
-        "description": "What the issue is",
-        "location": "Quote the problematic text",
-        "suggestion": "How to fix it"
-    }}
-]
-```
+Return a list of issues found. If no issues, return an empty list."""
 
-If no issues found, output: ```json
-[]
-```"""
-
-        response = self.generate(prompt)
-        issues = self._parse_issues(response)
+        try:
+            result = self.generate_structured(prompt, ContinuityIssueList)
+            issues = result.issues
+        except Exception as e:
+            logger.warning(f"Structured generation failed, returning empty issues: {e}")
+            issues = []
 
         # Perform voice consistency check if requested
         if check_voice and story_state.characters:
@@ -208,23 +213,20 @@ For each character who speaks, identify their dialogue characteristics:
 - Typical words they use frequently
 - Sentence structure (simple/complex/fragmented/eloquent)
 
-Output as JSON array:
-```json
-[
-    {{
-        "character_name": "Character Name",
-        "vocabulary_level": "formal|casual|colloquial|technical",
-        "speech_patterns": ["pattern1", "pattern2"],
-        "typical_words": ["word1", "word2"],
-        "sentence_structure": "simple|complex|fragmented|eloquent"
-    }}
-]
-```
-
 Only include characters who actually speak in this chapter."""
 
-        response = self.generate(prompt, temperature=self.settings.temp_plot_checking)
-        return self._parse_dialogue_patterns(response)
+        try:
+            result = self.generate_structured(
+                prompt,
+                DialoguePatternList,
+                temperature=self.settings.temp_plot_checking,
+            )
+            patterns = {p.character_name: p for p in result.patterns if p.character_name}
+            logger.debug("Extracted dialogue patterns for %d characters", len(patterns))
+            return patterns
+        except Exception as e:
+            logger.warning(f"Structured generation failed for dialogue patterns: {e}")
+            return {}
 
     def check_character_voice(
         self,
@@ -285,51 +287,18 @@ Check each character's dialogue for:
 4. Are verbal tics or catchphrases used consistently?
 5. Does sentence complexity match their intelligence/personality?
 
-Output voice inconsistencies as JSON:
-```json
-[
-    {{
-        "severity": "moderate|minor",
-        "category": "voice",
-        "description": "Character speaks out of character",
-        "location": "Quote the problematic dialogue",
-        "suggestion": "How to rewrite the dialogue to match their voice"
-    }}
-]
-```
+Return voice inconsistencies found. Set category to "voice". If no issues, return an empty list."""
 
-If no voice issues found, output: ```json
-[]
-```"""
-
-        response = self.generate(prompt, temperature=self.settings.temp_plot_checking)
-        return self._parse_issues(response)
-
-    def _parse_dialogue_patterns(self, response: str) -> dict[str, DialoguePattern]:
-        """Parse dialogue patterns from agent response."""
-        # Use strict=False since empty patterns are valid (no issues found)
-        data = extract_json_list(response, strict=False)
-        if not data:
-            logger.debug("No dialogue patterns found in response")
-            return {}
-
-        patterns = {}
-        for item in data:
-            try:
-                pattern = DialoguePattern(
-                    character_name=item.get("character_name", ""),
-                    vocabulary_level=item.get("vocabulary_level", "casual"),
-                    speech_patterns=item.get("speech_patterns", []),
-                    typical_words=item.get("typical_words", []),
-                    sentence_structure=item.get("sentence_structure", "simple"),
-                )
-                if pattern.character_name:
-                    patterns[pattern.character_name] = pattern
-            except (TypeError, KeyError) as e:
-                logger.debug(f"Skipping malformed dialogue pattern item: {e}")
-
-        logger.debug("Extracted dialogue patterns for %d characters", len(patterns))
-        return patterns
+        try:
+            result = self.generate_structured(
+                prompt,
+                ContinuityIssueList,
+                temperature=self.settings.temp_plot_checking,
+            )
+            return result.issues
+        except Exception as e:
+            logger.warning(f"Structured generation failed for voice check: {e}")
+            return []
 
     def check_full_story(
         self, story_state: StoryState, check_voice: bool = True
@@ -369,7 +338,7 @@ CHARACTERS:
 {chr(10).join(f"- {c.name} ({c.role})" for c in story_state.characters)}
 
 FULL STORY:
-{full_content[:8000]}  # Truncate for context limits
+{full_content[:8000]}
 
 Check for:
 - LANGUAGE VIOLATIONS (text not in {brief.language}) - mark as CRITICAL
@@ -379,21 +348,14 @@ Check for:
 - Overall logic issues
 - Timeline inconsistencies across chapters
 
-Output as JSON:
-```json
-[
-    {{
-        "severity": "critical|moderate|minor",
-        "category": "language|plot_hole|character|timeline|setting|logic",
-        "description": "What the issue is",
-        "location": "Which chapter(s) / quote",
-        "suggestion": "How to fix it"
-    }}
-]
-```"""
+Return a list of issues found. If no issues, return an empty list."""
 
-        response = self.generate(prompt)
-        issues = self._parse_issues(response)
+        try:
+            result = self.generate_structured(prompt, ContinuityIssueList)
+            issues = result.issues
+        except Exception as e:
+            logger.warning(f"Structured generation failed for full story check: {e}")
+            issues = []
 
         # Perform voice consistency check if requested
         if check_voice and story_state.characters and full_content:
@@ -427,21 +389,15 @@ Check if:
 - Plot points are addressed
 - Nothing major was skipped or contradicted
 
-Output as JSON (only issues, not confirmations):
-```json
-[
-    {{
-        "severity": "critical|moderate|minor",
-        "category": "plot_hole",
-        "description": "What's missing or wrong",
-        "location": "outline vs content",
-        "suggestion": "What needs to be added/fixed"
-    }}
-]
-```"""
+Return only issues (not confirmations). Use category "plot_hole" for outline mismatches.
+If no issues, return an empty list."""
 
-        response = self.generate(prompt)
-        return self._parse_issues(response)
+        try:
+            result = self.generate_structured(prompt, ContinuityIssueList)
+            return result.issues
+        except Exception as e:
+            logger.warning(f"Structured generation failed for outline validation: {e}")
+            return []
 
     def extract_new_facts(
         self,
@@ -473,22 +429,6 @@ Output as a simple list, one fact per line, starting with "- "."""
                 facts.append(line[1:].strip())
 
         return facts
-
-    def _parse_issues(self, response: str) -> list[ContinuityIssue]:
-        """Parse continuity issues from agent response."""
-        # Use strict=False since empty issues list is valid (no issues found)
-        data = extract_json_list(response, strict=False)
-        if not data:
-            return []
-
-        issues = []
-        for item in data:
-            try:
-                issues.append(ContinuityIssue(**item))
-            except (TypeError, KeyError) as e:
-                logger.debug(f"Skipping malformed continuity issue item: {e}")
-
-        return issues
 
     def should_revise(self, issues: list[ContinuityIssue]) -> bool:
         """Determine if issues are severe enough to warrant revision."""

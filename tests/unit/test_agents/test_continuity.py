@@ -4,7 +4,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.continuity import ContinuityAgent, ContinuityIssue
+from agents.continuity import (
+    ContinuityAgent,
+    ContinuityIssue,
+    ContinuityIssueList,
+    DialoguePattern,
+    DialoguePatternList,
+)
 from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
 from settings import Settings
 
@@ -107,19 +113,18 @@ class TestContinuityCheckChapter:
 
     def test_returns_issues_list(self, continuity, sample_story_state):
         """Test returns list of continuity issues."""
-        json_response = """Issues found:
-```json
-[
-    {
-        "severity": "moderate",
-        "category": "character",
-        "description": "Marcus is described as having blue eyes, but was established with brown eyes",
-        "location": "Paragraph 3: 'His blue eyes sparkled'",
-        "suggestion": "Change 'blue eyes' to 'brown eyes'"
-    }
-]
-```"""
-        continuity.generate = MagicMock(return_value=json_response)
+        mock_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="moderate",
+                    category="character",
+                    description="Marcus is described as having blue eyes, but was established with brown eyes",
+                    location="Paragraph 3: 'His blue eyes sparkled'",
+                    suggestion="Change 'blue eyes' to 'brown eyes'",
+                )
+            ]
+        )
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         issues = continuity.check_chapter(
             sample_story_state,
@@ -135,25 +140,23 @@ class TestContinuityCheckChapter:
 
     def test_returns_empty_list_when_no_issues(self, continuity, sample_story_state):
         """Test returns empty list when no issues found."""
-        json_response = """No issues found.
-```json
-[]
-```"""
-        continuity.generate = MagicMock(return_value=json_response)
+        mock_result = ContinuityIssueList(issues=[])
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         issues = continuity.check_chapter(
-            sample_story_state, "Perfect chapter content...", chapter_number=1
+            sample_story_state, "Perfect chapter content...", chapter_number=1, check_voice=False
         )
 
         assert issues == []
 
     def test_includes_established_facts(self, continuity, sample_story_state):
         """Test prompt includes established facts."""
-        continuity.generate = MagicMock(return_value="```json\n[]\n```")
+        mock_result = ContinuityIssueList(issues=[])
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         continuity.check_chapter(sample_story_state, "Content", 1, check_voice=False)
 
-        call_args = continuity.generate.call_args
+        call_args = continuity.generate_structured.call_args
         prompt = call_args[0][0]
         assert "ESTABLISHED FACTS" in prompt
         assert "mentor died" in prompt
@@ -165,6 +168,16 @@ class TestContinuityCheckChapter:
         with pytest.raises(ValueError, match="brief"):
             continuity.check_chapter(state, "Content", 1)
 
+    def test_returns_empty_list_on_generation_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        issues = continuity.check_chapter(
+            sample_story_state, "Content...", chapter_number=1, check_voice=False
+        )
+
+        assert issues == []
+
 
 class TestContinuityCheckFullStory:
     """Tests for check_full_story method."""
@@ -174,18 +187,18 @@ class TestContinuityCheckFullStory:
         sample_story_state.chapters[0].content = "Chapter 1 content..."
         sample_story_state.chapters[1].content = "Chapter 2 content..."
 
-        json_response = """```json
-[
-    {
-        "severity": "critical",
-        "category": "plot_hole",
-        "description": "The ancient map mentioned in chapter 1 is never found",
-        "location": "Chapter 1 vs overall plot",
-        "suggestion": "Add a scene where Sarah finds the map"
-    }
-]
-```"""
-        continuity.generate = MagicMock(return_value=json_response)
+        mock_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="critical",
+                    category="plot_hole",
+                    description="The ancient map mentioned in chapter 1 is never found",
+                    location="Chapter 1 vs overall plot",
+                    suggestion="Add a scene where Sarah finds the map",
+                )
+            ]
+        )
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         issues = continuity.check_full_story(sample_story_state, check_voice=False)
 
@@ -197,12 +210,12 @@ class TestContinuityCheckFullStory:
         """Test returns empty list when chapters have no content."""
         sample_story_state.chapters[0].content = ""
         sample_story_state.chapters[1].content = ""
-        continuity.generate = MagicMock(return_value="Should not be called")
+        continuity.generate_structured = MagicMock(return_value="Should not be called")
 
         issues = continuity.check_full_story(sample_story_state)
 
         assert issues == []
-        continuity.generate.assert_not_called()
+        continuity.generate_structured.assert_not_called()
 
     def test_raises_without_brief(self, continuity):
         """Test raises error when brief is missing."""
@@ -215,24 +228,34 @@ class TestContinuityCheckFullStory:
         with pytest.raises(ValueError, match="brief"):
             continuity.check_full_story(state)
 
+    def test_returns_empty_list_on_generation_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        sample_story_state.chapters[0].content = "Chapter 1 content..."
+        sample_story_state.chapters[1].content = "Chapter 2 content..."
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        issues = continuity.check_full_story(sample_story_state, check_voice=False)
+
+        assert issues == []
+
 
 class TestContinuityValidateAgainstOutline:
     """Tests for validate_against_outline method."""
 
     def test_compares_content_to_outline(self, continuity, sample_story_state):
         """Test compares chapter content against outline."""
-        json_response = """```json
-[
-    {
-        "severity": "moderate",
-        "category": "plot_hole",
-        "description": "The discovery of the ancient coin mentioned in outline is missing",
-        "location": "outline vs content",
-        "suggestion": "Add scene where Sarah finds the coin"
-    }
-]
-```"""
-        continuity.generate = MagicMock(return_value=json_response)
+        mock_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="moderate",
+                    category="plot_hole",
+                    description="The discovery of the ancient coin mentioned in outline is missing",
+                    location="outline vs content",
+                    suggestion="Add scene where Sarah finds the coin",
+                )
+            ]
+        )
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         issues = continuity.validate_against_outline(
             sample_story_state,
@@ -241,10 +264,22 @@ class TestContinuityValidateAgainstOutline:
         )
 
         assert len(issues) == 1
-        call_args = continuity.generate.call_args
+        call_args = continuity.generate_structured.call_args
         prompt = call_args[0][0]
         assert "OUTLINE" in prompt
         assert "CONTENT" in prompt
+
+    def test_returns_empty_list_on_generation_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        issues = continuity.validate_against_outline(
+            sample_story_state,
+            chapter_content="Sarah explored the site...",
+            chapter_outline="Sarah finds an ancient coin",
+        )
+
+        assert issues == []
 
 
 class TestContinuityExtractNewFacts:
@@ -444,37 +479,34 @@ class TestContinuityCheckPlotPoints:
 class TestContinuityParseIssues:
     """Tests for issue parsing edge cases."""
 
-    def test_skips_malformed_issues(self, continuity, sample_story_state):
-        """Test skips malformed continuity issue items."""
-        # JSON with one valid and one malformed issue (missing required fields)
-        json_response = """```json
-[
-    {
-        "severity": "moderate",
-        "category": "character",
-        "description": "Valid issue",
-        "location": "Para 1",
-        "suggestion": "Fix it"
-    },
-    {
-        "wrong_field": "This should be skipped"
-    },
-    {
-        "severity": "minor",
-        "category": "logic",
-        "description": "Another valid issue",
-        "location": "Para 2",
-        "suggestion": "Fix that"
-    }
-]
-```"""
-        continuity.generate = MagicMock(return_value=json_response)
+    def test_returns_valid_issues_from_structured_response(self, continuity, sample_story_state):
+        """Test returns valid issues from structured response."""
+        # With generate_structured, Pydantic handles validation
+        mock_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="moderate",
+                    category="character",
+                    description="Valid issue",
+                    location="Para 1",
+                    suggestion="Fix it",
+                ),
+                ContinuityIssue(
+                    severity="minor",
+                    category="logic",
+                    description="Another valid issue",
+                    location="Para 2",
+                    suggestion="Fix that",
+                ),
+            ]
+        )
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         issues = continuity.check_chapter(
             sample_story_state, "Content...", chapter_number=1, check_voice=False
         )
 
-        # Should have 2 issues (the malformed one is skipped)
+        # Should have 2 issues
         assert len(issues) == 2
         assert issues[0].description == "Valid issue"
         assert issues[1].description == "Another valid issue"
@@ -485,25 +517,25 @@ class TestContinuityVoiceConsistency:
 
     def test_extract_dialogue_patterns(self, continuity, sample_story_state):
         """Test extracts dialogue patterns from chapter."""
-        json_response = """```json
-[
-    {
-        "character_name": "Sarah Chen",
-        "vocabulary_level": "formal",
-        "speech_patterns": ["uses archaeological terms", "speaks precisely"],
-        "typical_words": ["exactly", "precisely", "artifact"],
-        "sentence_structure": "complex"
-    },
-    {
-        "character_name": "Marcus Wells",
-        "vocabulary_level": "casual",
-        "speech_patterns": ["uses contractions frequently", "informal"],
-        "typical_words": ["yeah", "gonna", "seriously"],
-        "sentence_structure": "simple"
-    }
-]
-```"""
-        continuity.generate = MagicMock(return_value=json_response)
+        mock_result = DialoguePatternList(
+            patterns=[
+                DialoguePattern(
+                    character_name="Sarah Chen",
+                    vocabulary_level="formal",
+                    speech_patterns=["uses archaeological terms", "speaks precisely"],
+                    typical_words=["exactly", "precisely", "artifact"],
+                    sentence_structure="complex",
+                ),
+                DialoguePattern(
+                    character_name="Marcus Wells",
+                    vocabulary_level="casual",
+                    speech_patterns=["uses contractions frequently", "informal"],
+                    typical_words=["yeah", "gonna", "seriously"],
+                    sentence_structure="simple",
+                ),
+            ]
+        )
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         patterns = continuity.extract_dialogue_patterns(
             sample_story_state, "Chapter with dialogue..."
@@ -518,18 +550,18 @@ class TestContinuityVoiceConsistency:
 
     def test_check_character_voice_finds_issues(self, continuity, sample_story_state):
         """Test checks character voice for inconsistencies."""
-        json_response = """```json
-[
-    {
-        "severity": "moderate",
-        "category": "voice",
-        "description": "Sarah Chen speaks too casually for her character",
-        "location": "Sarah said, 'Yeah, whatever dude.'",
-        "suggestion": "Change to more formal language: 'I understand your point.'"
-    }
-]
-```"""
-        continuity.generate = MagicMock(return_value=json_response)
+        mock_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="moderate",
+                    category="voice",
+                    description="Sarah Chen speaks too casually for her character",
+                    location="Sarah said, 'Yeah, whatever dude.'",
+                    suggestion="Change to more formal language: 'I understand your point.'",
+                )
+            ]
+        )
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         issues = continuity.check_character_voice(
             sample_story_state, "Chapter content with out-of-character dialogue..."
@@ -542,8 +574,6 @@ class TestContinuityVoiceConsistency:
 
     def test_check_character_voice_with_established_patterns(self, continuity, sample_story_state):
         """Test voice checking uses established patterns."""
-        from agents.continuity import DialoguePattern
-
         established_patterns = {
             "Sarah Chen": DialoguePattern(
                 character_name="Sarah Chen",
@@ -554,13 +584,14 @@ class TestContinuityVoiceConsistency:
             )
         }
 
-        continuity.generate = MagicMock(return_value="```json\n[]\n```")
+        mock_result = ContinuityIssueList(issues=[])
+        continuity.generate_structured = MagicMock(return_value=mock_result)
 
         continuity.check_character_voice(
             sample_story_state, "Chapter content...", established_patterns
         )
 
-        call_args = continuity.generate.call_args
+        call_args = continuity.generate_structured.call_args
         prompt = call_args[0][0]
         assert "ESTABLISHED SPEECH PATTERNS" in prompt
         assert "formal vocabulary" in prompt
@@ -573,34 +604,42 @@ class TestContinuityVoiceConsistency:
 
         assert issues == []
 
+    def test_check_character_voice_returns_empty_on_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        issues = continuity.check_character_voice(sample_story_state, "Content...")
+
+        assert issues == []
+
     def test_check_chapter_includes_voice_check(self, continuity, sample_story_state):
         """Test check_chapter includes voice consistency by default."""
         # Mock both the main check and voice check
-        main_response = """```json
-[
-    {
-        "severity": "minor",
-        "category": "timeline",
-        "description": "Timeline issue",
-        "location": "Para 1",
-        "suggestion": "Fix timeline"
-    }
-]
-```"""
-        voice_response = """```json
-[
-    {
-        "severity": "moderate",
-        "category": "voice",
-        "description": "Voice issue",
-        "location": "Para 2",
-        "suggestion": "Fix voice"
-    }
-]
-```"""
+        main_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="minor",
+                    category="timeline",
+                    description="Timeline issue",
+                    location="Para 1",
+                    suggestion="Fix timeline",
+                )
+            ]
+        )
+        voice_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="moderate",
+                    category="voice",
+                    description="Voice issue",
+                    location="Para 2",
+                    suggestion="Fix voice",
+                )
+            ]
+        )
 
-        # The generate method will be called twice
-        continuity.generate = MagicMock(side_effect=[main_response, voice_response])
+        # The generate_structured method will be called twice
+        continuity.generate_structured = MagicMock(side_effect=[main_result, voice_result])
 
         issues = continuity.check_chapter(sample_story_state, "Content...", chapter_number=1)
 
@@ -611,25 +650,25 @@ class TestContinuityVoiceConsistency:
 
     def test_check_chapter_can_skip_voice_check(self, continuity, sample_story_state):
         """Test check_chapter can skip voice checking."""
-        main_response = """```json
-[
-    {
-        "severity": "minor",
-        "category": "timeline",
-        "description": "Timeline issue",
-        "location": "Para 1",
-        "suggestion": "Fix timeline"
-    }
-]
-```"""
-        continuity.generate = MagicMock(return_value=main_response)
+        main_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="minor",
+                    category="timeline",
+                    description="Timeline issue",
+                    location="Para 1",
+                    suggestion="Fix timeline",
+                )
+            ]
+        )
+        continuity.generate_structured = MagicMock(return_value=main_result)
 
         issues = continuity.check_chapter(
             sample_story_state, "Content...", chapter_number=1, check_voice=False
         )
 
-        # Should only call generate once (no voice check)
-        assert continuity.generate.call_count == 1
+        # Should only call generate_structured once (no voice check)
+        assert continuity.generate_structured.call_count == 1
         assert len(issues) == 1
         assert issues[0].category == "timeline"
 
@@ -639,42 +678,42 @@ class TestContinuityVoiceConsistency:
         sample_story_state.chapters[1].content = "Chapter 2 with more dialogue..."
 
         # Mock responses: main check, pattern extraction, voice check
-        main_response = """```json
-[
-    {
-        "severity": "moderate",
-        "category": "plot_hole",
-        "description": "Plot issue",
-        "location": "Ch1",
-        "suggestion": "Fix plot"
-    }
-]
-```"""
-        pattern_response = """```json
-[
-    {
-        "character_name": "Sarah Chen",
-        "vocabulary_level": "formal",
-        "speech_patterns": [],
-        "typical_words": [],
-        "sentence_structure": "complex"
-    }
-]
-```"""
-        voice_response = """```json
-[
-    {
-        "severity": "moderate",
-        "category": "voice",
-        "description": "Voice issue",
-        "location": "Ch2",
-        "suggestion": "Fix voice"
-    }
-]
-```"""
+        main_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="moderate",
+                    category="plot_hole",
+                    description="Plot issue",
+                    location="Ch1",
+                    suggestion="Fix plot",
+                )
+            ]
+        )
+        pattern_result = DialoguePatternList(
+            patterns=[
+                DialoguePattern(
+                    character_name="Sarah Chen",
+                    vocabulary_level="formal",
+                    speech_patterns=[],
+                    typical_words=[],
+                    sentence_structure="complex",
+                )
+            ]
+        )
+        voice_result = ContinuityIssueList(
+            issues=[
+                ContinuityIssue(
+                    severity="moderate",
+                    category="voice",
+                    description="Voice issue",
+                    location="Ch2",
+                    suggestion="Fix voice",
+                )
+            ]
+        )
 
-        continuity.generate = MagicMock(
-            side_effect=[main_response, pattern_response, voice_response]
+        continuity.generate_structured = MagicMock(
+            side_effect=[main_result, pattern_result, voice_result]
         )
 
         issues = continuity.check_full_story(sample_story_state)
@@ -683,37 +722,6 @@ class TestContinuityVoiceConsistency:
         assert len(issues) == 2
         assert any(i.category == "plot_hole" for i in issues)
         assert any(i.category == "voice" for i in issues)
-
-    def test_parse_dialogue_patterns_handles_malformed(self, continuity):
-        """Test parsing skips malformed dialogue patterns."""
-        json_response = """```json
-[
-    {
-        "character_name": "Sarah Chen",
-        "vocabulary_level": "formal",
-        "speech_patterns": ["pattern1"],
-        "typical_words": ["word1"],
-        "sentence_structure": "complex"
-    },
-    {
-        "wrong_field": "Invalid"
-    },
-    {
-        "character_name": "Marcus Wells",
-        "vocabulary_level": "casual",
-        "speech_patterns": [],
-        "typical_words": [],
-        "sentence_structure": "simple"
-    }
-]
-```"""
-
-        patterns = continuity._parse_dialogue_patterns(json_response)
-
-        # Should parse 2 valid patterns, skip the malformed one
-        assert len(patterns) == 2
-        assert "Sarah Chen" in patterns
-        assert "Marcus Wells" in patterns
 
     def test_extract_dialogue_patterns_no_characters(self, continuity, sample_story_state):
         """Test extract_dialogue_patterns returns empty dict when no characters."""
@@ -725,45 +733,12 @@ class TestContinuityVoiceConsistency:
 
         assert patterns == {}
 
-    def test_parse_dialogue_patterns_empty_data(self, continuity):
-        """Test _parse_dialogue_patterns returns empty dict for empty response."""
-        # Empty JSON array
-        patterns = continuity._parse_dialogue_patterns("[]")
+    def test_extract_dialogue_patterns_handles_exception(self, continuity, sample_story_state):
+        """Test extract_dialogue_patterns returns empty dict on exception."""
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        patterns = continuity.extract_dialogue_patterns(
+            sample_story_state, "Chapter with dialogue..."
+        )
+
         assert patterns == {}
-
-        # Response with no valid JSON
-        patterns = continuity._parse_dialogue_patterns("No valid JSON here")
-        assert patterns == {}
-
-    def test_parse_dialogue_patterns_malformed_items(self, continuity):
-        """Test _parse_dialogue_patterns skips malformed items gracefully."""
-        from agents.continuity import DialoguePattern
-
-        json_response = """```json
-[
-    {
-        "character_name": "Valid Character",
-        "vocabulary_level": "formal"
-    },
-    {
-        "character_name": "Error Character",
-        "vocabulary_level": "formal"
-    }
-]
-```"""
-        # Mock DialoguePattern to raise TypeError for the second item
-        original_init = DialoguePattern.__init__
-        call_count = [0]
-
-        def mock_init(self, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 2:
-                raise TypeError("Simulated type error")
-            return original_init(self, **kwargs)
-
-        with patch.object(DialoguePattern, "__init__", mock_init):
-            patterns = continuity._parse_dialogue_patterns(json_response)
-
-        # Should only have the first valid character, second was skipped due to error
-        assert len(patterns) == 1
-        assert "Valid Character" in patterns

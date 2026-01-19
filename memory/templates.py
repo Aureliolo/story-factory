@@ -5,6 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Shared type for target length across templates and story briefs
+type TargetLength = Literal["short_story", "novella", "novel"]
+
 
 class CharacterTemplate(BaseModel):
     """Template for a character archetype."""
@@ -53,7 +56,7 @@ class StoryTemplate(BaseModel):
     themes: list[str] = Field(default_factory=list)
     setting_time: str = ""
     setting_place: str = ""
-    target_length: Literal["short_story", "novella", "novel"] = "novel"
+    target_length: TargetLength = "novel"
 
     # Structure preset reference
     structure_preset_id: str | None = None
