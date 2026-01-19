@@ -152,7 +152,14 @@ addopts = "-v --tb=short --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 main_file = "tests/component/test_app_entry.py"
-# filterwarnings = ["error"]  # Enable for strict warning mode (requires fixing ResourceWarnings)
+# Treat warnings as errors for strict testing
+filterwarnings = [
+    "error",
+    # Ignore sqlite3 ResourceWarnings during GC (test cleanup timing issue)
+    "ignore:Exception ignored while finalizing database connection:pytest.PytestUnraisableExceptionWarning",
+    # Ignore socket ResourceWarnings during GC (mock cleanup timing issue)
+    "ignore:Exception ignored while finalizing socket:pytest.PytestUnraisableExceptionWarning",
+]
 markers = [
     "e2e: End-to-end browser tests (require playwright)",
     "smoke: Quick startup validation tests",

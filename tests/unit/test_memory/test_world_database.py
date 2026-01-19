@@ -1,5 +1,6 @@
 """Tests for WorldDatabase."""
 
+from collections.abc import Generator
 from unittest.mock import patch
 
 import pytest
@@ -14,17 +15,22 @@ from memory.world_database import (
 class TestWorldDatabase:
     """Tests for WorldDatabase."""
 
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
+        db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
     def test_create_database(self, tmp_path):
         """Test creating a new database."""
         db_path = tmp_path / "test.db"
-        db = WorldDatabase(db_path)
+        with WorldDatabase(db_path) as db:
+            assert db_path.exists()
+            assert db.count_entities() == 0
 
-        assert db_path.exists()
-        assert db.count_entities() == 0
-
-    def test_add_entity(self, tmp_path):
+    def test_add_entity(self, db):
         """Test adding an entity."""
-        db = WorldDatabase(tmp_path / "test.db")
 
         entity_id = db.add_entity(
             entity_type="character",
@@ -35,10 +41,8 @@ class TestWorldDatabase:
         assert entity_id is not None
         assert db.count_entities("character") == 1
 
-    def test_get_entity(self, tmp_path):
+    def test_get_entity(self, db):
         """Test retrieving an entity."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         entity_id = db.add_entity(
             entity_type="location",
             name="Test Location",
@@ -53,10 +57,8 @@ class TestWorldDatabase:
         assert entity.type == "location"
         assert entity.attributes["climate"] == "temperate"
 
-    def test_update_entity(self, tmp_path):
+    def test_update_entity(self, db):
         """Test updating an entity."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         entity_id = db.add_entity(
             entity_type="character",
             name="Original Name",
@@ -77,10 +79,8 @@ class TestWorldDatabase:
         assert updated.name == "Updated Name"
         assert updated.description == "Updated description"
 
-    def test_delete_entity(self, tmp_path):
+    def test_delete_entity(self, db):
         """Test deleting an entity."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         entity_id = db.add_entity(
             entity_type="item",
             name="Test Item",
@@ -93,10 +93,8 @@ class TestWorldDatabase:
         assert result is True
         assert db.count_entities("item") == 0
 
-    def test_search_entities(self, tmp_path):
+    def test_search_entities(self, db):
         """Test searching entities."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         db.add_entity("character", "Alice", "A brave warrior")
         db.add_entity("character", "Bob", "A wise wizard")
         db.add_entity("location", "Alice's Tower", "Where Alice lives")
@@ -110,10 +108,8 @@ class TestWorldDatabase:
         assert len(results) == 1
         assert results[0].name == "Alice"
 
-    def test_add_relationship(self, tmp_path):
+    def test_add_relationship(self, db):
         """Test adding a relationship."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         char1_id = db.add_entity("character", "Alice")
         char2_id = db.add_entity("character", "Bob")
 
@@ -187,41 +183,33 @@ class TestWorldDatabase:
         assert "Alice" in char_names
         assert "Bob" in char_names
 
-    def test_add_entity_validation_empty_name(self, tmp_path):
+    def test_add_entity_validation_empty_name(self, db):
         """Test that empty entity names are rejected."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         with pytest.raises(ValueError, match="Entity name cannot be empty"):
             db.add_entity("character", "")
 
         with pytest.raises(ValueError, match="Entity name cannot be empty"):
             db.add_entity("character", "   ")
 
-    def test_add_entity_validation_long_name(self, tmp_path):
+    def test_add_entity_validation_long_name(self, db):
         """Test that overly long entity names are rejected."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         with pytest.raises(ValueError, match="cannot exceed 200 characters"):
             db.add_entity("character", "x" * 201)
 
-    def test_add_entity_validation_long_description(self, tmp_path):
+    def test_add_entity_validation_long_description(self, db):
         """Test that overly long descriptions are rejected."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         with pytest.raises(ValueError, match="cannot exceed 5000 characters"):
             db.add_entity("character", "Test", "x" * 5001)
 
-    def test_update_entity_validation_empty_name(self, tmp_path):
+    def test_update_entity_validation_empty_name(self, db):
         """Test that empty names are rejected in updates."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Valid Name")
 
         with pytest.raises(ValueError, match="Entity name cannot be empty"):
             db.update_entity(entity_id, name="")
 
-    def test_update_entity_validation_strips_whitespace(self, tmp_path):
+    def test_update_entity_validation_strips_whitespace(self, db):
         """Test that entity names are trimmed."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "  Spaced Name  ")
 
         entity = db.get_entity(entity_id)
@@ -252,18 +240,16 @@ class TestWorldDatabase:
             with WorldDatabase(db_path) as db:
                 db.add_entity("character", "")  # Should raise ValueError
 
-    def test_description_whitespace_stripped_on_add(self, tmp_path):
+    def test_description_whitespace_stripped_on_add(self, db):
         """Test that description whitespace is stripped when adding entity."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test", "  Spaced description  ")
 
         entity = db.get_entity(entity_id)
         assert entity is not None
         assert entity.description == "Spaced description"
 
-    def test_description_whitespace_stripped_on_update(self, tmp_path):
+    def test_description_whitespace_stripped_on_update(self, db):
         """Test that description whitespace is stripped when updating entity."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test", "Original")
 
         db.update_entity(entity_id, description="  Updated description  ")
@@ -272,17 +258,14 @@ class TestWorldDatabase:
         assert entity is not None
         assert entity.description == "Updated description"
 
-    def test_get_entity_not_found(self, tmp_path):
+    def test_get_entity_not_found(self, db):
         """Test get_entity returns None for non-existent entity."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         result = db.get_entity("non-existent-id")
 
         assert result is None
 
-    def test_get_entity_by_name(self, tmp_path):
+    def test_get_entity_by_name(self, db):
         """Test get_entity_by_name retrieves entity correctly."""
-        db = WorldDatabase(tmp_path / "test.db")
         db.add_entity("character", "Alice", "A brave character")
         db.add_entity("location", "Alice's House", "Where Alice lives")
 
@@ -300,25 +283,20 @@ class TestWorldDatabase:
         entity = db.get_entity_by_name("Alice", entity_type="location")
         assert entity is None
 
-    def test_get_entity_by_name_not_found(self, tmp_path):
+    def test_get_entity_by_name_not_found(self, db):
         """Test get_entity_by_name returns None for non-existent name."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         result = db.get_entity_by_name("NonExistent")
 
         assert result is None
 
-    def test_update_entity_not_found(self, tmp_path):
+    def test_update_entity_not_found(self, db):
         """Test update_entity returns False for non-existent entity."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         result = db.update_entity("non-existent-id", name="New Name")
 
         assert result is False
 
-    def test_update_entity_invalid_field(self, tmp_path):
+    def test_update_entity_invalid_field(self, db):
         """Test update_entity ignores invalid fields."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test")
 
         # invalid_field should be ignored (not in allowed fields)
@@ -329,9 +307,8 @@ class TestWorldDatabase:
         assert entity is not None
         assert entity.name == "Updated"
 
-    def test_update_entity_attributes(self, tmp_path):
+    def test_update_entity_attributes(self, db):
         """Test update_entity can update attributes."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test", attributes={"age": 25})
 
         result = db.update_entity(entity_id, attributes={"age": 30, "rank": "Captain"})
@@ -342,9 +319,8 @@ class TestWorldDatabase:
         assert entity.attributes["age"] == 30
         assert entity.attributes["rank"] == "Captain"
 
-    def test_update_entity_type(self, tmp_path):
+    def test_update_entity_type(self, db):
         """Test update_entity can change entity type."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test")
 
         result = db.update_entity(entity_id, type="faction")
@@ -354,17 +330,14 @@ class TestWorldDatabase:
         assert entity is not None
         assert entity.type == "faction"
 
-    def test_delete_entity_not_found(self, tmp_path):
+    def test_delete_entity_not_found(self, db):
         """Test delete_entity returns False for non-existent entity."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         result = db.delete_entity("non-existent-id")
 
         assert result is False
 
-    def test_delete_entity_cleans_up_graph(self, tmp_path):
+    def test_delete_entity_cleans_up_graph(self, db):
         """Test delete_entity removes entity from graph."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
 
         # Entity should be in graph
@@ -377,9 +350,8 @@ class TestWorldDatabase:
         # Entity should be gone
         assert db.get_entity(char1) is None
 
-    def test_list_entities_with_type_filter(self, tmp_path):
+    def test_list_entities_with_type_filter(self, db):
         """Test list_entities with type filter."""
-        db = WorldDatabase(tmp_path / "test.db")
         db.add_entity("character", "Alice")
         db.add_entity("character", "Bob")
         db.add_entity("location", "Town")
@@ -390,9 +362,8 @@ class TestWorldDatabase:
         assert len(chars) == 2
         assert len(locs) == 1
 
-    def test_list_entities_all(self, tmp_path):
+    def test_list_entities_all(self, db):
         """Test list_entities without filter."""
-        db = WorldDatabase(tmp_path / "test.db")
         db.add_entity("character", "Alice")
         db.add_entity("location", "Town")
 
@@ -400,9 +371,8 @@ class TestWorldDatabase:
 
         assert len(all_entities) == 2
 
-    def test_get_relationship_between(self, tmp_path):
+    def test_get_relationship_between(self, db):
         """Test get_relationship_between returns relationship."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         db.add_relationship(char1, char2, "knows")
@@ -412,9 +382,8 @@ class TestWorldDatabase:
         assert rel is not None
         assert rel.relation_type == "knows"
 
-    def test_get_relationship_between_not_found(self, tmp_path):
+    def test_get_relationship_between_not_found(self, db):
         """Test get_relationship_between returns None when not found."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
 
@@ -422,9 +391,8 @@ class TestWorldDatabase:
 
         assert rel is None
 
-    def test_delete_relationship(self, tmp_path):
+    def test_delete_relationship(self, db):
         """Test delete_relationship removes relationship."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         rel_id = db.add_relationship(char1, char2, "knows")
@@ -434,17 +402,14 @@ class TestWorldDatabase:
         assert result is True
         assert db.get_relationship_between(char1, char2) is None
 
-    def test_delete_relationship_not_found(self, tmp_path):
+    def test_delete_relationship_not_found(self, db):
         """Test delete_relationship returns False when not found."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         result = db.delete_relationship("non-existent-id")
 
         assert result is False
 
-    def test_update_relationship(self, tmp_path):
+    def test_update_relationship(self, db):
         """Test update_relationship modifies relationship."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         rel_id = db.add_relationship(char1, char2, "knows", description="Acquaintances")
@@ -457,17 +422,14 @@ class TestWorldDatabase:
         assert rel.relation_type == "friend"
         assert rel.description == "Best friends"
 
-    def test_update_relationship_not_found(self, tmp_path):
+    def test_update_relationship_not_found(self, db):
         """Test update_relationship returns False when not found."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         result = db.update_relationship("non-existent-id", relation_type="friend")
 
         assert result is False
 
-    def test_list_relationships(self, tmp_path):
+    def test_list_relationships(self, db):
         """Test list_relationships returns all relationships."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         char3 = db.add_entity("character", "Charlie")
@@ -498,9 +460,15 @@ class TestWorldDatabase:
 class TestWorldDatabaseEvents:
     """Tests for event-related methods."""
 
-    def test_add_event(self, tmp_path):
-        """Test adding a world event."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_add_event(self, db):
+        """Test adding a world event."""
         char_id = db.add_entity("character", "Alice")
 
         # Participants are tuples of (entity_id, role)
@@ -512,9 +480,8 @@ class TestWorldDatabaseEvents:
 
         assert event_id is not None
 
-    def test_get_events_for_entity(self, tmp_path):
+    def test_get_events_for_entity(self, db):
         """Test getting events for a specific entity."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
         db.add_event(
             description="First event",
@@ -527,9 +494,8 @@ class TestWorldDatabaseEvents:
         assert len(events) == 1
         assert "First event" in events[0].description
 
-    def test_get_events_for_chapter(self, tmp_path):
+    def test_get_events_for_chapter(self, db):
         """Test getting events for a specific chapter."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
         db.add_event("Event 1", [(char_id, "main")], chapter_number=1)
         db.add_event("Event 2", [(char_id, "main")], chapter_number=1)
@@ -539,9 +505,8 @@ class TestWorldDatabaseEvents:
 
         assert len(events) == 2
 
-    def test_get_event_participants(self, tmp_path):
+    def test_get_event_participants(self, db):
         """Test getting participants for an event."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         event_id = db.add_event(
@@ -554,9 +519,8 @@ class TestWorldDatabaseEvents:
 
         assert len(participants) == 2
 
-    def test_list_events_with_limit(self, tmp_path):
+    def test_list_events_with_limit(self, db):
         """Test list_events with limit."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
         for i in range(5):
             db.add_event(f"Event {i}", [(char_id, "main")], chapter_number=1)
@@ -565,9 +529,8 @@ class TestWorldDatabaseEvents:
 
         assert len(events) == 3
 
-    def test_list_events_no_limit(self, tmp_path):
+    def test_list_events_no_limit(self, db):
         """Test list_events without limit."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
         for i in range(3):
             db.add_event(f"Event {i}", [(char_id, "main")], chapter_number=1)
@@ -576,9 +539,8 @@ class TestWorldDatabaseEvents:
 
         assert len(events) == 3
 
-    def test_add_event_with_consequences(self, tmp_path):
+    def test_add_event_with_consequences(self, db):
         """Test adding event with consequences."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
 
         db.add_event(
@@ -592,10 +554,8 @@ class TestWorldDatabaseEvents:
         assert len(events) == 1
         assert events[0].consequences == ["Changed the world", "Awakened powers"]
 
-    def test_add_event_no_participants(self, tmp_path):
+    def test_add_event_no_participants(self, db):
         """Test adding event without participants."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         event_id = db.add_event(
             description="Natural disaster",
             chapter_number=1,
@@ -609,6 +569,13 @@ class TestWorldDatabaseEvents:
 class TestWorldDatabaseGraphOperations:
     """Tests for graph-related operations."""
 
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
+        db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
     def test_get_graph_returns_digraph(self, sample_world_db):
         """Test get_graph returns a NetworkX DiGraph."""
         import networkx as nx
@@ -617,9 +584,8 @@ class TestWorldDatabaseGraphOperations:
 
         assert isinstance(graph, nx.DiGraph)
 
-    def test_find_path_not_found(self, tmp_path):
+    def test_find_path_not_found(self, db):
         """Test find_path returns empty when no path exists."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         # No relationship between them
@@ -649,9 +615,8 @@ class TestWorldDatabaseGraphOperations:
         # Just verify it doesn't crash and returns a list
         assert isinstance(paths, list)
 
-    def test_find_all_paths_no_path(self, tmp_path):
+    def test_find_all_paths_no_path(self, db):
         """Test find_all_paths returns empty when no path exists."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         # No relationship between them
@@ -660,9 +625,8 @@ class TestWorldDatabaseGraphOperations:
 
         assert paths == []
 
-    def test_find_all_paths_node_not_found(self, tmp_path):
+    def test_find_all_paths_node_not_found(self, db):
         """Test find_all_paths handles non-existent node."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
 
         paths = db.find_all_paths(char1, "non-existent")
@@ -678,10 +642,8 @@ class TestWorldDatabaseGraphOperations:
         if communities:
             assert isinstance(communities[0], list)
 
-    def test_get_communities_empty_graph(self, tmp_path):
+    def test_get_communities_empty_graph(self, db):
         """Test get_communities returns empty for empty graph."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         communities = db.get_communities()
 
         assert communities == []
@@ -696,25 +658,20 @@ class TestWorldDatabaseGraphOperations:
             assert isinstance(entity_id, str)
             assert isinstance(score, float)
 
-    def test_get_entity_centrality_empty_graph(self, tmp_path):
+    def test_get_entity_centrality_empty_graph(self, db):
         """Test get_entity_centrality returns empty for empty graph."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         centrality = db.get_entity_centrality()
 
         assert centrality == {}
 
-    def test_get_connected_entities_nonexistent(self, tmp_path):
+    def test_get_connected_entities_nonexistent(self, db):
         """Test get_connected_entities with non-existent entity."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         connected = db.get_connected_entities("non-existent-id")
 
         assert connected == []
 
-    def test_get_connected_entities_no_connections(self, tmp_path):
+    def test_get_connected_entities_no_connections(self, db):
         """Test get_connected_entities with entity that has no connections."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Lonely")
 
         connected = db.get_connected_entities(char_id)
@@ -794,17 +751,20 @@ class TestWorldDatabaseDestructor:
 class TestWorldDatabaseAddEntityValidation:
     """Tests for add_entity validation."""
 
-    def test_add_entity_invalid_type(self, tmp_path):
-        """Test add_entity rejects invalid entity type."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
 
+    def test_add_entity_invalid_type(self, db):
+        """Test add_entity rejects invalid entity type."""
         with pytest.raises(ValueError, match="Invalid entity type"):
             db.add_entity("invalid_type", "Test")
 
-    def test_add_entity_with_attributes_validation(self, tmp_path):
+    def test_add_entity_with_attributes_validation(self, db):
         """Test add_entity validates attributes."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         # Create deeply nested attributes that exceed depth limit
         deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
 
@@ -815,9 +775,15 @@ class TestWorldDatabaseAddEntityValidation:
 class TestWorldDatabaseRelationshipFeatures:
     """Tests for relationship features."""
 
-    def test_add_relationship_bidirectional(self, tmp_path):
-        """Test adding bidirectional relationship."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_add_relationship_bidirectional(self, db):
+        """Test adding bidirectional relationship."""
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
 
@@ -828,9 +794,8 @@ class TestWorldDatabaseRelationshipFeatures:
         assert rel.bidirectional is True
         assert rel.strength == 0.9
 
-    def test_add_relationship_with_attributes(self, tmp_path):
+    def test_add_relationship_with_attributes(self, db):
         """Test adding relationship with attributes."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
 
@@ -841,9 +806,8 @@ class TestWorldDatabaseRelationshipFeatures:
         assert rel.attributes["since"] == "childhood"
         assert rel.attributes["trust"] == 10
 
-    def test_update_relationship_strength(self, tmp_path):
+    def test_update_relationship_strength(self, db):
         """Test updating relationship strength."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         rel_id = db.add_relationship(char1, char2, "knows", strength=0.5)
@@ -855,9 +819,8 @@ class TestWorldDatabaseRelationshipFeatures:
         assert rel is not None
         assert rel.strength == 0.9
 
-    def test_update_relationship_attributes(self, tmp_path):
+    def test_update_relationship_attributes(self, db):
         """Test updating relationship attributes."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         rel_id = db.add_relationship(char1, char2, "knows")
@@ -873,9 +836,15 @@ class TestWorldDatabaseRelationshipFeatures:
 class TestWorldDatabaseGetRelationships:
     """Tests for get_relationships with different directions."""
 
-    def test_get_relationships_outgoing(self, tmp_path):
-        """Test get_relationships with outgoing direction."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_get_relationships_outgoing(self, db):
+        """Test get_relationships with outgoing direction."""
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         char3 = db.add_entity("character", "Charlie")
@@ -887,9 +856,8 @@ class TestWorldDatabaseGetRelationships:
         assert len(rels) == 1
         assert rels[0].target_id == char2
 
-    def test_get_relationships_incoming(self, tmp_path):
+    def test_get_relationships_incoming(self, db):
         """Test get_relationships with incoming direction."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         char3 = db.add_entity("character", "Charlie")
@@ -901,9 +869,8 @@ class TestWorldDatabaseGetRelationships:
         assert len(rels) == 1
         assert rels[0].source_id == char3
 
-    def test_get_relationships_both(self, tmp_path):
+    def test_get_relationships_both(self, db):
         """Test get_relationships with both direction (default)."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         char3 = db.add_entity("character", "Charlie")
@@ -918,9 +885,15 @@ class TestWorldDatabaseGetRelationships:
 class TestWorldDatabaseUpdateValidation:
     """Tests for update_entity validation edge cases."""
 
-    def test_update_entity_skips_updated_at(self, tmp_path):
-        """Test update_entity ignores explicit updated_at."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_update_entity_skips_updated_at(self, db):
+        """Test update_entity ignores explicit updated_at."""
         entity_id = db.add_entity("character", "Test")
 
         # Try to set updated_at explicitly (should be ignored)
@@ -931,9 +904,8 @@ class TestWorldDatabaseUpdateValidation:
         assert entity is not None
         assert entity.name == "New Name"
 
-    def test_update_entity_no_valid_fields(self, tmp_path):
+    def test_update_entity_no_valid_fields(self, db):
         """Test update_entity with no valid fields returns False."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test")
 
         # Only provide invalid/ignored fields
@@ -942,33 +914,29 @@ class TestWorldDatabaseUpdateValidation:
         # Should return False since no valid updates
         assert result is False
 
-    def test_update_entity_long_name(self, tmp_path):
+    def test_update_entity_long_name(self, db):
         """Test update_entity rejects long name."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test")
 
         with pytest.raises(ValueError, match="cannot exceed 200 characters"):
             db.update_entity(entity_id, name="x" * 201)
 
-    def test_update_entity_long_description(self, tmp_path):
+    def test_update_entity_long_description(self, db):
         """Test update_entity rejects long description."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test")
 
         with pytest.raises(ValueError, match="cannot exceed 5000 characters"):
             db.update_entity(entity_id, description="x" * 5001)
 
-    def test_update_entity_empty_type(self, tmp_path):
+    def test_update_entity_empty_type(self, db):
         """Test update_entity rejects empty type."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test")
 
         with pytest.raises(ValueError, match="Entity type cannot be empty"):
             db.update_entity(entity_id, type="")
 
-    def test_update_entity_invalid_type(self, tmp_path):
+    def test_update_entity_invalid_type(self, db):
         """Test update_entity rejects invalid type."""
-        db = WorldDatabase(tmp_path / "test.db")
         entity_id = db.add_entity("character", "Test")
 
         with pytest.raises(ValueError, match="Invalid entity type"):
@@ -978,17 +946,20 @@ class TestWorldDatabaseUpdateValidation:
 class TestWorldDatabaseAddEntityValidationExtra:
     """Additional tests for add_entity validation."""
 
-    def test_add_entity_empty_type(self, tmp_path):
-        """Test add_entity rejects empty type."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
 
+    def test_add_entity_empty_type(self, db):
+        """Test add_entity rejects empty type."""
         with pytest.raises(ValueError, match="Entity type cannot be empty"):
             db.add_entity("", "Test Name")
 
-    def test_add_entity_whitespace_type(self, tmp_path):
+    def test_add_entity_whitespace_type(self, db):
         """Test add_entity rejects whitespace-only type."""
-        db = WorldDatabase(tmp_path / "test.db")
-
         with pytest.raises(ValueError, match="Entity type cannot be empty"):
             db.add_entity("   ", "Test Name")
 
@@ -996,9 +967,15 @@ class TestWorldDatabaseAddEntityValidationExtra:
 class TestWorldDatabaseGraphInternal:
     """Tests for internal graph operations."""
 
-    def test_graph_updates_on_add_entity(self, tmp_path):
-        """Test graph is updated when adding entity after graph is built."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_graph_updates_on_add_entity(self, db):
+        """Test graph is updated when adding entity after graph is built."""
         char1 = db.add_entity("character", "Alice")
 
         # Build graph first
@@ -1010,9 +987,8 @@ class TestWorldDatabaseGraphInternal:
         graph = db.get_graph()
         assert char2 in graph
 
-    def test_graph_updates_on_update_entity(self, tmp_path):
+    def test_graph_updates_on_update_entity(self, db):
         """Test graph is updated when updating entity."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
 
         # Build graph
@@ -1024,9 +1000,8 @@ class TestWorldDatabaseGraphInternal:
         graph = db.get_graph()
         assert graph.nodes[char_id]["name"] == "Alicia"
 
-    def test_graph_updates_on_delete_entity(self, tmp_path):
+    def test_graph_updates_on_delete_entity(self, db):
         """Test graph is updated when deleting entity."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
 
         # Build graph
@@ -1039,9 +1014,8 @@ class TestWorldDatabaseGraphInternal:
         # Graph should be invalidated and rebuilt without the entity
         assert char_id not in graph
 
-    def test_graph_updates_on_add_relationship(self, tmp_path):
+    def test_graph_updates_on_add_relationship(self, db):
         """Test graph is updated when adding relationship."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
 
@@ -1054,9 +1028,8 @@ class TestWorldDatabaseGraphInternal:
         graph = db.get_graph()
         assert graph.has_edge(char1, char2)
 
-    def test_graph_updates_on_add_bidirectional_relationship(self, tmp_path):
+    def test_graph_updates_on_add_bidirectional_relationship(self, db):
         """Test graph is updated for bidirectional relationship."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
 
@@ -1071,9 +1044,8 @@ class TestWorldDatabaseGraphInternal:
         assert graph.has_edge(char1, char2)
         assert graph.has_edge(char2, char1)
 
-    def test_graph_updates_on_delete_relationship(self, tmp_path):
+    def test_graph_updates_on_delete_relationship(self, db):
         """Test graph is updated when deleting relationship."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         rel_id = db.add_relationship(char1, char2, "knows")
@@ -1147,17 +1119,21 @@ class TestWorldDatabaseImportExportEvents:
 class TestWorldDatabaseGetMostConnected:
     """Tests for get_most_connected method."""
 
-    def test_get_most_connected_empty(self, tmp_path):
-        """Test get_most_connected with empty database."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
 
+    def test_get_most_connected_empty(self, db):
+        """Test get_most_connected with empty database."""
         result = db.get_most_connected(limit=5)
 
         assert result == []
 
-    def test_get_most_connected_ordering(self, tmp_path):
+    def test_get_most_connected_ordering(self, db):
         """Test get_most_connected returns correctly ordered."""
-        db = WorldDatabase(tmp_path / "test.db")
         # Create hub entity connected to many
         hub = db.add_entity("character", "Hub")
         chars = [db.add_entity("character", f"Char{i}") for i in range(5)]
@@ -1175,9 +1151,15 @@ class TestWorldDatabaseGetMostConnected:
 class TestWorldDatabaseGraphInternalExtra:
     """Additional tests for internal graph operations."""
 
-    def test_graph_updates_on_update_entity_type(self, tmp_path):
-        """Test graph is updated when updating entity type."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_graph_updates_on_update_entity_type(self, db):
+        """Test graph is updated when updating entity type."""
         char_id = db.add_entity("character", "Alice")
 
         # Build graph
@@ -1189,9 +1171,8 @@ class TestWorldDatabaseGraphInternalExtra:
         graph = db.get_graph()
         assert graph.nodes[char_id]["type"] == "faction"
 
-    def test_graph_updates_on_update_entity_description(self, tmp_path):
+    def test_graph_updates_on_update_entity_description(self, db):
         """Test graph is updated when updating entity description."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice", "Original description")
 
         # Build graph
@@ -1203,9 +1184,8 @@ class TestWorldDatabaseGraphInternalExtra:
         graph = db.get_graph()
         assert graph.nodes[char_id]["description"] == "New description"
 
-    def test_graph_updates_on_update_entity_attributes(self, tmp_path):
+    def test_graph_updates_on_update_entity_attributes(self, db):
         """Test graph is updated when updating entity attributes."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice", attributes={"age": 25})
 
         # Build graph
@@ -1218,9 +1198,8 @@ class TestWorldDatabaseGraphInternalExtra:
         assert graph.nodes[char_id]["attributes"]["age"] == 30
         assert graph.nodes[char_id]["attributes"]["rank"] == "Captain"
 
-    def test_graph_deletes_bidirectional_relationship(self, tmp_path):
+    def test_graph_deletes_bidirectional_relationship(self, db):
         """Test deleting bidirectional relationship removes both edges."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         rel_id = db.add_relationship(char1, char2, "friends", bidirectional=True)
@@ -1238,9 +1217,8 @@ class TestWorldDatabaseGraphInternalExtra:
         assert not graph.has_edge(char1, char2)
         assert not graph.has_edge(char2, char1)
 
-    def test_graph_rebuild_with_bidirectional_relationship(self, tmp_path):
+    def test_graph_rebuild_with_bidirectional_relationship(self, db):
         """Test graph rebuild includes bidirectional relationships."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
         char2 = db.add_entity("character", "Bob")
         db.add_relationship(char1, char2, "friends", bidirectional=True)
@@ -1257,9 +1235,15 @@ class TestWorldDatabaseGraphInternalExtra:
 class TestWorldDatabaseFindAllPathsNodeNotFound:
     """Tests for find_all_paths with non-existent nodes."""
 
-    def test_find_all_paths_source_not_found(self, tmp_path):
-        """Test find_all_paths with non-existent source node."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_find_all_paths_source_not_found(self, db):
+        """Test find_all_paths with non-existent source node."""
         char1 = db.add_entity("character", "Alice")
 
         # Source doesn't exist
@@ -1267,9 +1251,8 @@ class TestWorldDatabaseFindAllPathsNodeNotFound:
 
         assert paths == []
 
-    def test_find_all_paths_target_not_found(self, tmp_path):
+    def test_find_all_paths_target_not_found(self, db):
         """Test find_all_paths with non-existent target node."""
-        db = WorldDatabase(tmp_path / "test.db")
         char1 = db.add_entity("character", "Alice")
 
         # Target doesn't exist
@@ -1281,9 +1264,15 @@ class TestWorldDatabaseFindAllPathsNodeNotFound:
 class TestWorldDatabaseGraphEdgeCases:
     """Tests for edge cases in graph operations."""
 
-    def test_update_entity_in_graph_entity_not_in_graph(self, tmp_path):
-        """Test _update_entity_in_graph handles entity not in graph."""
+    @pytest.fixture
+    def db(self, tmp_path) -> Generator[WorldDatabase]:
+        """Create a test database that auto-closes after each test."""
         db = WorldDatabase(tmp_path / "test.db")
+        yield db
+        db.close()
+
+    def test_update_entity_in_graph_entity_not_in_graph(self, db):
+        """Test _update_entity_in_graph handles entity not in graph."""
         char_id = db.add_entity("character", "Alice")
 
         # Build graph
@@ -1300,9 +1289,8 @@ class TestWorldDatabaseGraphEdgeCases:
         # No error should occur, and entity should still not be in graph
         assert char_id not in graph
 
-    def test_invalidate_graph_cache(self, tmp_path):
+    def test_invalidate_graph_cache(self, db):
         """Test invalidate_graph_cache forces graph rebuild on next access."""
-        db = WorldDatabase(tmp_path / "test.db")
         char_id = db.add_entity("character", "Alice")
 
         # Build graph first
