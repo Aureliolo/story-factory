@@ -410,16 +410,18 @@ class TestWorldQualityServiceInit:
         # Second access returns same client
         assert service.client is client
 
-    def test_analytics_db_creation(self, service):
+    def test_analytics_db_creation(self, settings, mock_mode_service):
         """Test lazy analytics database creation."""
-        assert service._analytics_db is None
+        # Create service without the fixture's analytics_db mock
+        svc = WorldQualityService(settings, mock_mode_service)
+        assert svc._analytics_db is None
         with patch("services.world_quality_service.ModeDatabase") as mock_db_class:
             mock_db = MagicMock()
             mock_db_class.return_value = mock_db
-            db = service.analytics_db
+            db = svc.analytics_db
             assert db is mock_db
             # Second access returns same instance
-            assert service.analytics_db is mock_db
+            assert svc.analytics_db is mock_db
 
     def test_get_creator_model(self, service, mock_mode_service):
         """Test getting creator model."""

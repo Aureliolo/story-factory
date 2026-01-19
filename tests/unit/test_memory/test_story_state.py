@@ -297,6 +297,36 @@ class TestCharacter:
         char.update_arc(2, "Shows loyalty")
         assert char.arc_progress == {1: "First appearance", 2: "Shows loyalty"}
 
+    def test_arc_progress_cleans_invalid_string_keys(self):
+        """Test arc_progress validator cleans invalid string keys from LLM responses."""
+        # LLMs sometimes return string keys like {"Embracing Power": "..."}
+        # instead of integer chapter numbers {1: "..."}
+        # Simulate LLM JSON response with mixed key types
+        raw_data = {
+            "name": "Test",
+            "role": "protagonist",
+            "description": "Test character",
+            "arc_progress": {
+                "Embracing Power": "Becomes stronger",
+                "1": "Valid chapter 1",  # String "1" should be converted to int 1
+                "2": "Valid chapter 2",  # String "2" should be converted to int 2
+                "invalid": "Should be skipped",
+            },
+        }
+        char = Character.model_validate(raw_data)
+        # Only valid integer keys should remain
+        assert char.arc_progress == {1: "Valid chapter 1", 2: "Valid chapter 2"}
+
+    def test_arc_progress_handles_empty(self):
+        """Test arc_progress validator handles empty dict."""
+        char = Character(
+            name="Test",
+            role="protagonist",
+            description="Test character",
+            arc_progress={},
+        )
+        assert char.arc_progress == {}
+
 
 class TestStoryState:
     """Tests for StoryState model."""
