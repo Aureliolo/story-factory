@@ -415,7 +415,7 @@ class WritePage:
             ui.label("No reviews or notes yet.").classes("text-gray-500 dark:text-gray-400")
 
         for review in reviews:
-            with ui.card().classes("w-full"):
+            with ui.card().classes("w-full bg-gray-50 dark:bg-gray-800"):
                 with ui.row().classes("items-center gap-2"):
                     ui.badge(review.get("type", "note")).props("color=grey-7")
                     if review.get("chapter"):
@@ -426,7 +426,7 @@ class WritePage:
 
         # Add note form
         with ui.row().classes("w-full gap-2 mt-4"):
-            note_input = ui.input(placeholder="Add a note...").classes("flex-grow")
+            note_input = ui.input(placeholder="Add a note...").props("filled").classes("flex-grow")
             ui.button(
                 "Add Note",
                 on_click=lambda: self._add_note(note_input.value),
@@ -758,7 +758,7 @@ class WritePage:
                 logger.exception("Failed to finalize interview")
                 self._notify(f"Error: {e}", type="negative")
 
-        with dialog, ui.card().classes("w-96"):
+        with dialog, ui.card().classes("w-96 bg-white dark:bg-gray-800"):
             ui.label("Finalize Interview?").classes("text-xl font-bold mb-2")
             ui.label(
                 "This will generate a story brief based on the conversation so far. "
@@ -850,11 +850,11 @@ class WritePage:
                 self._update_interview_buttons()
                 self._notify(f"Error: {e}", type="negative")
 
-        with dialog, ui.card().classes("w-[500px]"):
+        with dialog, ui.card().classes("w-[500px] bg-white dark:bg-gray-800"):
             ui.label("Building Story Structure").classes("text-xl font-bold mb-4")
 
             # Show what we're building
-            with ui.card().classes("w-full bg-gray-50 dark:bg-gray-800 mb-4"):
+            with ui.card().classes("w-full bg-gray-50 dark:bg-gray-700 mb-4"):
                 ui.label("Story Overview:").classes("font-medium mb-2")
                 ui.label(f"Genre: {brief.genre} • Tone: {brief.tone}").classes(
                     "text-sm text-gray-600 dark:text-gray-400"
@@ -1331,9 +1331,11 @@ class WritePage:
         # Create dialog to show version
         dialog = ui.dialog().props("maximized")
 
-        with dialog, ui.card().classes("w-full h-full flex flex-col"):
+        with dialog, ui.card().classes("w-full h-full flex flex-col bg-white dark:bg-gray-800"):
             # Header
-            with ui.row().classes("w-full items-center justify-between p-4 border-b"):
+            with ui.row().classes(
+                "w-full items-center justify-between p-4 border-b dark:border-gray-700"
+            ):
                 with ui.column().classes("gap-1"):
                     with ui.row().classes("items-center gap-2"):
                         ui.label(f"Chapter {chapter.number}: {chapter.title}").classes(
@@ -1359,7 +1361,7 @@ class WritePage:
                 ui.markdown(version.content).classes("prose dark:prose-invert max-w-none")
 
             # Footer with actions
-            with ui.row().classes("w-full justify-end gap-2 p-4 border-t"):
+            with ui.row().classes("w-full justify-end gap-2 p-4 border-t dark:border-gray-700"):
                 if not version.is_current:
 
                     def restore_and_close() -> None:
@@ -1481,9 +1483,11 @@ class WritePage:
                     loading_spinner.set_visibility(False)
                 self._notify(f"Error generating suggestions: {e}", type="negative")
 
-        with dialog, ui.card().classes("w-full h-full flex flex-col"):
+        with dialog, ui.card().classes("w-full h-full flex flex-col bg-white dark:bg-gray-800"):
             # Header
-            with ui.row().classes("w-full items-center justify-between p-4 border-b"):
+            with ui.row().classes(
+                "w-full items-center justify-between p-4 border-b dark:border-gray-700"
+            ):
                 with ui.row().classes("items-center gap-2"):
                     ui.icon("lightbulb", size="md").classes("text-amber-500")
                     ui.label("Writing Suggestions").classes("text-2xl font-bold")
@@ -1496,7 +1500,7 @@ class WritePage:
                 suggestions_html.set_visibility(False)
 
             # Footer
-            with ui.row().classes("w-full justify-end gap-2 p-4 border-t"):
+            with ui.row().classes("w-full justify-end gap-2 p-4 border-t dark:border-gray-700"):
                 ui.button("Refresh", on_click=load_suggestions, icon="refresh").props("flat")
 
                 def close_dialog():
