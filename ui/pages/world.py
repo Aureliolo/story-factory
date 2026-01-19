@@ -1945,7 +1945,45 @@ class WorldPage:
             }
             default_chapters = length_map.get(brief.target_length, settings.chapters_novella)
 
-            with ui.row().classes("w-full gap-4 flex-wrap mb-4"):
+            # Helper to create min-max input pair
+            def create_minmax_input(
+                label: str,
+                project_min: int | None,
+                project_max: int | None,
+                default_min: int,
+                default_max: int,
+                max_val: int = 50,
+            ) -> tuple:
+                with ui.column().classes("gap-1"):
+                    ui.label(f"{label} (min-max)").classes("text-xs text-gray-500")
+                    with ui.row().classes("gap-1 items-center"):
+                        min_input = (
+                            ui.number(
+                                value=project_min or default_min,
+                                min=0,
+                                max=max_val,
+                                step=1,
+                            )
+                            .props("dense outlined")
+                            .classes("w-16")
+                        )
+                        ui.label("-").classes("text-gray-400")
+                        max_input = (
+                            ui.number(
+                                value=project_max or default_max,
+                                min=0,
+                                max=max_val,
+                                step=1,
+                            )
+                            .props("dense outlined")
+                            .classes("w-16")
+                        )
+                    ui.label(f"Default: {default_min}-{default_max}").classes(
+                        "text-xs text-gray-400"
+                    )
+                return min_input, max_input
+
+            with ui.row().classes("w-full gap-4 flex-wrap mb-2"):
                 # Chapter count
                 with ui.column().classes("gap-1"):
                     ui.label("Chapters").classes("text-xs text-gray-500")
@@ -1962,40 +2000,50 @@ class WorldPage:
                     ui.label(f"Default: {default_chapters}").classes("text-xs text-gray-400")
 
                 # Character count range
-                with ui.column().classes("gap-1"):
-                    ui.label("Characters (min-max)").classes("text-xs text-gray-500")
-                    with ui.row().classes("gap-1 items-center"):
-                        char_min_input = (
-                            ui.number(
-                                value=(
-                                    project.target_characters_min
-                                    or settings.world_gen_characters_min
-                                ),
-                                min=1,
-                                max=50,
-                                step=1,
-                            )
-                            .props("dense outlined")
-                            .classes("w-16")
-                        )
-                        ui.label("-").classes("text-gray-400")
-                        char_max_input = (
-                            ui.number(
-                                value=(
-                                    project.target_characters_max
-                                    or settings.world_gen_characters_max
-                                ),
-                                min=1,
-                                max=50,
-                                step=1,
-                            )
-                            .props("dense outlined")
-                            .classes("w-16")
-                        )
-                    ui.label(
-                        f"Default: {settings.world_gen_characters_min}-"
-                        f"{settings.world_gen_characters_max}"
-                    ).classes("text-xs text-gray-400")
+                char_min_input, char_max_input = create_minmax_input(
+                    "Characters",
+                    project.target_characters_min,
+                    project.target_characters_max,
+                    settings.world_gen_characters_min,
+                    settings.world_gen_characters_max,
+                )
+
+                # Locations count range
+                loc_min_input, loc_max_input = create_minmax_input(
+                    "Locations",
+                    project.target_locations_min,
+                    project.target_locations_max,
+                    settings.world_gen_locations_min,
+                    settings.world_gen_locations_max,
+                )
+
+            with ui.row().classes("w-full gap-4 flex-wrap mb-4"):
+                # Factions count range
+                fac_min_input, fac_max_input = create_minmax_input(
+                    "Factions",
+                    project.target_factions_min,
+                    project.target_factions_max,
+                    settings.world_gen_factions_min,
+                    settings.world_gen_factions_max,
+                )
+
+                # Items count range
+                item_min_input, item_max_input = create_minmax_input(
+                    "Items",
+                    project.target_items_min,
+                    project.target_items_max,
+                    settings.world_gen_items_min,
+                    settings.world_gen_items_max,
+                )
+
+                # Concepts count range
+                concept_min_input, concept_max_input = create_minmax_input(
+                    "Concepts",
+                    project.target_concepts_min,
+                    project.target_concepts_max,
+                    settings.world_gen_concepts_min,
+                    settings.world_gen_concepts_max,
+                )
 
             # Function to save settings before building
             async def save_settings_and_build() -> None:
@@ -2007,10 +2055,38 @@ class WorldPage:
                 project.target_characters_max = (
                     int(char_max_input.value) if char_max_input.value else None
                 )
+                project.target_locations_min = (
+                    int(loc_min_input.value) if loc_min_input.value else None
+                )
+                project.target_locations_max = (
+                    int(loc_max_input.value) if loc_max_input.value else None
+                )
+                project.target_factions_min = (
+                    int(fac_min_input.value) if fac_min_input.value else None
+                )
+                project.target_factions_max = (
+                    int(fac_max_input.value) if fac_max_input.value else None
+                )
+                project.target_items_min = (
+                    int(item_min_input.value) if item_min_input.value else None
+                )
+                project.target_items_max = (
+                    int(item_max_input.value) if item_max_input.value else None
+                )
+                project.target_concepts_min = (
+                    int(concept_min_input.value) if concept_min_input.value else None
+                )
+                project.target_concepts_max = (
+                    int(concept_max_input.value) if concept_max_input.value else None
+                )
                 self.services.project.save_project(project)
                 logger.info(
                     f"Updated generation settings: chapters={project.target_chapters}, "
-                    f"chars={project.target_characters_min}-{project.target_characters_max}"
+                    f"chars={project.target_characters_min}-{project.target_characters_max}, "
+                    f"locs={project.target_locations_min}-{project.target_locations_max}, "
+                    f"facs={project.target_factions_min}-{project.target_factions_max}, "
+                    f"items={project.target_items_min}-{project.target_items_max}, "
+                    f"concepts={project.target_concepts_min}-{project.target_concepts_max}"
                 )
                 # Now start the build
                 await do_build()
