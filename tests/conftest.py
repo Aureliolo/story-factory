@@ -1,5 +1,6 @@
 """Pytest fixtures for Story Factory tests."""
 
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -90,13 +91,13 @@ def fast_orchestrator(cached_settings: Settings, orchestrator_temp_dir: Path):
 
 
 @pytest.fixture
-def sample_world_db(tmp_path: Path) -> WorldDatabase:
+def sample_world_db(tmp_path: Path) -> Generator[WorldDatabase]:
     """Create a sample WorldDatabase with test data.
 
     Args:
         tmp_path: Pytest temporary path fixture.
 
-    Returns:
+    Yields:
         WorldDatabase with sample entities and relationships.
     """
     db = WorldDatabase(tmp_path / "test_world.db")
@@ -141,7 +142,8 @@ def sample_world_db(tmp_path: Path) -> WorldDatabase:
     db.add_relationship(alice_id, villain_id, "enemy_of")
     db.add_relationship(villain_id, castle_id, "located_in")
 
-    return db
+    yield db
+    db.close()
 
 
 @pytest.fixture
