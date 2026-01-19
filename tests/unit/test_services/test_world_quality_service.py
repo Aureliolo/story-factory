@@ -67,7 +67,10 @@ def mock_mode_service():
 @pytest.fixture
 def service(settings, mock_mode_service):
     """Create WorldQualityService with mocked dependencies."""
-    return WorldQualityService(settings, mock_mode_service)
+    svc = WorldQualityService(settings, mock_mode_service)
+    # Mock analytics_db to prevent tests from writing to real database
+    svc._analytics_db = MagicMock()
+    return svc
 
 
 @pytest.fixture
