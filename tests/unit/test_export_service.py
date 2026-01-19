@@ -79,9 +79,8 @@ class TestExportServiceSaveToFile:
 
         filepath = tmp_path / "test.xyz"
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(ValueError):
-                export_service.save_to_file(sample_state, "xyz", filepath)
+        with caplog.at_level(logging.ERROR), pytest.raises(ValueError):
+            export_service.save_to_file(sample_state, "xyz", filepath)
 
         # Note: The error is raised by validation before logging would occur
         # for unsupported format. The log happens in the else branch which

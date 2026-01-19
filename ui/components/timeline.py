@@ -275,17 +275,17 @@ class TimelineComponent:
     def _render_empty_state(self) -> None:
         """Render empty state message."""
         assert self._container is not None  # Checked by caller
-        with self._container:
-            with (
-                ui.column()
-                .classes("w-full items-center justify-center gap-4 p-8")
-                .style(f"min-height: {self.height}px")
-            ):
-                ui.icon("timeline", size="xl").classes("text-gray-400 dark:text-gray-500")
-                ui.label("No timeline data available").classes("text-gray-500 dark:text-gray-400")
-                ui.label(
-                    "Complete the interview and generate chapters to see your story timeline."
-                ).classes("text-sm text-gray-400 dark:text-gray-500 text-center")
+        with (
+            self._container,
+            ui.column()
+            .classes("w-full items-center justify-center gap-4 p-8")
+            .style(f"min-height: {self.height}px"),
+        ):
+            ui.icon("timeline", size="xl").classes("text-gray-400 dark:text-gray-500")
+            ui.label("No timeline data available").classes("text-gray-500 dark:text-gray-400")
+            ui.label(
+                "Complete the interview and generate chapters to see your story timeline."
+            ).classes("text-sm text-gray-400 dark:text-gray-500 text-center")
 
     def _build_chapter_timeline(self) -> None:
         """Build chapter-based timeline using native NiceGUI."""
@@ -375,19 +375,17 @@ class TimelineComponent:
         color = TRACK_COLORS["chapters"]["bg"]
         border_color = TRACK_COLORS["chapters"]["border"]
 
-        with ui.element("div").classes(
-            "h-full border-l dark:border-gray-600 p-1 flex items-center"
+        with (
+            ui.element("div").classes("h-full border-l dark:border-gray-600 p-1 flex items-center"),
+            ui.element("div")
+            .classes(
+                "w-full px-2 py-1 rounded text-white text-xs truncate cursor-pointer "
+                "hover:opacity-80 transition-opacity"
+            )
+            .style(f"background-color: {color}; border: 1px solid {border_color};")
+            .tooltip(f"Chapter {chapter.number}: {chapter.title}\n{chapter.word_count:,} words"),
         ):
-            with (
-                ui.element("div")
-                .classes(
-                    "w-full px-2 py-1 rounded text-white text-xs truncate cursor-pointer "
-                    "hover:opacity-80 transition-opacity"
-                )
-                .style(f"background-color: {color}; border: 1px solid {border_color};")
-                .tooltip(f"Chapter {chapter.number}: {chapter.title}\n{chapter.word_count:,} words")
-            ):
-                ui.label(chapter.title[:20] + "..." if len(chapter.title) > 20 else chapter.title)
+            ui.label(chapter.title[:20] + "..." if len(chapter.title) > 20 else chapter.title)
 
     def _build_events_track(self, num_chapters: int, label_width: str, chapter_width: str) -> None:
         """Build the events track row.

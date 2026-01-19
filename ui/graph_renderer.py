@@ -481,7 +481,7 @@ def _get_layout_options(layout: str) -> str:
                 }
             }
         """
-    elif layout == "circular":
+    if layout == "circular":
         # Circular layout - disable physics to keep positions fixed
         return """
             layout: {
@@ -492,7 +492,7 @@ def _get_layout_options(layout: str) -> str:
                 enabled: false
             }
         """
-    elif layout == "grid":
+    if layout == "grid":
         # Grid layout - disable physics to keep positions fixed
         return """
             layout: {
@@ -503,8 +503,8 @@ def _get_layout_options(layout: str) -> str:
                 enabled: false
             }
         """
-    else:  # force-directed (default)
-        return """
+    # force-directed (default)
+    return """
             layout: {
                 improvedLayout: true,
                 hierarchical: false

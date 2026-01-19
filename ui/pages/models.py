@@ -441,20 +441,19 @@ class ModelsPage:
 
             with self._pull_progress:
                 task.card = ui.card().classes("w-full mb-2").props("flat bordered")
-                with task.card:
-                    with ui.row().classes("w-full items-center gap-2"):
-                        with ui.column().classes("flex-grow gap-1"):
-                            with ui.row().classes("items-center gap-2"):
-                                ui.spinner(size="sm")
-                                ui.label(task.model_id).classes("font-medium")
-                            task.progress_bar = ui.linear_progress(value=0).classes("w-full")
-                            task.status_label = ui.label(task.status_text).classes(
-                                "text-sm text-gray-500 dark:text-gray-400"
-                            )
-                        ui.button(
-                            icon="close",
-                            on_click=lambda t=task: self._cancel_download(t),
-                        ).props("flat dense round").tooltip("Cancel")
+                with task.card, ui.row().classes("w-full items-center gap-2"):
+                    with ui.column().classes("flex-grow gap-1"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.spinner(size="sm")
+                            ui.label(task.model_id).classes("font-medium")
+                        task.progress_bar = ui.linear_progress(value=0).classes("w-full")
+                        task.status_label = ui.label(task.status_text).classes(
+                            "text-sm text-gray-500 dark:text-gray-400"
+                        )
+                    ui.button(
+                        icon="close",
+                        on_click=lambda t=task: self._cancel_download(t),
+                    ).props("flat dense round").tooltip("Cancel")
         except Exception as e:
             logger.exception(f"Error creating download card for {task.model_id}: {e}")
 

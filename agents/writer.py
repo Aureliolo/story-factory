@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import logging
 
 from memory.story_state import Chapter, Scene, StoryState
@@ -89,9 +88,8 @@ class WriterAgent(BaseAgent):
                 f"Chapter {chapter.number} has {len(chapter.scenes)} scenes, writing scene-by-scene"
             )
             return self._write_chapter_with_scenes(story_state, chapter, revision_feedback)
-        else:
-            logger.info(f"Chapter {chapter.number} has no scenes, writing as single unit")
-            return self._write_chapter_whole(story_state, chapter, revision_feedback)
+        logger.info(f"Chapter {chapter.number} has no scenes, writing as single unit")
+        return self._write_chapter_whole(story_state, chapter, revision_feedback)
 
     def _write_chapter_whole(
         self,

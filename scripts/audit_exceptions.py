@@ -187,9 +187,8 @@ def main():
     if results["broad_without_logging"]:
         print("❌ Audit found issues that should be addressed")
         return 1
-    else:
-        print("✅ All exception handlers meet quality standards")
-        return 0
+    print("✅ All exception handlers meet quality standards")
+    return 0
 
 
 if __name__ == "__main__":

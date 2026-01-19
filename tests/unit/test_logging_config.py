@@ -207,10 +207,9 @@ class TestLogContext:
         _context_filter.correlation_id = "original"
 
         try:
-            with pytest.raises(ValueError):
-                with log_context("exception-id"):
-                    assert _context_filter.correlation_id == "exception-id"
-                    raise ValueError("Test error")
+            with pytest.raises(ValueError), log_context("exception-id"):
+                assert _context_filter.correlation_id == "exception-id"
+                raise ValueError("Test error")
 
             # Should restore original after exception
             assert _context_filter.correlation_id == "original"
@@ -225,9 +224,8 @@ class TestLogPerformance:
         """Test log_performance logs success."""
         logger = logging.getLogger("test_perf")
 
-        with caplog.at_level(logging.INFO):
-            with log_performance(logger, "test_operation"):
-                pass  # Simulate work
+        with caplog.at_level(logging.INFO), log_performance(logger, "test_operation"):
+            pass  # Simulate work
 
         assert "test_operation: Starting" in caplog.text
         assert "test_operation: Completed" in caplog.text
@@ -236,10 +234,9 @@ class TestLogPerformance:
         """Test log_performance logs failure on exception."""
         logger = logging.getLogger("test_perf")
 
-        with caplog.at_level(logging.INFO):
-            with pytest.raises(RuntimeError):
-                with log_performance(logger, "failing_operation"):
-                    raise RuntimeError("Something went wrong")
+        with caplog.at_level(logging.INFO), pytest.raises(RuntimeError):
+            with log_performance(logger, "failing_operation"):
+                raise RuntimeError("Something went wrong")
 
         assert "failing_operation: Starting" in caplog.text
         assert "failing_operation: Failed" in caplog.text
@@ -251,9 +248,8 @@ class TestLogPerformance:
 
         logger = logging.getLogger("test_perf")
 
-        with caplog.at_level(logging.INFO):
-            with log_performance(logger, "timed_op"):
-                time.sleep(0.01)  # Small delay to ensure measurable time
+        with caplog.at_level(logging.INFO), log_performance(logger, "timed_op"):
+            time.sleep(0.01)  # Small delay to ensure measurable time
 
         # Check duration is logged
         assert "Completed in" in caplog.text

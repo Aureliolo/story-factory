@@ -92,38 +92,37 @@ class TimelinePage:
         chapter_count = len(project.chapters)
         character_count = len(project.characters)
 
-        with ui.card().classes("w-full p-4"):
-            with ui.row().classes("w-full items-center gap-6"):
-                # Events count
-                with ui.column().classes("items-center"):
-                    ui.icon("event", size="lg").classes("text-blue-500")
-                    ui.label(str(event_count)).classes("text-2xl font-bold")
-                    ui.label("Events").classes("text-sm text-gray-500 dark:text-gray-400")
+        with ui.card().classes("w-full p-4"), ui.row().classes("w-full items-center gap-6"):
+            # Events count
+            with ui.column().classes("items-center"):
+                ui.icon("event", size="lg").classes("text-blue-500")
+                ui.label(str(event_count)).classes("text-2xl font-bold")
+                ui.label("Events").classes("text-sm text-gray-500 dark:text-gray-400")
 
-                ui.separator().props("vertical")
+            ui.separator().props("vertical")
 
-                # Chapters count
-                with ui.column().classes("items-center"):
-                    ui.icon("menu_book", size="lg").classes("text-green-500")
-                    ui.label(str(chapter_count)).classes("text-2xl font-bold")
-                    ui.label("Chapters").classes("text-sm text-gray-500 dark:text-gray-400")
+            # Chapters count
+            with ui.column().classes("items-center"):
+                ui.icon("menu_book", size="lg").classes("text-green-500")
+                ui.label(str(chapter_count)).classes("text-2xl font-bold")
+                ui.label("Chapters").classes("text-sm text-gray-500 dark:text-gray-400")
 
-                ui.separator().props("vertical")
+            ui.separator().props("vertical")
 
-                # Characters count
-                with ui.column().classes("items-center"):
-                    ui.icon("people", size="lg").classes("text-orange-500")
-                    ui.label(str(character_count)).classes("text-2xl font-bold")
-                    ui.label("Characters").classes("text-sm text-gray-500 dark:text-gray-400")
+            # Characters count
+            with ui.column().classes("items-center"):
+                ui.icon("people", size="lg").classes("text-orange-500")
+                ui.label(str(character_count)).classes("text-2xl font-bold")
+                ui.label("Characters").classes("text-sm text-gray-500 dark:text-gray-400")
 
-                ui.space()
+            ui.space()
 
-                # Add event button
-                ui.button(
-                    "+ Add Event",
-                    on_click=self._show_add_event_dialog,
-                    icon="add",
-                ).props("color=primary")
+            # Add event button
+            ui.button(
+                "+ Add Event",
+                on_click=self._show_add_event_dialog,
+                icon="add",
+            ).props("color=primary")
 
     def _build_timeline_section(self) -> None:
         """Build the main timeline visualization section."""
@@ -149,21 +148,21 @@ class TimelinePage:
             else:
                 with ui.column().classes("w-full gap-2 p-2"):
                     for idx, event in enumerate(self.state.project.timeline):
-                        with ui.card().classes(
-                            "w-full p-3 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        with (
+                            ui.card().classes("w-full p-3 hover:bg-gray-50 dark:hover:bg-gray-700"),
+                            ui.row().classes("w-full items-center gap-2"),
                         ):
-                            with ui.row().classes("w-full items-center gap-2"):
-                                ui.icon("event", size="sm").classes("text-blue-500")
-                                ui.label(f"Event {idx + 1}").classes(
-                                    "text-sm font-medium text-gray-500 dark:text-gray-400"
-                                )
-                                ui.label(event).classes("flex-grow")
+                            ui.icon("event", size="sm").classes("text-blue-500")
+                            ui.label(f"Event {idx + 1}").classes(
+                                "text-sm font-medium text-gray-500 dark:text-gray-400"
+                            )
+                            ui.label(event).classes("flex-grow")
 
-                                # Delete button
-                                ui.button(
-                                    icon="delete",
-                                    on_click=lambda i=idx: self._delete_event(i),
-                                ).props("flat dense round color=negative")
+                            # Delete button
+                            ui.button(
+                                icon="delete",
+                                on_click=lambda i=idx: self._delete_event(i),
+                            ).props("flat dense round color=negative")
 
     def _show_add_event_dialog(self) -> None:
         """Show dialog to add a new timeline event."""

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import logging
 import threading
 import time
@@ -46,7 +45,7 @@ def _get_llm_semaphore(settings: Settings) -> threading.Semaphore:
 
 
 # Re-export exceptions for backward compatibility
-__all__ = ["BaseAgent", "LLMError", "LLMConnectionError", "LLMGenerationError"]
+__all__ = ["BaseAgent", "LLMConnectionError", "LLMError", "LLMGenerationError"]
 
 
 class BaseAgent:
@@ -223,12 +222,11 @@ class BaseAgent:
                                 time.sleep(delay)
                                 delay *= self.settings.llm_retry_backoff
                                 continue  # Retry
-                            else:
-                                # Last attempt - return what we have
-                                logger.warning(
-                                    f"{self.name}: Returning short response after all retries"
-                                )
-                                return content
+                            # Last attempt - return what we have
+                            logger.warning(
+                                f"{self.name}: Returning short response after all retries"
+                            )
+                            return content
 
                         return content
 

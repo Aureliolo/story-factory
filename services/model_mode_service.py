@@ -505,8 +505,7 @@ Respond ONLY with JSON:
                     f"instruction={scores.instruction_following:.1f}"
                 )
                 return scores
-            else:
-                logger.warning(f"No valid JSON dict found in judge response: {text}")
+            logger.warning(f"No valid JSON dict found in judge response: {text}")
 
         except json.JSONDecodeError as e:
             logger.warning(f"Quality judgment JSON parse error: {e}")

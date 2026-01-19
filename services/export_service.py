@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import html
 import logging
 import tempfile

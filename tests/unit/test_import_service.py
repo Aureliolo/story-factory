@@ -110,9 +110,8 @@ class TestImportServiceJsonParsingErrors:
         mock_client.generate.return_value = {"response": "not json"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.extract_characters("Test text")
+        with caplog.at_level(logging.ERROR), pytest.raises(WorldGenerationError):
+            import_service.extract_characters("Test text")
 
         assert "Character extraction" in caplog.text or "Invalid character" in caplog.text
 
@@ -124,9 +123,8 @@ class TestImportServiceJsonParsingErrors:
         mock_client.generate.return_value = {"response": "not json"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.extract_locations("Test text")
+        with caplog.at_level(logging.ERROR), pytest.raises(WorldGenerationError):
+            import_service.extract_locations("Test text")
 
         assert "Location extraction" in caplog.text or "Invalid location" in caplog.text
 
@@ -138,9 +136,8 @@ class TestImportServiceJsonParsingErrors:
         mock_client.generate.return_value = {"response": "not json"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.extract_items("Test text")
+        with caplog.at_level(logging.ERROR), pytest.raises(WorldGenerationError):
+            import_service.extract_items("Test text")
 
         assert "Item extraction" in caplog.text or "Invalid item" in caplog.text
 
@@ -152,9 +149,8 @@ class TestImportServiceJsonParsingErrors:
         mock_client.generate.return_value = {"response": "not json"}
         monkeypatch.setattr(import_service, "_client", mock_client)
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(WorldGenerationError):
-                import_service.infer_relationships([{"name": "Alice"}], "Test text")
+        with caplog.at_level(logging.ERROR), pytest.raises(WorldGenerationError):
+            import_service.infer_relationships([{"name": "Alice"}], "Test text")
 
         assert "Relationship inference" in caplog.text or "Invalid relationship" in caplog.text
 

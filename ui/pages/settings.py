@@ -599,8 +599,7 @@ class SettingsPage:
                         def update_label(label_ref, min_s, max_s):
                             def _update():
                                 # Ensure min <= max
-                                if min_s.value > max_s.value:
-                                    max_s.value = min_s.value
+                                max_s.value = max(max_s.value, min_s.value)
                                 label_ref.text = f"{int(min_s.value)} - {int(max_s.value)}"
 
                             return _update
@@ -686,8 +685,7 @@ class SettingsPage:
                 min_val = int(min_slider.value)
                 max_val = int(max_slider.value)
                 # Ensure min <= max
-                if min_val > max_val:
-                    max_val = min_val
+                max_val = max(max_val, min_val)
                 setattr(self.settings, f"world_gen_{key}_min", min_val)
                 setattr(self.settings, f"world_gen_{key}_max", max_val)
 

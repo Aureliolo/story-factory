@@ -20,10 +20,9 @@ def _get_quality_badge_color(score: float) -> str:
     """
     if score >= 8.0:
         return "green"
-    elif score >= 6.0:
+    if score >= 6.0:
         return "orange"
-    else:
-        return "red"
+    return "red"
 
 
 def _format_quality_tooltip(quality_scores: dict[str, Any]) -> str:

@@ -277,14 +277,13 @@ def info_card(
     card_classes = f"w-full p-4 rounded-lg border {color_map.get(color, color_map['blue'])}"
 
     card = ui.card().classes(card_classes)
-    with card:
-        with ui.row().classes("w-full items-start gap-3"):
-            if icon:
-                ui.icon(icon, size="md")
+    with card, ui.row().classes("w-full items-start gap-3"):
+        if icon:
+            ui.icon(icon, size="md")
 
-            with ui.column().classes("flex-grow gap-1"):
-                ui.label(title).classes("font-semibold")
-                ui.label(content).classes("text-sm")
+        with ui.column().classes("flex-grow gap-1"):
+            ui.label(title).classes("font-semibold")
+            ui.label(content).classes("text-sm")
 
-            if dismissible:
-                ui.button(icon="close", on_click=lambda: card.delete()).props("flat dense")
+        if dismissible:
+            ui.button(icon="close", on_click=lambda: card.delete()).props("flat dense")

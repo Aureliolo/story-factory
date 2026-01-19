@@ -129,16 +129,20 @@ select = [
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
 ]
+# Minimal ignores - only for legitimate reasons
 ignore = [
-    "E501",  # line too long (ruff format handles code, not string literals)
+    # Formatter conflicts - must be ignored
+    "COM812", # Trailing comma - conflicts with ruff formatter
+    "ISC001", # Single line implicit string concatenation - conflicts with formatter
 ]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.12"  # Actual runtime version (not 3.14)
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false  # Start lenient, can tighten later
-disallow_incomplete_defs = false
+# Strict type checking for production code
+disallow_untyped_defs = true   # Require type hints on all functions
+disallow_incomplete_defs = true # Require complete type hints
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
@@ -146,14 +150,23 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+strict_optional = true
+disallow_subclassing_any = true
 
 [[tool.mypy.overrides]]
+# Third-party libraries without type stubs (legitimate exceptions)
 module = [
     "ebooklib.*",  # No type stubs available, no py.typed
     "docx",  # python-docx has no type stubs
     "docx.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Tests can be less strict with typing
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -164,8 +177,14 @@ addopts = "-v --tb=short --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 main_file = "tests/component/test_app_entry.py"
-# Fail on warnings in strict mode (use PYTEST_STRICT=1 to enable)
-# filterwarnings = ["error"]  # Uncomment for strict warning mode
+# Enable warning filters for enterprise-grade testing
+filterwarnings = [
+    "error",  # Treat warnings as errors
+    # Legitimate exceptions for third-party library warnings
+    "ignore::DeprecationWarning:nicegui.*",
+    "ignore::DeprecationWarning:pydantic.*",
+    "ignore:The --rsyncdir command line argument:DeprecationWarning",
+]
 markers = [
     "e2e: End-to-end browser tests (require playwright)",
     "smoke: Quick startup validation tests",
@@ -189,17 +208,18 @@ omit = [
 ]
 
 [tool.coverage.report]
-# 100% coverage achieved on all core modules (849 tests)
+# 100% coverage achieved on all core modules (1700+ tests)
 fail_under = 100
+# Only exclude truly non-testable code patterns
 exclude_lines = [
     "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "@abstractmethod",
-    "\\.\\.\\.",
+    "def __repr__",  # String representations are low-value to test
+    "raise AssertionError",  # Should never be reached
+    "raise NotImplementedError",  # Abstract methods
+    "if __name__ == .__main__.:",  # Script entry points
+    "if TYPE_CHECKING:",  # Type checking imports
+    "@abstractmethod",  # Abstract method declarations
+    "\\.\\.\\.",  # Ellipsis (placeholder)
 ]
 precision = 1
 show_missing = true

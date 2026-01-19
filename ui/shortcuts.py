@@ -114,28 +114,27 @@ class ShortcutManager:
             self._help_dialog.open()
             return
 
-        with ui.dialog() as self._help_dialog:
-            with ui.card().classes("w-96"):
-                ui.label("Keyboard Shortcuts").classes("text-xl font-bold mb-4")
+        with ui.dialog() as self._help_dialog, ui.card().classes("w-96"):
+            ui.label("Keyboard Shortcuts").classes("text-xl font-bold mb-4")
 
-                # Group shortcuts by category
-                categories: dict[str, list[Shortcut]] = {}
-                for shortcut in self._shortcuts.values():
-                    if shortcut.category not in categories:
-                        categories[shortcut.category] = []
-                    categories[shortcut.category].append(shortcut)
+            # Group shortcuts by category
+            categories: dict[str, list[Shortcut]] = {}
+            for shortcut in self._shortcuts.values():
+                if shortcut.category not in categories:
+                    categories[shortcut.category] = []
+                categories[shortcut.category].append(shortcut)
 
-                for category, shortcuts in sorted(categories.items()):
-                    ui.label(category).classes("text-lg font-semibold mt-3 mb-2")
-                    for shortcut in shortcuts:
-                        with ui.row().classes("w-full justify-between items-center py-1"):
-                            ui.label(shortcut.description).classes("text-sm")
-                            ui.label(self.get_shortcut_display(shortcut)).classes(
-                                "text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded"
-                            )
+            for category, shortcuts in sorted(categories.items()):
+                ui.label(category).classes("text-lg font-semibold mt-3 mb-2")
+                for shortcut in shortcuts:
+                    with ui.row().classes("w-full justify-between items-center py-1"):
+                        ui.label(shortcut.description).classes("text-sm")
+                        ui.label(self.get_shortcut_display(shortcut)).classes(
+                            "text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded"
+                        )
 
-                with ui.row().classes("w-full justify-end mt-4"):
-                    ui.button("Close", on_click=self._help_dialog.close)
+            with ui.row().classes("w-full justify-end mt-4"):
+                ui.button("Close", on_click=self._help_dialog.close)
 
         self._help_dialog.open()
 

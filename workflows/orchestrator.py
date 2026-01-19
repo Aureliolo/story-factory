@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import json
 import logging
 import uuid
@@ -196,8 +195,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
                 result = [str(t) for t in titles[:5]]
                 logger.info(f"Generated {len(result)} title suggestions: {result}")
                 return result
-            else:
-                logger.warning(f"Failed to parse titles from response: {response[:100]}...")
+            logger.warning(f"Failed to parse titles from response: {response[:100]}...")
         except Exception as e:
             logger.exception(f"Failed to generate title suggestions: {e}")
 

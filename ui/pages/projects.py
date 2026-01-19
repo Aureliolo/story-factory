@@ -97,63 +97,62 @@ class ProjectsPage:
         if is_current:
             card_classes += " ring-2 ring-blue-500"
 
-        with ui.card().classes(card_classes):
-            with ui.row().classes("w-full items-start gap-4"):
-                # Project info
-                with ui.column().classes("flex-grow gap-2"):
-                    with ui.row().classes("items-center gap-2"):
-                        ui.label(project.name).classes("text-lg font-semibold")
-                        ui.badge(project.status.title()).style(
-                            f"background-color: {status_color}; color: white;"
-                        )
-                        if is_current:
-                            ui.badge("Active").props("color=primary").classes("text-white")
+        with ui.card().classes(card_classes), ui.row().classes("w-full items-start gap-4"):
+            # Project info
+            with ui.column().classes("flex-grow gap-2"):
+                with ui.row().classes("items-center gap-2"):
+                    ui.label(project.name).classes("text-lg font-semibold")
+                    ui.badge(project.status.title()).style(
+                        f"background-color: {status_color}; color: white;"
+                    )
+                    if is_current:
+                        ui.badge("Active").props("color=primary").classes("text-white")
 
-                    if project.premise:
-                        ui.label(
-                            project.premise[:150] + "..."
-                            if len(project.premise) > 150
-                            else project.premise
-                        ).classes("text-sm text-gray-600 dark:text-gray-400")
+                if project.premise:
+                    ui.label(
+                        project.premise[:150] + "..."
+                        if len(project.premise) > 150
+                        else project.premise
+                    ).classes("text-sm text-gray-600 dark:text-gray-400")
 
-                    # Stats
-                    with ui.row().classes("gap-4 text-sm text-gray-600 dark:text-gray-300"):
-                        ui.label(f"{project.chapter_count} chapters")
-                        ui.label(f"{project.word_count:,} words")
-                        ui.label(f"Updated: {self._format_date(project.updated_at)}")
+                # Stats
+                with ui.row().classes("gap-4 text-sm text-gray-600 dark:text-gray-300"):
+                    ui.label(f"{project.chapter_count} chapters")
+                    ui.label(f"{project.word_count:,} words")
+                    ui.label(f"Updated: {self._format_date(project.updated_at)}")
 
-                # Actions
-                with ui.column().classes("gap-2"):
-                    if not is_current:
-                        ui.button(
-                            "Open",
-                            on_click=lambda p=project: self._open_project(p.id),
-                            icon="folder_open",
-                        ).props("flat")
-
+            # Actions
+            with ui.column().classes("gap-2"):
+                if not is_current:
                     ui.button(
-                        "Rename",
-                        on_click=lambda p=project: self._rename_project(p.id, p.name),
-                        icon="edit",
+                        "Open",
+                        on_click=lambda p=project: self._open_project(p.id),
+                        icon="folder_open",
                     ).props("flat")
 
-                    ui.button(
-                        "Backup",
-                        on_click=lambda p=project: self._backup_project(p.id, p.name),
-                        icon="backup",
-                    ).props("flat")
+                ui.button(
+                    "Rename",
+                    on_click=lambda p=project: self._rename_project(p.id, p.name),
+                    icon="edit",
+                ).props("flat")
 
-                    ui.button(
-                        "Duplicate",
-                        on_click=lambda p=project: self._duplicate_project(p.id),
-                        icon="content_copy",
-                    ).props("flat")
+                ui.button(
+                    "Backup",
+                    on_click=lambda p=project: self._backup_project(p.id, p.name),
+                    icon="backup",
+                ).props("flat")
 
-                    ui.button(
-                        "Delete",
-                        on_click=lambda p=project: self._confirm_delete(p),
-                        icon="delete",
-                    ).props("flat color=negative")
+                ui.button(
+                    "Duplicate",
+                    on_click=lambda p=project: self._duplicate_project(p.id),
+                    icon="content_copy",
+                ).props("flat")
+
+                ui.button(
+                    "Delete",
+                    on_click=lambda p=project: self._confirm_delete(p),
+                    icon="delete",
+                ).props("flat color=negative")
 
     def _format_date(self, dt: datetime) -> str:
         """Format datetime for display."""
@@ -166,12 +165,11 @@ class ProjectsPage:
                 return f"{mins}m ago"
             hours = diff.seconds // 3600
             return f"{hours}h ago"
-        elif diff.days == 1:
+        if diff.days == 1:
             return "Yesterday"
-        elif diff.days < 7:
+        if diff.days < 7:
             return f"{diff.days} days ago"
-        else:
-            return dt.strftime("%b %d, %Y")
+        return dt.strftime("%b %d, %Y")
 
     async def _create_project(self) -> None:
         """Create a new project with optional template selection."""

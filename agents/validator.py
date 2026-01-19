@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import logging
 import re
 
@@ -15,7 +14,7 @@ from .base import BaseAgent
 logger = logging.getLogger(__name__)
 
 # Re-export exception for backward compatibility
-__all__ = ["ValidatorAgent", "ResponseValidationError", "validate_or_raise"]
+__all__ = ["ResponseValidationError", "ValidatorAgent", "validate_or_raise"]
 
 
 VALIDATOR_SYSTEM_PROMPT = """You are a response validator. Your ONLY job is to answer TRUE or FALSE.
@@ -141,12 +140,11 @@ Answer only TRUE or FALSE."""
             # Parse response
             if "TRUE" in result_clean:
                 return True
-            elif "FALSE" in result_clean:
+            if "FALSE" in result_clean:
                 return False
-            else:
-                # Ambiguous response, assume OK
-                logger.debug(f"Validator gave ambiguous response: {result}")
-                return True
+            # Ambiguous response, assume OK
+            logger.debug(f"Validator gave ambiguous response: {result}")
+            return True
         except Exception as e:
             logger.warning(f"Validator AI call failed: {e}")
             return True  # Fail open

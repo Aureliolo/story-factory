@@ -251,90 +251,86 @@ class AnalyticsPage:
             logger.debug(f"Loaded {len(summaries)} model performance summaries")
         except Exception as e:
             logger.error(f"Failed to load model performance data: {e}", exc_info=True)
-            with self._model_section:
-                with ui.card().classes("w-full"):
-                    ui.label(
-                        "Failed to load model performance data. Check logs for details."
-                    ).classes("text-red-500 p-4")
+            with self._model_section, ui.card().classes("w-full"):
+                ui.label("Failed to load model performance data. Check logs for details.").classes(
+                    "text-red-500 p-4"
+                )
             return
 
-        with self._model_section:
-            with ui.card().classes("w-full"):
-                with ui.row().classes("w-full items-center mb-4"):
-                    ui.icon("leaderboard").classes("text-blue-500")
-                    ui.label("Model Performance").classes("text-lg font-semibold")
-                    ui.space()
-                    ui.label(f"{len(summaries)} models tracked").classes("text-sm text-gray-500")
+        with self._model_section, ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-center mb-4"):
+                ui.icon("leaderboard").classes("text-blue-500")
+                ui.label("Model Performance").classes("text-lg font-semibold")
+                ui.space()
+                ui.label(f"{len(summaries)} models tracked").classes("text-sm text-gray-500")
 
-                if not summaries:
-                    ui.label(
-                        "No performance data yet. Generate some stories to collect metrics!"
-                    ).classes("text-gray-500 dark:text-gray-400 py-8 text-center")
-                    return
+            if not summaries:
+                ui.label(
+                    "No performance data yet. Generate some stories to collect metrics!"
+                ).classes("text-gray-500 dark:text-gray-400 py-8 text-center")
+                return
 
-                # Performance table
-                columns = [
-                    {"name": "model", "label": "Model", "field": "model", "sortable": True},
-                    {"name": "role", "label": "Role", "field": "role", "sortable": True},
-                    {"name": "prose", "label": "Prose", "field": "prose", "sortable": True},
-                    {
-                        "name": "instruction",
-                        "label": "Instruction",
-                        "field": "instruction",
-                        "sortable": True,
-                    },
-                    {
-                        "name": "consistency",
-                        "label": "Consistency",
-                        "field": "consistency",
-                        "sortable": True,
-                    },
-                    {"name": "speed", "label": "Speed (t/s)", "field": "speed", "sortable": True},
-                    {"name": "samples", "label": "Samples", "field": "samples", "sortable": True},
-                    {"name": "overall", "label": "Overall", "field": "overall", "sortable": True},
-                ]
+            # Performance table
+            columns = [
+                {"name": "model", "label": "Model", "field": "model", "sortable": True},
+                {"name": "role", "label": "Role", "field": "role", "sortable": True},
+                {"name": "prose", "label": "Prose", "field": "prose", "sortable": True},
+                {
+                    "name": "instruction",
+                    "label": "Instruction",
+                    "field": "instruction",
+                    "sortable": True,
+                },
+                {
+                    "name": "consistency",
+                    "label": "Consistency",
+                    "field": "consistency",
+                    "sortable": True,
+                },
+                {"name": "speed", "label": "Speed (t/s)", "field": "speed", "sortable": True},
+                {"name": "samples", "label": "Samples", "field": "samples", "sortable": True},
+                {"name": "overall", "label": "Overall", "field": "overall", "sortable": True},
+            ]
 
-                rows = []
-                for s in summaries:
-                    model_name = extract_model_name(s.model_id)
-                    # Calculate overall score as average of quality metrics
-                    quality_scores = [
-                        score
-                        for score in [
-                            s.avg_prose_quality,
-                            s.avg_instruction_following,
-                            s.avg_consistency,
-                        ]
-                        if score is not None
+            rows = []
+            for s in summaries:
+                model_name = extract_model_name(s.model_id)
+                # Calculate overall score as average of quality metrics
+                quality_scores = [
+                    score
+                    for score in [
+                        s.avg_prose_quality,
+                        s.avg_instruction_following,
+                        s.avg_consistency,
                     ]
-                    overall_score = (
-                        sum(quality_scores) / len(quality_scores) if quality_scores else 0
-                    )
+                    if score is not None
+                ]
+                overall_score = sum(quality_scores) / len(quality_scores) if quality_scores else 0
 
-                    rows.append(
-                        {
-                            "model": model_name,
-                            "role": s.agent_role.title(),
-                            "prose": f"{s.avg_prose_quality:.1f}" if s.avg_prose_quality else "-",
-                            "instruction": f"{s.avg_instruction_following:.1f}"
-                            if s.avg_instruction_following
-                            else "-",
-                            "consistency": f"{s.avg_consistency:.1f}" if s.avg_consistency else "-",
-                            "speed": f"{s.avg_tokens_per_second:.1f}"
-                            if s.avg_tokens_per_second
-                            else "-",
-                            "samples": s.sample_count,
-                            "overall": f"{overall_score:.1f}" if overall_score > 0 else "-",
-                        }
-                    )
+                rows.append(
+                    {
+                        "model": model_name,
+                        "role": s.agent_role.title(),
+                        "prose": f"{s.avg_prose_quality:.1f}" if s.avg_prose_quality else "-",
+                        "instruction": f"{s.avg_instruction_following:.1f}"
+                        if s.avg_instruction_following
+                        else "-",
+                        "consistency": f"{s.avg_consistency:.1f}" if s.avg_consistency else "-",
+                        "speed": f"{s.avg_tokens_per_second:.1f}"
+                        if s.avg_tokens_per_second
+                        else "-",
+                        "samples": s.sample_count,
+                        "overall": f"{overall_score:.1f}" if overall_score > 0 else "-",
+                    }
+                )
 
-                # Wrap table in scrollable container for mobile
-                with ui.element("div").classes("w-full overflow-x-auto"):
-                    ui.table(columns=columns, rows=rows, row_key="model").classes("w-full")
+            # Wrap table in scrollable container for mobile
+            with ui.element("div").classes("w-full overflow-x-auto"):
+                ui.table(columns=columns, rows=rows, row_key="model").classes("w-full")
 
-                # Add model comparison insights
-                if len(summaries) >= 2:
-                    self._build_model_insights(summaries)
+            # Add model comparison insights
+            if len(summaries) >= 2:
+                self._build_model_insights(summaries)
 
     def _build_model_insights(self, summaries: list) -> None:
         """Build model comparison insights.
@@ -395,106 +391,104 @@ class AnalyticsPage:
             logger.debug(f"Loaded world quality summary: {entity_count} entities")
         except Exception as e:
             logger.error(f"Failed to load world quality data: {e}", exc_info=True)
-            with self._world_quality_section:
-                with ui.card().classes("w-full"):
-                    ui.label("Failed to load world quality data.").classes("text-red-500 p-4")
+            with self._world_quality_section, ui.card().classes("w-full"):
+                ui.label("Failed to load world quality data.").classes("text-red-500 p-4")
             return
 
-        with self._world_quality_section:
-            with ui.card().classes("w-full"):
-                with ui.row().classes("w-full items-center mb-4"):
-                    ui.icon("public").classes("text-green-500")
-                    ui.label("World Quality Metrics").classes("text-lg font-semibold")
-                    ui.space()
-                    ui.label(f"{entity_count} entities generated").classes("text-sm text-gray-500")
+        with self._world_quality_section, ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-center mb-4"):
+                ui.icon("public").classes("text-green-500")
+                ui.label("World Quality Metrics").classes("text-lg font-semibold")
+                ui.space()
+                ui.label(f"{entity_count} entities generated").classes("text-sm text-gray-500")
 
-                if entity_count == 0:
-                    ui.label(
-                        "No world entity quality data yet. Generate entities with Quality Refinement "
-                        "enabled to collect metrics!"
-                    ).classes("text-gray-500 dark:text-gray-400 py-8 text-center")
-                    return
+            if entity_count == 0:
+                ui.label(
+                    "No world entity quality data yet. Generate entities with Quality Refinement "
+                    "enabled to collect metrics!"
+                ).classes("text-gray-500 dark:text-gray-400 py-8 text-center")
+                return
 
-                # Summary stats row
-                avg_quality = summary.get("avg_quality")
-                avg_iterations = summary.get("avg_iterations")
-                avg_time = summary.get("avg_generation_time")
+            # Summary stats row
+            avg_quality = summary.get("avg_quality")
+            avg_iterations = summary.get("avg_iterations")
+            avg_time = summary.get("avg_generation_time")
 
-                with ui.element("div").classes("grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"):
-                    self._build_stat_card(
-                        "Avg Quality",
-                        f"{avg_quality:.1f}/10" if avg_quality else "N/A",
-                        "star",
-                        "text-yellow-500",
-                    )
-                    self._build_stat_card(
-                        "Avg Iterations",
-                        f"{avg_iterations:.1f}" if avg_iterations else "N/A",
-                        "loop",
-                        "text-blue-500",
-                    )
-                    self._build_stat_card(
-                        "Avg Gen Time",
-                        f"{avg_time:.1f}s" if avg_time else "N/A",
-                        "timer",
-                        "text-purple-500",
-                    )
-                    self._build_stat_card(
-                        "Total Entities",
-                        str(entity_count),
-                        "category",
-                        "text-green-500",
-                    )
+            with ui.element("div").classes("grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"):
+                self._build_stat_card(
+                    "Avg Quality",
+                    f"{avg_quality:.1f}/10" if avg_quality else "N/A",
+                    "star",
+                    "text-yellow-500",
+                )
+                self._build_stat_card(
+                    "Avg Iterations",
+                    f"{avg_iterations:.1f}" if avg_iterations else "N/A",
+                    "loop",
+                    "text-blue-500",
+                )
+                self._build_stat_card(
+                    "Avg Gen Time",
+                    f"{avg_time:.1f}s" if avg_time else "N/A",
+                    "timer",
+                    "text-purple-500",
+                )
+                self._build_stat_card(
+                    "Total Entities",
+                    str(entity_count),
+                    "category",
+                    "text-green-500",
+                )
 
-                # Breakdown by entity type
-                by_type = summary.get("by_entity_type", [])
-                if by_type:
-                    ui.label("Quality by Entity Type").classes("font-semibold mt-4 mb-2")
-                    columns = [
-                        {"name": "type", "label": "Entity Type", "field": "type", "sortable": True},
-                        {"name": "count", "label": "Count", "field": "count", "sortable": True},
-                        {
-                            "name": "quality",
-                            "label": "Avg Quality",
-                            "field": "quality",
-                            "sortable": True,
-                        },
-                    ]
-                    rows = [
-                        {
-                            "type": item["entity_type"].title(),
-                            "count": item["count"],
-                            "quality": f"{item['avg_quality']:.1f}" if item["avg_quality"] else "-",
-                        }
-                        for item in by_type
-                    ]
-                    with ui.element("div").classes("w-full overflow-x-auto"):
-                        ui.table(columns=columns, rows=rows).classes("w-full")
+            # Breakdown by entity type
+            by_type = summary.get("by_entity_type", [])
+            if by_type:
+                ui.label("Quality by Entity Type").classes("font-semibold mt-4 mb-2")
+                columns = [
+                    {"name": "type", "label": "Entity Type", "field": "type", "sortable": True},
+                    {"name": "count", "label": "Count", "field": "count", "sortable": True},
+                    {
+                        "name": "quality",
+                        "label": "Avg Quality",
+                        "field": "quality",
+                        "sortable": True,
+                    },
+                ]
+                rows = [
+                    {
+                        "type": item["entity_type"].title(),
+                        "count": item["count"],
+                        "quality": f"{item['avg_quality']:.1f}" if item["avg_quality"] else "-",
+                    }
+                    for item in by_type
+                ]
+                with ui.element("div").classes("w-full overflow-x-auto"):
+                    ui.table(columns=columns, rows=rows).classes("w-full")
 
-                # Breakdown by model
-                by_model = summary.get("by_model", [])
-                if by_model:
-                    ui.label("Quality by Model").classes("font-semibold mt-4 mb-2")
-                    columns = [
-                        {"name": "model", "label": "Model", "field": "model", "sortable": True},
-                        {"name": "count", "label": "Entities", "field": "count", "sortable": True},
-                        {
-                            "name": "quality",
-                            "label": "Avg Quality",
-                            "field": "quality",
-                            "sortable": True,
-                        },
-                    ]
-                    rows = [
-                        {
-                            "model": extract_model_name(item["model_id"]),
-                            "count": item["count"],
-                            "quality": f"{item['avg_quality']:.1f}" if item["avg_quality"] else "-",
-                        }
-                        for item in by_model
-                    ]
-                    with ui.element("div").classes("w-full overflow-x-auto"):
-                        ui.table(columns=columns, rows=rows).classes("w-full")
+            # Breakdown by model
+            by_model = summary.get("by_model", [])
+            if by_model:
+                ui.label("Quality by Model").classes("font-semibold mt-4 mb-2")
+                columns = [
+                    {"name": "model", "label": "Model", "field": "model", "sortable": True},
+                    {"name": "count", "label": "Entities", "field": "count", "sortable": True},
+                    {
+                        "name": "quality",
+                        "label": "Avg Quality",
+                        "field": "quality",
+                        "sortable": True,
+                    },
+                ]
+                rows = [
+                    {
+                        "model": extract_model_name(item["model_id"]),
+                        "count": item["count"],
+                        "quality": f"{item['avg_quality']:.1f}" if item["avg_quality"] else "-",
+                    }
+                    for item in by_model
+                ]
+                with ui.element("div").classes("w-full overflow-x-auto"):
+                    ui.table(columns=columns, rows=rows).classes("w-full")
 
     def _build_recommendations_section(self) -> None:
         """Build the recommendations history section."""
@@ -508,61 +502,57 @@ class AnalyticsPage:
             logger.debug(f"Loaded {len(recommendations)} recent recommendations")
         except Exception as e:
             logger.error(f"Failed to load recommendations: {e}", exc_info=True)
-            with self._recommendations_section:
-                with ui.card().classes("w-full"):
-                    ui.label("Failed to load recommendations. Check logs for details.").classes(
-                        "text-red-500 p-4"
-                    )
+            with self._recommendations_section, ui.card().classes("w-full"):
+                ui.label("Failed to load recommendations. Check logs for details.").classes(
+                    "text-red-500 p-4"
+                )
             return
 
-        with self._recommendations_section:
-            with ui.card().classes("w-full"):
-                with ui.row().classes("w-full items-center mb-4"):
-                    ui.icon("lightbulb").classes("text-yellow-500")
-                    ui.label("Recent Recommendations").classes("text-lg font-semibold")
+        with self._recommendations_section, ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-center mb-4"):
+                ui.icon("lightbulb").classes("text-yellow-500")
+                ui.label("Recent Recommendations").classes("text-lg font-semibold")
 
-                if not recommendations:
-                    ui.label("No recommendations yet.").classes("text-gray-500 dark:text-gray-400")
-                    return
+            if not recommendations:
+                ui.label("No recommendations yet.").classes("text-gray-500 dark:text-gray-400")
+                return
 
-                for rec in recommendations:
-                    with ui.card().classes("w-full mb-2").props("flat bordered"):
-                        with ui.row().classes("w-full items-start gap-3 flex-wrap sm:flex-nowrap"):
-                            # Status icon
-                            if rec.was_applied:
-                                ui.icon("check_circle", color="green")
-                            elif rec.user_feedback == "rejected":
-                                ui.icon("cancel", color="red")
-                            else:
-                                ui.icon("pending", color="grey")
+            for rec in recommendations:
+                with ui.card().classes("w-full mb-2").props("flat bordered"):
+                    with ui.row().classes("w-full items-start gap-3 flex-wrap sm:flex-nowrap"):
+                        # Status icon
+                        if rec.was_applied:
+                            ui.icon("check_circle", color="green")
+                        elif rec.user_feedback == "rejected":
+                            ui.icon("cancel", color="red")
+                        else:
+                            ui.icon("pending", color="grey")
 
-                            with ui.column().classes("flex-grow gap-1 min-w-0"):
-                                # Type and change
-                                with ui.row().classes("items-center gap-2 flex-wrap"):
-                                    ui.badge(rec.recommendation_type).props("color=primary")
-                                    if rec.affected_role:
-                                        ui.label(f"({rec.affected_role})").classes(
-                                            "text-sm text-gray-500"
-                                        )
-
-                                # Current -> Suggested
-                                with ui.row().classes("items-center gap-2 text-sm flex-wrap"):
-                                    ui.label(rec.current_value).classes(
-                                        "font-mono truncate max-w-[120px] sm:max-w-none"
-                                    )
-                                    ui.icon("arrow_forward", size="xs")
-                                    ui.label(rec.suggested_value).classes(
-                                        "font-mono text-blue-500 truncate max-w-[120px] sm:max-w-none"
+                        with ui.column().classes("flex-grow gap-1 min-w-0"):
+                            # Type and change
+                            with ui.row().classes("items-center gap-2 flex-wrap"):
+                                ui.badge(rec.recommendation_type).props("color=primary")
+                                if rec.affected_role:
+                                    ui.label(f"({rec.affected_role})").classes(
+                                        "text-sm text-gray-500"
                                     )
 
-                                # Reason
-                                ui.label(rec.reason).classes(
-                                    "text-sm text-gray-600 dark:text-gray-400"
+                            # Current -> Suggested
+                            with ui.row().classes("items-center gap-2 text-sm flex-wrap"):
+                                ui.label(rec.current_value).classes(
+                                    "font-mono truncate max-w-[120px] sm:max-w-none"
+                                )
+                                ui.icon("arrow_forward", size="xs")
+                                ui.label(rec.suggested_value).classes(
+                                    "font-mono text-blue-500 truncate max-w-[120px] sm:max-w-none"
                                 )
 
-                            # Confidence badge
-                            confidence_color = "green" if rec.confidence >= 0.8 else "orange"
-                            ui.badge(f"{rec.confidence:.0%}").props(f"color={confidence_color}")
+                            # Reason
+                            ui.label(rec.reason).classes("text-sm text-gray-600 dark:text-gray-400")
+
+                        # Confidence badge
+                        confidence_color = "green" if rec.confidence >= 0.8 else "orange"
+                        ui.badge(f"{rec.confidence:.0%}").props(f"color={confidence_color}")
 
     def _build_content_statistics_section(self) -> None:
         """Build the content statistics section."""
@@ -577,57 +567,55 @@ class AnalyticsPage:
             logger.debug(f"Loaded content statistics: {stats['generation_count']} generations")
         except Exception as e:
             logger.error(f"Failed to load content statistics: {e}", exc_info=True)
-            with self._content_stats_section:
-                with ui.card().classes("w-full"):
-                    ui.label("Failed to load content statistics.").classes("text-red-500 p-4")
+            with self._content_stats_section, ui.card().classes("w-full"):
+                ui.label("Failed to load content statistics.").classes("text-red-500 p-4")
             return
 
-        with self._content_stats_section:
-            with ui.card().classes("w-full"):
-                with ui.row().classes("w-full items-center mb-4"):
-                    ui.icon("insights").classes("text-indigo-500")
-                    ui.label("Content Statistics").classes("text-lg font-semibold")
-                    ui.space()
-                    ui.label(f"{stats['generation_count']} generations").classes(
-                        "text-sm text-gray-500"
-                    )
+        with self._content_stats_section, ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-center mb-4"):
+                ui.icon("insights").classes("text-indigo-500")
+                ui.label("Content Statistics").classes("text-lg font-semibold")
+                ui.space()
+                ui.label(f"{stats['generation_count']} generations").classes(
+                    "text-sm text-gray-500"
+                )
 
-                if stats["generation_count"] == 0:
-                    ui.label("No content generated yet. Start writing to see statistics!").classes(
-                        "text-gray-500 dark:text-gray-400 py-8 text-center"
-                    )
-                    return
+            if stats["generation_count"] == 0:
+                ui.label("No content generated yet. Start writing to see statistics!").classes(
+                    "text-gray-500 dark:text-gray-400 py-8 text-center"
+                )
+                return
 
-                # Statistics grid
-                with ui.element("div").classes("grid grid-cols-2 md:grid-cols-4 gap-4"):
-                    self._build_stat_card(
-                        "Total Tokens",
-                        f"{stats['total_tokens']:,}",
-                        "functions",
-                        "text-indigo-500",
-                    )
-                    self._build_stat_card(
-                        "Avg Tokens/Gen",
-                        f"{stats['avg_tokens']:.0f}" if stats["avg_tokens"] else "N/A",
-                        "bar_chart",
-                        "text-blue-500",
-                    )
-                    self._build_stat_card(
-                        "Token Range",
-                        f"{stats['min_tokens']}-{stats['max_tokens']}"
-                        if stats["min_tokens"] and stats["max_tokens"]
-                        else "N/A",
-                        "straighten",
-                        "text-purple-500",
-                    )
-                    self._build_stat_card(
-                        "Avg Gen Time",
-                        f"{stats['avg_generation_time']:.1f}s"
-                        if stats["avg_generation_time"]
-                        else "N/A",
-                        "schedule",
-                        "text-orange-500",
-                    )
+            # Statistics grid
+            with ui.element("div").classes("grid grid-cols-2 md:grid-cols-4 gap-4"):
+                self._build_stat_card(
+                    "Total Tokens",
+                    f"{stats['total_tokens']:,}",
+                    "functions",
+                    "text-indigo-500",
+                )
+                self._build_stat_card(
+                    "Avg Tokens/Gen",
+                    f"{stats['avg_tokens']:.0f}" if stats["avg_tokens"] else "N/A",
+                    "bar_chart",
+                    "text-blue-500",
+                )
+                self._build_stat_card(
+                    "Token Range",
+                    f"{stats['min_tokens']}-{stats['max_tokens']}"
+                    if stats["min_tokens"] and stats["max_tokens"]
+                    else "N/A",
+                    "straighten",
+                    "text-purple-500",
+                )
+                self._build_stat_card(
+                    "Avg Gen Time",
+                    f"{stats['avg_generation_time']:.1f}s"
+                    if stats["avg_generation_time"]
+                    else "N/A",
+                    "schedule",
+                    "text-orange-500",
+                )
 
     def _build_quality_trends_section(self) -> None:
         """Build the quality trends over time section."""
@@ -651,80 +639,78 @@ class AnalyticsPage:
             logger.debug(f"Loaded {len(prose_trends)} prose quality trend points")
         except Exception as e:
             logger.error(f"Failed to load quality trends: {e}", exc_info=True)
-            with self._quality_trends_section:
-                with ui.card().classes("w-full"):
-                    ui.label("Failed to load quality trends.").classes("text-red-500 p-4")
+            with self._quality_trends_section, ui.card().classes("w-full"):
+                ui.label("Failed to load quality trends.").classes("text-red-500 p-4")
             return
 
-        with self._quality_trends_section:
-            with ui.card().classes("w-full"):
-                with ui.row().classes("w-full items-center mb-4"):
-                    ui.icon("trending_up").classes("text-green-500")
-                    ui.label("Quality Trends (30 Days)").classes("text-lg font-semibold")
+        with self._quality_trends_section, ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-center mb-4"):
+                ui.icon("trending_up").classes("text-green-500")
+                ui.label("Quality Trends (30 Days)").classes("text-lg font-semibold")
 
-                if not prose_trends and not speed_trends:
-                    ui.label("Not enough data yet. Generate more content to see trends!").classes(
-                        "text-gray-500 dark:text-gray-400 py-8 text-center"
-                    )
-                    return
+            if not prose_trends and not speed_trends:
+                ui.label("Not enough data yet. Generate more content to see trends!").classes(
+                    "text-gray-500 dark:text-gray-400 py-8 text-center"
+                )
+                return
 
-                # Create a simple text-based trend visualization
-                if prose_trends:
-                    ui.label("Prose Quality Over Time").classes("font-semibold mt-4 mb-2")
-                    with ui.element("div").classes("w-full overflow-x-auto"):
-                        # Build trend table
-                        columns = [
-                            {"name": "date", "label": "Date", "field": "date", "sortable": True},
-                            {
-                                "name": "avg_quality",
-                                "label": "Avg Quality",
-                                "field": "avg_quality",
-                                "sortable": True,
-                            },
-                            {
-                                "name": "samples",
-                                "label": "Samples",
-                                "field": "samples",
-                                "sortable": True,
-                            },
-                        ]
-                        rows = [
-                            {
-                                "date": trend["date"],
-                                "avg_quality": f"{trend['avg_value']:.1f}/10",
-                                "samples": trend["sample_count"],
-                            }
-                            for trend in prose_trends[:10]  # Show last 10 days
-                        ]
-                        ui.table(columns=columns, rows=rows).classes("w-full")
+            # Create a simple text-based trend visualization
+            if prose_trends:
+                ui.label("Prose Quality Over Time").classes("font-semibold mt-4 mb-2")
+                with ui.element("div").classes("w-full overflow-x-auto"):
+                    # Build trend table
+                    columns = [
+                        {"name": "date", "label": "Date", "field": "date", "sortable": True},
+                        {
+                            "name": "avg_quality",
+                            "label": "Avg Quality",
+                            "field": "avg_quality",
+                            "sortable": True,
+                        },
+                        {
+                            "name": "samples",
+                            "label": "Samples",
+                            "field": "samples",
+                            "sortable": True,
+                        },
+                    ]
+                    rows = [
+                        {
+                            "date": trend["date"],
+                            "avg_quality": f"{trend['avg_value']:.1f}/10",
+                            "samples": trend["sample_count"],
+                        }
+                        for trend in prose_trends[:10]  # Show last 10 days
+                    ]
+                    ui.table(columns=columns, rows=rows).classes("w-full")
 
-                if speed_trends:
-                    ui.label("Generation Speed Over Time").classes("font-semibold mt-4 mb-2")
-                    with ui.element("div").classes("w-full overflow-x-auto"):
-                        columns = [
-                            {"name": "date", "label": "Date", "field": "date", "sortable": True},
-                            {
-                                "name": "avg_speed",
-                                "label": "Avg Speed (t/s)",
-                                "field": "avg_speed",
-                                "sortable": True,
-                            },
-                            {
-                                "name": "samples",
-                                "label": "Samples",
-                                "field": "samples",
-                                "sortable": True,
-                            },
-                        ]
-                        rows = [
-                            {
-                                "date": trend["date"],
-                                "avg_speed": f"{trend['avg_value']:.1f}",
-                                "samples": trend["sample_count"],
-                            }
-                            for trend in speed_trends[:10]
-                        ]
-                        ui.table(columns=columns, rows=rows).classes("w-full")
+            if speed_trends:
+                ui.label("Generation Speed Over Time").classes("font-semibold mt-4 mb-2")
+                with ui.element("div").classes("w-full overflow-x-auto"):
+                    columns = [
+                        {"name": "date", "label": "Date", "field": "date", "sortable": True},
+                        {
+                            "name": "avg_speed",
+                            "label": "Avg Speed (t/s)",
+                            "field": "avg_speed",
+                            "sortable": True,
+                        },
+                        {
+                            "name": "samples",
+                            "label": "Samples",
+                            "field": "samples",
+                            "sortable": True,
+                        },
+                    ]
+                    rows = [
+                        {
+                            "date": trend["date"],
+                            "avg_speed": f"{trend['avg_value']:.1f}",
+                            "samples": trend["sample_count"],
+                        }
+                        for trend in speed_trends[:10]
+                    ]
+                    ui.table(columns=columns, rows=rows).classes("w-full")
 
     def _refresh_all(self) -> None:
         """Refresh all sections."""
@@ -815,4 +801,4 @@ class AnalyticsPage:
 
         except Exception as e:
             logger.error(f"Failed to export CSV: {e}", exc_info=True)
-            ui.notify(f"Export failed: {str(e)}", type="negative")
+            ui.notify(f"Export failed: {e!s}", type="negative")

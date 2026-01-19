@@ -123,9 +123,8 @@ class TestErrorBoundary:
 
     def test_reraises_when_configured(self):
         """Should re-raise exception when raise_on_exit=True."""
-        with pytest.raises(ValueError):
-            with ErrorBoundary(raise_on_exit=True):
-                raise ValueError("Test error")
+        with pytest.raises(ValueError), ErrorBoundary(raise_on_exit=True):
+            raise ValueError("Test error")
 
     def test_no_error_on_success(self):
         """Should work normally when no error occurs."""

@@ -107,64 +107,61 @@ class TemplatesPage:
         Args:
             template: StoryTemplate object.
         """
-        with ui.card().classes("w-full"):
-            with ui.row().classes("w-full items-start gap-4"):
-                # Template icon
-                with ui.column().classes("items-center justify-start"):
-                    ui.icon("book", size="2rem").style(f"color: {COLORS['primary']}")
+        with ui.card().classes("w-full"), ui.row().classes("w-full items-start gap-4"):
+            # Template icon
+            with ui.column().classes("items-center justify-start"):
+                ui.icon("book", size="2rem").style(f"color: {COLORS['primary']}")
 
-                # Template info
-                with ui.column().classes("flex-grow gap-2"):
-                    with ui.row().classes("items-center gap-2"):
-                        ui.label(template.name).classes("text-lg font-semibold")
-                        ui.badge(template.genre).props("color=primary")
-                        if template.is_builtin:
-                            ui.badge("Built-in").props("color=secondary")
+            # Template info
+            with ui.column().classes("flex-grow gap-2"):
+                with ui.row().classes("items-center gap-2"):
+                    ui.label(template.name).classes("text-lg font-semibold")
+                    ui.badge(template.genre).props("color=primary")
+                    if template.is_builtin:
+                        ui.badge("Built-in").props("color=secondary")
 
-                    ui.label(template.description).classes(
-                        "text-sm text-gray-600 dark:text-gray-400"
-                    )
+                ui.label(template.description).classes("text-sm text-gray-600 dark:text-gray-400")
 
-                    # Details
-                    with ui.row().classes("gap-4 text-sm text-gray-600 dark:text-gray-300"):
-                        if template.subgenres:
-                            ui.label(f"Subgenres: {', '.join(template.subgenres)}")
-                        ui.label(f"Length: {template.target_length.replace('_', ' ').title()}")
-                        ui.label(f"{len(template.characters)} characters")
-                        ui.label(f"{len(template.plot_points)} plot points")
+                # Details
+                with ui.row().classes("gap-4 text-sm text-gray-600 dark:text-gray-300"):
+                    if template.subgenres:
+                        ui.label(f"Subgenres: {', '.join(template.subgenres)}")
+                    ui.label(f"Length: {template.target_length.replace('_', ' ').title()}")
+                    ui.label(f"{len(template.characters)} characters")
+                    ui.label(f"{len(template.plot_points)} plot points")
 
-                    # Tags
-                    if template.tags:
-                        with ui.row().classes("gap-2 mt-2"):
-                            for tag in template.tags:
-                                ui.badge(tag).props("outline")
+                # Tags
+                if template.tags:
+                    with ui.row().classes("gap-2 mt-2"):
+                        for tag in template.tags:
+                            ui.badge(tag).props("outline")
 
-                # Actions
-                with ui.column().classes("gap-2"):
+            # Actions
+            with ui.column().classes("gap-2"):
+                ui.button(
+                    "View Details",
+                    on_click=lambda t=template: self._show_template_details(t),
+                    icon="visibility",
+                ).props("flat")
+
+                ui.button(
+                    "Use Template",
+                    on_click=lambda t=template: self._use_template(t.id),
+                    icon="add_circle",
+                ).props("flat color=primary")
+
+                if not template.is_builtin:
                     ui.button(
-                        "View Details",
-                        on_click=lambda t=template: self._show_template_details(t),
-                        icon="visibility",
+                        "Export",
+                        on_click=lambda t=template: self._export_template(t.id),
+                        icon="download",
                     ).props("flat")
 
                     ui.button(
-                        "Use Template",
-                        on_click=lambda t=template: self._use_template(t.id),
-                        icon="add_circle",
-                    ).props("flat color=primary")
-
-                    if not template.is_builtin:
-                        ui.button(
-                            "Export",
-                            on_click=lambda t=template: self._export_template(t.id),
-                            icon="download",
-                        ).props("flat")
-
-                        ui.button(
-                            "Delete",
-                            on_click=lambda t=template: self._delete_template(t.id),
-                            icon="delete",
-                        ).props("flat color=negative")
+                        "Delete",
+                        on_click=lambda t=template: self._delete_template(t.id),
+                        icon="delete",
+                    ).props("flat color=negative")
 
     def _build_presets_view(self) -> None:
         """Build the structure presets view."""

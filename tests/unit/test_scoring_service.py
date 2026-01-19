@@ -82,13 +82,12 @@ class TestScoringServiceExceptionHandling:
 
         mock_mode_service.record_generation.side_effect = ValueError("Invalid input")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(ValueError):
-                scoring_service.start_tracking(
-                    project_id="test-project",
-                    agent_role="writer",
-                    model_id="test-model",
-                )
+        with caplog.at_level(logging.ERROR), pytest.raises(ValueError):
+            scoring_service.start_tracking(
+                project_id="test-project",
+                agent_role="writer",
+                model_id="test-model",
+            )
 
         assert "Failed to start tracking" in caplog.text
 
@@ -100,14 +99,13 @@ class TestScoringServiceExceptionHandling:
 
         mock_mode_service.update_performance_metrics.side_effect = ValueError("Invalid metrics")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(ValueError):
-                scoring_service.finish_tracking(
-                    score_id=1,
-                    content="Test content",
-                    tokens_generated=100,
-                    time_seconds=5.0,
-                )
+        with caplog.at_level(logging.ERROR), pytest.raises(ValueError):
+            scoring_service.finish_tracking(
+                score_id=1,
+                content="Test content",
+                tokens_generated=100,
+                time_seconds=5.0,
+            )
 
         assert "Failed to finish tracking" in caplog.text
 
@@ -119,14 +117,13 @@ class TestScoringServiceExceptionHandling:
 
         mock_mode_service.judge_quality.side_effect = ValueError("Invalid content")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(ValueError):
-                scoring_service.judge_chapter_quality(
-                    content="Test content",
-                    genre="Fantasy",
-                    tone="Epic",
-                    themes=["Adventure"],
-                )
+        with caplog.at_level(logging.ERROR), pytest.raises(ValueError):
+            scoring_service.judge_chapter_quality(
+                content="Test content",
+                genre="Fantasy",
+                tone="Epic",
+                themes=["Adventure"],
+            )
 
         assert "Failed to judge quality" in caplog.text
 
@@ -138,8 +135,7 @@ class TestScoringServiceExceptionHandling:
 
         mock_mode_service.calculate_consistency_score.side_effect = ValueError("Invalid issues")
 
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(ValueError):
-                scoring_service.calculate_consistency_score(issues=[])
+        with caplog.at_level(logging.ERROR), pytest.raises(ValueError):
+            scoring_service.calculate_consistency_score(issues=[])
 
         assert "Failed to calculate consistency score" in caplog.text

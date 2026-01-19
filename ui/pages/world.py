@@ -182,19 +182,18 @@ class WorldPage:
 
         with ui.row().classes("w-full items-center gap-4 px-4 pt-4 pb-2"):
             # Readiness indicator
-            with ui.card().classes("p-3"):
-                with ui.row().classes("items-center gap-3"):
-                    ui.circular_progress(
-                        value=readiness / 100,
-                        show_value=True,
-                        size="lg",
-                        color=readiness_color,
+            with ui.card().classes("p-3"), ui.row().classes("items-center gap-3"):
+                ui.circular_progress(
+                    value=readiness / 100,
+                    show_value=True,
+                    size="lg",
+                    color=readiness_color,
+                )
+                with ui.column().classes("gap-0"):
+                    ui.label("World Readiness").classes("text-sm font-medium")
+                    ui.label(readiness_text).classes(
+                        f"text-xs text-{readiness_color}-600 dark:text-{readiness_color}-400"
                     )
-                    with ui.column().classes("gap-0"):
-                        ui.label("World Readiness").classes("text-sm font-medium")
-                        ui.label(readiness_text).classes(
-                            f"text-xs text-{readiness_color}-600 dark:text-{readiness_color}-400"
-                        )
 
             # Quality refinement toggle
             with ui.row().classes("items-center gap-2"):
@@ -542,30 +541,29 @@ class WorldPage:
                     # Show preview dialog
                     self._show_entity_preview_dialog("character", results, add_selected_characters)
                     return  # Early return - callback handles the rest
-                else:
-                    # Generate characters via service (original method)
-                    logger.info("Calling story service to generate characters...")
-                    new_chars = await run.io_bound(
-                        self.services.story.generate_more_characters, self.state.project, count
+                # Generate characters via service (original method)
+                logger.info("Calling story service to generate characters...")
+                new_chars = await run.io_bound(
+                    self.services.story.generate_more_characters, self.state.project, count
+                )
+                logger.info(f"Generated {len(new_chars)} characters from LLM")
+                # Add to world database
+                for char in new_chars:
+                    self.services.world.add_entity(
+                        self.state.world_db,
+                        name=char.name,
+                        entity_type="character",
+                        description=char.description,
+                        attributes={
+                            "role": char.role,
+                            "traits": char.personality_traits,
+                            "goals": char.goals,
+                            "arc": char.arc_notes,
+                        },
                     )
-                    logger.info(f"Generated {len(new_chars)} characters from LLM")
-                    # Add to world database
-                    for char in new_chars:
-                        self.services.world.add_entity(
-                            self.state.world_db,
-                            name=char.name,
-                            entity_type="character",
-                            description=char.description,
-                            attributes={
-                                "role": char.role,
-                                "traits": char.personality_traits,
-                                "goals": char.goals,
-                                "arc": char.arc_notes,
-                            },
-                        )
-                    logger.info(f"Added {len(new_chars)} characters to world database")
-                    notification.dismiss()
-                    ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
+                logger.info(f"Added {len(new_chars)} characters to world database")
+                notification.dismiss()
+                ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
 
             elif entity_type == "locations":
                 if use_quality:
@@ -651,30 +649,29 @@ class WorldPage:
                         "location", loc_results, add_selected_locations
                     )
                     return  # Early return - callback handles the rest
-                else:
-                    # Generate locations via service (original method)
-                    logger.info("Calling story service to generate locations...")
-                    locations = await run.io_bound(
-                        self.services.story.generate_locations, self.state.project, count
-                    )
-                    logger.info(f"Generated {len(locations)} locations from LLM")
-                    # Add to world database
-                    added_count = 0
-                    for loc in locations:
-                        if isinstance(loc, dict) and "name" in loc:
-                            self.services.world.add_entity(
-                                self.state.world_db,
-                                name=loc["name"],
-                                entity_type="location",
-                                description=loc.get("description", ""),
-                                attributes={"significance": loc.get("significance", "")},
-                            )
-                            added_count += 1
-                        else:
-                            logger.warning(f"Skipping invalid location: {loc}")
-                    logger.info(f"Added {added_count} locations to world database")
-                    notification.dismiss()
-                    ui.notify(f"Added {added_count} new locations!", type="positive")
+                # Generate locations via service (original method)
+                logger.info("Calling story service to generate locations...")
+                locations = await run.io_bound(
+                    self.services.story.generate_locations, self.state.project, count
+                )
+                logger.info(f"Generated {len(locations)} locations from LLM")
+                # Add to world database
+                added_count = 0
+                for loc in locations:
+                    if isinstance(loc, dict) and "name" in loc:
+                        self.services.world.add_entity(
+                            self.state.world_db,
+                            name=loc["name"],
+                            entity_type="location",
+                            description=loc.get("description", ""),
+                            attributes={"significance": loc.get("significance", "")},
+                        )
+                        added_count += 1
+                    else:
+                        logger.warning(f"Skipping invalid location: {loc}")
+                logger.info(f"Added {added_count} locations to world database")
+                notification.dismiss()
+                ui.notify(f"Added {added_count} new locations!", type="positive")
 
             elif entity_type == "factions":
                 if use_quality:
@@ -795,10 +792,9 @@ class WorldPage:
                         "faction", faction_results, add_selected_factions
                     )
                     return  # Early return - callback handles the rest
-                else:
-                    notification.dismiss()
-                    ui.notify("Enable Quality Refinement to generate factions", type="warning")
-                    return
+                notification.dismiss()
+                ui.notify("Enable Quality Refinement to generate factions", type="warning")
+                return
 
             elif entity_type == "items":
                 if use_quality:
@@ -883,10 +879,9 @@ class WorldPage:
                     # Show preview dialog
                     self._show_entity_preview_dialog("item", item_results, add_selected_items)
                     return  # Early return - callback handles the rest
-                else:
-                    notification.dismiss()
-                    ui.notify("Enable Quality Refinement to generate items", type="warning")
-                    return
+                notification.dismiss()
+                ui.notify("Enable Quality Refinement to generate items", type="warning")
+                return
 
             elif entity_type == "concepts":
                 if use_quality:
@@ -974,10 +969,9 @@ class WorldPage:
                         "concept", concept_results, add_selected_concepts
                     )
                     return  # Early return - callback handles the rest
-                else:
-                    notification.dismiss()
-                    ui.notify("Enable Quality Refinement to generate concepts", type="warning")
-                    return
+                notification.dismiss()
+                ui.notify("Enable Quality Refinement to generate concepts", type="warning")
+                return
 
             elif entity_type == "relationships":
                 # Get existing entities and relationships
@@ -1082,48 +1076,43 @@ class WorldPage:
                         "relationship", rel_results, add_selected_relationships
                     )
                     return  # Early return - callback handles the rest
-                else:
-                    # Generate relationships via service (original method)
-                    logger.info("Calling story service to generate relationships...")
-                    relationships = await run.io_bound(
-                        self.services.story.generate_relationships,
-                        self.state.project,
-                        entity_names,
-                        existing_rels,
-                        count,
-                    )
-                    logger.info(f"Generated {len(relationships)} relationships from LLM")
+                # Generate relationships via service (original method)
+                logger.info("Calling story service to generate relationships...")
+                relationships = await run.io_bound(
+                    self.services.story.generate_relationships,
+                    self.state.project,
+                    entity_names,
+                    existing_rels,
+                    count,
+                )
+                logger.info(f"Generated {len(relationships)} relationships from LLM")
 
-                    # Add to world database
-                    added = 0
-                    for rel in relationships:
-                        if isinstance(rel, dict) and "source" in rel and "target" in rel:
-                            # Find entity IDs by name
-                            source_entity = next(
-                                (e for e in entities if e.name == rel["source"]), None
+                # Add to world database
+                added = 0
+                for rel in relationships:
+                    if isinstance(rel, dict) and "source" in rel and "target" in rel:
+                        # Find entity IDs by name
+                        source_entity = next((e for e in entities if e.name == rel["source"]), None)
+                        target_entity = next((e for e in entities if e.name == rel["target"]), None)
+                        if source_entity and target_entity:
+                            self.services.world.add_relationship(
+                                self.state.world_db,
+                                source_entity.id,
+                                target_entity.id,
+                                rel.get("relation_type", "knows"),
+                                rel.get("description", ""),
                             )
-                            target_entity = next(
-                                (e for e in entities if e.name == rel["target"]), None
-                            )
-                            if source_entity and target_entity:
-                                self.services.world.add_relationship(
-                                    self.state.world_db,
-                                    source_entity.id,
-                                    target_entity.id,
-                                    rel.get("relation_type", "knows"),
-                                    rel.get("description", ""),
-                                )
-                                added += 1
-                            else:
-                                logger.warning(
-                                    f"Skipping relationship: source={rel['source']} or "
-                                    f"target={rel['target']} not found"
-                                )
+                            added += 1
                         else:
-                            logger.warning(f"Skipping invalid relationship: {rel}")
-                    logger.info(f"Added {added} relationships to world database")
-                    notification.dismiss()
-                    ui.notify(f"Added {added} new relationships!", type="positive")
+                            logger.warning(
+                                f"Skipping relationship: source={rel['source']} or "
+                                f"target={rel['target']} not found"
+                            )
+                    else:
+                        logger.warning(f"Skipping invalid relationship: {rel}")
+                logger.info(f"Added {added} relationships to world database")
+                notification.dismiss()
+                ui.notify(f"Added {added} new relationships!", type="positive")
 
             # Invalidate graph cache to ensure fresh tooltips
             self.state.world_db.invalidate_graph_cache()
@@ -1779,15 +1768,14 @@ class WorldPage:
 
             with ui.tab_panels(tabs, value="path").classes("w-full"):
                 # Path finder
-                with ui.tab_panel("path"):
-                    with ui.row().classes("items-end gap-4"):
-                        entities = self._get_entity_options()
-                        path_source = ui.select(label="From", options=entities).classes("w-48")
-                        path_target = ui.select(label="To", options=entities).classes("w-48")
-                        ui.button(
-                            "Find Path",
-                            on_click=lambda: self._find_path(path_source.value, path_target.value),
-                        )
+                with ui.tab_panel("path"), ui.row().classes("items-end gap-4"):
+                    entities = self._get_entity_options()
+                    path_source = ui.select(label="From", options=entities).classes("w-48")
+                    path_target = ui.select(label="To", options=entities).classes("w-48")
+                    ui.button(
+                        "Find Path",
+                        on_click=lambda: self._find_path(path_source.value, path_target.value),
+                    )
 
                 # Centrality analysis
                 with ui.tab_panel("centrality"):
@@ -2299,9 +2287,7 @@ class WorldPage:
                         attrs[key] = [v.strip() for v in widget.value.split(",") if v.strip()]
                     else:
                         attrs[key] = []
-                elif value_type == "bool":
-                    attrs[key] = widget.value
-                elif value_type == "number":
+                elif value_type == "bool" or value_type == "number":
                     attrs[key] = widget.value
                 else:  # str
                     attrs[key] = widget.value

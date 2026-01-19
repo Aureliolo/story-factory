@@ -288,67 +288,62 @@ class SceneListComponent:
         card = ui.card().classes("w-full p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-move")
         self._scene_cards[scene.id] = card
 
-        with card:
-            with ui.row().classes("w-full items-start gap-2"):
-                # Drag handle
-                ui.icon("drag_indicator", size="sm").classes("text-gray-400 cursor-move")
+        with card, ui.row().classes("w-full items-start gap-2"):
+            # Drag handle
+            ui.icon("drag_indicator", size="sm").classes("text-gray-400 cursor-move")
 
-                # Scene content
-                with ui.column().classes("flex-grow gap-1"):
-                    # Title and status
-                    with ui.row().classes("items-center gap-2"):
-                        ui.label(f"{scene.order + 1}. {scene.title}").classes("font-medium")
-                        ui.badge(scene.status).props(f"color={status_color}")
+            # Scene content
+            with ui.column().classes("flex-grow gap-1"):
+                # Title and status
+                with ui.row().classes("items-center gap-2"):
+                    ui.label(f"{scene.order + 1}. {scene.title}").classes("font-medium")
+                    ui.badge(scene.status).props(f"color={status_color}")
 
-                    # Metadata
-                    metadata_parts = []
-                    if scene.pov_character:
-                        metadata_parts.append(f"POV: {scene.pov_character}")
-                    if scene.location:
-                        metadata_parts.append(f"@ {scene.location}")
-                    if scene.word_count > 0:
-                        metadata_parts.append(f"{scene.word_count} words")
+                # Metadata
+                metadata_parts = []
+                if scene.pov_character:
+                    metadata_parts.append(f"POV: {scene.pov_character}")
+                if scene.location:
+                    metadata_parts.append(f"@ {scene.location}")
+                if scene.word_count > 0:
+                    metadata_parts.append(f"{scene.word_count} words")
 
-                    if metadata_parts:
-                        ui.label(" • ".join(metadata_parts)).classes(
-                            "text-xs text-gray-500 dark:text-gray-400"
-                        )
+                if metadata_parts:
+                    ui.label(" • ".join(metadata_parts)).classes(
+                        "text-xs text-gray-500 dark:text-gray-400"
+                    )
 
-                    # Outline preview
-                    if scene.outline:
-                        outline_preview = (
-                            scene.outline[:100] + "..."
-                            if len(scene.outline) > 100
-                            else scene.outline
-                        )
-                        ui.label(outline_preview).classes(
-                            "text-sm text-gray-600 dark:text-gray-400"
-                        )
+                # Outline preview
+                if scene.outline:
+                    outline_preview = (
+                        scene.outline[:100] + "..." if len(scene.outline) > 100 else scene.outline
+                    )
+                    ui.label(outline_preview).classes("text-sm text-gray-600 dark:text-gray-400")
 
-                    # Goals
-                    if scene.goals:
-                        with ui.row().classes("flex-wrap gap-1 mt-1"):
-                            for goal in scene.goals[:3]:  # Show max 3 goals
-                                ui.chip(
-                                    goal[:30] + "..." if len(goal) > 30 else goal,
-                                    icon="flag",
-                                ).props("size=sm outline")
-                            if len(scene.goals) > 3:
-                                ui.chip(f"+{len(scene.goals) - 3} more").props(
-                                    "size=sm color=grey outline"
-                                )
+                # Goals
+                if scene.goals:
+                    with ui.row().classes("flex-wrap gap-1 mt-1"):
+                        for goal in scene.goals[:3]:  # Show max 3 goals
+                            ui.chip(
+                                goal[:30] + "..." if len(goal) > 30 else goal,
+                                icon="flag",
+                            ).props("size=sm outline")
+                        if len(scene.goals) > 3:
+                            ui.chip(f"+{len(scene.goals) - 3} more").props(
+                                "size=sm color=grey outline"
+                            )
 
-                # Action buttons
-                with ui.column().classes("gap-1"):
-                    ui.button(
-                        icon="edit",
-                        on_click=lambda s=scene: self._handle_edit_scene(s),
-                    ).props("flat dense size=sm").tooltip("Edit scene")
+            # Action buttons
+            with ui.column().classes("gap-1"):
+                ui.button(
+                    icon="edit",
+                    on_click=lambda s=scene: self._handle_edit_scene(s),
+                ).props("flat dense size=sm").tooltip("Edit scene")
 
-                    ui.button(
-                        icon="delete",
-                        on_click=lambda s=scene: self._handle_delete_scene(s),
-                    ).props("flat dense size=sm color=red").tooltip("Delete scene")
+                ui.button(
+                    icon="delete",
+                    on_click=lambda s=scene: self._handle_delete_scene(s),
+                ).props("flat dense size=sm color=red").tooltip("Delete scene")
 
         # Note: Drag-drop reordering will be implemented in a future update
         # using SortableJS library or similar

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 # Language name to ISO 639-1 code mapping
 # Used for EPUB metadata and other internationalization needs
 LANGUAGE_CODES: dict[str, str] = {

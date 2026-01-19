@@ -606,11 +606,13 @@ class TestModelModeServiceAdditional:
         service._loaded_models = {"model-a", "model-b"}
 
         # Mock low VRAM scenario - less than required
-        with patch("services.model_mode_service.get_available_vram", return_value=4):
-            with patch(
+        with (
+            patch("services.model_mode_service.get_available_vram", return_value=4),
+            patch(
                 "services.model_mode_service.AVAILABLE_MODELS", {"model-c": {"vram_required": 8}}
-            ):
-                service.prepare_model("model-c")
+            ),
+        ):
+            service.prepare_model("model-c")
 
         # Should have unloaded other models
         assert service._loaded_models == {"model-c"}
@@ -671,11 +673,13 @@ class TestModelModeServiceAdditional:
             project_id="test", agent_role="writer", model_id="model"
         )
 
-        with patch.object(
-            service._db, "update_performance_metrics", side_effect=Exception("Perf error")
+        with (
+            patch.object(
+                service._db, "update_performance_metrics", side_effect=Exception("Perf error")
+            ),
+            pytest.raises(Exception, match="Perf error"),
         ):
-            with pytest.raises(Exception, match="Perf error"):
-                service.update_performance_metrics(score_id, tokens_generated=100)
+            service.update_performance_metrics(score_id, tokens_generated=100)
 
     def test_judge_quality_success(self, service: ModelModeService) -> None:
         """Test judge_quality with successful LLM response."""
@@ -1117,22 +1121,24 @@ class TestModelModeServiceAdditional:
         from unittest.mock import patch
 
         # Mock extract_json to raise JSONDecodeError
-        with patch("services.model_mode_service.ollama.Client") as mock_client:
-            with patch(
+        with (
+            patch("services.model_mode_service.ollama.Client") as mock_client,
+            patch(
                 "services.model_mode_service.extract_json",
                 side_effect=json.JSONDecodeError("test error", "doc", 0),
-            ):
-                mock_instance = MagicMock()
-                mock_client.return_value = mock_instance
-                mock_instance.generate.return_value = {"response": "some response"}
+            ),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.generate.return_value = {"response": "some response"}
 
-                scores = service.judge_quality(
-                    content="A story...",
-                    genre="fantasy",
-                    tone="epic",
-                    themes=["adventure"],
-                )
+            scores = service.judge_quality(
+                content="A story...",
+                genre="fantasy",
+                tone="epic",
+                themes=["adventure"],
+            )
 
-                # Should return neutral scores (line 484)
-                assert scores.prose_quality == 5.0
-                assert scores.instruction_following == 5.0
+            # Should return neutral scores (line 484)
+            assert scores.prose_quality == 5.0
+            assert scores.instruction_following == 5.0

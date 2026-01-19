@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import logging
 
 from agents.base import BaseAgent
@@ -126,35 +125,31 @@ Each suggestion should be 1-2 sentences, specific to this story."""
                 # Single category response - wrap in dict
                 if isinstance(suggestions_data, list):
                     return {category: suggestions_data}
-                elif isinstance(suggestions_data, dict) and category in suggestions_data:
+                if isinstance(suggestions_data, dict) and category in suggestions_data:
                     return {category: suggestions_data[category]}
+                logger.error(f"Unexpected response structure for category {category}")
+                raise SuggestionError(f"AI returned unexpected format for {category} suggestions")
+            # Multi-category response
+            if not isinstance(suggestions_data, dict):
+                logger.error("Expected dict for multi-category suggestions")
+                raise SuggestionError("AI returned unexpected format for suggestions")
+
+            # Ensure all expected categories are present
+            result = {}
+            missing_categories = []
+            for cat in categories:
+                if cat in suggestions_data and isinstance(suggestions_data[cat], list):
+                    result[cat] = suggestions_data[cat]
                 else:
-                    logger.error(f"Unexpected response structure for category {category}")
-                    raise SuggestionError(
-                        f"AI returned unexpected format for {category} suggestions"
-                    )
-            else:
-                # Multi-category response
-                if not isinstance(suggestions_data, dict):
-                    logger.error("Expected dict for multi-category suggestions")
-                    raise SuggestionError("AI returned unexpected format for suggestions")
+                    missing_categories.append(cat)
 
-                # Ensure all expected categories are present
-                result = {}
-                missing_categories = []
-                for cat in categories:
-                    if cat in suggestions_data and isinstance(suggestions_data[cat], list):
-                        result[cat] = suggestions_data[cat]
-                    else:
-                        missing_categories.append(cat)
+            if missing_categories:
+                logger.error(f"Missing categories in response: {missing_categories}")
+                raise SuggestionError(
+                    f"AI response missing categories: {', '.join(missing_categories)}"
+                )
 
-                if missing_categories:
-                    logger.error(f"Missing categories in response: {missing_categories}")
-                    raise SuggestionError(
-                        f"AI response missing categories: {', '.join(missing_categories)}"
-                    )
-
-                return result
+            return result
 
         except SuggestionError:
             raise

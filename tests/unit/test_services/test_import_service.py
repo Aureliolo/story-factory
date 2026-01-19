@@ -1314,23 +1314,27 @@ class TestExtractAllMocked:
 
     def test_extract_all_propagates_world_generation_error(self, mock_import_service, sample_text):
         """Test that WorldGenerationError is propagated from sub-methods."""
-        with patch.object(
-            mock_import_service,
-            "extract_characters",
-            side_effect=WorldGenerationError("Character extraction failed"),
+        with (
+            patch.object(
+                mock_import_service,
+                "extract_characters",
+                side_effect=WorldGenerationError("Character extraction failed"),
+            ),
+            pytest.raises(WorldGenerationError, match="Character extraction failed"),
         ):
-            with pytest.raises(WorldGenerationError, match="Character extraction failed"):
-                mock_import_service.extract_all(sample_text)
+            mock_import_service.extract_all(sample_text)
 
     def test_extract_all_unexpected_error(self, mock_import_service, sample_text):
         """Test handling of unexpected errors in extract_all."""
-        with patch.object(
-            mock_import_service,
-            "extract_characters",
-            side_effect=RuntimeError("Unexpected error"),
+        with (
+            patch.object(
+                mock_import_service,
+                "extract_characters",
+                side_effect=RuntimeError("Unexpected error"),
+            ),
+            pytest.raises(WorldGenerationError, match="Unexpected extraction error"),
         ):
-            with pytest.raises(WorldGenerationError, match="Unexpected extraction error"):
-                mock_import_service.extract_all(sample_text)
+            mock_import_service.extract_all(sample_text)
 
 
 class TestPostProcessingLogic:

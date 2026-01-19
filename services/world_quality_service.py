@@ -167,15 +167,14 @@ class WorldQualityService:
                     character = self._create_character(
                         story_state, existing_names, config.creator_temperature
                     )
-                else:
-                    # Refinement based on feedback
-                    if character and scores:
-                        character = self._refine_character(
-                            character,
-                            scores,
-                            story_state,
-                            config.refinement_temperature,
-                        )
+                # Refinement based on feedback
+                elif character and scores:
+                    character = self._refine_character(
+                        character,
+                        scores,
+                        story_state,
+                        config.refinement_temperature,
+                    )
 
                 if character is None:
                     last_error = f"Character creation returned None on iteration {iteration + 1}"
@@ -298,9 +297,8 @@ Output ONLY valid JSON (all text in {brief.language}):
                     relationships=data.get("relationships", {}),
                     arc_notes=data.get("arc_notes", ""),
                 )
-            else:
-                logger.error(f"Character creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid character JSON structure: {data}")
+            logger.error(f"Character creation returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid character JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Character creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during character creation: {e}") from e
@@ -479,9 +477,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     relationships=data.get("relationships", character.relationships),
                     arc_notes=data.get("arc_notes", character.arc_notes),
                 )
-            else:
-                logger.error(f"Character refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid character refinement JSON structure: {data}")
+            logger.error(f"Character refinement returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid character refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Character refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during character refinement: {e}") from e
@@ -532,14 +529,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     location = self._create_location(
                         story_state, existing_names, config.creator_temperature
                     )
-                else:
-                    if location and scores:
-                        location = self._refine_location(
-                            location,
-                            scores,
-                            story_state,
-                            config.refinement_temperature,
-                        )
+                elif location and scores:
+                    location = self._refine_location(
+                        location,
+                        scores,
+                        story_state,
+                        config.refinement_temperature,
+                    )
 
                 if not location.get("name"):
                     last_error = f"Location creation returned empty on iteration {iteration + 1}"
@@ -634,9 +630,8 @@ Output ONLY valid JSON (all text in {brief.language}):
                     logger.warning(f"Location name '{name}' is duplicate, clearing to force retry")
                     return {}  # Return empty to trigger retry
                 return data
-            else:
-                logger.error(f"Location creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid location JSON structure: {data}")
+            logger.error(f"Location creation returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid location JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Location creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during location creation: {e}") from e
@@ -780,9 +775,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
-            else:
-                logger.error(f"Location refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid location refinement JSON structure: {data}")
+            logger.error(f"Location refinement returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid location refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Location refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during location refinement: {e}") from e
@@ -838,14 +832,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     relationship = self._create_relationship(
                         story_state, entity_names, existing_rels, config.creator_temperature
                     )
-                else:
-                    if relationship and scores:
-                        relationship = self._refine_relationship(
-                            relationship,
-                            scores,
-                            story_state,
-                            config.refinement_temperature,
-                        )
+                elif relationship and scores:
+                    relationship = self._refine_relationship(
+                        relationship,
+                        scores,
+                        story_state,
+                        config.refinement_temperature,
+                    )
 
                 if not relationship.get("source") or not relationship.get("target"):
                     last_error = (
@@ -977,9 +970,8 @@ Output ONLY valid JSON (all text in {brief.language}):
             data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
-            else:
-                logger.error(f"Relationship creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid relationship JSON structure: {data}")
+            logger.error(f"Relationship creation returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid relationship JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Relationship creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during relationship creation: {e}") from e
@@ -1120,11 +1112,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
-            else:
-                logger.error(f"Relationship refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(
-                    f"Invalid relationship refinement JSON structure: {data}"
-                )
+            logger.error(f"Relationship refinement returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid relationship refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Relationship refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during relationship refinement: {e}") from e
@@ -1179,14 +1168,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     faction = self._create_faction(
                         story_state, existing_names, config.creator_temperature, existing_locations
                     )
-                else:
-                    if faction and scores:
-                        faction = self._refine_faction(
-                            faction,
-                            scores,
-                            story_state,
-                            config.refinement_temperature,
-                        )
+                elif faction and scores:
+                    faction = self._refine_faction(
+                        faction,
+                        scores,
+                        story_state,
+                        config.refinement_temperature,
+                    )
 
                 if not faction.get("name"):
                     last_error = f"Faction creation returned empty on iteration {iteration + 1}"
@@ -1291,9 +1279,8 @@ Output ONLY valid JSON (all text in {brief.language}):
                     logger.warning(f"Faction name '{name}' is duplicate, clearing to force retry")
                     return {}  # Return empty to trigger retry
                 return data
-            else:
-                logger.error(f"Faction creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid faction JSON structure: {data}")
+            logger.error(f"Faction creation returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid faction JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Faction creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during faction creation: {e}") from e
@@ -1438,9 +1425,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
-            else:
-                logger.error(f"Faction refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid faction refinement JSON structure: {data}")
+            logger.error(f"Faction refinement returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid faction refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Faction refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during faction refinement: {e}") from e
@@ -1491,14 +1477,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     item = self._create_item(
                         story_state, existing_names, config.creator_temperature
                     )
-                else:
-                    if item and scores:
-                        item = self._refine_item(
-                            item,
-                            scores,
-                            story_state,
-                            config.refinement_temperature,
-                        )
+                elif item and scores:
+                    item = self._refine_item(
+                        item,
+                        scores,
+                        story_state,
+                        config.refinement_temperature,
+                    )
 
                 if not item.get("name"):
                     last_error = f"Item creation returned empty on iteration {iteration + 1}"
@@ -1591,9 +1576,8 @@ Output ONLY valid JSON (all text in {brief.language}):
                     logger.warning(f"Item name '{name}' is duplicate, clearing to force retry")
                     return {}  # Return empty to trigger retry
                 return data
-            else:
-                logger.error(f"Item creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid item JSON structure: {data}")
+            logger.error(f"Item creation returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid item JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Item creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during item creation: {e}") from e
@@ -1735,9 +1719,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
-            else:
-                logger.error(f"Item refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid item refinement JSON structure: {data}")
+            logger.error(f"Item refinement returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid item refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Item refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during item refinement: {e}") from e
@@ -1789,14 +1772,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     concept = self._create_concept(
                         story_state, existing_names, config.creator_temperature
                     )
-                else:
-                    if concept and scores:
-                        concept = self._refine_concept(
-                            concept,
-                            scores,
-                            story_state,
-                            config.refinement_temperature,
-                        )
+                elif concept and scores:
+                    concept = self._refine_concept(
+                        concept,
+                        scores,
+                        story_state,
+                        config.refinement_temperature,
+                    )
 
                 if not concept.get("name"):
                     last_error = f"Concept creation returned empty on iteration {iteration + 1}"
@@ -1890,9 +1872,8 @@ Output ONLY valid JSON (all text in {brief.language}):
                     logger.warning(f"Concept name '{name}' is duplicate, clearing to force retry")
                     return {}  # Return empty to trigger retry
                 return data
-            else:
-                logger.error(f"Concept creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid concept JSON structure: {data}")
+            logger.error(f"Concept creation returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid concept JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Concept creation LLM error: {e}")
             raise WorldGenerationError(f"LLM error during concept creation: {e}") from e
@@ -2026,9 +2007,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             data = extract_json(response["response"], strict=False)
             if data and isinstance(data, dict):
                 return data
-            else:
-                logger.error(f"Concept refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid concept refinement JSON structure: {data}")
+            logger.error(f"Concept refinement returned invalid JSON structure: {data}")
+            raise WorldGenerationError(f"Invalid concept refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(f"Concept refinement LLM error: {e}")
             raise WorldGenerationError(f"LLM error during concept refinement: {e}") from e

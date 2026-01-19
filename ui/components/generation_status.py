@@ -99,14 +99,13 @@ class GenerationStatus:
         """
         if seconds < 60:
             return f"{int(seconds)}s"
-        elif seconds < 3600:
+        if seconds < 3600:
             minutes = int(seconds / 60)
             secs = int(seconds % 60)
             return f"{minutes}m {secs}s"
-        else:
-            hours = int(seconds / 3600)
-            minutes = int((seconds % 3600) / 60)
-            return f"{hours}h {minutes}m"
+        hours = int(seconds / 3600)
+        minutes = int((seconds % 3600) / 60)
+        return f"{hours}h {minutes}m"
 
     def _update_phase_icons(self, current_phase: str) -> None:
         """Update phase indicator icons to show progress.

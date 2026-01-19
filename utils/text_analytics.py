@@ -251,15 +251,14 @@ def get_readability_interpretation(flesch_score: float) -> str:
     """
     if flesch_score >= 90:
         return "Very Easy (5th grade)"
-    elif flesch_score >= 80:
+    if flesch_score >= 80:
         return "Easy (6th grade)"
-    elif flesch_score >= 70:
+    if flesch_score >= 70:
         return "Fairly Easy (7th grade)"
-    elif flesch_score >= 60:
+    if flesch_score >= 60:
         return "Standard (8th-9th grade)"
-    elif flesch_score >= 50:
+    if flesch_score >= 50:
         return "Fairly Difficult (10th-12th grade)"
-    elif flesch_score >= 30:
+    if flesch_score >= 30:
         return "Difficult (College)"
-    else:
-        return "Very Difficult (College graduate)"
+    return "Very Difficult (College graduate)"
