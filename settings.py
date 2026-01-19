@@ -380,6 +380,13 @@ class Settings:
     llm_retry_delay: float = 2.0  # Base delay in seconds between retries
     llm_retry_backoff: float = 2.0  # Exponential backoff multiplier
 
+    # Prompt management settings
+    prompt_cache_enabled: bool = True  # Enable response caching
+    prompt_cache_size: int = 1000  # Maximum cached responses
+    prompt_cache_ttl: int = 3600  # Cache TTL in seconds (1 hour)
+    prompt_metrics_enabled: bool = True  # Enable metrics collection
+    prompt_template_dir: str = "prompts/templates"  # Template directory
+
     # Verification delays
     model_verification_sleep: float = 0.1  # Delay for model download verification
 
