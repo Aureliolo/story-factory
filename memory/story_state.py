@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from memory.templates import TargetLength
 
@@ -581,18 +581,42 @@ class CharacterList(BaseModel):
     """Wrapper model for a list of characters.
 
     Used with generate_structured() to get validated character lists from LLM.
+    Handles LLMs returning a single object instead of a wrapped list.
     """
 
     characters: list[Character]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single Character object in a list if needed."""
+        if isinstance(data, dict) and "characters" not in data:
+            # LLM returned a single object, wrap it
+            if "name" in data and "role" in data:
+                logger.debug("Wrapping single Character object in CharacterList")
+                return {"characters": [data]}
+        return data
 
 
 class PlotPointList(BaseModel):
     """Wrapper model for a list of plot points.
 
     Used with generate_structured() to get validated plot point lists from LLM.
+    Handles LLMs returning a single object instead of a wrapped list.
     """
 
     plot_points: list[PlotPoint]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single PlotPoint object in a list if needed."""
+        if isinstance(data, dict) and "plot_points" not in data:
+            # LLM returned a single object, wrap it
+            if "description" in data:
+                logger.debug("Wrapping single PlotPoint object in PlotPointList")
+                return {"plot_points": [data]}
+        return data
 
 
 class PlotOutline(BaseModel):
@@ -609,6 +633,18 @@ class ChapterList(BaseModel):
     """Wrapper model for a list of chapters.
 
     Used with generate_structured() to get validated chapter lists from LLM.
+    Handles LLMs returning a single object instead of a wrapped list.
     """
 
     chapters: list[Chapter]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single Chapter object in a list if needed."""
+        if isinstance(data, dict) and "chapters" not in data:
+            # LLM returned a single object, wrap it
+            if "number" in data and "title" in data:
+                logger.debug("Wrapping single Chapter object in ChapterList")
+                return {"chapters": [data]}
+        return data

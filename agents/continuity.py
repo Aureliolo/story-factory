@@ -1,8 +1,9 @@
 """Continuity Checker Agent - Detects plot holes and inconsistencies."""
 
 import logging
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from memory.story_state import StoryState
 from settings import Settings
@@ -27,9 +28,21 @@ class ContinuityIssueList(BaseModel):
     """Wrapper for a list of continuity issues.
 
     Used with generate_structured() to get validated issue lists from LLM.
+    Handles LLMs returning a single object instead of a wrapped list.
     """
 
     issues: list[ContinuityIssue] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single ContinuityIssue object in a list if needed."""
+        if isinstance(data, dict) and "issues" not in data:
+            # LLM returned a single object, wrap it
+            if "severity" in data and "category" in data:
+                logger.debug("Wrapping single ContinuityIssue object in ContinuityIssueList")
+                return {"issues": [data]}
+        return data
 
 
 class DialoguePattern(BaseModel):
@@ -46,9 +59,21 @@ class DialoguePatternList(BaseModel):
     """Wrapper for a list of dialogue patterns.
 
     Used with generate_structured() to get validated pattern lists from LLM.
+    Handles LLMs returning a single object instead of a wrapped list.
     """
 
     patterns: list[DialoguePattern] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single DialoguePattern object in a list if needed."""
+        if isinstance(data, dict) and "patterns" not in data:
+            # LLM returned a single object, wrap it
+            if "character_name" in data and "vocabulary_level" in data:
+                logger.debug("Wrapping single DialoguePattern object in DialoguePatternList")
+                return {"patterns": [data]}
+        return data
 
 
 CONTINUITY_SYSTEM_PROMPT = """You are the Continuity Checker, the guardian of story consistency.

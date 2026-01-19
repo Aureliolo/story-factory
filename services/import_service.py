@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from memory.story_state import StoryState
 from services.llm_client import generate_structured
@@ -30,9 +30,22 @@ class ExtractedCharacter(BaseModel):
 
 
 class ExtractedCharacterList(BaseModel):
-    """Wrapper for list of extracted characters."""
+    """Wrapper for list of extracted characters.
+
+    Handles LLMs returning a single object instead of a wrapped list.
+    """
 
     characters: list[ExtractedCharacter]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single ExtractedCharacter object in a list if needed."""
+        if isinstance(data, dict) and "characters" not in data:
+            if "name" in data and "role" in data:
+                logger.debug("Wrapping single ExtractedCharacter in ExtractedCharacterList")
+                return {"characters": [data]}
+        return data
 
 
 class ExtractedLocation(BaseModel):
@@ -47,9 +60,22 @@ class ExtractedLocation(BaseModel):
 
 
 class ExtractedLocationList(BaseModel):
-    """Wrapper for list of extracted locations."""
+    """Wrapper for list of extracted locations.
+
+    Handles LLMs returning a single object instead of a wrapped list.
+    """
 
     locations: list[ExtractedLocation]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single ExtractedLocation object in a list if needed."""
+        if isinstance(data, dict) and "locations" not in data:
+            if "name" in data and "description" in data:
+                logger.debug("Wrapping single ExtractedLocation in ExtractedLocationList")
+                return {"locations": [data]}
+        return data
 
 
 class ExtractedItem(BaseModel):
@@ -65,9 +91,22 @@ class ExtractedItem(BaseModel):
 
 
 class ExtractedItemList(BaseModel):
-    """Wrapper for list of extracted items."""
+    """Wrapper for list of extracted items.
+
+    Handles LLMs returning a single object instead of a wrapped list.
+    """
 
     items: list[ExtractedItem]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single ExtractedItem object in a list if needed."""
+        if isinstance(data, dict) and "items" not in data:
+            if "name" in data and "description" in data:
+                logger.debug("Wrapping single ExtractedItem in ExtractedItemList")
+                return {"items": [data]}
+        return data
 
 
 class ExtractedRelationship(BaseModel):
@@ -82,9 +121,22 @@ class ExtractedRelationship(BaseModel):
 
 
 class ExtractedRelationshipList(BaseModel):
-    """Wrapper for list of extracted relationships."""
+    """Wrapper for list of extracted relationships.
+
+    Handles LLMs returning a single object instead of a wrapped list.
+    """
 
     relationships: list[ExtractedRelationship]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single ExtractedRelationship object in a list if needed."""
+        if isinstance(data, dict) and "relationships" not in data:
+            if "source" in data and "target" in data:
+                logger.debug("Wrapping single ExtractedRelationship in ExtractedRelationshipList")
+                return {"relationships": [data]}
+        return data
 
 
 class ImportService:
