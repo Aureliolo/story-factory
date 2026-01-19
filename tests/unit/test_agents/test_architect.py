@@ -173,6 +173,25 @@ class TestArchitectCreateCharacters:
         with pytest.raises(LLMGenerationError):
             architect.create_characters(sample_story_state)
 
+    def test_raises_error_when_not_enough_characters(self, architect, sample_story_state):
+        """Test raises LLMGenerationError when LLM can't generate minimum characters."""
+        from utils.exceptions import LLMGenerationError
+
+        # Mock returning only 2 characters (less than minimum of 4)
+        mock_result = CharacterList(
+            characters=[
+                Character(name="A", role="protagonist", description="Test"),
+                Character(name="B", role="antagonist", description="Test"),
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        with pytest.raises(LLMGenerationError, match="Failed to generate enough characters"):
+            architect.create_characters(sample_story_state)
+
+        # Should have retried 3 times
+        assert architect.generate_structured.call_count == 3
+
 
 class TestArchitectCreatePlotOutline:
     """Tests for create_plot_outline method."""
@@ -270,6 +289,78 @@ class TestArchitectCreateChapterOutline:
         chapters = architect.create_chapter_outline(sample_story_state)
 
         assert len(chapters) == 1
+
+    def test_iteratively_generates_chapters_when_needed(self, architect, sample_story_state):
+        """Test generates chapters iteratively if LLM returns fewer than needed."""
+        sample_story_state.plot_summary = "An epic journey"
+        sample_story_state.plot_points = [PlotPoint(description="Beginning")]
+        sample_story_state.characters = [
+            Character(name="Hero", role="protagonist", description="Main")
+        ]
+
+        # First call returns 3 chapters, second call returns 4 more
+        first_result = ChapterList(
+            chapters=[
+                Chapter(number=1, title="Ch1", outline="First"),
+                Chapter(number=2, title="Ch2", outline="Second"),
+                Chapter(number=3, title="Ch3", outline="Third"),
+            ]
+        )
+        second_result = ChapterList(
+            chapters=[
+                Chapter(number=1, title="Ch4", outline="Fourth"),
+                Chapter(number=2, title="Ch5", outline="Fifth"),
+                Chapter(number=3, title="Ch6", outline="Sixth"),
+                Chapter(number=4, title="Ch7", outline="Seventh"),
+            ]
+        )
+        architect.generate_structured = MagicMock(side_effect=[first_result, second_result])
+
+        chapters = architect.create_chapter_outline(sample_story_state)
+
+        assert len(chapters) == 7
+        # Check that chapters are properly renumbered
+        assert chapters[0].number == 1
+        assert chapters[3].number == 4
+        assert chapters[6].number == 7
+        # Should have been called twice
+        assert architect.generate_structured.call_count == 2
+
+    def test_raises_error_when_not_enough_chapters(self, architect, sample_story_state):
+        """Test raises LLMGenerationError when unable to generate enough chapters."""
+        from utils.exceptions import LLMGenerationError
+
+        sample_story_state.plot_summary = "An epic journey"
+        sample_story_state.plot_points = [PlotPoint(description="Beginning")]
+        sample_story_state.characters = [
+            Character(name="Hero", role="protagonist", description="Main")
+        ]
+
+        # Always return empty chapters
+        mock_result = ChapterList(chapters=[])
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        with pytest.raises(LLMGenerationError, match="Failed to generate enough chapters"):
+            architect.create_chapter_outline(sample_story_state)
+
+    def test_handles_zero_chapters_iteration(self, architect, sample_story_state):
+        """Test handles iteration where LLM returns 0 chapters and retries."""
+        sample_story_state.brief.target_length = "short_story"  # Only needs 1 chapter
+        sample_story_state.plot_summary = "A short story"
+        sample_story_state.plot_points = []
+        sample_story_state.characters = []
+
+        # First call returns 0, second call returns 1
+        empty_result = ChapterList(chapters=[])
+        success_result = ChapterList(
+            chapters=[Chapter(number=1, title="The Story", outline="Complete")]
+        )
+        architect.generate_structured = MagicMock(side_effect=[empty_result, success_result])
+
+        chapters = architect.create_chapter_outline(sample_story_state)
+
+        assert len(chapters) == 1
+        assert architect.generate_structured.call_count == 2
 
 
 class TestArchitectBuildStoryStructure:
