@@ -1452,24 +1452,29 @@ class WorldPage:
         """Show confirmation dialog before clearing world data."""
         logger.info("Clear World button clicked - showing confirmation dialog")
 
-        if not self.state.world_db:
+        if not self.state.world_db or not self.state.project:
             ui.notify("No world data to clear", type="info")
             return
 
         # Count existing data
         entity_count = self.state.world_db.count_entities()
         rel_count = len(self.state.world_db.list_relationships())
+        chapter_count = len(self.state.project.chapters)
+        char_count = len(self.state.project.characters)
 
-        if entity_count == 0 and rel_count == 0:
+        if entity_count == 0 and rel_count == 0 and chapter_count == 0 and char_count == 0:
             ui.notify("World is already empty", type="info")
             return
 
         with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[400px]"):
             ui.label("Clear World?").classes("text-lg font-bold")
             ui.label(
-                f"This will permanently delete all world data:\n"
+                f"This will permanently delete all world and story structure data:\n"
                 f"• {entity_count} entities\n"
-                f"• {rel_count} relationships\n\n"
+                f"• {rel_count} relationships\n"
+                f"• {chapter_count} chapter outlines\n"
+                f"• {char_count} characters\n\n"
+                f"Your interview and story brief will be kept.\n"
                 f"This action cannot be undone."
             ).classes("text-gray-600 dark:text-gray-400 whitespace-pre-line")
 
@@ -1484,12 +1489,12 @@ class WorldPage:
         dialog.open()
 
     def _do_clear_world(self, dialog: ui.dialog) -> None:
-        """Execute world clear - removes all entities and relationships."""
-        logger.info("User confirmed clear - removing all world data")
+        """Execute world clear - removes all entities, relationships, and story structure."""
+        logger.info("User confirmed clear - removing all world data and story structure")
         dialog.close()
 
-        if not self.state.world_db:
-            logger.warning("Clear failed: no world_db available")
+        if not self.state.world_db or not self.state.project:
+            logger.warning("Clear failed: no world_db or project available")
             ui.notify("No world database available", type="negative")
             return
 
@@ -1506,17 +1511,33 @@ class WorldPage:
                 self.state.world_db.delete_entity(entity.id)
             logger.info(f"Deleted {len(entities)} entities")
 
+            # Clear story structure (but keep brief and interview)
+            chapter_count = len(self.state.project.chapters)
+            char_count = len(self.state.project.characters)
+            self.state.project.chapters = []
+            self.state.project.characters = []
+            self.state.project.world_description = ""
+            self.state.project.plot_points = []
+            logger.info(
+                f"Cleared {chapter_count} chapters and {char_count} characters from project"
+            )
+
+            # Save the project with cleared structure
+            self.services.project.save_project(self.state.project)
+            logger.info("Project saved with cleared structure")
+
             # Refresh UI
             self._refresh_entity_list()
             if self._graph:
                 self._graph.refresh()
 
             ui.notify(
-                f"World cleared: removed {len(entities)} entities and {len(relationships)} relationships",
+                f"World cleared: removed {len(entities)} entities, {len(relationships)} relationships, "
+                f"{chapter_count} chapters, {char_count} characters",
                 type="positive",
             )
 
-            # Reload page to update toolbar (Clear button visibility)
+            # Reload page to update toolbar (Clear button visibility, Build Structure button)
             ui.navigate.reload()
 
         except Exception as e:
