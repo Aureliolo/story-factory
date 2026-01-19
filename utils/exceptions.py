@@ -102,6 +102,16 @@ class WorldGenerationError(StoryFactoryError):
     pass
 
 
+class GenerationCancelledError(StoryFactoryError):
+    """Raised when generation is cancelled by user.
+
+    This indicates the user clicked Cancel during a long-running
+    generation operation (e.g., Build Story Structure).
+    """
+
+    pass
+
+
 class SuggestionError(StoryFactoryError):
     """Raised when AI suggestion generation fails.
 

@@ -5,14 +5,16 @@ from __future__ import annotations
 import logging
 import random
 import re
+import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from memory.entities import Entity, Relationship
 from memory.story_state import StoryState
 from memory.world_database import WorldDatabase
 from settings import Settings
+from utils.exceptions import GenerationCancelledError
 from utils.validation import (
     validate_not_empty,
     validate_not_none,
@@ -49,6 +51,7 @@ class WorldBuildOptions:
         generate_items: Whether to generate item entities.
         generate_concepts: Whether to generate concept entities.
         generate_relationships: Whether to generate relationships between entities.
+        cancellation_event: Optional threading.Event to signal cancellation.
     """
 
     clear_existing: bool = False
@@ -58,9 +61,14 @@ class WorldBuildOptions:
     generate_items: bool = True
     generate_concepts: bool = True
     generate_relationships: bool = True
+    cancellation_event: threading.Event | None = field(default=None, repr=False)
+
+    def is_cancelled(self) -> bool:
+        """Check if cancellation has been requested."""
+        return self.cancellation_event is not None and self.cancellation_event.is_set()
 
     @classmethod
-    def full(cls) -> WorldBuildOptions:
+    def full(cls, cancellation_event: threading.Event | None = None) -> WorldBuildOptions:
         """Create options for full world build (everything, keeping existing data)."""
         return cls(
             clear_existing=False,
@@ -70,10 +78,11 @@ class WorldBuildOptions:
             generate_items=True,
             generate_concepts=True,
             generate_relationships=True,
+            cancellation_event=cancellation_event,
         )
 
     @classmethod
-    def full_rebuild(cls) -> WorldBuildOptions:
+    def full_rebuild(cls, cancellation_event: threading.Event | None = None) -> WorldBuildOptions:
         """Create options for full world rebuild (everything, clearing existing first)."""
         return cls(
             clear_existing=True,
@@ -83,6 +92,7 @@ class WorldBuildOptions:
             generate_items=True,
             generate_concepts=True,
             generate_relationships=True,
+            cancellation_event=cancellation_event,
         )
 
 
@@ -171,14 +181,22 @@ class WorldService:
 
         logger.info(f"Starting world build for project {state.id} with options: {options}")
 
+        def check_cancelled() -> None:
+            """Raise if cancellation requested."""
+            if options.is_cancelled():
+                logger.info("World build cancelled by user")
+                raise GenerationCancelledError("Generation cancelled by user")
+
         # Step 1: Clear existing data if requested
         if options.clear_existing:
+            check_cancelled()
             report_progress("Clearing existing world data...")
             self._clear_world_db(world_db)
             logger.info("Cleared existing world data")
 
         # Step 2: Generate story structure (characters, chapters) if requested
         if options.generate_structure:
+            check_cancelled()
             report_progress("Generating story structure...")
             if options.clear_existing:
                 # Full rebuild - clear story state and regenerate
@@ -196,6 +214,7 @@ class WorldService:
             )
 
         # Step 3: Extract characters to world database
+        check_cancelled()
         report_progress("Adding characters to world...", "character")
         char_count = self._extract_characters_to_world(state, world_db)
         counts["characters"] = char_count
@@ -203,6 +222,7 @@ class WorldService:
 
         # Step 4: Generate locations if requested
         if options.generate_locations:
+            check_cancelled()
             report_progress("Generating locations...", "location")
             loc_count = self._generate_locations(state, world_db, services)
             counts["locations"] = loc_count
@@ -210,6 +230,7 @@ class WorldService:
 
         # Step 5: Generate factions if requested
         if options.generate_factions:
+            check_cancelled()
             report_progress("Generating factions...", "faction")
             faction_count = self._generate_factions(state, world_db, services)
             counts["factions"] = faction_count
@@ -217,6 +238,7 @@ class WorldService:
 
         # Step 6: Generate items if requested
         if options.generate_items:
+            check_cancelled()
             report_progress("Generating items...", "item")
             item_count = self._generate_items(state, world_db, services)
             counts["items"] = item_count
@@ -224,6 +246,7 @@ class WorldService:
 
         # Step 7: Generate concepts if requested
         if options.generate_concepts:
+            check_cancelled()
             report_progress("Generating concepts...", "concept")
             concept_count = self._generate_concepts(state, world_db, services)
             counts["concepts"] = concept_count
@@ -231,6 +254,7 @@ class WorldService:
 
         # Step 8: Generate relationships if requested
         if options.generate_relationships:
+            check_cancelled()
             report_progress("Generating relationships...", "relationship")
             rel_count = self._generate_relationships(state, world_db, services)
             counts["relationships"] = rel_count
