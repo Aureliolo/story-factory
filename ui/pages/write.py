@@ -65,6 +65,7 @@ class WritePage:
         self._build_structure_btn: Button | None = None
         self._scene_list_container: ui.column | None = None  # Container for scene list
         self._generation_status: GenerationStatus | None = None
+        self._world_overview_container: ui.column | None = None  # Container for world overview
 
     def _notify(
         self,
@@ -128,7 +129,9 @@ class WritePage:
 
             # World Overview Section
             with ui.expansion("World Overview", icon="public").classes("w-full"):
-                self._build_world_overview()
+                self._world_overview_container = ui.column().classes("w-full")
+                with self._world_overview_container:
+                    self._build_world_overview_content()
 
             # Story Structure Section
             with ui.expansion("Story Structure", icon="list_alt").classes("w-full"):
@@ -190,8 +193,8 @@ class WritePage:
             )
             self._build_structure_btn.set_visibility(show_build)
 
-    def _build_world_overview(self) -> None:
-        """Build the world overview section."""
+    def _build_world_overview_content(self) -> None:
+        """Build the world overview section content."""
         if not self.state.world_db:
             ui.label("No world data yet. Complete the interview first.").classes(
                 "text-gray-500 dark:text-gray-400"
@@ -226,6 +229,14 @@ class WritePage:
             on_click=lambda: ui.navigate.to("/world"),
             icon="public",
         ).props("flat").classes("mt-4")
+
+    def _refresh_world_overview(self) -> None:
+        """Refresh the world overview section after data changes."""
+        if not self._world_overview_container:
+            return
+        self._world_overview_container.clear()
+        with self._world_overview_container:
+            self._build_world_overview_content()
 
     def _build_structure_section(self) -> None:
         """Build the story structure section."""
@@ -475,9 +486,13 @@ class WritePage:
             ui.label("Provide specific feedback to improve this chapter").classes(
                 "text-sm text-gray-600 dark:text-gray-400 mb-2"
             )
-            self._regenerate_feedback_input = ui.textarea(
-                placeholder="e.g., 'Add more dialogue between the characters' or 'Make the action sequence more suspenseful'"
-            ).classes("w-full min-h-[100px]")
+            self._regenerate_feedback_input = (
+                ui.textarea(
+                    placeholder="e.g., 'Add more dialogue between the characters' or 'Make the action sequence more suspenseful'"
+                )
+                .props("filled")
+                .classes("w-full min-h-[100px]")
+            )
             ui.button(
                 "Regenerate Chapter",
                 on_click=self._regenerate_with_feedback,
@@ -720,13 +735,14 @@ class WritePage:
 
                 # Update UI without full page reload
                 self._update_interview_buttons()
+                self._refresh_world_overview()
 
                 # Show completion with summary
                 chapters = len(self.state.project.chapters)
                 chars = len(self.state.project.characters)
                 self._notify(
                     f"Story structure built! {chapters} chapters, {chars} characters. "
-                    "Expand 'Story Structure' section to view.",
+                    "Expand 'World Overview' section to view.",
                     type="positive",
                 )
 
