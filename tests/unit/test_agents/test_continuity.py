@@ -168,6 +168,16 @@ class TestContinuityCheckChapter:
         with pytest.raises(ValueError, match="brief"):
             continuity.check_chapter(state, "Content", 1)
 
+    def test_returns_empty_list_on_generation_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        issues = continuity.check_chapter(
+            sample_story_state, "Content...", chapter_number=1, check_voice=False
+        )
+
+        assert issues == []
+
 
 class TestContinuityCheckFullStory:
     """Tests for check_full_story method."""
@@ -218,6 +228,16 @@ class TestContinuityCheckFullStory:
         with pytest.raises(ValueError, match="brief"):
             continuity.check_full_story(state)
 
+    def test_returns_empty_list_on_generation_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        sample_story_state.chapters[0].content = "Chapter 1 content..."
+        sample_story_state.chapters[1].content = "Chapter 2 content..."
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        issues = continuity.check_full_story(sample_story_state, check_voice=False)
+
+        assert issues == []
+
 
 class TestContinuityValidateAgainstOutline:
     """Tests for validate_against_outline method."""
@@ -248,6 +268,18 @@ class TestContinuityValidateAgainstOutline:
         prompt = call_args[0][0]
         assert "OUTLINE" in prompt
         assert "CONTENT" in prompt
+
+    def test_returns_empty_list_on_generation_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
+
+        issues = continuity.validate_against_outline(
+            sample_story_state,
+            chapter_content="Sarah explored the site...",
+            chapter_outline="Sarah finds an ancient coin",
+        )
+
+        assert issues == []
 
 
 class TestContinuityExtractNewFacts:
@@ -567,6 +599,14 @@ class TestContinuityVoiceConsistency:
     def test_check_character_voice_no_characters(self, continuity, sample_story_state):
         """Test returns empty list when no characters."""
         sample_story_state.characters = []
+
+        issues = continuity.check_character_voice(sample_story_state, "Content...")
+
+        assert issues == []
+
+    def test_check_character_voice_returns_empty_on_exception(self, continuity, sample_story_state):
+        """Test returns empty list when generate_structured raises exception."""
+        continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
 
         issues = continuity.check_character_voice(sample_story_state, "Content...")
 
