@@ -417,6 +417,14 @@ class StoryState(BaseModel):
     target_chapters: int | None = None  # Override chapter count for this project
     target_characters_min: int | None = None  # Override min characters for this project
     target_characters_max: int | None = None  # Override max characters for this project
+    target_locations_min: int | None = None  # Override min locations for this project
+    target_locations_max: int | None = None  # Override max locations for this project
+    target_factions_min: int | None = None  # Override min factions for this project
+    target_factions_max: int | None = None  # Override max factions for this project
+    target_items_min: int | None = None  # Override min items for this project
+    target_items_max: int | None = None  # Override max items for this project
+    target_concepts_min: int | None = None  # Override min concepts for this project
+    target_concepts_max: int | None = None  # Override max concepts for this project
 
     def get_context_summary(self) -> str:
         """Generate a compressed context summary for agents."""

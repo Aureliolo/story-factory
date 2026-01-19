@@ -3452,3 +3452,128 @@ class TestBatchOperationsPartialFailure:
 
         assert len(results) == 1
         assert results[0][0].name == "Character One"
+
+
+class TestCustomInstructions:
+    """Tests for custom_instructions parameter coverage."""
+
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_character_prompt_with_custom_instructions(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test character creation with custom_instructions parameter."""
+        mock_character = Character(
+            name="Custom Char",
+            role="supporting",
+            description="A custom character",
+            personality_traits=["unique"],
+            goals=["custom goal"],
+            arc_notes="Custom arc",
+        )
+        mock_generate_structured.return_value = mock_character
+
+        result = service._create_character(
+            story_state,
+            existing_names=[],
+            temperature=0.9,
+            custom_instructions="Make this character a mysterious wizard.",
+        )
+
+        assert result is not None
+        assert result.name == "Custom Char"
+        # Verify the prompt contained the custom instructions
+        call_args = mock_generate_structured.call_args
+        assert "SPECIFIC REQUIREMENTS" in call_args[1]["prompt"]
+        assert "mysterious wizard" in call_args[1]["prompt"]
+
+
+class TestFactionIterationRegression:
+    """Tests for faction iteration regression path coverage."""
+
+    @patch.object(WorldQualityService, "_create_faction")
+    @patch.object(WorldQualityService, "_judge_faction_quality")
+    @patch.object(WorldQualityService, "_refine_faction")
+    def test_faction_iteration_worse_after_peak_returns_best(
+        self, mock_refine, mock_judge, mock_create, settings, mock_mode_service, story_state
+    ):
+        """Test faction returns best iteration when later iterations get worse."""
+        # Create service with very high threshold to ensure it never meets
+        settings.world_quality_threshold = 9.5
+        settings.world_quality_max_iterations = 3
+        service = WorldQualityService(settings, mock_mode_service)
+
+        test_faction = {
+            "name": "Peak Faction",
+            "description": "A faction",
+            "leader": "Leader",
+            "goals": ["goal"],
+            "values": ["value"],
+            "base_location": "",
+        }
+        mock_create.return_value = test_faction
+
+        # First judge call - high score (but below threshold)
+        high_scores = FactionQualityScores(
+            coherence=8.5, influence=8.5, conflict_potential=8.5, distinctiveness=8.5
+        )
+        # Second judge call - lower scores (regression)
+        low_scores1 = FactionQualityScores(
+            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+        )
+        # Third judge call - even lower scores
+        low_scores2 = FactionQualityScores(
+            coherence=5.0, influence=5.0, conflict_potential=5.0, distinctiveness=5.0
+        )
+
+        mock_judge.side_effect = [high_scores, low_scores1, low_scores2]
+        mock_refine.return_value = test_faction  # Return same faction for simplicity
+
+        faction, scores, iteration = service.generate_faction_with_quality(
+            story_state,
+            existing_names=[],
+            existing_locations=[],
+        )
+
+        # Should return the best iteration (iteration 1) not the last
+        assert faction is not None
+        assert iteration == 1  # Best iteration was the first one
+        assert scores.average >= 8.0  # Should have scores from best iteration
+
+    @patch.object(WorldQualityService, "_create_faction")
+    @patch.object(WorldQualityService, "_judge_faction_quality")
+    def test_faction_scores_none_reconstructed_from_last(
+        self, mock_judge, mock_create, settings, mock_mode_service, story_state
+    ):
+        """Test faction scores are reconstructed when None at end of loop."""
+        # Set threshold impossibly high with only 1 iteration
+        settings.world_quality_threshold = 10.0  # Impossible
+        settings.world_quality_max_iterations = 1
+        service = WorldQualityService(settings, mock_mode_service)
+
+        test_faction = {
+            "name": "Single Faction",
+            "description": "Only iteration",
+            "leader": "Leader",
+            "goals": ["goal"],
+            "values": ["value"],
+            "base_location": "",
+        }
+        mock_create.return_value = test_faction
+
+        # Single judge call with scores below threshold
+        scores_below_threshold = FactionQualityScores(
+            coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
+        )
+        mock_judge.return_value = scores_below_threshold
+
+        faction, scores, iteration = service.generate_faction_with_quality(
+            story_state,
+            existing_names=[],
+            existing_locations=[],
+        )
+
+        # Should return valid faction with reconstructed scores from last iteration
+        assert faction is not None
+        assert scores is not None
+        assert scores.coherence == 6.0
+        assert iteration == 1

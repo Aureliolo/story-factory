@@ -329,10 +329,10 @@ class WorldService:
         services: ServiceContainer,
     ) -> int:
         """Generate and add locations to world database."""
-        location_count = random.randint(
-            self.settings.world_gen_locations_min,
-            self.settings.world_gen_locations_max,
-        )
+        # Use project-level settings if available, otherwise fall back to global
+        loc_min = state.target_locations_min or self.settings.world_gen_locations_min
+        loc_max = state.target_locations_max or self.settings.world_gen_locations_max
+        location_count = random.randint(loc_min, loc_max)
 
         locations = services.story.generate_locations(state, location_count)
         added_count = 0
@@ -362,10 +362,10 @@ class WorldService:
         all_existing_names = [e.name for e in all_entities]
         existing_locations = [e.name for e in all_entities if e.type == "location"]
 
-        faction_count = random.randint(
-            self.settings.world_gen_factions_min,
-            self.settings.world_gen_factions_max,
-        )
+        # Use project-level settings if available, otherwise fall back to global
+        fac_min = state.target_factions_min or self.settings.world_gen_factions_min
+        fac_max = state.target_factions_max or self.settings.world_gen_factions_max
+        faction_count = random.randint(fac_min, fac_max)
 
         faction_results = services.world_quality.generate_factions_with_quality(
             state, all_existing_names, faction_count, existing_locations
@@ -416,10 +416,10 @@ class WorldService:
         """Generate and add items to world database."""
         all_existing_names = [e.name for e in world_db.list_entities()]
 
-        item_count = random.randint(
-            self.settings.world_gen_items_min,
-            self.settings.world_gen_items_max,
-        )
+        # Use project-level settings if available, otherwise fall back to global
+        item_min = state.target_items_min or self.settings.world_gen_items_min
+        item_max = state.target_items_max or self.settings.world_gen_items_max
+        item_count = random.randint(item_min, item_max)
 
         item_results = services.world_quality.generate_items_with_quality(
             state, all_existing_names, item_count
@@ -454,10 +454,10 @@ class WorldService:
         """Generate and add concepts to world database."""
         all_existing_names = [e.name for e in world_db.list_entities()]
 
-        concept_count = random.randint(
-            self.settings.world_gen_concepts_min,
-            self.settings.world_gen_concepts_max,
-        )
+        # Use project-level settings if available, otherwise fall back to global
+        concept_min = state.target_concepts_min or self.settings.world_gen_concepts_min
+        concept_max = state.target_concepts_max or self.settings.world_gen_concepts_max
+        concept_count = random.randint(concept_min, concept_max)
 
         concept_results = services.world_quality.generate_concepts_with_quality(
             state, all_existing_names, concept_count

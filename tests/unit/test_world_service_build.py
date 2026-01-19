@@ -695,3 +695,38 @@ class TestBuildWorld:
         assert counts["items"] == 0
         assert counts["concepts"] == 0
         assert counts["relationships"] == 0
+
+
+class TestWorldBuildCancellation:
+    """Tests for world build cancellation."""
+
+    def test_build_world_cancellation_raises_error(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancellation event triggers GenerationCancelledError."""
+        import threading
+
+        from utils.exceptions import GenerationCancelledError
+
+        # Create a cancellation event that's already set
+        cancel_event = threading.Event()
+        cancel_event.set()  # Pre-set to trigger immediate cancellation
+
+        options = WorldBuildOptions(
+            clear_existing=True,  # This step checks cancellation first
+            generate_structure=True,
+            generate_locations=True,
+            generate_factions=True,
+            generate_items=True,
+            generate_concepts=True,
+            generate_relationships=True,
+            cancellation_event=cancel_event,
+        )
+
+        with pytest.raises(GenerationCancelledError, match="Generation cancelled"):
+            world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                options,
+            )
