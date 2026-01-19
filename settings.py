@@ -409,9 +409,9 @@ class Settings:
     model_download_threshold: float = 0.9  # Completion ratio to detect actual download
 
     # Story length chapter counts
-    chapters_short_story: int = 1  # Chapters for short story
-    chapters_novella: int = 7  # Chapters for novella
-    chapters_novel: int = 20  # Chapters for novel
+    chapters_short_story: int = 3  # Chapters for short story
+    chapters_novella: int = 10  # Chapters for novella
+    chapters_novel: int = 25  # Chapters for novel
     chapters_default: int = 5  # Default if length not recognized
 
     # Import temperatures (override agent defaults for specific operations)
