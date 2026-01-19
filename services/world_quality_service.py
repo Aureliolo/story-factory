@@ -12,7 +12,6 @@ import time
 from typing import Any
 
 import ollama
-from pydantic import BaseModel, Field
 
 from memory.mode_database import ModeDatabase
 from memory.story_state import Character, StoryState
@@ -31,80 +30,6 @@ from settings import Settings
 from utils.exceptions import WorldGenerationError
 from utils.json_parser import extract_json
 from utils.validation import validate_not_empty
-
-# Pydantic models for entity generation
-
-
-class GeneratedCharacter(BaseModel):
-    """A generated character entity."""
-
-    name: str
-    role: str
-    description: str
-    personality_traits: list[str] = Field(default_factory=list)
-    goals: list[str] = Field(default_factory=list)
-    flaws: list[str] = Field(default_factory=list)
-    backstory: str = ""
-
-
-class GeneratedLocation(BaseModel):
-    """A generated location entity."""
-
-    name: str
-    type: str = "location"
-    description: str
-    atmosphere: str = ""
-    significance: str = ""
-    sensory_details: list[str] = Field(default_factory=list)
-    story_hooks: list[str] = Field(default_factory=list)
-
-
-class GeneratedFaction(BaseModel):
-    """A generated faction entity."""
-
-    name: str
-    type: str = "faction"
-    description: str
-    beliefs: str = ""
-    goals: list[str] = Field(default_factory=list)
-    structure: str = ""
-    notable_members: list[str] = Field(default_factory=list)
-    story_hooks: list[str] = Field(default_factory=list)
-
-
-class GeneratedItem(BaseModel):
-    """A generated item entity."""
-
-    name: str
-    type: str = "item"
-    description: str
-    origin: str = ""
-    significance: str = ""
-    properties: list[str] = Field(default_factory=list)
-    story_hooks: list[str] = Field(default_factory=list)
-
-
-class GeneratedConcept(BaseModel):
-    """A generated concept entity."""
-
-    name: str
-    type: str = "concept"
-    description: str
-    manifestation: str = ""
-    implications: list[str] = Field(default_factory=list)
-    story_hooks: list[str] = Field(default_factory=list)
-
-
-class GeneratedRelationship(BaseModel):
-    """A generated relationship entity."""
-
-    source: str
-    target: str
-    relation_type: str
-    description: str
-    dynamics: str = ""
-    history: str = ""
-
 
 logger = logging.getLogger(__name__)
 
@@ -388,56 +313,25 @@ Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
 
 Rate each dimension 0-10:
-- DEPTH: Psychological complexity, internal contradictions, layers
-- GOALS: Clarity, story relevance, want vs need tension
-- FLAWS: Meaningful vulnerabilities that drive conflict
-- UNIQUENESS: Distinctiveness from genre archetypes
-- ARC_POTENTIAL: Room for transformation and growth
+- depth: Psychological complexity, internal contradictions, layers
+- goals: Clarity, story relevance, want vs need tension
+- flaws: Meaningful vulnerabilities that drive conflict
+- uniqueness: Distinctiveness from genre archetypes
+- arc_potential: Room for transformation and growth
 
-Provide specific, actionable feedback for improvement.
+Provide specific, actionable feedback for improvement in the feedback field.
 
-IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
-
-Output ONLY valid JSON:
-{{"depth": <your_score>, "goals": <your_score>, "flaws": <your_score>, "uniqueness": <your_score>, "arc_potential": <your_score>, "feedback": "<your_specific_feedback>"}}"""
+IMPORTANT: Evaluate honestly - provide YOUR OWN assessment scores."""
 
         try:
             model = self._get_judge_model()
-            response = self.client.generate(
+            return generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_character_judge,
-                },
+                response_model=CharacterQualityScores,
+                temperature=temperature,
             )
-
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                # Validate all required fields are present
-                required_fields = ["depth", "goals", "flaws", "uniqueness", "arc_potential"]
-                missing = [f for f in required_fields if f not in data]
-                if missing:
-                    raise WorldGenerationError(
-                        f"Character judge response missing required fields: {missing}"
-                    )
-
-                return CharacterQualityScores(
-                    depth=float(data["depth"]),
-                    goals=float(data["goals"]),
-                    flaws=float(data["flaws"]),
-                    uniqueness=float(data["uniqueness"]),
-                    arc_potential=float(data["arc_potential"]),
-                    feedback=data.get("feedback", ""),
-                )
-
-            raise WorldGenerationError(
-                f"Failed to extract JSON from judge response: {response['response'][:200]}..."
-            )
-
-        except WorldGenerationError:
-            raise
         except Exception as e:
             logger.exception(f"Character quality judgment failed: {e}")
             raise WorldGenerationError(f"Character quality judgment failed: {e}") from e
@@ -484,57 +378,22 @@ FEEDBACK: {scores.feedback}
 
 WEAK AREAS TO IMPROVE: {", ".join(weak) if weak else "None - minor improvements only"}
 
-Keep the name and role, but enhance the weak areas.
+Keep the name "{character.name}" and role "{character.role}", but enhance the weak areas.
 Make the character more compelling while maintaining consistency.
-
-Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
-{{
-    "name": "{character.name}",
-    "role": "{character.role}",
-    "description": "Improved description",
-    "personality_traits": ["improved", "traits"],
-    "goals": ["improved goals"],
-    "relationships": {{}},
-    "arc_notes": "Improved arc notes"
-}}"""
+Write all text in {brief.language if brief else "English"}."""
 
         try:
             model = self._get_creator_model()
-            response = self.client.generate(
+            return generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_character_refine,
-                },
+                response_model=Character,
+                temperature=temperature,
             )
-
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                return Character(
-                    name=data.get("name", character.name),
-                    role=data.get("role", character.role),
-                    description=data.get("description", character.description),
-                    personality_traits=data.get("personality_traits", character.personality_traits),
-                    goals=data.get("goals", character.goals),
-                    relationships=data.get("relationships", character.relationships),
-                    arc_notes=data.get("arc_notes", character.arc_notes),
-                )
-            else:
-                logger.error(f"Character refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid character refinement JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Character refinement LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during character refinement: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Character refinement JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid character refinement response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
         except Exception as e:
-            logger.exception(f"Unexpected error in character refinement: {e}")
-            raise WorldGenerationError(f"Unexpected character refinement error: {e}") from e
+            logger.exception(f"Character refinement failed: {e}")
+            raise WorldGenerationError(f"Character refinement failed: {e}") from e
 
     # ========== LOCATION GENERATION WITH QUALITY ==========
 
@@ -713,59 +572,24 @@ Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
 
 Rate each dimension 0-10:
-- ATMOSPHERE: Sensory richness, mood, immersion
-- SIGNIFICANCE: Plot or symbolic meaning
-- STORY_RELEVANCE: Connections to themes and characters
-- DISTINCTIVENESS: Memorable, unique qualities
+- atmosphere: Sensory richness, mood, immersion
+- significance: Plot or symbolic meaning
+- story_relevance: Connections to themes and characters
+- distinctiveness: Memorable, unique qualities
 
-Provide specific improvement feedback.
+Provide specific improvement feedback in the feedback field.
 
-IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
-
-Output ONLY valid JSON:
-{{"atmosphere": <your_score>, "significance": <your_score>, "story_relevance": <your_score>, "distinctiveness": <your_score>, "feedback": "<your_specific_feedback>"}}"""
+IMPORTANT: Evaluate honestly - provide YOUR OWN assessment scores."""
 
         try:
             model = self._get_judge_model()
-            response = self.client.generate(
+            return generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_location_judge,
-                },
+                response_model=LocationQualityScores,
+                temperature=temperature,
             )
-
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                # Validate all required fields are present
-                required_fields = [
-                    "atmosphere",
-                    "significance",
-                    "story_relevance",
-                    "distinctiveness",
-                ]
-                missing = [f for f in required_fields if f not in data]
-                if missing:
-                    raise WorldGenerationError(
-                        f"Location judge response missing required fields: {missing}"
-                    )
-
-                return LocationQualityScores(
-                    atmosphere=float(data["atmosphere"]),
-                    significance=float(data["significance"]),
-                    story_relevance=float(data["story_relevance"]),
-                    distinctiveness=float(data["distinctiveness"]),
-                    feedback=data.get("feedback", ""),
-                )
-
-            raise WorldGenerationError(
-                f"Failed to extract JSON from location judge response: {response['response'][:200]}..."
-            )
-
-        except WorldGenerationError:
-            raise
         except Exception as e:
             logger.exception(f"Location quality judgment failed: {e}")
             raise WorldGenerationError(f"Location quality judgment failed: {e}") from e

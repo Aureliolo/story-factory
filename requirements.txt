@@ -1,7 +1,7 @@
 # Runtime dependencies
 ollama==0.6.1
-instructor>=1.7.2
-openai>=2.15.0
+instructor==1.14.4
+openai==2.15.0
 nicegui==3.5.0
 pydantic==2.12.5
 networkx==3.6.1
