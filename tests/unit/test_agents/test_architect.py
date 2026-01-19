@@ -247,17 +247,13 @@ class TestArchitectCreateChapterOutline:
     """Tests for create_chapter_outline method."""
 
     def test_creates_correct_number_of_chapters(self, architect, sample_story_state):
-        """Test creates chapters based on target length."""
-        # Novella should create 7 chapters
+        """Test creates chapters based on target length (uses settings value)."""
+        # Novella should create chapters_novella chapters (default 10)
+        num_chapters = architect.settings.chapters_novella
         mock_result = ChapterList(
             chapters=[
-                Chapter(number=1, title="The Letter", outline="Oliver receives the invitation"),
-                Chapter(number=2, title="The Journey", outline="Travel to the hidden academy"),
-                Chapter(number=3, title="First Day", outline="Introduction to the magical world"),
-                Chapter(number=4, title="The Discovery", outline="Oliver finds his unique power"),
-                Chapter(number=5, title="The Training", outline="Intensive magical training"),
-                Chapter(number=6, title="The Revelation", outline="Dark secrets are revealed"),
-                Chapter(number=7, title="The Final Test", outline="Oliver faces his challenge"),
+                Chapter(number=i + 1, title=f"Chapter {i + 1}", outline=f"Outline {i + 1}")
+                for i in range(num_chapters)
             ]
         )
         sample_story_state.plot_summary = "An epic journey of discovery"
@@ -269,16 +265,18 @@ class TestArchitectCreateChapterOutline:
 
         chapters = architect.create_chapter_outline(sample_story_state)
 
-        assert len(chapters) == 7
-        assert chapters[0].title == "The Letter"
-        assert chapters[6].number == 7
+        assert len(chapters) == num_chapters
+        assert chapters[0].title == "Chapter 1"
+        assert chapters[-1].number == num_chapters
 
-    def test_short_story_creates_one_chapter(self, architect, sample_story_state):
-        """Test short story creates single chapter."""
+    def test_short_story_creates_chapters(self, architect, sample_story_state):
+        """Test short story creates chapters_short_story chapters (uses settings value)."""
         sample_story_state.brief.target_length = "short_story"
+        num_chapters = architect.settings.chapters_short_story
         mock_result = ChapterList(
             chapters=[
-                Chapter(number=1, title="The Complete Story", outline="The entire narrative in one")
+                Chapter(number=i + 1, title=f"Part {i + 1}", outline=f"Outline {i + 1}")
+                for i in range(num_chapters)
             ]
         )
         sample_story_state.plot_summary = "A complete story"
@@ -288,7 +286,7 @@ class TestArchitectCreateChapterOutline:
 
         chapters = architect.create_chapter_outline(sample_story_state)
 
-        assert len(chapters) == 1
+        assert len(chapters) == num_chapters
 
     def test_iteratively_generates_chapters_when_needed(self, architect, sample_story_state):
         """Test generates chapters iteratively if LLM returns fewer than needed."""
@@ -298,31 +296,31 @@ class TestArchitectCreateChapterOutline:
             Character(name="Hero", role="protagonist", description="Main")
         ]
 
-        # First call returns 3 chapters, second call returns 4 more
+        num_chapters = architect.settings.chapters_novella  # Default target for novella
+        half = num_chapters // 2
+        remaining = num_chapters - half
+
+        # First call returns half chapters, second call returns the remaining
         first_result = ChapterList(
             chapters=[
-                Chapter(number=1, title="Ch1", outline="First"),
-                Chapter(number=2, title="Ch2", outline="Second"),
-                Chapter(number=3, title="Ch3", outline="Third"),
+                Chapter(number=i + 1, title=f"Ch{i + 1}", outline=f"Outline {i + 1}")
+                for i in range(half)
             ]
         )
         second_result = ChapterList(
             chapters=[
-                Chapter(number=1, title="Ch4", outline="Fourth"),
-                Chapter(number=2, title="Ch5", outline="Fifth"),
-                Chapter(number=3, title="Ch6", outline="Sixth"),
-                Chapter(number=4, title="Ch7", outline="Seventh"),
+                Chapter(number=i + 1, title=f"Ch{half + i + 1}", outline=f"Outline {half + i + 1}")
+                for i in range(remaining)
             ]
         )
         architect.generate_structured = MagicMock(side_effect=[first_result, second_result])
 
         chapters = architect.create_chapter_outline(sample_story_state)
 
-        assert len(chapters) == 7
+        assert len(chapters) == num_chapters
         # Check that chapters are properly renumbered
         assert chapters[0].number == 1
-        assert chapters[3].number == 4
-        assert chapters[6].number == 7
+        assert chapters[-1].number == num_chapters
         # Should have been called twice
         assert architect.generate_structured.call_count == 2
 
@@ -345,44 +343,51 @@ class TestArchitectCreateChapterOutline:
 
     def test_handles_zero_chapters_iteration(self, architect, sample_story_state):
         """Test handles iteration where LLM returns 0 chapters and retries."""
-        sample_story_state.brief.target_length = "short_story"  # Only needs 1 chapter
+        sample_story_state.brief.target_length = "short_story"
         sample_story_state.plot_summary = "A short story"
         sample_story_state.plot_points = []
         sample_story_state.characters = []
 
-        # First call returns 0, second call returns 1
+        num_chapters = architect.settings.chapters_short_story
+
+        # First call returns 0, second call returns the needed chapters
         empty_result = ChapterList(chapters=[])
         success_result = ChapterList(
-            chapters=[Chapter(number=1, title="The Story", outline="Complete")]
+            chapters=[
+                Chapter(number=i + 1, title=f"Part {i + 1}", outline=f"Outline {i + 1}")
+                for i in range(num_chapters)
+            ]
         )
         architect.generate_structured = MagicMock(side_effect=[empty_result, success_result])
 
         chapters = architect.create_chapter_outline(sample_story_state)
 
-        assert len(chapters) == 1
+        assert len(chapters) == num_chapters
         assert architect.generate_structured.call_count == 2
 
     def test_trims_excess_chapters_to_target(self, architect, sample_story_state):
         """Test trims chapters if LLM returns more than needed."""
-        sample_story_state.brief.target_length = "short_story"  # Only needs 1 chapter
+        sample_story_state.brief.target_length = "short_story"
         sample_story_state.plot_summary = "A short story"
         sample_story_state.plot_points = []
         sample_story_state.characters = []
 
-        # LLM returns 3 chapters when only 1 is needed
+        num_chapters = architect.settings.chapters_short_story
+        excess = num_chapters + 5  # Return more than needed
+
+        # LLM returns more chapters than needed
         mock_result = ChapterList(
             chapters=[
-                Chapter(number=1, title="Ch1", outline="First"),
-                Chapter(number=2, title="Ch2", outline="Second"),
-                Chapter(number=3, title="Ch3", outline="Third"),
+                Chapter(number=i + 1, title=f"Ch{i + 1}", outline=f"Outline {i + 1}")
+                for i in range(excess)
             ]
         )
         architect.generate_structured = MagicMock(return_value=mock_result)
 
         chapters = architect.create_chapter_outline(sample_story_state)
 
-        # Should trim to 1 chapter
-        assert len(chapters) == 1
+        # Should trim to target
+        assert len(chapters) == num_chapters
         assert chapters[0].title == "Ch1"
         # Only called once since first call returned enough
         assert architect.generate_structured.call_count == 1
