@@ -652,6 +652,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_location_refine,
@@ -992,6 +993,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_relationship_refine,
@@ -1724,6 +1726,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_item_refine,
@@ -2015,6 +2018,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
+                format="json",
                 options={
                     "temperature": temperature,
                     "num_predict": self.settings.llm_tokens_concept_refine,

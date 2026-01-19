@@ -436,6 +436,40 @@ class TestArchitectCreateChapterOutline:
         # Should use project-specific count, not novella default
         assert len(chapters) == 5
 
+    def test_unknown_target_length_falls_back_to_novella(
+        self, architect, sample_story_state, caplog
+    ):
+        """Test unknown target_length logs warning and uses novella chapter count."""
+        import logging
+
+        # Set an unknown target_length
+        sample_story_state.brief.target_length = "epic_saga"
+        sample_story_state.target_chapters = None  # Force length-based lookup
+        sample_story_state.plot_summary = "An unknown format story"
+        sample_story_state.plot_points = [PlotPoint(description="Beginning")]
+        sample_story_state.characters = [
+            Character(name="Hero", role="protagonist", description="Main")
+        ]
+
+        num_chapters = architect.settings.chapters_novella
+        mock_result = ChapterList(
+            chapters=[
+                Chapter(number=i + 1, title=f"Chapter {i + 1}", outline=f"Outline {i + 1}")
+                for i in range(num_chapters)
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        with caplog.at_level(logging.WARNING):
+            chapters = architect.create_chapter_outline(sample_story_state)
+
+        # Should use novella chapter count
+        assert len(chapters) == num_chapters
+        # Should log a warning about unknown target_length
+        assert any(
+            "Unknown target_length 'epic_saga'" in record.message for record in caplog.records
+        )
+
 
 class TestArchitectProjectSpecificCharacterCount:
     """Tests for project-specific character count settings."""
