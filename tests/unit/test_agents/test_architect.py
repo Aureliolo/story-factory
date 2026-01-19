@@ -362,6 +362,31 @@ class TestArchitectCreateChapterOutline:
         assert len(chapters) == 1
         assert architect.generate_structured.call_count == 2
 
+    def test_trims_excess_chapters_to_target(self, architect, sample_story_state):
+        """Test trims chapters if LLM returns more than needed."""
+        sample_story_state.brief.target_length = "short_story"  # Only needs 1 chapter
+        sample_story_state.plot_summary = "A short story"
+        sample_story_state.plot_points = []
+        sample_story_state.characters = []
+
+        # LLM returns 3 chapters when only 1 is needed
+        mock_result = ChapterList(
+            chapters=[
+                Chapter(number=1, title="Ch1", outline="First"),
+                Chapter(number=2, title="Ch2", outline="Second"),
+                Chapter(number=3, title="Ch3", outline="Third"),
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_result)
+
+        chapters = architect.create_chapter_outline(sample_story_state)
+
+        # Should trim to 1 chapter
+        assert len(chapters) == 1
+        assert chapters[0].title == "Ch1"
+        # Only called once since first call returned enough
+        assert architect.generate_structured.call_count == 1
+
 
 class TestArchitectBuildStoryStructure:
     """Tests for build_story_structure method."""
