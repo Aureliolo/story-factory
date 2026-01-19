@@ -260,8 +260,17 @@ class BaseAgent:
         context: str | None = None,
         temperature: float | None = None,
         model: str | None = None,
+        min_response_length: int | None = None,
     ) -> str:
         """Generate a response from the agent with retry logic, rate limiting, and performance tracking.
+
+        Args:
+            prompt: The prompt to send to the LLM.
+            context: Optional context to include.
+            temperature: Optional temperature override.
+            model: Optional model override.
+            min_response_length: Minimum response length to accept. Defaults to MIN_RESPONSE_LENGTH.
+                                 Set to 1 for agents that expect very short responses (e.g., Validator).
 
         Uses a semaphore to limit concurrent LLM requests and prevent overloading
         the Ollama server.
@@ -283,6 +292,9 @@ class BaseAgent:
         messages.append({"role": "user", "content": prompt})
 
         use_temp = temperature or self.temperature
+        use_min_length = (
+            min_response_length if min_response_length is not None else MIN_RESPONSE_LENGTH
+        )
 
         last_error: Exception | None = None
         delay = self.settings.llm_retry_delay
@@ -316,10 +328,10 @@ class BaseAgent:
 
                         # Validate response isn't just thinking tokens or truncated
                         cleaned_content = clean_llm_text(content)
-                        if len(cleaned_content) < MIN_RESPONSE_LENGTH:
+                        if len(cleaned_content) < use_min_length:
                             logger.warning(
                                 f"{self.name}: Response too short after cleaning "
-                                f"({len(cleaned_content)} chars < {MIN_RESPONSE_LENGTH}), "
+                                f"({len(cleaned_content)} chars < {use_min_length}), "
                                 f"raw: {content[:50]!r}..."
                             )
                             if attempt < max_retries - 1:
@@ -328,11 +340,13 @@ class BaseAgent:
                                 delay *= self.settings.llm_retry_backoff
                                 continue  # Retry
                             else:
-                                # Last attempt - return what we have
-                                logger.warning(
-                                    f"{self.name}: Returning short response after all retries"
+                                # Last attempt - raise error, don't return garbage
+                                error_msg = (
+                                    f"{self.name}: Response too short after {max_retries} attempts "
+                                    f"({len(cleaned_content)} chars < {use_min_length})"
                                 )
-                                return content
+                                logger.error(error_msg)
+                                raise LLMGenerationError(error_msg)
 
                         return content
 

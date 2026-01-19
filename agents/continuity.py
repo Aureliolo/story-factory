@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from memory.story_state import StoryState
 from settings import Settings
+from utils.exceptions import LLMGenerationError
 from utils.validation import validate_not_empty, validate_not_none, validate_positive, validate_type
 
 from .base import BaseAgent
@@ -189,9 +190,11 @@ Return a list of issues found. If no issues, return an empty list."""
         try:
             result = self.generate_structured(prompt, ContinuityIssueList)
             issues = result.issues
+        except LLMGenerationError:  # pragma: no cover
+            raise  # Re-raise LLM errors directly
         except Exception as e:
-            logger.warning(f"Structured generation failed, returning empty issues: {e}")
-            issues = []
+            logger.error(f"Structured generation failed for continuity check: {e}")
+            raise LLMGenerationError(f"Failed to check continuity: {e}") from e
 
         # Perform voice consistency check if requested
         if check_voice and story_state.characters:
@@ -249,9 +252,11 @@ Only include characters who actually speak in this chapter."""
             patterns = {p.character_name: p for p in result.patterns if p.character_name}
             logger.debug("Extracted dialogue patterns for %d characters", len(patterns))
             return patterns
+        except LLMGenerationError:  # pragma: no cover
+            raise  # Re-raise LLM errors directly
         except Exception as e:
-            logger.warning(f"Structured generation failed for dialogue patterns: {e}")
-            return {}
+            logger.error(f"Structured generation failed for dialogue patterns: {e}")
+            raise LLMGenerationError(f"Failed to extract dialogue patterns: {e}") from e
 
     def check_character_voice(
         self,
@@ -321,9 +326,11 @@ Return voice inconsistencies found. Set category to "voice". If no issues, retur
                 temperature=self.settings.temp_plot_checking,
             )
             return result.issues
+        except LLMGenerationError:  # pragma: no cover
+            raise  # Re-raise LLM errors directly
         except Exception as e:
-            logger.warning(f"Structured generation failed for voice check: {e}")
-            return []
+            logger.error(f"Structured generation failed for voice check: {e}")
+            raise LLMGenerationError(f"Failed to check character voice: {e}") from e
 
     def check_full_story(
         self, story_state: StoryState, check_voice: bool = True
@@ -378,9 +385,11 @@ Return a list of issues found. If no issues, return an empty list."""
         try:
             result = self.generate_structured(prompt, ContinuityIssueList)
             issues = result.issues
+        except LLMGenerationError:  # pragma: no cover
+            raise  # Re-raise LLM errors directly
         except Exception as e:
-            logger.warning(f"Structured generation failed for full story check: {e}")
-            issues = []
+            logger.error(f"Structured generation failed for full story check: {e}")
+            raise LLMGenerationError(f"Failed to check full story: {e}") from e
 
         # Perform voice consistency check if requested
         if check_voice and story_state.characters and full_content:
@@ -420,9 +429,11 @@ If no issues, return an empty list."""
         try:
             result = self.generate_structured(prompt, ContinuityIssueList)
             return result.issues
+        except LLMGenerationError:  # pragma: no cover
+            raise  # Re-raise LLM errors directly
         except Exception as e:
-            logger.warning(f"Structured generation failed for outline validation: {e}")
-            return []
+            logger.error(f"Structured generation failed for outline validation: {e}")
+            raise LLMGenerationError(f"Failed to validate outline: {e}") from e
 
     def extract_new_facts(
         self,
