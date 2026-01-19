@@ -6,10 +6,20 @@ from unittest.mock import MagicMock, patch
 
 import ollama
 import pytest
+from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent
 from settings import Settings
 from utils.exceptions import LLMGenerationError
+
+
+# Test model for structured output tests
+class TestOutputModel(BaseModel):
+    """Test model for structured output."""
+
+    name: str
+    count: int = 0
+    items: list[str] = Field(default_factory=list)
 
 
 class MockedBaseAgent(BaseAgent):
@@ -447,3 +457,136 @@ class TestBaseAgentRepr:
 
         assert "TestAgent" in repr_str
         assert "test-model:7b" in repr_str
+
+
+class TestBaseAgentGenerateStructured:
+    """Tests for generate_structured method with Instructor."""
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_returns_model_instance(self, mock_from_openai, mock_openai_class):
+        """Test generate_structured returns validated Pydantic model instance."""
+        # Setup mock instructor client
+        mock_instructor = MagicMock()
+        mock_response = TestOutputModel(name="Test", count=5, items=["a", "b"])
+        mock_instructor.chat.completions.create.return_value = mock_response
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent()
+        result = agent.generate_structured("Test prompt", TestOutputModel)
+
+        assert isinstance(result, TestOutputModel)
+        assert result.name == "Test"
+        assert result.count == 5
+        assert result.items == ["a", "b"]
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_uses_low_temperature_by_default(
+        self, mock_from_openai, mock_openai_class
+    ):
+        """Test generate_structured uses low temperature for schema adherence."""
+        mock_instructor = MagicMock()
+        mock_instructor.chat.completions.create.return_value = TestOutputModel(name="Test")
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent()
+        agent.generate_structured("Test prompt", TestOutputModel)
+
+        # Check the call was made with low temperature
+        call_args = mock_instructor.chat.completions.create.call_args
+        assert call_args.kwargs["temperature"] == 0.1
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_allows_custom_temperature(
+        self, mock_from_openai, mock_openai_class
+    ):
+        """Test generate_structured accepts custom temperature."""
+        mock_instructor = MagicMock()
+        mock_instructor.chat.completions.create.return_value = TestOutputModel(name="Test")
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent()
+        agent.generate_structured("Test prompt", TestOutputModel, temperature=0.5)
+
+        call_args = mock_instructor.chat.completions.create.call_args
+        assert call_args.kwargs["temperature"] == 0.5
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_includes_context(self, mock_from_openai, mock_openai_class):
+        """Test generate_structured includes context in messages."""
+        mock_instructor = MagicMock()
+        mock_instructor.chat.completions.create.return_value = TestOutputModel(name="Test")
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent()
+        agent.generate_structured("Test prompt", TestOutputModel, context="Story context here")
+
+        call_args = mock_instructor.chat.completions.create.call_args
+        messages = call_args.kwargs["messages"]
+        context_found = any("CURRENT STORY CONTEXT" in m.get("content", "") for m in messages)
+        assert context_found
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_adds_no_think_for_qwen(self, mock_from_openai, mock_openai_class):
+        """Test generate_structured adds /no_think for Qwen models."""
+        mock_instructor = MagicMock()
+        mock_instructor.chat.completions.create.return_value = TestOutputModel(name="Test")
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent(model="qwen2.5:7b")
+        agent.generate_structured("Test prompt", TestOutputModel)
+
+        call_args = mock_instructor.chat.completions.create.call_args
+        messages = call_args.kwargs["messages"]
+        system_msg = messages[0]["content"]
+        assert "/no_think" in system_msg
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_raises_on_error(self, mock_from_openai, mock_openai_class):
+        """Test generate_structured raises LLMGenerationError on failure."""
+        mock_instructor = MagicMock()
+        mock_instructor.chat.completions.create.side_effect = Exception("API error")
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent()
+
+        with pytest.raises(LLMGenerationError, match="Structured generation failed"):
+            agent.generate_structured("Test prompt", TestOutputModel)
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_caches_instructor_client(
+        self, mock_from_openai, mock_openai_class
+    ):
+        """Test generate_structured caches the instructor client."""
+        mock_instructor = MagicMock()
+        mock_instructor.chat.completions.create.return_value = TestOutputModel(name="Test")
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent()
+
+        # Call twice
+        agent.generate_structured("Prompt 1", TestOutputModel)
+        agent.generate_structured("Prompt 2", TestOutputModel)
+
+        # Instructor client should only be created once
+        assert mock_from_openai.call_count == 1
+
+    @patch("agents.base.OpenAI")
+    @patch("agents.base.instructor.from_openai")
+    def test_generate_structured_passes_max_retries(self, mock_from_openai, mock_openai_class):
+        """Test generate_structured passes max_retries to instructor."""
+        mock_instructor = MagicMock()
+        mock_instructor.chat.completions.create.return_value = TestOutputModel(name="Test")
+        mock_from_openai.return_value = mock_instructor
+
+        agent = create_mock_agent()
+        agent.generate_structured("Test prompt", TestOutputModel, max_retries=5)
+
+        call_args = mock_instructor.chat.completions.create.call_args
+        assert call_args.kwargs["max_retries"] == 5

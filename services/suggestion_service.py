@@ -2,13 +2,38 @@
 
 import logging
 
+from pydantic import BaseModel, Field
+
 from agents.base import BaseAgent
 from memory.story_state import StoryState
 from settings import Settings
 from utils.exceptions import SuggestionError
-from utils.json_parser import extract_json
 
 logger = logging.getLogger(__name__)
+
+
+# Pydantic models for structured outputs
+
+
+class WritingSuggestions(BaseModel):
+    """Multi-category writing suggestions."""
+
+    plot: list[str] = Field(default_factory=list)
+    character: list[str] = Field(default_factory=list)
+    scene: list[str] = Field(default_factory=list)
+    transition: list[str] = Field(default_factory=list)
+
+
+class CategorySuggestions(BaseModel):
+    """Single category writing suggestions."""
+
+    suggestions: list[str]
+
+
+class ProjectNames(BaseModel):
+    """Generated project name suggestions."""
+
+    titles: list[str]
 
 
 class SuggestionService:
@@ -87,74 +112,41 @@ Always return your response as valid JSON."""
 
         # Generate prompt
         if category:
-            prompt = f"Generate 3-5 {category} prompts based on this story context:\n\n{context}"
-            categories = [category]
+            prompt = f"""Generate 3-5 {category} prompts based on this story context.
+
+Story Context:
+{context}
+
+Each suggestion should be 1-2 sentences, specific to this story."""
         else:
             prompt = f"""Generate creative writing suggestions for this story across all categories.
 
 Story Context:
 {context}
 
-Return a JSON object with these keys:
-- "plot": Array of 3-4 "what if" scenarios or plot complications
-- "character": Array of 3-4 character action or development suggestions
-- "scene": Array of 3-4 scene atmosphere or tension ideas
-- "transition": Array of 2-3 scene/chapter transition suggestions
+Generate:
+- plot: 3-4 "what if" scenarios or plot complications
+- character: 3-4 character action or development suggestions
+- scene: 3-4 scene atmosphere or tension ideas
+- transition: 2-3 scene/chapter transition suggestions
 
 Each suggestion should be 1-2 sentences, specific to this story."""
-            categories = ["plot", "character", "scene", "transition"]
 
         try:
-            # Call LLM
             agent = self._get_agent()
-            response = agent.generate(prompt)
 
-            logger.debug(f"Raw suggestion response: {response[:200]}...")
-
-            # Parse JSON response - use strict=False to handle failure with SuggestionError
-            suggestions_data = extract_json(response, strict=False)
-
-            if not suggestions_data:
-                logger.error("Failed to extract JSON from suggestions response")
-                raise SuggestionError("Failed to parse AI response for writing suggestions")
-
-            # Validate structure
             if category:
-                # Single category response - wrap in dict
-                if isinstance(suggestions_data, list):
-                    return {category: suggestions_data}
-                elif isinstance(suggestions_data, dict) and category in suggestions_data:
-                    return {category: suggestions_data[category]}
-                else:
-                    logger.error(f"Unexpected response structure for category {category}")
-                    raise SuggestionError(
-                        f"AI returned unexpected format for {category} suggestions"
-                    )
+                cat_result = agent.generate_structured(prompt, CategorySuggestions)
+                return {category: cat_result.suggestions}
             else:
-                # Multi-category response
-                if not isinstance(suggestions_data, dict):
-                    logger.error("Expected dict for multi-category suggestions")
-                    raise SuggestionError("AI returned unexpected format for suggestions")
+                all_result = agent.generate_structured(prompt, WritingSuggestions)
+                return {
+                    "plot": all_result.plot,
+                    "character": all_result.character,
+                    "scene": all_result.scene,
+                    "transition": all_result.transition,
+                }
 
-                # Ensure all expected categories are present
-                result = {}
-                missing_categories = []
-                for cat in categories:
-                    if cat in suggestions_data and isinstance(suggestions_data[cat], list):
-                        result[cat] = suggestions_data[cat]
-                    else:
-                        missing_categories.append(cat)
-
-                if missing_categories:
-                    logger.error(f"Missing categories in response: {missing_categories}")
-                    raise SuggestionError(
-                        f"AI response missing categories: {', '.join(missing_categories)}"
-                    )
-
-                return result
-
-        except SuggestionError:
-            raise
         except Exception as e:
             logger.exception("Failed to generate suggestions")
             raise SuggestionError(f"Failed to generate writing suggestions: {e}") from e
@@ -276,38 +268,16 @@ Requirements:
 - Mix different styles: some short and punchy, some poetic, some mysterious
 - Avoid generic titles like "The Journey" or "A New Beginning"
 - Consider the genre and tone when crafting titles
-- Each title should feel like it could be a published book title
-
-Return ONLY a JSON array of strings, with {count} title suggestions.
-Example format: ["Title One", "Title Two", "Title Three"]
-
-Do not include any explanation, just the JSON array."""
+- Each title should feel like it could be a published book title"""
 
         try:
             agent = self._get_agent()
-            response = agent.generate(prompt)
+            result = agent.generate_structured(prompt, ProjectNames)
 
-            logger.debug(f"Raw name suggestions response: {response[:200]}...")
+            names = [s.strip() for s in result.titles if s and s.strip()]
+            logger.info(f"Generated {len(names)} project name suggestions")
+            return names[:count]
 
-            # Parse JSON response - use strict=False to handle failure with SuggestionError
-            suggestions = extract_json(response, strict=False)
-
-            if not suggestions:
-                logger.error("Failed to extract JSON from name suggestions response")
-                raise SuggestionError("Failed to parse AI response for project names")
-
-            # Validate it's a list of strings
-            if isinstance(suggestions, list):
-                names = [str(s).strip() for s in suggestions if s and str(s).strip()]
-                if names:
-                    logger.info(f"Generated {len(names)} project name suggestions")
-                    return names[:count]
-
-            logger.error("Unexpected response structure for name suggestions")
-            raise SuggestionError("AI returned unexpected format for project names")
-
-        except SuggestionError:
-            raise
         except Exception as e:
             logger.exception("Failed to generate project name suggestions")
             raise SuggestionError(f"Failed to generate project names: {e}") from e
