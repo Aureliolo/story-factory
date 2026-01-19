@@ -639,6 +639,7 @@ class WorldPage:
                         if not self.state.world_db or not self.state.project:
                             ui.notify("No project loaded", type="negative")
                             return
+                        added_names = []
                         for char, scores in selected:
                             attrs = {
                                 "role": char.role,
@@ -658,6 +659,7 @@ class WorldPage:
                             )
                             # Also add to story state
                             self.state.project.characters.append(char)
+                            added_names.append(char.name)
                         # Refresh UI and save
                         self.state.world_db.invalidate_graph_cache()
                         self._refresh_entity_list()
@@ -671,6 +673,8 @@ class WorldPage:
                             f"Added {len(selected)} characters (avg quality: {avg_quality:.1f})",
                             type="positive",
                         )
+                        # Prompt for relationship generation
+                        self._prompt_for_relationships_after_add(added_names)
 
                     # Show preview dialog
                     self._show_entity_preview_dialog("character", results, add_selected_characters)
@@ -752,6 +756,7 @@ class WorldPage:
                         if not self.state.world_db or not self.state.project:
                             ui.notify("No project loaded", type="negative")
                             return
+                        added_names = []
                         for loc, scores in selected:
                             if isinstance(loc, dict) and "name" in loc:
                                 attrs = {
@@ -767,6 +772,7 @@ class WorldPage:
                                     description=loc.get("description", ""),
                                     attributes=attrs,
                                 )
+                                added_names.append(loc["name"])
                         # Refresh UI and save
                         self.state.world_db.invalidate_graph_cache()
                         self._refresh_entity_list()
@@ -780,6 +786,8 @@ class WorldPage:
                             f"Added {len(selected)} locations (avg quality: {avg_quality:.1f})",
                             type="positive",
                         )
+                        # Prompt for relationship generation
+                        self._prompt_for_relationships_after_add(added_names)
 
                     # Show preview dialog
                     self._show_entity_preview_dialog(
@@ -873,6 +881,7 @@ class WorldPage:
                         if not self.state.world_db or not self.state.project:
                             ui.notify("No project loaded", type="negative")
                             return
+                        added_names = []
                         for faction, scores in selected:
                             if isinstance(faction, dict) and "name" in faction:
                                 attrs = {
@@ -891,6 +900,7 @@ class WorldPage:
                                     description=faction.get("description", ""),
                                     attributes=attrs,
                                 )
+                                added_names.append(faction["name"])
                                 # Create relationship to base location if it exists
                                 base_loc = faction.get("base_location", "")
                                 if base_loc:
@@ -926,6 +936,8 @@ class WorldPage:
                             f"Added {len(selected)} factions (avg quality: {avg_quality:.1f})",
                             type="positive",
                         )
+                        # Prompt for relationship generation
+                        self._prompt_for_relationships_after_add(added_names)
 
                     # Show preview dialog
                     self._show_entity_preview_dialog(
@@ -989,6 +1001,7 @@ class WorldPage:
                         if not self.state.world_db or not self.state.project:
                             ui.notify("No project loaded", type="negative")
                             return
+                        added_names = []
                         for item, scores in selected:
                             if isinstance(item, dict) and "name" in item:
                                 attrs = {
@@ -1005,6 +1018,7 @@ class WorldPage:
                                     description=item.get("description", ""),
                                     attributes=attrs,
                                 )
+                                added_names.append(item["name"])
                         # Refresh UI and save
                         self.state.world_db.invalidate_graph_cache()
                         self._refresh_entity_list()
@@ -1018,6 +1032,8 @@ class WorldPage:
                             f"Added {len(selected)} items (avg quality: {avg_quality:.1f})",
                             type="positive",
                         )
+                        # Prompt for relationship generation
+                        self._prompt_for_relationships_after_add(added_names)
 
                     # Show preview dialog
                     self._show_entity_preview_dialog("item", item_results, add_selected_items)
@@ -1081,6 +1097,7 @@ class WorldPage:
                         if not self.state.world_db or not self.state.project:
                             ui.notify("No project loaded", type="negative")
                             return
+                        added_names = []
                         for concept, scores in selected:
                             if isinstance(concept, dict) and "name" in concept:
                                 attrs = {
@@ -1096,6 +1113,7 @@ class WorldPage:
                                     description=concept.get("description", ""),
                                     attributes=attrs,
                                 )
+                                added_names.append(concept["name"])
                         # Refresh UI and save
                         self.state.world_db.invalidate_graph_cache()
                         self._refresh_entity_list()
@@ -1109,6 +1127,8 @@ class WorldPage:
                             f"Added {len(selected)} concepts (avg quality: {avg_quality:.1f})",
                             type="positive",
                         )
+                        # Prompt for relationship generation
+                        self._prompt_for_relationships_after_add(added_names)
 
                     # Show preview dialog
                     self._show_entity_preview_dialog(
@@ -1454,6 +1474,193 @@ class WorldPage:
                     ).props("color=primary")
 
         dialog.open()
+
+    def _prompt_for_relationships_after_add(self, entity_names: list[str]) -> None:
+        """Prompt user to generate relationships for newly added entities.
+
+        Args:
+            entity_names: Names of the newly added entities.
+        """
+        if not entity_names or not self.state.project or not self.state.world_db:
+            return
+
+        logger.info(f"Prompting for relationships for {len(entity_names)} new entities")
+
+        # Use state-based dark mode styling
+        card_bg = "#1f2937" if self.state.dark_mode else "#ffffff"
+        inner_card_bg = "#374151" if self.state.dark_mode else "#f9fafb"
+
+        with (
+            ui.dialog() as dialog,
+            ui.card().classes("w-[450px]").style(f"background-color: {card_bg}"),
+        ):
+            ui.label("Generate Relationships?").classes("text-xl font-bold mb-2")
+            ui.label(
+                f"Would you like to generate relationships for the {len(entity_names)} "
+                "newly added entities?"
+            ).classes("text-gray-600 dark:text-gray-400 mb-4")
+
+            with ui.card().classes("w-full mb-4 p-3").style(f"background-color: {inner_card_bg}"):
+                ui.label("New entities:").classes("font-medium mb-2")
+                for name in entity_names[:5]:  # Show first 5
+                    ui.label(f"• {name}").classes("text-sm")
+                if len(entity_names) > 5:
+                    ui.label(f"... and {len(entity_names) - 5} more").classes(
+                        "text-sm text-gray-500"
+                    )
+
+            # Relationships per entity input
+            ui.label("Relationships per entity:").classes("text-sm mb-1")
+            rel_count = (
+                ui.number(value=2, min=1, max=5, step=1)
+                .props("dense outlined")
+                .classes("w-20 mb-4")
+            )
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Skip", on_click=dialog.close).props("flat")
+
+                async def do_generate_relationships() -> None:
+                    count = int(rel_count.value) if rel_count.value else 2
+                    dialog.close()
+                    await self._generate_relationships_for_entities(entity_names, count)
+
+                ui.button("Generate Relationships", on_click=do_generate_relationships).props(
+                    "color=primary"
+                )
+
+        dialog.open()
+
+    async def _generate_relationships_for_entities(
+        self, entity_names: list[str], count_per_entity: int
+    ) -> None:
+        """Generate relationships for specific entities.
+
+        Args:
+            entity_names: Names of entities to generate relationships for.
+            count_per_entity: Number of relationships to generate per entity.
+        """
+        if not self.state.project or not self.state.world_db:
+            ui.notify("No project loaded", type="negative")
+            return
+
+        logger.info(
+            f"Generating {count_per_entity} relationships for each of {len(entity_names)} entities"
+        )
+
+        # Check if quality refinement is enabled
+        use_quality = (
+            self.state.quality_refinement_enabled and self.services.settings.world_quality_enabled
+        )
+
+        # Get all entity names for relationship generation
+        all_entity_names = self._get_all_entity_names()
+
+        # Get existing relationships to avoid duplicates (use source_id and target_id)
+        existing_rels = [
+            (r.source_id, r.target_id) for r in self.state.world_db.list_relationships()
+        ]
+
+        total_count = len(entity_names) * count_per_entity
+        notification = ui.notification(
+            message=f"Generating relationships for {len(entity_names)} entities...",
+            spinner=True,
+            timeout=None,
+        )
+
+        try:
+            from nicegui import run
+
+            if use_quality:
+                # Generate relationships with quality refinement
+                results = await run.io_bound(
+                    self.services.world_quality.generate_relationships_with_quality,
+                    self.state.project,
+                    all_entity_names,
+                    existing_rels,
+                    total_count,
+                )
+
+                # Check for partial failure
+                if len(results) < total_count:
+                    failed_count = total_count - len(results)
+                    ui.notify(
+                        f"ERROR: {failed_count} of {total_count} relationships FAILED to generate! "
+                        "Check logs for details.",
+                        type="negative",
+                        timeout=10000,
+                        close_button=True,
+                    )
+
+                if len(results) == 0:
+                    notification.dismiss()
+                    ui.notify("Failed to generate any relationships", type="negative")
+                    return
+
+                notification.dismiss()
+
+                # Show preview dialog
+                def add_selected_relationships(selected: list[tuple[Any, Any]]) -> None:
+                    if not selected:
+                        ui.notify("No relationships selected", type="info")
+                        return
+                    if not self.state.world_db:
+                        ui.notify("No world database", type="negative")
+                        return
+
+                    # Get all entities to look up IDs from names
+                    entities = self.state.world_db.list_entities()
+                    added_count = 0
+
+                    for rel_data, _scores in selected:
+                        source_name = rel_data.get("source", "")
+                        target_name = rel_data.get("target", "")
+                        rel_type = rel_data.get("relation_type", "related_to")
+                        desc = rel_data.get("description", "")
+
+                        # Look up entity IDs from names
+                        source_entity = next((e for e in entities if e.name == source_name), None)
+                        target_entity = next((e for e in entities if e.name == target_name), None)
+
+                        if source_entity and target_entity:
+                            self.services.world.add_relationship(
+                                self.state.world_db,
+                                source_id=source_entity.id,
+                                target_id=target_entity.id,
+                                relation_type=rel_type,
+                                description=desc,
+                            )
+                            added_count += 1
+                        else:
+                            logger.warning(
+                                f"Could not find entities for relationship: "
+                                f"{source_name} -> {target_name}"
+                            )
+
+                    self.state.world_db.invalidate_graph_cache()
+                    self._refresh_entity_list()
+                    if self._graph:
+                        self._graph.refresh()
+                    ui.notify(
+                        f"Added {added_count} relationships",
+                        type="positive",
+                    )
+
+                self._show_entity_preview_dialog(
+                    "relationship", results, add_selected_relationships
+                )
+            else:
+                # Non-quality generation - simpler approach
+                notification.dismiss()
+                ui.notify(
+                    "Relationship generation requires quality refinement to be enabled",
+                    type="warning",
+                )
+
+        except Exception as e:
+            notification.dismiss()
+            logger.exception(f"Error generating relationships: {e}")
+            ui.notify(f"Error: {e}", type="negative")
 
     def _confirm_regenerate(self) -> None:
         """Show confirmation dialog before regenerating world."""
