@@ -81,7 +81,7 @@ story-factory = "main:main"
 
 # Setuptools configuration
 [tool.setuptools]
-packages = ["agents", "memory", "services", "ui", "utils", "workflows"]
+packages = {find = {exclude = ["tests*"]}}
 
 [tool.setuptools.package-data]
 ui = ["*.css"]

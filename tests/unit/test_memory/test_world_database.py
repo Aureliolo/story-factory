@@ -12,15 +12,16 @@ from memory.world_database import (
 )
 
 
+@pytest.fixture
+def db(tmp_path) -> Generator[WorldDatabase]:
+    """Create a test database that auto-closes after each test."""
+    database = WorldDatabase(tmp_path / "test.db")
+    yield database
+    database.close()
+
+
 class TestWorldDatabase:
     """Tests for WorldDatabase."""
-
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
 
     def test_create_database(self, tmp_path):
         """Test creating a new database."""
@@ -460,13 +461,6 @@ class TestWorldDatabase:
 class TestWorldDatabaseEvents:
     """Tests for event-related methods."""
 
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
-
     def test_add_event(self, db):
         """Test adding a world event."""
         char_id = db.add_entity("character", "Alice")
@@ -568,13 +562,6 @@ class TestWorldDatabaseEvents:
 
 class TestWorldDatabaseGraphOperations:
     """Tests for graph-related operations."""
-
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
 
     def test_get_graph_returns_digraph(self, sample_world_db):
         """Test get_graph returns a NetworkX DiGraph."""
@@ -751,13 +738,6 @@ class TestWorldDatabaseDestructor:
 class TestWorldDatabaseAddEntityValidation:
     """Tests for add_entity validation."""
 
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
-
     def test_add_entity_invalid_type(self, db):
         """Test add_entity rejects invalid entity type."""
         with pytest.raises(ValueError, match="Invalid entity type"):
@@ -774,13 +754,6 @@ class TestWorldDatabaseAddEntityValidation:
 
 class TestWorldDatabaseRelationshipFeatures:
     """Tests for relationship features."""
-
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
 
     def test_add_relationship_bidirectional(self, db):
         """Test adding bidirectional relationship."""
@@ -836,13 +809,6 @@ class TestWorldDatabaseRelationshipFeatures:
 class TestWorldDatabaseGetRelationships:
     """Tests for get_relationships with different directions."""
 
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
-
     def test_get_relationships_outgoing(self, db):
         """Test get_relationships with outgoing direction."""
         char1 = db.add_entity("character", "Alice")
@@ -884,13 +850,6 @@ class TestWorldDatabaseGetRelationships:
 
 class TestWorldDatabaseUpdateValidation:
     """Tests for update_entity validation edge cases."""
-
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
 
     def test_update_entity_skips_updated_at(self, db):
         """Test update_entity ignores explicit updated_at."""
@@ -946,13 +905,6 @@ class TestWorldDatabaseUpdateValidation:
 class TestWorldDatabaseAddEntityValidationExtra:
     """Additional tests for add_entity validation."""
 
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
-
     def test_add_entity_empty_type(self, db):
         """Test add_entity rejects empty type."""
         with pytest.raises(ValueError, match="Entity type cannot be empty"):
@@ -966,13 +918,6 @@ class TestWorldDatabaseAddEntityValidationExtra:
 
 class TestWorldDatabaseGraphInternal:
     """Tests for internal graph operations."""
-
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
 
     def test_graph_updates_on_add_entity(self, db):
         """Test graph is updated when adding entity after graph is built."""
@@ -1119,13 +1064,6 @@ class TestWorldDatabaseImportExportEvents:
 class TestWorldDatabaseGetMostConnected:
     """Tests for get_most_connected method."""
 
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
-
     def test_get_most_connected_empty(self, db):
         """Test get_most_connected with empty database."""
         result = db.get_most_connected(limit=5)
@@ -1150,13 +1088,6 @@ class TestWorldDatabaseGetMostConnected:
 
 class TestWorldDatabaseGraphInternalExtra:
     """Additional tests for internal graph operations."""
-
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
 
     def test_graph_updates_on_update_entity_type(self, db):
         """Test graph is updated when updating entity type."""
@@ -1235,13 +1166,6 @@ class TestWorldDatabaseGraphInternalExtra:
 class TestWorldDatabaseFindAllPathsNodeNotFound:
     """Tests for find_all_paths with non-existent nodes."""
 
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
-
     def test_find_all_paths_source_not_found(self, db):
         """Test find_all_paths with non-existent source node."""
         char1 = db.add_entity("character", "Alice")
@@ -1263,13 +1187,6 @@ class TestWorldDatabaseFindAllPathsNodeNotFound:
 
 class TestWorldDatabaseGraphEdgeCases:
     """Tests for edge cases in graph operations."""
-
-    @pytest.fixture
-    def db(self, tmp_path) -> Generator[WorldDatabase]:
-        """Create a test database that auto-closes after each test."""
-        db = WorldDatabase(tmp_path / "test.db")
-        yield db
-        db.close()
 
     def test_update_entity_in_graph_entity_not_in_graph(self, db):
         """Test _update_entity_in_graph handles entity not in graph."""
