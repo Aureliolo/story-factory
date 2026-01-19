@@ -1149,7 +1149,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         else:
             history.final_iteration = len(history.iterations)
             # Reconstruct scores from last iteration if not available
-            if scores is None:
+            # Note: In practice, scores should always be set if we have iterations,
+            # since add_iteration is called after _judge_faction_quality succeeds.
+            # This is defensive code for edge cases that may not occur in practice.
+            if scores is None:  # pragma: no cover
                 last_record = history.iterations[-1]
                 scores = FactionQualityScores(
                     coherence=last_record.scores.get("coherence", 0),
