@@ -379,7 +379,7 @@ class TestModelServiceListAvailable:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
-            # Return one installed model that's in AVAILABLE_MODELS
+            # Return one installed model that's in RECOMMENDED_MODELS
             mock_model = MagicMock()
             mock_model.model = "huihui_ai/qwen3-abliterated:8b"
             mock_model.size = 5 * 1024**3
@@ -388,13 +388,13 @@ class TestModelServiceListAvailable:
 
             result = model_service.list_available()
 
-            # Should include models from AVAILABLE_MODELS
+            # Should include models from RECOMMENDED_MODELS
             assert len(result) > 0
             model_ids = [m.model_id for m in result]
             assert "huihui_ai/qwen3-abliterated:8b" in model_ids
 
     def test_includes_unknown_installed_models(self, model_service):
-        """Test includes installed models not in AVAILABLE_MODELS."""
+        """Test includes installed models not in RECOMMENDED_MODELS."""
         with patch("services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
@@ -413,7 +413,7 @@ class TestModelServiceListAvailable:
             assert custom_model is not None
             assert custom_model.installed is True
             assert custom_model.size_gb == 8.0
-            assert custom_model.description == "Custom/unknown model"
+            assert custom_model.description == "Automatically detected model"
 
     def test_matches_variant_models_to_known_base(self, model_service):
         """Test matches variant models (e.g., :latest) to known base models."""
@@ -545,44 +545,80 @@ class TestModelServiceCheckModelUpdateEdgeCases:
 
 
 class TestModelServiceGetRecommendedModel:
-    """Tests for get_recommended_model method."""
+    """Tests for get_recommended_model method.
 
-    def test_recommends_large_model_for_high_vram(self, model_service):
-        """Test recommends 70b model for 24GB+ VRAM."""
+    Since model selection is now fully automatic based on installed models,
+    we test that the selection returns a valid model from the installed set.
+    """
+
+    def test_recommends_model_for_high_vram(self, model_service):
+        """Test recommends a model when VRAM is available."""
         with patch("services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 24
 
-            result = model_service.get_recommended_model()
+            # Mock installed models with sizes
+            with patch(
+                "settings.get_installed_models_with_sizes",
+                return_value={
+                    "large-model:30b": 18.0,
+                    "medium-model:12b": 10.0,
+                    "small-model:8b": 5.0,
+                },
+            ):
+                result = model_service.get_recommended_model()
 
-            assert "70b" in result or "llama3.3" in result
+                # Should return one of the installed models
+                assert result in ["large-model:30b", "medium-model:12b", "small-model:8b"]
 
-    def test_recommends_medium_model_for_medium_vram(self, model_service):
-        """Test recommends medium model for 14-24GB VRAM."""
+    def test_recommends_model_for_medium_vram(self, model_service):
+        """Test recommends appropriate model for medium VRAM."""
         with patch("services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 14
 
-            result = model_service.get_recommended_model()
+            # Mock installed models
+            with patch(
+                "settings.get_installed_models_with_sizes",
+                return_value={
+                    "large-model:30b": 18.0,  # Won't fit (18*1.2 = 21.6GB)
+                    "medium-model:12b": 10.0,  # Fits (10*1.2 = 12GB)
+                    "small-model:8b": 5.0,  # Fits
+                },
+            ):
+                result = model_service.get_recommended_model()
 
-            assert "12b" in result or "mistral" in result.lower() or "nemo" in result.lower()
+                # Should return a model that fits VRAM
+                assert result in ["medium-model:12b", "small-model:8b"]
 
     def test_recommends_small_model_for_low_vram(self, model_service):
-        """Test recommends small model for <14GB VRAM."""
+        """Test recommends small model for low VRAM."""
         with patch("services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 8
 
-            result = model_service.get_recommended_model()
+            with patch(
+                "settings.get_installed_models_with_sizes",
+                return_value={
+                    "medium-model:12b": 10.0,  # Won't fit (10*1.2 = 12GB)
+                    "small-model:8b": 5.0,  # Fits (5*1.2 = 6GB)
+                },
+            ):
+                result = model_service.get_recommended_model()
 
-            assert "8b" in result or "dolphin" in result.lower()
+                # Should return the small model that fits
+                assert result == "small-model:8b"
 
     def test_uses_agent_role_for_recommendation(self, model_service):
         """Test uses role-specific recommendation."""
         with patch("services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 24
 
-            # With role, should use settings.get_model_for_agent
-            result = model_service.get_recommended_model(role="writer")
+            with patch(
+                "settings.get_installed_models_with_sizes",
+                return_value={"test-model:8b": 5.0},
+            ):
+                # With role, should use settings.get_model_for_agent
+                result = model_service.get_recommended_model(role="writer")
 
-            assert result is not None
+                assert result is not None
 
 
 class TestModelServiceGetModelsForVram:

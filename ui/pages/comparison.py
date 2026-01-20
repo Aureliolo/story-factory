@@ -9,7 +9,7 @@ from nicegui.elements.select import Select
 
 from services import ServiceContainer
 from services.comparison_service import ComparisonRecord, ComparisonResult
-from settings import AVAILABLE_MODELS
+from settings import RECOMMENDED_MODELS
 from ui.state import AppState
 from utils import extract_model_name
 
@@ -105,8 +105,8 @@ class ComparisonPage:
             installed_models = self.services.model.list_installed()
             model_options: dict[str, str] = {}
             for model in installed_models:
-                if model in AVAILABLE_MODELS:
-                    model_info = AVAILABLE_MODELS[model]
+                if model in RECOMMENDED_MODELS:
+                    model_info = RECOMMENDED_MODELS[model]
                     model_options[model] = f"{model_info['name']} ({model})"
                 else:
                     model_options[model] = model

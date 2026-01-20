@@ -12,7 +12,7 @@ from nicegui.elements.column import Column
 from nicegui.elements.input import Input
 
 from services import ServiceContainer
-from settings import AVAILABLE_MODELS, ModelInfo
+from settings import RECOMMENDED_MODELS, ModelInfo
 from ui.state import AppState
 from ui.theme import get_quality_color
 
@@ -312,7 +312,7 @@ class ModelsPage:
         installed = set(self.services.model.list_installed())
         downloadable = []
 
-        for model_id, info in AVAILABLE_MODELS.items():
+        for model_id, info in RECOMMENDED_MODELS.items():
             # Apply same filters as _refresh_model_list
             if self._filter_search and self._filter_search.lower() not in info["name"].lower():
                 continue
@@ -597,7 +597,7 @@ class ModelsPage:
 
         with self._model_list:
             shown_count = 0
-            for model_id, info in AVAILABLE_MODELS.items():
+            for model_id, info in RECOMMENDED_MODELS.items():
                 # Apply filters
                 if self._filter_search and self._filter_search.lower() not in info["name"].lower():
                     continue

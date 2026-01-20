@@ -606,10 +606,10 @@ class TestModelModeServiceAdditional:
         service._loaded_models = {"model-a", "model-b"}
 
         # Mock low VRAM scenario - less than required
+        # get_installed_models_with_sizes returns size 10GB, which needs ~12GB VRAM (20% overhead)
+        # But only 4GB available, so should unload other models
         with patch("services.model_mode_service.get_available_vram", return_value=4):
-            with patch(
-                "services.model_mode_service.AVAILABLE_MODELS", {"model-c": {"vram_required": 8}}
-            ):
+            with patch("settings.get_installed_models_with_sizes", return_value={"model-c": 10.0}):
                 service.prepare_model("model-c")
 
         # Should have unloaded other models

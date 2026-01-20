@@ -343,12 +343,18 @@ class TestPresetModes:
         assert len(modes) >= 5
         assert all(m.is_preset for m in modes)
 
-    def test_preset_modes_have_all_agents(self) -> None:
-        """Test that preset modes have models for all agents."""
+    def test_preset_modes_have_all_agent_temperatures(self) -> None:
+        """Test that preset modes have temperatures for all agents.
+
+        Note: agent_models is intentionally empty for preset modes to use
+        automatic model selection based on installed models. Only temperatures
+        need to be defined for all roles.
+        """
         expected_roles = {"architect", "writer", "editor", "continuity", "interviewer", "validator"}
 
         for mode_id, mode in PRESET_MODES.items():
-            assert set(mode.agent_models.keys()) == expected_roles, f"Mode {mode_id} missing roles"
+            # agent_models can be empty (auto-selection) or have specific overrides
+            # but agent_temperatures must be defined for all roles
             assert set(mode.agent_temperatures.keys()) == expected_roles, (
                 f"Mode {mode_id} missing temps"
             )

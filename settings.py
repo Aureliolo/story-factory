@@ -29,13 +29,14 @@ class ModelInfo(TypedDict):
     """Type definition for model information."""
 
     name: str
-    release: str
-    size_gb: int
+    size_gb: float
     vram_required: int
     quality: int | float
     speed: int
     uncensored: bool
     description: str
+    # Tags for role suitability - list of agent roles this model is good for
+    tags: list[str]
 
 
 class AgentRoleInfo(TypedDict):
@@ -43,161 +44,169 @@ class AgentRoleInfo(TypedDict):
 
     name: str
     description: str
-    recommended_quality: int
 
-
-# Available models registry - curated for creative writing (uncensored)
-# Organized by use case: creative specialists, general purpose, high-end
-AVAILABLE_MODELS: dict[str, ModelInfo] = {
-    # === CREATIVE WRITING SPECIALISTS ===
-    # These models are specifically fine-tuned for fiction and prose
-    "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": {
-        "name": "Celeste V1.9 12B",
-        "release": "2025",
-        "size_gb": 13,
-        "vram_required": 14,
-        "quality": 9,
-        "speed": 7,
-        "uncensored": True,
-        "description": "Purpose-built for fiction writing, excellent prose quality",
-    },
-    "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit": {
-        "name": "Dark Champion 18B MOE",
-        "release": "2025",
-        "size_gb": 11,
-        "vram_required": 14,
-        "quality": 9,
-        "speed": 7,
-        "uncensored": True,
-        "description": "Exceptional fiction/RP, outstanding prose quality",
-    },
-    # === GENERAL PURPOSE (FAST) ===
-    # Good for interviewer, editor, continuity - fast and reliable
-    "huihui_ai/dolphin3-abliterated:8b": {
-        "name": "Dolphin 3.0 8B Abliterated",
-        "release": "2025",
-        "size_gb": 5,
-        "vram_required": 8,
-        "quality": 7.5,
-        "speed": 9,
-        "uncensored": True,
-        "description": "Eric Hartford's latest, highly compliant, no Chinese output",
-    },
-    "CognitiveComputations/dolphin-mistral-nemo:12b": {
-        "name": "Dolphin Mistral Nemo 12B",
-        "release": "2025",
-        "size_gb": 7,
-        "vram_required": 10,
-        "quality": 8,
-        "speed": 8,
-        "uncensored": True,
-        "description": "128K context, excellent for editing and refinement",
-    },
-    # === REASONING / ARCHITECT SPECIALISTS ===
-    # MoE models offer excellent reasoning at reduced VRAM
-    "huihui_ai/qwen3-abliterated:30b": {
-        "name": "Qwen3 30B Abliterated (MoE)",
-        "release": "January 2025",
-        "size_gb": 18,
-        "vram_required": 18,
-        "quality": 9,
-        "speed": 7,
-        "uncensored": True,
-        "description": "MoE (30B/3B active), matches 70B reasoning at half VRAM - RECOMMENDED for architect",
-    },
-    # === HIGH-END (LARGE VRAM / QUANTIZED) ===
-    # Premium models for those with VRAM to spare
-    "vanilj/midnight-miqu-70b-v1.5": {
-        "name": "Midnight Miqu 70B V1.5",
-        "release": "2024",
-        "size_gb": 42,
-        "vram_required": 48,
-        "quality": 9.5,
-        "speed": 4,
-        "uncensored": True,
-        "description": "Premium creative writer - writes like a novelist, 32K context",
-    },
-    "huihui_ai/llama3.3-abliterated:70b": {
-        "name": "Llama 3.3 70B Abliterated",
-        "release": "December 2024",
-        "size_gb": 40,
-        "vram_required": 48,
-        "quality": 9.5,
-        "speed": 5,
-        "uncensored": True,
-        "description": "Best reasoning, excellent for story architecture",
-    },
-    "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M": {
-        "name": "Llama 3.3 70B Q4_K_M",
-        "release": "December 2024",
-        "size_gb": 43,
-        "vram_required": 24,
-        "quality": 9,
-        "speed": 4,
-        "uncensored": True,
-        "description": "Quantized 70B, fits 24GB VRAM, great for architect role",
-    },
-    # === SMALL / VALIDATOR MODELS ===
-    # Minimal models for basic validation tasks
-    "qwen3:0.6b": {
-        "name": "Qwen3 0.6B",
-        "release": "2025",
-        "size_gb": 1,
-        "vram_required": 2,
-        "quality": 3,
-        "speed": 10,
-        "uncensored": False,
-        "description": "Tiny model for validator role - basic sanity checks only",
-    },
-    # === LEGACY (kept for compatibility) ===
-    "huihui_ai/qwen3-abliterated:8b": {
-        "name": "Qwen3 8B Abliterated (v1)",
-        "release": "April 2025",
-        "size_gb": 5,
-        "vram_required": 8,
-        "quality": 7,
-        "speed": 9,
-        "uncensored": True,
-        "description": "Fast but may output Chinese characters - use Dolphin instead",
-    },
-}
 
 # Agent role definitions
 AGENT_ROLES: dict[str, AgentRoleInfo] = {
     "interviewer": {
         "name": "Interviewer",
         "description": "Gathers story requirements",
-        "recommended_quality": 7,  # Doesn't need highest quality
     },
     "architect": {
         "name": "Architect",
         "description": "Designs story structure",
-        "recommended_quality": 8,  # Needs good reasoning
     },
     "writer": {
         "name": "Writer",
         "description": "Writes prose",
-        "recommended_quality": 9,  # Needs best quality
     },
     "editor": {
         "name": "Editor",
         "description": "Polishes prose",
-        "recommended_quality": 8,
     },
     "continuity": {
         "name": "Continuity Checker",
         "description": "Checks for plot holes",
-        "recommended_quality": 7,
     },
     "validator": {
         "name": "Validator",
         "description": "Validates AI responses",
-        "recommended_quality": 3,  # Uses small/fast model for basic sanity checks
     },
     "suggestion": {
         "name": "Suggestion Assistant",
         "description": "Generates writing prompts and suggestions",
-        "recommended_quality": 7,  # Needs creativity but not highest quality
+    },
+}
+
+
+# Recommended/supported models registry
+# This is a curated list for the UI - auto-selection works with ANY installed model
+# Tags indicate which roles the model is particularly good for
+RECOMMENDED_MODELS: dict[str, ModelInfo] = {
+    # === CREATIVE WRITING SPECIALISTS ===
+    "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": {
+        "name": "Celeste V1.9 12B",
+        "size_gb": 13,
+        "vram_required": 14,
+        "quality": 9,
+        "speed": 7,
+        "uncensored": True,
+        "description": "Purpose-built for fiction writing, excellent prose quality",
+        "tags": ["writer", "editor"],
+    },
+    "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit": {
+        "name": "Dark Champion 18B MOE",
+        "size_gb": 11,
+        "vram_required": 14,
+        "quality": 9,
+        "speed": 7,
+        "uncensored": True,
+        "description": "Exceptional fiction/RP, outstanding prose quality",
+        "tags": ["writer"],
+    },
+    # === GENERAL PURPOSE ===
+    "huihui_ai/dolphin3-abliterated:8b": {
+        "name": "Dolphin 3.0 8B Abliterated",
+        "size_gb": 5,
+        "vram_required": 8,
+        "quality": 7,
+        "speed": 9,
+        "uncensored": True,
+        "description": "Fast, compliant, no Chinese output - great all-rounder",
+        "tags": ["interviewer", "continuity", "suggestion"],
+    },
+    "CognitiveComputations/dolphin-mistral-nemo:12b": {
+        "name": "Dolphin Mistral Nemo 12B",
+        "size_gb": 7,
+        "vram_required": 10,
+        "quality": 8,
+        "speed": 8,
+        "uncensored": True,
+        "description": "128K context, excellent for editing and refinement",
+        "tags": ["editor", "continuity"],
+    },
+    # === REASONING SPECIALISTS ===
+    "huihui_ai/qwen3-abliterated:30b": {
+        "name": "Qwen3 30B Abliterated (MoE)",
+        "size_gb": 18,
+        "vram_required": 18,
+        "quality": 9,
+        "speed": 7,
+        "uncensored": True,
+        "description": "MoE (30B/3B active), matches 70B reasoning - BEST for architect",
+        "tags": ["architect", "continuity"],
+    },
+    "huihui_ai/qwen3-abliterated:8b": {
+        "name": "Qwen3 8B Abliterated",
+        "size_gb": 5,
+        "vram_required": 8,
+        "quality": 7,
+        "speed": 9,
+        "uncensored": True,
+        "description": "Good reasoning at smaller size",
+        "tags": ["architect", "continuity", "interviewer"],
+    },
+    # === HIGH-END ===
+    "huihui_ai/llama3.3-abliterated:70b": {
+        "name": "Llama 3.3 70B Abliterated",
+        "size_gb": 40,
+        "vram_required": 48,
+        "quality": 10,
+        "speed": 5,
+        "uncensored": True,
+        "description": "Premium reasoning, excellent for complex story architecture",
+        "tags": ["architect", "writer"],
+    },
+    "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M": {
+        "name": "Llama 3.3 70B Q4_K_M",
+        "size_gb": 43,
+        "vram_required": 24,
+        "quality": 9,
+        "speed": 4,
+        "uncensored": True,
+        "description": "Quantized 70B, fits 24GB VRAM",
+        "tags": ["architect", "writer"],
+    },
+    "vanilj/midnight-miqu-70b-v1.5": {
+        "name": "Midnight Miqu 70B",
+        "size_gb": 42,
+        "vram_required": 48,
+        "quality": 10,
+        "speed": 4,
+        "uncensored": True,
+        "description": "Premium creative writer - writes like a novelist",
+        "tags": ["writer"],
+    },
+    # === SMALL / FAST ===
+    "qwen3:0.6b": {
+        "name": "Qwen3 0.6B",
+        "size_gb": 0.5,
+        "vram_required": 2,
+        "quality": 3,
+        "speed": 10,
+        "uncensored": False,
+        "description": "Tiny, ultra-fast - for validator only",
+        "tags": ["validator"],
+    },
+    "smollm2:1.7b": {
+        "name": "SmolLM2 1.7B",
+        "size_gb": 1.2,
+        "vram_required": 2,
+        "quality": 4,
+        "speed": 10,
+        "uncensored": True,
+        "description": "Small but capable - good for validation",
+        "tags": ["validator"],
+    },
+    "qwen3:4b": {
+        "name": "Qwen3 4B",
+        "size_gb": 2.5,
+        "vram_required": 4,
+        "quality": 5,
+        "speed": 9,
+        "uncensored": True,
+        "description": "Fast inference, good for quick tasks",
+        "tags": ["validator", "interviewer"],
     },
 }
 
@@ -219,8 +228,9 @@ class Settings:
     context_size: int = 32768
     max_tokens: int = 8192  # Increased to support longer chapters (2000+ words)
 
-    # Default model for all agents (if not using per-agent)
-    default_model: str = "huihui_ai/dolphin3-abliterated:8b"
+    # Default model for all agents - "auto" means select automatically
+    # If set to a specific model, that model will be used as fallback
+    default_model: str = "auto"
 
     # Per-agent model settings
     use_per_agent_models: bool = True
@@ -943,89 +953,123 @@ class Settings:
         cls._cached_instance = None
 
     def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
-        """Get the appropriate model for an agent role.
+        """Get the appropriate model for an agent role using automatic selection.
 
-        If set to 'auto', selects based on agent's quality requirements, available VRAM,
-        and which models are actually installed. Only returns installed models.
-        Special handling for writer role to prefer creative writing specialists.
+        Model selection priority:
+        1. Explicit user override in agent_models (if not "auto")
+        2. Installed models tagged for this role in RECOMMENDED_MODELS
+        3. Any installed model based on size tier preferences
+
+        Args:
+            agent_role: The agent role (writer, architect, etc.)
+            available_vram: Available VRAM in GB
+
+        Returns:
+            Model ID to use for this agent role.
         """
+        # Import here to avoid circular dependency
+        from memory.mode_models import AGENT_SIZE_PREFERENCES, get_size_tier
+
         if not self.use_per_agent_models:
-            return self.default_model
+            # If per-agent disabled, use auto-selection for all
+            if self.default_model != "auto":
+                return self.default_model
+            # Fall through to auto-selection
 
         model_setting: str = self.agent_models.get(agent_role, "auto")
 
         if model_setting != "auto":
             return model_setting
 
-        # Get installed models to filter candidates
-        installed = get_installed_models()
+        # Get installed models with their sizes
+        installed_models = get_installed_models_with_sizes()
 
-        def is_installed(model_id: str) -> bool:
-            """Check if model is installed (exact match or base name match)."""
-            return any(model_id in m or m.startswith(model_id.split(":")[0]) for m in installed)
+        if not installed_models:
+            raise ValueError(
+                "No models installed in Ollama. Please install at least one model using "
+                "'ollama pull <model_name>'. See docs/MODELS.md for recommendations."
+            )
 
-        # Special case: Writer role prefers creative writing specialists
-        if agent_role == "writer":
-            creative_models = [
-                "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-                "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit",
-            ]
-            for model_id in creative_models:
-                info = AVAILABLE_MODELS.get(model_id)
-                if info and info["vram_required"] <= available_vram and is_installed(model_id):
-                    return model_id
+        # PRIORITY 1: Check if any installed models are tagged for this role
+        tagged_models: list[tuple[str, float, float]] = []  # (model_id, size, quality)
+        for model_id in installed_models:
+            # Check both exact match and base name match
+            for rec_id, info in RECOMMENDED_MODELS.items():
+                if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
+                    if agent_role in info.get("tags", []):
+                        size = installed_models.get(model_id, info["size_gb"])
+                        estimated_vram = int(size * 1.2)
+                        if estimated_vram <= available_vram:
+                            tagged_models.append((model_id, size, info["quality"]))
+                    break
 
-        # Special case: Architect role prefers high-reasoning models
-        if agent_role == "architect":
-            architect_models = [
-                "huihui_ai/qwen3-abliterated:30b",  # MoE, matches 70B reasoning at 18GB - RECOMMENDED
-                "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M",  # Fits 24GB
-                "huihui_ai/llama3.3-abliterated:70b",  # Needs 48GB
-            ]
-            for model_id in architect_models:
-                info = AVAILABLE_MODELS.get(model_id)
-                if info and info["vram_required"] <= available_vram and is_installed(model_id):
-                    return model_id
+        if tagged_models:
+            # Sort by quality descending, then size descending
+            tagged_models.sort(key=lambda x: (x[2], x[1]), reverse=True)
+            best = tagged_models[0]
+            logger.info(
+                f"Auto-selected {best[0]} ({best[1]:.1f}GB, quality={best[2]}) "
+                f"for {agent_role} (tagged model)"
+            )
+            return best[0]
 
-        # Special case: Validator role prefers smallest/fastest models
-        if agent_role == "validator":
-            validator_models = [
-                "qwen3:0.6b",  # Tiny, fast - ideal for simple validation
-            ]
-            for model_id in validator_models:
-                info = AVAILABLE_MODELS.get(model_id)
-                if info and info["vram_required"] <= available_vram and is_installed(model_id):
-                    return model_id
+        # PRIORITY 2: Fall back to size tier selection
+        # Categorize installed models by size tier
+        models_by_tier: dict[str, list[tuple[str, float]]] = {
+            "large": [],
+            "medium": [],
+            "small": [],
+            "tiny": [],
+        }
 
-        # Auto-select based on agent role and VRAM
-        role_info: AgentRoleInfo | None = AGENT_ROLES.get(agent_role)
-        required_quality: int = role_info["recommended_quality"] if role_info else 7
+        for model_id, size_gb in installed_models.items():
+            tier = get_size_tier(size_gb)
+            models_by_tier[tier.value].append((model_id, size_gb))
 
-        # Filter models that fit VRAM, meet quality requirement, AND are installed
-        candidates = []
-        for model_id, info in AVAILABLE_MODELS.items():
-            if (
-                info["vram_required"] <= available_vram
-                and info["quality"] >= required_quality
-                and is_installed(model_id)
-            ):
-                candidates.append((model_id, info))
+        # Sort each tier by size (larger first within tier)
+        for tier_name in models_by_tier:
+            models_by_tier[tier_name].sort(key=lambda x: x[1], reverse=True)
 
-        if not candidates:
-            # No suitable installed model found - fall back to default
-            return self.default_model
+        # Get size preferences for this role
+        preferences = AGENT_SIZE_PREFERENCES.get(
+            agent_role,
+            # Default: prefer medium, then small, then large, then tiny
+            [
+                get_size_tier(10),  # medium
+                get_size_tier(5),  # small
+                get_size_tier(25),  # large
+                get_size_tier(1),  # tiny
+            ],
+        )
 
-        # For high quality roles (9+), prioritize quality
-        # For lower quality roles, prioritize speed while meeting quality threshold
-        if required_quality >= 9:
-            # Writer needs best quality - sort by quality desc
-            candidates.sort(key=lambda x: x[1]["quality"], reverse=True)
-        else:
-            # Other roles - prefer speed while meeting quality threshold
-            # Find candidates closest to required quality with best speed
-            candidates.sort(key=lambda x: (-x[1]["speed"], x[1]["quality"]))
+        # Select model based on tier preferences
+        for tier in preferences:
+            tier_models = models_by_tier.get(tier.value, [])
+            if tier_models:
+                # Return the largest model in the preferred tier that fits VRAM
+                for model_id, size_gb in tier_models:
+                    estimated_vram = int(size_gb * 1.2)  # Add 20% overhead
+                    if estimated_vram <= available_vram:
+                        logger.info(
+                            f"Auto-selected {model_id} ({size_gb:.1f}GB) for {agent_role} "
+                            f"(tier={tier.value}, estimated_vram={estimated_vram}GB)"
+                        )
+                        return model_id
 
-        return candidates[0][0]
+        # Fallback: return any installed model that fits VRAM
+        for model_id, size_gb in sorted(installed_models.items(), key=lambda x: x[1], reverse=True):
+            estimated_vram = int(size_gb * 1.2)
+            if estimated_vram <= available_vram:
+                logger.info(f"Fallback: selected {model_id} ({size_gb:.1f}GB) for {agent_role}")
+                return model_id
+
+        # Last resort: return smallest installed model
+        smallest = min(installed_models.items(), key=lambda x: x[1])
+        logger.warning(
+            f"No model fits VRAM ({available_vram}GB) for {agent_role}, "
+            f"using smallest: {smallest[0]}"
+        )
+        return smallest[0]
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
         """Get temperature setting for an agent.
@@ -1069,6 +1113,69 @@ def get_installed_models(timeout: int | None = None) -> list[str]:
         return []
 
 
+def get_installed_models_with_sizes(timeout: int | None = None) -> dict[str, float]:
+    """Get installed models with their sizes in GB.
+
+    Args:
+        timeout: Timeout in seconds. If None, uses default (10s).
+
+    Returns:
+        Dict mapping model ID to size in GB.
+    """
+    actual_timeout = timeout if timeout is not None else 10
+    try:
+        result = subprocess.run(
+            ["ollama", "list"], capture_output=True, text=True, timeout=actual_timeout
+        )
+        models = {}
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+            if line.strip():
+                parts = line.split()
+                if len(parts) >= 2:
+                    model_name = parts[0]
+                    # Size is typically in format like "4.1 GB" or "890 MB"
+                    # Find size column - it's the one with GB/MB
+                    size_gb = 0.0
+                    for i, part in enumerate(parts):
+                        if part.upper() == "GB" and i > 0:
+                            try:
+                                size_gb = float(parts[i - 1])
+                            except ValueError:
+                                pass
+                            break
+                        elif part.upper() == "MB" and i > 0:
+                            try:
+                                size_gb = float(parts[i - 1]) / 1024
+                            except ValueError:
+                                pass
+                            break
+                        # Also handle combined format like "4.1GB"
+                        elif part.upper().endswith("GB"):
+                            try:
+                                size_gb = float(part[:-2])
+                            except ValueError:
+                                pass
+                            break
+                        elif part.upper().endswith("MB"):
+                            try:
+                                size_gb = float(part[:-2]) / 1024
+                            except ValueError:
+                                pass
+                            break
+
+                    models[model_name] = size_gb
+        return models
+    except FileNotFoundError:
+        logger.warning("Ollama not found. Please ensure Ollama is installed and in PATH.")
+        return {}
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Ollama list command timed out after {actual_timeout}s.")
+        return {}
+    except (OSError, ValueError) as e:
+        logger.warning(f"Error listing Ollama models: {e}")
+        return {}
+
+
 def get_available_vram(timeout: int | None = None) -> int:
     """Detect available VRAM in GB. Returns 8GB default if detection fails.
 
@@ -1100,17 +1207,44 @@ def get_available_vram(timeout: int | None = None) -> int:
 
 
 def get_model_info(model_id: str) -> ModelInfo:
-    """Get information about a model."""
-    return AVAILABLE_MODELS.get(
-        model_id,
-        ModelInfo(
-            name=model_id,
-            release="Unknown",
-            size_gb=0,
-            vram_required=0,
-            quality=5,
-            speed=5,
-            uncensored=True,
-            description="Unknown model",
-        ),
+    """Get information about a model.
+
+    If the model is in RECOMMENDED_MODELS, returns that info.
+    Otherwise, estimates info based on model name/size.
+    """
+    # Check exact match first
+    if model_id in RECOMMENDED_MODELS:
+        return RECOMMENDED_MODELS[model_id]
+
+    # Check base name match (e.g., "qwen3:4b" matches "qwen3:4b")
+    base_name = model_id.split(":")[0] if ":" in model_id else model_id
+    for rec_id, info in RECOMMENDED_MODELS.items():
+        if rec_id.startswith(base_name) or base_name in rec_id:
+            return info
+
+    # Try to get size from installed models
+    installed = get_installed_models_with_sizes()
+    size_gb = installed.get(model_id, 0)
+
+    # Estimate quality/speed from size
+    if size_gb > 0:
+        # Larger models = higher quality, lower speed
+        quality = min(10, int(size_gb / 4) + 4)  # 4GB->5, 20GB->9
+        speed = max(1, 10 - int(size_gb / 5))  # Smaller = faster
+        vram_required = int(size_gb * 1.2)
+    else:
+        quality = 5
+        speed = 5
+        vram_required = 8  # Default assumption
+        size_gb = 5.0
+
+    return ModelInfo(
+        name=model_id,
+        size_gb=size_gb,
+        vram_required=vram_required,
+        quality=quality,
+        speed=speed,
+        uncensored=True,
+        description="Automatically detected model",
+        tags=[],  # No specific tags for unknown models
     )
