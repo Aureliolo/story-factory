@@ -1447,9 +1447,17 @@ class ModeDatabase:
 
         Returns:
             List of analytics records with aggregated stats per template.
+
+        Raises:
+            ValueError: If days is negative.
         """
-        where_clauses = [f"DATE(timestamp) >= DATE('now', '-{days} days')"]
-        params: list[Any] = []
+        # Validate days to prevent SQL injection
+        validated_days = int(days)
+        if validated_days < 0:
+            raise ValueError("days must be a non-negative integer")
+
+        where_clauses = ["DATE(timestamp) >= DATE('now', ?)"]
+        params: list[Any] = [f"-{validated_days} days"]
 
         if agent_role:
             where_clauses.append("agent_role = ?")
@@ -1584,11 +1592,19 @@ class ModeDatabase:
 
         Returns:
             List of error summaries grouped by agent/task.
+
+        Raises:
+            ValueError: If days is negative.
         """
+        # Validate days to prevent SQL injection
+        validated_days = int(days)
+        if validated_days < 0:
+            raise ValueError("days must be a non-negative integer")
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                f"""
+                """
                 SELECT
                     agent_role,
                     task,
@@ -1598,9 +1614,10 @@ class ModeDatabase:
                     GROUP_CONCAT(DISTINCT error_message) as error_messages
                 FROM prompt_metrics
                 WHERE success = 0
-                AND DATE(timestamp) >= DATE('now', '-{days} days')
+                AND DATE(timestamp) >= DATE('now', ?)
                 GROUP BY agent_role, task, template_version, prompt_hash
                 ORDER BY error_count DESC
                 """,
+                (f"-{validated_days} days",),
             )
             return [dict(row) for row in cursor.fetchall()]

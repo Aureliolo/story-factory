@@ -88,6 +88,8 @@ class PromptTemplate:
             raise PromptTemplateError(f"Undefined variable in template '{self.name}': {e}") from e
         except TemplateSyntaxError as e:
             raise PromptTemplateError(f"Syntax error in template '{self.name}': {e}") from e
+        except Exception as e:
+            raise PromptTemplateError(f"Render error in template '{self.name}': {e}") from e
 
     def get_hash(self) -> str:
         """Generate MD5 hash of template content for metrics tracking.
@@ -192,10 +194,14 @@ class PromptTemplate:
         if not isinstance(optional_vars, list):
             raise PromptTemplateError(f"Invalid 'variables.optional' in {path}: expected list")
 
+        # Require version explicitly for proper metrics tracking
+        if "version" not in data:
+            raise PromptTemplateError(f"Missing required 'version' field in {path}")
+
         # Create template instance
         template = cls(
             name=data.get("name", path.stem),
-            version=str(data.get("version", "1.0")),
+            version=str(data["version"]),
             description=data.get("description", ""),
             agent=data.get("agent", ""),
             task=data.get("task", path.stem),
@@ -239,7 +245,9 @@ class PromptTemplate:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
-                yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                yaml.safe_dump(
+                    data, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+                )
             logger.debug(f"Saved template '{self.name}' to {path}")
         except OSError as e:
             raise PromptTemplateError(f"Cannot write template file {path}: {e}") from e

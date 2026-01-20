@@ -537,3 +537,41 @@ variables:
             assert "expected list" in str(exc_info.value)
         finally:
             yaml_path.unlink()
+
+    def test_from_yaml_missing_version(self):
+        """Test error when YAML is missing required version field."""
+        yaml_content = """
+name: test
+description: Test
+agent: writer
+task: test
+template: Hello
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(yaml_content)
+            yaml_path = Path(f.name)
+
+        try:
+            with pytest.raises(PromptTemplateError) as exc_info:
+                PromptTemplate.from_yaml(yaml_path)
+            assert "Missing required 'version'" in str(exc_info.value)
+        finally:
+            yaml_path.unlink()
+
+    def test_render_generic_exception(self):
+        """Test that generic exceptions during render are caught and wrapped."""
+        template = PromptTemplate(
+            name="test",
+            version="1.0",
+            description="Test",
+            agent="writer",
+            task="test",
+            template="{{ items | sort }}",  # Will fail if items is not sortable
+            required_variables=["items"],
+        )
+        # Pass a mix of incomparable types to trigger TypeError
+        with pytest.raises(PromptTemplateError) as exc_info:
+            template.render(items=[1, "string", None])
+        assert "Render error" in str(exc_info.value)

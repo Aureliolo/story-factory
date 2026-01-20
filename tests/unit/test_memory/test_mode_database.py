@@ -1719,3 +1719,13 @@ class TestModeDatabase:
         # Verify no record was inserted
         analytics = db.get_prompt_analytics()
         assert len(analytics) == 0
+
+    def test_get_prompt_analytics_negative_days_raises(self, db: ModeDatabase) -> None:
+        """Test that get_prompt_analytics raises ValueError for negative days."""
+        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+            db.get_prompt_analytics(days=-1)
+
+    def test_get_prompt_error_summary_negative_days_raises(self, db: ModeDatabase) -> None:
+        """Test that get_prompt_error_summary raises ValueError for negative days."""
+        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+            db.get_prompt_error_summary(days=-1)
