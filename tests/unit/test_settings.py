@@ -489,47 +489,43 @@ class TestSettingsGetModelForAgent:
 
         assert result == "huihui_ai/qwen3-abliterated:30b"
 
-    def test_auto_selects_by_size_tier_when_no_tagged_model(self, monkeypatch):
-        """Test auto-selects by size tier when no tagged model available."""
-        # Mock installed models with sizes - no recommended models
+    def test_raises_error_when_no_tagged_model_available(self, monkeypatch):
+        """Test raises error when no installed model has the required tag."""
+        # Mock installed models with no matching tags
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "custom-large:30b": 18.0,  # Large tier
-                "custom-medium:12b": 10.0,  # Medium tier
-                "custom-small:8b": 5.0,  # Small tier
+                "custom-large:30b": 18.0,
+                "custom-medium:12b": 10.0,
             },
         )
 
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
+
+        with pytest.raises(ValueError, match="No model tagged for role 'architect'"):
+            settings.get_model_for_agent("architect", available_vram=24)
+
+    def test_selects_custom_tagged_model(self, monkeypatch):
+        """Test selects model with custom tags when configured."""
+        monkeypatch.setattr(
+            "settings.get_installed_models_with_sizes",
+            lambda timeout=None: {
+                "my-custom-model:7b": 5.0,
+                "another-model:12b": 10.0,
+            },
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"architect": "auto"}
+        # Add custom tag for the model
+        settings.custom_model_tags = {"my-custom-model:7b": ["architect"]}
 
         result = settings.get_model_for_agent("architect", available_vram=24)
 
-        # Architect prefers large models - should select custom-large
-        assert result == "custom-large:30b"
-
-    def test_falls_back_to_smaller_tier_when_large_doesnt_fit(self, monkeypatch):
-        """Test falls back to smaller tier when large models don't fit VRAM."""
-        monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
-            lambda timeout=None: {
-                "custom-large:30b": 18.0,  # Large tier - needs ~21.6GB VRAM
-                "custom-medium:12b": 10.0,  # Medium tier - needs ~12GB VRAM
-                "custom-small:8b": 5.0,  # Small tier - needs ~6GB VRAM
-            },
-        )
-
-        settings = Settings()
-        settings.use_per_agent_models = True
-        settings.agent_models = {"architect": "auto"}
-
-        # Only 16GB VRAM - large model won't fit (needs 21.6GB with 20% overhead)
-        result = settings.get_model_for_agent("architect", available_vram=16)
-
-        # Should select medium tier
-        assert result == "custom-medium:12b"
+        assert result == "my-custom-model:7b"
 
     def test_validator_prefers_tiny_models(self, monkeypatch):
         """Test validator role prefers tiny models."""
@@ -566,8 +562,8 @@ class TestSettingsGetModelForAgent:
         assert result == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"  # First in RECOMMENDED_MODELS
         assert "No models installed in Ollama" in caplog.text
 
-    def test_selects_smallest_when_nothing_fits_vram(self, monkeypatch):
-        """Test selects smallest model as last resort when nothing fits VRAM."""
+    def test_selects_smallest_tagged_when_nothing_fits_vram(self, monkeypatch):
+        """Test selects smallest tagged model as last resort when nothing fits VRAM."""
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {
@@ -579,15 +575,20 @@ class TestSettingsGetModelForAgent:
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"writer": "auto"}
+        # Tag both models for writer role
+        settings.custom_model_tags = {
+            "large-model:30b": ["writer"],
+            "medium-model:12b": ["writer"],
+        }
 
-        # Only 8GB VRAM - nothing fits
+        # Only 8GB VRAM - nothing fits, but should select smallest tagged model
         result = settings.get_model_for_agent("writer", available_vram=8)
 
-        # Should select smallest as last resort with warning
+        # Should select smallest tagged model as last resort
         assert result == "medium-model:12b"
 
-    def test_auto_selects_for_unknown_role(self, monkeypatch):
-        """Test auto-selects for unknown agent role using default tier preferences."""
+    def test_raises_error_for_unknown_role(self, monkeypatch):
+        """Test raises error for unknown role with no tagged models."""
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {
@@ -600,10 +601,9 @@ class TestSettingsGetModelForAgent:
         settings.use_per_agent_models = True
         settings.agent_models = {"unknown_role": "auto"}
 
-        result = settings.get_model_for_agent("unknown_role", available_vram=24)
-
-        # Unknown role uses default tier preferences (medium first)
-        assert result == "custom-medium:12b"
+        # Unknown role has no tagged models - should raise error
+        with pytest.raises(ValueError, match="No model tagged for role 'unknown_role'"):
+            settings.get_model_for_agent("unknown_role", available_vram=24)
 
 
 class TestGetAvailableVram:
@@ -769,8 +769,8 @@ class TestGetInstalledModelsWithSizes:
         models = get_installed_models_with_sizes()
 
         assert "small-model:1b" in models
-        # 512 MB = 0.5 GB
-        assert models["small-model:1b"] == 0.5
+        # 512 MB = 0.512 GB (using decimal: 1 GB = 1000 MB)
+        assert models["small-model:1b"] == 0.512
 
     @patch("settings.subprocess.run")
     def test_parses_combined_size_format(self, mock_run):
@@ -1362,23 +1362,25 @@ class TestValidatorModelSelection:
 
         assert result == "qwen3:0.6b"
 
-    def test_validator_falls_back_to_tiny_tier(self, monkeypatch):
-        """Test validator falls back to tiny tier when no tagged model available."""
+    def test_validator_selects_tagged_model(self, monkeypatch):
+        """Test validator selects model tagged for validator role."""
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "custom-tiny:1b": 1.0,  # Tiny tier
-                "custom-medium:12b": 10.0,  # Medium tier
+                "custom-tiny:1b": 1.0,
+                "custom-medium:12b": 10.0,
             },
         )
 
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"validator": "auto"}
+        # Tag the tiny model for validator
+        settings.custom_model_tags = {"custom-tiny:1b": ["validator"]}
 
         result = settings.get_model_for_agent("validator", available_vram=24)
 
-        # Validator prefers tiny tier
+        # Validator selects the tagged model
         assert result == "custom-tiny:1b"
 
 
@@ -1463,93 +1465,185 @@ class TestWriterModelSelection:
         assert result == "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit"
 
 
-class TestSizeTierBasedModelSelection:
-    """Tests for size tier-based model selection.
+class TestTagBasedModelSelection:
+    """Tests for tag-based model selection.
 
-    Size tier boundaries:
-    - LARGE: >= 20GB
-    - MEDIUM: 8-20GB
-    - SMALL: 3-8GB
-    - TINY: < 3GB
+    Models must be tagged for a specific role to be selected.
+    Tags can come from RECOMMENDED_MODELS or custom_model_tags.
     """
 
-    def test_interviewer_prefers_small_tier(self, monkeypatch):
-        """Test interviewer role prefers small tier models."""
+    def test_selects_highest_quality_tagged_model(self, monkeypatch):
+        """Test selects highest quality model when multiple tagged models available."""
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "custom-large:70b": 25.0,  # Large tier (>= 20GB)
-                "custom-medium:12b": 10.0,  # Medium tier (8-20GB)
-                "custom-small:8b": 5.0,  # Small tier (3-8GB)
+                "custom-large:70b": 25.0,
+                "custom-medium:12b": 10.0,
+                "custom-small:8b": 5.0,
             },
         )
 
         settings = Settings()
         settings.use_per_agent_models = True
-        settings.agent_models = {"interviewer": "auto"}
+        settings.agent_models = {"writer": "auto"}
+        # Tag multiple models for writer with different implicit quality (size-based)
+        settings.custom_model_tags = {
+            "custom-large:70b": ["writer"],
+            "custom-medium:12b": ["writer"],
+            "custom-small:8b": ["writer"],
+        }
 
-        result = settings.get_model_for_agent("interviewer", available_vram=50)
+        result = settings.get_model_for_agent("writer", available_vram=50)
 
-        # Interviewer prefers small tier
-        assert result == "custom-small:8b"
+        # Should select largest tagged model (highest quality by size when quality equal)
+        assert result == "custom-large:70b"
 
-    def test_continuity_prefers_medium_tier(self, monkeypatch):
-        """Test continuity role prefers medium tier models."""
+    def test_respects_vram_limit_for_tagged_models(self, monkeypatch):
+        """Test only selects tagged models that fit in VRAM."""
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "custom-large:70b": 25.0,  # Large tier (>= 20GB)
-                "custom-medium:12b": 10.0,  # Medium tier (8-20GB)
-                "custom-small:8b": 5.0,  # Small tier (3-8GB)
+                "custom-large:70b": 25.0,  # Needs 30GB VRAM
+                "custom-medium:12b": 10.0,  # Needs 12GB VRAM
+                "custom-small:8b": 5.0,  # Needs 6GB VRAM
             },
         )
 
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"continuity": "auto"}
+        settings.custom_model_tags = {
+            "custom-large:70b": ["continuity"],
+            "custom-medium:12b": ["continuity"],
+            "custom-small:8b": ["continuity"],
+        }
 
-        result = settings.get_model_for_agent("continuity", available_vram=50)
+        # Only 15GB VRAM - large doesn't fit
+        result = settings.get_model_for_agent("continuity", available_vram=15)
 
-        # Continuity prefers medium tier
+        # Should select medium (largest that fits)
         assert result == "custom-medium:12b"
 
-    def test_editor_prefers_medium_tier(self, monkeypatch):
-        """Test editor role prefers medium tier models."""
+    def test_multiple_roles_on_same_model(self, monkeypatch):
+        """Test model can be tagged for multiple roles."""
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "custom-large:70b": 25.0,  # Large tier (>= 20GB)
-                "custom-medium:12b": 10.0,  # Medium tier (8-20GB)
-                "custom-small:8b": 5.0,  # Small tier (3-8GB)
+                "versatile-model:12b": 10.0,
+            },
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.custom_model_tags = {
+            "versatile-model:12b": ["editor", "writer", "continuity"],
+        }
+
+        # Should work for all tagged roles
+        settings.agent_models = {"editor": "auto"}
+        assert settings.get_model_for_agent("editor", available_vram=24) == "versatile-model:12b"
+
+        settings.agent_models = {"writer": "auto"}
+        assert settings.get_model_for_agent("writer", available_vram=24) == "versatile-model:12b"
+
+        settings.agent_models = {"continuity": "auto"}
+        assert (
+            settings.get_model_for_agent("continuity", available_vram=24) == "versatile-model:12b"
+        )
+
+    def test_raises_error_when_no_tagged_model_fits_vram(self, monkeypatch):
+        """Test raises error when tagged models exist but none fit VRAM."""
+        monkeypatch.setattr(
+            "settings.get_installed_models_with_sizes",
+            lambda timeout=None: {
+                "large-model:70b": 25.0,  # Needs 30GB VRAM
             },
         )
 
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"editor": "auto"}
+        settings.custom_model_tags = {"large-model:70b": ["editor"]}
 
-        result = settings.get_model_for_agent("editor", available_vram=50)
+        # Only 8GB VRAM - tagged model doesn't fit, should still select as last resort
+        result = settings.get_model_for_agent("editor", available_vram=8)
 
-        # Editor prefers medium tier
-        assert result == "custom-medium:12b"
+        # Should select the only tagged model even if it doesn't fit
+        assert result == "large-model:70b"
 
-    def test_fallback_when_no_tier_matches(self, monkeypatch):
-        """Test fallback when no model in preferred tiers fits VRAM."""
-        monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
-            lambda timeout=None: {
-                # Only tiny tier models available
-                "tiny-model:1b": 2.0,  # Tiny tier (< 3GB)
-            },
-        )
+
+class TestModelTags:
+    """Tests for get_model_tags and set_model_tags methods."""
+
+    def test_get_model_tags_returns_empty_for_unknown_model(self):
+        """Test returns empty list for unknown model."""
+        settings = Settings()
+        tags = settings.get_model_tags("unknown-model:7b")
+        assert tags == []
+
+    def test_get_model_tags_returns_recommended_tags(self):
+        """Test returns tags from RECOMMENDED_MODELS for known models."""
+        settings = Settings()
+        # Use a model from RECOMMENDED_MODELS that has tags
+        tags = settings.get_model_tags("vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0")
+        assert "writer" in tags
+
+    def test_get_model_tags_matches_by_base_name(self):
+        """Test matches model by base name prefix."""
+        settings = Settings()
+        # Match by base name (without the tag suffix)
+        tags = settings.get_model_tags("vanilj/mistral-nemo-12b-celeste-v1.9:latest")
+        assert "writer" in tags
+
+    def test_get_model_tags_returns_custom_tags(self):
+        """Test returns custom tags when set."""
+        settings = Settings()
+        settings.custom_model_tags = {"my-model:7b": ["writer", "editor"]}
+        tags = settings.get_model_tags("my-model:7b")
+        assert "writer" in tags
+        assert "editor" in tags
+
+    def test_get_model_tags_merges_recommended_and_custom(self):
+        """Test merges tags from RECOMMENDED_MODELS and custom tags."""
+        settings = Settings()
+        # Add a custom tag to a recommended model
+        model_id = "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+        settings.custom_model_tags = {model_id: ["validator"]}
+        tags = settings.get_model_tags(model_id)
+        # Should have both recommended tags (writer) and custom tag (validator)
+        assert "writer" in tags
+        assert "validator" in tags
+
+    def test_set_model_tags_saves_tags(self, tmp_path, monkeypatch):
+        """Test set_model_tags saves tags to settings."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
-        settings.use_per_agent_models = True
-        # Editor prefers medium tier, but only tiny model available
-        settings.agent_models = {"editor": "auto"}
+        settings.set_model_tags("my-model:7b", ["writer", "editor"])
 
-        # VRAM is enough for the tiny model (2GB * 1.2 = 2.4GB < 50GB)
-        result = settings.get_model_for_agent("editor", available_vram=50)
+        assert settings.custom_model_tags == {"my-model:7b": ["writer", "editor"]}
+        # Verify it was saved to file
+        assert settings_file.exists()
 
-        # Should fall back to the only available model
-        assert result == "tiny-model:1b"
+    def test_set_model_tags_removes_empty_tags(self, tmp_path, monkeypatch):
+        """Test set_model_tags removes entry when tags are empty."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+
+        settings = Settings()
+        settings.custom_model_tags = {"my-model:7b": ["writer"]}
+        settings.set_model_tags("my-model:7b", [])
+
+        assert "my-model:7b" not in settings.custom_model_tags
+
+    def test_set_model_tags_updates_existing_tags(self, tmp_path, monkeypatch):
+        """Test set_model_tags updates existing tags."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+
+        settings = Settings()
+        settings.custom_model_tags = {"my-model:7b": ["writer"]}
+        settings.set_model_tags("my-model:7b", ["editor", "validator"])
+
+        assert settings.custom_model_tags == {"my-model:7b": ["editor", "validator"]}

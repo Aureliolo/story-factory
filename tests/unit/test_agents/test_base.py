@@ -84,7 +84,8 @@ class TestBaseAgentInit:
         """Test agent uses explicit temperature when provided."""
         agent = BaseAgent(
             name="Test",
-            role="Tester",
+            role="Writer",
+            agent_role="writer",
             system_prompt="Test prompt",
             temperature=0.5,
         )

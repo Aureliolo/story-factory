@@ -246,6 +246,11 @@ class Settings:
         }
     )
 
+    # Custom model tags - maps model_id to list of role tags
+    # Example: {"my-model:7b": ["writer", "editor"], "fast-model:3b": ["validator"]}
+    # These are merged with RECOMMENDED_MODELS tags for selection
+    custom_model_tags: dict[str, list[str]] = field(default_factory=dict)
+
     # Agent temperatures
     agent_temperatures: dict[str, float] = field(
         default_factory=lambda: {
@@ -952,13 +957,48 @@ class Settings:
         """
         cls._cached_instance = None
 
-    def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
-        """Get the appropriate model for an agent role using automatic selection.
+    def get_model_tags(self, model_id: str) -> list[str]:
+        """Get all tags for a model, merging RECOMMENDED_MODELS and custom tags.
 
-        Model selection priority:
-        1. Explicit user override in agent_models (if not "auto")
-        2. Installed models tagged for this role in RECOMMENDED_MODELS
-        3. Any installed model based on size tier preferences
+        Args:
+            model_id: The model identifier (e.g., "my-model:7b")
+
+        Returns:
+            List of role tags for this model (e.g., ["writer", "editor"])
+        """
+        tags: set[str] = set()
+
+        # Check RECOMMENDED_MODELS (exact match and base name match)
+        for rec_id, info in RECOMMENDED_MODELS.items():
+            if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
+                tags.update(info.get("tags", []))
+                break
+
+        # Add custom tags
+        if model_id in self.custom_model_tags:
+            tags.update(self.custom_model_tags[model_id])
+
+        return list(tags)
+
+    def set_model_tags(self, model_id: str, tags: list[str]) -> None:
+        """Set custom tags for a model.
+
+        Args:
+            model_id: The model identifier
+            tags: List of role tags to assign
+        """
+        if tags:
+            self.custom_model_tags[model_id] = tags
+        elif model_id in self.custom_model_tags:
+            del self.custom_model_tags[model_id]
+        self.save()
+        logger.info(f"Updated tags for {model_id}: {tags}")
+
+    def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
+        """Get the appropriate model for an agent role using tag-based selection.
+
+        ONLY models tagged for the specified role will be selected.
+        No fallback to untagged models - users must configure tags.
 
         Args:
             agent_role: The agent role (writer, architect, etc.)
@@ -966,15 +1006,16 @@ class Settings:
 
         Returns:
             Model ID to use for this agent role.
+
+        Raises:
+            ValueError: If no tagged model is available for the role.
         """
-        # Import here to avoid circular dependency
-        from memory.mode_models import AGENT_SIZE_PREFERENCES, get_size_tier
 
         if not self.use_per_agent_models:
-            # If per-agent disabled, use auto-selection for all
+            # If per-agent disabled, use default model
             if self.default_model != "auto":
                 return self.default_model
-            # Fall through to auto-selection
+            # Fall through to tag-based selection
 
         model_setting: str = self.agent_models.get(agent_role, "auto")
 
@@ -985,8 +1026,8 @@ class Settings:
         installed_models = get_installed_models_with_sizes()
 
         if not installed_models:
-            # Return the first recommended model as a sensible default
-            # This allows the code to continue; Ollama will error later if needed
+            # Return a recommended model as default for CI/testing
+            # Ollama will error later when actually trying to use it
             default = next(iter(RECOMMENDED_MODELS.keys()))
             logger.warning(
                 f"No models installed in Ollama - returning default model '{default}' for {agent_role}. "
@@ -994,86 +1035,50 @@ class Settings:
             )
             return default
 
-        # PRIORITY 1: Check if any installed models are tagged for this role
-        tagged_models: list[tuple[str, float, float]] = []  # (model_id, size, quality)
-        for model_id in installed_models:
-            # Check both exact match and base name match
-            for rec_id, info in RECOMMENDED_MODELS.items():
-                if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
-                    if agent_role in info.get("tags", []):
-                        size = installed_models.get(model_id, info["size_gb"])
-                        estimated_vram = int(size * 1.2)
-                        if estimated_vram <= available_vram:
-                            tagged_models.append((model_id, size, info["quality"]))
-                    break
+        # Find installed models tagged for this role
+        tagged_models_fit: list[tuple[str, float, float]] = []  # (model_id, size, quality)
+        tagged_models_all: list[tuple[str, float, float]] = []  # All tagged models
+        for model_id, size_gb in installed_models.items():
+            tags = self.get_model_tags(model_id)
+            if agent_role in tags:
+                estimated_vram = int(size_gb * 1.2)
+                # Get quality from RECOMMENDED_MODELS if available, else default to 5
+                quality = 5.0
+                for rec_id, info in RECOMMENDED_MODELS.items():
+                    if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
+                        quality = info.get("quality", 5.0)
+                        break
+                tagged_models_all.append((model_id, size_gb, quality))
+                if estimated_vram <= available_vram:
+                    tagged_models_fit.append((model_id, size_gb, quality))
 
-        if tagged_models:
+        if tagged_models_fit:
             # Sort by quality descending, then size descending
-            tagged_models.sort(key=lambda x: (x[2], x[1]), reverse=True)
-            best = tagged_models[0]
+            tagged_models_fit.sort(key=lambda x: (x[2], x[1]), reverse=True)
+            best = tagged_models_fit[0]
             logger.info(
                 f"Auto-selected {best[0]} ({best[1]:.1f}GB, quality={best[2]}) "
                 f"for {agent_role} (tagged model)"
             )
             return best[0]
 
-        # PRIORITY 2: Fall back to size tier selection
-        # Categorize installed models by size tier
-        models_by_tier: dict[str, list[tuple[str, float]]] = {
-            "large": [],
-            "medium": [],
-            "small": [],
-            "tiny": [],
-        }
+        if tagged_models_all:
+            # No tagged model fits VRAM - select smallest as last resort
+            tagged_models_all.sort(key=lambda x: x[1])  # Sort by size ascending
+            smallest = tagged_models_all[0]
+            logger.warning(
+                f"No tagged model fits VRAM ({available_vram}GB) for {agent_role}. "
+                f"Selecting smallest tagged model: {smallest[0]} ({smallest[1]:.1f}GB)"
+            )
+            return smallest[0]
 
-        for model_id, size_gb in installed_models.items():
-            tier = get_size_tier(size_gb)
-            models_by_tier[tier.value].append((model_id, size_gb))
-
-        # Sort each tier by size (larger first within tier)
-        for tier_name in models_by_tier:
-            models_by_tier[tier_name].sort(key=lambda x: x[1], reverse=True)
-
-        # Get size preferences for this role
-        preferences = AGENT_SIZE_PREFERENCES.get(
-            agent_role,
-            # Default: prefer medium, then small, then large, then tiny
-            [
-                get_size_tier(10),  # medium
-                get_size_tier(5),  # small
-                get_size_tier(25),  # large
-                get_size_tier(1),  # tiny
-            ],
+        # No tagged model available - raise error with helpful message
+        installed_list = ", ".join(installed_models.keys())
+        raise ValueError(
+            f"No model tagged for role '{agent_role}'. "
+            f"Installed models: [{installed_list}]. "
+            f"Configure model tags in Settings > Models tab, or download a recommended model."
         )
-
-        # Select model based on tier preferences
-        for tier in preferences:
-            tier_models = models_by_tier.get(tier.value, [])
-            if tier_models:
-                # Return the largest model in the preferred tier that fits VRAM
-                for model_id, size_gb in tier_models:
-                    estimated_vram = int(size_gb * 1.2)  # Add 20% overhead
-                    if estimated_vram <= available_vram:
-                        logger.info(
-                            f"Auto-selected {model_id} ({size_gb:.1f}GB) for {agent_role} "
-                            f"(tier={tier.value}, estimated_vram={estimated_vram}GB)"
-                        )
-                        return model_id
-
-        # Fallback: return any installed model that fits VRAM
-        for model_id, size_gb in sorted(installed_models.items(), key=lambda x: x[1], reverse=True):
-            estimated_vram = int(size_gb * 1.2)
-            if estimated_vram <= available_vram:
-                logger.info(f"Fallback: selected {model_id} ({size_gb:.1f}GB) for {agent_role}")
-                return model_id
-
-        # Last resort: return smallest installed model
-        smallest = min(installed_models.items(), key=lambda x: x[1])
-        logger.warning(
-            f"No model fits VRAM ({available_vram}GB) for {agent_role}, "
-            f"using smallest: {smallest[0]}"
-        )
-        return smallest[0]
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
         """Get temperature setting for an agent.
@@ -1131,6 +1136,11 @@ def get_installed_models_with_sizes(timeout: int | None = None) -> dict[str, flo
         result = subprocess.run(
             ["ollama", "list"], capture_output=True, text=True, timeout=actual_timeout
         )
+        # Check return code before parsing
+        if result.returncode != 0:
+            logger.warning(f"Ollama list returned non-zero exit code: {result.returncode}")
+            return {}
+
         models = {}
         for line in result.stdout.strip().split("\n")[1:]:  # Skip header
             if line.strip():
@@ -1139,32 +1149,41 @@ def get_installed_models_with_sizes(timeout: int | None = None) -> dict[str, flo
                     model_name = parts[0]
                     # Size is typically in format like "4.1 GB" or "890 MB"
                     # Find size column - it's the one with GB/MB
+                    # Use decimal units: 1 GB = 1000 MB (not 1024)
                     size_gb = 0.0
                     for i, part in enumerate(parts):
                         if part.upper() == "GB" and i > 0:
                             try:
                                 size_gb = float(parts[i - 1])
                             except ValueError:
-                                pass
+                                logger.debug(
+                                    f"Failed to parse GB size '{parts[i - 1]}' for model '{model_name}'"
+                                )
                             break
                         elif part.upper() == "MB" and i > 0:
                             try:
-                                size_gb = float(parts[i - 1]) / 1024
+                                size_gb = float(parts[i - 1]) / 1000
                             except ValueError:
-                                pass
+                                logger.debug(
+                                    f"Failed to parse MB size '{parts[i - 1]}' for model '{model_name}'"
+                                )
                             break
                         # Also handle combined format like "4.1GB"
                         elif part.upper().endswith("GB"):
                             try:
                                 size_gb = float(part[:-2])
                             except ValueError:
-                                pass
+                                logger.debug(
+                                    f"Failed to parse combined GB size '{part}' for model '{model_name}'"
+                                )
                             break
                         elif part.upper().endswith("MB"):
                             try:
-                                size_gb = float(part[:-2]) / 1024
+                                size_gb = float(part[:-2]) / 1000
                             except ValueError:
-                                pass
+                                logger.debug(
+                                    f"Failed to parse combined MB size '{part}' for model '{model_name}'"
+                                )
                             break
 
                     models[model_name] = size_gb

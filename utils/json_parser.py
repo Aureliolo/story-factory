@@ -116,10 +116,10 @@ def extract_json(
         logger.debug("Found raw JSON array but failed to parse")
 
     # Strategy 4: Try to repair truncated JSON (common with token limits)
-    # Check if response starts with { but has no closing }
+    # Check if response starts with { and has more opening than closing braces
     stripped = response.strip()
-    if stripped.startswith("{") and "}" not in stripped:
-        logger.warning("Detected truncated JSON (no closing brace) - likely token limit reached")
+    if stripped.startswith("{") and stripped.count("{") > stripped.count("}"):
+        logger.warning("Detected truncated JSON (unbalanced braces) - likely token limit reached")
         # Try to close the JSON by adding missing braces
         try:
             # Count open braces and brackets
@@ -129,6 +129,7 @@ def extract_json(
             repaired = stripped.rstrip(",: \n\t")  # Remove trailing punctuation
             repaired += '""' if repaired.endswith(":") else ""  # Close incomplete string
             repaired += "]" * open_brackets + "}" * open_braces
+            logger.debug(f"Attempting JSON repair, preview: {repaired[:200]}")
             result = _try_parse_json(repaired)
             if result is not None:
                 logger.info("Successfully repaired truncated JSON")
@@ -136,7 +137,7 @@ def extract_json(
         except Exception:  # pragma: no cover
             logger.debug("JSON repair attempt failed")
 
-    # Strategy 6: Try custom fallback pattern
+    # Strategy 5: Try custom fallback pattern
     if fallback_pattern:
         fallback_match = re.search(fallback_pattern, response, re.DOTALL)
         if fallback_match:
