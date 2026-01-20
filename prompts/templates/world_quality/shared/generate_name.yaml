@@ -1,0 +1,35 @@
+name: generate_name
+version: "1.0"
+description: "Generates a name for an entity"
+agent: world_quality
+task: generate_name
+is_system_prompt: false
+
+template: |
+  Generate a unique name for a {{ entity_type }} in a {{ genre }} story.
+
+  SETTING: {{ setting_place }}, {{ setting_time }}
+
+  EXISTING NAMES TO AVOID: {{ existing_names | join(", ") if existing_names else "None" }}
+
+  {% if naming_hint %}
+  NAMING STYLE: {{ naming_hint }}
+  {% endif %}
+
+  Generate 3-5 name options that:
+  - Fit the setting and genre
+  - Are easy to pronounce and remember
+  - Sound distinct from existing names
+  - Evoke the right tone
+
+  Return as a JSON array of strings: ["Name1", "Name2", "Name3"]
+
+variables:
+  required:
+    - entity_type
+    - genre
+    - setting_place
+    - setting_time
+  optional:
+    - existing_names
+    - naming_hint

@@ -1,0 +1,28 @@
+name: edit_passage
+version: "1.0"
+description: "Edits a specific passage with optional focus area"
+agent: editor
+task: edit_passage
+is_system_prompt: false
+
+template: |
+  Edit and polish this passage.
+
+  LANGUAGE: {{ language }} - Keep ALL text in {{ language }}. Do not translate.
+
+  ---
+  {{ passage }}
+  ---
+
+  {% if focus %}
+  FOCUS ESPECIALLY ON: {{ focus }}
+  {% endif %}
+
+  Output ONLY the edited text in {{ language }} - no commentary.
+
+variables:
+  required:
+    - passage
+    - language
+  optional:
+    - focus

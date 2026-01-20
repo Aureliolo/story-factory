@@ -1,0 +1,41 @@
+name: create_chapter_outline
+version: "1.0"
+description: "Creates detailed chapter outlines"
+agent: architect
+task: create_chapter_outline
+is_system_prompt: false
+
+template: |
+  Create EXACTLY {{ num_chapters }} chapter outlines for this {{ target_length }}.
+  You MUST output {{ num_chapters }} chapters - no more, no less.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PLOT SUMMARY:
+  {{ plot_summary }}
+
+  KEY PLOT POINTS:
+  {% for point in plot_points %}
+  - {{ point.description }}
+  {% endfor %}
+
+  CHARACTERS: {{ character_names | join(", ") }}
+
+  Output a JSON object with a 'chapters' array containing EXACTLY {{ num_chapters }} chapters.
+  Each chapter needs (all text in {{ language }}):
+
+  {{ chapter_schema }}
+
+  Ensure good pacing - build tension, vary intensity, place climactic moments appropriately.
+  Remember: output EXACTLY {{ num_chapters }} chapters.
+
+variables:
+  required:
+    - num_chapters
+    - target_length
+    - language
+    - plot_summary
+    - plot_points
+    - character_names
+    - chapter_schema
+  optional: []

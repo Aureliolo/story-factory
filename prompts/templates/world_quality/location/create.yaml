@@ -1,0 +1,51 @@
+name: location_create
+version: "1.0"
+description: "Creates a new location with quality-focused generation"
+agent: world_quality
+task: location_create
+is_system_prompt: false
+
+template: |
+  Create a compelling NEW location for a {{ genre }} story.
+
+  STORY PREMISE: {{ premise }}
+  TONE: {{ tone }}
+  SETTING: {{ setting_place }}, {{ setting_time }}
+
+  EXISTING LOCATIONS: {{ existing_names | join(", ") if existing_names else "None yet" }}
+  (Create a NEW location with a different name that complements these)
+
+  {% if custom_instructions %}
+  SPECIFIC REQUIREMENTS:
+  {{ custom_instructions }}
+  {% endif %}
+
+  Create a location with:
+  1. Vivid sensory details - sights, sounds, smells
+  2. Atmosphere that serves the story tone
+  3. Potential for conflict or important scenes
+  4. Connections to other story elements
+  5. Unique characteristics that make it memorable
+
+  Write all text in {{ language }}.
+
+  Return a JSON object with:
+  {
+    "name": "Location Name",
+    "type": "location",
+    "description": "Detailed description",
+    "atmosphere": "The mood/feeling of this place",
+    "significance": "Why this place matters to the story"
+  }
+
+variables:
+  required:
+    - genre
+    - premise
+    - tone
+    - setting_place
+    - setting_time
+    - language
+  optional:
+    - existing_names
+    - custom_instructions

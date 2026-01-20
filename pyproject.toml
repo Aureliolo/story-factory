@@ -135,6 +135,7 @@ module = [
     "ebooklib.*",
     "docx",
     "docx.*",
+    "yaml",
 ]
 ignore_missing_imports = true
 

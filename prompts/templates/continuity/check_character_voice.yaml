@@ -1,0 +1,39 @@
+name: check_character_voice
+version: "1.0"
+description: "Checks for character voice inconsistencies in dialogue"
+agent: continuity
+task: check_character_voice
+is_system_prompt: false
+
+template: |
+  Analyze dialogue for character voice consistency:
+
+  ESTABLISHED CHARACTERS:
+  {% for char in characters %}
+  - {{ char.name }}: {{ char.description }}
+    Personality: {{ char.personality_traits | join(", ") }}
+  {% endfor %}
+
+  {% if patterns_context %}
+  ESTABLISHED SPEECH PATTERNS:
+  {{ patterns_context }}
+  {% endif %}
+
+  CHAPTER CONTENT:
+  {{ chapter_content }}
+
+  Check each character's dialogue for:
+  1. Does vocabulary match their education/background/personality?
+  2. Are speech patterns consistent with their character traits?
+  3. Do formal/informal language choices fit the character?
+  4. Are verbal tics or catchphrases used consistently?
+  5. Does sentence complexity match their intelligence/personality?
+
+  Return voice inconsistencies found. Set category to "voice". If no issues, return an empty list.
+
+variables:
+  required:
+    - characters
+    - chapter_content
+  optional:
+    - patterns_context

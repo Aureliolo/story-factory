@@ -1,0 +1,41 @@
+name: generate_locations
+version: "1.0"
+description: "Generates locations for the story world"
+agent: architect
+task: generate_locations
+is_system_prompt: false
+
+template: |
+  Create {{ count }} important locations for this story's world.
+  These should be places where key scenes will happen.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PREMISE: {{ premise }}
+
+  {% if world_preview %}
+  WORLD:
+  {{ world_preview }}
+  {% endif %}
+
+  {% if existing_locations %}
+  EXISTING LOCATIONS (do NOT recreate):
+  {{ existing_locations | join(", ") }}
+  {% endif %}
+
+  Create {{ count }} NEW locations. Output JSON (all text in {{ language }}):
+
+  {{ location_schema }}
+
+  Include a mix of: main settings, secret places, meeting spots, dangerous areas.
+  Make each location atmospheric and memorable.
+
+variables:
+  required:
+    - count
+    - language
+    - premise
+    - location_schema
+  optional:
+    - world_preview
+    - existing_locations

@@ -1,0 +1,31 @@
+name: extract_dialogue_patterns
+version: "1.0"
+description: "Extracts dialogue patterns for each character from chapter content"
+agent: continuity
+task: extract_dialogue_patterns
+is_system_prompt: false
+
+template: |
+  Analyze the dialogue patterns for each character who speaks in this chapter:
+
+  CHAPTER CONTENT:
+  {{ chapter_content }}
+
+  CHARACTERS:
+  {% for char in characters %}
+  - {{ char.name }}: {{ char.description }} | Traits: {{ char.personality_traits | join(", ") }}
+  {% endfor %}
+
+  For each character who speaks, identify their dialogue characteristics:
+  - Vocabulary level (formal/casual/colloquial/technical)
+  - Speech patterns (catchphrases, verbal tics, repetitions)
+  - Typical words they use frequently
+  - Sentence structure (simple/complex/fragmented/eloquent)
+
+  Only include characters who actually speak in this chapter.
+
+variables:
+  required:
+    - chapter_content
+    - characters
+  optional: []

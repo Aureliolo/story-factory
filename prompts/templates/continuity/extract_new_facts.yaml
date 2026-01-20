@@ -1,0 +1,30 @@
+name: extract_new_facts
+version: "1.0"
+description: "Extracts new established facts from a chapter"
+agent: continuity
+task: extract_new_facts
+is_system_prompt: false
+
+template: |
+  Extract important facts established in this chapter that should be remembered:
+
+  {{ chapter_content }}
+
+  ALREADY KNOWN:
+  {% for fact in established_facts %}
+  - {{ fact }}
+  {% endfor %}
+
+  List NEW facts only - things that are now canon:
+  - Character revelations
+  - Plot events that happened
+  - World details established
+  - Relationship changes
+
+  Output as a simple list, one fact per line, starting with "- ".
+
+variables:
+  required:
+    - chapter_content
+    - established_facts
+  optional: []

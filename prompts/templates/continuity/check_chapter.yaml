@@ -1,0 +1,53 @@
+name: check_chapter
+version: "1.0"
+description: "Checks a chapter for continuity issues"
+agent: continuity
+task: check_chapter
+is_system_prompt: false
+
+template: |
+  Analyze this chapter for continuity issues:
+
+  REQUIRED LANGUAGE: {{ language }} - ALL story text MUST be in {{ language }}. Flag any text in wrong language as CRITICAL.
+
+  ESTABLISHED CHARACTERS:
+  {% for char in characters %}
+  - {{ char.name }}: {{ char.description }} | Traits: {{ char.personality_traits | join(", ") }}
+  {% endfor %}
+
+  ESTABLISHED FACTS:
+  {% for fact in established_facts %}
+  - {{ fact }}
+  {% endfor %}
+
+  WORLD RULES:
+  {% for rule in world_rules %}
+  - {{ rule }}
+  {% endfor %}
+
+  PREVIOUS CHAPTER ENDINGS:
+  {{ previous_content }}
+
+  CURRENT CHAPTER (#{{ chapter_number }}):
+  {{ chapter_content }}
+
+  Find any:
+  - LANGUAGE VIOLATIONS (text not in {{ language }}) - mark as CRITICAL
+  - Plot holes or contradictions
+  - Character inconsistencies
+  - Timeline errors
+  - Setting/world rule violations
+  - Logic problems
+
+  Return a list of issues found. If no issues, return an empty list.
+
+variables:
+  required:
+    - language
+    - characters
+    - established_facts
+    - world_rules
+    - previous_content
+    - chapter_number
+    - chapter_content
+  optional: []

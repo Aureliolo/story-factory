@@ -1,0 +1,36 @@
+name: create_world
+version: "1.0"
+description: "Creates detailed world-building for a story"
+agent: architect
+task: create_world
+is_system_prompt: false
+
+template: |
+  Create detailed world-building for this story.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PREMISE: {{ premise }}
+  GENRE: {{ genre }} (subgenres: {{ subgenres | join(", ") }})
+  SETTING: {{ setting_place }}, {{ setting_time }}
+  TONE: {{ tone }}
+  THEMES: {{ themes | join(", ") }}
+
+  Create:
+  1. A vivid description of the world/setting (2-3 paragraphs)
+  2. Key rules or facts about this world (5-10 bullet points)
+  3. The atmosphere and mood that should permeate the story
+
+  Make it immersive and specific to the genre.
+
+variables:
+  required:
+    - language
+    - premise
+    - genre
+    - subgenres
+    - setting_place
+    - setting_time
+    - tone
+    - themes
+  optional: []

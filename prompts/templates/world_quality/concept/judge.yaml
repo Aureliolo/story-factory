@@ -1,0 +1,37 @@
+name: concept_judge
+version: "1.0"
+description: "Judges concept quality for refinement loop"
+agent: world_quality
+task: concept_judge
+is_system_prompt: false
+
+template: |
+  You are evaluating concept quality for a {{ genre }} story.
+
+  CONCEPT TO EVALUATE:
+  Name: {{ concept_name }}
+  Description: {{ concept_description }}
+  Rules: {{ concept_rules }}
+  Impact: {{ concept_impact }}
+  Thematic Role: {{ concept_thematic_role }}
+
+  Rate each dimension 0-10:
+  - coherence: Internal logic and consistency
+  - thematic_fit: Relevance to story themes
+  - uniqueness: Distinctiveness and creativity
+  - usability: Ease of integration into story
+
+  Provide specific, actionable feedback for improvement.
+
+  OUTPUT FORMAT - Return ONLY a flat JSON object:
+  {"coherence": <number>, "thematic_fit": <number>, "uniqueness": <number>, "usability": <number>, "feedback": "<string>"}
+
+variables:
+  required:
+    - genre
+    - concept_name
+    - concept_description
+    - concept_rules
+    - concept_impact
+    - concept_thematic_role
+  optional: []

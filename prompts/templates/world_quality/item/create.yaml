@@ -1,0 +1,52 @@
+name: item_create
+version: "1.0"
+description: "Creates a new item with quality-focused generation"
+agent: world_quality
+task: item_create
+is_system_prompt: false
+
+template: |
+  Create a compelling NEW item/artifact for a {{ genre }} story.
+
+  STORY PREMISE: {{ premise }}
+  TONE: {{ tone }}
+  SETTING: {{ setting_place }}, {{ setting_time }}
+
+  EXISTING ITEMS: {{ existing_names | join(", ") if existing_names else "None yet" }}
+  (Create a NEW item that complements the story)
+
+  {% if custom_instructions %}
+  SPECIFIC REQUIREMENTS:
+  {{ custom_instructions }}
+  {% endif %}
+
+  Create an item with:
+  1. Physical description and history
+  2. Powers/abilities or significance
+  3. Connection to characters or plot
+  4. Potential for conflict or quests
+  5. Unique characteristics
+
+  Write all text in {{ language }}.
+
+  Return a JSON object with:
+  {
+    "name": "Item Name",
+    "type": "item",
+    "description": "Physical description",
+    "history": "Origin and past",
+    "powers": "Special abilities or significance",
+    "significance": "Role in the story"
+  }
+
+variables:
+  required:
+    - genre
+    - premise
+    - tone
+    - setting_place
+    - setting_time
+    - language
+  optional:
+    - existing_names
+    - custom_instructions

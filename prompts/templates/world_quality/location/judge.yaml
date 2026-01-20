@@ -1,0 +1,35 @@
+name: location_judge
+version: "1.0"
+description: "Judges location quality for refinement loop"
+agent: world_quality
+task: location_judge
+is_system_prompt: false
+
+template: |
+  You are evaluating location quality for a {{ genre }} story.
+
+  LOCATION TO EVALUATE:
+  Name: {{ location_name }}
+  Description: {{ location_description }}
+  Atmosphere: {{ location_atmosphere }}
+  Significance: {{ location_significance }}
+
+  Rate each dimension 0-10:
+  - atmosphere: Mood, sensory details, immersion
+  - plot_utility: Usefulness for scenes, conflict potential
+  - uniqueness: Distinctiveness, memorability
+  - world_fit: How well it fits the story setting
+
+  Provide specific, actionable feedback for improvement.
+
+  OUTPUT FORMAT - Return ONLY a flat JSON object:
+  {"atmosphere": <number>, "plot_utility": <number>, "uniqueness": <number>, "world_fit": <number>, "feedback": "<string>"}
+
+variables:
+  required:
+    - genre
+    - location_name
+    - location_description
+    - location_atmosphere
+    - location_significance
+  optional: []

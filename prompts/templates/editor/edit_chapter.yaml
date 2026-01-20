@@ -1,0 +1,43 @@
+name: edit_chapter
+version: "1.0"
+description: "Edits and polishes a complete chapter"
+agent: editor
+task: edit_chapter
+is_system_prompt: false
+
+template: |
+  Edit and polish this chapter.
+
+  LANGUAGE: {{ language }} - Keep ALL text in {{ language }}. Do not translate.
+
+  ---
+  {{ chapter_content }}
+  ---
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+
+  Improve:
+  - Prose quality and flow
+  - Dialogue naturalness
+  - Sensory details
+  - Pacing
+  - Sentence variety
+  - Show don't tell
+
+  Preserve:
+  - All plot points and events
+  - Character voices
+  - The overall story content
+  - Mature content (improve writing quality, don't remove)
+  - The language ({{ language }})
+
+  Output ONLY the edited chapter text in {{ language }} - no commentary or notes.
+
+variables:
+  required:
+    - chapter_content
+    - language
+    - genre
+    - tone
+  optional: []

@@ -1,0 +1,42 @@
+name: item_refine
+version: "1.0"
+description: "Refines an item based on quality feedback"
+agent: world_quality
+task: item_refine
+is_system_prompt: false
+
+template: |
+  Improve this item based on quality feedback.
+
+  ORIGINAL ITEM:
+  Name: {{ item_name }}
+  Description: {{ item_description }}
+  History: {{ item_history }}
+  Powers: {{ item_powers }}
+  Significance: {{ item_significance }}
+
+  QUALITY SCORES (0-10):
+  - Intrigue: {{ scores.intrigue }}
+  - Plot Utility: {{ scores.plot_utility }}
+  - Uniqueness: {{ scores.uniqueness }}
+  - World Fit: {{ scores.world_fit }}
+
+  FEEDBACK: {{ scores.feedback }}
+
+  WEAK AREAS TO IMPROVE: {{ weak_dimensions | join(", ") if weak_dimensions else "None - minor improvements only" }}
+
+  Keep the name "{{ item_name }}", but enhance the weak areas.
+  Make the item more compelling while maintaining consistency.
+  Write all text in {{ language }}.
+
+variables:
+  required:
+    - item_name
+    - item_description
+    - item_history
+    - item_powers
+    - item_significance
+    - scores
+    - language
+  optional:
+    - weak_dimensions

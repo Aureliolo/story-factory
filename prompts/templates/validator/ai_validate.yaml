@@ -1,0 +1,31 @@
+name: ai_validate
+version: "1.0"
+description: "AI-based validation of response content"
+agent: validator
+task: ai_validate
+is_system_prompt: false
+
+template: |
+  Check this AI response:
+
+  EXPECTED LANGUAGE: {{ expected_language }}
+  TASK: {{ task_description }}
+
+  RESPONSE SAMPLE:
+  ---
+  {{ response_sample }}
+  ---
+
+  Is this response:
+  1. Written in {{ expected_language }}? (CRITICAL)
+  2. Relevant to the task?
+  3. Not gibberish or corrupted text?
+
+  Answer only TRUE or FALSE.
+
+variables:
+  required:
+    - expected_language
+    - task_description
+    - response_sample
+  optional: []
