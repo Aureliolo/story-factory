@@ -74,6 +74,7 @@ class WorldQualityService:
         scores: dict[str, Any],
         iterations: int,
         generation_time: float,
+        model_id: str | None = None,
     ) -> None:
         """Record entity quality score to analytics database.
 
@@ -84,16 +85,22 @@ class WorldQualityService:
             scores: Quality scores dictionary.
             iterations: Number of refinement iterations used.
             generation_time: Time in seconds to generate.
+            model_id: The model ID used for generation. If not provided, determines from entity_type.
         """
         validate_not_empty(project_id, "project_id")
         validate_not_empty(entity_type, "entity_type")
         validate_not_empty(entity_name, "entity_name")
+
+        # Determine model_id if not provided
+        if model_id is None:
+            model_id = self._get_creator_model(entity_type)
+
         try:
             self.analytics_db.record_world_entity_score(
                 project_id=project_id,
                 entity_type=entity_type,
                 entity_name=entity_name,
-                model_id=self._get_creator_model(),
+                model_id=model_id,
                 scores=scores,
                 iterations_used=iterations,
                 generation_time_seconds=generation_time,
@@ -101,7 +108,7 @@ class WorldQualityService:
             )
             logger.debug(
                 f"Recorded {entity_type} '{entity_name}' quality to analytics "
-                f"(avg: {scores.get('average', 0):.1f})"
+                f"(model={model_id}, avg: {scores.get('average', 0):.1f})"
             )
         except Exception as e:
             # Don't fail generation if analytics recording fails
@@ -121,9 +128,29 @@ class WorldQualityService:
         """Get refinement configuration from settings."""
         return RefinementConfig.from_settings(self.settings)
 
-    def _get_creator_model(self) -> str:
-        """Get the model to use for creative generation."""
-        return self.mode_service.get_model_for_agent("writer")
+    def _get_creator_model(self, entity_type: str | None = None) -> str:
+        """Get the model to use for creative generation.
+
+        Args:
+            entity_type: Type of entity being created (character, faction, location, etc.).
+                        If provided, uses entity-type-specific agent role for model selection.
+
+        Returns:
+            Model ID to use for generation.
+        """
+        # Map entity types to specialized agent roles for better model selection
+        entity_to_agent = {
+            "character": "writer",  # Characters need strong character development
+            "faction": "architect",  # Factions need political/organizational reasoning
+            "location": "writer",  # Locations need atmospheric/descriptive writing
+            "item": "writer",  # Items need creative descriptions
+            "concept": "architect",  # Concepts need abstract thinking
+            "relationship": "editor",  # Relationships need understanding of dynamics
+        }
+
+        # Use entity-specific role if available, otherwise default to writer
+        agent_role = entity_to_agent.get(entity_type, "writer") if entity_type else "writer"
+        return self.mode_service.get_model_for_agent(agent_role)
 
     def _get_judge_model(self) -> str:
         """Get the model to use for quality judgment."""
@@ -277,7 +304,7 @@ Create a character with:
 Write all text in {brief.language}."""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="character")
             character = generate_structured(
                 settings=self.settings,
                 model=model,
@@ -396,7 +423,7 @@ Make the character more compelling while maintaining consistency.
 Write all text in {brief.language if brief else "English"}."""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="character")
             return generate_structured(
                 settings=self.settings,
                 model=model,
@@ -528,7 +555,7 @@ Output ONLY valid JSON (all text in {brief.language}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="location")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -648,7 +675,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="location")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -846,7 +873,7 @@ Output ONLY valid JSON (all text in {brief.language}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="relationship")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -989,7 +1016,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="relationship")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1257,7 +1284,7 @@ Output ONLY valid JSON (all text in {brief.language}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="faction")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1424,7 +1451,7 @@ REQUIREMENTS:
 Return ONLY the improved faction as JSON."""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="faction")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1575,7 +1602,7 @@ Output ONLY valid JSON (all text in {brief.language}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="item")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1725,7 +1752,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="item")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1875,7 +1902,7 @@ Output ONLY valid JSON (all text in {brief.language}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="concept")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -2017,7 +2044,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 }}"""
 
         try:
-            model = self._get_creator_model()
+            model = self._get_creator_model(entity_type="concept")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
