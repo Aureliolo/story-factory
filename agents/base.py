@@ -68,10 +68,11 @@ def _get_prompt_registry() -> PromptRegistry:
     """
     global _prompt_registry
     if _prompt_registry is None:
+        # Load settings outside lock to minimize lock hold time
+        settings = Settings.load()
         with _prompt_registry_lock:
             # Double-check after acquiring lock
             if _prompt_registry is None:
-                settings = Settings.load()
                 _prompt_registry = PromptRegistry(settings.prompt_templates_dir)
                 logger.info(f"Initialized prompt registry with {len(_prompt_registry)} templates")
     return _prompt_registry
