@@ -217,7 +217,7 @@ Press `Ctrl+/` to see all available shortcuts in a popup dialog.
 No new dependencies added - all improvements use existing NiceGUI and Tailwind CSS.
 
 ### Testing
-- All tests pass (849 unit tests with 100% coverage)
+- All tests pass (2000+ unit tests with 100% coverage)
 - Code formatted with ruff
 - Linted with ruff
 - CI enforces 100% coverage

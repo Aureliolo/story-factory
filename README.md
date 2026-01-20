@@ -536,7 +536,7 @@ story-factory/
 │   └── validation.py       # Data validation helpers
 ├── prompts/                # Prompt templates
 │   └── templates/          # Template files
-├── tests/                  # Test suite (849+ tests)
+├── tests/                  # Test suite (2000+ tests)
 │   ├── unit/               # Unit tests
 │   ├── component/          # NiceGUI component tests
 │   ├── integration/        # Integration tests
@@ -612,7 +612,7 @@ mypy .
 
 - **Ruff**: Fast Python formatter and linter
 - **MyPy**: Type checking
-- **Pytest**: 849 tests with 100% coverage on core modules
+- **Pytest**: 2000+ tests with 100% coverage on core modules
 - **CI/CD**: GitHub Actions with coverage enforcement
 - **GitHub Copilot**: Custom instructions configured (see [docs/COPILOT_INSTRUCTIONS.md](docs/COPILOT_INSTRUCTIONS.md))
 
