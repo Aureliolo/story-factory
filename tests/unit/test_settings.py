@@ -759,6 +759,18 @@ class TestGetInstalledModelsWithSizes:
         assert models == {}
 
     @patch("settings.subprocess.run")
+    def test_returns_empty_on_nonzero_exit_code(self, mock_run):
+        """Test returns empty dict when ollama list returns non-zero exit code."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = "Error: something went wrong"
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        assert models == {}
+
+    @patch("settings.subprocess.run")
     def test_parses_mb_sizes(self, mock_run):
         """Test parses MB size values and converts to GB."""
         mock_result = MagicMock()

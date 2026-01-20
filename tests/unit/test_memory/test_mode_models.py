@@ -11,12 +11,14 @@ from memory.mode_models import (
     LearningSettings,
     LearningTrigger,
     ModelPerformanceSummary,
+    ModelSizeTier,
     PerformanceMetrics,
     QualityScores,
     RecommendationType,
     TuningRecommendation,
     VramStrategy,
     get_preset_mode,
+    get_size_tier,
     list_preset_modes,
 )
 
@@ -368,3 +370,31 @@ class TestPresetModes:
         for mode_id, mode in PRESET_MODES.items():
             if mode_id != "experimental":
                 assert mode.is_experimental is False, f"Mode {mode_id} should not be experimental"
+
+
+class TestGetSizeTier:
+    """Tests for get_size_tier function."""
+
+    def test_large_tier(self) -> None:
+        """Test models >= 20GB are classified as LARGE."""
+        assert get_size_tier(20.0) == ModelSizeTier.LARGE
+        assert get_size_tier(25.0) == ModelSizeTier.LARGE
+        assert get_size_tier(50.0) == ModelSizeTier.LARGE
+
+    def test_medium_tier(self) -> None:
+        """Test models 8-20GB are classified as MEDIUM."""
+        assert get_size_tier(8.0) == ModelSizeTier.MEDIUM
+        assert get_size_tier(12.0) == ModelSizeTier.MEDIUM
+        assert get_size_tier(19.9) == ModelSizeTier.MEDIUM
+
+    def test_small_tier(self) -> None:
+        """Test models 3-8GB are classified as SMALL."""
+        assert get_size_tier(3.0) == ModelSizeTier.SMALL
+        assert get_size_tier(5.0) == ModelSizeTier.SMALL
+        assert get_size_tier(7.9) == ModelSizeTier.SMALL
+
+    def test_tiny_tier(self) -> None:
+        """Test models < 3GB are classified as TINY."""
+        assert get_size_tier(0.5) == ModelSizeTier.TINY
+        assert get_size_tier(1.0) == ModelSizeTier.TINY
+        assert get_size_tier(2.9) == ModelSizeTier.TINY
