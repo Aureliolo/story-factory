@@ -7,7 +7,13 @@ from typing import Any
 
 import ollama
 
-from settings import AVAILABLE_MODELS, ModelInfo, Settings, get_available_vram, get_model_info
+from settings import (
+    RECOMMENDED_MODELS,
+    ModelInfo,
+    Settings,
+    get_available_vram,
+    get_model_info,
+)
 from utils.validation import (
     validate_in_range,
     validate_non_negative,
@@ -148,19 +154,20 @@ class ModelService:
 
         Returns:
             List of ModelStatus objects for all known and installed models.
+            Includes both RECOMMENDED_MODELS and any installed models.
         """
         logger.debug("list_available called")
         installed_with_sizes = self.list_installed_with_sizes()
         installed_ids = set(installed_with_sizes.keys())
         models = []
-        seen_ids = set()
+        seen_ids: set[str] = set()
 
-        # First, add all known models from AVAILABLE_MODELS
-        for model_id, info in AVAILABLE_MODELS.items():
+        # First, add all RECOMMENDED_MODELS
+        for model_id, info in RECOMMENDED_MODELS.items():
             # Check if any variant of this model is installed
             is_installed = model_id in installed_ids or any(model_id in m for m in installed_ids)
 
-            # Use actual size from Ollama if available, otherwise use hardcoded
+            # Use actual size from Ollama if available, otherwise use recommended
             actual_size = installed_with_sizes.get(model_id, info["size_gb"])
 
             models.append(
@@ -178,23 +185,24 @@ class ModelService:
             )
             seen_ids.add(model_id)
 
-        # Then, add any installed models that aren't in AVAILABLE_MODELS
+        # Then, add any installed models not in RECOMMENDED_MODELS
         for model_id, size_gb in installed_with_sizes.items():
             if model_id not in seen_ids:
-                # Check if this is a variant of a known model (e.g., :latest tag)
+                # Check if this is a variant of a recommended model
                 base_name = model_id.split(":")[0] if ":" in model_id else model_id
                 known_base = None
-                for known_id in AVAILABLE_MODELS:
-                    if known_id.startswith(base_name):
-                        known_base = AVAILABLE_MODELS[known_id]
+                for known_id in RECOMMENDED_MODELS:
+                    if known_id.startswith(base_name) or base_name in known_id:
+                        known_base = RECOMMENDED_MODELS[known_id]
                         break
 
                 if known_base:
                     # Use info from known base model
+                    tag = model_id.split(":")[-1] if ":" in model_id else "custom"
                     models.append(
                         ModelStatus(
                             model_id=model_id,
-                            name=f"{known_base['name']} ({model_id.split(':')[-1] if ':' in model_id else 'custom'})",
+                            name=f"{known_base['name']} ({tag})",
                             installed=True,
                             size_gb=size_gb,
                             vram_required=known_base["vram_required"],
@@ -205,20 +213,23 @@ class ModelService:
                         )
                     )
                 else:
-                    # Completely unknown model - use defaults with actual size
+                    # Completely unknown model - estimate from size
+                    quality = min(10, int(size_gb / 4) + 4) if size_gb > 0 else 5
+                    speed = max(1, 10 - int(size_gb / 5)) if size_gb > 0 else 5
                     models.append(
                         ModelStatus(
                             model_id=model_id,
                             name=model_id,
                             installed=True,
                             size_gb=size_gb,
-                            vram_required=int(size_gb * 1.2) if size_gb > 0 else 8,  # Estimate VRAM
-                            quality=5,  # Default quality
-                            speed=5,  # Default speed
-                            uncensored=True,  # Assume uncensored
-                            description="Custom/unknown model",
+                            vram_required=int(size_gb * 1.2) if size_gb > 0 else 8,
+                            quality=quality,
+                            speed=speed,
+                            uncensored=True,  # Assume uncensored for local models
+                            description="Automatically detected model",
                         )
                     )
+                seen_ids.add(model_id)
 
         logger.info(f"Listed {len(models)} available models ({len(installed_ids)} installed)")
         return models
@@ -406,11 +417,17 @@ class ModelService:
     def get_recommended_model(self, role: str | None = None) -> str:
         """Get recommended model based on available VRAM and role.
 
+        Uses fully automatic model selection based on installed models.
+        No hardcoded model names - selection is based on what's actually installed.
+
         Args:
             role: Optional agent role for role-specific recommendation.
 
         Returns:
-            Recommended model ID.
+            Recommended model ID from installed models.
+
+        Raises:
+            ValueError: If no models are installed.
         """
         logger.debug(f"get_recommended_model called: role={role}")
         vram = self.get_vram()
@@ -420,14 +437,9 @@ class ModelService:
             logger.info(f"Recommended model for {role} with {vram}GB VRAM: {model}")
             return model
 
-        # General recommendation based on VRAM
-        if vram >= 24:
-            model = "huihui_ai/llama3.3-abliterated:70b-q4_K_M"
-        elif vram >= 14:
-            model = "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
-        else:
-            model = "huihui_ai/dolphin3-abliterated:8b"
-
+        # General recommendation: use auto-selection for "writer" role
+        # (writer requires highest quality, so it's a good default)
+        model = self.settings.get_model_for_agent("writer", vram)
         logger.info(f"General recommended model for {vram}GB VRAM: {model}")
         return model
 

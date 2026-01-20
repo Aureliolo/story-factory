@@ -235,21 +235,54 @@ class LearningSettings(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
 
+# === Model Size Tiers ===
+# Used for automatic model selection based on installed models
+
+
+class ModelSizeTier(str, Enum):
+    """Model size classification for automatic selection."""
+
+    LARGE = "large"  # 20GB+, for architect/complex reasoning
+    MEDIUM = "medium"  # 8-20GB, for writer/editor
+    SMALL = "small"  # 3-8GB, for interviewer/continuity
+    TINY = "tiny"  # <3GB, for validator
+
+
+# Size tier preferences by agent role
+# Each role has ordered list of preferred tiers (first = most preferred)
+AGENT_SIZE_PREFERENCES: dict[str, list[ModelSizeTier]] = {
+    "architect": [ModelSizeTier.LARGE, ModelSizeTier.MEDIUM, ModelSizeTier.SMALL],
+    "writer": [ModelSizeTier.LARGE, ModelSizeTier.MEDIUM, ModelSizeTier.SMALL],
+    "editor": [ModelSizeTier.MEDIUM, ModelSizeTier.LARGE, ModelSizeTier.SMALL],
+    "continuity": [ModelSizeTier.MEDIUM, ModelSizeTier.SMALL, ModelSizeTier.LARGE],
+    "interviewer": [ModelSizeTier.SMALL, ModelSizeTier.MEDIUM, ModelSizeTier.TINY],
+    "validator": [ModelSizeTier.TINY, ModelSizeTier.SMALL],
+    "suggestion": [ModelSizeTier.SMALL, ModelSizeTier.MEDIUM],
+}
+
+
+def get_size_tier(size_gb: float) -> ModelSizeTier:
+    """Classify a model by its size in GB."""
+    if size_gb >= 20:
+        return ModelSizeTier.LARGE
+    elif size_gb >= 8:
+        return ModelSizeTier.MEDIUM
+    elif size_gb >= 3:
+        return ModelSizeTier.SMALL
+    else:
+        return ModelSizeTier.TINY
+
+
 # === Preset Mode Definitions ===
+# NOTE: agent_models is EMPTY for all presets - models are selected automatically
+# based on what's installed. Modes only define temperatures and VRAM strategy.
 
 PRESET_MODES: dict[str, GenerationMode] = {
     "quality_max": GenerationMode(
         id="quality_max",
         name="Maximum Quality",
-        description="Sequential big models, full VRAM utilization",
-        agent_models={
-            "architect": "huihui_ai/qwen3-abliterated:30b",
-            "writer": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-            "editor": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-            "continuity": "deepseek-r1-14b",
-            "interviewer": "huihui_ai/dolphin3-abliterated:8b",
-            "validator": "smollm2:1.7b",
-        },
+        description="Uses largest available models, sequential loading for max VRAM",
+        agent_models={},  # Auto-select: largest available per role
         agent_temperatures={
             "architect": 0.3,
             "writer": 0.9,
@@ -264,18 +297,11 @@ PRESET_MODES: dict[str, GenerationMode] = {
     "quality_creative": GenerationMode(
         id="quality_creative",
         name="Creative Focus",
-        description="30B reasoning + premium creative writers",
-        agent_models={
-            "architect": "huihui_ai/qwen3-abliterated:30b",
-            "writer": "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit",
-            "editor": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-            "continuity": "huihui_ai/dolphin3-abliterated:8b",
-            "interviewer": "huihui_ai/dolphin3-abliterated:8b",
-            "validator": "smollm2:1.7b",
-        },
+        description="High temperature for creative writing, largest models",
+        agent_models={},  # Auto-select: largest available per role
         agent_temperatures={
             "architect": 0.3,
-            "writer": 1.0,
+            "writer": 1.0,  # Higher for creativity
             "editor": 0.6,
             "continuity": 0.2,
             "interviewer": 0.5,
@@ -287,15 +313,8 @@ PRESET_MODES: dict[str, GenerationMode] = {
     "balanced": GenerationMode(
         id="balanced",
         name="Balanced",
-        description="Good quality with reasonable speed",
-        agent_models={
-            "architect": "qwen3:14b",
-            "writer": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-            "editor": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-            "continuity": "huihui_ai/qwen3-abliterated:8b",
-            "interviewer": "huihui_ai/dolphin3-abliterated:8b",
-            "validator": "qwen3:0.6b",
-        },
+        description="Good quality with reasonable speed, adaptive VRAM",
+        agent_models={},  # Auto-select: medium models preferred
         agent_temperatures={
             "architect": 0.4,
             "writer": 0.8,
@@ -310,15 +329,8 @@ PRESET_MODES: dict[str, GenerationMode] = {
     "draft_fast": GenerationMode(
         id="draft_fast",
         name="Fast Draft",
-        description="Quick iteration with smaller models",
-        agent_models={
-            "architect": "huihui_ai/qwen3-abliterated:8b",
-            "writer": "huihui_ai/dolphin3-abliterated:8b",
-            "editor": "huihui_ai/dolphin3-abliterated:8b",
-            "continuity": "qwen3:4b",
-            "interviewer": "huihui_ai/dolphin3-abliterated:8b",
-            "validator": "qwen3:0.6b",
-        },
+        description="Quick iteration with smaller models, parallel loading",
+        agent_models={},  # Auto-select: smaller models for speed
         agent_temperatures={
             "architect": 0.4,
             "writer": 0.8,
@@ -334,14 +346,7 @@ PRESET_MODES: dict[str, GenerationMode] = {
         id="experimental",
         name="Experimental",
         description="Varies models to gather comparative data",
-        agent_models={
-            "architect": "huihui_ai/qwen3-abliterated:30b",
-            "writer": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-            "editor": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
-            "continuity": "huihui_ai/qwen3-abliterated:8b",
-            "interviewer": "huihui_ai/dolphin3-abliterated:8b",
-            "validator": "qwen3:0.6b",
-        },
+        agent_models={},  # Auto-select with variation
         agent_temperatures={
             "architect": 0.4,
             "writer": 0.9,

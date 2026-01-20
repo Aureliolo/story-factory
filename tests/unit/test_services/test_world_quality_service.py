@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import ollama
 import pytest
 
-from memory.story_state import Character, StoryBrief, StoryState
+from memory.story_state import Character, Faction, StoryBrief, StoryState
 from memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
@@ -1469,20 +1469,18 @@ class TestGenerateRelationshipWithQuality:
 class TestCreateFaction:
     """Tests for _create_faction method."""
 
-    def test_create_faction_success(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_faction_success(self, mock_generate_structured, service, story_state):
         """Test successful faction creation."""
-        faction_json = json.dumps(
-            {
-                "name": "The Shadow Council",
-                "type": "faction",
-                "description": "A secret society manipulating events from the shadows",
-                "leader": "The Grand Master",
-                "goals": ["control the kingdom", "gather ancient artifacts"],
-                "values": ["secrecy", "power"],
-            }
+        mock_faction = Faction(
+            name="The Shadow Council",
+            type="faction",
+            description="A secret society manipulating events from the shadows",
+            leader="The Grand Master",
+            goals=["control the kingdom", "gather ancient artifacts"],
+            values=["secrecy", "power"],
         )
-        mock_ollama_client.generate.return_value = {"response": faction_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_faction
 
         faction = service._create_faction(story_state, existing_names=[], temperature=0.9)
 
@@ -1490,21 +1488,21 @@ class TestCreateFaction:
         assert faction["leader"] == "The Grand Master"
         assert len(faction["goals"]) == 2
 
-    def test_create_faction_with_existing_locations(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_faction_with_existing_locations(
+        self, mock_generate_structured, service, story_state
+    ):
         """Test faction creation with existing locations for spatial grounding."""
-        faction_json = json.dumps(
-            {
-                "name": "The Shadow Council",
-                "type": "faction",
-                "description": "A secret society based in the old castle",
-                "leader": "The Grand Master",
-                "goals": ["control the kingdom"],
-                "values": ["secrecy"],
-                "base_location": "The Dark Castle",
-            }
+        mock_faction = Faction(
+            name="The Shadow Council",
+            type="faction",
+            description="A secret society based in the old castle",
+            leader="The Grand Master",
+            goals=["control the kingdom"],
+            values=["secrecy"],
+            base_location="The Dark Castle",
         )
-        mock_ollama_client.generate.return_value = {"response": faction_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_faction
 
         faction = service._create_faction(
             story_state,
@@ -1516,22 +1514,20 @@ class TestCreateFaction:
         assert faction["name"] == "The Shadow Council"
         assert faction["base_location"] == "The Dark Castle"
 
+    @patch("services.world_quality_service.generate_structured")
     def test_create_faction_duplicate_name_returns_empty(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
         """Test faction creation returns empty dict when name is duplicate."""
-        faction_json = json.dumps(
-            {
-                "name": "The Shadow Council",
-                "type": "faction",
-                "description": "A secret society",
-                "leader": "The Grand Master",
-                "goals": ["control"],
-                "values": ["power"],
-            }
+        mock_faction = Faction(
+            name="The Shadow Council",
+            type="faction",
+            description="A secret society",
+            leader="The Grand Master",
+            goals=["control"],
+            values=["power"],
         )
-        mock_ollama_client.generate.return_value = {"response": faction_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_faction
 
         # Pass existing name - should return empty to force retry
         result = service._create_faction(
@@ -1547,22 +1543,20 @@ class TestCreateFaction:
         result = service._create_faction(state, existing_names=[], temperature=0.9)
         assert result == {}
 
-    def test_create_faction_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test faction creation raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_faction_error_raises(self, mock_generate_structured, service, story_state):
+        """Test faction creation raises error on generation failure."""
+        mock_generate_structured.side_effect = Exception("Generation failed")
 
-        with pytest.raises(WorldGenerationError, match="Invalid faction"):
+        with pytest.raises(WorldGenerationError, match="Faction creation failed"):
             service._create_faction(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_faction_ollama_error(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_faction_ollama_error(self, mock_generate_structured, service, story_state):
         """Test faction creation handles Ollama errors."""
-        mock_ollama_client.generate.side_effect = TimeoutError("Timeout")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = TimeoutError("Timeout")
 
-        with pytest.raises(WorldGenerationError, match="LLM error"):
+        with pytest.raises(WorldGenerationError, match="Faction creation failed"):
             service._create_faction(story_state, existing_names=[], temperature=0.9)
 
 
@@ -1618,20 +1612,18 @@ class TestJudgeFactionQuality:
 class TestRefineFaction:
     """Tests for _refine_faction method."""
 
-    def test_refine_faction_success(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_faction_success(self, mock_generate_structured, service, story_state):
         """Test successful faction refinement."""
-        refined_json = json.dumps(
-            {
-                "name": "Test Guild",
-                "type": "faction",
-                "description": "A deeply influential guild with rich history",
-                "leader": "The Grand Master",
-                "goals": ["dominate trade", "expand influence"],
-                "values": ["profit", "loyalty"],
-            }
+        mock_faction = Faction(
+            name="Ignored - should use original",
+            type="faction",
+            description="A deeply influential guild with rich history",
+            leader="The Grand Master",
+            goals=["dominate trade", "expand influence"],
+            values=["profit", "loyalty"],
         )
-        mock_ollama_client.generate.return_value = {"response": refined_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_faction
 
         original = {
             "name": "Test Guild",
@@ -1646,22 +1638,21 @@ class TestRefineFaction:
 
         refined = service._refine_faction(original, scores, story_state, temperature=0.7)
 
+        # Name should be preserved from original
         assert refined["name"] == "Test Guild"
         assert "influential" in refined["description"]
 
-    def test_refine_faction_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
-    ):
-        """Test refinement raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_faction_error_raises(self, mock_generate_structured, service, story_state):
+        """Test refinement raises error on generation failure."""
+        mock_generate_structured.side_effect = Exception("Generation failed")
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
             coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Invalid faction refinement"):
+        with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
             service._refine_faction(original, scores, story_state, temperature=0.7)
 
 
@@ -2798,23 +2789,20 @@ class TestExceptionHandlingPaths:
 
     # ========== Faction Creation Exception Paths ==========
 
-    def test_create_faction_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test faction creation handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_faction_generation_error(self, mock_generate_structured, service, story_state):
+        """Test faction creation handles generation errors."""
+        mock_generate_structured.side_effect = ValueError("validation error")
 
-        with patch("services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = ValueError("parse error")
+        with pytest.raises(WorldGenerationError, match="Faction creation failed"):
+            service._create_faction(story_state, existing_names=[], temperature=0.9)
 
-            with pytest.raises(WorldGenerationError, match="Invalid faction response format"):
-                service._create_faction(story_state, existing_names=[], temperature=0.9)
-
-    def test_create_faction_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_create_faction_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test faction creation handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
-        with pytest.raises(WorldGenerationError, match="Unexpected faction creation error"):
+        with pytest.raises(WorldGenerationError, match="Faction creation failed"):
             service._create_faction(story_state, existing_names=[], temperature=0.9)
 
     # ========== Faction Judge Exception Paths ==========
@@ -2831,46 +2819,43 @@ class TestExceptionHandlingPaths:
 
     # ========== Faction Refinement Exception Paths ==========
 
-    def test_refine_faction_llm_error(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_faction_llm_error(self, mock_generate_structured, service, story_state):
         """Test faction refinement handles LLM errors."""
-        mock_ollama_client.generate.side_effect = ConnectionError("Connection lost")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = ConnectionError("Connection lost")
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
             coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="LLM error during faction refinement"):
+        with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
             service._refine_faction(original, scores, story_state, temperature=0.7)
 
-    def test_refine_faction_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test faction refinement handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_faction_generation_error(self, mock_generate_structured, service, story_state):
+        """Test faction refinement handles generation errors."""
+        mock_generate_structured.side_effect = ValueError("validation error")
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
             coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
         )
 
-        with patch("services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = TypeError("type error")
+        with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
+            service._refine_faction(original, scores, story_state, temperature=0.7)
 
-            with pytest.raises(WorldGenerationError, match="Invalid faction refinement"):
-                service._refine_faction(original, scores, story_state, temperature=0.7)
-
-    def test_refine_faction_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("services.world_quality_service.generate_structured")
+    def test_refine_faction_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test faction refinement handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
         original = {"name": "Test", "description": "Test", "leader": "X", "goals": [], "values": []}
         scores = FactionQualityScores(
             coherence=6.0, influence=6.0, conflict_potential=6.0, distinctiveness=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Unexpected faction refinement error"):
+        with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
             service._refine_faction(original, scores, story_state, temperature=0.7)
 
     # ========== Item Creation Exception Paths ==========

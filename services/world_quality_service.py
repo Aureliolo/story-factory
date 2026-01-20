@@ -14,7 +14,7 @@ from typing import Any
 import ollama
 
 from memory.mode_database import ModeDatabase
-from memory.story_state import Character, StoryState
+from memory.story_state import Character, Faction, StoryState
 from memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
@@ -1194,8 +1194,19 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 f"Returning best iteration."
             )
             faction = best_entity
-            # Reconstruct scores from best iteration
-            best_record = history.iterations[history.best_iteration - 1]
+            # Find best iteration record by iteration number (not index)
+            # This handles cases where some iterations failed and weren't added to the list
+            best_record = next(
+                (r for r in history.iterations if r.iteration == history.best_iteration),
+                None,
+            )
+            if best_record is None:  # pragma: no cover
+                logger.error(
+                    f"Best iteration {history.best_iteration} not found in history. "
+                    f"Available iterations: {[r.iteration for r in history.iterations]}"
+                )
+                # Fall back to last iteration
+                best_record = history.iterations[-1]
             scores = FactionQualityScores(
                 coherence=best_record.scores.get("coherence", 0),
                 influence=best_record.scores.get("influence", 0),
@@ -1317,39 +1328,27 @@ Output ONLY valid JSON (all text in {brief.language}):
 
         try:
             model = self._get_creator_model(entity_type="faction")
-            response = self.client.generate(
+            # Use structured generation with Pydantic model for reliable output
+            faction = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_faction_create,
-                },
+                response_model=Faction,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                # Validate name is not a duplicate
-                name = data.get("name", "")
-                if name and name in existing_names:
-                    logger.warning(f"Faction name '{name}' is duplicate, clearing to force retry")
-                    return {}  # Return empty to trigger retry
-                return data
-            else:
-                logger.error(f"Faction creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid faction JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Faction creation LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during faction creation: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Faction creation JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid faction response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+            # Validate name is not a duplicate
+            if faction.name and faction.name in existing_names:
+                logger.warning(
+                    f"Faction name '{faction.name}' is duplicate, clearing to force retry"
+                )
+                return {}  # Return empty to trigger retry
+
+            # Convert to dict for compatibility with existing code
+            return faction.model_dump()
         except Exception as e:
-            logger.exception(f"Unexpected error in faction creation: {e}")
-            raise WorldGenerationError(f"Unexpected faction creation error: {e}") from e
+            logger.exception(f"Faction creation failed: {e}")
+            raise WorldGenerationError(f"Faction creation failed: {e}") from e
 
     def _judge_faction_quality(
         self,
@@ -1480,41 +1479,27 @@ REQUIREMENTS:
 3. Add concrete details, not vague generalities
 4. Output in {brief.language if brief else "English"}
 
-Return ONLY the improved faction as JSON."""
+Return ONLY the improved faction."""
 
         try:
             model = self._get_creator_model(entity_type="faction")
-            response = self.client.generate(
+            # Use structured generation with Pydantic model for reliable output
+            refined = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",  # Force JSON output
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_faction_refine,
-                },
+                response_model=Faction,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                # Ensure name is preserved
-                data["name"] = faction.get("name", "Unknown")
-                data["type"] = "faction"
-                return data
-            else:
-                logger.error(f"Faction refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid faction refinement JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Faction refinement LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during faction refinement: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Faction refinement JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid faction refinement response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+            # Ensure name is preserved from original faction
+            result = refined.model_dump()
+            result["name"] = faction.get("name", "Unknown")
+            result["type"] = "faction"
+            return result
         except Exception as e:
-            logger.exception(f"Unexpected error in faction refinement: {e}")
-            raise WorldGenerationError(f"Unexpected faction refinement error: {e}") from e
+            logger.exception(f"Faction refinement failed: {e}")
+            raise WorldGenerationError(f"Faction refinement failed: {e}") from e
 
     # ========== ITEM GENERATION WITH QUALITY ==========
 

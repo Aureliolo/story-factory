@@ -586,6 +586,58 @@ class TestModelModeServiceAdditional:
         assert model == "fallback-model:8b"
         mock_settings.get_model_for_agent.assert_called()
 
+    def test_get_model_for_agent_returns_explicit_override(self, service: ModelModeService) -> None:
+        """Test get_model_for_agent returns explicit model when mode overrides agent."""
+
+        # Create mode with explicit model for writer
+        custom = GenerationMode(
+            id="explicit_model_test",
+            name="Explicit Test",
+            description="",
+            agent_models={"writer": "my-custom-model:7b"},  # Explicit override
+            agent_temperatures={},
+            vram_strategy=VramStrategy.PARALLEL,
+            is_preset=False,
+        )
+        service.save_custom_mode(custom)
+        service.set_mode("explicit_model_test")
+
+        # Should return the explicit model, not fall back to settings
+        model = service.get_model_for_agent("writer")
+        assert model == "my-custom-model:7b"
+
+    def test_prepare_model_adaptive_fallback_to_model_info(self, service: ModelModeService) -> None:
+        """Test prepare_model uses get_model_info when model not in installed list."""
+        from unittest.mock import patch
+
+        # Set mode with adaptive strategy
+        custom = GenerationMode(
+            id="adaptive_fallback_test",
+            name="Adaptive Fallback",
+            description="",
+            agent_models={},
+            agent_temperatures={},
+            vram_strategy=VramStrategy.ADAPTIVE,
+            is_preset=False,
+        )
+        service.save_custom_mode(custom)
+        service.set_mode("adaptive_fallback_test")
+
+        service._loaded_models = {"existing-model"}
+
+        # Mock: model-x NOT in installed models, so it must use get_model_info
+        # Available VRAM is 4GB, model requires 10GB from get_model_info
+        with patch("services.model_mode_service.get_available_vram", return_value=4):
+            with patch("settings.get_installed_models_with_sizes", return_value={}):
+                with patch(
+                    "settings.get_model_info",
+                    return_value={"vram_required": 10, "quality": 7, "speed": 7},
+                ):
+                    service.prepare_model("unknown-model:xyz")
+
+        # Should have unloaded other models due to VRAM constraint
+        assert service._loaded_models == {"unknown-model:xyz"}
+
     def test_prepare_model_adaptive_strategy_low_vram(self, service: ModelModeService) -> None:
         """Test prepare_model with adaptive strategy when VRAM is low."""
         from unittest.mock import patch
@@ -606,10 +658,10 @@ class TestModelModeServiceAdditional:
         service._loaded_models = {"model-a", "model-b"}
 
         # Mock low VRAM scenario - less than required
+        # get_installed_models_with_sizes returns size 10GB, which needs ~12GB VRAM (20% overhead)
+        # But only 4GB available, so should unload other models
         with patch("services.model_mode_service.get_available_vram", return_value=4):
-            with patch(
-                "services.model_mode_service.AVAILABLE_MODELS", {"model-c": {"vram_required": 8}}
-            ):
+            with patch("settings.get_installed_models_with_sizes", return_value={"model-c": 10.0}):
                 service.prepare_model("model-c")
 
         # Should have unloaded other models

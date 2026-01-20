@@ -34,6 +34,7 @@ ALLOWED_LARGE_FILES: dict[str, str] = {
     "memory/world_database.py": "SQLite + NetworkX world database with CRUD, queries, and migrations - should be split by concern",
     "memory/mode_database.py": "Mode presets and custom mode management - should be split into presets and storage",
     "services/world_service.py": "World building service with entity extraction and generation - should be split by operation type",
+    "ui/pages/models.py": "Model management with download queue, batch operations, and tag configuration - should be split into components",
 }
 
 

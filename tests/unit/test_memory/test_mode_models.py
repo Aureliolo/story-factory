@@ -11,12 +11,14 @@ from memory.mode_models import (
     LearningSettings,
     LearningTrigger,
     ModelPerformanceSummary,
+    ModelSizeTier,
     PerformanceMetrics,
     QualityScores,
     RecommendationType,
     TuningRecommendation,
     VramStrategy,
     get_preset_mode,
+    get_size_tier,
     list_preset_modes,
 )
 
@@ -343,12 +345,18 @@ class TestPresetModes:
         assert len(modes) >= 5
         assert all(m.is_preset for m in modes)
 
-    def test_preset_modes_have_all_agents(self) -> None:
-        """Test that preset modes have models for all agents."""
+    def test_preset_modes_have_all_agent_temperatures(self) -> None:
+        """Test that preset modes have temperatures for all agents.
+
+        Note: agent_models is intentionally empty for preset modes to use
+        automatic model selection based on installed models. Only temperatures
+        need to be defined for all roles.
+        """
         expected_roles = {"architect", "writer", "editor", "continuity", "interviewer", "validator"}
 
         for mode_id, mode in PRESET_MODES.items():
-            assert set(mode.agent_models.keys()) == expected_roles, f"Mode {mode_id} missing roles"
+            # agent_models can be empty (auto-selection) or have specific overrides
+            # but agent_temperatures must be defined for all roles
             assert set(mode.agent_temperatures.keys()) == expected_roles, (
                 f"Mode {mode_id} missing temps"
             )
@@ -362,3 +370,31 @@ class TestPresetModes:
         for mode_id, mode in PRESET_MODES.items():
             if mode_id != "experimental":
                 assert mode.is_experimental is False, f"Mode {mode_id} should not be experimental"
+
+
+class TestGetSizeTier:
+    """Tests for get_size_tier function."""
+
+    def test_large_tier(self) -> None:
+        """Test models >= 20GB are classified as LARGE."""
+        assert get_size_tier(20.0) == ModelSizeTier.LARGE
+        assert get_size_tier(25.0) == ModelSizeTier.LARGE
+        assert get_size_tier(50.0) == ModelSizeTier.LARGE
+
+    def test_medium_tier(self) -> None:
+        """Test models 8-20GB are classified as MEDIUM."""
+        assert get_size_tier(8.0) == ModelSizeTier.MEDIUM
+        assert get_size_tier(12.0) == ModelSizeTier.MEDIUM
+        assert get_size_tier(19.9) == ModelSizeTier.MEDIUM
+
+    def test_small_tier(self) -> None:
+        """Test models 3-8GB are classified as SMALL."""
+        assert get_size_tier(3.0) == ModelSizeTier.SMALL
+        assert get_size_tier(5.0) == ModelSizeTier.SMALL
+        assert get_size_tier(7.9) == ModelSizeTier.SMALL
+
+    def test_tiny_tier(self) -> None:
+        """Test models < 3GB are classified as TINY."""
+        assert get_size_tier(0.5) == ModelSizeTier.TINY
+        assert get_size_tier(1.0) == ModelSizeTier.TINY
+        assert get_size_tier(2.9) == ModelSizeTier.TINY

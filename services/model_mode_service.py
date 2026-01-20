@@ -27,7 +27,7 @@ from memory.mode_models import (
     list_preset_modes,
 )
 from services.llm_client import generate_structured
-from settings import AVAILABLE_MODELS, Settings, get_available_vram
+from settings import Settings, get_available_vram
 from utils.validation import validate_not_empty, validate_not_none, validate_positive
 
 logger = logging.getLogger(__name__)
@@ -189,18 +189,33 @@ class ModelModeService:
     def get_model_for_agent(self, agent_role: str) -> str:
         """Get the model ID for an agent based on current mode.
 
-        Falls back to settings auto-selection if mode doesn't specify.
+        Model selection is fully automatic. The mode's agent_models is only
+        used for explicit user overrides. If empty or not specified for a role,
+        uses automatic selection based on installed models.
+
+        Args:
+            agent_role: The agent role (writer, architect, etc.)
+
+        Returns:
+            Model ID selected automatically or from user override.
+
+        Raises:
+            ValueError: If no models are installed.
         """
         validate_not_empty(agent_role, "agent_role")
         mode = self.get_current_mode()
         model_id = mode.agent_models.get(agent_role)
 
         if model_id:
+            # User has explicitly overridden this role
+            logger.debug(f"Using user-specified model {model_id} for {agent_role}")
             return model_id
 
-        # Fallback to settings-based selection
+        # Use automatic selection based on installed models
         vram = get_available_vram()
-        return self.settings.get_model_for_agent(agent_role, vram)
+        selected = self.settings.get_model_for_agent(agent_role, vram)
+        logger.debug(f"Auto-selected {selected} for {agent_role} (vram={vram}GB)")
+        return selected
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
         """Get the temperature for an agent based on current mode.
@@ -225,6 +240,8 @@ class ModelModeService:
         For parallel, keeps models loaded.
         For adaptive, unloads if VRAM is constrained.
         """
+        from settings import get_installed_models_with_sizes, get_model_info
+
         validate_not_empty(model_id, "model_id")
         mode = self.get_current_mode()
         strategy = mode.vram_strategy
@@ -235,8 +252,15 @@ class ModelModeService:
         elif strategy == VramStrategy.ADAPTIVE:
             # Check if we need to free VRAM
             available = get_available_vram()
-            model_info = AVAILABLE_MODELS.get(model_id)
-            required = model_info["vram_required"] if model_info else 8
+
+            # Get model size from installed models or RECOMMENDED_MODELS
+            installed = get_installed_models_with_sizes()
+            if model_id in installed:
+                size_gb = installed[model_id]
+                required = int(size_gb * 1.2)  # 20% overhead
+            else:
+                model_info = get_model_info(model_id)
+                required = model_info["vram_required"]
 
             if available < required:
                 # Need to free up space
