@@ -1,6 +1,6 @@
 """Tests for UI page functionality."""
 
-from settings import AVAILABLE_MODELS
+from settings import RECOMMENDED_MODELS
 
 
 class TestModelFiltering:
@@ -15,7 +15,7 @@ class TestModelFiltering:
         fitting_models = []
         non_fitting_models = []
 
-        for model_id, info in AVAILABLE_MODELS.items():
+        for model_id, info in RECOMMENDED_MODELS.items():
             if info["vram_required"] <= available_vram:
                 fitting_models.append(model_id)
             else:
@@ -27,11 +27,11 @@ class TestModelFiltering:
 
         # Verify all fitting models have VRAM <= 10
         for model_id in fitting_models:
-            assert AVAILABLE_MODELS[model_id]["vram_required"] <= 10
+            assert RECOMMENDED_MODELS[model_id]["vram_required"] <= 10
 
         # Verify all non-fitting models have VRAM > 10
         for model_id in non_fitting_models:
-            assert AVAILABLE_MODELS[model_id]["vram_required"] > 10
+            assert RECOMMENDED_MODELS[model_id]["vram_required"] > 10
 
     def test_filter_models_all_fit_high_vram(self):
         """Test filtering with high VRAM shows all models."""
@@ -40,11 +40,11 @@ class TestModelFiltering:
         # All models should fit
         fitting_models = [
             model_id
-            for model_id, info in AVAILABLE_MODELS.items()
+            for model_id, info in RECOMMENDED_MODELS.items()
             if info["vram_required"] <= available_vram
         ]
 
-        assert len(fitting_models) == len(AVAILABLE_MODELS)
+        assert len(fitting_models) == len(RECOMMENDED_MODELS)
 
     def test_filter_models_none_fit_low_vram(self):
         """Test filtering with very low VRAM shows no models."""
@@ -53,17 +53,17 @@ class TestModelFiltering:
         # Find models that fit
         fitting_models = [
             model_id
-            for model_id, info in AVAILABLE_MODELS.items()
+            for model_id, info in RECOMMENDED_MODELS.items()
             if info["vram_required"] <= available_vram
         ]
 
         # Most models should not fit (there might be very small models)
-        assert len(fitting_models) < len(AVAILABLE_MODELS) / 2
+        assert len(fitting_models) < len(RECOMMENDED_MODELS) / 2
 
     def test_filter_logic_boundary_cases(self):
         """Test filtering at exact VRAM boundaries."""
         # Test with exact VRAM requirement
-        for _model_id, info in AVAILABLE_MODELS.items():
+        for _model_id, info in RECOMMENDED_MODELS.items():
             exact_vram = info["vram_required"]
 
             # Model should fit when VRAM exactly matches requirement
@@ -75,7 +75,7 @@ class TestModelFiltering:
 
     def test_model_metadata_completeness(self):
         """Test that all models have required metadata for filtering."""
-        for model_id, info in AVAILABLE_MODELS.items():
+        for model_id, info in RECOMMENDED_MODELS.items():
             # Check required fields exist
             assert "vram_required" in info, f"Model {model_id} missing vram_required"
             assert "name" in info, f"Model {model_id} missing name"
@@ -90,7 +90,7 @@ class TestModelFiltering:
 
     def test_vram_requirements_are_positive(self):
         """Test that all VRAM requirements are positive numbers."""
-        for model_id, info in AVAILABLE_MODELS.items():
+        for model_id, info in RECOMMENDED_MODELS.items():
             assert info["vram_required"] > 0, (
                 f"Model {model_id} has invalid VRAM requirement: {info['vram_required']}"
             )
@@ -108,7 +108,7 @@ class TestModelInstallationTracking:
         installed = ["qwen3:0.6b", "huihui_ai/qwen3-abliterated:8b"]
 
         # Test identification logic
-        for model_id in AVAILABLE_MODELS.keys():
+        for model_id in RECOMMENDED_MODELS.keys():
             # Check if model_id is in any installed model name
             is_installed = any(model_id in m for m in installed)
 

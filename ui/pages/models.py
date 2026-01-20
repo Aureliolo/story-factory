@@ -12,7 +12,7 @@ from nicegui.elements.column import Column
 from nicegui.elements.input import Input
 
 from services import ServiceContainer
-from settings import AVAILABLE_MODELS, ModelInfo
+from settings import AGENT_ROLES, RECOMMENDED_MODELS, ModelInfo, Settings
 from ui.state import AppState
 from ui.theme import get_quality_color
 
@@ -182,8 +182,10 @@ class ModelsPage:
                 return
 
             # Model cards for installed
+            settings = Settings.load()
             for model_id, size_gb in installed_with_sizes.items():
                 info = self.services.model.get_model_info(model_id)
+                current_tags = settings.get_model_tags(model_id)
                 with ui.card().classes("w-full mb-2").props("flat bordered"):
                     with ui.row().classes("w-full items-center"):
                         with ui.column().classes("flex-grow gap-0"):
@@ -205,6 +207,19 @@ class ModelsPage:
                                 icon="delete",
                                 on_click=lambda m=model_id: self._delete_model(m),
                             ).props("flat dense round color=negative").tooltip("Delete")
+
+                    # Tags configuration
+                    with ui.row().classes("w-full items-center gap-2 mt-2"):
+                        ui.label("Roles:").classes("text-xs text-gray-500 dark:text-gray-400")
+                        role_options = {role: AGENT_ROLES[role]["name"] for role in AGENT_ROLES}
+                        ui.select(
+                            options=role_options,
+                            value=current_tags,
+                            multiple=True,
+                            on_change=lambda e, m=model_id: self._update_model_tags(m, e.value),
+                        ).classes("flex-grow").props("dense use-chips").tooltip(
+                            "Select agent roles this model can be used for"
+                        )
 
     def _build_available_section(self) -> None:
         """Build the available models section."""
@@ -312,7 +327,7 @@ class ModelsPage:
         installed = set(self.services.model.list_installed())
         downloadable = []
 
-        for model_id, info in AVAILABLE_MODELS.items():
+        for model_id, info in RECOMMENDED_MODELS.items():
             # Apply same filters as _refresh_model_list
             if self._filter_search and self._filter_search.lower() not in info["name"].lower():
                 continue
@@ -597,7 +612,7 @@ class ModelsPage:
 
         with self._model_list:
             shown_count = 0
-            for model_id, info in AVAILABLE_MODELS.items():
+            for model_id, info in RECOMMENDED_MODELS.items():
                 # Apply filters
                 if self._filter_search and self._filter_search.lower() not in info["name"].lower():
                     continue
@@ -813,6 +828,18 @@ class ModelsPage:
         else:
             logger.warning(f"Model test failed: {model_id} - {message}")
             ui.notify(message, type="negative")
+
+    def _update_model_tags(self, model_id: str, tags: list[str]) -> None:
+        """Update the tags for a model.
+
+        Args:
+            model_id: Model identifier.
+            tags: List of role tags to assign.
+        """
+        logger.info(f"Updating tags for {model_id}: {tags}")
+        settings = Settings.load()
+        settings.set_model_tags(model_id, tags)
+        ui.notify(f"Updated roles for {model_id}", type="positive")
 
     async def _delete_model(self, model_id: str) -> None:
         """Delete a model."""

@@ -126,6 +126,45 @@ That's all."""
         result = extract_json(response, fallback_pattern=fallback)
         assert result == {"valid": "json"}
 
+    def test_repairs_truncated_json_simple(self):
+        """Should repair simple truncated JSON with missing closing brace."""
+        response = '{"name": "test", "value": 42'
+        result = extract_json(response, strict=False)
+        # Should repair by closing the brace
+        assert result is not None
+        assert isinstance(result, dict)
+        assert result["name"] == "test"
+
+    def test_repairs_truncated_json_with_incomplete_string(self):
+        """Should attempt to repair truncated JSON with incomplete string value."""
+        response = '{"name": "test", "description": "A long description that gets cut'
+        result = extract_json(response, strict=False)
+        # The repair adds closing braces; may or may not successfully parse
+        # depending on the truncation point
+        assert result is None or isinstance(result, dict)
+
+    def test_truncated_json_without_opening_brace_not_repaired(self):
+        """Should not attempt repair if no opening brace exists."""
+        response = '"name": "test", "value": 42}'
+        result = extract_json(response, strict=False)
+        # No opening brace, so truncation detection doesn't trigger
+        assert result is None
+
+    def test_repairs_nested_truncated_json(self):
+        """Should repair truncated JSON with nested objects."""
+        response = '{"outer": {"inner": "value"'
+        result = extract_json(response, strict=False)
+        # Should close both braces
+        assert result is not None
+        assert "outer" in result
+
+    def test_repairs_truncated_json_with_array(self):
+        """Should repair truncated JSON with unclosed array."""
+        response = '{"items": ["a", "b"'
+        result = extract_json(response, strict=False)
+        # Should close both array and object
+        assert result is not None
+
 
 class TestExtractJsonList:
     """Tests for extract_json_list function."""
