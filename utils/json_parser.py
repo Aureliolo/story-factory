@@ -133,7 +133,7 @@ def extract_json(
             if result is not None:
                 logger.info("Successfully repaired truncated JSON")
                 return result
-        except Exception:
+        except Exception:  # pragma: no cover
             logger.debug("JSON repair attempt failed")
 
     # Strategy 6: Try custom fallback pattern
