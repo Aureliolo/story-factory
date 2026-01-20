@@ -11,6 +11,7 @@ from settings import (
     Settings,
     get_available_vram,
     get_installed_models,
+    get_installed_models_with_sizes,
     get_model_info,
 )
 
@@ -129,6 +130,31 @@ class TestGetModelInfo:
         assert info["quality"] > 0
         assert info["speed"] > 0
         assert info["tags"] == []  # No tags for unknown models
+
+    def test_matches_model_by_base_name(self):
+        """Should match model by base name if exact match not found."""
+        # Use a base name that matches an existing model
+        # "huihui_ai/qwen3-abliterated:xyz" should match "huihui_ai/qwen3-abliterated:30b"
+        info = get_model_info("huihui_ai/qwen3-abliterated:xyz")
+        # Should return info from the matching base name (not estimated defaults)
+        assert info is not None
+        assert "quality" in info
+        # The quality should come from the RECOMMENDED_MODELS entry, not defaults
+        assert info["quality"] >= 7  # Known models have good quality scores
+
+    def test_returns_defaults_for_unknown_model_with_no_size(self, monkeypatch):
+        """Should return default values when model size is unknown."""
+        # Mock installed models to return empty or no size for the model
+        monkeypatch.setattr(
+            "settings.get_installed_models_with_sizes",
+            lambda timeout=None: {},
+        )
+        info = get_model_info("completely-unknown-model:xyz")
+        assert info["name"] == "completely-unknown-model:xyz"
+        # Should use default values (quality=5, speed=5, vram=8)
+        assert info["quality"] == 5
+        assert info["speed"] == 5
+        assert info["vram_required"] == 8
 
 
 class TestAgentRoles:
@@ -679,6 +705,143 @@ class TestGetInstalledModels:
         models = get_installed_models()
 
         assert models == []
+
+
+class TestGetInstalledModelsWithSizes:
+    """Tests for get_installed_models_with_sizes function."""
+
+    @patch("settings.subprocess.run")
+    def test_returns_model_sizes(self, mock_run):
+        """Test returns dict of models with sizes."""
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = (
+            "NAME              SIZE\nmodel1:latest     8.5 GB\nmodel2:7b     4.0 GB\n"
+        )
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        assert "model1:latest" in models
+        assert models["model1:latest"] == 8.5
+        assert models["model2:7b"] == 4.0
+
+    @patch("settings.subprocess.run")
+    def test_returns_empty_on_file_not_found(self, mock_run):
+        """Test returns empty dict when ollama not found."""
+        mock_run.side_effect = FileNotFoundError("ollama not found")
+
+        models = get_installed_models_with_sizes()
+
+        assert models == {}
+
+    @patch("settings.subprocess.run")
+    def test_returns_empty_on_timeout(self, mock_run):
+        """Test returns empty dict on timeout."""
+        import subprocess
+
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="ollama", timeout=10)
+
+        models = get_installed_models_with_sizes()
+
+        assert models == {}
+
+    @patch("settings.subprocess.run")
+    def test_returns_empty_on_os_error(self, mock_run):
+        """Test returns empty dict on OSError."""
+        mock_run.side_effect = OSError("Permission denied")
+
+        models = get_installed_models_with_sizes()
+
+        assert models == {}
+
+    @patch("settings.subprocess.run")
+    def test_parses_mb_sizes(self, mock_run):
+        """Test parses MB size values and converts to GB."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "NAME              SIZE\nsmall-model:1b    512 MB\n"
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        assert "small-model:1b" in models
+        # 512 MB = 0.5 GB
+        assert models["small-model:1b"] == 0.5
+
+    @patch("settings.subprocess.run")
+    def test_parses_combined_size_format(self, mock_run):
+        """Test parses combined format like '4.1GB' without space."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "NAME              SIZE\nmodel:tag     4.1GB\n"
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        assert "model:tag" in models
+        assert models["model:tag"] == 4.1
+
+    @patch("settings.subprocess.run")
+    def test_handles_invalid_gb_separate_format(self, mock_run):
+        """Test handles invalid GB separate format gracefully."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        # Invalid size format - not a number before GB
+        mock_result.stdout = "NAME              SIZE\nmodel:tag     invalid GB\n"
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        # Should still return the model but with default size of 0.0
+        assert "model:tag" in models
+        assert models["model:tag"] == 0.0
+
+    @patch("settings.subprocess.run")
+    def test_handles_invalid_mb_separate_format(self, mock_run):
+        """Test handles invalid MB separate format gracefully."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        # Invalid size format - not a number before MB
+        mock_result.stdout = "NAME              SIZE\nmodel:tag     invalid MB\n"
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        # Should still return the model but with default size of 0.0
+        assert "model:tag" in models
+        assert models["model:tag"] == 0.0
+
+    @patch("settings.subprocess.run")
+    def test_handles_invalid_combined_gb_format(self, mock_run):
+        """Test handles invalid combined GB format (like 'xyzGB') gracefully."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        # Invalid combined format - not a valid number
+        mock_result.stdout = "NAME              SIZE\nmodel:tag     invalidGB\n"
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        # Should still return the model but with default size of 0.0
+        assert "model:tag" in models
+        assert models["model:tag"] == 0.0
+
+    @patch("settings.subprocess.run")
+    def test_handles_invalid_combined_mb_format(self, mock_run):
+        """Test handles invalid combined MB format (like 'xyzMB') gracefully."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        # Invalid combined format - not a valid number
+        mock_result.stdout = "NAME              SIZE\nmodel:tag     invalidMB\n"
+        mock_run.return_value = mock_result
+
+        models = get_installed_models_with_sizes()
+
+        # Should still return the model but with default size of 0.0
+        assert "model:tag" in models
+        assert models["model:tag"] == 0.0
 
 
 class TestNewSettingsValidation:
@@ -1367,3 +1530,24 @@ class TestSizeTierBasedModelSelection:
 
         # Editor prefers medium tier
         assert result == "custom-medium:12b"
+
+    def test_fallback_when_no_tier_matches(self, monkeypatch):
+        """Test fallback when no model in preferred tiers fits VRAM."""
+        monkeypatch.setattr(
+            "settings.get_installed_models_with_sizes",
+            lambda timeout=None: {
+                # Only tiny tier models available
+                "tiny-model:1b": 2.0,  # Tiny tier (< 3GB)
+            },
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        # Editor prefers medium tier, but only tiny model available
+        settings.agent_models = {"editor": "auto"}
+
+        # VRAM is enough for the tiny model (2GB * 1.2 = 2.4GB < 50GB)
+        result = settings.get_model_for_agent("editor", available_vram=50)
+
+        # Should fall back to the only available model
+        assert result == "tiny-model:1b"

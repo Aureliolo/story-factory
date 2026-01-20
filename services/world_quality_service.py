@@ -1200,7 +1200,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 (r for r in history.iterations if r.iteration == history.best_iteration),
                 None,
             )
-            if best_record is None:
+            if best_record is None:  # pragma: no cover
                 logger.error(
                     f"Best iteration {history.best_iteration} not found in history. "
                     f"Available iterations: {[r.iteration for r in history.iterations]}"
