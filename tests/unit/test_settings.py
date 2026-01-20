@@ -550,8 +550,8 @@ class TestSettingsGetModelForAgent:
         # Should select the tiny model tagged for validator
         assert result == "qwen3:0.6b"
 
-    def test_raises_when_no_models_installed(self, monkeypatch):
-        """Test raises ValueError when no models installed."""
+    def test_returns_default_when_no_models_installed(self, monkeypatch, caplog):
+        """Test returns default model when no models installed."""
         monkeypatch.setattr(
             "settings.get_installed_models_with_sizes",
             lambda timeout=None: {},
@@ -561,8 +561,10 @@ class TestSettingsGetModelForAgent:
         settings.use_per_agent_models = True
         settings.agent_models = {"writer": "auto"}
 
-        with pytest.raises(ValueError, match="No models installed"):
-            settings.get_model_for_agent("writer", available_vram=24)
+        # Should return first recommended model and log warning
+        result = settings.get_model_for_agent("writer", available_vram=24)
+        assert result == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"  # First in RECOMMENDED_MODELS
+        assert "No models installed in Ollama" in caplog.text
 
     def test_selects_smallest_when_nothing_fits_vram(self, monkeypatch):
         """Test selects smallest model as last resort when nothing fits VRAM."""
