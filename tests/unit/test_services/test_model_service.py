@@ -565,6 +565,12 @@ class TestModelServiceGetRecommendedModel:
                     "small-model:8b": 5.0,
                 },
             ):
+                # Tag all models for writer role (default role for get_recommended_model)
+                model_service.settings.custom_model_tags = {
+                    "large-model:30b": ["writer"],
+                    "medium-model:12b": ["writer"],
+                    "small-model:8b": ["writer"],
+                }
                 result = model_service.get_recommended_model()
 
                 # Should return one of the installed models
@@ -584,6 +590,12 @@ class TestModelServiceGetRecommendedModel:
                     "small-model:8b": 5.0,  # Fits
                 },
             ):
+                # Tag all models for writer role (default role for get_recommended_model)
+                model_service.settings.custom_model_tags = {
+                    "large-model:30b": ["writer"],
+                    "medium-model:12b": ["writer"],
+                    "small-model:8b": ["writer"],
+                }
                 result = model_service.get_recommended_model()
 
                 # Should return a model that fits VRAM
@@ -601,6 +613,11 @@ class TestModelServiceGetRecommendedModel:
                     "small-model:8b": 5.0,  # Fits (5*1.2 = 6GB)
                 },
             ):
+                # Tag models for writer role (default role for get_recommended_model)
+                model_service.settings.custom_model_tags = {
+                    "medium-model:12b": ["writer"],
+                    "small-model:8b": ["writer"],
+                }
                 result = model_service.get_recommended_model()
 
                 # Should return the small model that fits
@@ -615,10 +632,12 @@ class TestModelServiceGetRecommendedModel:
                 "settings.get_installed_models_with_sizes",
                 return_value={"test-model:8b": 5.0},
             ):
+                # Tag the model for writer role
+                model_service.settings.custom_model_tags = {"test-model:8b": ["writer"]}
                 # With role, should use settings.get_model_for_agent
                 result = model_service.get_recommended_model(role="writer")
 
-                assert result is not None
+                assert result == "test-model:8b"
 
 
 class TestModelServiceGetModelsForVram:
