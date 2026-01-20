@@ -1,0 +1,40 @@
+name: check_full_story
+version: "1.0"
+description: "Checks the entire story for continuity issues"
+agent: continuity
+task: check_full_story
+is_system_prompt: false
+
+template: |
+  Analyze this complete story for continuity issues:
+
+  REQUIRED LANGUAGE: {{ language }} - ALL story text MUST be in {{ language }}. Flag any text in wrong language as CRITICAL.
+
+  STORY PREMISE:
+  {{ premise }}
+
+  CHARACTERS:
+  {% for char in characters %}
+  - {{ char.name }} ({{ char.role }})
+  {% endfor %}
+
+  FULL STORY:
+  {{ full_content }}
+
+  Check for:
+  - LANGUAGE VIOLATIONS (text not in {{ language }}) - mark as CRITICAL
+  - Unresolved plot threads
+  - Character arcs that don't complete
+  - Foreshadowing that never pays off
+  - Overall logic issues
+  - Timeline inconsistencies across chapters
+
+  Return a list of issues found. If no issues, return an empty list.
+
+variables:
+  required:
+    - language
+    - premise
+    - characters
+    - full_content
+  optional: []

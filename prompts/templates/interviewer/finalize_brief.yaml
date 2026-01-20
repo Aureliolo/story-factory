@@ -1,0 +1,19 @@
+name: finalize_brief
+version: "1.0"
+description: "Forces generation of a final brief from conversation"
+agent: interviewer
+task: finalize_brief
+is_system_prompt: false
+
+template: |
+  Based on this conversation, create a complete story brief.
+
+  {{ conversation_summary }}
+
+  Fill in ALL fields with appropriate values based on the conversation.
+  If something wasn't discussed, make a reasonable choice that fits the story.
+
+variables:
+  required:
+    - conversation_summary
+  optional: []

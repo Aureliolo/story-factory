@@ -1,0 +1,80 @@
+name: write_scene
+version: "1.0"
+description: "Writes a single scene within a chapter"
+agent: writer
+task: write_scene
+is_system_prompt: false
+
+template: |
+  Write Scene {{ scene_number }} of Chapter {{ chapter_number }}: "{{ scene_title }}"
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  {% if scene_goal %}
+  SCENE GOAL:
+  {{ scene_goal }}
+  {% endif %}
+
+  {% if scene_beats %}
+  KEY BEATS TO HIT:
+  {% for beat in scene_beats %}- {{ beat }}
+  {% endfor %}
+  {% endif %}
+
+  {% if pov_character %}POV CHARACTER: {{ pov_character }}{% endif %}
+  {% if location %}LOCATION: {{ location }}{% endif %}
+
+  CHAPTER CONTEXT:
+  {{ chapter_outline }}
+
+  STORY CONTEXT:
+  {{ story_context }}
+
+  {% if previous_context %}
+  {{ previous_context }}
+  {% endif %}
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+  CONTENT RATING: {{ content_rating }}
+  {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
+  {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
+
+  {% if revision_feedback %}
+  REVISION REQUESTED:
+  {{ revision_feedback }}
+
+  Address these issues while rewriting.
+  {% endif %}
+
+  Write this scene in {{ language }}. Focus on:
+  - Achieving the scene goal
+  - Hitting the specified story beats naturally
+  - Vivid, sensory descriptions
+  - Character voice and emotion
+  - Smooth flow from previous content
+
+  Target length: 500-1000 words for this scene.
+  Write in third person past tense unless specified otherwise.
+  Do not include scene numbers or titles in your output - just the prose.
+
+variables:
+  required:
+    - scene_number
+    - chapter_number
+    - scene_title
+    - chapter_outline
+    - story_context
+    - language
+    - genre
+    - tone
+    - content_rating
+  optional:
+    - scene_goal
+    - scene_beats
+    - pov_character
+    - location
+    - previous_context
+    - content_preferences
+    - content_avoid
+    - revision_feedback

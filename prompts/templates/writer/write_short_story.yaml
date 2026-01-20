@@ -1,0 +1,57 @@
+name: write_short_story
+version: "1.0"
+description: "Writes a complete short story in one pass"
+agent: writer
+task: write_short_story
+is_system_prompt: false
+
+template: |
+  Write a complete short story based on this premise:
+  {{ premise }}
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+  CONTENT RATING: {{ content_rating }}
+  {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
+  {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
+
+  SETTING: {{ setting_place }}, {{ setting_time }}
+
+  CHARACTERS:
+  {% for char in characters %}
+  - {{ char.name }} ({{ char.role }}): {{ char.description }}
+  {% endfor %}
+
+  PLOT OUTLINE:
+  {{ plot_summary }}
+
+  {% if revision_feedback %}
+  REVISION REQUESTED:
+  {{ revision_feedback }}
+
+  Address these issues while rewriting.
+  {% endif %}
+
+  Write a complete, polished short story in {{ language }} (2000-4000 words).
+  Include a strong opening hook, rising tension, a satisfying climax, and resolution.
+  Show character growth and explore the themes naturally through the narrative.
+
+  Write only the story prose - no titles, headers, or meta-commentary.
+
+variables:
+  required:
+    - premise
+    - language
+    - genre
+    - tone
+    - content_rating
+    - setting_place
+    - setting_time
+    - characters
+    - plot_summary
+  optional:
+    - content_preferences
+    - content_avoid
+    - revision_feedback

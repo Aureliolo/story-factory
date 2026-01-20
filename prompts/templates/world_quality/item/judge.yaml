@@ -1,0 +1,37 @@
+name: item_judge
+version: "1.0"
+description: "Judges item quality for refinement loop"
+agent: world_quality
+task: item_judge
+is_system_prompt: false
+
+template: |
+  You are evaluating item quality for a {{ genre }} story.
+
+  ITEM TO EVALUATE:
+  Name: {{ item_name }}
+  Description: {{ item_description }}
+  History: {{ item_history }}
+  Powers: {{ item_powers }}
+  Significance: {{ item_significance }}
+
+  Rate each dimension 0-10:
+  - intrigue: Interest factor and mystery
+  - plot_utility: Usefulness for story and conflict
+  - uniqueness: Distinctiveness from common tropes
+  - world_fit: How well it fits the setting
+
+  Provide specific, actionable feedback for improvement.
+
+  OUTPUT FORMAT - Return ONLY a flat JSON object:
+  {"intrigue": <number>, "plot_utility": <number>, "uniqueness": <number>, "world_fit": <number>, "feedback": "<string>"}
+
+variables:
+  required:
+    - genre
+    - item_name
+    - item_description
+    - item_history
+    - item_powers
+    - item_significance
+  optional: []

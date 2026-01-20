@@ -1,0 +1,20 @@
+name: initial_questions
+version: "1.0"
+description: "Generates initial interview questions"
+agent: interviewer
+task: initial_questions
+is_system_prompt: false
+
+template: |
+  Start the interview by warmly greeting the user and asking about their story idea.
+  Ask 3-4 initial questions covering:
+  1. What's the basic premise or concept they have in mind?
+  2. What genre are they interested in?
+  3. Any specific setting or time period?
+  4. How long should the story be (short story, novella, or novel)?
+
+  Keep it friendly and conversational. Do NOT ask about language upfront - you'll infer it from how they write.
+
+variables:
+  required: []
+  optional: []

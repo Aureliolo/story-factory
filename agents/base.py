@@ -16,6 +16,7 @@ from utils.error_handling import handle_ollama_errors
 from utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
 from utils.json_parser import clean_llm_text
 from utils.logging_config import log_performance
+from utils.prompt_registry import PromptRegistry
 from utils.validation import validate_not_empty
 
 # Type variable for generic structured output
@@ -52,6 +53,29 @@ def _get_llm_semaphore(settings: Settings) -> threading.Semaphore:
 
 # Re-export exceptions for backward compatibility
 __all__ = ["BaseAgent", "LLMError", "LLMConnectionError", "LLMGenerationError"]
+
+# Class-level singleton for prompt registry
+_prompt_registry: PromptRegistry | None = None
+_prompt_registry_lock = threading.Lock()
+
+
+def _get_prompt_registry() -> PromptRegistry:
+    """Get or create the prompt registry singleton.
+
+    The registry is created lazily on first use and shared across all agents.
+    This ensures templates are loaded only once per application lifetime.
+    Uses the prompt_templates_dir setting to locate templates.
+    """
+    global _prompt_registry
+    if _prompt_registry is None:
+        # Load settings outside lock to minimize lock hold time
+        settings = Settings.load()
+        with _prompt_registry_lock:
+            # Double-check after acquiring lock
+            if _prompt_registry is None:
+                _prompt_registry = PromptRegistry(settings.prompt_templates_dir)
+                logger.info(f"Initialized prompt registry with {len(_prompt_registry)} templates")
+    return _prompt_registry
 
 
 class BaseAgent:
@@ -382,6 +406,74 @@ class BaseAgent:
     def get_model_info(self) -> ModelInfo:
         """Get information about the current model."""
         return get_model_info(self.model)
+
+    # === Prompt Template Methods ===
+
+    def render_prompt(self, task: str, **kwargs) -> str:
+        """Render a prompt template for this agent.
+
+        Uses the prompt registry to find and render the appropriate template
+        based on this agent's role and the specified task.
+
+        Args:
+            task: Task identifier (e.g., "write_chapter", "edit_passage").
+            **kwargs: Variables to substitute into the template.
+
+        Returns:
+            Rendered prompt string.
+
+        Raises:
+            PromptTemplateError: If template not found or rendering fails.
+        """
+        registry = _get_prompt_registry()
+        return registry.render(self.agent_role, task, **kwargs)
+
+    def get_prompt_hash(self, task: str) -> str:
+        """Get the hash of a prompt template for metrics tracking.
+
+        Args:
+            task: Task identifier.
+
+        Returns:
+            MD5 hash of the template content.
+
+        Raises:
+            PromptTemplateError: If template not found.
+        """
+        registry = _get_prompt_registry()
+        return registry.get_hash(self.agent_role, task)
+
+    def has_prompt_template(self, task: str) -> bool:
+        """Check if a prompt template exists for this agent and task.
+
+        Args:
+            task: Task identifier.
+
+        Returns:
+            True if template exists, False otherwise.
+        """
+        registry = _get_prompt_registry()
+        return registry.has_template(self.agent_role, task)
+
+    def get_system_prompt_from_template(self) -> str | None:
+        """Get system prompt from template if available.
+
+        Returns:
+            Rendered system prompt string, or None if no template exists.
+        """
+        registry = _get_prompt_registry()
+        if registry.has_system(self.agent_role):
+            return registry.render_system(self.agent_role)
+        return None
+
+    @classmethod
+    def get_registry(cls) -> PromptRegistry:
+        """Get the shared prompt registry.
+
+        Returns:
+            The singleton PromptRegistry instance.
+        """
+        return _get_prompt_registry()
 
     def __repr__(self) -> str:
         """Return string representation of the agent.

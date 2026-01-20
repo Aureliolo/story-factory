@@ -1,0 +1,37 @@
+name: continue_chapter_outline
+version: "1.0"
+description: "Continues chapter outline generation when incomplete"
+agent: architect
+task: continue_chapter_outline
+is_system_prompt: false
+
+template: |
+  Continue the chapter outline. You have {{ existing_count }} chapters so far.
+  Create the next {{ remaining }} chapter(s) to complete the {{ num_chapters }}-chapter outline.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  EXISTING CHAPTERS:
+  {% for chapter in existing_chapters %}
+  - Ch{{ chapter.number }}: {{ chapter.title }}
+  {% endfor %}
+
+  PLOT SUMMARY:
+  {{ plot_summary }}
+
+  Create chapters {{ start_chapter }} through {{ num_chapters }}.
+  Output JSON with a 'chapters' array:
+
+  {{ chapter_schema }}
+
+variables:
+  required:
+    - existing_count
+    - remaining
+    - num_chapters
+    - language
+    - existing_chapters
+    - plot_summary
+    - start_chapter
+    - chapter_schema
+  optional: []

@@ -1,0 +1,26 @@
+name: check_plot_points_completed
+version: "1.0"
+description: "Checks which plot points were completed in a chapter"
+agent: continuity
+task: check_plot_points_completed
+is_system_prompt: false
+
+template: |
+  Check which plot points were addressed in this chapter:
+
+  CHAPTER CONTENT:
+  {{ chapter_content }}
+
+  PENDING PLOT POINTS:
+  {% for idx, point in pending_points %}
+  {{ idx }}. {{ point.description }}
+  {% endfor %}
+
+  List ONLY the numbers of plot points that were CLEARLY addressed or completed in this chapter.
+  Output format: Just the numbers separated by commas (e.g., "0, 2, 5") or "none" if no plot points were addressed.
+
+variables:
+  required:
+    - chapter_content
+    - pending_points
+  optional: []

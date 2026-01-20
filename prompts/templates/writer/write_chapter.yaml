@@ -1,0 +1,62 @@
+name: write_chapter
+version: "1.0"
+description: "Writes a complete chapter from outline"
+agent: writer
+task: write_chapter
+is_system_prompt: false
+
+template: |
+  Write Chapter {{ chapter_number }}: "{{ chapter_title }}"
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  CHAPTER OUTLINE:
+  {{ chapter_outline }}
+
+  STORY CONTEXT:
+  {{ story_context }}
+
+  {% if previous_chapter_summary %}
+  PREVIOUS CHAPTER ENDED WITH:
+  ...{{ previous_chapter_summary }}
+  {% endif %}
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+  CONTENT RATING: {{ content_rating }}
+  {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
+  {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
+
+  {% if revision_feedback %}
+  REVISION REQUESTED:
+  {{ revision_feedback }}
+
+  Address these issues while rewriting.
+  {% endif %}
+
+  Write the complete chapter in {{ language }}. Include:
+  - Scene-setting description
+  - Character actions and dialogue
+  - Internal thoughts/feelings where appropriate
+  - Smooth transitions between scenes
+  - A hook or tension point at the end to pull readers forward
+
+  Target length: 1500-2500 words for this chapter.
+  Write in third person past tense unless the outline specifies otherwise.
+  Do not include the chapter title or number in your output - just the prose.
+
+variables:
+  required:
+    - chapter_number
+    - chapter_title
+    - chapter_outline
+    - story_context
+    - language
+    - genre
+    - tone
+    - content_rating
+  optional:
+    - previous_chapter_summary
+    - content_preferences
+    - content_avoid
+    - revision_feedback

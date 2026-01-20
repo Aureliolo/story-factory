@@ -1,0 +1,28 @@
+name: get_edit_suggestions
+version: "1.0"
+description: "Gets editing suggestions without making changes"
+agent: editor
+task: get_edit_suggestions
+is_system_prompt: false
+
+template: |
+  Review this text and provide specific editing suggestions:
+
+  ---
+  {{ text }}
+  ---
+
+  Identify:
+  1. Awkward phrasing that needs smoothing
+  2. Places where "show don't tell" could improve
+  3. Dialogue that sounds unnatural
+  4. Pacing issues
+  5. Missing sensory details
+  6. Repetitive sentence structures
+
+  Be specific - quote the problematic text and suggest improvements.
+
+variables:
+  required:
+    - text
+  optional: []

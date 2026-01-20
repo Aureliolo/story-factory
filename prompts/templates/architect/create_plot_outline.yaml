@@ -1,0 +1,54 @@
+name: create_plot_outline
+version: "1.0"
+description: "Creates the main plot outline and key plot points"
+agent: architect
+task: create_plot_outline
+is_system_prompt: false
+
+template: |
+  Create a plot outline for this story.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PREMISE: {{ premise }}
+  LENGTH: {{ target_length }}
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+  CONTENT RATING: {{ content_rating }}
+  {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
+  {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
+
+  CHARACTERS:
+  {% for char in characters %}
+  - {{ char.name }} ({{ char.role }}): {{ char.description }}
+  {% endfor %}
+
+  {% if world_preview %}
+  WORLD:
+  {{ world_preview }}
+  {% endif %}
+
+  Create a complete plot outline with summary and key plot points.
+  Write all text in {{ language }}.
+  Output as JSON:
+
+  {{ plot_point_schema }}
+
+  Make sure the plot serves the themes and gives characters room to grow.
+  For mature content at level '{{ content_rating }}', integrate intimate moments naturally into the arc.
+
+variables:
+  required:
+    - language
+    - premise
+    - target_length
+    - genre
+    - tone
+    - content_rating
+    - characters
+    - plot_point_schema
+  optional:
+    - content_preferences
+    - content_avoid
+    - world_preview

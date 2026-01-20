@@ -1,0 +1,47 @@
+name: character_create
+version: "1.0"
+description: "Creates a new character with quality-focused generation"
+agent: world_quality
+task: character_create
+is_system_prompt: false
+
+template: |
+  Create a compelling NEW character for a {{ genre }} story.
+
+  STORY PREMISE: {{ premise }}
+  TONE: {{ tone }}
+  THEMES: {{ themes | join(", ") }}
+  SETTING: {{ setting_place }}, {{ setting_time }}
+
+  EXISTING CHARACTERS IN THIS WORLD: {{ existing_names | join(", ") if existing_names else "None yet" }}
+  (Create a NEW character with a different name that complements these existing ones)
+
+  NAMING: {{ naming_hint }}
+
+  {% if custom_instructions %}
+  SPECIFIC REQUIREMENTS:
+  {{ custom_instructions }}
+  {% endif %}
+
+  Create a character with:
+  1. Deep psychological complexity - internal contradictions, layers
+  2. Clear goals - what they want vs what they need
+  3. Meaningful flaws that drive conflict
+  4. Uniqueness - not a genre archetype
+  5. Arc potential - room for transformation
+
+  Write all text in {{ language }}.
+
+variables:
+  required:
+    - genre
+    - premise
+    - tone
+    - themes
+    - setting_place
+    - setting_time
+    - naming_hint
+    - language
+  optional:
+    - existing_names
+    - custom_instructions

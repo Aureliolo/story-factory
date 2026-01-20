@@ -1,0 +1,54 @@
+name: concept_create
+version: "1.0"
+description: "Creates a new concept with quality-focused generation"
+agent: world_quality
+task: concept_create
+is_system_prompt: false
+
+template: |
+  Create a compelling NEW concept/idea for a {{ genre }} story.
+
+  STORY PREMISE: {{ premise }}
+  TONE: {{ tone }}
+  THEMES: {{ themes | join(", ") }}
+  SETTING: {{ setting_place }}, {{ setting_time }}
+
+  EXISTING CONCEPTS: {{ existing_names | join(", ") if existing_names else "None yet" }}
+  (Create a NEW concept that enriches the world)
+
+  {% if custom_instructions %}
+  SPECIFIC REQUIREMENTS:
+  {{ custom_instructions }}
+  {% endif %}
+
+  Create a concept (magic system, technology, social custom, philosophy, etc.) with:
+  1. Clear rules and limitations
+  2. Impact on society/characters
+  3. Thematic relevance
+  4. Internal consistency
+  5. Story potential
+
+  Write all text in {{ language }}.
+
+  Return a JSON object with:
+  {
+    "name": "Concept Name",
+    "type": "concept",
+    "description": "What this concept is",
+    "rules": "How it works and its limitations",
+    "impact": "Effects on the world/characters",
+    "thematic_role": "How it serves the themes"
+  }
+
+variables:
+  required:
+    - genre
+    - premise
+    - tone
+    - themes
+    - setting_place
+    - setting_time
+    - language
+  optional:
+    - existing_names
+    - custom_instructions

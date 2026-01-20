@@ -1,0 +1,30 @@
+name: validate_against_outline
+version: "1.0"
+description: "Checks if a chapter fulfills its outline"
+agent: continuity
+task: validate_against_outline
+is_system_prompt: false
+
+template: |
+  Compare this chapter content against its outline:
+
+  OUTLINE:
+  {{ chapter_outline }}
+
+  ACTUAL CONTENT:
+  {{ chapter_content }}
+
+  Check if:
+  - All outlined events occur
+  - Character moments are included
+  - Plot points are addressed
+  - Nothing major was skipped or contradicted
+
+  Return only issues (not confirmations). Use category "plot_hole" for outline mismatches.
+  If no issues, return an empty list.
+
+variables:
+  required:
+    - chapter_outline
+    - chapter_content
+  optional: []

@@ -1,0 +1,61 @@
+name: process_response
+version: "1.0"
+description: "Processes user response and generates follow-up or brief"
+agent: interviewer
+task: process_response
+is_system_prompt: false
+
+template: |
+  {% if inferred_context %}
+  ALREADY DETERMINED (do NOT ask about these):
+  {{ inferred_context }}
+  {% endif %}
+
+  Based on the conversation so far:
+
+  {{ conversation_history }}
+
+  YOUR TASK:
+  1. If this is the user's FIRST detailed message about their story idea, ask 2-3 thoughtful follow-up questions about:
+     - Characters they envision (main protagonist, love interests, antagonists)
+     - Specific themes or elements they want emphasized
+     - Any specific scenes, plot points, or moments they're excited about
+     - Things they definitely want to AVOID
+
+  2. If you've already asked follow-up questions and the user has answered them, summarize what you understand and ASK FOR CONFIRMATION:
+     "Here's what I understand about your story: [brief summary]. Is there anything you'd like to add, change, or clarify before I create the story brief?"
+
+  3. ONLY when the user explicitly confirms they're done (says something like "yes", "that's all", "looks good", "I'm ready", "nothing else", etc.), output the JSON brief:
+
+  ```json
+  {
+      "premise": "...",
+      "genre": "...",
+      "subgenres": ["...", "..."],
+      "tone": "...",
+      "themes": ["...", "..."],
+      "setting_time": "...",
+      "setting_place": "...",
+      "target_length": "short_story|novella|novel",
+      "language": "English|German|Spanish|French|etc.",
+      "content_rating": "general|teen|mature|adult",
+      "content_preferences": ["things to include..."],
+      "content_avoid": ["things to avoid..."],
+      "additional_notes": "..."
+  }
+  ```
+
+  IMPORTANT RULES:
+  - NEVER output the JSON brief immediately after the user's first message!
+  - ALWAYS ask at least one round of follow-up questions first
+  - ALWAYS ask for confirmation before generating the brief
+  - Use the ALREADY DETERMINED values above if provided - do NOT ask about them!
+  - Infer language from the language the user is writing in
+  - Infer content rating from keywords: "smut"/"nsfw"/"explicit" = adult
+  - Be conversational and enthusiastic about their ideas!
+
+variables:
+  required:
+    - conversation_history
+  optional:
+    - inferred_context

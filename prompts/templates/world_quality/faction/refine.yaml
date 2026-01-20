@@ -1,0 +1,42 @@
+name: faction_refine
+version: "1.0"
+description: "Refines a faction based on quality feedback"
+agent: world_quality
+task: faction_refine
+is_system_prompt: false
+
+template: |
+  Improve this faction based on quality feedback.
+
+  ORIGINAL FACTION:
+  Name: {{ faction_name }}
+  Description: {{ faction_description }}
+  Ideology: {{ faction_ideology }}
+  Methods: {{ faction_methods }}
+  Structure: {{ faction_structure }}
+
+  QUALITY SCORES (0-10):
+  - Coherence: {{ scores.coherence }}
+  - Conflict Potential: {{ scores.conflict_potential }}
+  - Uniqueness: {{ scores.uniqueness }}
+  - World Fit: {{ scores.world_fit }}
+
+  FEEDBACK: {{ scores.feedback }}
+
+  WEAK AREAS TO IMPROVE: {{ weak_dimensions | join(", ") if weak_dimensions else "None - minor improvements only" }}
+
+  Keep the name "{{ faction_name }}", but enhance the weak areas.
+  Make the faction more compelling while maintaining consistency.
+  Write all text in {{ language }}.
+
+variables:
+  required:
+    - faction_name
+    - faction_description
+    - faction_ideology
+    - faction_methods
+    - faction_structure
+    - scores
+    - language
+  optional:
+    - weak_dimensions

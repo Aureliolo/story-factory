@@ -1,0 +1,45 @@
+name: create_characters
+version: "1.0"
+description: "Designs main characters for a story"
+agent: architect
+task: create_characters
+is_system_prompt: false
+
+template: |
+  Design the main characters for this story.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PREMISE: {{ premise }}
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+  CONTENT RATING: {{ content_rating }}
+  {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
+  {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
+
+  Create EXACTLY {{ min_chars }} to {{ max_chars }} main characters. You MUST output at least {{ min_chars }} characters.
+
+  {{ naming_hint }}
+
+  Output a JSON object with a 'characters' array. Each character needs (all text values in {{ language }}):
+
+  {{ character_schema }}
+
+  Make them complex, with flaws and desires that create conflict.
+  Remember: output at least {{ min_chars }} characters.
+
+variables:
+  required:
+    - language
+    - premise
+    - genre
+    - tone
+    - content_rating
+    - min_chars
+    - max_chars
+    - naming_hint
+    - character_schema
+  optional:
+    - content_preferences
+    - content_avoid
