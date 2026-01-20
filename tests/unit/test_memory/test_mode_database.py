@@ -1692,3 +1692,30 @@ class TestModeDatabase:
 
         errors = db.get_prompt_error_summary()
         assert len(errors) == 0
+
+    def test_record_prompt_metrics_disabled(self, db: ModeDatabase, monkeypatch) -> None:
+        """Test that prompt metrics are not recorded when disabled in settings."""
+        from settings import Settings
+
+        # Create settings with prompt_metrics_enabled=False
+        mock_settings = Settings()
+        mock_settings.prompt_metrics_enabled = False
+        monkeypatch.setattr(Settings, "load", lambda: mock_settings)
+
+        # Attempt to record metrics - should return 0 and not insert
+        record_id = db.record_prompt_metrics(
+            prompt_hash="abc123",
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="test-model",
+            tokens_generated=500,
+            generation_time_seconds=10.5,
+            success=True,
+        )
+
+        assert record_id == 0
+
+        # Verify no record was inserted
+        analytics = db.get_prompt_analytics()
+        assert len(analytics) == 0

@@ -20,6 +20,7 @@ from memory.mode_models import (
     RecommendationType,
     TuningRecommendation,
 )
+from settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -1396,6 +1397,12 @@ class ModeDatabase:
         Raises:
             sqlite3.Error: If database operation fails.
         """
+        # Check if prompt metrics are enabled
+        settings = Settings.load()
+        if not settings.prompt_metrics_enabled:
+            logger.debug("Prompt metrics disabled, skipping recording")
+            return 0
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.execute(
