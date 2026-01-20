@@ -1,0 +1,45 @@
+name: generate_outline_variations
+version: "1.0"
+description: "Generates a variation of the story outline"
+agent: architect
+task: generate_outline_variations
+is_system_prompt: false
+
+template: |
+  Create variation #{{ variation_number }} of {{ total_variations }} different story outline approaches.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  {{ focus_instruction }}
+
+  PREMISE: {{ premise }}
+  LENGTH: {{ target_length }}
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+  CONTENT RATING: {{ content_rating }}
+  {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
+  {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
+
+  Provide a COMPLETE outline including:
+  1. A brief rationale (2-3 sentences) explaining what makes this variation unique
+  2. World description (2-3 paragraphs)
+  3. Characters as JSON
+  4. Plot summary (1-2 paragraphs)
+  5. Key plot points as JSON
+  6. Chapter outlines as JSON
+
+variables:
+  required:
+    - variation_number
+    - total_variations
+    - language
+    - focus_instruction
+    - premise
+    - target_length
+    - genre
+    - tone
+    - content_rating
+  optional:
+    - content_preferences
+    - content_avoid

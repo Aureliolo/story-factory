@@ -1,0 +1,31 @@
+name: custom_instructions
+version: "1.0"
+description: "Processes custom instructions for entity generation"
+agent: world_quality
+task: custom_instructions
+is_system_prompt: false
+
+template: |
+  Parse these custom instructions for {{ entity_type }} generation:
+
+  {{ instructions }}
+
+  Extract:
+  1. Specific requirements (must have)
+  2. Preferences (should have)
+  3. Restrictions (must not have)
+  4. Style guidance
+
+  Return as a JSON object:
+  {
+    "requirements": ["..."],
+    "preferences": ["..."],
+    "restrictions": ["..."],
+    "style": "..."
+  }
+
+variables:
+  required:
+    - entity_type
+    - instructions
+  optional: []

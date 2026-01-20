@@ -1,0 +1,30 @@
+name: extract_character_arcs
+version: "1.0"
+description: "Extracts character arc updates from a chapter"
+agent: continuity
+task: extract_character_arcs
+is_system_prompt: false
+
+template: |
+  Analyze how each character develops in this chapter:
+
+  CHAPTER CONTENT:
+  {{ chapter_content }}
+
+  CHARACTERS TO ANALYZE:
+  {% for char in characters %}
+  - {{ char.name }}: {{ char.arc_notes }}
+  {% endfor %}
+
+  For each character who appears in this chapter, describe their current emotional/psychological state and any development or change they undergo.
+
+  Output as simple lines:
+  CHARACTER_NAME: Brief description of their state/development in this chapter
+
+  Only include characters who actually appear in this chapter.
+
+variables:
+  required:
+    - chapter_content
+    - characters
+  optional: []

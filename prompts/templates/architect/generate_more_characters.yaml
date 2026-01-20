@@ -1,0 +1,33 @@
+name: generate_more_characters
+version: "1.0"
+description: "Generates additional characters that complement existing ones"
+agent: architect
+task: generate_more_characters
+is_system_prompt: false
+
+template: |
+  Create {{ count }} NEW supporting characters for this story.
+  These should complement and interact with existing characters.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PREMISE: {{ premise }}
+
+  EXISTING CHARACTERS (do NOT recreate):
+  {{ existing_names | join(", ") }}
+
+  Create {{ count }} NEW characters. Output JSON (all text in {{ language }}):
+
+  {{ character_schema }}
+
+  Make these characters interesting and give them connections to existing characters.
+  Consider: mentors, rivals, allies, family members, or mysterious figures.
+
+variables:
+  required:
+    - count
+    - language
+    - premise
+    - existing_names
+    - character_schema
+  optional: []

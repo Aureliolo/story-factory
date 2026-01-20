@@ -1,0 +1,25 @@
+name: generate_project_names
+version: "1.0"
+description: "Generates creative project name suggestions"
+agent: suggestion
+task: generate_project_names
+is_system_prompt: false
+
+template: |
+  Based on this story context, generate {{ count }} unique, creative title suggestions.
+
+  Story Context:
+  {{ story_context }}
+
+  Requirements:
+  - Each title should be evocative and memorable
+  - Mix different styles: some short and punchy, some poetic, some mysterious
+  - Avoid generic titles like "The Journey" or "A New Beginning"
+  - Consider the genre and tone when crafting titles
+  - Each title should feel like it could be a published book title
+
+variables:
+  required:
+    - count
+    - story_context
+  optional: []

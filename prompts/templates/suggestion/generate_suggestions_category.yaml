@@ -1,0 +1,20 @@
+name: generate_suggestions_category
+version: "1.0"
+description: "Generates suggestions for a specific category"
+agent: suggestion
+task: generate_suggestions_category
+is_system_prompt: false
+
+template: |
+  Generate 3-5 {{ category }} prompts based on this story context.
+
+  Story Context:
+  {{ story_context }}
+
+  Each suggestion should be 1-2 sentences, specific to this story.
+
+variables:
+  required:
+    - category
+    - story_context
+  optional: []

@@ -1,0 +1,41 @@
+name: continue_scene
+version: "1.0"
+description: "Continues writing from where the text left off"
+agent: writer
+task: continue_scene
+is_system_prompt: false
+
+template: |
+  Continue this scene:
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  {{ current_text }}
+
+  {% if direction %}
+  DIRECTION:
+  {{ direction }}
+  {% else %}
+  Continue naturally to the next beat.
+  {% endif %}
+
+  GENRE: {{ genre }}
+  TONE: {{ tone }}
+  CONTENT RATING: {{ content_rating }}
+  {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
+  {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
+
+  Continue seamlessly from where the text ends. Write 500-1000 more words in {{ language }}.
+  Maintain the same voice, tense, and style.
+
+variables:
+  required:
+    - current_text
+    - language
+    - genre
+    - tone
+    - content_rating
+  optional:
+    - direction
+    - content_preferences
+    - content_avoid

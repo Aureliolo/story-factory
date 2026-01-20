@@ -321,6 +321,10 @@ class Settings:
     world_gen_relationships_min: int = 8
     world_gen_relationships_max: int = 25
 
+    # Prompt template settings
+    prompt_templates_dir: str = "prompts/templates"
+    prompt_metrics_enabled: bool = True
+
     # Graph visualization settings
     graph_filter_types: list[str] = field(
         default_factory=lambda: ["character", "location", "item", "faction", "concept"]

@@ -1,0 +1,40 @@
+name: location_refine
+version: "1.0"
+description: "Refines a location based on quality feedback"
+agent: world_quality
+task: location_refine
+is_system_prompt: false
+
+template: |
+  Improve this location based on quality feedback.
+
+  ORIGINAL LOCATION:
+  Name: {{ location_name }}
+  Description: {{ location_description }}
+  Atmosphere: {{ location_atmosphere }}
+  Significance: {{ location_significance }}
+
+  QUALITY SCORES (0-10):
+  - Atmosphere: {{ scores.atmosphere }}
+  - Plot Utility: {{ scores.plot_utility }}
+  - Uniqueness: {{ scores.uniqueness }}
+  - World Fit: {{ scores.world_fit }}
+
+  FEEDBACK: {{ scores.feedback }}
+
+  WEAK AREAS TO IMPROVE: {{ weak_dimensions | join(", ") if weak_dimensions else "None - minor improvements only" }}
+
+  Keep the name "{{ location_name }}", but enhance the weak areas.
+  Make the location more vivid and useful while maintaining consistency.
+  Write all text in {{ language }}.
+
+variables:
+  required:
+    - location_name
+    - location_description
+    - location_atmosphere
+    - location_significance
+    - scores
+    - language
+  optional:
+    - weak_dimensions

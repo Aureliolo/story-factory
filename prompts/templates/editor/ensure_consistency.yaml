@@ -1,0 +1,39 @@
+name: ensure_consistency
+version: "1.0"
+description: "Edits new content to ensure consistency with previous content"
+agent: editor
+task: ensure_consistency
+is_system_prompt: false
+
+template: |
+  Review this new content for consistency with what came before.
+
+  LANGUAGE: {{ language }} - Keep ALL text in {{ language }}. Do not translate.
+
+  PREVIOUS CONTENT (ending):
+  ...{{ previous_content }}
+
+  NEW CONTENT:
+  {{ new_content }}
+
+  ESTABLISHED FACTS:
+  {% for fact in established_facts %}
+  - {{ fact }}
+  {% endfor %}
+
+  Check for and fix:
+  - Tone/voice shifts
+  - Tense inconsistencies
+  - Character voice changes
+  - Contradictions with established facts
+  - Language consistency (must be in {{ language }})
+
+  Output the corrected version of the NEW CONTENT only, in {{ language }}.
+
+variables:
+  required:
+    - new_content
+    - previous_content
+    - established_facts
+    - language
+  optional: []

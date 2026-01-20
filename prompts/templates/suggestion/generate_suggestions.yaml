@@ -1,0 +1,25 @@
+name: generate_suggestions
+version: "1.0"
+description: "Generates creative writing suggestions for all categories"
+agent: suggestion
+task: generate_suggestions
+is_system_prompt: false
+
+template: |
+  Generate creative writing suggestions for this story across all categories.
+
+  Story Context:
+  {{ story_context }}
+
+  Generate:
+  - plot: 3-4 "what if" scenarios or plot complications
+  - character: 3-4 character action or development suggestions
+  - scene: 3-4 scene atmosphere or tension ideas
+  - transition: 2-3 scene/chapter transition suggestions
+
+  Each suggestion should be 1-2 sentences, specific to this story.
+
+variables:
+  required:
+    - story_context
+  optional: []

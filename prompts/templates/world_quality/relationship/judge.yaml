@@ -1,0 +1,39 @@
+name: relationship_judge
+version: "1.0"
+description: "Judges relationship quality for refinement loop"
+agent: world_quality
+task: relationship_judge
+is_system_prompt: false
+
+template: |
+  You are evaluating relationship quality for a {{ genre }} story.
+
+  RELATIONSHIP TO EVALUATE:
+  Source: {{ source_name }}
+  Target: {{ target_name }}
+  Type: {{ relation_type }}
+  Description: {{ relationship_description }}
+  History: {{ relationship_history }}
+  Tension: {{ relationship_tension }}
+
+  Rate each dimension 0-10:
+  - depth: Emotional complexity and nuance
+  - conflict_potential: Ability to drive story tension
+  - believability: Natural development and logic
+  - uniqueness: Distinctiveness from cliches
+
+  Provide specific, actionable feedback for improvement.
+
+  OUTPUT FORMAT - Return ONLY a flat JSON object:
+  {"depth": <number>, "conflict_potential": <number>, "believability": <number>, "uniqueness": <number>, "feedback": "<string>"}
+
+variables:
+  required:
+    - genre
+    - source_name
+    - target_name
+    - relation_type
+    - relationship_description
+    - relationship_history
+    - relationship_tension
+  optional: []

@@ -1,0 +1,40 @@
+name: generate_relationships
+version: "1.0"
+description: "Generates relationships between existing entities"
+agent: architect
+task: generate_relationships
+is_system_prompt: false
+
+template: |
+  Create {{ count }} meaningful relationships between characters/entities in this story.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PREMISE: {{ premise }}
+
+  AVAILABLE ENTITIES:
+  {{ entity_names | join(", ") }}
+
+  {% if existing_relationships %}
+  EXISTING RELATIONSHIPS (avoid these):
+  {% for rel in existing_relationships %}
+  - {{ rel }}
+  {% endfor %}
+  {% endif %}
+
+  Create {{ count }} NEW relationships. Output JSON (in {{ language }}):
+
+  {{ relationship_schema }}
+
+  Create interesting dynamics: allies, rivals, secret connections, family ties,
+  romantic interests, professional relationships. Each should add depth to the story.
+
+variables:
+  required:
+    - count
+    - language
+    - premise
+    - entity_names
+    - relationship_schema
+  optional:
+    - existing_relationships
