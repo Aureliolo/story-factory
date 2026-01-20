@@ -66,6 +66,18 @@ class Character(BaseModel):
         return "\n".join(summary_parts)
 
 
+class Faction(BaseModel):
+    """A faction or organization in the story world."""
+
+    name: str = Field(description="Name of the faction")
+    type: str = Field(default="faction", description="Entity type (always 'faction')")
+    description: str = Field(description="Description of the faction, its history, and purpose")
+    leader: str = Field(default="", description="Name or title of leader (if any)")
+    goals: list[str] = Field(default_factory=list, description="Primary and secondary goals")
+    values: list[str] = Field(default_factory=list, description="Core values of the faction")
+    base_location: str = Field(default="", description="Headquarters or territory location")
+
+
 class PlotPoint(BaseModel):
     """A key plot point in the story."""
 
