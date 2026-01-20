@@ -4,8 +4,6 @@ These models track quality scores from the judge/refinement loop, enabling
 iterative improvement of characters, locations, and relationships.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from pydantic import BaseModel, Field

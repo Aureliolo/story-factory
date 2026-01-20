@@ -3,8 +3,6 @@
 Settings are stored in settings.json and can be modified via the web UI.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import subprocess
