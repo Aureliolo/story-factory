@@ -591,3 +591,132 @@ class TestBaseAgentGenerateStructured:
 
         call_args = mock_instructor.chat.completions.create.call_args
         assert call_args.kwargs["max_retries"] == 5
+
+
+class TestBaseAgentPromptTemplate:
+    """Tests for prompt template methods."""
+
+    def test_get_registry_returns_registry(self):
+        """Test get_registry returns a PromptRegistry instance."""
+        from utils.prompt_registry import PromptRegistry
+
+        registry = BaseAgent.get_registry()
+
+        assert isinstance(registry, PromptRegistry)
+        assert len(registry) > 0  # Should have loaded templates
+
+    def test_get_registry_returns_same_instance(self):
+        """Test get_registry returns the same singleton instance."""
+        registry1 = BaseAgent.get_registry()
+        registry2 = BaseAgent.get_registry()
+
+        assert registry1 is registry2
+
+    def test_has_prompt_template_returns_true_for_existing(self):
+        """Test has_prompt_template returns True for existing template."""
+        agent = BaseAgent(
+            name="Test",
+            role="Writer",
+            system_prompt="Test prompt",
+            agent_role="writer",
+        )
+
+        # Writer should have system template
+        assert agent.has_prompt_template("system") is True
+
+    def test_has_prompt_template_returns_false_for_missing(self):
+        """Test has_prompt_template returns False for missing template."""
+        agent = BaseAgent(
+            name="Test",
+            role="Writer",
+            system_prompt="Test prompt",
+            agent_role="writer",
+        )
+
+        # Writer shouldn't have this task
+        assert agent.has_prompt_template("nonexistent_task") is False
+
+    def test_render_prompt_renders_template(self):
+        """Test render_prompt renders a template with variables."""
+        agent = BaseAgent(
+            name="Test",
+            role="Writer",
+            system_prompt="Test prompt",
+            agent_role="writer",
+        )
+
+        # Render the write_chapter template
+        result = agent.render_prompt(
+            "write_chapter",
+            chapter_number=1,
+            chapter_title="The Beginning",
+            chapter_outline="First chapter outline",
+            story_context="Fantasy story context",
+            language="English",
+            genre="Fantasy",
+            tone="Epic",
+            content_rating="Teen",
+        )
+
+        assert "Chapter 1" in result
+        assert "The Beginning" in result
+        assert "English" in result
+
+    def test_get_prompt_hash_returns_hash(self):
+        """Test get_prompt_hash returns a valid MD5 hash."""
+        agent = BaseAgent(
+            name="Test",
+            role="Writer",
+            system_prompt="Test prompt",
+            agent_role="writer",
+        )
+
+        hash_value = agent.get_prompt_hash("system")
+
+        assert isinstance(hash_value, str)
+        assert len(hash_value) == 32  # MD5 hex length
+
+    def test_get_prompt_hash_consistent(self):
+        """Test get_prompt_hash returns same hash for same template."""
+        agent = BaseAgent(
+            name="Test",
+            role="Writer",
+            system_prompt="Test prompt",
+            agent_role="writer",
+        )
+
+        hash1 = agent.get_prompt_hash("system")
+        hash2 = agent.get_prompt_hash("system")
+
+        assert hash1 == hash2
+
+    def test_get_system_prompt_from_template_returns_prompt(self):
+        """Test get_system_prompt_from_template returns rendered prompt."""
+        agent = BaseAgent(
+            name="Test",
+            role="Writer",
+            system_prompt="Test prompt",
+            agent_role="writer",
+        )
+
+        result = agent.get_system_prompt_from_template()
+
+        assert result is not None
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_get_system_prompt_from_template_returns_none_for_missing(self):
+        """Test get_system_prompt_from_template returns None when no template."""
+        # Create agent with a valid role that exists in settings
+        agent = BaseAgent(
+            name="Test",
+            role="Writer",
+            system_prompt="Test prompt",
+            agent_role="writer",
+        )
+        # Override agent_role after creation to simulate missing template
+        agent.agent_role = "nonexistent_agent_role"
+
+        result = agent.get_system_prompt_from_template()
+
+        assert result is None

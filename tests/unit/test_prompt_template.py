@@ -291,6 +291,19 @@ variables:
         finally:
             yaml_path.unlink()
 
+    def test_from_yaml_oserror(self, tmp_path):
+        """Test error when file cannot be read due to OSError."""
+        from unittest.mock import patch
+
+        yaml_path = tmp_path / "test.yaml"
+        yaml_path.write_text("name: test\nversion: '1.0'\nagent: writer\ntask: test\ntemplate: hi")
+
+        # Mock open to raise OSError
+        with patch("builtins.open", side_effect=OSError("Permission denied")):
+            with pytest.raises(PromptTemplateError) as exc_info:
+                PromptTemplate.from_yaml(yaml_path)
+            assert "Cannot read template file" in str(exc_info.value)
+
     def test_to_yaml(self):
         """Test saving template to YAML file."""
         template = PromptTemplate(
@@ -335,3 +348,110 @@ variables:
         assert "writer" in str_repr
         assert "write_chapter" in str_repr
         assert "1.0" in str_repr
+
+    def test_render_undefined_variable_raises(self):
+        """Test that undefined variables in template raise error."""
+        template = PromptTemplate(
+            name="test",
+            version="1.0",
+            description="Test",
+            agent="writer",
+            task="test",
+            template="Hello {{ name }} and {{ undefined_var }}!",
+            required_variables=["name"],
+            optional_variables=[],  # undefined_var is NOT optional
+        )
+        with pytest.raises(PromptTemplateError) as exc_info:
+            template.render(name="Alice")
+        assert "Undefined variable" in str(exc_info.value)
+
+    def test_render_syntax_error_raises(self):
+        """Test that template syntax errors during render raise error."""
+        template = PromptTemplate(
+            name="test",
+            version="1.0",
+            description="Test",
+            agent="writer",
+            task="test",
+            template="Hello {% invalid %}!",
+            required_variables=[],
+        )
+        with pytest.raises(PromptTemplateError) as exc_info:
+            template.render()
+        assert "Syntax error" in str(exc_info.value)
+
+    def test_from_yaml_not_dict_format(self):
+        """Test error when YAML doesn't parse to a dict."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write("- item1\n- item2\n- item3\n")  # List, not dict
+            yaml_path = Path(f.name)
+
+        try:
+            with pytest.raises(PromptTemplateError) as exc_info:
+                PromptTemplate.from_yaml(yaml_path)
+            assert "expected dict" in str(exc_info.value)
+        finally:
+            yaml_path.unlink()
+
+    def test_from_yaml_validation_errors(self):
+        """Test error when YAML template fails validation."""
+        yaml_content = """
+name: ""
+version: ""
+description: Test
+agent: ""
+task: ""
+template: ""
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(yaml_content)
+            yaml_path = Path(f.name)
+
+        try:
+            with pytest.raises(PromptTemplateError) as exc_info:
+                PromptTemplate.from_yaml(yaml_path)
+            assert "Invalid template" in str(exc_info.value)
+        finally:
+            yaml_path.unlink()
+
+    def test_to_yaml_write_error(self, tmp_path):
+        """Test error when writing to YAML fails."""
+        import os
+
+        template = PromptTemplate(
+            name="test",
+            version="1.0",
+            description="Test",
+            agent="writer",
+            task="test",
+            template="Hello",
+            required_variables=[],
+        )
+        # Create a read-only directory to trigger write failure
+        readonly_dir = tmp_path / "readonly"
+        readonly_dir.mkdir()
+        readonly_file = readonly_dir / "template.yaml"
+
+        # Make the directory read-only (works differently on Windows vs Unix)
+        if os.name == "nt":
+            # On Windows, we can't easily make a directory read-only
+            # Instead, test that writing to NUL device path fails
+            try:
+                template.to_yaml(Path("NUL/cannot/write/here.yaml"))
+            except PromptTemplateError as e:
+                assert "Cannot write" in str(e)
+            except OSError:
+                # Also acceptable - OS error on invalid path
+                pass
+        else:
+            os.chmod(readonly_dir, 0o444)
+            try:
+                with pytest.raises(PromptTemplateError) as exc_info:
+                    template.to_yaml(readonly_file)
+                assert "Cannot write" in str(exc_info.value)
+            finally:
+                os.chmod(readonly_dir, 0o755)

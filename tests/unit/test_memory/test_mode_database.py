@@ -1438,3 +1438,257 @@ class TestModeDatabase:
         # With days=0, should still include today's record (DATE('now', '-0 days') = today)
         data = db.get_daily_quality_averages(days=0)
         assert len(data) == 1
+
+    # === Prompt Metrics Tests ===
+
+    def test_record_prompt_metrics(self, db: ModeDatabase) -> None:
+        """Test recording prompt metrics."""
+        record_id = db.record_prompt_metrics(
+            prompt_hash="abc123",
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="test-model",
+            tokens_generated=500,
+            generation_time_seconds=10.5,
+            success=True,
+            project_id="test-project",
+        )
+
+        assert record_id > 0
+
+    def test_record_prompt_metrics_with_error(self, db: ModeDatabase) -> None:
+        """Test recording failed prompt metrics with error message."""
+        record_id = db.record_prompt_metrics(
+            prompt_hash="abc123",
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="test-model",
+            tokens_generated=0,
+            generation_time_seconds=5.0,
+            success=False,
+            error_message="Generation failed due to timeout",
+        )
+
+        assert record_id > 0
+
+    def test_record_prompt_metrics_raises_on_db_error(self, db: ModeDatabase) -> None:
+        """Test record_prompt_metrics raises sqlite3.Error on database failure."""
+        with patch("sqlite3.connect") as mock_connect:
+            mock_connect.side_effect = sqlite3.Error("Database write failed")
+            with pytest.raises(sqlite3.Error, match="Database write failed"):
+                db.record_prompt_metrics(
+                    prompt_hash="abc123",
+                    agent_role="writer",
+                    task="test",
+                    template_version="1.0",
+                    model_id="model",
+                    tokens_generated=100,
+                    generation_time_seconds=1.0,
+                    success=True,
+                )
+
+    def test_get_prompt_analytics(self, db: ModeDatabase) -> None:
+        """Test getting prompt analytics."""
+        # Record some metrics
+        for i in range(5):
+            db.record_prompt_metrics(
+                prompt_hash="hash1",
+                agent_role="writer",
+                task="write_chapter",
+                template_version="1.0",
+                model_id="test-model",
+                tokens_generated=500 + i * 10,
+                generation_time_seconds=10.0 + i,
+                success=True,
+            )
+        db.record_prompt_metrics(
+            prompt_hash="hash1",
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="test-model",
+            tokens_generated=0,
+            generation_time_seconds=2.0,
+            success=False,
+            error_message="Failed",
+        )
+
+        # Get analytics
+        analytics = db.get_prompt_analytics()
+        assert len(analytics) == 1
+        assert analytics[0]["agent_role"] == "writer"
+        assert analytics[0]["task"] == "write_chapter"
+        assert analytics[0]["total_calls"] == 6
+        assert analytics[0]["successful_calls"] == 5
+
+    def test_get_prompt_analytics_with_filters(self, db: ModeDatabase) -> None:
+        """Test get_prompt_analytics with agent_role and task filters."""
+        # Record metrics for different agents/tasks
+        db.record_prompt_metrics(
+            prompt_hash="h1",
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="m1",
+            tokens_generated=100,
+            generation_time_seconds=1.0,
+            success=True,
+        )
+        db.record_prompt_metrics(
+            prompt_hash="h2",
+            agent_role="editor",
+            task="edit_chapter",
+            template_version="1.0",
+            model_id="m1",
+            tokens_generated=200,
+            generation_time_seconds=2.0,
+            success=True,
+        )
+
+        # Filter by agent_role
+        analytics = db.get_prompt_analytics(agent_role="writer")
+        assert len(analytics) == 1
+        assert analytics[0]["agent_role"] == "writer"
+
+        # Filter by task
+        analytics = db.get_prompt_analytics(task="edit_chapter")
+        assert len(analytics) == 1
+        assert analytics[0]["task"] == "edit_chapter"
+
+    def test_get_prompt_metrics_summary(self, db: ModeDatabase) -> None:
+        """Test getting prompt metrics summary."""
+        # Record some metrics
+        for i in range(3):
+            db.record_prompt_metrics(
+                prompt_hash=f"hash{i}",
+                agent_role="writer" if i < 2 else "editor",
+                task="write_chapter" if i < 2 else "edit_chapter",
+                template_version="1.0",
+                model_id="test-model",
+                tokens_generated=100 * (i + 1),
+                generation_time_seconds=5.0 + i,
+                success=True,
+            )
+
+        summary = db.get_prompt_metrics_summary()
+
+        assert summary["total_generations"] == 3
+        assert summary["successful_generations"] == 3
+        assert summary["success_rate"] == 100.0
+        assert summary["total_tokens"] == 600  # 100 + 200 + 300
+        assert "by_agent" in summary
+        assert len(summary["by_agent"]) == 2  # writer and editor
+
+    def test_get_prompt_metrics_summary_empty(self, db: ModeDatabase) -> None:
+        """Test get_prompt_metrics_summary with no data."""
+        summary = db.get_prompt_metrics_summary()
+
+        assert summary["total_generations"] == 0
+        assert summary["successful_generations"] == 0
+        assert summary["success_rate"] == 0.0
+        assert summary["by_agent"] == []
+
+    def test_get_prompt_metrics_by_hash(self, db: ModeDatabase) -> None:
+        """Test getting metrics for a specific template hash."""
+        target_hash = "target_hash_123"
+        other_hash = "other_hash_456"
+
+        # Record metrics for target hash
+        for i in range(3):
+            db.record_prompt_metrics(
+                prompt_hash=target_hash,
+                agent_role="writer",
+                task="write_chapter",
+                template_version="1.0",
+                model_id="test-model",
+                tokens_generated=100 + i,
+                generation_time_seconds=1.0 + i,
+                success=True,
+            )
+
+        # Record metrics for other hash
+        db.record_prompt_metrics(
+            prompt_hash=other_hash,
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="test-model",
+            tokens_generated=500,
+            generation_time_seconds=5.0,
+            success=True,
+        )
+
+        # Get metrics for target hash only
+        metrics = db.get_prompt_metrics_by_hash(target_hash)
+        assert len(metrics) == 3
+        assert all(m["prompt_hash"] == target_hash for m in metrics)
+
+    def test_get_prompt_metrics_by_hash_respects_limit(self, db: ModeDatabase) -> None:
+        """Test get_prompt_metrics_by_hash respects limit parameter."""
+        for _i in range(10):
+            db.record_prompt_metrics(
+                prompt_hash="test_hash",
+                agent_role="writer",
+                task="write_chapter",
+                template_version="1.0",
+                model_id="test-model",
+                tokens_generated=100,
+                generation_time_seconds=1.0,
+                success=True,
+            )
+
+        metrics = db.get_prompt_metrics_by_hash("test_hash", limit=5)
+        assert len(metrics) == 5
+
+    def test_get_prompt_error_summary(self, db: ModeDatabase) -> None:
+        """Test getting prompt error summary."""
+        # Record some successful metrics
+        db.record_prompt_metrics(
+            prompt_hash="h1",
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="test-model",
+            tokens_generated=500,
+            generation_time_seconds=10.0,
+            success=True,
+        )
+
+        # Record some failed metrics
+        for i in range(3):
+            db.record_prompt_metrics(
+                prompt_hash="h1",
+                agent_role="writer",
+                task="write_chapter",
+                template_version="1.0",
+                model_id="test-model",
+                tokens_generated=0,
+                generation_time_seconds=1.0,
+                success=False,
+                error_message=f"Error {i}",
+            )
+
+        errors = db.get_prompt_error_summary()
+        assert len(errors) == 1
+        assert errors[0]["error_count"] == 3
+        assert errors[0]["agent_role"] == "writer"
+        assert errors[0]["task"] == "write_chapter"
+
+    def test_get_prompt_error_summary_empty(self, db: ModeDatabase) -> None:
+        """Test get_prompt_error_summary with no errors."""
+        # Record only successful metrics
+        db.record_prompt_metrics(
+            prompt_hash="h1",
+            agent_role="writer",
+            task="write_chapter",
+            template_version="1.0",
+            model_id="test-model",
+            tokens_generated=500,
+            generation_time_seconds=10.0,
+            success=True,
+        )
+
+        errors = db.get_prompt_error_summary()
+        assert len(errors) == 0

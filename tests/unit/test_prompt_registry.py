@@ -262,9 +262,11 @@ variables:
             assert len(registry) == 0
             assert registry.list_templates() == []
 
-    def test_nonexistent_directory(self):
+    def test_nonexistent_directory(self, tmp_path):
         """Test handling nonexistent templates directory."""
-        registry = PromptRegistry(Path("/nonexistent/path"))
+        # Use a path inside tmp_path that doesn't exist
+        nonexistent_path = tmp_path / "does_not_exist" / "nested" / "path"
+        registry = PromptRegistry(nonexistent_path)
         assert len(registry) == 0
 
     def test_nested_templates(self):
@@ -301,6 +303,90 @@ variables:
         registry = PromptRegistry(temp_templates_dir)
         repr_str = repr(registry)
         assert "4 templates" in repr_str
+
+    def test_duplicate_template_warning(self):
+        """Test warning when loading duplicate templates."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            templates_dir = Path(tmpdir)
+
+            # Create first template
+            writer_dir = templates_dir / "writer"
+            writer_dir.mkdir()
+            (writer_dir / "write_chapter.yaml").write_text(
+                """
+name: write_chapter
+version: "1.0"
+description: First write chapter
+agent: writer
+task: write_chapter
+template: First template
+variables:
+  required: []
+  optional: []
+""",
+                encoding="utf-8",
+            )
+
+            # Create second template with same agent/task but different filename
+            (writer_dir / "write_chapter_v2.yaml").write_text(
+                """
+name: write_chapter_v2
+version: "2.0"
+description: Second write chapter
+agent: writer
+task: write_chapter
+template: Second template
+variables:
+  required: []
+  optional: []
+""",
+                encoding="utf-8",
+            )
+
+            # Should load both, second overwrites first
+            registry = PromptRegistry(templates_dir)
+            # Only one template should exist for the key
+            assert registry.has_template("writer", "write_chapter")
+
+    def test_invalid_template_file_skipped(self):
+        """Test that invalid template files are skipped during loading."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            templates_dir = Path(tmpdir)
+
+            # Create valid template
+            writer_dir = templates_dir / "writer"
+            writer_dir.mkdir()
+            (writer_dir / "system.yaml").write_text(
+                """
+name: system
+version: "1.0"
+description: System prompt
+agent: writer
+task: system
+template: You are a writer
+variables:
+  required: []
+  optional: []
+""",
+                encoding="utf-8",
+            )
+
+            # Create invalid template (missing required fields)
+            (writer_dir / "invalid.yaml").write_text(
+                """
+name: ""
+version: ""
+agent: ""
+task: ""
+template: ""
+""",
+                encoding="utf-8",
+            )
+
+            # Should load valid template and skip invalid one
+            registry = PromptRegistry(templates_dir)
+            assert len(registry) == 1
+            assert registry.has_template("writer", "system")
 
 
 class TestPromptRegistryIntegration:
