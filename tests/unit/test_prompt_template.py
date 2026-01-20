@@ -455,3 +455,85 @@ template: ""
                 assert "Cannot write" in str(exc_info.value)
             finally:
                 os.chmod(readonly_dir, 0o755)
+
+    def test_from_yaml_invalid_variables_type(self):
+        """Test error when 'variables' is not a dict."""
+        yaml_content = """
+name: test
+version: "1.0"
+description: Test
+agent: writer
+task: test
+template: Hello
+
+variables: "not a dict"
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(yaml_content)
+            yaml_path = Path(f.name)
+
+        try:
+            with pytest.raises(PromptTemplateError) as exc_info:
+                PromptTemplate.from_yaml(yaml_path)
+            assert "Invalid 'variables'" in str(exc_info.value)
+            assert "expected dict" in str(exc_info.value)
+        finally:
+            yaml_path.unlink()
+
+    def test_from_yaml_invalid_required_vars_type(self):
+        """Test error when 'variables.required' is not a list."""
+        yaml_content = """
+name: test
+version: "1.0"
+description: Test
+agent: writer
+task: test
+template: Hello
+
+variables:
+  required: "not a list"
+  optional: []
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(yaml_content)
+            yaml_path = Path(f.name)
+
+        try:
+            with pytest.raises(PromptTemplateError) as exc_info:
+                PromptTemplate.from_yaml(yaml_path)
+            assert "Invalid 'variables.required'" in str(exc_info.value)
+            assert "expected list" in str(exc_info.value)
+        finally:
+            yaml_path.unlink()
+
+    def test_from_yaml_invalid_optional_vars_type(self):
+        """Test error when 'variables.optional' is not a list."""
+        yaml_content = """
+name: test
+version: "1.0"
+description: Test
+agent: writer
+task: test
+template: Hello
+
+variables:
+  required: []
+  optional: "not a list"
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(yaml_content)
+            yaml_path = Path(f.name)
+
+        try:
+            with pytest.raises(PromptTemplateError) as exc_info:
+                PromptTemplate.from_yaml(yaml_path)
+            assert "Invalid 'variables.optional'" in str(exc_info.value)
+            assert "expected list" in str(exc_info.value)
+        finally:
+            yaml_path.unlink()

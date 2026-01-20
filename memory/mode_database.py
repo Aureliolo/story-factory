@@ -1458,6 +1458,7 @@ class ModeDatabase:
                 agent_role,
                 task,
                 template_version,
+                prompt_hash,
                 COUNT(*) as total_calls,
                 SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_calls,
                 ROUND(AVG(CASE WHEN success = 1 THEN 1.0 ELSE 0.0 END) * 100, 1) as success_rate,
@@ -1467,7 +1468,7 @@ class ModeDatabase:
                 MAX(timestamp) as last_used
             FROM prompt_metrics
             WHERE {where_sql}
-            GROUP BY agent_role, task, template_version
+            GROUP BY agent_role, task, template_version, prompt_hash
             ORDER BY total_calls DESC
         """
 
@@ -1585,12 +1586,13 @@ class ModeDatabase:
                     agent_role,
                     task,
                     template_version,
+                    prompt_hash,
                     COUNT(*) as error_count,
                     GROUP_CONCAT(DISTINCT error_message) as error_messages
                 FROM prompt_metrics
                 WHERE success = 0
                 AND DATE(timestamp) >= DATE('now', '-{days} days')
-                GROUP BY agent_role, task, template_version
+                GROUP BY agent_role, task, template_version, prompt_hash
                 ORDER BY error_count DESC
                 """,
             )

@@ -64,13 +64,15 @@ def _get_prompt_registry() -> PromptRegistry:
 
     The registry is created lazily on first use and shared across all agents.
     This ensures templates are loaded only once per application lifetime.
+    Uses the prompt_templates_dir setting to locate templates.
     """
     global _prompt_registry
     if _prompt_registry is None:
         with _prompt_registry_lock:
             # Double-check after acquiring lock
             if _prompt_registry is None:
-                _prompt_registry = PromptRegistry()
+                settings = Settings.load()
+                _prompt_registry = PromptRegistry(settings.prompt_templates_dir)
                 logger.info(f"Initialized prompt registry with {len(_prompt_registry)} templates")
     return _prompt_registry
 

@@ -65,7 +65,7 @@ class PromptRegistry:
             logger.warning(f"Templates directory not found: {self.templates_dir}")
             return
 
-        yaml_files = list(self.templates_dir.rglob("*.yaml"))
+        yaml_files = sorted(self.templates_dir.rglob("*.yaml"))
         logger.info(f"Loading {len(yaml_files)} template files from {self.templates_dir}")
 
         loaded = 0

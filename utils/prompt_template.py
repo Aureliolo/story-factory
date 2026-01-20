@@ -1,7 +1,5 @@
 """YAML-based prompt template system with Jinja2 rendering."""
 
-from __future__ import annotations
-
 import hashlib
 import logging
 from dataclasses import dataclass, field
@@ -181,10 +179,18 @@ class PromptTemplate:
         if not isinstance(data, dict):
             raise PromptTemplateError(f"Invalid template format in {path}: expected dict")
 
-        # Extract variables section
+        # Extract and validate variables section
         variables = data.get("variables", {})
+        if not isinstance(variables, dict):
+            raise PromptTemplateError(
+                f"Invalid 'variables' in {path}: expected dict, got {type(variables).__name__}"
+            )
         required_vars = variables.get("required", [])
         optional_vars = variables.get("optional", [])
+        if not isinstance(required_vars, list):
+            raise PromptTemplateError(f"Invalid 'variables.required' in {path}: expected list")
+        if not isinstance(optional_vars, list):
+            raise PromptTemplateError(f"Invalid 'variables.optional' in {path}: expected list")
 
         # Create template instance
         template = cls(
