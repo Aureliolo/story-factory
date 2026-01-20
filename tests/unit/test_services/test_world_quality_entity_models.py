@@ -274,3 +274,69 @@ class TestAnalyticsRecording:
             assert call_args.kwargs["model_id"] == expected_model, (
                 f"Expected {expected_model} for {entity_type}, got {call_args.kwargs['model_id']}"
             )
+
+
+class TestJudgeModelSelection:
+    """Test that judge model selection works correctly for entity types."""
+
+    def test_judge_model_uses_validator_for_character(self, settings):
+        """Test that character judgment uses validator model."""
+        mock_mode_service = MagicMock()
+        mock_mode_service.get_model_for_agent.return_value = "test-validator-model"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        model = service._get_judge_model(entity_type="character")
+
+        mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
+        assert model == "test-validator-model"
+
+    def test_judge_model_uses_validator_for_all_entity_types(self, settings):
+        """Test that all entity types use validator for judgment."""
+        mock_mode_service = MagicMock()
+        mock_mode_service.get_model_for_agent.return_value = "test-validator-model"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        entity_types = ["character", "faction", "location", "item", "concept", "relationship"]
+        for entity_type in entity_types:
+            mock_mode_service.reset_mock()
+            model = service._get_judge_model(entity_type=entity_type)
+
+            mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
+            assert model == "test-validator-model"
+
+    def test_judge_model_without_entity_type_uses_validator(self, settings):
+        """Test that no entity type defaults to validator for judgment."""
+        mock_mode_service = MagicMock()
+        mock_mode_service.get_model_for_agent.return_value = "test-validator-model"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        model = service._get_judge_model()
+
+        mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
+        assert model == "test-validator-model"
+
+
+class TestClassConstants:
+    """Test that class constants are properly defined."""
+
+    def test_entity_creator_roles_defined(self, settings):
+        """Test that ENTITY_CREATOR_ROLES constant is defined."""
+        assert hasattr(WorldQualityService, "ENTITY_CREATOR_ROLES")
+        roles = WorldQualityService.ENTITY_CREATOR_ROLES
+        assert roles["character"] == "writer"
+        assert roles["faction"] == "architect"
+        assert roles["location"] == "writer"
+        assert roles["item"] == "writer"
+        assert roles["concept"] == "architect"
+        assert roles["relationship"] == "editor"
+
+    def test_entity_judge_roles_defined(self, settings):
+        """Test that ENTITY_JUDGE_ROLES constant is defined."""
+        assert hasattr(WorldQualityService, "ENTITY_JUDGE_ROLES")
+        roles = WorldQualityService.ENTITY_JUDGE_ROLES
+        # All entity types should use validator for judgment
+        for entity_type in ["character", "faction", "location", "item", "concept", "relationship"]:
+            assert roles[entity_type] == "validator"

@@ -45,6 +45,28 @@ class WorldQualityService:
     4. Return entity with quality scores
     """
 
+    # Map entity types to specialized agent roles for model selection.
+    # Creator roles: Characters/locations/items need descriptive writing (writer),
+    # factions/concepts need reasoning (architect), relationships need dynamics (editor).
+    # Judge roles: All entities use validator for consistent quality assessment.
+    ENTITY_CREATOR_ROLES: dict[str, str] = {
+        "character": "writer",  # Strong character development
+        "faction": "architect",  # Political/organizational reasoning
+        "location": "writer",  # Atmospheric/descriptive writing
+        "item": "writer",  # Creative descriptions
+        "concept": "architect",  # Abstract thinking
+        "relationship": "editor",  # Understanding dynamics
+    }
+
+    ENTITY_JUDGE_ROLES: dict[str, str] = {
+        "character": "validator",  # Character consistency checking
+        "faction": "validator",  # Faction coherence checking
+        "location": "validator",  # Location plausibility checking
+        "item": "validator",  # Item consistency checking
+        "concept": "validator",  # Concept coherence checking
+        "relationship": "validator",  # Relationship validity checking
+    }
+
     def __init__(self, settings: Settings, mode_service: ModelModeService):
         """Initialize WorldQualityService.
 
@@ -138,23 +160,33 @@ class WorldQualityService:
         Returns:
             Model ID to use for generation.
         """
-        # Map entity types to specialized agent roles for better model selection
-        entity_to_agent = {
-            "character": "writer",  # Characters need strong character development
-            "faction": "architect",  # Factions need political/organizational reasoning
-            "location": "writer",  # Locations need atmospheric/descriptive writing
-            "item": "writer",  # Items need creative descriptions
-            "concept": "architect",  # Concepts need abstract thinking
-            "relationship": "editor",  # Relationships need understanding of dynamics
-        }
+        agent_role = (
+            self.ENTITY_CREATOR_ROLES.get(entity_type, "writer") if entity_type else "writer"
+        )
+        model = self.mode_service.get_model_for_agent(agent_role)
+        logger.debug(
+            f"Selected creator model '{model}' for entity_type={entity_type} (role={agent_role})"
+        )
+        return model
 
-        # Use entity-specific role if available, otherwise default to writer
-        agent_role = entity_to_agent.get(entity_type, "writer") if entity_type else "writer"
-        return self.mode_service.get_model_for_agent(agent_role)
+    def _get_judge_model(self, entity_type: str | None = None) -> str:
+        """Get the model to use for quality judgment.
 
-    def _get_judge_model(self) -> str:
-        """Get the model to use for quality judgment."""
-        return self.mode_service.get_model_for_agent("validator")
+        Args:
+            entity_type: Type of entity being judged. Currently all use validator,
+                        but allows future differentiation per entity type.
+
+        Returns:
+            Model ID to use for judgment.
+        """
+        agent_role = (
+            self.ENTITY_JUDGE_ROLES.get(entity_type, "validator") if entity_type else "validator"
+        )
+        model = self.mode_service.get_model_for_agent(agent_role)
+        logger.debug(
+            f"Selected judge model '{model}' for entity_type={entity_type} (role={agent_role})"
+        )
+        return model
 
     # ========== CHARACTER GENERATION WITH QUALITY ==========
 
@@ -364,7 +396,7 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
         try:
-            model = self._get_judge_model()
+            model = self._get_judge_model(entity_type="character")
             return generate_structured(
                 settings=self.settings,
                 model=model,
@@ -625,7 +657,7 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
         try:
-            model = self._get_judge_model()
+            model = self._get_judge_model(entity_type="location")
             return generate_structured(
                 settings=self.settings,
                 model=model,
@@ -938,7 +970,7 @@ Output ONLY valid JSON:
 {{"tension": <your_score>, "dynamics": <your_score>, "story_potential": <your_score>, "authenticity": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
-            model = self._get_judge_model()
+            model = self._get_judge_model(entity_type="relationship")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1358,7 +1390,7 @@ Output ONLY valid JSON:
 {{"coherence": <score>, "influence": <score>, "conflict_potential": <score>, "distinctiveness": <score>, "feedback": "<specific_actionable_feedback>"}}"""
 
         try:
-            model = self._get_judge_model()
+            model = self._get_judge_model(entity_type="faction")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1669,7 +1701,7 @@ Output ONLY valid JSON:
 {{"significance": <your_score>, "uniqueness": <your_score>, "narrative_potential": <your_score>, "integration": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
-            model = self._get_judge_model()
+            model = self._get_judge_model(entity_type="item")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -1968,7 +2000,7 @@ Output ONLY valid JSON:
 {{"relevance": <your_score>, "depth": <your_score>, "manifestation": <your_score>, "resonance": <your_score>, "feedback": "<your_specific_feedback>"}}"""
 
         try:
-            model = self._get_judge_model()
+            model = self._get_judge_model(entity_type="concept")
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
@@ -2492,7 +2524,7 @@ Write a punchy, informative summary. NO quotes, NO formatting, just the summary 
 SUMMARY:"""
 
         try:
-            model = self._get_judge_model()  # Use fast validator model
+            model = self._get_judge_model(entity_type=entity_type)  # Use fast validator model
             response = self.client.generate(
                 model=model,
                 prompt=prompt,
