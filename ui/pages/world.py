@@ -2001,11 +2001,8 @@ class WorldPage:
                     )
                 return min_input, max_input
 
-            # Use grid for consistent spacing across all settings
-            with ui.element("div").classes(
-                "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-4"
-            ):
-                # Chapter count
+            # Chapter count (standalone)
+            with ui.element("div").classes("mb-4"):
                 with ui.column().classes("gap-1"):
                     ui.label("Chapters").classes("text-xs text-gray-500")
                     chapter_input = (
@@ -2020,6 +2017,10 @@ class WorldPage:
                     )
                     ui.label(f"Default: {default_chapters}").classes("text-xs text-gray-400")
 
+            # All entity settings in one grid with consistent horizontal layout
+            with ui.element("div").classes(
+                "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4"
+            ):
                 # Character count range
                 char_min_input, char_max_input = create_minmax_input(
                     "Characters",
@@ -2038,9 +2039,6 @@ class WorldPage:
                     settings.world_gen_locations_max,
                 )
 
-            with ui.element("div").classes(
-                "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4"
-            ):
                 # Factions count range
                 fac_min_input, fac_max_input = create_minmax_input(
                     "Factions",
