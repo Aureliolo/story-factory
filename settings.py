@@ -985,10 +985,14 @@ class Settings:
         installed_models = get_installed_models_with_sizes()
 
         if not installed_models:
-            raise ValueError(
-                "No models installed in Ollama. Please install at least one model using "
-                "'ollama pull <model_name>'. See docs/MODELS.md for recommendations."
+            # Return the first recommended model as a sensible default
+            # This allows the code to continue; Ollama will error later if needed
+            default = next(iter(RECOMMENDED_MODELS.keys()))
+            logger.warning(
+                f"No models installed in Ollama - returning default model '{default}' for {agent_role}. "
+                f"Install a model with 'ollama pull <model_name>'."
             )
+            return default
 
         # PRIORITY 1: Check if any installed models are tagged for this role
         tagged_models: list[tuple[str, float, float]] = []  # (model_id, size, quality)
