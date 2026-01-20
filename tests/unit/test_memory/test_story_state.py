@@ -327,6 +327,19 @@ class TestCharacter:
         )
         assert char.arc_progress == {}
 
+    def test_arc_progress_handles_non_dict(self):
+        """Test arc_progress validator handles non-dict input (e.g., None or list)."""
+        # When LLM returns a non-dict value like a list or string
+        raw_data = {
+            "name": "Test",
+            "role": "protagonist",
+            "description": "Test character",
+            "arc_progress": ["invalid", "list", "format"],
+        }
+        char = Character.model_validate(raw_data)
+        # Should convert to empty dict
+        assert char.arc_progress == {}
+
 
 class TestStoryState:
     """Tests for StoryState model."""
