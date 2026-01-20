@@ -30,6 +30,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 - Use docstrings for classes and complex functions
 - Line length: 100 characters (enforced by Ruff)
 - Python version: 3.14+
+- **NEVER** add `from __future__ import annotations` - Python 3.14+ has native support for deferred annotation evaluation and does not require this import
 
 ### Required Before Each Commit
 **CRITICAL**: After making code changes, always run in this order:
