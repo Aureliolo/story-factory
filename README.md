@@ -463,7 +463,7 @@ story-factory/
 ├── main.py                 # Entry point
 ├── settings.py             # Settings management & model registry
 ├── agents/                 # AI agent implementations
-│   ├── base.py             # Base agent class
+│   ├── base.py             # Base agent class with retry logic
 │   ├── interviewer.py      # Story requirements gathering
 │   ├── architect.py        # Structure and character design
 │   ├── writer.py           # Prose generation
@@ -472,41 +472,82 @@ story-factory/
 │   └── validator.py        # Response validation
 ├── workflows/
 │   └── orchestrator.py     # Agent coordination
-├── memory/
-│   ├── story_state.py      # Story state management
+├── memory/                 # Data models and persistence
+│   ├── story_state.py      # Story state (Pydantic models)
 │   ├── entities.py         # Entity/Relationship models
-│   └── world_database.py   # SQLite + NetworkX database
+│   ├── world_database.py   # SQLite + NetworkX database
+│   ├── mode_database.py    # Model performance database
+│   ├── mode_models.py      # Performance tracking models
+│   ├── templates.py        # Template data models
+│   ├── builtin_templates.py # Built-in story templates
+│   └── world_quality.py    # World quality tracking
 ├── services/               # Business logic layer
-│   ├── project_service.py  # Project CRUD
-│   ├── story_service.py    # Story generation
-│   ├── world_service.py    # Entity management
-│   ├── model_service.py    # Ollama operations
-│   └── export_service.py   # Export formats
+│   ├── project_service.py  # Project CRUD operations
+│   ├── story_service.py    # Story generation workflow
+│   ├── world_service.py    # Entity/world management
+│   ├── model_service.py    # Ollama model operations
+│   ├── export_service.py   # Export to multiple formats
+│   ├── model_mode_service.py # Model performance tracking
+│   ├── scoring_service.py  # Quality scoring logic
+│   ├── template_service.py # Story template management
+│   ├── backup_service.py   # Project backup/restore
+│   ├── import_service.py   # Import entities from text
+│   ├── comparison_service.py # Model comparison testing
+│   ├── suggestion_service.py # AI-powered suggestions
+│   ├── world_quality_service.py # World quality enhancement
+│   └── llm_client.py       # Unified LLM client
 ├── ui/                     # NiceGUI web interface
-│   ├── app.py              # Main application
+│   ├── app.py              # Main application setup
 │   ├── state.py            # Centralized UI state
-│   ├── theme.py            # Colors, styles
+│   ├── theme.py            # Colors, styles, dark mode
 │   ├── styles.css          # Custom CSS
 │   ├── graph_renderer.py   # vis.js graph rendering
 │   ├── keyboard_shortcuts.py # Keyboard shortcut handling
+│   ├── shortcuts.py        # Shortcut registry
 │   ├── pages/              # Page components
-│   │   ├── write.py        # Write Story page
+│   │   ├── write.py        # Write Story page (Fundamentals + Live Writing)
 │   │   ├── world.py        # World Builder page
-│   │   ├── projects.py     # Projects page
-│   │   ├── settings.py     # Settings page
-│   │   ├── models.py       # Models page
-│   │   └── analytics.py    # Analytics page
+│   │   ├── projects.py     # Projects management
+│   │   ├── templates.py    # Story templates
+│   │   ├── timeline.py     # Event timeline
+│   │   ├── comparison.py   # Model comparison
+│   │   ├── settings.py     # Settings configuration
+│   │   ├── models.py       # Model management
+│   │   └── analytics.py    # Performance analytics
 │   └── components/         # Reusable UI components
 │       ├── header.py       # App header with project selector
 │       ├── chat.py         # Chat interface
 │       ├── graph.py        # Graph component wrapper
 │       ├── entity_card.py  # Entity display
 │       └── common.py       # Shared components (loading, dialogs, etc.)
-└── tests/                  # Test suite
-    ├── unit/               # Unit tests
-    ├── component/          # NiceGUI component tests
-    ├── integration/        # Integration tests
-    └── e2e/                # End-to-end tests
+├── utils/                  # Utility modules
+│   ├── logging_config.py   # Logging configuration
+│   ├── json_parser.py      # JSON extraction from LLM responses
+│   ├── error_handling.py   # Error decorators and handlers
+│   ├── exceptions.py       # Custom exception hierarchy
+│   ├── constants.py        # Shared constants
+│   ├── environment.py      # Environment checks
+│   ├── prompt_builder.py   # Prompt construction
+│   ├── prompt_registry.py  # Prompt management
+│   ├── prompt_template.py  # Template system
+│   ├── model_utils.py      # Model name utilities
+│   ├── message_analyzer.py # Conversation analysis
+│   ├── text_analytics.py   # Text analysis utilities
+│   └── validation.py       # Data validation helpers
+├── prompts/                # Prompt templates
+│   └── templates/          # Template files
+├── tests/                  # Test suite (2000+ tests)
+│   ├── unit/               # Unit tests
+│   ├── component/          # NiceGUI component tests
+│   ├── integration/        # Integration tests
+│   ├── smoke/              # Quick validation tests
+│   └── e2e/                # End-to-end browser tests
+└── docs/                   # Documentation
+    ├── ARCHITECTURE.md     # System design
+    ├── MODELS.md           # Model recommendations
+    ├── TEMPLATES.md        # Template system guide
+    ├── UX_UI_IMPROVEMENTS.md # UI/UX features
+    └── plans/              # Design documents
 ```
 
 ## Workflow
@@ -571,7 +612,7 @@ mypy .
 
 - **Ruff**: Fast Python formatter and linter
 - **MyPy**: Type checking
-- **Pytest**: 849 tests with 100% coverage on core modules
+- **Pytest**: 2000+ tests with 100% coverage on core modules
 - **CI/CD**: GitHub Actions with coverage enforcement
 - **GitHub Copilot**: Custom instructions configured (see [docs/COPILOT_INSTRUCTIONS.md](docs/COPILOT_INSTRUCTIONS.md))
 

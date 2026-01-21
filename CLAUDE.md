@@ -54,7 +54,15 @@ main.py
        ├── StoryService           # Story generation workflow
        ├── WorldService           # Entity/relationship management
        ├── ModelService           # Ollama model operations
-       └── ExportService          # Export formats
+       ├── ExportService          # Export formats
+       ├── ModelModeService       # Model performance tracking
+       ├── ScoringService         # Quality scoring
+       ├── WorldQualityService    # World quality enhancement
+       ├── SuggestionService      # AI-powered suggestions
+       ├── TemplateService        # Story template management
+       ├── BackupService          # Project backup/restore
+       ├── ImportService          # Import entities from text
+       └── ComparisonService      # Model comparison testing
 ```
 
 **Layer responsibilities:**

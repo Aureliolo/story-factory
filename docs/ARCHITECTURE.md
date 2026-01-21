@@ -106,22 +106,32 @@ story-factory/
 │   ├── continuity.py       # Consistency checking
 │   └── validator.py        # Response validation
 │
-├── memory/                  # Data models
-│   ├── story_state.py      # Story state model
-│   ├── entities.py         # Entity models
-│   ├── world_database.py   # SQLite + NetworkX
-│   ├── mode_database.py    # Model performance scores DB
-│   └── mode_models.py      # Mode/scoring Pydantic models
+├── memory/                  # Data models and persistence
+│   ├── story_state.py      # Story state (Pydantic models)
+│   ├── entities.py         # Entity/Relationship models
+│   ├── world_database.py   # SQLite + NetworkX database
+│   ├── mode_database.py    # Model performance database
+│   ├── mode_models.py      # Performance tracking models
+│   ├── templates.py        # Template data models
+│   ├── builtin_templates.py # Built-in story templates
+│   └── world_quality.py    # World quality tracking
 │
 ├── services/                # Business logic layer
 │   ├── __init__.py         # ServiceContainer
-│   ├── project_service.py  # Project CRUD, listing
+│   ├── project_service.py  # Project CRUD operations
 │   ├── story_service.py    # Story generation workflow
-│   ├── world_service.py    # World/entity management
+│   ├── world_service.py    # Entity/world management
 │   ├── model_service.py    # Ollama model operations
-│   ├── export_service.py   # Export to various formats
+│   ├── export_service.py   # Export to multiple formats
 │   ├── model_mode_service.py # Model performance tracking
-│   └── scoring_service.py  # Quality scoring logic
+│   ├── scoring_service.py  # Quality scoring logic
+│   ├── template_service.py # Story template management
+│   ├── backup_service.py   # Project backup/restore
+│   ├── import_service.py   # Import entities from text
+│   ├── comparison_service.py # Model comparison testing
+│   ├── suggestion_service.py # AI-powered suggestions
+│   ├── world_quality_service.py # World quality enhancement
+│   └── llm_client.py       # Unified LLM client
 │
 ├── ui/                      # NiceGUI UI layer
 │   ├── __init__.py
@@ -131,6 +141,7 @@ story-factory/
 │   ├── styles.css          # Custom CSS styles
 │   ├── graph_renderer.py   # vis.js graph rendering
 │   ├── keyboard_shortcuts.py # Keyboard shortcut handling
+│   ├── shortcuts.py        # Shortcut registry
 │   ├── components/         # Reusable components
 │   │   ├── __init__.py
 │   │   ├── header.py       # Project selector + navigation
@@ -143,12 +154,20 @@ story-factory/
 │       ├── write.py        # Fundamentals + Live Writing
 │       ├── world.py        # World Builder
 │       ├── projects.py     # Project management
-│       ├── settings.py     # Settings
+│       ├── templates.py    # Story templates
+│       ├── timeline.py     # Event timeline
+│       ├── comparison.py   # Model comparison
+│       ├── settings.py     # Settings configuration
 │       ├── models.py       # Model management
 │       └── analytics.py    # Model performance analytics
 │
 ├── workflows/               # Orchestration
+│   ├── __init__.py
 │   └── orchestrator.py     # Coordinates agents
+│
+├── prompts/                 # Prompt templates
+│   ├── __init__.py
+│   └── templates/          # Prompt template files
 │
 ├── utils/                   # Utilities
 │   ├── logging_config.py   # Logging setup and context
@@ -156,9 +175,14 @@ story-factory/
 │   ├── error_handling.py   # Decorators and helpers
 │   ├── exceptions.py       # Custom exception hierarchy
 │   ├── constants.py        # Shared constants
+│   ├── environment.py      # Environment validation
 │   ├── message_analyzer.py # Conversation analysis
 │   ├── model_utils.py      # Model name utilities
-│   └── prompt_builder.py   # Prompt construction
+│   ├── prompt_builder.py   # Prompt construction
+│   ├── prompt_registry.py  # Prompt management
+│   ├── prompt_template.py  # Template system for prompts
+│   ├── text_analytics.py   # Text analysis utilities
+│   └── validation.py       # Data validation helpers
 │
 ├── tests/                   # Tests
 │   ├── unit/               # Unit tests (fast, isolated)
@@ -231,9 +255,17 @@ class ServiceContainer:
         self.settings = settings
         self.project = ProjectService(settings)
         self.story = StoryService(settings)
-        self.world = WorldService()
+        self.world = WorldService(settings)
         self.model = ModelService(settings)
-        self.export = ExportService()
+        self.export = ExportService(settings)
+        self.mode = ModelModeService(settings)
+        self.scoring = ScoringService(self.mode)
+        self.world_quality = WorldQualityService(settings, self.mode)
+        self.suggestion = SuggestionService(settings)
+        self.template = TemplateService(settings)
+        self.backup = BackupService(settings)
+        self.import_svc = ImportService(settings, self.mode)
+        self.comparison = ComparisonService(settings)
 
 # main.py - Services created once and passed to UI
 settings = Settings.load()

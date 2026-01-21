@@ -4,7 +4,7 @@
 
 ### Test Coverage
 - **Total Coverage**: 100% on all core modules
-- **Unit Tests**: 849 tests
+- **Unit Tests**: 2000+ tests
 - **Coverage Enforcement**: CI fails below 100%
 
 ### Covered Modules (100% coverage)
@@ -168,7 +168,7 @@ pytest -x
 
 ## Summary
 
-- **849 tests** with **100% coverage** on all core modules
+- **2000+ tests** with **100% coverage** on all core modules
 - Industry-standard patterns (MockedBaseAgent, tmp_path, proper mocking)
 - CI enforces 100% coverage
 - Clean linting and type checking
