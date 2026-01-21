@@ -109,47 +109,47 @@ The following pages/features are not currently screenshotted but should be:
 
 Each screenshot should demonstrate:
 
-1. **Write Page**: 
+1. **Write Page**:
    - Interview chat with sample messages
    - Story structure visible
    - Live writing tab with chapter content
 
-2. **World Builder**: 
+2. **World Builder**:
    - Graph with multiple entities and connections
    - Sidebar showing entity details
    - Search/filter functionality
 
-3. **Projects Page**: 
+3. **Projects Page**:
    - List of sample projects
    - Action buttons (create, load, delete)
    - Project metadata visible
 
-4. **Templates Page**: 
+4. **Templates Page**:
    - Template cards showing different genres
    - Preview of template details
    - Create custom template button
 
-5. **Timeline Page**: 
+5. **Timeline Page**:
    - Event timeline with multiple events
    - Story progression visible
    - Timeline controls
 
-6. **Comparison Page**: 
+6. **Comparison Page**:
    - Side-by-side comparison interface
    - Model selection dropdowns
    - Comparison results
 
-7. **Settings Page**: 
+7. **Settings Page**:
    - Model configuration section
    - Temperature sliders
    - Workflow preferences
 
-8. **Models Page**: 
+8. **Models Page**:
    - List of installed models
    - VRAM usage indicators
    - Pull/delete actions
 
-9. **Analytics Page**: 
+9. **Analytics Page**:
    - Performance metrics dashboard
    - Quality score charts
    - Model recommendations
