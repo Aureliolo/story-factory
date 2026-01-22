@@ -264,13 +264,17 @@ function Start-Ollama {
     }
 
     Set-ActionMessage "Starting Ollama..." "Yellow"
-    Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden
-    Start-Sleep -Seconds 1
+    try {
+        Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden -ErrorAction Stop
+        Start-Sleep -Seconds 1
 
-    if (Test-OllamaRunning -TimeoutSec 3) {
-        Set-ActionMessage "Ollama started at $ollamaUrl" "Green"
-    } else {
-        Set-ActionMessage "Started, API warming up..." "Yellow"
+        if (Test-OllamaRunning -TimeoutSec 3) {
+            Set-ActionMessage "Ollama started at $ollamaUrl" "Green"
+        } else {
+            Set-ActionMessage "Started, API warming up..." "Yellow"
+        }
+    } catch {
+        Set-ActionMessage "Failed to start Ollama: $_" "Red"
     }
 }
 

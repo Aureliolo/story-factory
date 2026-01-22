@@ -140,7 +140,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "description": "MoE (30B/3B active), strong reasoning - excellent for architect",
         "tags": ["architect", "continuity", "interviewer", "suggestion"],
     },
-    # Quality 7 reasoning: architect, continuity, interviewer. No suggestion (Q7 limit).
+    # Quality 7 reasoning: architect, continuity, interviewer. No suggestion (reasoning focus).
     "huihui_ai/qwen3-abliterated:8b": {
         "name": "Qwen3 8B Abliterated",
         "size_gb": 5,
