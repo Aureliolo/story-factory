@@ -84,7 +84,7 @@ AGENT_ROLES: dict[str, AgentRoleInfo] = {
 # Tags indicate which roles the model is particularly good for
 RECOMMENDED_MODELS: dict[str, ModelInfo] = {
     # === CREATIVE WRITING SPECIALISTS ===
-    # Creative focus: writer, editor, suggestion. NOT architect (needs structured reasoning)
+    # Prose-optimized models: writer, editor, suggestion, interviewer. NOT architect.
     "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": {
         "name": "Celeste V1.9 12B",
         "size_gb": 13,
@@ -106,7 +106,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "tags": ["writer", "editor", "suggestion", "interviewer"],
     },
     # === GENERAL PURPOSE ===
-    # Quality 7: No writer/editor (need 8+), no architect (need 8+ for complex planning)
+    # Quality 7: continuity, interviewer, suggestion. No writer/editor/architect (need Q8+).
     "huihui_ai/dolphin3-abliterated:8b": {
         "name": "Dolphin 3.0 8B Abliterated",
         "size_gb": 5,
@@ -117,7 +117,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "description": "Fast, compliant, no Chinese output - great all-rounder",
         "tags": ["continuity", "interviewer", "suggestion"],
     },
-    # Quality 8: Balanced - good at most roles
+    # Quality 8: All roles except writer (editing-focused, not prose creation).
     "CognitiveComputations/dolphin-mistral-nemo:12b": {
         "name": "Dolphin Mistral Nemo 12B",
         "size_gb": 7,
@@ -129,7 +129,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "tags": ["editor", "architect", "continuity", "interviewer", "suggestion"],
     },
     # === REASONING SPECIALISTS ===
-    # Reasoning focus: architect, continuity. NOT writer/editor (creative prose not their strength)
+    # Reasoning-optimized: architect, continuity, interviewer, suggestion. NOT writer/editor.
     "huihui_ai/qwen3-abliterated:30b": {
         "name": "Qwen3 30B Abliterated (MoE)",
         "size_gb": 18,
@@ -137,10 +137,10 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "quality": 9,
         "speed": 7,
         "uncensored": True,
-        "description": "MoE (30B/3B active), matches 70B reasoning - BEST for architect",
+        "description": "MoE (30B/3B active), strong reasoning - excellent for architect",
         "tags": ["architect", "continuity", "interviewer", "suggestion"],
     },
-    # Quality 7 reasoning: architect, continuity only
+    # Quality 7 reasoning: architect, continuity, interviewer. No suggestion (Q7 limit).
     "huihui_ai/qwen3-abliterated:8b": {
         "name": "Qwen3 8B Abliterated",
         "size_gb": 5,
