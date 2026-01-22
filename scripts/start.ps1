@@ -63,14 +63,23 @@ function Write-Screen {
 
     # Status
     $running = Get-Process -Name python -ErrorAction SilentlyContinue
+    $ollamaRunning = Test-OllamaRunning
+    $ollamaUrl = Get-OllamaUrl
     Write-Host ""
+    Write-Host "  Story Factory: " -NoNewline
     if ($running) {
-        Write-Host "  Status: " -NoNewline
         Write-Host "RUNNING" -ForegroundColor Green -NoNewline
         Write-Host "  |  URL: " -NoNewline
         Write-Host "http://localhost:7860" -ForegroundColor Cyan
     } else {
-        Write-Host "  Status: " -NoNewline
+        Write-Host "STOPPED" -ForegroundColor Red
+    }
+    Write-Host "  Ollama:        " -NoNewline
+    if ($ollamaRunning) {
+        Write-Host "RUNNING" -ForegroundColor Green -NoNewline
+        Write-Host "  |  API: " -NoNewline
+        Write-Host $ollamaUrl -ForegroundColor Cyan
+    } else {
         Write-Host "STOPPED" -ForegroundColor Red
     }
 
@@ -83,7 +92,7 @@ function Write-Screen {
     # Menu
     Write-Host "  [1] Start    [2] Stop      [3] Restart" -ForegroundColor White
     Write-Host "  [4] Browser  [5] Clear Logs [6] Clear & Restart" -ForegroundColor White
-    Write-Host "  [Q] Quit" -ForegroundColor DarkGray
+    Write-Host "  [7] Ollama   [Q] Quit" -ForegroundColor White
 
     # Logs section - visible while waiting for input
     Write-Host ""
@@ -185,6 +194,90 @@ function Clear-AndRestart {
     Set-ActionMessage "Logs cleared & restarted!" "Green"
 }
 
+function Get-OllamaUrl {
+    # Read ollama_url from settings.json, or use default
+    $settingsFile = Join-Path $projectRoot "settings.json"
+    $defaultUrl = "http://localhost:11434"
+
+    if (Test-Path $settingsFile) {
+        try {
+            $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
+            if ($settings.ollama_url) {
+                return $settings.ollama_url
+            }
+        } catch {
+            # Ignore parse errors, use default
+        }
+    }
+    return $defaultUrl
+}
+
+function Test-OllamaRunning {
+    param([int]$TimeoutSec = 1)
+    $ollamaUrl = Get-OllamaUrl
+    try {
+        $response = Invoke-WebRequest -Uri "$ollamaUrl/api/tags" -TimeoutSec $TimeoutSec -UseBasicParsing -ErrorAction Stop
+        return $response.StatusCode -eq 200
+    } catch {
+        return $false
+    }
+}
+
+function Start-Ollama {
+    $ollamaUrl = Get-OllamaUrl
+
+    # Check if Ollama is already responding via API
+    if (Test-OllamaRunning) {
+        Set-ActionMessage "Ollama already running at $ollamaUrl" "Green"
+        return
+    }
+
+    # Check if Ollama is installed as a Windows service
+    $ollamaService = Get-Service -Name "ollama" -ErrorAction SilentlyContinue
+    if ($ollamaService) {
+        if ($ollamaService.Status -eq "Running") {
+            Set-ActionMessage "Ollama service running but not responding" "Yellow"
+            return
+        }
+
+        Set-ActionMessage "Starting Ollama service..." "Yellow"
+        try {
+            Start-Service -Name "ollama" -ErrorAction Stop
+            Start-Sleep -Seconds 1
+
+            if (Test-OllamaRunning -TimeoutSec 3) {
+                Set-ActionMessage "Ollama service started at $ollamaUrl" "Green"
+            } else {
+                Set-ActionMessage "Service started, API warming up..." "Yellow"
+            }
+        } catch {
+            Set-ActionMessage "Failed to start service: $_" "Red"
+        }
+        return
+    }
+
+    # Not a service - try to start ollama serve
+    $ollamaPath = Get-Command "ollama" -ErrorAction SilentlyContinue
+    if (-not $ollamaPath) {
+        Set-ActionMessage "Ollama not found. Install from ollama.ai" "Red"
+        return
+    }
+
+    Set-ActionMessage "Starting Ollama..." "Yellow"
+    try {
+        Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden -ErrorAction Stop
+        Start-Sleep -Seconds 1
+
+        if (Test-OllamaRunning -TimeoutSec 3) {
+            Set-ActionMessage "Ollama started at $ollamaUrl" "Green"
+        } else {
+            Set-ActionMessage "Started, API warming up..." "Yellow"
+        }
+    } catch {
+        Set-ActionMessage "Failed to start Ollama: $_" "Red"
+    }
+}
+
 # Main loop with auto-refresh only when logs change
 $checkInterval = 2000  # milliseconds between log checks
 $lastCheck = [DateTime]::Now
@@ -208,6 +301,7 @@ while ($true) {
             "4" { Open-Browser }
             "5" { Clear-LogFile }
             "6" { Clear-AndRestart }
+            "7" { Start-Ollama }
             "Q" { [Environment]::Exit(0) }
             default {
                 if ($choice -and $choice -ne "`r" -and $choice -ne "`n") {
