@@ -2873,3 +2873,41 @@ class TestOrchestratorLearningIntegration:
         events = list(orchestrator_with_mode_service.write_chapter(1))
 
         assert len(events) > 0  # Chapter should still be written
+
+    def test_write_chapter_records_generation_without_writer_model(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test recording generation when writer.model is None (fallback to settings)."""
+        # Set writer.model to None so fallback logic is triggered
+        object.__setattr__(orchestrator_with_mode_service.writer, "model", None)
+
+        # Configure settings to return a model via use_mode_system path
+        orchestrator_with_mode_service.settings.use_mode_system = True
+        mock_mode_service.get_model_for_agent.return_value = "test-model:8b"
+
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.get_model_for_agent.assert_called_with("writer")
+        call_args = mock_mode_service.record_generation.call_args
+        assert call_args.kwargs["model_id"] == "test-model:8b"
+
+    def test_write_chapter_records_generation_with_settings_fallback(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test recording generation using settings fallback when mode system disabled."""
+        # Set writer.model to None so fallback logic is triggered
+        object.__setattr__(orchestrator_with_mode_service.writer, "model", None)
+
+        # Disable mode system so settings fallback is used
+        orchestrator_with_mode_service.settings.use_mode_system = False
+        orchestrator_with_mode_service.settings.get_model_for_agent = MagicMock(
+            return_value="settings-model:7b"
+        )
+
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        orchestrator_with_mode_service.settings.get_model_for_agent.assert_called_with("writer")
+        call_args = mock_mode_service.record_generation.call_args
+        assert call_args.kwargs["model_id"] == "settings-model:7b"

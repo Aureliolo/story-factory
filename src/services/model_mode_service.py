@@ -928,21 +928,15 @@ Rate each dimension from 0-10:
         recommendations = []
         for row in rows:
             try:
-                # Parse timestamp - handle both string and datetime
+                # Parse timestamp from string (SQLite stores as ISO format)
                 timestamp_raw = row.get("timestamp")
-                if isinstance(timestamp_raw, str):
-                    timestamp = datetime.fromisoformat(timestamp_raw)
-                elif isinstance(timestamp_raw, datetime):
-                    timestamp = timestamp_raw
+                if timestamp_raw:
+                    timestamp = datetime.fromisoformat(str(timestamp_raw))
                 else:
                     timestamp = datetime.now()
 
-                # Parse recommendation_type - handle both string and enum
-                rec_type_raw = row.get("recommendation_type")
-                if isinstance(rec_type_raw, RecommendationType):
-                    rec_type = rec_type_raw
-                else:
-                    rec_type = RecommendationType(str(rec_type_raw))
+                # Parse recommendation_type from string
+                rec_type = RecommendationType(str(row.get("recommendation_type")))
 
                 rec = TuningRecommendation(
                     id=row.get("id"),
