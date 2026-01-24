@@ -220,7 +220,7 @@ class ComparisonPage:
     async def _generate_comparison(self) -> None:
         """
         Initiates generation of a chapter comparison for the currently selected chapter and models, processes progress events from the generator, stores the resulting ComparisonRecord, and updates the UI.
-        
+
         Performs validation of project presence, chapter selection, and that 2–4 models are chosen; notifies the user on validation failures or generation errors. Updates internal state (_is_generating and _current_comparison) and progress UI while the comparison is being produced.
         """
         if self._is_generating:

@@ -77,7 +77,7 @@ class TestCompleteWorkflow:
     def test_novella_complete_workflow(self, services, tmp_path):
         """
         Verify the end-to-end novella workflow from project creation through export and persistence.
-        
+
         Creates a project with a novella brief, adds two characters and three finalized chapters, marks the story complete, exports to Markdown (verifies all chapter titles appear), saves the project, reloads it, and verifies three chapters and two characters are persisted.
         """
         # Create project

@@ -51,7 +51,7 @@ class ModelsPage:
     def __init__(self, state: AppState, services: ServiceContainer):
         """
         Create and initialize a ModelsPage using the given application state and services.
-        
+
         Parameters:
             state (AppState): The application state object used by the page.
             services (ServiceContainer): Container providing access to backend services (e.g., model management, notifications).
@@ -487,7 +487,7 @@ class ModelsPage:
     async def _process_download_queue(self) -> None:
         """
         Start queued downloads until the concurrency limit is reached.
-        
+
         Marks eligible queued DownloadTask entries as "downloading" and schedules their execution as background asyncio Tasks, adding each Task to the `_background_tasks` set for lifecycle tracking.
         """
         active_downloads = sum(
@@ -513,10 +513,10 @@ class ModelsPage:
     async def _execute_download(self, task: DownloadTask) -> None:
         """
         Perform a single model download: stream progress updates, handle cancellation and errors, update task state and UI, and then clean up and continue the download queue.
-        
+
         Parameters:
             task (DownloadTask): The download task to execute; its `status`, `status_text`, `progress`, and UI references (`status_label`, `progress_bar`, `card`) will be updated in-place.
-        
+
         Detailed behavior:
             - Iterates progress events from the async pull generator, updating task progress and status text.
             - Detects and handles error events and cancellation requests.

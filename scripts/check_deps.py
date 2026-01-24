@@ -20,12 +20,12 @@ from pathlib import Path
 def parse_requirement(req: str) -> tuple[str, str]:
     """
     Parse a dependency requirement string into a (package_name, version) pair.
-    
+
     Parameters:
-    	req (str): Requirement like "nicegui==3.6.1", "ruff==0.14.14", or just a package name.
-    
+        req (str): Requirement like "nicegui==3.6.1", "ruff==0.14.14", or just a package name.
+
     Returns:
-    	tuple[str, str]: `(name, version)` where `name` is lowercased and hyphens are replaced with underscores, and `version` is the specified version or an empty string if none was provided.
+        tuple[str, str]: `(name, version)` where `name` is lowercased and hyphens are replaced with underscores, and `version` is the specified version or an empty string if none was provided.
     """
     if "==" not in req:
         return req.lower(), ""
@@ -36,10 +36,10 @@ def parse_requirement(req: str) -> tuple[str, str]:
 def get_installed_version(package: str) -> str | None:
     """
     Return the installed version string for the given package, or None if it is not installed or cannot be determined.
-    
+
     Parameters:
         package (str): Package name to query.
-    
+
     Returns:
         str | None: Version string if the package is installed, `None` otherwise.
     """
@@ -94,13 +94,13 @@ def load_required_deps(pyproject_path: Path) -> dict[str, str]:
 def check_deps(auto_install: bool = False) -> int:
     """
     Check dependencies declared in pyproject.toml and report missing or outdated packages.
-    
+
     If any required packages are missing or have a different version than specified, prints diagnostics.
     If `auto_install` is True, attempts to install/upgrade the missing or outdated packages using pip.
-    
+
     Parameters:
         auto_install (bool): If True, automatically install or upgrade missing/outdated packages.
-    
+
     Returns:
         int: Exit code — `0` if all dependencies are present and up-to-date or installation succeeded, `1` if dependencies are missing/outdated and not installed or an installation error occurred.
     """
@@ -151,7 +151,7 @@ def check_deps(auto_install: bool = False) -> int:
 def main() -> None:
     """
     Parse command-line arguments and run the dependency check, exiting with the check's status.
-    
+
     Recognizes the `--auto-install` flag to enable automatic installation or upgrade of packages to the required versions before exiting with the same status code produced by `check_deps`.
     """
     parser = argparse.ArgumentParser(description="Check dependencies from pyproject.toml")

@@ -46,9 +46,9 @@ class WritePage:
     def __init__(self, state: AppState, services: ServiceContainer):
         """
         Create a WritePage instance and initialize its UI references, application state, and service access.
-        
+
         Initializes internal references for UI components to None and sets up a background task tracker to hold asyncio.Task objects (prevents silent task garbage collection).
-        
+
         Parameters:
             state: Application state used by the page to read and mutate current project and UI state.
             services: Service container providing access to story, world, project, export, settings, and other application services.
@@ -80,7 +80,7 @@ class WritePage:
     ) -> None:
         """
         Display a UI notification and fall back to logging if the notification cannot be shown.
-        
+
         Parameters:
             message (str): The message text to display in the notification.
             type (Literal["positive", "negative", "warning", "info", "ongoing"]): Notification style; defaults to "info".
@@ -160,7 +160,7 @@ class WritePage:
     def _build_interview_section(self) -> None:
         """
         Builds the Interview section of the UI, including the status badge, chat component, and action buttons.
-        
+
         This constructs and configures the chat UI used for conducting or continuing the interview, loads any existing interview history into the chat, and when no history is present starts a background task to begin the interview. It also creates the Finalize Interview and Build Story Structure buttons and updates their visibility based on interview and project state. Side effects: mutates UI component attributes on the instance (e.g., `_chat`, `_finalize_btn`, `_build_structure_btn`) and registers background tasks in `self._background_tasks`.
         """
         # Status indicator

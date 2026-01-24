@@ -553,11 +553,11 @@ def _calculate_circular_positions(node_count: int, radius: int = 300) -> list[tu
 def _calculate_grid_positions(node_count: int, spacing: int = 150) -> list[tuple[int, int]]:
     """
     Compute (x, y) pixel coordinates for nodes arranged in a centered grid.
-    
+
     Parameters:
         node_count (int): Number of nodes to place.
         spacing (int): Distance in pixels between adjacent grid cells.
-    
+
     Returns:
         positions (list[tuple[int, int]]): List of (x, y) integer coordinates for each node index (0..node_count-1) laid out row-wise; coordinates are centered around (0, 0).
     """

@@ -340,14 +340,14 @@ class ExportService:
     ) -> bytes:
         """
         Export the story as an EPUB e-book.
-        
+
         Uses the specified template (defaults to the built-in "ebook" template when None) and the provided options (defaults to the template's options when None). Includes brief metadata (title, language, description, subject) when available; converts each chapter with content into an individual XHTML item with escaped HTML and a bundled stylesheet.
-        
+
         Parameters:
             state (StoryState): The story state to export.
             template (str | None): Template name to use; if None the "ebook" template is used.
             options (ExportOptions | None): Export options to override template defaults; if None the template's options are used.
-        
+
         Returns:
             bytes: The EPUB file contents.
         """

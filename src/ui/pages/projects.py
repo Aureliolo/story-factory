@@ -675,7 +675,7 @@ class ProjectsPage:
     async def _delete_backup(self, backup_filename: str, dialog) -> None:
         """
         Prompt the user to confirm deletion of the specified backup and, on confirmation, delete it and refresh the backup manager.
-        
+
         Parameters:
             backup_filename (str): The filename identifier of the backup to delete.
             dialog: Parent dialog to close after successful deletion.
@@ -685,7 +685,7 @@ class ProjectsPage:
         def delete():
             """
             Delete the selected backup and refresh the backup manager view.
-            
+
             On success, deletes the backup, shows a positive notification, closes the dialog, and reopens the backup manager in a background task to refresh the list. On failure, logs the exception and shows a negative notification with the error message.
             """
             try:
