@@ -319,7 +319,8 @@ def mock_ollama_globally(monkeypatch):
             """
             mock_model = MagicMock()
             mock_model.model = TEST_MODEL
-            mock_model.__getitem__ = lambda self, key: TEST_MODEL if key == "name" else None
+            # Support dict-style access: m["name"] - lambda takes only key, not self
+            mock_model.__getitem__ = lambda key: TEST_MODEL if key == "name" else None
 
             mock_response = MagicMock()
             mock_response.models = [mock_model]
@@ -340,7 +341,8 @@ def mock_ollama_globally(monkeypatch):
             """
             mock_result = MagicMock()
             mock_result.response = "Mock response from AI"
-            mock_result.__getitem__ = lambda self, key: (
+            # Support dict-style access: response["response"] - lambda takes only key
+            mock_result.__getitem__ = lambda key: (
                 "Mock response from AI" if key == "response" else None
             )
             return mock_result

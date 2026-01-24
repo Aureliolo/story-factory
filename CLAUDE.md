@@ -123,6 +123,11 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 - **Always run tests in background** to avoid blocking on long test runs when working on todo lists
 - **Never run full test suite scans** - only run tests for specific files when needed (e.g., `pytest tests/unit/test_settings.py`). Full test runs take too long and should only be done by CI.
 
+**Test mocking gotchas:**
+- Mock models must use a name from `RECOMMENDED_MODELS` (e.g., `huihui_ai/dolphin3-abliterated:8b`) - fake names like `test-model:latest` have no role tags and cause `ValueError: No model tagged for role`
+- `mock_ollama_globally` fixture in conftest.py is autouse - all tests automatically mock Ollama
+- Ollama API responses use both dict (`models.get("models")`) and object (`response.models`) patterns - mocks must support both
+
 ## Ollama Integration
 
 - Default endpoint: `http://localhost:11434`

@@ -5,6 +5,7 @@
 ## Services (`services/`)
 
 ### ServiceContainer (`services/__init__.py:27-74`)
+
 DI container for all services. Initialized with Settings, creates all service instances.
 
 ```python
@@ -42,11 +43,13 @@ services.story.start_interview(state)
 | `ImportService` | `import_service.py` | Entity extraction from text |
 
 ### LLM Client (`services/llm_client.py`)
+
 Direct Ollama integration for services that need raw LLM access.
 
 ## Agents (`agents/`)
 
 ### BaseAgent (`agents/base.py:81-485`)
+
 Abstract base for all agents with:
 - Rate limiting via semaphore (max 2 concurrent)
 - Retry logic with exponential backoff
@@ -73,6 +76,7 @@ Key methods:
 ## Workflows (`workflows/`)
 
 ### StoryOrchestrator (`workflows/orchestrator.py:51-1567`)
+
 Main coordinator for the story generation pipeline.
 
 **Phases:**
@@ -93,6 +97,7 @@ Main coordinator for the story generation pipeline.
 ## Memory Models (`memory/`)
 
 ### StoryState (`memory/story_state.py:404-622`)
+
 Complete story context:
 - `brief`: StoryBrief | None
 - `characters`: list[Character]
@@ -102,6 +107,7 @@ Complete story context:
 - `outline_variations`: list[OutlineVariation]
 
 ### WorldDatabase (`memory/world_database.py:62-700+`)
+
 SQLite + NetworkX hybrid storage:
 - Thread-safe with RLock
 - WAL mode for concurrency
@@ -111,6 +117,7 @@ SQLite + NetworkX hybrid storage:
 Tables: `entities`, `relationships`, `events`, `event_participants`, `schema_version`
 
 ### Entity Models (`memory/entities.py`)
+
 - `Entity`: character, location, item, faction, concept
 - `Relationship`: source → target with type, strength
 - `WorldEvent`: Timeline events with participants
@@ -134,6 +141,7 @@ Tables: `entities`, `relationships`, `events`, `event_participants`, `schema_ver
 ## Configuration (`settings.py`)
 
 ### Settings Class (`settings.py:231-1103`)
+
 Dataclass with ~100+ configurable values:
 - Ollama connection (URL, timeouts)
 - Per-agent model selection (`agent_models` dict)
@@ -150,12 +158,14 @@ Key methods:
 - `get_temperature_for_agent(role)` → float
 
 ### Model Registry (`settings.py:85-219`)
+
 `RECOMMENDED_MODELS`: Curated model catalog with:
 - Quality/speed ratings
 - VRAM requirements
 - Role-specific tags
 
 ### Auto-Selection (`settings.py:1005-1089`)
+
 Tag-based model selection:
 1. Check `use_per_agent_models` setting
 2. Lookup `agent_models[role]`
