@@ -18,9 +18,9 @@ import pytest
 def test_settings():
     """
     Create test Settings for component tests.
-    
+
     Uses the default Ollama URL accepted by the shared mock.
-    
+
     Returns:
         settings (Settings): A Settings instance configured for component tests.
     """
@@ -115,11 +115,11 @@ def test_story_state():
 def test_app_state(test_story_state, test_world_db):
     """
     Create an AppState instance with the provided story and world loaded.
-    
+
     Parameters:
         test_story_state (memory.story_state.StoryState): Story state to load into the project.
         test_world_db (memory.world_database.WorldDatabase): World database to attach to the project.
-    
+
     Returns:
         ui.state.AppState: AppState with the project set to the provided story and world.
     """

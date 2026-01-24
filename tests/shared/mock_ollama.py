@@ -65,7 +65,7 @@ class MockResponse:
     def __init__(self, response_text: str):
         """
         Initialize the mock response object storing the given text as the `response` attribute and accessible via `response["response"]`.
-        
+
         Parameters:
             response_text (str): Text content to store as the mock response.
         """
@@ -74,10 +74,10 @@ class MockResponse:
     def __getitem__(self, key: str):
         """
         Provide dict-style access to the mock response object.
-        
+
         Parameters:
             key (str): The dictionary key to retrieve; supports "response".
-        
+
         Returns:
             The stored response string when `key` is "response", `None` otherwise.
         """
@@ -97,7 +97,7 @@ class MockModel:
     def __init__(self, model_name: str):
         """
         Create a MockModel that represents a model identifier.
-        
+
         Parameters:
             model_name (str): The model identifier to expose as the `model` attribute and via dict-style access under the `"name"` key.
         """
@@ -106,10 +106,10 @@ class MockModel:
     def __getitem__(self, key: str):
         """
         Provide dict-style access to the wrapped model name.
-        
+
         Parameters:
             key (str): The dictionary key to retrieve; only "name" is supported.
-        
+
         Returns:
             The model name (str) when `key` is "name", `None` otherwise.
         """
@@ -129,7 +129,7 @@ class MockListResponse:
     def __init__(self, models: list[str] | None = None):
         """
         Create a MockListResponse containing MockModel instances for each provided model name.
-        
+
         Parameters:
             models (list[str] | None): Model names to include; if None, defaults to [TEST_MODEL].
         """
@@ -140,13 +140,13 @@ class MockListResponse:
     def get(self, key: str, default=None):
         """
         Provide dict-like `.get()` access for MockListResponse.
-        
+
         When `key` is "models", return a list of dictionaries each containing a `"name"` key mapped to the model name; otherwise return `default`.
-        
+
         Parameters:
             key (str): The dictionary key to retrieve.
             default: Value to return if `key` is not "models".
-        
+
         Returns:
             list[dict] | Any: A list of `{"name": model_name}` dictionaries when `key == "models"`, otherwise `default`.
         """
@@ -185,7 +185,7 @@ class MockOllamaClient:
     def list(self) -> MockListResponse:
         """
         Provide a mock list of installed models.
-        
+
         Returns:
             MockListResponse: A response containing TEST_MODEL as the sole installed model.
         """
@@ -200,7 +200,7 @@ class MockOllamaClient:
     ) -> MockResponse:
         """
         Produce a mock generation response for the given model and prompt.
-        
+
         Returns:
             MockResponse: MockResponse containing the text "Mock response from AI".
         """
@@ -232,11 +232,11 @@ class MockOllamaClient:
     def pull(self, model: str, stream: bool = False):
         """
         Simulate pulling a model from Ollama for tests.
-        
+
         Parameters:
             model (str): Identifier of the model to pull.
             stream (bool): If True, return an iterator of progress updates; if False, return a final summary.
-        
+
         Returns:
             Iterator[dict]: When `stream` is True, yields progress dictionaries with keys `status`, `completed`, and `total`.
             dict: When `stream` is False, a summary dictionary (e.g., `{"status": "success"}`).
@@ -265,10 +265,10 @@ class MockOllamaClient:
 def create_mock_subprocess_run(original_run):
     """
     Return a callable suitable for monkeypatching that intercepts 'ollama' and 'nvidia-smi' subprocess calls and returns predefined mock results.
-    
+
     Parameters:
         original_run (callable): The real subprocess.run function to delegate non-intercepted commands to.
-    
+
     Returns:
         mock_subprocess_run (callable): A replacement for subprocess.run that returns canned outputs for 'ollama' and 'nvidia-smi' and calls `original_run` for all other commands.
     """
@@ -276,7 +276,7 @@ def create_mock_subprocess_run(original_run):
     def mock_subprocess_run(cmd, *args, **kwargs):
         """
         Intercept specific subprocess commands used in tests and return canned results for them, otherwise delegate to the original subprocess runner.
-        
+
         Returns:
             A subprocess.run-compatible result object with `stdout`, `stderr`, and `returncode`.
             - For `ollama`: `stdout` contains a sample model listing that includes `TEST_MODEL`.
@@ -322,7 +322,7 @@ def create_mock_subprocess_run(original_run):
 def setup_ollama_mocks(monkeypatch):
     """
     Configure shared Ollama-related test doubles on the provided pytest monkeypatch.
-    
+
     Sets patched implementations for:
     - ollama.Client to a MockOllamaClient,
     - subprocess.run to intercept `ollama` and `nvidia-smi` calls with deterministic responses,
@@ -349,10 +349,10 @@ def setup_ollama_mocks(monkeypatch):
         def mock_get_model_tags(self, model_id: str) -> list[str]:
             """
             Provide role tags for a model identifier, with special-case behavior for the test model.
-            
+
             Parameters:
                 model_id (str): The model identifier to query; used to detect the special-cased TEST_MODEL.
-            
+
             Returns:
                 list[str]: A list of role tag strings. If `model_id` equals `TEST_MODEL` and either no models are installed or `TEST_MODEL` is the only installed model — or if the installed-models lookup cannot be performed — returns `ALL_ROLE_TAGS`. Otherwise returns the tags provided by the settings module for the given model.
             """
