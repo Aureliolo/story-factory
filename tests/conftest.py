@@ -69,29 +69,39 @@ def clear_prompt_registry_cache_per_test():
 
 @pytest.fixture(scope="session")
 def cached_settings() -> Settings:
-    """Create settings once per test session for performance.
+    """Create default settings once per test session for performance.
 
     Using session scope avoids repeated Settings.load() calls which take ~0.3s each.
     Tests that need fresh settings should create them directly.
 
+    IMPORTANT: This fixture creates a default Settings() instance without loading
+    from the settings.json file to ensure test isolation.
+
     Returns:
-        Cached settings instance.
+        Cached default settings instance.
     """
+    # Create default settings WITHOUT loading from file
+    # This ensures tests don't depend on local settings.json content
     return Settings()
 
 
 @pytest.fixture
 def tmp_settings(tmp_path: Path) -> Settings:
-    """Create settings with temporary directories.
+    """Create default settings with temporary directories.
+
+    IMPORTANT: This fixture creates a default Settings() instance without loading
+    from the settings.json file to ensure test isolation.
 
     Args:
         tmp_path: Pytest temporary path fixture.
 
     Returns:
-        Settings configured for testing.
+        Default settings configured for testing.
     """
+    # Create default settings WITHOUT loading from file
+    # This ensures tests don't depend on local settings.json content
     settings = Settings()
-    # Override paths to use temp directories
+    # Override paths to use temp directories (if needed in future)
     return settings
 
 
