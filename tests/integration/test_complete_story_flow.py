@@ -75,7 +75,11 @@ class TestCompleteWorkflow:
         assert len(loaded_state.chapters) == 1
 
     def test_novella_complete_workflow(self, services, tmp_path):
-        """Test complete workflow for novella."""
+        """
+        Verify the end-to-end novella workflow from project creation through export and persistence.
+
+        Creates a project with a novella brief, adds two characters and three finalized chapters, marks the story complete, exports to Markdown (verifies all chapter titles appear), saves the project, reloads it, and verifies three chapters and two characters are persisted.
+        """
         # Create project
         story_state, _world_db = services.project.create_project("Novella Complete")
 

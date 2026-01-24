@@ -320,7 +320,11 @@ class TestProjectServiceExceptionHandling:
     """Tests for exception handling and edge cases in ProjectService."""
 
     def test_create_project_with_template(self, tmp_settings, monkeypatch, tmp_path):
-        """Test creating a project with a template applies the template (lines 120-126)."""
+        """
+        Verifies that creating a project with a built-in template applies the template data to the new project.
+
+        Asserts the created project's name is preserved, its status is "interview", and the template populates the project's brief with genre "Fantasy".
+        """
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 

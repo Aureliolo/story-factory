@@ -338,15 +338,18 @@ class ExportService:
         template: str | None = None,
         options: ExportOptions | None = None,
     ) -> bytes:
-        """Export story as EPUB e-book.
+        """
+        Export the story as an EPUB e-book.
 
-        Args:
-            state: The story state to export.
-            template: Template name to use. If None, uses ebook template.
-            options: Custom export options. If None, uses template defaults.
+        Uses the specified template (defaults to the built-in "ebook" template when None) and the provided options (defaults to the template's options when None). Includes brief metadata (title, language, description, subject) when available; converts each chapter with content into an individual XHTML item with escaped HTML and a bundled stylesheet.
+
+        Parameters:
+            state (StoryState): The story state to export.
+            template (str | None): Template name to use; if None the "ebook" template is used.
+            options (ExportOptions | None): Export options to override template defaults; if None the template's options are used.
 
         Returns:
-            EPUB file as bytes.
+            bytes: The EPUB file contents.
         """
         validate_not_none(state, "state")
         validate_type(state, "state", StoryState)
