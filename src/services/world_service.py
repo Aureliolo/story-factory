@@ -166,6 +166,7 @@ class WorldService:
         current_step = 0
 
         def report_progress(message: str, entity_type: str | None = None, count: int = 0) -> None:
+            """Report world build progress to callback."""
             nonlocal current_step
             current_step += 1
             if progress_callback:

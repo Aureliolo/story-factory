@@ -1,5 +1,6 @@
 """Graph visualization component using vis.js."""
 
+import logging
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -10,6 +11,8 @@ from nicegui.elements.html import Html
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
 from src.ui.graph_renderer import render_graph_html
+
+logger = logging.getLogger(__name__)
 
 
 def _ensure_vis_network_loaded() -> None:
@@ -136,9 +139,13 @@ class GraphComponent:
         if self.on_edge_context_menu:
 
             def handle_edge_context_menu(e) -> None:
+                """Handle right-click context menu on graph edge."""
                 edge_id = e.args.get("edge_id") if e.args else None
                 if edge_id and self.on_edge_context_menu:
+                    logger.debug("Graph edge context menu: edge_id=%s", edge_id)
                     self.on_edge_context_menu(edge_id)
+                elif not edge_id:
+                    logger.warning("Graph edge context menu event missing edge_id")
 
             ui.on(self._edge_context_callback_id, handle_edge_context_menu)
 

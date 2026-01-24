@@ -234,6 +234,7 @@ class TestAnalyticsRecording:
 
         # Configure different return values for different agent roles
         def mock_get_model(agent_role):
+            """Return a mock model ID based on the agent role."""
             model_map = {
                 "writer": "writer-model",
                 "architect": "architect-model",

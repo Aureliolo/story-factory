@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, ClassVar, TypedDict
 from urllib.parse import urlparse
 
-from src.memory.mode_models import LearningTrigger
+from src.memory.mode_models import LearningTrigger, VramStrategy
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -310,6 +310,7 @@ class Settings:
     # Generation mode settings
     current_mode: str = "balanced"  # ID of active generation mode
     use_mode_system: bool = True  # Whether to use mode-based model selection
+    vram_strategy: str = "adaptive"  # sequential, parallel, adaptive
 
     # Learning/tuning settings
     learning_triggers: list[str] = field(
@@ -499,6 +500,13 @@ class Settings:
         if self.interaction_mode not in valid_modes:
             raise ValueError(
                 f"interaction_mode must be one of {valid_modes}, got {self.interaction_mode}"
+            )
+
+        # Validate VRAM strategy (derived from enum to prevent drift)
+        valid_vram_strategies = [strategy.value for strategy in VramStrategy]
+        if self.vram_strategy not in valid_vram_strategies:
+            raise ValueError(
+                f"vram_strategy must be one of {valid_vram_strategies}, got {self.vram_strategy}"
             )
 
         # Validate temperatures

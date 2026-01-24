@@ -3,7 +3,7 @@
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -793,6 +793,7 @@ class TestBuildStoryStructure:
 
         # Return state with content that triggers validation
         def mock_build(state):
+            """Simulate architect building story structure with foreign language content."""
             state.world_description = "A world with German: Die Welt"
             state.plot_summary = "A plot summary"
             state.status = "writing"
@@ -912,6 +913,7 @@ class TestWritingMethods:
         check_calls = [0]
 
         def mock_check(*args):
+            """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
                 return mock_issues
@@ -1060,6 +1062,7 @@ class TestWritingMethods:
         check_calls = [0]
 
         def mock_check(*args):
+            """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
                 return mock_issues
@@ -1205,6 +1208,7 @@ class TestWritingMethods:
         check_calls = [0]
 
         def mock_check(*args):
+            """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
                 return mock_issues
@@ -1431,6 +1435,7 @@ class TestWritingMethods:
         object.__setattr__(orc.validator, "validate_response", MagicMock(return_value=None))
 
         def on_checkpoint(chapter, content):
+            """Handle checkpoint event by returning True to continue writing."""
             return True  # Continue
 
         # With 3 chapters and default chapters_between_checkpoints=3,
@@ -1835,6 +1840,7 @@ class TestPersistenceMethods:
 
         # Make save_story raise
         def mock_save(*args):
+            """Simulate save failure by raising an OSError."""
             raise OSError("Disk full")
 
         object.__setattr__(orchestrator, "save_story", mock_save)
@@ -2479,6 +2485,7 @@ class TestRebuildWorld:
 
         # Mock build_story_structure to return new content
         def mock_build(state):
+            """Simulate architect rebuilding story structure with new content."""
             state.world_description = "New world"
             state.characters = [Character(name="NewChar", role="protagonist", description="New")]
             state.chapters = [Chapter(number=1, title="New Chapter", outline="New outline")]
@@ -2511,6 +2518,7 @@ class TestRebuildWorld:
         )
 
         def mock_build(state):
+            """Simulate architect building story structure by returning state unchanged."""
             return state
 
         object.__setattr__(orchestrator.architect, "build_story_structure", mock_build)
@@ -2761,3 +2769,177 @@ class TestContinueChapterSaveExceptions:
 
         with pytest.raises(ExportError, match="Unexpected error saving continued chapter"):
             list(orc.continue_chapter(1))
+
+
+class TestOrchestratorLearningIntegration:
+    """Tests for learning system integration in orchestrator."""
+
+    @pytest.fixture
+    def mock_mode_service(self):
+        """
+        Create a MagicMock that simulates a ModeService for tests.
+
+        The mock is pre-configured so `record_generation` returns a fixed score id (123), and
+        `update_performance_metrics` and `on_chapter_complete` return `None`. Use this mock
+        to verify interactions with the learning/mode service without invoking real I/O.
+
+        Returns:
+            MagicMock: A mock object implementing `record_generation`, `update_performance_metrics`,
+            and `on_chapter_complete` with the behaviors described above.
+        """
+        mock = MagicMock()
+        mock.record_generation.return_value = 123  # score_id
+        mock.update_performance_metrics.return_value = None
+        mock.on_chapter_complete.return_value = None
+        return mock
+
+    @pytest.fixture
+    def orchestrator_with_mode_service(self, mock_mode_service):
+        """Create a StoryOrchestrator with mocked mode service for learning-integration tests.
+
+        Parameters:
+            mock_mode_service (Mock): A mock implementation of the mode/learning service.
+
+        Returns:
+            StoryOrchestrator: An orchestrator with story_state set and agent methods mocked.
+        """
+        with patch("src.agents.base.ollama.Client"):
+            orchestrator = StoryOrchestrator(mode_service=mock_mode_service)
+            orchestrator.story_state = StoryState(
+                id="test-story",
+                status="writing",
+                brief=StoryBrief(
+                    premise="A test story",
+                    genre="Fantasy",
+                    tone="Epic",
+                    setting_time="Medieval",
+                    setting_place="Kingdom",
+                    target_length="novella",
+                    content_rating="none",
+                ),
+                characters=[
+                    Character(name="Hero", role="protagonist", description="A brave warrior")
+                ],
+                chapters=[
+                    Chapter(number=1, title="Beginning", outline="The start of the adventure")
+                ],
+            )
+            # Mock agent methods
+            object.__setattr__(
+                orchestrator.writer, "write_chapter", MagicMock(return_value="Chapter content...")
+            )
+            object.__setattr__(
+                orchestrator.editor, "edit_chapter", MagicMock(return_value="Edited content...")
+            )
+            object.__setattr__(orchestrator.continuity, "check_chapter", MagicMock(return_value=[]))
+            object.__setattr__(
+                orchestrator.continuity, "validate_against_outline", MagicMock(return_value=[])
+            )
+            object.__setattr__(
+                orchestrator.continuity, "extract_new_facts", MagicMock(return_value=[])
+            )
+            object.__setattr__(
+                orchestrator.continuity, "extract_character_arcs", MagicMock(return_value={})
+            )
+            object.__setattr__(
+                orchestrator.continuity, "check_plot_points_completed", MagicMock(return_value=[])
+            )
+            object.__setattr__(
+                orchestrator.validator, "validate_response", MagicMock(return_value=None)
+            )
+            return orchestrator
+
+    def test_write_chapter_records_generation(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter calls record_generation on mode_service."""
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.record_generation.assert_called_once()
+        call_args = mock_mode_service.record_generation.call_args
+        assert call_args.kwargs["project_id"] == "test-story"
+        assert call_args.kwargs["agent_role"] == "writer"
+        assert call_args.kwargs["chapter_id"] == "1"
+
+    def test_write_chapter_updates_performance_metrics(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter calls update_performance_metrics on mode_service."""
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.update_performance_metrics.assert_called_once()
+        call_args = mock_mode_service.update_performance_metrics.call_args
+        assert call_args[0][0] == 123  # score_id
+        assert "tokens_generated" in call_args.kwargs
+        assert "time_seconds" in call_args.kwargs
+
+    def test_write_chapter_calls_on_chapter_complete(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter calls on_chapter_complete on mode_service."""
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.on_chapter_complete.assert_called_once()
+
+    def test_write_chapter_handles_record_generation_exception(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter handles exceptions from record_generation."""
+        mock_mode_service.record_generation.side_effect = Exception("Learning failed")
+
+        # Should not raise, just log warning
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0  # Chapter should still be written
+
+    def test_write_chapter_handles_metrics_update_exception(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter handles exceptions from update_performance_metrics."""
+        mock_mode_service.update_performance_metrics.side_effect = Exception("Metrics failed")
+
+        # Should not raise, just log warning
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0  # Chapter should still be written
+
+    def test_write_chapter_records_generation_without_writer_model(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test recording generation when writer.model is None (fallback to settings)."""
+        # Set writer.model to None so fallback logic is triggered
+        object.__setattr__(orchestrator_with_mode_service.writer, "model", None)
+
+        # Configure settings to return a model via use_mode_system path
+        orchestrator_with_mode_service.settings.use_mode_system = True
+        mock_mode_service.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
+
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.get_model_for_agent.assert_called_with("writer")
+        call_args = mock_mode_service.record_generation.call_args
+        assert call_args.kwargs["model_id"] == "huihui_ai/dolphin3-abliterated:8b"
+
+    def test_write_chapter_records_generation_with_settings_fallback(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test recording generation using settings fallback when mode system disabled."""
+        # Set writer.model to None so fallback logic is triggered
+        object.__setattr__(orchestrator_with_mode_service.writer, "model", None)
+
+        # Disable mode system so settings fallback is used
+        orchestrator_with_mode_service.settings.use_mode_system = False
+        orchestrator_with_mode_service.settings.get_model_for_agent = MagicMock(
+            return_value="huihui_ai/dolphin3-abliterated:8b"
+        )
+
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        orchestrator_with_mode_service.settings.get_model_for_agent.assert_called_with("writer")
+        call_args = mock_mode_service.record_generation.call_args
+        assert call_args.kwargs["model_id"] == "huihui_ai/dolphin3-abliterated:8b"

@@ -404,6 +404,86 @@ Key features:
 
 ---
 
+## Adaptive Learning & Recommendations
+
+Story Factory includes an adaptive learning system that tracks generation performance and suggests model/temperature adjustments.
+
+### How It Works
+
+1. **Generation Tracking**: Each chapter generation records:
+   - Model used, mode settings, genre
+   - Tokens generated, time taken, tokens/second
+   - Chapter and project IDs for context
+
+2. **Implicit Signals**: The system tracks user actions:
+   - **Regenerate**: Indicates dissatisfaction (negative signal)
+   - **Edit**: Measures edit distance from original
+   - **Rating**: Explicit 1-5 star rating
+
+3. **Tuning Triggers**: Recommendations are generated based on:
+   - `off`: No automatic analysis
+   - `after_project`: After story completion
+   - `periodic`: After N chapters (e.g., every 10 chapters)
+   - `continuous`: Background analysis after each generation
+
+4. **Recommendation Types**:
+   | Type | Description |
+   |------|-------------|
+   | `model_swap` | Suggests switching to a better-performing model |
+   | `temp_adjust` | Suggests temperature change for an agent role |
+   | `mode_change` | Suggests a different generation mode |
+   | `vram_strategy` | Suggests VRAM strategy adjustment |
+
+5. **Autonomy Levels**:
+   - `manual`: All changes require approval
+   - `cautious`: Auto-apply temp changes, prompt for model swaps
+   - `balanced`: Auto-apply when confidence > threshold
+   - `aggressive`: Auto-apply all, just notify
+   - `experimental`: Try variations to gather data
+
+### Settings UI
+
+Configure learning in Settings → Learning:
+- **Autonomy Level**: How much control the system has
+- **Learning Triggers**: When to generate recommendations
+- **Learning Threshold**: Confidence threshold for recommendations
+
+### Recommendation Dialog
+
+When recommendations are generated, a dialog shows:
+- Recommendation type and affected role
+- Current value → Suggested value
+- Confidence percentage
+- Expected improvement
+
+Users can select which recommendations to apply or dismiss them.
+
+### Disabling Learning
+
+To completely opt out of the learning system:
+
+1. Go to **Settings → Learning**
+2. Set **Learning Triggers** to `Off`
+3. Alternatively, set **Autonomy Level** to `suggest_only` to see recommendations without auto-applying
+
+With triggers set to `Off`, no generation data is analyzed and no recommendations are generated.
+
+### Example Scenario
+
+After writing 10 chapters with `dolphin3:8b` for the Writer role:
+- 3 chapters were regenerated (negative signal)
+- Average edit distance was high (200+ characters)
+- `qwen2.5:32b` showed 15% higher prose quality in other projects
+
+The system generates a recommendation:
+> **Model Swap** for Writer role
+> Current: `dolphin3:8b` → Suggested: `qwen2.5:32b`
+> Confidence: 78% | Expected: +15% quality
+
+You can approve to switch models or dismiss to keep current settings.
+
+---
+
 ## Configuration Examples
 
 ### settings.json for 24GB VRAM (2026 Update)

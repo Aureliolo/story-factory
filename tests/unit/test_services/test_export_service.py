@@ -689,6 +689,7 @@ class TestExportServiceAdditionalEdgeCases:
 
         # Mock to_markdown to raise an unexpected exception
         def mock_to_markdown(*args, **kwargs):
+            """Simulate an unexpected error during markdown conversion."""
             raise RuntimeError("Simulated error")
 
         monkeypatch.setattr(service, "to_markdown", mock_to_markdown)

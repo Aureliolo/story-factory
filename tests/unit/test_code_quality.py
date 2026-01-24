@@ -34,6 +34,8 @@ ALLOWED_LARGE_FILES: dict[str, str] = {
     "src/memory/mode_database.py": "Mode presets and custom mode management - should be split into presets and storage",
     "src/services/world_service.py": "World building service with entity extraction and generation - should be split by operation type",
     "src/ui/pages/models.py": "Model management with download queue, batch operations, and tag configuration - should be split into components",
+    "src/services/story_service.py": "Story workflow orchestration with project completion hooks and learning integration - should be split by concern",
+    "src/services/model_mode_service.py": "Mode management with generation scoring, adaptive learning, and recommendation system - should be split by concern",
 }
 
 

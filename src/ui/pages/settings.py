@@ -309,7 +309,15 @@ class SettingsPage:
                 )
 
     def _build_context_section(self) -> None:
-        """Build context limit settings."""
+        """
+        Create the "Memory & Context" settings card with inputs for context-related limits.
+
+        Constructs a UI card containing number inputs for context window (tokens), max output tokens,
+        previous chapter memory (chars), analysis context (chars), and editor preview (chars).
+        Stores the input component references on self as:
+        `_context_size_input`, `_max_tokens_input`, `_prev_chapter_chars`,
+        `_chapter_analysis_chars`, and `_full_text_preview_chars`.
+        """
         with ui.card().classes("w-full h-full"):
             self._section_header(
                 "Memory & Context",
@@ -369,6 +377,18 @@ class SettingsPage:
                     .tooltip("Characters to analyze when reviewing chapter quality")
                 )
 
+                self._full_text_preview_chars = (
+                    ui.number(
+                        label="Editor preview (chars)",
+                        value=self.settings.full_text_preview_chars,
+                        min=500,
+                        max=10000,
+                    )
+                    .classes("w-full")
+                    .props("outlined dense")
+                    .tooltip("Characters sent to editor for suggestions")
+                )
+
     def _build_mode_section(self) -> None:
         """Build generation mode settings."""
         with ui.card().classes("w-full h-full"):
@@ -418,20 +438,17 @@ class SettingsPage:
                                     "text-gray-600 dark:text-gray-400 italic"
                                 )
 
-                    # VRAM strategy
+                    # VRAM strategy (persisted in settings)
                     vram_options = {
                         VramStrategy.SEQUENTIAL.value: "Sequential - Full unload between agents",
                         VramStrategy.PARALLEL.value: "Parallel - Keep models loaded",
                         VramStrategy.ADAPTIVE.value: "Adaptive - Smart loading (recommended)",
                     }
-                    current_vram = (
-                        current_mode.vram_strategy if current_mode else VramStrategy.ADAPTIVE.value
-                    )
                     self._vram_strategy_select = (
                         ui.select(
                             label="VRAM Strategy",
                             options=vram_options,
-                            value=current_vram,
+                            value=self.settings.vram_strategy,
                         )
                         .classes("w-full mt-3")
                         .props("outlined dense")
@@ -646,7 +663,15 @@ class SettingsPage:
             ui.notify(f"Connection failed: {health.message}", type="negative")
 
     def _save_settings(self) -> None:
-        """Save all settings."""
+        """
+        Persist current UI-configured settings to the application's settings store and record an undo snapshot.
+
+        Read values from the page's UI controls and apply them to the settings object.
+        Validate and save the updated settings.
+        Record an undo action that contains before and after snapshots for undo and redo.
+        On success, display a positive notification.
+        On validation error or any other failure, log the issue and display a negative notification.
+        """
         from src.ui.state import ActionType, UndoAction
 
         try:
@@ -676,11 +701,14 @@ class SettingsPage:
             self.settings.max_tokens = int(self._max_tokens_input.value)
             self.settings.previous_chapter_context_chars = int(self._prev_chapter_chars.value)
             self.settings.chapter_analysis_chars = int(self._chapter_analysis_chars.value)
+            self.settings.full_text_preview_chars = int(self._full_text_preview_chars.value)
 
             # Generation mode
             self.settings.use_mode_system = self._use_mode_system.value
             if hasattr(self, "_mode_select"):
                 self.settings.current_mode = self._mode_select.value
+            if hasattr(self, "_vram_strategy_select"):
+                self.settings.vram_strategy = self._vram_strategy_select.value
 
             # Learning settings
             self.settings.learning_autonomy = self._autonomy_select.value
@@ -739,10 +767,17 @@ class SettingsPage:
             ui.notify(f"Error saving: {e}", type="negative")
 
     def _capture_settings_snapshot(self) -> dict[str, Any]:
-        """Capture current settings state for undo/redo.
+        """
+        Create a serializable snapshot of current settings suitable for undo/redo operations.
 
         Returns:
-            Dictionary containing all current settings values.
+            snapshot (dict[str, Any]): A dictionary snapshot of settings including:
+                - Core connection and model: `ollama_url`, `default_model`, `use_per_agent_models`, `agent_models`, `agent_temperatures`
+                - Interaction and workflow: `interaction_mode`, `chapters_between_checkpoints`, `max_revision_iterations`
+                - Context and generation: `context_size`, `max_tokens`, `previous_chapter_context_chars`, `chapter_analysis_chars`, `full_text_preview_chars`
+                - Mode and VRAM: `use_mode_system`, `current_mode`, `vram_strategy`
+                - Adaptive learning: `learning_autonomy`, `learning_triggers`, `learning_periodic_interval`, `learning_min_samples`, `learning_confidence_threshold`
+                - World generation counts: `world_gen_*_min` and `world_gen_*_max` for `characters`, `locations`, `factions`, `items`, `concepts`, and `relationships`
         """
         return {
             "ollama_url": self.settings.ollama_url,
@@ -757,8 +792,10 @@ class SettingsPage:
             "max_tokens": self.settings.max_tokens,
             "previous_chapter_context_chars": self.settings.previous_chapter_context_chars,
             "chapter_analysis_chars": self.settings.chapter_analysis_chars,
+            "full_text_preview_chars": self.settings.full_text_preview_chars,
             "use_mode_system": self.settings.use_mode_system,
             "current_mode": self.settings.current_mode,
+            "vram_strategy": self.settings.vram_strategy,
             "learning_autonomy": self.settings.learning_autonomy,
             "learning_triggers": list(self.settings.learning_triggers),
             "learning_periodic_interval": self.settings.learning_periodic_interval,
@@ -780,10 +817,33 @@ class SettingsPage:
         }
 
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
-        """Restore settings from a snapshot.
+        """
+        Restore the SettingsPage state from a snapshot and persist the restored values.
 
-        Args:
-            snapshot: Settings snapshot to restore.
+        Parameters:
+            snapshot (dict[str, Any]): Snapshot containing saved settings values.
+
+                Required keys:
+                - Core settings: `ollama_url`, `default_model`, `use_per_agent_models`,
+                  `agent_models`, `agent_temperatures`
+                - Workflow: `interaction_mode`, `chapters_between_checkpoints`,
+                  `max_revision_iterations`
+                - Context: `context_size`, `max_tokens`, `previous_chapter_context_chars`,
+                  `chapter_analysis_chars`
+                - Mode: `use_mode_system`, `current_mode`
+                - Learning: `learning_autonomy`, `learning_triggers`,
+                  `learning_periodic_interval`, `learning_min_samples`,
+                  `learning_confidence_threshold`
+
+                Optional keys:
+                - `full_text_preview_chars`, `vram_strategy`
+                - World generation: `world_gen_*_min` / `world_gen_*_max` pairs for
+                  `characters`, `locations`, `factions`, `items`, `concepts`,
+                  `relationships`
+
+        Behavior:
+            Applies values from `snapshot` to the persistent settings, saves the settings, updates UI controls
+            to reflect the restored values, and shows an informational notification indicating the restore completed.
         """
         self.settings.ollama_url = snapshot["ollama_url"]
         self.settings.default_model = snapshot["default_model"]
@@ -797,8 +857,12 @@ class SettingsPage:
         self.settings.max_tokens = snapshot["max_tokens"]
         self.settings.previous_chapter_context_chars = snapshot["previous_chapter_context_chars"]
         self.settings.chapter_analysis_chars = snapshot["chapter_analysis_chars"]
+        if "full_text_preview_chars" in snapshot:
+            self.settings.full_text_preview_chars = snapshot["full_text_preview_chars"]
         self.settings.use_mode_system = snapshot["use_mode_system"]
         self.settings.current_mode = snapshot["current_mode"]
+        if "vram_strategy" in snapshot:
+            self.settings.vram_strategy = snapshot["vram_strategy"]
         self.settings.learning_autonomy = snapshot["learning_autonomy"]
         self.settings.learning_triggers = list(snapshot["learning_triggers"])
         self.settings.learning_periodic_interval = snapshot["learning_periodic_interval"]
@@ -865,10 +929,14 @@ class SettingsPage:
             self._context_size_input.value = self.settings.context_size
         if hasattr(self, "_max_tokens_input") and self._max_tokens_input:
             self._max_tokens_input.value = self.settings.max_tokens
+        if hasattr(self, "_full_text_preview_chars") and self._full_text_preview_chars:
+            self._full_text_preview_chars.value = self.settings.full_text_preview_chars
 
         # Mode settings
         if hasattr(self, "_mode_select") and self._mode_select:
             self._mode_select.value = self.settings.current_mode
+        if hasattr(self, "_vram_strategy_select") and self._vram_strategy_select:
+            self._vram_strategy_select.value = self.settings.vram_strategy
 
         # Learning settings
         if hasattr(self, "_autonomy_select") and self._autonomy_select:

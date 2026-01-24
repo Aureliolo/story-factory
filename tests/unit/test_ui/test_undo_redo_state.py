@@ -170,6 +170,7 @@ class TestUndoRedoState:
         called = []
 
         def undo_callback():
+            """Record that the undo callback was invoked."""
             called.append(True)
 
         state.on_undo(undo_callback)
@@ -192,6 +193,7 @@ class TestUndoRedoState:
         called = []
 
         def redo_callback():
+            """Record that the redo callback was invoked."""
             called.append(True)
 
         state.on_redo(redo_callback)

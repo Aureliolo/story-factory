@@ -79,6 +79,7 @@ class TestRegenerateChapterWithFeedback:
 
         # Mock write_chapter to return events
         def mock_write_chapter(chapter_num, feedback=None):
+            """Simulate chapter writing by updating content and yielding workflow events."""
             # Simulate writing new content
             chapter = sample_story_with_content.chapters[0]
             chapter.content = "Regenerated content with feedback applied."
@@ -121,6 +122,7 @@ class TestRegenerateChapterWithFeedback:
         write_calls = []
 
         def mock_write_chapter(chapter_num, feedback=None):
+            """Track write_chapter calls and yield a completion event."""
             write_calls.append((chapter_num, feedback))
             chapter = sample_story_with_content.chapters[0]
             chapter.content = "New content"
@@ -190,6 +192,7 @@ class TestRegenerateChapterWithFeedback:
         cancel_checked = [False]
 
         def mock_write_chapter(chapter_num, feedback=None):
+            """Yield an event to trigger the cancel check during regeneration."""
             # Yield an event so the cancel check runs
             yield WorkflowEvent(event_type="agent_start", agent_name="Writer", message="Writing...")
             # After the event, the service checks for cancellation
@@ -199,6 +202,7 @@ class TestRegenerateChapterWithFeedback:
 
         # Create a cancel check that returns True to simulate cancellation
         def should_cancel():
+            """Return True to simulate user-requested cancellation."""
             cancel_checked[0] = True
             return True
 

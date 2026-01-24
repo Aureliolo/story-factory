@@ -8,7 +8,10 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.services.model_mode_service import ModelModeService
 
 from src.agents import (
     ArchitectAgent,
@@ -55,15 +58,18 @@ class StoryOrchestrator:
         self,
         settings: Settings | None = None,
         model_override: str | None = None,  # Force specific model for all agents
+        mode_service: ModelModeService | None = None,  # ModelModeService for learning hooks
     ):
-        """Initialize the story orchestrator.
+        """Create a StoryOrchestrator and initialize agents, persistent state, and progress tracking.
 
-        Args:
-            settings: Application settings. If None, loads default settings.
-            model_override: Force specific model for all agents. If None, uses per-agent settings.
+        Parameters:
+            settings (Settings | None): Application settings; when None the default settings are loaded.
+            model_override (str | None): Model identifier to force for all agents; when None agents use their configured models.
+            mode_service (ModelModeService | None): Optional ModelModeService instance for adaptive learning hooks.
         """
         self.settings = settings or Settings.load()
         self.model_override = model_override
+        self.mode_service = mode_service  # For learning hooks
 
         # Initialize agents with settings
         self.interviewer = InterviewerAgent(model=model_override, settings=self.settings)
@@ -84,6 +90,7 @@ class StoryOrchestrator:
         self._phase_start_time: datetime | None = None
         self._total_chapters: int = 0
         self._completed_chapters: int = 0
+        self._current_score_id: int | None = None  # For learning tracking
 
     def _validate_response(self, response: str, task: str = "") -> str:
         """Validate an AI response for language and basic correctness.
@@ -725,11 +732,24 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
     def write_chapter(
         self, chapter_number: int, feedback: str | None = None
     ) -> Generator[WorkflowEvent, None, str]:
-        """Write a single chapter with the full pipeline.
+        """
+        Run the full write-edit-continuity pipeline for a single chapter, yielding workflow events during processing.
 
-        Args:
-            chapter_number: The chapter number to write.
-            feedback: Optional user feedback to incorporate into the writing.
+        Detailed behavior:
+        - Yields WorkflowEvent objects at key stages to report progress to the UI.
+        - Writes the chapter and applies editor passes.
+        - Performs continuity checks and iterative revisions.
+        - Extracts new facts and character-arc updates.
+        - Marks plot points as completed.
+        - Updates story state and autosaves.
+        - Optionally reports learning/training metrics via the configured mode service.
+
+        Parameters:
+            chapter_number (int): The chapter number to process (must exist in the current story structure).
+            feedback (str | None): Optional feedback or revision guidance to incorporate into the initial generation.
+
+        Returns:
+            chapter_content (str): The final content of the chapter after editing and revisions.
         """
         if not self.story_state:
             raise ValueError("No story state. Call create_new_story() first.")
@@ -767,6 +787,30 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
             write_msg = f"Regenerating Chapter {chapter_number} with feedback..."
         self._emit("agent_start", "Writer", write_msg)
         yield self.events[-1]
+
+        # Start learning tracking
+        write_start_time = datetime.now()
+        if self.mode_service and self.story_state.id:
+            try:
+                # Get model_id using the same logic as BaseAgent._get_model
+                model_id = self.writer.model
+                if not model_id:
+                    if self.settings.use_mode_system:
+                        model_id = self.mode_service.get_model_for_agent("writer")
+                    else:
+                        model_id = self.settings.get_model_for_agent("writer")
+                genre = self.story_state.brief.genre if self.story_state.brief else None
+                self._current_score_id = self.mode_service.record_generation(
+                    project_id=self.story_state.id,
+                    agent_role="writer",
+                    model_id=model_id,
+                    chapter_id=str(chapter_number),
+                    genre=genre,
+                )
+                logger.debug(f"Started tracking generation score {self._current_score_id}")
+            except Exception as e:
+                logger.warning(f"Failed to start generation tracking: {e}")
+                self._current_score_id = None
 
         content = self.writer.write_chapter(self.story_state, chapter, revision_feedback=feedback)
 
@@ -875,6 +919,29 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
 
         # Update completed chapters count for progress tracking
         self._completed_chapters = chapter_number
+
+        # Finish learning tracking
+        if self.mode_service:
+            try:
+                # Update performance metrics
+                if self._current_score_id:
+                    elapsed = (datetime.now() - write_start_time).total_seconds()
+                    tokens_estimated = chapter.word_count * 1.3  # Rough token estimate
+                    self.mode_service.update_performance_metrics(
+                        self._current_score_id,
+                        tokens_generated=int(tokens_estimated),
+                        time_seconds=elapsed,
+                    )
+                    logger.debug(
+                        f"Updated score {self._current_score_id}: "
+                        f"{tokens_estimated:.0f} tokens in {elapsed:.1f}s"
+                    )
+
+                # Notify chapter complete for learning triggers
+                self.mode_service.on_chapter_complete()
+                logger.debug("Notified mode service of chapter completion")
+            except Exception as e:
+                logger.warning(f"Failed to complete generation tracking: {e}")
 
         # Auto-save after each chapter to prevent data loss
         try:

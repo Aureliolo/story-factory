@@ -588,6 +588,7 @@ class TestArchitectGenerateVariations:
 
         # Mock the generate method to return variation responses
         def mock_generate(prompt):
+            """Return a mock variation response with complete story structure."""
             return """
             RATIONALE: This variation focuses on character-driven narrative.
 
@@ -633,6 +634,7 @@ class TestArchitectGenerateVariations:
         """Test each variation contains complete structure."""
 
         def mock_generate(prompt):
+            """Return a mock variation response with characters, plot, and chapters."""
             return """
             RATIONALE: Fast-paced action variant.
 
@@ -677,6 +679,7 @@ class TestArchitectGenerateVariations:
         prompts_used = []
 
         def capture_generate(prompt):
+            """Capture prompts and return a minimal mock variation response."""
             prompts_used.append(prompt)
             return """
             RATIONALE: Test variation.
@@ -709,6 +712,7 @@ class TestArchitectGenerateVariations:
         prompts_used = []
 
         def capture_generate(prompt):
+            """Capture prompts and return a minimal mock variation response."""
             prompts_used.append(prompt)
             return """
             RATIONALE: Variation test.

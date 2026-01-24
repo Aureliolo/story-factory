@@ -403,6 +403,7 @@ class TestBaseAgentRateLimiting:
         results = []
 
         def call_generate():
+            """Call agent.generate and append result to shared list."""
             result = agent.generate("Prompt")
             results.append(result)
 

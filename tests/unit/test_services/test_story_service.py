@@ -525,6 +525,7 @@ class TestStoryServiceGenerators:
 
             # Mock the generator
             def mock_write_chapter(chapter_num):
+                """Yield mock workflow events for chapter writing."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Starting"
                 )
@@ -550,6 +551,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_write_all():
+                """Yield mock workflow events for writing all chapters."""
                 yield WorkflowEvent(
                     event_type="chapter_start", agent_name="System", message="Chapter 1"
                 )
@@ -573,6 +575,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_write_short():
+                """Yield mock workflow events for short story writing."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Starting"
                 )
@@ -596,6 +599,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_continue(chapter_num, direction=None):
+                """Yield mock workflow events for chapter continuation."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Continuing"
                 )
@@ -624,6 +628,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_edit(text, focus=None):
+                """Yield mock workflow events for passage editing."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Editor", message="Editing"
                 )
@@ -653,6 +658,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_suggestions(text):
+                """Yield mock workflow events for edit suggestions."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Editor", message="Reviewing"
                 )
@@ -679,6 +685,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_review():
+                """Yield mock workflow events for full story review."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Continuity", message="Reviewing"
                 )
@@ -967,6 +974,7 @@ class TestStoryServiceCancellation:
 
             # Mock generator that yields one event before cancellation check
             def mock_write_chapter(chapter_num):
+                """Yield mock workflow events for chapter writing cancellation test."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Starting"
                 )
@@ -982,6 +990,7 @@ class TestStoryServiceCancellation:
             call_count = [0]
 
             def cancel_check():
+                """Return True after first call to simulate cancellation."""
                 call_count[0] += 1
                 return call_count[0] > 1
 
@@ -1005,6 +1014,7 @@ class TestStoryServiceCancellation:
             mock_orch = MagicMock()
 
             def mock_write_all():
+                """Yield mock workflow events for write all chapters cancellation test."""
                 yield WorkflowEvent(
                     event_type="chapter_start", agent_name="System", message="Chapter 1"
                 )
@@ -1019,6 +1029,7 @@ class TestStoryServiceCancellation:
             call_count = [0]
 
             def cancel_check():
+                """Return True after first call to simulate cancellation."""
                 call_count[0] += 1
                 return call_count[0] > 1
 
@@ -1048,6 +1059,7 @@ class TestStoryServiceRegenerateChapter:
             mock_orch = MagicMock()
 
             def mock_write_chapter(chapter_num, feedback=None):
+                """Yield mock workflow events and update chapter content for regeneration."""
                 # Simulate writing new content
                 sample_story_with_chapters.chapters[0].content = "New improved content."
                 yield WorkflowEvent(
@@ -1105,6 +1117,7 @@ class TestStoryServiceRegenerateChapter:
             mock_orch = MagicMock()
 
             def mock_write_chapter(chapter_num, feedback=None):
+                """Yield mock workflow events with partial content for rollback test."""
                 # Simulate partial writing
                 sample_story_with_chapters.chapters[0].content = "Partial new content..."
                 yield WorkflowEvent(
@@ -1121,6 +1134,7 @@ class TestStoryServiceRegenerateChapter:
             call_count = [0]
 
             def cancel_check():
+                """Return True after first call to trigger cancellation and rollback."""
                 call_count[0] += 1
                 return call_count[0] > 1
 
@@ -1259,3 +1273,81 @@ class TestGenerationCancelledException:
         assert str(exc) == "Full cancellation"
         assert exc.chapter_num == 7
         assert exc.progress_state == progress
+
+
+class TestStoryServiceLearning:
+    """Tests for learning system integration."""
+
+    def test_complete_project_no_mode_service(self, story_service, sample_story_state):
+        """Test complete_project when no mode_service is configured."""
+        result = story_service.complete_project(sample_story_state)
+
+        assert result["project_id"] == sample_story_state.id
+        assert result["status"] == "complete"
+        assert result["pending_recommendations"] == []
+        assert sample_story_state.status == "complete"
+
+    def test_complete_project_with_mode_service(self, settings, sample_story_state):
+        """Test complete_project with mode_service that returns recommendations."""
+        from unittest.mock import MagicMock
+
+        from src.memory.mode_models import RecommendationType, TuningRecommendation
+
+        mock_mode_service = MagicMock()
+        mock_rec = TuningRecommendation(
+            recommendation_type=RecommendationType.MODEL_SWAP,
+            current_value="huihui_ai/dolphin3-abliterated:8b",
+            suggested_value="vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+            reason="Better quality",
+            confidence=0.9,
+            affected_role="writer",
+        )
+        mock_mode_service.on_project_complete.return_value = [mock_rec]
+        mock_mode_service.handle_recommendations.return_value = [mock_rec]
+
+        service = StoryService(settings, mode_service=mock_mode_service)
+        result = service.complete_project(sample_story_state)
+
+        assert result["project_id"] == sample_story_state.id
+        assert result["status"] == "complete"
+        assert len(result["pending_recommendations"]) == 1
+        mock_mode_service.on_project_complete.assert_called_once()
+        mock_mode_service.handle_recommendations.assert_called_once()
+
+    def test_complete_project_with_exception(self, settings, sample_story_state):
+        """Test complete_project handles exceptions gracefully."""
+        from unittest.mock import MagicMock
+
+        mock_mode_service = MagicMock()
+        mock_mode_service.on_project_complete.side_effect = Exception("Learning failed")
+
+        service = StoryService(settings, mode_service=mock_mode_service)
+        result = service.complete_project(sample_story_state)
+
+        # Should still complete but with empty recommendations
+        assert result["project_id"] == sample_story_state.id
+        assert result["status"] == "complete"
+        assert result["pending_recommendations"] == []
+
+    def test_on_story_complete_no_recommendations(self, settings, sample_story_state):
+        """Test _on_story_complete when no recommendations are generated."""
+        from unittest.mock import MagicMock
+
+        mock_mode_service = MagicMock()
+        mock_mode_service.on_project_complete.return_value = []
+
+        service = StoryService(settings, mode_service=mock_mode_service)
+        result = service._on_story_complete(sample_story_state)
+
+        assert result is None
+        mock_mode_service.handle_recommendations.assert_not_called()
+
+    def test_complete_project_validates_state(self, story_service):
+        """Test complete_project validates state parameter."""
+        with pytest.raises(ValueError, match="'state' cannot be None"):
+            story_service.complete_project(None)
+
+    def test_complete_project_validates_state_type(self, story_service):
+        """Test complete_project validates state is StoryState."""
+        with pytest.raises(TypeError, match="'state' must be StoryState"):
+            story_service.complete_project({"id": "fake"})

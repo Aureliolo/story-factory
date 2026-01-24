@@ -154,6 +154,7 @@ class TestArchitectParseVariationResponse:
         # When extract_json_list returns None (strict=False), no characters are added
         # Mock extract_json_list to return None (simulating parse failure with strict=False)
         def mock_extract_json_list(text, strict=True):
+            """Return None to simulate JSON extraction failure."""
             return None
 
         monkeypatch.setattr(architect_module, "extract_json_list", mock_extract_json_list)
@@ -183,6 +184,7 @@ class TestArchitectParseVariationResponse:
         call_count = [0]
 
         def mock_extract_json_list(text, strict=True):
+            """Return empty list on first call, then None to simulate plot points extraction failure."""
             call_count[0] += 1
             # Let first call (characters) pass, return None on second call (plot points)
             if call_count[0] == 1:
@@ -226,6 +228,7 @@ class TestArchitectParseVariationResponse:
         call_count = [0]
 
         def mock_extract_json_list(text, strict=True):
+            """Return empty list on first two calls, then None to simulate chapters extraction failure."""
             call_count[0] += 1
             # Let first two calls pass, return None on third call (chapters)
             if call_count[0] <= 2:

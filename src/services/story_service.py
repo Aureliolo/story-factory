@@ -3,7 +3,10 @@
 import logging
 from collections import OrderedDict
 from collections.abc import Callable, Generator
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.services.model_mode_service import ModelModeService
 
 from src.agents.continuity import ContinuityIssue
 from src.memory.story_state import Character, StoryBrief, StoryState
@@ -28,40 +31,44 @@ class StoryService:
     chapter writing workflows.
     """
 
-    def __init__(self, settings: Settings):
-        """Initialize story service.
+    def __init__(self, settings: Settings, mode_service: ModelModeService | None = None):
+        """Create a StoryService configured with application settings and an optional mode service.
 
-        Args:
-            settings: Application settings.
+        Parameters:
+            settings (Settings): Application settings used to configure the service; must be a Settings instance.
+            mode_service (ModelModeService | None): Optional service that provides adaptive learning hooks; stored on the instance for use by orchestrators.
         """
         validate_not_none(settings, "settings")
         validate_type(settings, "settings", Settings)
         logger.debug("Initializing StoryService")
         self.settings = settings
+        self.mode_service = mode_service  # For learning hooks
         # Use OrderedDict for LRU cache behavior
         self._orchestrators: OrderedDict[str, StoryOrchestrator] = OrderedDict()
         logger.debug("StoryService initialized successfully")
 
     def _get_orchestrator(self, state: StoryState) -> StoryOrchestrator:
-        """Get or create an orchestrator for a story state.
+        """
+        Retrieve the StoryOrchestrator associated with the given StoryState, creating and caching one if absent.
 
-        Each story gets its own orchestrator instance to maintain
-        conversation history and agent state. Uses LRU eviction to
-        prevent unbounded memory growth.
+        Creates a new orchestrator tied to the provided state and inserts it into an LRU cache; evicts the least-recently-used orchestrator when the cache exceeds settings.orchestrator_cache_size.
 
-        Args:
-            state: The story state.
+        Parameters:
+            state (StoryState): The story state to obtain an orchestrator for.
 
         Returns:
-            StoryOrchestrator for this story.
+            StoryOrchestrator: The orchestrator instance for the story.
         """
         if state.id in self._orchestrators:
             # Move to end (most recently used)
             self._orchestrators.move_to_end(state.id)
             return self._orchestrators[state.id]
 
-        # Create new orchestrator
-        orchestrator = StoryOrchestrator(settings=self.settings)
+        # Create new orchestrator with mode service for learning hooks
+        orchestrator = StoryOrchestrator(
+            settings=self.settings,
+            mode_service=self.mode_service,
+        )
         orchestrator.story_state = state
         self._orchestrators[state.id] = orchestrator
 
@@ -93,16 +100,84 @@ class StoryService:
             state.current_chapter = orchestrator.story_state.current_chapter
             state.status = orchestrator.story_state.status
 
+    def _on_story_complete(self, state: StoryState) -> list[Any] | None:
+        """
+        Invoke learning hooks via the configured mode service when a story is completed.
+
+        If a mode service is not configured, no action is taken. When configured, this method requests recommendations from the mode service and asks the mode service to handle them. It returns any recommendations that remain pending user approval.
+
+        Parameters:
+            state (StoryState): The completed story state (used for logging/context).
+
+        Returns:
+            list[Any] | None: A list of pending recommendations if any exist, `None` otherwise.
+        """
+        if not self.mode_service:
+            return None
+
+        try:
+            recommendations = self.mode_service.on_project_complete()
+            if recommendations:
+                logger.info(
+                    f"Generated {len(recommendations)} learning recommendations "
+                    f"for project {state.id}"
+                )
+                # Handle recommendations based on autonomy level
+                pending = self.mode_service.handle_recommendations(recommendations)
+                if pending:
+                    logger.info(f"{len(pending)} recommendations pending user approval")
+                return list(pending)  # Explicit cast for type checker
+            logger.debug(f"No recommendations generated for project {state.id}")
+            return None
+        except Exception as e:
+            logger.warning(
+                f"Failed to process project completion learning for project {state.id}: {e}",
+                exc_info=True,
+            )
+            return None
+
+    def complete_project(self, state: StoryState) -> dict[str, Any]:
+        """Mark a project as complete and trigger learning.
+
+        Call this when the user explicitly marks a story as finished.
+        This triggers the learning system to generate recommendations
+        based on the project's generation data.
+
+        Args:
+            state: The story state to complete.
+
+        Returns:
+            Dictionary with completion info and any pending recommendations.
+
+        Raises:
+            TypeError: If state is not a StoryState.
+            ValueError: If state is None.
+        """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
+        logger.info(f"Completing project {state.id}")
+        state.status = "complete"
+
+        # Trigger learning
+        recommendations = self._on_story_complete(state)
+
+        return {
+            "project_id": state.id,
+            "status": "complete",
+            "pending_recommendations": recommendations or [],
+        }
+
     # ========== INTERVIEW PHASE ==========
 
     def start_interview(self, state: StoryState) -> str:
-        """Start the interview process.
+        """
+        Begin the interview for the given story and record the assistant's initial questions in the state's interview history.
 
-        Args:
-            state: The story state.
+        Parameters:
+            state (StoryState): The story state representing the project to interview.
 
         Returns:
-            Initial interview questions from the interviewer agent.
+            str: The assistant's initial interview questions.
         """
         validate_not_none(state, "state")
         validate_type(state, "state", StoryState)
@@ -504,17 +579,18 @@ class StoryService:
     def write_all_chapters(
         self, state: StoryState, cancel_check: Callable[[], bool] | None = None
     ) -> Generator[WorkflowEvent]:
-        """Write all chapters with streaming events.
+        """
+        Stream the generation of every chapter, yielding workflow events as progress is produced.
 
-        Args:
-            state: The story state.
-            cancel_check: Optional callable that returns True if cancellation is requested.
+        Parameters:
+            state (StoryState): The story state to write into; orchestrator state will be synchronized back to this object.
+            cancel_check (Callable[[], bool] | None): Optional callable invoked between events; return `True` to request cancellation.
 
         Yields:
-            WorkflowEvent objects for progress updates.
+            WorkflowEvent: Progress events emitted during chapter generation.
 
         Raises:
-            GenerationCancelled: If cancellation is requested.
+            GenerationCancelled: If `cancel_check` returns `True` indicating the user requested cancellation.
         """
         orchestrator = self._get_orchestrator(state)
         orchestrator.story_state = state
@@ -529,17 +605,21 @@ class StoryService:
 
         self._sync_state(orchestrator, state)
 
-    def write_short_story(self, state: StoryState) -> Generator[WorkflowEvent, None, str]:
-        """Write a short story (single chapter).
+        # Trigger project completion learning
+        self._on_story_complete(state)
 
-        Args:
-            state: The story state.
+    def write_short_story(self, state: StoryState) -> Generator[WorkflowEvent, None, str]:
+        """
+        Generate a single-chapter short story while streaming progress events.
+
+        Parameters:
+            state (StoryState): Story state to use and update during generation.
 
         Yields:
-            WorkflowEvent objects for progress updates.
+            WorkflowEvent: Progress events emitted by the orchestrator during generation.
 
         Returns:
-            The completed story content.
+            str: The completed story content from chapter 1, or an empty string if no chapter was produced.
         """
         orchestrator = self._get_orchestrator(state)
         orchestrator.story_state = state

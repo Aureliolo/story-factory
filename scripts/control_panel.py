@@ -791,7 +791,8 @@ class ControlPanel(ctk.CTk):
     def _poll_ollama_status(self) -> None:
         """Poll Ollama health in background thread to avoid blocking UI."""
 
-        def check_and_update():
+        def check_and_update() -> None:
+            """Check Ollama health and queue UI update."""
             healthy = self._ollama_manager.check_health()
             self._ui_queue.put(lambda: setattr(self, "_ollama_healthy", healthy))
 
@@ -870,7 +871,8 @@ class ControlPanel(ctk.CTk):
             error_msg: Message on error.
         """
 
-        def wrapper():
+        def wrapper() -> None:
+            """Execute function and queue success/error status update."""
             try:
                 result = func()
                 # Success: function returned a truthy value (PID or True)
@@ -884,6 +886,7 @@ class ControlPanel(ctk.CTk):
                 err_msg = str(exc)
 
                 def make_error_callback(msg: str) -> Callable[[], None]:
+                    """Create callback that displays error message in status bar."""
                     return lambda: self._set_status_message(f"Error: {msg}", "#dc3545")
 
                 self._ui_queue.put(make_error_callback(err_msg))
@@ -920,7 +923,8 @@ class ControlPanel(ctk.CTk):
     def _on_restart(self) -> None:
         """Handle Restart button click."""
 
-        def restart():
+        def restart() -> int | None:
+            """Stop app, wait, and restart."""
             self._process_manager.stop_app()
             time.sleep(1)
             return self._process_manager.start_app()
@@ -935,7 +939,8 @@ class ControlPanel(ctk.CTk):
     def _on_restart_clear(self) -> None:
         """Handle Restart & Clear button click."""
 
-        def restart_and_clear():
+        def restart_and_clear() -> int | None:
+            """Stop app, clear logs, and restart."""
             self._process_manager.stop_app()
             self._log_watcher.clear_log()
             time.sleep(1)

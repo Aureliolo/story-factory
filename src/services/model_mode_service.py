@@ -8,7 +8,9 @@ This service handles:
 """
 
 import hashlib
+import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,9 +23,11 @@ from src.memory.mode_models import (
     LearningTrigger,
     QualityScores,
     RecommendationType,
+    SizePreference,
     TuningRecommendation,
     VramStrategy,
     get_preset_mode,
+    get_size_tier,
     list_preset_modes,
 )
 from src.services.llm_client import generate_structured
@@ -87,22 +91,25 @@ class ModelModeService:
         return self._current_mode
 
     def set_mode(self, mode_id: str) -> GenerationMode:
-        """Set the current generation mode.
+        """
+        Activate the generation mode identified by `mode_id`, set it as the current mode, and synchronize its VRAM strategy to application settings.
 
-        Args:
-            mode_id: ID of preset or custom mode.
+        Parameters:
+            mode_id (str): Identifier of a preset or custom generation mode.
 
         Returns:
-            The activated mode.
+            GenerationMode: The activated generation mode object.
 
         Raises:
-            ValueError: If mode_id is not found.
+            ValueError: If no mode with `mode_id` exists or if a custom mode contains an invalid VRAM strategy.
         """
         validate_not_empty(mode_id, "mode_id")
         # Check presets first
         mode = get_preset_mode(mode_id)
         if mode:
             self._current_mode = mode
+            # Sync mode's VRAM strategy to settings so UI reflects mode default
+            self._sync_vram_strategy_to_settings(mode)
             logger.info(f"Activated preset mode: {mode.name}")
             return mode
 
@@ -121,28 +128,101 @@ class ModelModeService:
                 logger.error(error_msg)
                 raise ValueError(error_msg) from e
 
+            # Parse size preference (required - migration should have backfilled)
+            size_pref_str = custom.get("size_preference")
+            if size_pref_str is None:
+                error_msg = (
+                    f"Missing size_preference in custom mode '{mode_id}'. "
+                    "Please run database migration to backfill this field."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            try:
+                size_preference = SizePreference(size_pref_str)
+            except ValueError as e:
+                valid_options = ", ".join(s.value for s in SizePreference)
+                error_msg = (
+                    f"Invalid size_preference '{size_pref_str}' in custom mode '{mode_id}'. "
+                    f"Valid options: {valid_options}."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
+
             mode = GenerationMode(
                 id=custom["id"],
                 name=custom["name"],
                 description=custom.get("description", ""),
                 agent_models=custom["agent_models"],
                 agent_temperatures=custom["agent_temperatures"],
+                size_preference=size_preference,
                 vram_strategy=vram_strategy,
                 is_preset=False,
                 is_experimental=bool(custom.get("is_experimental", False)),
             )
             self._current_mode = mode
+            # Sync mode's VRAM strategy to settings so UI reflects mode default
+            self._sync_vram_strategy_to_settings(mode)
             logger.info(f"Activated custom mode: {mode.name}")
             return mode
 
         raise ValueError(f"Mode not found: {mode_id}")
 
+    def _sync_vram_strategy_to_settings(self, mode: GenerationMode) -> None:
+        """Sync the mode's VRAM strategy to settings.
+
+        This ensures the Settings UI reflects the mode's default VRAM strategy,
+        while still allowing the user to override it.
+
+        Args:
+            mode: The mode whose VRAM strategy should be synced.
+        """
+        strategy_value = (
+            mode.vram_strategy.value
+            if isinstance(mode.vram_strategy, VramStrategy)
+            else str(mode.vram_strategy)
+        )
+        if self.settings.vram_strategy != strategy_value:
+            logger.debug(f"Syncing VRAM strategy from mode '{mode.name}': {strategy_value}")
+            self.settings.vram_strategy = strategy_value
+
     def list_modes(self) -> list[GenerationMode]:
-        """List all available modes (presets + custom)."""
+        """Get all available generation modes by combining built-in presets with custom modes.
+
+        Custom modes are converted into GenerationMode objects with strict validation:
+        missing or invalid `size_preference` raises ValueError (migration/backfill required).
+        Stored `vram_strategy` values are parsed into VramStrategy; invalid values raise.
+
+        Returns:
+            list[GenerationMode]: A list of GenerationMode instances for presets and custom modes.
+
+        Raises:
+            ValueError: If a custom mode has missing or invalid size_preference.
+        """
         modes = list_preset_modes()
 
         # Add custom modes
         for custom in self._db.list_custom_modes():
+            mode_id = custom.get("id", "unknown")
+            # Parse size preference (required - migration should have backfilled)
+            size_pref_str = custom.get("size_preference")
+            if size_pref_str is None:
+                error_msg = (
+                    f"Missing size_preference in custom mode '{mode_id}'. "
+                    "Please run database migration to backfill this field."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            try:
+                size_preference = SizePreference(size_pref_str)
+            except ValueError as e:
+                valid_options = ", ".join(s.value for s in SizePreference)
+                error_msg = (
+                    f"Invalid size_preference '{size_pref_str}' in custom mode '{mode_id}'. "
+                    f"Valid options: {valid_options}."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
+
             modes.append(
                 GenerationMode(
                     id=custom["id"],
@@ -150,6 +230,7 @@ class ModelModeService:
                     description=custom.get("description", ""),
                     agent_models=custom["agent_models"],
                     agent_temperatures=custom["agent_temperatures"],
+                    size_preference=size_preference,
                     vram_strategy=VramStrategy(custom["vram_strategy"]),
                     is_preset=False,
                     is_experimental=bool(custom.get("is_experimental", False)),
@@ -159,13 +240,23 @@ class ModelModeService:
         return modes
 
     def save_custom_mode(self, mode: GenerationMode) -> None:
-        """Save a custom generation mode."""
+        """
+        Persist a custom GenerationMode to the application's mode database.
+
+        Saves the mode's id, name, per-agent model and temperature overrides, size preference, VRAM strategy, description, and experimental flag to persistent storage and logs the save.
+
+        Parameters:
+            mode (GenerationMode): The custom mode to persist; must not be `None`.
+        """
         validate_not_none(mode, "mode")
         self._db.save_custom_mode(
             mode_id=mode.id,
             name=mode.name,
             agent_models=mode.agent_models,
             agent_temperatures=mode.agent_temperatures,
+            size_preference=mode.size_preference.value
+            if isinstance(mode.size_preference, SizePreference)
+            else mode.size_preference,
             vram_strategy=mode.vram_strategy.value
             if isinstance(mode.vram_strategy, VramStrategy)
             else mode.vram_strategy,
@@ -191,18 +282,15 @@ class ModelModeService:
     def get_model_for_agent(self, agent_role: str) -> str:
         """Get the model ID for an agent based on current mode.
 
-        Model selection is fully automatic. The mode's agent_models is only
-        used for explicit user overrides. If empty or not specified for a role,
-        uses automatic selection based on installed models.
+        Model selection uses the mode's size_preference to steer toward
+        larger or smaller models. The mode's agent_models is only used
+        for explicit user overrides.
 
         Args:
             agent_role: The agent role (writer, architect, etc.)
 
         Returns:
-            Model ID selected automatically or from user override.
-
-        Raises:
-            ValueError: If no models are installed.
+            Model ID selected based on size preference or from user override.
         """
         validate_not_empty(agent_role, "agent_role")
         mode = self.get_current_mode()
@@ -213,17 +301,160 @@ class ModelModeService:
             logger.debug(f"Using user-specified model {model_id} for {agent_role}")
             return model_id
 
-        # Use automatic selection based on installed models
-        vram = get_available_vram()
-        selected = self.settings.get_model_for_agent(agent_role, vram)
-        logger.debug(f"Auto-selected {selected} for {agent_role} (vram={vram}GB)")
-        return selected
+        # Validate size_preference before model selection
+        try:
+            size_pref = SizePreference(mode.size_preference)
+        except ValueError as e:
+            valid_options = ", ".join(s.value for s in SizePreference)
+            error_msg = (
+                f"Invalid size_preference '{mode.size_preference}' in mode '{mode.id}'. "
+                f"Valid options: {valid_options}."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
-    def get_temperature_for_agent(self, agent_role: str) -> float:
-        """Get the temperature for an agent based on current mode.
+        # Try size-preference-aware selection
+        try:
+            vram = get_available_vram()
+            selected = self._select_model_with_size_preference(agent_role, size_pref, vram)
+            logger.info(
+                f"Auto-selected {selected} for {agent_role} "
+                f"(mode={mode.id}, size_pref={size_pref.value}, vram={vram}GB)"
+            )
+            return selected
+        except ValueError:
+            # No tagged models available - fall back to settings
+            logger.debug(f"No tagged models for {agent_role}, falling back to settings")
+            return self.settings.get_model_for_agent(agent_role)
+
+    def _select_model_with_size_preference(
+        self,
+        agent_role: str,
+        size_pref: SizePreference,
+        available_vram: int,
+    ) -> str:
+        """
+        Selects the best installed model ID for an agent role based on the requested size preference and available VRAM.
+
+        Parameters:
+            agent_role (str): Agent role tag to filter models (e.g., "writer", "validator").
+            size_pref (SizePreference): Desired model size preference (LARGEST, MEDIUM, SMALLEST).
+            available_vram (int): Available VRAM in gigabytes to prefer models that fit.
+
+        Returns:
+            str: The selected model ID.
 
         Raises:
-            ValueError: If agent_role is not configured in agent_temperatures.
+            ValueError: If no installed model is tagged for the given agent_role.
+        """
+        from src.settings import RECOMMENDED_MODELS, get_installed_models_with_sizes
+
+        installed_models = get_installed_models_with_sizes()
+
+        if not installed_models:
+            # Return a recommended model as default for CI/testing
+            default = next(iter(RECOMMENDED_MODELS.keys()))
+            logger.warning(f"No models installed - returning default '{default}' for {agent_role}")
+            return default
+
+        # Find models tagged for this role
+        candidates: list[dict] = []
+        for model_id, size_gb in installed_models.items():
+            tags = self.settings.get_model_tags(model_id)
+            if agent_role in tags:
+                # Get quality from RECOMMENDED_MODELS if available
+                quality = 5.0
+                for rec_id, info in RECOMMENDED_MODELS.items():
+                    if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
+                        quality = info.get("quality", 5.0)
+                        break
+
+                estimated_vram = int(size_gb * 1.2)
+                fits_vram = estimated_vram <= available_vram
+                tier = get_size_tier(size_gb)
+
+                candidates.append(
+                    {
+                        "model_id": model_id,
+                        "size_gb": size_gb,
+                        "quality": quality,
+                        "tier": tier.value,
+                        "fits_vram": fits_vram,
+                    }
+                )
+
+        if not candidates:
+            installed_list = ", ".join(installed_models.keys())
+            raise ValueError(
+                f"No model tagged for role '{agent_role}'. "
+                f"Installed models: [{installed_list}]. "
+                f"Configure model tags in Settings > Models tab."
+            )
+
+        # Calculate tier score based on size preference
+        # Higher score = more preferred
+        for c in candidates:
+            c["tier_score"] = self._calculate_tier_score(c["size_gb"], size_pref)
+
+        # Separate models that fit VRAM from those that don't
+        fitting = [c for c in candidates if c["fits_vram"]]
+        non_fitting = [c for c in candidates if not c["fits_vram"]]
+
+        # Prefer models that fit VRAM
+        pool = fitting if fitting else non_fitting
+
+        # Sort by: tier_score (primary), quality (secondary), size based on preference (tertiary)
+        if size_pref == SizePreference.LARGEST:
+            # For largest preference: higher tier_score, higher quality, larger size
+            pool.sort(key=lambda x: (x["tier_score"], x["quality"], x["size_gb"]), reverse=True)
+        elif size_pref == SizePreference.SMALLEST:
+            # For smallest preference: higher tier_score, higher quality, smaller size
+            pool.sort(key=lambda x: (x["tier_score"], x["quality"], -x["size_gb"]), reverse=True)
+        else:  # MEDIUM
+            # For medium: higher tier_score, higher quality. Size is not a deciding factor.
+            pool.sort(key=lambda x: (x["tier_score"], x["quality"]), reverse=True)
+
+        best = pool[0]
+        if not fitting:
+            logger.warning(
+                f"No model fits VRAM ({available_vram}GB) for {agent_role}. "
+                f"Selected {best['model_id']} ({best['size_gb']:.1f}GB) anyway."
+            )
+
+        return str(best["model_id"])
+
+    def _calculate_tier_score(self, size_gb: float, size_pref: SizePreference) -> float:
+        """
+        Score how well a model size matches the given SizePreference on a 0-10 scale.
+
+        Parameters:
+            size_gb (float): Model size in gigabytes.
+            size_pref (SizePreference): Desired size preference enum.
+
+        Returns:
+            float: A score between 0.0 and 10.0 where higher values indicate a closer match to the preference.
+        """
+        tier = get_size_tier(size_gb)
+
+        # Define ideal sizes for each preference
+        if size_pref == SizePreference.LARGEST:
+            # Prefer large > medium > small > tiny
+            tier_scores = {"large": 10, "medium": 7, "small": 4, "tiny": 1}
+        elif size_pref == SizePreference.SMALLEST:
+            # Prefer tiny > small > medium > large
+            tier_scores = {"large": 1, "medium": 4, "small": 7, "tiny": 10}
+        else:  # MEDIUM
+            # Prefer medium > small > large > tiny (balanced)
+            tier_scores = {"large": 5, "medium": 10, "small": 7, "tiny": 2}
+
+        return tier_scores.get(tier.value, 5)
+
+    def get_temperature_for_agent(self, agent_role: str) -> float:
+        """
+        Get the temperature for an agent role according to the active generation mode; falls back to application Settings if the mode does not specify a value.
+
+        Returns:
+            float: Temperature value for the specified agent role.
         """
         validate_not_empty(agent_role, "agent_role")
         mode = self.get_current_mode()
@@ -236,17 +467,39 @@ class ModelModeService:
     # === VRAM Management ===
 
     def prepare_model(self, model_id: str) -> None:
-        """Prepare a model for use, respecting VRAM strategy.
+        """
+        Prepare a model for use according to the configured VRAM strategy.
 
-        For sequential strategy, unloads other models first.
-        For parallel, keeps models loaded.
-        For adaptive, unloads if VRAM is constrained.
+        This method reads the VRAM strategy from ``settings.vram_strategy`` (user-configurable)
+        and may unload other loaded models depending on that strategy:
+
+        - ``SEQUENTIAL``: unloads all other models.
+        - ``ADAPTIVE``: unloads other models only if available VRAM is less than the model's
+          estimated requirement.
+
+        The given model is then marked as loaded in the service's internal tracker.
+
+        Parameters:
+            model_id (str): Identifier of the model to prepare.
         """
         from src.settings import get_installed_models_with_sizes, get_model_info
 
         validate_not_empty(model_id, "model_id")
-        mode = self.get_current_mode()
-        strategy = mode.vram_strategy
+
+        # Use settings.vram_strategy as the source of truth (user-configurable override)
+        strategy_str = self.settings.vram_strategy
+        try:
+            strategy = VramStrategy(strategy_str)
+        except ValueError as e:
+            valid_options = ", ".join(s.value for s in VramStrategy)
+            error_msg = (
+                f"Invalid vram_strategy '{strategy_str}' in settings. "
+                f"Valid options: {valid_options}."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
+
+        logger.debug(f"Preparing model {model_id} with VRAM strategy: {strategy.value}")
 
         if strategy == VramStrategy.SEQUENTIAL:
             # Unload all other models
@@ -660,10 +913,16 @@ Rate each dimension from 0-10:
         return recommendations
 
     def apply_recommendation(self, recommendation: TuningRecommendation) -> bool:
-        """Apply a tuning recommendation.
+        """
+        Apply a tuning recommendation to the current mode and persist its outcome when applicable.
+
+        Parameters:
+            recommendation (TuningRecommendation): Recommendation describing the action (e.g., model swap or temperature adjustment),
+                the affected role, and the suggested value; if `recommendation.id` is present the outcome will be recorded.
 
         Returns:
-            True if successfully applied.
+            bool: `True` if the recommendation was applied to the in-memory current mode and (when present) recorded in the database,
+            `False` otherwise.
         """
         try:
             if recommendation.recommendation_type == "model_swap":
@@ -690,6 +949,18 @@ Rate each dimension from 0-10:
                     self._current_mode.agent_temperatures[recommendation.affected_role] = float(
                         recommendation.suggested_value
                     )
+                    logger.info(
+                        f"Applied recommendation: {recommendation.affected_role} "
+                        f"temperature now {recommendation.suggested_value}"
+                    )
+
+                    # Record outcome (same as model_swap to prevent resurface)
+                    if recommendation.id:
+                        self._db.update_recommendation_outcome(
+                            recommendation.id,
+                            was_applied=True,
+                            user_feedback="accepted",
+                        )
                     return True
 
         except Exception as e:
@@ -767,9 +1038,124 @@ Rate each dimension from 0-10:
         return self._db.get_recommendation_history(limit)
 
     def export_scores_csv(self, output_path: Path | str) -> int:
-        """Export all scores to CSV."""
+        """
+        Export all recorded scores to a CSV file at the given path.
+
+        Parameters:
+            output_path (Path | str): Destination file path for the exported CSV.
+
+        Returns:
+            int: Number of score records written to the CSV.
+        """
         return self._db.export_scores_csv(output_path)
 
-    def get_pending_recommendations(self) -> list[dict[str, Any]]:
-        """Get recommendations awaiting user action."""
-        return self._db.get_pending_recommendations()
+    def get_pending_recommendations(self) -> list[TuningRecommendation]:
+        """Return pending tuning recommendations retrieved from the database.
+
+        Each database row is converted into a TuningRecommendation object:
+        - Timestamps stored as ISO strings are parsed to datetimes (falls back to now if missing).
+        - Recommendation types are converted to the RecommendationType enum.
+        - Evidence JSON is parsed when present; malformed JSON is logged and evidence is left as None.
+        - Rows that fail to parse are skipped with a warning.
+
+        Returns:
+            list[TuningRecommendation]: Parsed pending recommendations (may be empty).
+        """
+        rows = self._db.get_pending_recommendations(limit=20)
+        recommendations = []
+        for row in rows:
+            row_id = row.get("id")
+            try:
+                # Validate required fields
+                required = ["current_value", "suggested_value", "reason", "confidence"]
+                missing = [k for k in required if row.get(k) is None]
+                if missing:
+                    logger.warning(
+                        f"Skipping recommendation {row_id}: missing {', '.join(missing)}"
+                    )
+                    continue
+
+                # Parse timestamp from string (SQLite stores as ISO format)
+                timestamp_raw = row.get("timestamp")
+                if timestamp_raw:
+                    timestamp = datetime.fromisoformat(str(timestamp_raw))
+                else:
+                    timestamp = datetime.now()
+
+                # Parse recommendation_type from string
+                rec_type = RecommendationType(str(row.get("recommendation_type")))
+
+                # Parse evidence from JSON (DB column is evidence_json)
+                evidence = None
+                evidence_json = row.get("evidence_json")
+                if evidence_json:
+                    try:
+                        evidence = json.loads(evidence_json)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse evidence JSON for recommendation {row_id}")
+
+                rec = TuningRecommendation(
+                    id=row_id,
+                    timestamp=timestamp,
+                    recommendation_type=rec_type,
+                    current_value=str(row["current_value"]),
+                    suggested_value=str(row["suggested_value"]),
+                    affected_role=row.get("affected_role"),
+                    reason=str(row["reason"]),
+                    confidence=float(row["confidence"]),
+                    evidence=evidence,
+                    expected_improvement=row.get("expected_improvement"),
+                )
+                recommendations.append(rec)
+            except Exception as e:
+                logger.warning(f"Failed to parse recommendation {row_id}: {e}")
+        return recommendations
+
+    def dismiss_recommendation(self, recommendation: TuningRecommendation) -> None:
+        """
+        Mark a tuning recommendation as dismissed so it is recorded as ignored and not re-surfaced.
+
+        If the recommendation has an `id`, persist an outcome indicating it was not applied and store `"ignored"` as user feedback in the database. If the recommendation has no `id`, no database change is made and a warning is logged.
+
+        Parameters:
+            recommendation (TuningRecommendation): The recommendation to dismiss; must include `id` to persist the dismissal.
+        """
+        if recommendation.id is None:
+            logger.warning("Cannot dismiss recommendation without ID")
+            return
+        self._db.update_recommendation_outcome(
+            recommendation_id=recommendation.id,
+            was_applied=False,
+            user_feedback="ignored",
+        )
+        logger.debug(f"Dismissed recommendation {recommendation.id}")
+
+    def on_regenerate(self, project_id: str, chapter_id: str) -> None:
+        """Record regeneration as a negative implicit signal.
+
+        When a user regenerates a chapter, it indicates dissatisfaction with
+        the previous output. This updates the most recent score for that
+        chapter to mark it as regenerated.
+
+        Args:
+            project_id: The project ID.
+            chapter_id: The chapter being regenerated.
+        """
+        try:
+            # Find the most recent score for this project/chapter using efficient LIMIT 1 query
+            score = self._db.get_latest_score_for_chapter(project_id, chapter_id)
+            if score:
+                score_id = score.get("id")
+                if score_id:
+                    self._db.update_score(score_id, was_regenerated=True)
+                    logger.debug(
+                        f"Marked score {score_id} as regenerated for "
+                        f"project {project_id}, chapter {chapter_id}"
+                    )
+                    return
+            logger.debug(
+                f"No score found to mark as regenerated for "
+                f"project {project_id}, chapter {chapter_id}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record regeneration signal: {e}")

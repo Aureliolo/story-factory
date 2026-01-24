@@ -92,7 +92,7 @@ class TestComparisonService:
 
         # Mock chapter writing events
         def write_chapter_side_effect(chapter_num):
-            # Yield some events
+            """Simulate chapter writing by yielding start and complete events."""
             yield WorkflowEvent(
                 event_type="agent_start",
                 agent_name="Writer",
@@ -143,6 +143,7 @@ class TestComparisonService:
         mock_orchestrator_class.return_value = mock_orchestrator
 
         def write_chapter_error(chapter_num):
+            """Simulate a chapter writing failure by raising an error."""
             raise RuntimeError("Test error")
 
         mock_orchestrator.write_chapter.side_effect = write_chapter_error
@@ -350,6 +351,7 @@ class TestComparisonService:
         cancel_flag = False
 
         def cancel_check():
+            """Return the current cancellation state."""
             return cancel_flag
 
         with patch("src.services.comparison_service.StoryOrchestrator") as mock_orch:
@@ -360,6 +362,7 @@ class TestComparisonService:
             call_count = [0]
 
             def write_chapter_side_effect(chapter_num):
+                """Simulate chapter writing and trigger cancellation after the first call."""
                 call_count[0] += 1
                 if call_count[0] > 1:
                     nonlocal cancel_flag
@@ -404,6 +407,7 @@ class TestComparisonService:
         mock_orchestrator_class.return_value = mock_orchestrator
 
         def write_chapter_side_effect(chapter_num):
+            """Simulate chapter writing by yielding a completion event."""
             yield WorkflowEvent(
                 event_type="agent_complete",
                 agent_name="System",
