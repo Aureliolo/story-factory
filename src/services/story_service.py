@@ -3,7 +3,10 @@
 import logging
 from collections import OrderedDict
 from collections.abc import Callable, Generator
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.services.model_mode_service import ModelModeService
 
 from src.agents.continuity import ContinuityIssue
 from src.memory.story_state import Character, StoryBrief, StoryState
@@ -28,7 +31,7 @@ class StoryService:
     chapter writing workflows.
     """
 
-    def __init__(self, settings: Settings, mode_service: Any | None = None):
+    def __init__(self, settings: Settings, mode_service: ModelModeService | None = None):
         """Initialize story service.
 
         Args:

@@ -404,6 +404,58 @@ Key features:
 
 ---
 
+## Adaptive Learning & Recommendations
+
+Story Factory includes an adaptive learning system that tracks generation performance and suggests model/temperature adjustments.
+
+### How It Works
+
+1. **Generation Tracking**: Each chapter generation records:
+   - Model used, mode settings, genre
+   - Tokens generated, time taken, tokens/second
+   - Chapter and project IDs for context
+
+2. **Implicit Signals**: The system tracks user actions:
+   - **Regenerate**: Indicates dissatisfaction (negative signal)
+   - **Edit**: Measures edit distance from original
+   - **Rating**: Explicit 1-5 star rating
+
+3. **Tuning Triggers**: Recommendations are generated based on:
+   - `periodic`: After N chapters (e.g., every 10 chapters)
+   - `continuous`: After each generation
+
+4. **Recommendation Types**:
+   | Type | Description |
+   |------|-------------|
+   | `model_swap` | Suggests switching to a better-performing model |
+   | `temp_adjust` | Suggests temperature change for an agent role |
+   | `mode_change` | Suggests a different generation mode |
+   | `vram_strategy` | Suggests VRAM strategy adjustment |
+
+5. **Autonomy Levels**:
+   - `suggest_only`: Show recommendations, user must approve
+   - `auto_minor`: Auto-apply temperature tweaks, ask for model changes
+   - `auto_all`: Auto-apply all recommendations
+
+### Settings UI
+
+Configure learning in Settings → Learning:
+- **Autonomy Level**: How much control the system has
+- **Learning Triggers**: When to generate recommendations
+- **Learning Threshold**: Confidence threshold for recommendations
+
+### Recommendation Dialog
+
+When recommendations are generated, a dialog shows:
+- Recommendation type and affected role
+- Current value → Suggested value
+- Confidence percentage
+- Expected improvement
+
+Users can select which recommendations to apply or dismiss them.
+
+---
+
 ## Configuration Examples
 
 ### settings.json for 24GB VRAM (2026 Update)

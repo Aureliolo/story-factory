@@ -8,7 +8,9 @@ This service handles:
 """
 
 import hashlib
+import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -125,15 +127,25 @@ class ModelModeService:
                 logger.error(error_msg)
                 raise ValueError(error_msg) from e
 
-            # Parse size preference (default to MEDIUM for backwards compatibility)
-            size_pref_str = custom.get("size_preference", SizePreference.MEDIUM.value)
+            # Parse size preference (required - migration should have backfilled)
+            size_pref_str = custom.get("size_preference")
+            if size_pref_str is None:
+                error_msg = (
+                    f"Missing size_preference in custom mode '{mode_id}'. "
+                    "Please run database migration to backfill this field."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             try:
                 size_preference = SizePreference(size_pref_str)
-            except ValueError:
-                logger.warning(
-                    f"Invalid size_preference '{size_pref_str}' in mode '{mode_id}', using MEDIUM"
+            except ValueError as e:
+                valid_options = ", ".join(s.value for s in SizePreference)
+                error_msg = (
+                    f"Invalid size_preference '{size_pref_str}' in custom mode '{mode_id}'. "
+                    f"Valid options: {valid_options}."
                 )
-                size_preference = SizePreference.MEDIUM
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
 
             mode = GenerationMode(
                 id=custom["id"],
@@ -178,12 +190,26 @@ class ModelModeService:
 
         # Add custom modes
         for custom in self._db.list_custom_modes():
-            # Parse size preference (default to MEDIUM for backwards compatibility)
-            size_pref_str = custom.get("size_preference", SizePreference.MEDIUM.value)
+            mode_id = custom.get("id", "unknown")
+            # Parse size preference (required - migration should have backfilled)
+            size_pref_str = custom.get("size_preference")
+            if size_pref_str is None:
+                error_msg = (
+                    f"Missing size_preference in custom mode '{mode_id}'. "
+                    "Please run database migration to backfill this field."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             try:
                 size_preference = SizePreference(size_pref_str)
-            except ValueError:
-                size_preference = SizePreference.MEDIUM
+            except ValueError as e:
+                valid_options = ", ".join(s.value for s in SizePreference)
+                error_msg = (
+                    f"Invalid size_preference '{size_pref_str}' in custom mode '{mode_id}'. "
+                    f"Valid options: {valid_options}."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
 
             modes.append(
                 GenerationMode(
@@ -354,7 +380,7 @@ class ModelModeService:
             # For smallest preference: higher tier_score, higher quality, smaller size
             pool.sort(key=lambda x: (x["tier_score"], x["quality"], -x["size_gb"]), reverse=True)
         else:  # MEDIUM
-            # For medium: higher tier_score, higher quality, prefer middle sizes
+            # For medium: higher tier_score, higher quality. Size is not a deciding factor.
             pool.sort(key=lambda x: (x["tier_score"], x["quality"]), reverse=True)
 
         best = pool[0]
@@ -425,11 +451,14 @@ class ModelModeService:
         strategy_str = self.settings.vram_strategy
         try:
             strategy = VramStrategy(strategy_str)
-        except ValueError:
-            logger.warning(
-                f"Invalid vram_strategy '{strategy_str}' in settings, falling back to ADAPTIVE"
+        except ValueError as e:
+            valid_options = ", ".join(s.value for s in VramStrategy)
+            error_msg = (
+                f"Invalid vram_strategy '{strategy_str}' in settings. "
+                f"Valid options: {valid_options}."
             )
-            strategy = VramStrategy.ADAPTIVE
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
         logger.debug(f"Preparing model {model_id} with VRAM strategy: {strategy.value}")
 
@@ -969,9 +998,6 @@ Rate each dimension from 0-10:
 
     def get_pending_recommendations(self) -> list[TuningRecommendation]:
         """Get recommendations awaiting user action as TuningRecommendation objects."""
-        import json
-        from datetime import datetime
-
         rows = self._db.get_pending_recommendations(limit=20)
         recommendations = []
         for row in rows:

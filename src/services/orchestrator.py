@@ -8,7 +8,10 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.services.model_mode_service import ModelModeService
 
 from src.agents import (
     ArchitectAgent,
@@ -55,7 +58,7 @@ class StoryOrchestrator:
         self,
         settings: Settings | None = None,
         model_override: str | None = None,  # Force specific model for all agents
-        mode_service: Any | None = None,  # ModelModeService for learning hooks
+        mode_service: ModelModeService | None = None,  # ModelModeService for learning hooks
     ):
         """Initialize the story orchestrator.
 

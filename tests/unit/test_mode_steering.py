@@ -186,19 +186,19 @@ class TestModelModeServiceModelSelection:
     ):
         """LARGEST preference should select largest available model."""
         mock_get_models.return_value = {
-            "small-model:3b": 3.0,
-            "medium-model:8b": 8.0,
-            "large-model:20b": 20.0,
+            "huihui_ai/dolphin3-abliterated:8b": 3.0,
+            "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": 8.0,
+            "qwen2.5:32b": 20.0,
         }
         service.settings.custom_model_tags = {
-            "small-model:3b": ["writer"],
-            "medium-model:8b": ["writer"],
-            "large-model:20b": ["writer"],
+            "huihui_ai/dolphin3-abliterated:8b": ["writer"],
+            "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": ["writer"],
+            "qwen2.5:32b": ["writer"],
         }
 
         result = service._select_model_with_size_preference("writer", SizePreference.LARGEST, 48)
 
-        assert result == "large-model:20b"
+        assert result == "qwen2.5:32b"
 
     @patch("src.settings.get_installed_models_with_sizes")
     def test_select_smallest_for_draft_fast(
@@ -206,30 +206,30 @@ class TestModelModeServiceModelSelection:
     ):
         """SMALLEST preference should select smallest available model."""
         mock_get_models.return_value = {
-            "tiny-model:1b": 1.0,
-            "small-model:3b": 3.0,
-            "large-model:20b": 20.0,
+            "qwen2.5:1.5b": 1.0,
+            "huihui_ai/dolphin3-abliterated:8b": 3.0,
+            "qwen2.5:32b": 20.0,
         }
         service.settings.custom_model_tags = {
-            "tiny-model:1b": ["writer"],
-            "small-model:3b": ["writer"],
-            "large-model:20b": ["writer"],
+            "qwen2.5:1.5b": ["writer"],
+            "huihui_ai/dolphin3-abliterated:8b": ["writer"],
+            "qwen2.5:32b": ["writer"],
         }
 
         result = service._select_model_with_size_preference("writer", SizePreference.SMALLEST, 48)
 
-        assert result == "tiny-model:1b"
+        assert result == "qwen2.5:1.5b"
 
     @patch("src.settings.get_installed_models_with_sizes")
     def test_respects_vram_constraint(self, mock_get_models: MagicMock, service: ModelModeService):
         """Should prefer models that fit in VRAM even with LARGEST preference."""
         mock_get_models.return_value = {
-            "small-model:3b": 3.0,  # Fits in 8GB
-            "large-model:20b": 20.0,  # Doesn't fit
+            "huihui_ai/dolphin3-abliterated:8b": 3.0,  # Fits in 8GB
+            "qwen2.5:32b": 20.0,  # Doesn't fit
         }
         service.settings.custom_model_tags = {
-            "small-model:3b": ["writer"],
-            "large-model:20b": ["writer"],
+            "huihui_ai/dolphin3-abliterated:8b": ["writer"],
+            "qwen2.5:32b": ["writer"],
         }
 
         result = service._select_model_with_size_preference(
@@ -239,7 +239,7 @@ class TestModelModeServiceModelSelection:
         )
 
         # Should select small model because large doesn't fit
-        assert result == "small-model:3b"
+        assert result == "huihui_ai/dolphin3-abliterated:8b"
 
     @patch("src.settings.get_installed_models_with_sizes")
     def test_raises_when_no_tagged_models(
@@ -247,7 +247,7 @@ class TestModelModeServiceModelSelection:
     ):
         """Should raise ValueError when no models are tagged for the role."""
         mock_get_models.return_value = {
-            "untagged-model:3b": 3.0,
+            "qwen2.5:3b": 3.0,
         }
         service.settings.custom_model_tags = {}
 
@@ -281,7 +281,7 @@ class TestModelModeServiceAdditionalCoverage:
         """Create mock settings."""
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
-        mock.get_model_for_agent.return_value = "test-model:8b"
+        mock.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
         mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
 
         def _get_temp(role: str) -> float:
@@ -297,10 +297,10 @@ class TestModelModeServiceAdditionalCoverage:
         """Create a ModelModeService with mocked dependencies."""
         return ModelModeService(mock_settings, db_path=temp_db)
 
-    def test_set_mode_invalid_size_preference_fallback(
+    def test_set_mode_invalid_size_preference_raises_error(
         self, service: ModelModeService, temp_db: Path
     ):
-        """Test that invalid size_preference falls back to MEDIUM."""
+        """Test that invalid size_preference raises ValueError."""
         import sqlite3
 
         from src.memory.mode_models import GenerationMode, VramStrategy
@@ -328,14 +328,14 @@ class TestModelModeServiceAdditionalCoverage:
         finally:
             conn.close()
 
-        # Load the mode - should use MEDIUM fallback
-        mode = service.set_mode("test_invalid_pref")
-        assert mode.size_preference == SizePreference.MEDIUM
+        # Load the mode - should raise error for invalid size_preference
+        with pytest.raises(ValueError, match="Invalid size_preference 'invalid_pref'"):
+            service.set_mode("test_invalid_pref")
 
-    def test_list_modes_invalid_size_preference_fallback(
+    def test_list_modes_invalid_size_preference_raises_error(
         self, service: ModelModeService, temp_db: Path
     ):
-        """Test that list_modes handles invalid size_preference gracefully."""
+        """Test that list_modes raises error for invalid size_preference."""
         import sqlite3
 
         from src.memory.mode_models import GenerationMode, VramStrategy
@@ -363,11 +363,55 @@ class TestModelModeServiceAdditionalCoverage:
         finally:
             conn.close()
 
-        # list_modes should handle gracefully
-        modes = service.list_modes()
-        custom_mode = next((m for m in modes if m.id == "test_list_pref"), None)
-        assert custom_mode is not None
-        assert custom_mode.size_preference == SizePreference.MEDIUM
+        # list_modes should raise error for invalid size_preference
+        with pytest.raises(ValueError, match="Invalid size_preference 'bad_value'"):
+            service.list_modes()
+
+    def test_set_mode_missing_size_preference_raises_error(
+        self, service: ModelModeService, temp_db: Path
+    ):
+        """Test that missing size_preference raises ValueError."""
+        from unittest.mock import patch
+
+        # Mock the database to return a custom mode with missing size_preference
+        mock_custom = {
+            "id": "test_missing_pref",
+            "name": "Test",
+            "description": "",
+            "agent_models": "{}",
+            "agent_temperatures": "{}",
+            "vram_strategy": "adaptive",
+            "is_experimental": False,
+            # size_preference is missing (None)
+        }
+
+        with patch.object(service._db, "get_custom_mode", return_value=mock_custom):
+            # Load the mode - should raise error for missing size_preference
+            with pytest.raises(ValueError, match="Missing size_preference in custom mode"):
+                service.set_mode("test_missing_pref")
+
+    def test_list_modes_missing_size_preference_raises_error(
+        self, service: ModelModeService, temp_db: Path
+    ):
+        """Test that list_modes raises error for missing size_preference."""
+        from unittest.mock import patch
+
+        # Mock the database to return a custom mode with missing size_preference
+        mock_custom = {
+            "id": "test_list_missing",
+            "name": "Test List",
+            "description": "",
+            "agent_models": {},
+            "agent_temperatures": {},
+            "vram_strategy": "adaptive",
+            "is_experimental": False,
+            # size_preference is missing (None)
+        }
+
+        with patch.object(service._db, "list_custom_modes", return_value=[mock_custom]):
+            # list_modes should raise error for missing size_preference
+            with pytest.raises(ValueError, match="Missing size_preference in custom mode"):
+                service.list_modes()
 
     def test_get_temperature_from_mode(self, service: ModelModeService):
         """Test getting temperature when mode has explicit value."""
@@ -394,7 +438,7 @@ class TestModelModeServiceAdditionalCoverage:
         score_id = service.record_generation(
             project_id="test-proj",
             agent_role="writer",
-            model_id="test-model",
+            model_id="huihui_ai/dolphin3-abliterated:8b",
             chapter_id="ch-1",
         )
         assert score_id > 0
@@ -435,7 +479,7 @@ class TestPendingRecommendations:
         """Create mock settings."""
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
-        mock.get_model_for_agent.return_value = "test-model:8b"
+        mock.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
         mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
 
         def _get_temp(role: str) -> float:
@@ -463,8 +507,8 @@ class TestPendingRecommendations:
         # Insert a recommendation directly into the database
         service._db.record_recommendation(
             recommendation_type="model_swap",
-            current_value="small-model:3b",
-            suggested_value="large-model:8b",
+            current_value="huihui_ai/dolphin3-abliterated:8b",
+            suggested_value="vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
             affected_role="writer",
             reason="Better quality observed",
             confidence=0.85,
@@ -476,8 +520,8 @@ class TestPendingRecommendations:
         assert len(recs) == 1
         rec = recs[0]
         assert rec.recommendation_type == RecommendationType.MODEL_SWAP
-        assert rec.current_value == "small-model:3b"
-        assert rec.suggested_value == "large-model:8b"
+        assert rec.current_value == "huihui_ai/dolphin3-abliterated:8b"
+        assert rec.suggested_value == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
         assert rec.affected_role == "writer"
         assert rec.confidence == 0.85
 
@@ -592,7 +636,7 @@ class TestVramStrategyIntegration:
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
         mock.vram_strategy = "adaptive"
-        mock.get_model_for_agent.return_value = "test-model:8b"
+        mock.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
         mock.agent_temperatures = {"writer": 0.9}
 
         def _get_temp(role: str) -> float:
@@ -634,7 +678,7 @@ class TestVramStrategyIntegration:
 
         # prepare_model should use "parallel" from settings
         with patch.object(service, "_unload_all_except") as mock_unload:
-            service.prepare_model("test-model:8b")
+            service.prepare_model("huihui_ai/dolphin3-abliterated:8b")
             # PARALLEL strategy should NOT call unload
             mock_unload.assert_not_called()
 
@@ -645,15 +689,13 @@ class TestVramStrategyIntegration:
         service.settings.vram_strategy = "sequential"
 
         with patch.object(service, "_unload_all_except") as mock_unload:
-            service.prepare_model("test-model:8b")
-            mock_unload.assert_called_once_with("test-model:8b")
+            service.prepare_model("huihui_ai/dolphin3-abliterated:8b")
+            mock_unload.assert_called_once_with("huihui_ai/dolphin3-abliterated:8b")
 
-    def test_prepare_model_with_invalid_strategy_falls_back(self, service: ModelModeService):
-        """Invalid vram_strategy should fall back to ADAPTIVE."""
-        from unittest.mock import patch
-
+    def test_prepare_model_with_invalid_strategy_raises_error(self, service: ModelModeService):
+        """Invalid vram_strategy should raise ValueError."""
         service.settings.vram_strategy = "invalid_strategy"
 
-        # Should not raise, falls back to ADAPTIVE
-        with patch("src.services.model_mode_service.get_available_vram", return_value=48):
-            service.prepare_model("test-model:8b")
+        # Should raise error for invalid strategy
+        with pytest.raises(ValueError, match="Invalid vram_strategy 'invalid_strategy'"):
+            service.prepare_model("huihui_ai/dolphin3-abliterated:8b")
