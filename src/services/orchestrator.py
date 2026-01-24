@@ -734,8 +734,13 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         Run the full write-edit-continuity pipeline for a single chapter, yielding workflow events during processing.
 
         Detailed behavior:
-        - Yields WorkflowEvent objects at key stages (writer start/complete, editor start/complete, continuity checks, progress updates, and final completion) to report progress to the UI.
-        - Writes the chapter, applies editor passes, performs continuity checks and iterative revisions, extracts new facts and character-arc updates, marks plot points completed, updates story state, autosaves, and optionally reports learning/training metrics via the configured mode service.
+        - Yields WorkflowEvent objects at key stages to report progress to the UI.
+        - Writes the chapter and applies editor passes.
+        - Performs continuity checks and iterative revisions.
+        - Extracts new facts and character-arc updates.
+        - Marks plot points as completed.
+        - Updates story state and autosaves.
+        - Optionally reports learning/training metrics via the configured mode service.
 
         Parameters:
             chapter_number (int): The chapter number to process (must exist in the current story structure).

@@ -1375,7 +1375,16 @@ class WritePage:
         """
         Regenerate the currently selected chapter using the text entered in the feedback input.
 
-        Validates that a project, a selected chapter, and non-empty feedback exist; records the regeneration as a learning signal, prevents concurrent generation, shows progress and status updates, supports user cancellation, saves the updated chapter and version history, refreshes the writing UI, clears the feedback input on success, and notifies the user of success, cancellation, or errors.
+        This method:
+        - Validates that a project, a selected chapter, and non-empty feedback exist
+        - Records the regeneration as a learning signal
+        - Prevents concurrent generation
+        - Shows progress and status updates
+        - Supports user cancellation
+        - Saves the updated chapter and version history
+        - Refreshes the writing UI
+        - Clears the feedback input on success
+        - Notifies the user of success, cancellation, or errors
         """
         if not self._regenerate_feedback_input or not self._regenerate_feedback_input.value:
             self._notify("Please enter feedback before regenerating", type="warning")

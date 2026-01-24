@@ -666,7 +666,11 @@ class SettingsPage:
         """
         Persist current UI-configured settings to the application's settings store and record an undo snapshot.
 
-        Reads values from the page's UI controls, applies them to the settings object, validates and saves the settings, then records an undo action containing before/after snapshots for undo/redo. On success, displays a positive notification; on validation error or other failure, logs the issue and displays a negative notification.
+        Read values from the page's UI controls and apply them to the settings object.
+        Validate and save the updated settings.
+        Record an undo action that contains before and after snapshots for undo and redo.
+        On success, display a positive notification.
+        On validation error or any other failure, log the issue and display a negative notification.
         """
         from src.ui.state import ActionType, UndoAction
 
@@ -817,14 +821,25 @@ class SettingsPage:
         Restore the SettingsPage state from a snapshot and persist the restored values.
 
         Parameters:
-            snapshot (dict[str, Any]): Snapshot containing saved settings values. Expected keys include core settings such as
-                `ollama_url`, `default_model`, `use_per_agent_models`, `agent_models`, `agent_temperatures`,
-                `interaction_mode`, `chapters_between_checkpoints`, `max_revision_iterations`, `context_size`,
-                `max_tokens`, `previous_chapter_context_chars`, `chapter_analysis_chars`, `use_mode_system`,
-                `current_mode`, and learning settings (`learning_autonomy`, `learning_triggers`,
-                `learning_periodic_interval`, `learning_min_samples`, `learning_confidence_threshold`).
-                Optional keys handled when present: `full_text_preview_chars`, `vram_strategy`, and the
-                `world_gen_*_min` / `world_gen_*_max` group for world generation settings.
+            snapshot (dict[str, Any]): Snapshot containing saved settings values.
+
+                Required keys:
+                - Core settings: `ollama_url`, `default_model`, `use_per_agent_models`,
+                  `agent_models`, `agent_temperatures`
+                - Workflow: `interaction_mode`, `chapters_between_checkpoints`,
+                  `max_revision_iterations`
+                - Context: `context_size`, `max_tokens`, `previous_chapter_context_chars`,
+                  `chapter_analysis_chars`
+                - Mode: `use_mode_system`, `current_mode`
+                - Learning: `learning_autonomy`, `learning_triggers`,
+                  `learning_periodic_interval`, `learning_min_samples`,
+                  `learning_confidence_threshold`
+
+                Optional keys:
+                - `full_text_preview_chars`, `vram_strategy`
+                - World generation: `world_gen_*_min` / `world_gen_*_max` pairs for
+                  `characters`, `locations`, `factions`, `items`, `concepts`,
+                  `relationships`
 
         Behavior:
             Applies values from `snapshot` to the persistent settings, saves the settings, updates UI controls
