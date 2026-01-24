@@ -137,7 +137,12 @@ class TestModelModeServiceTierScore:
 
     @pytest.fixture
     def service(self) -> ModelModeService:
-        """Create a ModelModeService with mocked dependencies."""
+        """
+        Create a ModelModeService configured with default Settings and a patched ModeDatabase.
+        
+        Returns:
+            service (ModelModeService): Instance initialized with a default Settings object and ModeDatabase patched to prevent real database access.
+        """
         settings = Settings()
         with patch("src.services.model_mode_service.ModeDatabase"):
             return ModelModeService(settings)
@@ -175,7 +180,12 @@ class TestModelModeServiceModelSelection:
 
     @pytest.fixture
     def service(self) -> ModelModeService:
-        """Create a ModelModeService with mocked dependencies."""
+        """
+        Create a ModelModeService configured with default Settings and a patched ModeDatabase.
+        
+        Returns:
+            service (ModelModeService): Instance initialized with a default Settings object and ModeDatabase patched to prevent real database access.
+        """
         settings = Settings()
         with patch("src.services.model_mode_service.ModeDatabase"):
             return ModelModeService(settings)
@@ -273,18 +283,46 @@ class TestModelModeServiceAdditionalCoverage:
 
     @pytest.fixture
     def temp_db(self, tmp_path: Path) -> Path:
-        """Create a temporary database file using pytest's tmp_path fixture."""
+        """
+        Create a Path for a temporary test database file named "test_mode.db".
+        
+        Returns:
+            Path: Path to the temporary database file within the provided `tmp_path`.
+        """
         return tmp_path / "test_mode.db"
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
-        """Create mock settings."""
+        """
+        Create a MagicMock of Settings preconfigured for tests.
+        
+        The mock exposes:
+        - ollama_url set to "http://localhost:11434".
+        - get_model_for_agent() returning "test-model:8b".
+        - agent_temperatures mapping {"writer": 0.9, "editor": 0.6"}.
+        - get_temperature_for_agent(role) returning the temperature as a float for known roles and raising ValueError("Unknown agent role: {role}") for unknown roles.
+        
+        Returns:
+            MagicMock: A mock object conforming to the Settings spec with the above behaviors.
+        """
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
         mock.get_model_for_agent.return_value = "test-model:8b"
         mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
 
         def _get_temp(role: str) -> float:
+            """
+            Retrieve the temperature value for a given agent role from the mock configuration.
+            
+            Parameters:
+                role (str): Agent role name to look up in mock.agent_temperatures.
+            
+            Returns:
+                float: Temperature value associated with the specified role.
+            
+            Raises:
+                ValueError: If the provided role is not present in mock.agent_temperatures.
+            """
             if role not in mock.agent_temperatures:
                 raise ValueError(f"Unknown agent role: {role}")
             return float(mock.agent_temperatures[role])
@@ -294,7 +332,16 @@ class TestModelModeServiceAdditionalCoverage:
 
     @pytest.fixture
     def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
-        """Create a ModelModeService with mocked dependencies."""
+        """
+        Create a ModelModeService configured with mocked settings and a temporary database path.
+        
+        Parameters:
+            mock_settings (MagicMock): Mocked Settings object used to configure the service.
+            temp_db (Path): Filesystem path to a temporary database used by the service.
+        
+        Returns:
+            ModelModeService: An instance of ModelModeService initialized with the provided mocks.
+        """
         return ModelModeService(mock_settings, db_path=temp_db)
 
     def test_set_mode_invalid_size_preference_fallback(
@@ -432,13 +479,36 @@ class TestPendingRecommendations:
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
-        """Create mock settings."""
+        """
+        Create a MagicMock of Settings preconfigured for tests.
+        
+        The mock exposes:
+        - ollama_url set to "http://localhost:11434".
+        - get_model_for_agent() returning "test-model:8b".
+        - agent_temperatures mapping {"writer": 0.9, "editor": 0.6"}.
+        - get_temperature_for_agent(role) returning the temperature as a float for known roles and raising ValueError("Unknown agent role: {role}") for unknown roles.
+        
+        Returns:
+            MagicMock: A mock object conforming to the Settings spec with the above behaviors.
+        """
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
         mock.get_model_for_agent.return_value = "test-model:8b"
         mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
 
         def _get_temp(role: str) -> float:
+            """
+            Retrieve the temperature value for a given agent role from the mock configuration.
+            
+            Parameters:
+                role (str): Agent role name to look up in mock.agent_temperatures.
+            
+            Returns:
+                float: Temperature value associated with the specified role.
+            
+            Raises:
+                ValueError: If the provided role is not present in mock.agent_temperatures.
+            """
             if role not in mock.agent_temperatures:
                 raise ValueError(f"Unknown agent role: {role}")
             return float(mock.agent_temperatures[role])
@@ -448,7 +518,16 @@ class TestPendingRecommendations:
 
     @pytest.fixture
     def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
-        """Create a ModelModeService with mocked dependencies."""
+        """
+        Create a ModelModeService configured with mocked settings and a temporary database path.
+        
+        Parameters:
+            mock_settings (MagicMock): Mocked Settings object used to configure the service.
+            temp_db (Path): Filesystem path to a temporary database used by the service.
+        
+        Returns:
+            ModelModeService: An instance of ModelModeService initialized with the provided mocks.
+        """
         return ModelModeService(mock_settings, db_path=temp_db)
 
     def test_get_pending_recommendations_empty(self, service: ModelModeService):
@@ -492,7 +571,11 @@ class TestPendingRecommendations:
     def test_get_pending_recommendations_handles_invalid_evidence_json(
         self, service: ModelModeService
     ):
-        """Should handle invalid evidence_json gracefully."""
+        """
+        Verifies that get_pending_recommendations converts rows with invalid JSON in `evidence_json` into recommendations with `evidence` set to None.
+        
+        Patches the database to return a single row whose `evidence_json` is not valid JSON and asserts the service still returns one recommendation object with `evidence is None`.
+        """
         from datetime import datetime
 
         # Mock a row with invalid JSON in evidence_json
@@ -583,12 +666,32 @@ class TestVramStrategyIntegration:
 
     @pytest.fixture
     def temp_db(self, tmp_path: Path) -> Path:
-        """Create a temporary database file."""
+        """
+        Create a temporary database path for tests.
+        
+        Parameters:
+        	tmp_path (Path): Base temporary directory provided by pytest.
+        
+        Returns:
+        	db_path (Path): Path to a temporary database file named "test_vram.db" inside `tmp_path`.
+        """
         return tmp_path / "test_vram.db"
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
-        """Create mock settings."""
+        """
+        Create a Settings-like MagicMock preconfigured for tests.
+        
+        The mock uses Settings as its spec and includes:
+        - ollama_url set to "http://localhost:11434"
+        - vram_strategy set to "adaptive"
+        - get_model_for_agent returning "test-model:8b"
+        - agent_temperatures initialized to {"writer": 0.9}
+        - get_temperature_for_agent that returns the configured temperature as a float for known roles and raises ValueError("Unknown agent role: {role}") for unknown roles
+        
+        Returns:
+            MagicMock: A configured MagicMock instance that conforms to the Settings spec.
+        """
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
         mock.vram_strategy = "adaptive"
@@ -596,6 +699,18 @@ class TestVramStrategyIntegration:
         mock.agent_temperatures = {"writer": 0.9}
 
         def _get_temp(role: str) -> float:
+            """
+            Retrieve the temperature value for a given agent role from the mock configuration.
+            
+            Parameters:
+                role (str): Agent role name to look up in mock.agent_temperatures.
+            
+            Returns:
+                float: Temperature value associated with the specified role.
+            
+            Raises:
+                ValueError: If the provided role is not present in mock.agent_temperatures.
+            """
             if role not in mock.agent_temperatures:
                 raise ValueError(f"Unknown agent role: {role}")
             return float(mock.agent_temperatures[role])
@@ -605,7 +720,12 @@ class TestVramStrategyIntegration:
 
     @pytest.fixture
     def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
-        """Create a ModelModeService."""
+        """
+        Create a ModelModeService configured with the provided settings and database path.
+        
+        Returns:
+            ModelModeService: Instance configured with `mock_settings` and `db_path=temp_db`.
+        """
         return ModelModeService(mock_settings, db_path=temp_db)
 
     def test_set_mode_syncs_vram_strategy_to_settings(self, service: ModelModeService):

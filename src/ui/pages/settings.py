@@ -309,7 +309,15 @@ class SettingsPage:
                 )
 
     def _build_context_section(self) -> None:
-        """Build context limit settings."""
+        """
+        Create the "Memory & Context" settings card with inputs for context-related limits.
+        
+        Constructs a UI card containing number inputs for context window (tokens), max output tokens,
+        previous chapter memory (chars), analysis context (chars), and editor preview (chars).
+        Stores the input component references on self as:
+        `_context_size_input`, `_max_tokens_input`, `_prev_chapter_chars`,
+        `_chapter_analysis_chars`, and `_full_text_preview_chars`.
+        """
         with ui.card().classes("w-full h-full"):
             self._section_header(
                 "Memory & Context",
@@ -655,7 +663,11 @@ class SettingsPage:
             ui.notify(f"Connection failed: {health.message}", type="negative")
 
     def _save_settings(self) -> None:
-        """Save all settings."""
+        """
+        Persist current UI-configured settings to the application's settings store and record an undo snapshot.
+        
+        Reads values from the page's UI controls, applies them to the settings object, validates and saves the settings, then records an undo action containing before/after snapshots for undo/redo. On success, displays a positive notification; on validation error or other failure, logs the issue and displays a negative notification.
+        """
         from src.ui.state import ActionType, UndoAction
 
         try:
@@ -751,10 +763,17 @@ class SettingsPage:
             ui.notify(f"Error saving: {e}", type="negative")
 
     def _capture_settings_snapshot(self) -> dict[str, Any]:
-        """Capture current settings state for undo/redo.
-
+        """
+        Create a serializable snapshot of current settings suitable for undo/redo operations.
+        
         Returns:
-            Dictionary containing all current settings values.
+            snapshot (dict[str, Any]): A dictionary snapshot of settings including:
+                - Core connection and model: `ollama_url`, `default_model`, `use_per_agent_models`, `agent_models`, `agent_temperatures`
+                - Interaction and workflow: `interaction_mode`, `chapters_between_checkpoints`, `max_revision_iterations`
+                - Context and generation: `context_size`, `max_tokens`, `previous_chapter_context_chars`, `chapter_analysis_chars`, `full_text_preview_chars`
+                - Mode and VRAM: `use_mode_system`, `current_mode`, `vram_strategy`
+                - Adaptive learning: `learning_autonomy`, `learning_triggers`, `learning_periodic_interval`, `learning_min_samples`, `learning_confidence_threshold`
+                - World generation counts: `world_gen_*_min` and `world_gen_*_max` for `characters`, `locations`, `factions`, `items`, `concepts`, and `relationships`
         """
         return {
             "ollama_url": self.settings.ollama_url,
@@ -794,10 +813,22 @@ class SettingsPage:
         }
 
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
-        """Restore settings from a snapshot.
-
-        Args:
-            snapshot: Settings snapshot to restore.
+        """
+        Restore the SettingsPage state from a snapshot and persist the restored values.
+        
+        Parameters:
+            snapshot (dict[str, Any]): Snapshot containing saved settings values. Expected keys include core settings such as
+                `ollama_url`, `default_model`, `use_per_agent_models`, `agent_models`, `agent_temperatures`,
+                `interaction_mode`, `chapters_between_checkpoints`, `max_revision_iterations`, `context_size`,
+                `max_tokens`, `previous_chapter_context_chars`, `chapter_analysis_chars`, `use_mode_system`,
+                `current_mode`, and learning settings (`learning_autonomy`, `learning_triggers`,
+                `learning_periodic_interval`, `learning_min_samples`, `learning_confidence_threshold`).
+                Optional keys handled when present: `full_text_preview_chars`, `vram_strategy`, and the
+                `world_gen_*_min` / `world_gen_*_max` group for world generation settings.
+        
+        Behavior:
+            Applies values from `snapshot` to the persistent settings, saves the settings, updates UI controls
+            to reflect the restored values, and shows an informational notification indicating the restore completed.
         """
         self.settings.ollama_url = snapshot["ollama_url"]
         self.settings.default_model = snapshot["default_model"]

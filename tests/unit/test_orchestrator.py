@@ -2768,7 +2768,17 @@ class TestOrchestratorLearningIntegration:
 
     @pytest.fixture
     def mock_mode_service(self):
-        """Create a mock ModelModeService."""
+        """
+        Create a MagicMock that simulates a ModeService for tests.
+        
+        The mock is pre-configured so `record_generation` returns a fixed score id (123), and
+        `update_performance_metrics` and `on_chapter_complete` return `None`. Use this mock
+        to verify interactions with the learning/mode service without invoking real I/O.
+        
+        Returns:
+            MagicMock: A mock object implementing `record_generation`, `update_performance_metrics`,
+            and `on_chapter_complete` with the behaviors described above.
+        """
         mock = MagicMock()
         mock.record_generation.return_value = 123  # score_id
         mock.update_performance_metrics.return_value = None
@@ -2777,7 +2787,15 @@ class TestOrchestratorLearningIntegration:
 
     @pytest.fixture
     def orchestrator_with_mode_service(self, mock_mode_service):
-        """Create orchestrator with mode service for learning tests."""
+        """
+        Create a StoryOrchestrator configured with a mocked mode service and a preloaded StoryState for learning-integration tests.
+        
+        Parameters:
+            mock_mode_service (Mock): A mock implementation of the mode/learning service to inject into the orchestrator.
+        
+        Returns:
+            orchestrator (StoryOrchestrator): An orchestrator instance whose story_state is set to a writing test story and whose writer, editor, continuity, and validator agent methods are replaced with mocks.
+        """
         orchestrator = StoryOrchestrator(mode_service=mock_mode_service)
         orchestrator.story_state = StoryState(
             id="test-story",

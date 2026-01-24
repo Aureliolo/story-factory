@@ -57,12 +57,13 @@ class StoryOrchestrator:
         model_override: str | None = None,  # Force specific model for all agents
         mode_service: Any | None = None,  # ModelModeService for learning hooks
     ):
-        """Initialize the story orchestrator.
-
-        Args:
-            settings: Application settings. If None, loads default settings.
-            model_override: Force specific model for all agents. If None, uses per-agent settings.
-            mode_service: Optional ModelModeService for adaptive learning hooks.
+        """
+        Create a StoryOrchestrator and initialize agents, persistent state, and progress tracking.
+        
+        Parameters:
+            settings (Settings | None): Application settings; when None the default settings are loaded.
+            model_override (str | None): Model identifier to force for all agents; when None agents use their configured models.
+            mode_service (Any | None): Optional ModelModeService instance used for adaptive learning hooks and performance tracking.
         """
         self.settings = settings or Settings.load()
         self.model_override = model_override
@@ -729,11 +730,19 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
     def write_chapter(
         self, chapter_number: int, feedback: str | None = None
     ) -> Generator[WorkflowEvent, None, str]:
-        """Write a single chapter with the full pipeline.
-
-        Args:
-            chapter_number: The chapter number to write.
-            feedback: Optional user feedback to incorporate into the writing.
+        """
+        Run the full write–edit–continuity pipeline for a single chapter, yielding workflow events during processing.
+        
+        Detailed behavior:
+        - Yields WorkflowEvent objects at key stages (writer start/complete, editor start/complete, continuity checks, progress updates, and final completion) to report progress to the UI.
+        - Writes the chapter, applies editor passes, performs continuity checks and iterative revisions, extracts new facts and character-arc updates, marks plot points completed, updates story state, autosaves, and optionally reports learning/training metrics via the configured mode service.
+        
+        Parameters:
+            chapter_number (int): The chapter number to process (must exist in the current story structure).
+            feedback (str | None): Optional feedback or revision guidance to incorporate into the initial generation.
+        
+        Returns:
+            chapter_content (str): The final content of the chapter after editing and revisions.
         """
         if not self.story_state:
             raise ValueError("No story state. Call create_new_story() first.")
