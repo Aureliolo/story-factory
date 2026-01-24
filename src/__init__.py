@@ -1,1 +1,1 @@
-# Story Factory source package
+"""Story Factory source package."""

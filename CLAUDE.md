@@ -22,6 +22,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **No bypassing CI.** Never use `git push --no-verify` or modify test coverage thresholds to make tests pass. If tests fail, fix the actual issue. Pre-push hooks exist to catch problems before they reach CI.
 
+**No skipping coverage.** Never exclude files from coverage requirements to make tests pass. Write proper tests to achieve 100% coverage. Acceptable exclusions are: (1) `# pragma: no cover` on pure UI widget creation code (code that only creates GUI widgets with no business logic), and (2) standalone utility scripts in `scripts/` that are not part of the main application. If coverage is failing for core application code, write tests for the uncovered code.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.
@@ -107,6 +109,12 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - **Python**: 3.14+
 - **Type hints**: Encouraged but not enforced (gradual adoption)
 - **Imports**: Auto-sorted by Ruff
+- **Dependency parsing**: Use `packaging.requirements.Requirement` instead of regex - handles all version specifiers (`==`, `>=`, `~=`, etc.) correctly.
+
+## Cross-Platform Gotchas
+
+- `subprocess.CREATE_NO_WINDOW` is Windows-only - use `getattr(subprocess, "CREATE_NO_WINDOW", 0)` for cross-platform code
+- Pre-commit hooks run only on staged files locally, but pre-commit.ci runs on full repo - use `pass_filenames: false` for tools that should check entire directories
 
 ## After Making Changes
 
@@ -135,6 +143,10 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - Shared fixtures in `tests/conftest.py`
 - **Always run tests in background** to avoid blocking on long test runs when working on todo lists
 - **Never run full test suite scans** - only run tests for specific files when needed (e.g., `pytest tests/unit/test_settings.py`). Full test runs take too long and should only be done by CI.
+
+**Test patterns:**
+- Use `threading.Event` instead of `time.sleep()` for thread synchronization in tests
+- When testing Windows-specific code paths, patch `sys.platform` to `"win32"`.
 
 **Test mocking gotchas:**
 - Mock models must use a name from `RECOMMENDED_MODELS` (e.g., `huihui_ai/dolphin3-abliterated:8b`) - fake names like `test-model:latest` have no role tags and cause `ValueError: No model tagged for role`

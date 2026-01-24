@@ -91,7 +91,7 @@ Areas that need help:
 
 4. **Install dependencies**:
    ```bash
-   pip install -r requirements.txt
+   pip install -e ".[all]"
    ```
 
 5. **Copy settings**:
