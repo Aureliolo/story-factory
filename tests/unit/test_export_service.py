@@ -59,7 +59,7 @@ class TestExportServiceSaveToFile:
         # Lines 826-828: Unsupported export format error
         filepath = tmp_path / "test.xyz"
 
-        with pytest.raises(ValueError, match="format.*must be one of"):
+        with pytest.raises(ValueError, match=r"format.*must be one of"):
             export_service.save_to_file(sample_state, "xyz", filepath)
 
     def test_save_to_file_reraises_value_error(self, export_service, sample_state, tmp_path):
@@ -68,7 +68,7 @@ class TestExportServiceSaveToFile:
         # Test with a format that fails validation
         filepath = tmp_path / "test.txt"
 
-        with pytest.raises(ValueError, match="format.*must be one of"):
+        with pytest.raises(ValueError, match=r"format.*must be one of"):
             export_service.save_to_file(sample_state, "invalid_format", filepath)
 
     def test_save_to_file_logs_error_on_unsupported_format(

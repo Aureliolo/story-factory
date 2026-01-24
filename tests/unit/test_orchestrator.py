@@ -733,7 +733,7 @@ class TestInterviewCompletion:
             orchestrator.interviewer, "extract_brief", MagicMock(return_value=mock_brief)
         )
 
-        response, is_complete = orchestrator.process_interview_response("I want a noir mystery")
+        _response, is_complete = orchestrator.process_interview_response("I want a noir mystery")
 
         assert is_complete is True
         assert orchestrator.story_state is not None

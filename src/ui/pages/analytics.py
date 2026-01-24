@@ -815,4 +815,4 @@ class AnalyticsPage:
 
         except Exception as e:
             logger.error(f"Failed to export CSV: {e}", exc_info=True)
-            ui.notify(f"Export failed: {str(e)}", type="negative")
+            ui.notify(f"Export failed: {e!s}", type="negative")

@@ -44,11 +44,14 @@ class WritePage:
     """
 
     def __init__(self, state: AppState, services: ServiceContainer):
-        """Initialize write page.
+        """
+        Create a WritePage instance and initialize its UI references, application state, and service access.
 
-        Args:
-            state: Application state.
-            services: Service container.
+        Initializes internal references for UI components to None and sets up a background task tracker to hold asyncio.Task objects (prevents silent task garbage collection).
+
+        Parameters:
+            state: Application state used by the page to read and mutate current project and UI state.
+            services: Service container providing access to story, world, project, export, settings, and other application services.
         """
         self.state = state
         self.services = services
@@ -68,13 +71,20 @@ class WritePage:
         self._scene_list_container: ui.column | None = None  # Container for scene list
         self._generation_status: GenerationStatus | None = None
         self._world_overview_container: ui.column | None = None  # Container for world overview
+        self._background_tasks: set[asyncio.Task[Any]] = set()  # Prevent task GC
 
     def _notify(
         self,
         message: str,
         type: Literal["positive", "negative", "warning", "info", "ongoing"] = "info",
     ) -> None:
-        """Show notification safely from background tasks."""
+        """
+        Display a UI notification and fall back to logging if the notification cannot be shown.
+
+        Parameters:
+            message (str): The message text to display in the notification.
+            type (Literal["positive", "negative", "warning", "info", "ongoing"]): Notification style; defaults to "info".
+        """
         if self._client:
             with self._client:
                 ui.notify(message, type=type)
@@ -148,7 +158,11 @@ class WritePage:
                 self._build_reviews_section()
 
     def _build_interview_section(self) -> None:
-        """Build the interview chat section."""
+        """
+        Builds the Interview section of the UI, including the status badge, chat component, and action buttons.
+
+        This constructs and configures the chat UI used for conducting or continuing the interview, loads any existing interview history into the chat, and when no history is present starts a background task to begin the interview. It also creates the Finalize Interview and Build Story Structure buttons and updates their visibility based on interview and project state. Side effects: mutates UI component attributes on the instance (e.g., `_chat`, `_finalize_btn`, `_build_structure_btn`) and registers background tasks in `self._background_tasks`.
+        """
         # Status indicator
         status = self.state.project.status if self.state.project else "unknown"
         color = get_status_color(status)
@@ -178,7 +192,9 @@ class WritePage:
             self._chat.set_messages(self.state.interview_history)
         elif not self.state.interview_complete:
             # Start interview if fresh
-            asyncio.create_task(self._start_interview())
+            task = asyncio.create_task(self._start_interview())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
         # Finalize button - right-aligned
         with ui.row().classes("w-full justify-end gap-2 mt-2"):

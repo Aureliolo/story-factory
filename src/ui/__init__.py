@@ -12,7 +12,7 @@ from .app import StoryFactoryApp, create_app
 from .state import AppState
 
 __all__ = [
+    "AppState",
     "StoryFactoryApp",
     "create_app",
-    "AppState",
 ]

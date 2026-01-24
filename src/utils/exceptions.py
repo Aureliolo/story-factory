@@ -8,6 +8,7 @@ Exception Hierarchy:
     │   └── LLMGenerationError (generation failures after retries)
     ├── ValidationError (validation failures)
     │   └── ResponseValidationError (AI response validation)
+    ├── ConfigError (configuration parsing/validation failures)
     ├── ExportError (export/file related errors)
     └── WorldGenerationError (world entity generation failures)
 
@@ -117,6 +118,16 @@ class SuggestionError(StoryFactoryError):
 
     This indicates a failure to generate project name suggestions,
     writing prompts, or other AI-assisted suggestions.
+    """
+
+    pass
+
+
+class ConfigError(StoryFactoryError):
+    """Raised when configuration parsing or validation fails.
+
+    This indicates issues with pyproject.toml, settings files,
+    or other configuration that cannot be loaded or is invalid.
     """
 
     pass

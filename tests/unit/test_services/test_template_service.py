@@ -315,7 +315,7 @@ class TestTemplateService:
         service = TemplateService(tmp_settings)
 
         export_path = tmp_path / "exported.txt"
-        with pytest.raises(ValueError, match="must be a .json file"):
+        with pytest.raises(ValueError, match=r"must be a \.json file"):
             service.export_template("mystery-detective", export_path)
 
     def test_export_nonexistent_template(self, tmp_settings, monkeypatch, tmp_path):

@@ -12,7 +12,7 @@ from .base import BaseAgent
 logger = logging.getLogger(__name__)
 
 # Re-export exception for backward compatibility
-__all__ = ["ValidatorAgent", "ResponseValidationError", "validate_or_raise"]
+__all__ = ["ResponseValidationError", "ValidatorAgent", "validate_or_raise"]
 
 
 VALIDATOR_SYSTEM_PROMPT = """You are a response validator. Your ONLY job is to answer TRUE or FALSE.

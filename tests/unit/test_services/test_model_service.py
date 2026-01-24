@@ -266,7 +266,7 @@ class TestModelServiceTestModel:
             mock_client.return_value = mock_instance
             mock_instance.generate.side_effect = ConnectionError("Model not found")
 
-            success, message = model_service.test_model("test-model")
+            success, _message = model_service.test_model("test-model")
 
             assert success is False
 

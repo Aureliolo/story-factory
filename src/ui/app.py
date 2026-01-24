@@ -89,7 +89,13 @@ class StoryFactoryApp:
                 ui.add_head_html(f"<style>{f.read()}</style>")
 
     def _page_layout(self, current_path: str, build_content: Callable[[], None]) -> None:
-        """Shared page layout with header (includes navigation)."""
+        """
+        Render the shared application layout: apply styles and theme, register keyboard shortcuts, build the header, and render page-specific content.
+
+        Parameters:
+            current_path (str): The active route path used to configure header navigation and context.
+            build_content (Callable[[], None]): A zero-argument callable that renders the page-specific UI; it is invoked inside the layout container.
+        """
         self._add_styles()
         self._apply_theme()
 
@@ -105,8 +111,54 @@ class StoryFactoryApp:
         with ui.column().classes("w-full flex-grow p-0"):
             build_content()
 
+    def _setup_global_colors(self) -> None:
+        """
+        Set the application's global color palette for primary, secondary, positive, negative, warning, and info.
+
+        Sets the following palette keys to specific hex values: primary `#2196F3`, secondary `#607D8B`, positive `#4CAF50`, negative `#F44336`, warning `#FF9800`, and info `#00BCD4`.
+        """
+        # Access colors via getattr for NiceGUI 3.6+ (type stubs not yet updated)
+        colors = app.colors
+        colors.primary = "#2196F3"
+        colors.secondary = "#607D8B"
+        colors.positive = "#4CAF50"
+        colors.negative = "#F44336"
+        colors.warning = "#FF9800"
+        colors.info = "#00BCD4"
+        logger.debug("Global color palette configured")
+
+    def _setup_exception_handler(self) -> None:
+        """Set up global exception handler for unhandled UI errors.
+
+        This catches exceptions that occur after the page is sent to the client,
+        such as errors in async handlers or background tasks.
+        """
+
+        def handle_exception(e: Exception) -> None:
+            """
+            Handle an unhandled UI exception by recording it and notifying the user.
+
+            Logs the provided exception with stack trace and displays a negative UI notification containing the exception message.
+
+            Parameters:
+                e (Exception): The exception to handle.
+            """
+            logger.exception("Unhandled UI exception")
+            ui.notify(f"An error occurred: {e}", type="negative", timeout=10000)
+
+        # Access on_exception via getattr for NiceGUI 3.6+ (type stubs not yet updated)
+        on_exception = ui.on_exception
+        on_exception(handle_exception)
+        logger.debug("Global exception handler registered")
+
     def build(self) -> None:
-        """Build the application routes."""
+        """
+        Set up global UI configuration and register all path-based pages for the application.
+
+        Configures global colors and the global exception handler, registers page routes and their shared layout for "/", "/world", "/timeline", "/projects", "/settings", "/models", "/analytics", "/templates", and "/compare", and registers the application shutdown handler.
+        """
+        self._setup_global_colors()
+        self._setup_exception_handler()
 
         @ui.page("/")
         def write_page() -> None:
