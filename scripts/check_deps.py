@@ -18,6 +18,12 @@ import sys
 import tomllib
 from pathlib import Path
 
+from packaging.version import Version
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.utils.exceptions import ConfigError
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,8 +98,8 @@ def get_installed_version(package: str) -> str | None:
                 logger.debug("Found %s version: %s", package, version)
                 return version
         return None
-    except (subprocess.SubprocessError, OSError) as e:
-        logger.debug("Error checking %s: %s", package, e)
+    except (subprocess.SubprocessError, OSError):
+        logger.error("Error checking package %s", package, exc_info=True)
         return None
 
 
@@ -107,7 +113,7 @@ def load_required_deps(pyproject_path: Path) -> dict[str, str]:
         Dict of {normalized_package_name: required_version}
 
     Raises:
-        SystemExit: If pyproject.toml cannot be parsed or is missing required sections.
+        ConfigError: If pyproject.toml cannot be parsed or is missing required sections.
     """
     logger.debug("Loading dependencies from: %s", pyproject_path)
     try:
@@ -115,17 +121,17 @@ def load_required_deps(pyproject_path: Path) -> dict[str, str]:
             data = tomllib.load(f)
     except tomllib.TOMLDecodeError as e:
         logger.error("Invalid TOML in %s: %s", pyproject_path, e)
-        sys.exit(1)
+        raise ConfigError(f"Invalid TOML in {pyproject_path}: {e}") from e
 
     # Validate required sections exist
     if "project" not in data:
         logger.error("Missing [project] section in %s", pyproject_path)
-        sys.exit(1)
+        raise ConfigError(f"Missing [project] section in {pyproject_path}")
 
     project = data["project"]
     if "dependencies" not in project:
         logger.error("Missing [project].dependencies in %s", pyproject_path)
-        sys.exit(1)
+        raise ConfigError(f"Missing [project].dependencies in {pyproject_path}")
 
     deps: dict[str, str] = {}
 
@@ -163,7 +169,8 @@ def check_deps(auto_install: bool = False) -> int:
 
     Returns:
         int: Exit code - 0 if all dependencies are present and up-to-date or
-            installation succeeded, 1 if dependencies are missing/outdated.
+            installation succeeded, 1 if dependencies are missing/outdated or
+            configuration error occurred.
     """
     logger.debug("check_deps called with auto_install=%s", auto_install)
     pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -171,7 +178,11 @@ def check_deps(auto_install: bool = False) -> int:
         logger.error("pyproject.toml not found at %s", pyproject_path)
         return 1
 
-    required = load_required_deps(pyproject_path)
+    try:
+        required = load_required_deps(pyproject_path)
+    except ConfigError:
+        return 1
+
     missing: list[str] = []
     outdated: list[tuple[str, str, str]] = []  # (name, installed, required)
 
@@ -179,7 +190,7 @@ def check_deps(auto_install: bool = False) -> int:
         installed = get_installed_version(package)
         if installed is None:
             missing.append(f"{package}=={required_version}")
-        elif installed != required_version:
+        elif Version(installed) != Version(required_version):
             outdated.append((package, installed, required_version))
 
     if not missing and not outdated:
@@ -243,8 +254,12 @@ def main() -> None:
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("Verbose logging enabled")
 
-    sys.exit(check_deps(auto_install=args.auto_install))
+    logger.info("Running dependency check (auto_install=%s)", args.auto_install)
+    exit_code = check_deps(auto_install=args.auto_install)
+    logger.info("Dependency check completed with exit code %s", exit_code)
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
