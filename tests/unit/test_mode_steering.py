@@ -489,6 +489,31 @@ class TestPendingRecommendations:
             recs = service.get_pending_recommendations()
             assert recs == []
 
+    def test_get_pending_recommendations_handles_invalid_evidence_json(
+        self, service: ModelModeService
+    ):
+        """Should handle invalid evidence_json gracefully."""
+        from datetime import datetime
+
+        # Mock a row with invalid JSON in evidence_json
+        invalid_row = {
+            "id": 99,
+            "timestamp": datetime.now().isoformat(),
+            "recommendation_type": "model_swap",
+            "current_value": "old-model",
+            "suggested_value": "new-model",
+            "affected_role": "writer",
+            "reason": "Test",
+            "confidence": 0.8,
+            "evidence_json": "not-valid-json{",  # Invalid JSON
+            "expected_improvement": None,
+        }
+        with patch.object(service._db, "get_pending_recommendations", return_value=[invalid_row]):
+            recs = service.get_pending_recommendations()
+            # Should still parse the recommendation, just with None evidence
+            assert len(recs) == 1
+            assert recs[0].evidence is None
+
     def test_dismiss_recommendation(self, service: ModelModeService):
         """Should persist dismissal to database."""
         # Insert a recommendation
