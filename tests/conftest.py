@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from memory.story_state import StoryBrief, StoryState
-from memory.world_database import WorldDatabase
-from settings import Settings
+from src.memory.story_state import StoryBrief, StoryState
+from src.memory.world_database import WorldDatabase
+from src.settings import Settings
 
 # Enable NiceGUI testing plugin for component tests
 pytest_plugins = ["nicegui.testing.user_plugin"]
@@ -19,7 +19,7 @@ def cleanup_production_log_handlers():
     """Remove file handlers pointing to the production log after each test.
 
     This fixture runs after each test and removes any file handlers
-    that point to the production log file (logs/story_factory.log).
+    that point to the production log file (output/logs/story_factory.log).
     This ensures tests don't accidentally leave handlers that write to
     the production log, while still allowing logging tests to work.
     """
@@ -51,6 +51,20 @@ def clear_settings_cache_per_test():
     Settings.clear_cache()
     yield
     Settings.clear_cache()
+
+
+@pytest.fixture(autouse=True)
+def clear_prompt_registry_cache_per_test():
+    """Clear prompt registry cache before each test to ensure isolation.
+
+    The prompt registry is a module-level singleton that caches templates.
+    This can cause test pollution if tests modify settings.prompt_templates_dir.
+    """
+    import src.agents.base as base_module
+
+    base_module._prompt_registry = None
+    yield
+    base_module._prompt_registry = None
 
 
 @pytest.fixture(scope="session")
@@ -96,7 +110,7 @@ def orchestrator_temp_dir(tmp_path: Path, monkeypatch):
     """
     stories_dir = tmp_path / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+    monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
     return stories_dir
 
 
@@ -113,7 +127,7 @@ def fast_orchestrator(cached_settings: Settings, orchestrator_temp_dir: Path):
     Returns:
         StoryOrchestrator configured for testing.
     """
-    from workflows.orchestrator import StoryOrchestrator
+    from src.services.orchestrator import StoryOrchestrator
 
     return StoryOrchestrator(settings=cached_settings)
 
@@ -217,7 +231,7 @@ def sample_story_with_chapters(sample_story_state: StoryState) -> StoryState:
     Returns:
         StoryState: The same StoryState instance with two sample characters, three sample chapters, and `status` set to "writing".
     """
-    from memory.story_state import Chapter, Character
+    from src.memory.story_state import Chapter, Character
 
     state = sample_story_state
 

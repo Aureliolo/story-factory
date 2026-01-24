@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from memory.story_state import Chapter, StoryBrief, StoryState
-from services.export_service import ExportService, _validate_export_path
-from settings import STORIES_DIR, Settings
+from src.memory.story_state import Chapter, StoryBrief, StoryState
+from src.services.export_service import ExportService, _validate_export_path
+from src.settings import STORIES_DIR, Settings
 
 
 class TestExportServiceMarkdown:
@@ -643,7 +643,7 @@ class TestExportServiceAdditionalEdgeCases:
 
     def test_format_chapter_header_without_numbers(self):
         """Test chapter header formatting without numbers."""
-        from services.export_service import ExportOptions
+        from src.services.export_service import ExportOptions
 
         settings = Settings()
         service = ExportService(settings)
@@ -656,7 +656,7 @@ class TestExportServiceAdditionalEdgeCases:
 
     def test_to_pdf_double_spaced(self, tmp_path):
         """Test PDF export with double spacing option."""
-        from services.export_service import ExportOptions
+        from src.services.export_service import ExportOptions
 
         settings = Settings()
         service = ExportService(settings)

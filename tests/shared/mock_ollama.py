@@ -342,7 +342,7 @@ def setup_ollama_mocks(monkeypatch):
     # But only if TEST_MODEL is the only installed model (to not interfere
     # with tests that set up specific model selection scenarios)
     try:
-        import settings as settings_module
+        import src.settings as settings_module
 
         original_get_model_tags = settings_module.Settings.get_model_tags
 

@@ -2,8 +2,8 @@
 
 import pytest
 
-from agents.base import BaseAgent, LLMConnectionError
-from utils.error_handling import ErrorBoundary, handle_ollama_errors, retry_with_fallback
+from src.agents.base import BaseAgent, LLMConnectionError
+from src.utils.error_handling import ErrorBoundary, handle_ollama_errors, retry_with_fallback
 
 
 class TestHandleOllamaErrors:

@@ -1,6 +1,6 @@
 """Tests for world quality models."""
 
-from memory.world_quality import (
+from src.memory.world_quality import (
     FactionQualityScores,
     RefinementHistory,
 )
@@ -32,7 +32,7 @@ class TestRefinementHistory:
 
     def test_get_best_entity_returns_none_when_iteration_not_found(self):
         """Test get_best_entity returns None when best_iteration not in list."""
-        from memory.world_quality import IterationRecord
+        from src.memory.world_quality import IterationRecord
 
         history = RefinementHistory(
             entity_type="character",
@@ -59,7 +59,7 @@ class TestRefinementHistory:
 
     def test_get_best_entity_returns_correct_entity(self):
         """Test get_best_entity returns entity from best iteration."""
-        from memory.world_quality import IterationRecord
+        from src.memory.world_quality import IterationRecord
 
         history = RefinementHistory(
             entity_type="character",

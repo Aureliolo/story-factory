@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.model_service import ModelService
-from settings import Settings
+from src.services.model_service import ModelService
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ class TestModelServiceCheckHealth:
 
     def test_returns_healthy_when_ollama_responds(self, model_service):
         """Test health check returns healthy when Ollama is running."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.list.return_value = MagicMock(models=[])
@@ -37,7 +37,7 @@ class TestModelServiceCheckHealth:
 
     def test_returns_unhealthy_on_connection_error(self, model_service):
         """Test health check returns unhealthy on connection failure."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.list.side_effect = ConnectionError("Connection refused")
@@ -53,7 +53,7 @@ class TestModelServiceListInstalled:
 
     def test_returns_empty_list_on_error(self, model_service):
         """Test returns empty list when Ollama fails."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.list.side_effect = ConnectionError("Failed")
@@ -64,7 +64,7 @@ class TestModelServiceListInstalled:
 
     def test_returns_model_ids(self, model_service):
         """Test returns list of model IDs."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -85,7 +85,7 @@ class TestModelServicePullModel:
 
     def test_yields_progress_updates(self, model_service):
         """Test pull_model yields progress dictionaries."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.return_value = [
@@ -103,7 +103,7 @@ class TestModelServicePullModel:
 
     def test_yields_error_on_connection_failure(self, model_service):
         """Test pull_model yields error dict on connection failure."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.side_effect = ConnectionError("Network error")
@@ -120,7 +120,7 @@ class TestModelServicePullModel:
         This is a regression test for the bug where Ollama API returns None
         for total/completed fields during certain phases of the download.
         """
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             # Ollama API can return None for total/completed during certain phases
@@ -147,7 +147,7 @@ class TestModelServiceCheckModelUpdate:
 
     def test_returns_has_update_when_downloading(self, model_service):
         """Test returns has_update=True when model needs download."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.return_value = [
@@ -160,7 +160,7 @@ class TestModelServiceCheckModelUpdate:
 
     def test_returns_no_update_when_up_to_date(self, model_service):
         """Test returns has_update=False when already up to date."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.return_value = [
@@ -173,7 +173,7 @@ class TestModelServiceCheckModelUpdate:
 
     def test_handles_none_total_gracefully(self, model_service):
         """Test handles None value for total without crashing."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             # Simulate Ollama returning None for total (the bug case)
@@ -189,7 +189,7 @@ class TestModelServiceCheckModelUpdate:
 
     def test_handles_missing_keys_gracefully(self, model_service):
         """Test handles missing keys in progress dict."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             # Simulate Ollama returning incomplete progress dict
@@ -205,7 +205,7 @@ class TestModelServiceCheckModelUpdate:
 
     def test_returns_error_on_connection_failure(self, model_service):
         """Test returns error dict on connection failure."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.side_effect = ConnectionError("Network error")
@@ -220,7 +220,7 @@ class TestModelServiceDeleteModel:
 
     def test_returns_true_on_success(self, model_service):
         """Test returns True when deletion succeeds."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -231,7 +231,7 @@ class TestModelServiceDeleteModel:
 
     def test_returns_false_on_error(self, model_service):
         """Test returns False when deletion fails."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.delete.side_effect = ConnectionError("Failed")
@@ -246,7 +246,7 @@ class TestModelServiceTestModel:
 
     def test_returns_success_on_valid_response(self, model_service):
         """Test returns success when model generates response."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             # Ollama returns an object with .response attribute
@@ -261,7 +261,7 @@ class TestModelServiceTestModel:
 
     def test_returns_failure_on_error(self, model_service):
         """Test returns failure when model test fails."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.generate.side_effect = ConnectionError("Model not found")
@@ -276,7 +276,7 @@ class TestModelServiceGetVram:
 
     def test_returns_vram_value(self, model_service):
         """Test returns VRAM value."""
-        with patch("services.model_service.get_available_vram") as mock_vram:
+        with patch("src.services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 24
 
             result = model_service.get_vram()
@@ -285,7 +285,7 @@ class TestModelServiceGetVram:
 
     def test_returns_zero_on_error(self, model_service):
         """Test returns 0 when VRAM detection fails."""
-        with patch("services.model_service.get_available_vram") as mock_vram:
+        with patch("src.services.model_service.get_available_vram") as mock_vram:
             mock_vram.side_effect = Exception("Failed to detect VRAM")
 
             # Should handle gracefully (depends on implementation)
@@ -306,7 +306,7 @@ class TestModelServiceCheckHealthEdgeCases:
         """Test health check handles Ollama ResponseError."""
         import ollama
 
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.list.side_effect = ollama.ResponseError("API error")
@@ -322,7 +322,7 @@ class TestModelServiceListInstalledWithSizes:
 
     def test_returns_models_with_sizes(self, model_service):
         """Test returns dict of model IDs to sizes in GB."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -343,7 +343,7 @@ class TestModelServiceListInstalledWithSizes:
 
     def test_handles_missing_size_attribute(self, model_service):
         """Test handles models without size attribute."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -360,7 +360,7 @@ class TestModelServiceListInstalledWithSizes:
 
     def test_returns_empty_on_error(self, model_service):
         """Test returns empty dict on connection error."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.list.side_effect = ConnectionError("Failed")
@@ -375,7 +375,7 @@ class TestModelServiceListAvailable:
 
     def test_lists_known_and_installed_models(self, model_service):
         """Test returns combined list of known and installed models."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -395,7 +395,7 @@ class TestModelServiceListAvailable:
 
     def test_includes_unknown_installed_models(self, model_service):
         """Test includes installed models not in RECOMMENDED_MODELS."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -417,7 +417,7 @@ class TestModelServiceListAvailable:
 
     def test_matches_variant_models_to_known_base(self, model_service):
         """Test matches variant models (e.g., :latest) to known base models."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -457,7 +457,7 @@ class TestModelServicePullModelEdgeCases:
         """Test pull_model yields error on ResponseError."""
         import ollama
 
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.side_effect = ollama.ResponseError("Model not found")
@@ -469,7 +469,7 @@ class TestModelServicePullModelEdgeCases:
 
     def test_yields_error_on_unexpected_exception(self, model_service):
         """Test pull_model yields error on unexpected exception."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.side_effect = RuntimeError("Unexpected error")
@@ -486,7 +486,7 @@ class TestModelServiceCheckModelUpdateEdgeCases:
 
     def test_returns_no_update_on_success_status(self, model_service):
         """Test returns no update when success status received."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.return_value = [
@@ -502,7 +502,7 @@ class TestModelServiceCheckModelUpdateEdgeCases:
         """Test returns error on ResponseError."""
         import ollama
 
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.pull.side_effect = ollama.ResponseError("API error")
@@ -514,7 +514,7 @@ class TestModelServiceCheckModelUpdateEdgeCases:
 
     def test_returns_no_update_when_loop_completes_without_match(self, model_service):
         """Test returns no update when loop completes without matching status."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             # Return statuses that don't match any of the conditions
@@ -530,7 +530,7 @@ class TestModelServiceCheckModelUpdateEdgeCases:
 
     def test_returns_update_on_downloading_status(self, model_service):
         """Test returns update when 'downloading' status is seen."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             # Simulate actual downloading happening
@@ -553,12 +553,12 @@ class TestModelServiceGetRecommendedModel:
 
     def test_recommends_model_for_high_vram(self, model_service):
         """Test recommends a model when VRAM is available."""
-        with patch("services.model_service.get_available_vram") as mock_vram:
+        with patch("src.services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 24
 
             # Mock installed models with sizes
             with patch(
-                "settings.get_installed_models_with_sizes",
+                "src.settings.get_installed_models_with_sizes",
                 return_value={
                     "large-model:30b": 18.0,
                     "medium-model:12b": 10.0,
@@ -578,12 +578,12 @@ class TestModelServiceGetRecommendedModel:
 
     def test_recommends_model_for_medium_vram(self, model_service):
         """Test recommends appropriate model for medium VRAM."""
-        with patch("services.model_service.get_available_vram") as mock_vram:
+        with patch("src.services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 14
 
             # Mock installed models
             with patch(
-                "settings.get_installed_models_with_sizes",
+                "src.settings.get_installed_models_with_sizes",
                 return_value={
                     "large-model:30b": 18.0,  # Won't fit (18*1.2 = 21.6GB)
                     "medium-model:12b": 10.0,  # Fits (10*1.2 = 12GB)
@@ -603,11 +603,11 @@ class TestModelServiceGetRecommendedModel:
 
     def test_recommends_small_model_for_low_vram(self, model_service):
         """Test recommends small model for low VRAM."""
-        with patch("services.model_service.get_available_vram") as mock_vram:
+        with patch("src.services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 8
 
             with patch(
-                "settings.get_installed_models_with_sizes",
+                "src.settings.get_installed_models_with_sizes",
                 return_value={
                     "medium-model:12b": 10.0,  # Won't fit (10*1.2 = 12GB)
                     "small-model:8b": 5.0,  # Fits (5*1.2 = 6GB)
@@ -625,11 +625,11 @@ class TestModelServiceGetRecommendedModel:
 
     def test_uses_agent_role_for_recommendation(self, model_service):
         """Test uses role-specific recommendation."""
-        with patch("services.model_service.get_available_vram") as mock_vram:
+        with patch("src.services.model_service.get_available_vram") as mock_vram:
             mock_vram.return_value = 24
 
             with patch(
-                "settings.get_installed_models_with_sizes",
+                "src.settings.get_installed_models_with_sizes",
                 return_value={"test-model:8b": 5.0},
             ):
                 # Tag the model for writer role
@@ -646,7 +646,7 @@ class TestModelServiceGetModelsForVram:
     def test_filters_by_vram_requirement(self, model_service):
         """Test returns only models that fit within VRAM."""
         with patch.object(model_service, "list_available") as mock_list:
-            from services.model_service import ModelStatus
+            from src.services.model_service import ModelStatus
 
             mock_list.return_value = [
                 ModelStatus(
@@ -697,7 +697,7 @@ class TestModelServiceTestModelEdgeCases:
 
     def test_returns_failure_on_empty_response(self, model_service):
         """Test returns failure when model returns empty response."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_response = MagicMock()
@@ -713,7 +713,7 @@ class TestModelServiceTestModelEdgeCases:
         """Test returns failure on ResponseError."""
         import ollama
 
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
             mock_instance.generate.side_effect = ollama.ResponseError("Model error")
@@ -730,7 +730,7 @@ class TestModelServiceGetModelByQuality:
     def test_filters_by_quality_and_vram(self, model_service):
         """Test filters models by minimum quality and VRAM."""
         with patch.object(model_service, "list_available") as mock_list:
-            from services.model_service import ModelStatus
+            from src.services.model_service import ModelStatus
 
             mock_list.return_value = [
                 ModelStatus(
@@ -765,7 +765,7 @@ class TestModelServiceGetModelByQuality:
     def test_filters_by_uncensored_requirement(self, model_service):
         """Test filters models by uncensored requirement."""
         with patch.object(model_service, "list_available") as mock_list:
-            from services.model_service import ModelStatus
+            from src.services.model_service import ModelStatus
 
             mock_list.return_value = [
                 ModelStatus(
@@ -802,7 +802,7 @@ class TestModelServiceGetModelByQuality:
     def test_sorts_by_quality_descending(self, model_service):
         """Test results are sorted by quality descending."""
         with patch.object(model_service, "list_available") as mock_list:
-            from services.model_service import ModelStatus
+            from src.services.model_service import ModelStatus
 
             mock_list.return_value = [
                 ModelStatus(
@@ -839,7 +839,7 @@ class TestModelServiceCompareModels:
 
     def test_compares_multiple_models(self, model_service):
         """Test compares multiple models on same prompt."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 
@@ -859,7 +859,7 @@ class TestModelServiceCompareModels:
 
     def test_handles_model_failure_gracefully(self, model_service):
         """Test handles individual model failure in comparison."""
-        with patch("services.model_service.ollama.Client") as mock_client:
+        with patch("src.services.model_service.ollama.Client") as mock_client:
             mock_instance = MagicMock()
             mock_client.return_value = mock_instance
 

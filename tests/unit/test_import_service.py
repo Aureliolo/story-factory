@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.import_service import ImportService
-from settings import Settings
-from utils.exceptions import WorldGenerationError
+from src.services.import_service import ImportService
+from src.settings import Settings
+from src.utils.exceptions import WorldGenerationError
 
 
 class TestImportServiceStructuredGenerationErrors:
@@ -45,7 +45,7 @@ class TestImportServiceStructuredGenerationErrors:
         """Test extract_characters raises WorldGenerationError on generation failure."""
         import logging
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("LLM validation failed")
 
             with caplog.at_level(logging.ERROR):
@@ -56,7 +56,7 @@ class TestImportServiceStructuredGenerationErrors:
         """Test extract_locations raises WorldGenerationError on generation failure."""
         import logging
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("LLM validation failed")
 
             with caplog.at_level(logging.ERROR):
@@ -67,7 +67,7 @@ class TestImportServiceStructuredGenerationErrors:
         """Test extract_items raises WorldGenerationError on generation failure."""
         import logging
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("LLM validation failed")
 
             with caplog.at_level(logging.ERROR):
@@ -80,7 +80,7 @@ class TestImportServiceStructuredGenerationErrors:
 
         characters = [{"name": "Alice"}, {"name": "Bob"}]
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("LLM validation failed")
 
             with caplog.at_level(logging.ERROR):
@@ -91,7 +91,7 @@ class TestImportServiceStructuredGenerationErrors:
         """Test extract_characters logs the generation error."""
         import logging
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("Validation error")
 
             with caplog.at_level(logging.ERROR):
@@ -104,7 +104,7 @@ class TestImportServiceStructuredGenerationErrors:
         """Test extract_locations logs the generation error."""
         import logging
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("Validation error")
 
             with caplog.at_level(logging.ERROR):
@@ -117,7 +117,7 @@ class TestImportServiceStructuredGenerationErrors:
         """Test extract_items logs the generation error."""
         import logging
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("Validation error")
 
             with caplog.at_level(logging.ERROR):
@@ -130,7 +130,7 @@ class TestImportServiceStructuredGenerationErrors:
         """Test infer_relationships logs the generation error."""
         import logging
 
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = Exception("Validation error")
 
             with caplog.at_level(logging.ERROR):
@@ -171,7 +171,7 @@ class TestImportServiceConnectionErrors:
 
     def test_extract_characters_raises_on_connection_error(self, import_service):
         """Test extract_characters raises WorldGenerationError on ConnectionError."""
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(WorldGenerationError, match="Character extraction failed"):
@@ -179,7 +179,7 @@ class TestImportServiceConnectionErrors:
 
     def test_extract_locations_raises_on_connection_error(self, import_service):
         """Test extract_locations raises WorldGenerationError on ConnectionError."""
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(WorldGenerationError, match="Location extraction failed"):
@@ -187,7 +187,7 @@ class TestImportServiceConnectionErrors:
 
     def test_extract_items_raises_on_connection_error(self, import_service):
         """Test extract_items raises WorldGenerationError on ConnectionError."""
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(WorldGenerationError, match="Item extraction failed"):
@@ -195,7 +195,7 @@ class TestImportServiceConnectionErrors:
 
     def test_infer_relationships_raises_on_connection_error(self, import_service):
         """Test infer_relationships raises WorldGenerationError on ConnectionError."""
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             mock_gen.side_effect = ConnectionError("Connection refused")
 
             with pytest.raises(WorldGenerationError, match="Relationship inference failed"):

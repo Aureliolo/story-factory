@@ -4,14 +4,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from memory.story_state import Chapter, Character, StoryBrief, StoryState
-from memory.world_database import WorldDatabase
-from services.world_service import (
+from src.memory.story_state import Chapter, Character, StoryBrief, StoryState
+from src.memory.world_database import WorldDatabase
+from src.services.world_service import (
     WorldBuildOptions,
     WorldBuildProgress,
     WorldService,
 )
-from settings import Settings
+from src.settings import Settings
 
 
 class TestWorldBuildOptions:
@@ -706,7 +706,7 @@ class TestWorldBuildCancellation:
         """Test that cancellation event triggers GenerationCancelledError."""
         import threading
 
-        from utils.exceptions import GenerationCancelledError
+        from src.utils.exceptions import GenerationCancelledError
 
         # Create a cancellation event that's already set
         cancel_event = threading.Event()

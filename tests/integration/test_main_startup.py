@@ -121,10 +121,10 @@ class TestMainFunctionality:
         test_code = """
 import main
 # Test internal imports work
-from services import ServiceContainer
-from settings import Settings
-from ui import create_app
-from workflows.orchestrator import StoryOrchestrator
+from src.services import ServiceContainer
+from src.settings import Settings
+from src.ui import create_app
+from src.services.orchestrator import StoryOrchestrator
 print("All imports successful")
 """
         result = subprocess.run(

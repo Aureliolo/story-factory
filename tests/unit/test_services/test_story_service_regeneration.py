@@ -4,10 +4,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory.story_state import Chapter, Character, StoryBrief, StoryState
-from services.story_service import GenerationCancelled, StoryService
-from settings import Settings
-from workflows.orchestrator import WorkflowEvent
+from src.memory.story_state import Chapter, Character, StoryBrief, StoryState
+from src.services.orchestrator import WorkflowEvent
+from src.services.story_service import GenerationCancelled, StoryService
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def sample_story_with_content():
 class TestRegenerateChapterWithFeedback:
     """Tests for regenerate_chapter_with_feedback method."""
 
-    @patch("services.story_service.StoryOrchestrator")
+    @patch("src.services.story_service.StoryOrchestrator")
     def test_regenerate_saves_version_before_regenerating(
         self, mock_orchestrator_class, story_service, sample_story_with_content
     ):
@@ -109,7 +109,7 @@ class TestRegenerateChapterWithFeedback:
         second_version = chapter.versions[1]
         assert second_version.feedback == feedback  # Feedback associated with the result
 
-    @patch("services.story_service.StoryOrchestrator")
+    @patch("src.services.story_service.StoryOrchestrator")
     def test_regenerate_calls_orchestrator_with_feedback(
         self, mock_orchestrator_class, story_service, sample_story_with_content
     ):
@@ -175,7 +175,7 @@ class TestRegenerateChapterWithFeedback:
         with pytest.raises(ValueError):
             list(story_service.regenerate_chapter_with_feedback(sample_story_with_content, 1, ""))
 
-    @patch("services.story_service.StoryOrchestrator")
+    @patch("src.services.story_service.StoryOrchestrator")
     def test_regenerate_rollback_on_cancellation(
         self, mock_orchestrator_class, story_service, sample_story_with_content
     ):

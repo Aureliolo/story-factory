@@ -8,9 +8,9 @@ import ollama
 import pytest
 from pydantic import BaseModel, Field
 
-from agents.base import BaseAgent
-from settings import Settings
-from utils.exceptions import LLMGenerationError
+from src.agents.base import BaseAgent
+from src.settings import Settings
+from src.utils.exceptions import LLMGenerationError
 
 
 # Test model for structured output tests
@@ -146,7 +146,7 @@ class TestBaseAgentInit:
 class TestBaseAgentCheckOllamaHealth:
     """Tests for check_ollama_health classmethod."""
 
-    @patch("agents.base.ollama.Client")
+    @patch("src.agents.base.ollama.Client")
     def test_returns_healthy_when_ollama_responds(self, mock_client_class):
         """Test returns healthy tuple when Ollama responds."""
         mock_client = MagicMock()
@@ -158,7 +158,7 @@ class TestBaseAgentCheckOllamaHealth:
         assert is_healthy is True
         assert "2 models available" in message
 
-    @patch("agents.base.ollama.Client")
+    @patch("src.agents.base.ollama.Client")
     def test_returns_healthy_with_empty_models(self, mock_client_class):
         """Test returns healthy even with no models."""
         mock_client = MagicMock()
@@ -279,7 +279,7 @@ class TestBaseAgentGenerate:
         call_args = agent.client.chat.call_args
         assert call_args.kwargs["options"]["temperature"] == 0.9
 
-    @patch("agents.base.time.sleep")
+    @patch("src.agents.base.time.sleep")
     def test_generate_retries_on_connection_error(self, mock_sleep):
         """Test generate retries on connection error."""
         agent = create_mock_agent()
@@ -294,7 +294,7 @@ class TestBaseAgentGenerate:
         assert agent.client.chat.call_count == 2
         mock_sleep.assert_called_once()
 
-    @patch("agents.base.time.sleep")
+    @patch("src.agents.base.time.sleep")
     def test_generate_retries_on_timeout(self, mock_sleep):
         """Test generate retries on timeout."""
         agent = create_mock_agent()
@@ -308,7 +308,7 @@ class TestBaseAgentGenerate:
         assert result == "Success after retry"
         assert agent.client.chat.call_count == 2
 
-    @patch("agents.base.time.sleep")
+    @patch("src.agents.base.time.sleep")
     def test_generate_exhausts_retries(self, mock_sleep):
         """Test generate raises after exhausting retries."""
         agent = create_mock_agent()
@@ -362,7 +362,7 @@ class TestBaseAgentQwenNoThink:
 class TestBaseAgentShortResponseValidation:
     """Tests for short response validation and retry."""
 
-    @patch("agents.base.time.sleep")
+    @patch("src.agents.base.time.sleep")
     def test_generate_retries_on_short_response(self, mock_sleep):
         """Test generate retries when response is too short after cleaning."""
         agent = create_mock_agent()
@@ -376,10 +376,10 @@ class TestBaseAgentShortResponseValidation:
         assert result == "Valid response with enough content"
         assert agent.client.chat.call_count == 2
 
-    @patch("agents.base.time.sleep")
+    @patch("src.agents.base.time.sleep")
     def test_generate_raises_after_retries_exhausted_with_short_response(self, mock_sleep):
         """Test generate raises LLMGenerationError after all retries exhausted with short response."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         agent = create_mock_agent()
         # All attempts return short response
@@ -419,7 +419,7 @@ class TestBaseAgentRateLimiting:
 class TestBaseAgentGetModelInfo:
     """Tests for get_model_info method."""
 
-    @patch("agents.base.get_model_info")
+    @patch("src.agents.base.get_model_info")
     def test_get_model_info_returns_info(self, mock_get_info):
         """Test get_model_info returns model information."""
         mock_info = {
@@ -464,8 +464,8 @@ class TestBaseAgentRepr:
 class TestBaseAgentGenerateStructured:
     """Tests for generate_structured method with Instructor."""
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_returns_model_instance(self, mock_from_openai, mock_openai_class):
         """Test generate_structured returns validated Pydantic model instance."""
         # Setup mock instructor client
@@ -482,8 +482,8 @@ class TestBaseAgentGenerateStructured:
         assert result.count == 5
         assert result.items == ["a", "b"]
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_uses_low_temperature_by_default(
         self, mock_from_openai, mock_openai_class
     ):
@@ -499,8 +499,8 @@ class TestBaseAgentGenerateStructured:
         call_args = mock_instructor.chat.completions.create.call_args
         assert call_args.kwargs["temperature"] == 0.1
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_allows_custom_temperature(
         self, mock_from_openai, mock_openai_class
     ):
@@ -515,8 +515,8 @@ class TestBaseAgentGenerateStructured:
         call_args = mock_instructor.chat.completions.create.call_args
         assert call_args.kwargs["temperature"] == 0.5
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_includes_context(self, mock_from_openai, mock_openai_class):
         """Test generate_structured includes context in messages."""
         mock_instructor = MagicMock()
@@ -531,8 +531,8 @@ class TestBaseAgentGenerateStructured:
         context_found = any("CURRENT STORY CONTEXT" in m.get("content", "") for m in messages)
         assert context_found
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_adds_no_think_for_qwen(self, mock_from_openai, mock_openai_class):
         """Test generate_structured adds /no_think for Qwen models."""
         mock_instructor = MagicMock()
@@ -547,8 +547,8 @@ class TestBaseAgentGenerateStructured:
         system_msg = messages[0]["content"]
         assert "/no_think" in system_msg
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_raises_on_error(self, mock_from_openai, mock_openai_class):
         """Test generate_structured raises LLMGenerationError on failure."""
         mock_instructor = MagicMock()
@@ -560,8 +560,8 @@ class TestBaseAgentGenerateStructured:
         with pytest.raises(LLMGenerationError, match="Structured generation failed"):
             agent.generate_structured("Test prompt", SampleOutputModel)
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_caches_instructor_client(
         self, mock_from_openai, mock_openai_class
     ):
@@ -579,8 +579,8 @@ class TestBaseAgentGenerateStructured:
         # Instructor client should only be created once
         assert mock_from_openai.call_count == 1
 
-    @patch("agents.base.OpenAI")
-    @patch("agents.base.instructor.from_openai")
+    @patch("src.agents.base.OpenAI")
+    @patch("src.agents.base.instructor.from_openai")
     def test_generate_structured_passes_max_retries(self, mock_from_openai, mock_openai_class):
         """Test generate_structured passes max_retries to instructor."""
         mock_instructor = MagicMock()
@@ -599,7 +599,7 @@ class TestBaseAgentPromptTemplate:
 
     def test_get_registry_returns_registry(self):
         """Test get_registry returns a PromptRegistry instance."""
-        from utils.prompt_registry import PromptRegistry
+        from src.utils.prompt_registry import PromptRegistry
 
         registry = BaseAgent.get_registry()
 

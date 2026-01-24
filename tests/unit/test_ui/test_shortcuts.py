@@ -1,6 +1,6 @@
 """Tests for ui/shortcuts.py keyboard shortcut manager."""
 
-from ui.shortcuts import Shortcut, ShortcutManager
+from src.ui.shortcuts import Shortcut, ShortcutManager
 
 
 class TestShortcut:

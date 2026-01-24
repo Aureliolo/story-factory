@@ -7,11 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agents import ResponseValidationError
-from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
-from settings import Settings
-from utils.exceptions import ExportError
-from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
+from src.agents import ResponseValidationError
+from src.memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
+from src.services.orchestrator import StoryOrchestrator, WorkflowEvent
+from src.settings import Settings
+from src.utils.exceptions import ExportError
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +22,7 @@ def use_temp_stories_dir(tmp_path, monkeypatch):
     """
     stories_dir = tmp_path / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+    monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
 
 class TestExportFunctionality:
@@ -150,7 +150,7 @@ class TestWorkflowEvents:
         """Use temp directory for all tests to avoid polluting output/stories."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_create_new_story_sets_correlation_id(self):
         """Should set correlation ID when creating a new story."""
@@ -239,7 +239,7 @@ class TestStoryOrchestratorCreateNewStory:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_creates_story_with_uuid(self):
         """Test creates story with valid UUID."""
@@ -273,7 +273,7 @@ class TestStoryOrchestratorUpdateProjectName:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_updates_project_name(self):
         """Test updates project name."""
@@ -352,7 +352,7 @@ class TestStoryOrchestratorInterview:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_start_interview(self):
         """Test starts interview and returns questions."""
@@ -419,7 +419,7 @@ class TestStoryOrchestratorStructure:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_build_story_structure_yields_events(self):
         """Test build_story_structure yields workflow events."""
@@ -707,7 +707,7 @@ class TestInterviewCompletion:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_process_interview_completes_when_brief_extracted(self):
         """Test interview completes when brief is extracted."""
@@ -765,7 +765,7 @@ class TestBuildStoryStructure:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_raises_without_story_state(self):
         """Test raises when no story state."""
@@ -846,7 +846,7 @@ class TestWritingMethods:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     @pytest.fixture
     def orchestrator_with_story(self):
@@ -895,7 +895,7 @@ class TestWritingMethods:
 
     def test_write_short_story_with_revision_loop(self, orchestrator_with_story):
         """Test write_short_story performs revision when issues found."""
-        from agents.continuity import ContinuityIssue
+        from src.agents.continuity import ContinuityIssue
 
         orc = orchestrator_with_story
         mock_issues = [
@@ -1044,7 +1044,7 @@ class TestWritingMethods:
 
     def test_write_chapter_with_revision_loop(self, orchestrator_with_story):
         """Test write_chapter performs revision when issues found."""
-        from agents.continuity import ContinuityIssue
+        from src.agents.continuity import ContinuityIssue
 
         orc = orchestrator_with_story
         mock_issues = [
@@ -1169,7 +1169,7 @@ class TestWritingMethods:
 
     def test_write_chapter_revision_with_previous_chapter(self):
         """Test write_chapter revision loop ensures consistency with previous chapter."""
-        from agents.continuity import ContinuityIssue
+        from src.agents.continuity import ContinuityIssue
 
         orchestrator = StoryOrchestrator()
         orchestrator.story_state = StoryState(
@@ -1348,7 +1348,7 @@ class TestWritingMethods:
 
     def test_write_all_chapters_with_final_issues(self, orchestrator_with_story):
         """Test write_all_chapters reports final issues."""
-        from agents.continuity import ContinuityIssue
+        from src.agents.continuity import ContinuityIssue
 
         orc = orchestrator_with_story
         final_issues = [
@@ -1452,7 +1452,7 @@ class TestContinuationMethods:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_continue_chapter_raises_without_story(self):
         """Test continue_chapter raises when no story state."""
@@ -1548,7 +1548,7 @@ class TestContinuationMethods:
         """Test continue_chapter raises ExportError on save failure."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
         orchestrator = StoryOrchestrator()
         orchestrator.story_state = StoryState(
@@ -1613,7 +1613,7 @@ class TestReviewFullStory:
 
     def test_returns_issues_when_found(self):
         """Test returns issues when found."""
-        from agents.continuity import ContinuityIssue
+        from src.agents.continuity import ContinuityIssue
 
         orchestrator = StoryOrchestrator()
         orchestrator.story_state = StoryState(
@@ -1780,7 +1780,7 @@ class TestExportMethods:
         """Test export_story_to_file uses default path when not specified."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(exist_ok=True)  # May already exist from autouse fixture
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
         orchestrator = StoryOrchestrator()
         orchestrator.story_state = story_state_with_chapters
@@ -1807,7 +1807,7 @@ class TestPersistenceMethods:
         """Use temp directory for all tests."""
         self.stories_dir = tmp_path / "stories"
         self.stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", self.stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", self.stories_dir)
 
     def test_autosave_returns_none_without_story(self):
         """Test autosave returns None when no story."""
@@ -1900,7 +1900,7 @@ class TestPersistenceMethods:
     def test_list_saved_stories_returns_empty_for_no_dir(self, tmp_path, monkeypatch):
         """Test list_saved_stories returns empty when dir doesn't exist."""
         nonexistent = tmp_path / "nonexistent"
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", nonexistent)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", nonexistent)
 
         result = StoryOrchestrator.list_saved_stories()
 
@@ -1954,7 +1954,7 @@ class TestResetState:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_reset_state_clears_everything(self):
         """Test reset_state clears story and events."""
@@ -2082,7 +2082,7 @@ class TestCalculateETAEdgeCases:
         object.__setattr__(orchestrator.writer, "model", None)
 
         # Mock ModeDatabase to return performance data
-        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+        with patch("src.memory.mode_database.ModeDatabase") as mock_db_class:
             mock_db = MagicMock()
             mock_db.get_model_performance.return_value = [{"avg_tokens_per_second": 25.0}]
             mock_db_class.return_value = mock_db
@@ -2123,7 +2123,7 @@ class TestCalculateETAEdgeCases:
         # Set editor model to None
         object.__setattr__(orchestrator.editor, "model", None)
 
-        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+        with patch("src.memory.mode_database.ModeDatabase") as mock_db_class:
             mock_db = MagicMock()
             mock_db.get_model_performance.return_value = [{"avg_tokens_per_second": 30.0}]
             mock_db_class.return_value = mock_db
@@ -2161,7 +2161,7 @@ class TestCalculateETAEdgeCases:
         # Set continuity model to None
         object.__setattr__(orchestrator.continuity, "model", None)
 
-        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+        with patch("src.memory.mode_database.ModeDatabase") as mock_db_class:
             mock_db = MagicMock()
             mock_db.get_model_performance.return_value = [{"avg_tokens_per_second": 40.0}]
             mock_db_class.return_value = mock_db
@@ -2197,7 +2197,7 @@ class TestCalculateETAEdgeCases:
         orchestrator._phase_start_time = datetime.now()
 
         # Make ModeDatabase raise an exception
-        with patch("memory.mode_database.ModeDatabase") as mock_db_class:
+        with patch("src.memory.mode_database.ModeDatabase") as mock_db_class:
             mock_db_class.side_effect = Exception("Database connection failed")
 
             eta = orchestrator._calculate_eta()
@@ -2214,7 +2214,7 @@ class TestGenerateMoreCharacters:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_generate_more_characters_raises_without_story(self):
         """Test generate_more_characters raises when no story state."""
@@ -2290,7 +2290,7 @@ class TestGenerateLocations:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_generate_locations_raises_without_story(self):
         """Test generate_locations raises when no story state."""
@@ -2358,7 +2358,7 @@ class TestGenerateRelationships:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_generate_relationships_raises_without_story(self):
         """Test generate_relationships raises when no story state."""
@@ -2443,7 +2443,7 @@ class TestRebuildWorld:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     def test_rebuild_world_raises_without_story(self):
         """Test rebuild_world raises when no story state."""
@@ -2530,7 +2530,7 @@ class TestWriteShortStorySaveExceptions:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     @pytest.fixture
     def orchestrator_ready_to_write(self):
@@ -2609,7 +2609,7 @@ class TestWriteChapterSaveExceptions:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     @pytest.fixture
     def orchestrator_ready_to_write_chapter(self):
@@ -2696,7 +2696,7 @@ class TestContinueChapterSaveExceptions:
         """Use temp directory for all tests."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
     @pytest.fixture
     def orchestrator_ready_to_continue(self):

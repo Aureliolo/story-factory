@@ -28,11 +28,11 @@ updates:
         patterns:
           - "*"
 
-  # CDN dependencies tracked via package.json
+  # CDN dependencies tracked via package.json in .github/
   # When Dependabot updates vis-network, the sync-cdn-versions.yml workflow
-  # automatically updates the CDN URL in ui/components/graph.py
+  # automatically updates the CDN URL in src/ui/components/graph.py
   - package-ecosystem: "npm"
-    directory: "/"
+    directory: "/.github"
     schedule:
       interval: "weekly"
       day: "monday"

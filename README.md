@@ -5,6 +5,7 @@
 [![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Aureliolo/story-factory?utm_source=oss&utm_medium=github&utm_campaign=Aureliolo%2Fstory-factory&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 > **DISCLAIMER**: This is a personal holiday/hobby project created primarily as an experimentation playground for testing AI coding assistants (Claude Code, GitHub Copilot, Cursor, etc.) and exploring local LLM capabilities with Ollama. It's built for my own learning and enjoyment. Feel free to explore, but note that this is not production-grade software and comes with no guarantees. Use at your own risk!
 
@@ -175,7 +176,7 @@ cd story-factory
 pip install -r requirements.txt
 
 # 5. Copy example settings
-cp settings.example.json settings.json
+cp src/settings.example.json src/settings.json
 
 # 6. Launch the web UI
 python main.py
@@ -266,9 +267,9 @@ pip install -r requirements.txt
 
 ```bash
 # Copy the example settings file
-cp settings.example.json settings.json
+cp src/settings.example.json src/settings.json
 
-# Optional: Edit settings.json to customize
+# Optional: Edit src/settings.json to customize
 # - Ollama URL (if not localhost:11434)
 # - Default models
 # - Agent temperatures
@@ -442,7 +443,7 @@ Edit `settings.json` to customize:
 }
 ```
 
-See [settings.example.json](settings.example.json) for all available options.
+See [src/settings.example.json](src/settings.example.json) for all available options.
 
 ### Export Formats
 
@@ -461,93 +462,79 @@ Export from the web UI via the "Export" button or programmatically via the expor
 ```
 story-factory/
 ├── main.py                 # Entry point
-├── settings.py             # Settings management & model registry
-├── agents/                 # AI agent implementations
-│   ├── base.py             # Base agent class with retry logic
-│   ├── interviewer.py      # Story requirements gathering
-│   ├── architect.py        # Structure and character design
-│   ├── writer.py           # Prose generation
-│   ├── editor.py           # Refinement and polish
-│   ├── continuity.py       # Plot hole detection
-│   └── validator.py        # Response validation
-├── workflows/
-│   └── orchestrator.py     # Agent coordination
-├── memory/                 # Data models and persistence
-│   ├── story_state.py      # Story state (Pydantic models)
-│   ├── entities.py         # Entity/Relationship models
-│   ├── world_database.py   # SQLite + NetworkX database
-│   ├── mode_database.py    # Model performance database
-│   ├── mode_models.py      # Performance tracking models
-│   ├── templates.py        # Template data models
-│   ├── builtin_templates.py # Built-in story templates
-│   └── world_quality.py    # World quality tracking
-├── services/               # Business logic layer
-│   ├── project_service.py  # Project CRUD operations
-│   ├── story_service.py    # Story generation workflow
-│   ├── world_service.py    # Entity/world management
-│   ├── model_service.py    # Ollama model operations
-│   ├── export_service.py   # Export to multiple formats
-│   ├── model_mode_service.py # Model performance tracking
-│   ├── scoring_service.py  # Quality scoring logic
-│   ├── template_service.py # Story template management
-│   ├── backup_service.py   # Project backup/restore
-│   ├── import_service.py   # Import entities from text
-│   ├── comparison_service.py # Model comparison testing
-│   ├── suggestion_service.py # AI-powered suggestions
-│   ├── world_quality_service.py # World quality enhancement
-│   └── llm_client.py       # Unified LLM client
-├── ui/                     # NiceGUI web interface
-│   ├── app.py              # Main application setup
-│   ├── state.py            # Centralized UI state
-│   ├── theme.py            # Colors, styles, dark mode
-│   ├── styles.css          # Custom CSS
-│   ├── graph_renderer.py   # vis.js graph rendering
-│   ├── keyboard_shortcuts.py # Keyboard shortcut handling
-│   ├── shortcuts.py        # Shortcut registry
-│   ├── pages/              # Page components
-│   │   ├── write.py        # Write Story page (Fundamentals + Live Writing)
-│   │   ├── world.py        # World Builder page
-│   │   ├── projects.py     # Projects management
-│   │   ├── templates.py    # Story templates
-│   │   ├── timeline.py     # Event timeline
-│   │   ├── comparison.py   # Model comparison
-│   │   ├── settings.py     # Settings configuration
-│   │   ├── models.py       # Model management
-│   │   └── analytics.py    # Performance analytics
-│   └── components/         # Reusable UI components
-│       ├── header.py       # App header with project selector
-│       ├── chat.py         # Chat interface
-│       ├── graph.py        # Graph component wrapper
-│       ├── entity_card.py  # Entity display
-│       └── common.py       # Shared components (loading, dialogs, etc.)
-├── utils/                  # Utility modules
-│   ├── logging_config.py   # Logging configuration
-│   ├── json_parser.py      # JSON extraction from LLM responses
-│   ├── error_handling.py   # Error decorators and handlers
-│   ├── exceptions.py       # Custom exception hierarchy
-│   ├── constants.py        # Shared constants
-│   ├── environment.py      # Environment checks
-│   ├── prompt_builder.py   # Prompt construction
-│   ├── prompt_registry.py  # Prompt management
-│   ├── prompt_template.py  # Template system
-│   ├── model_utils.py      # Model name utilities
-│   ├── message_analyzer.py # Conversation analysis
-│   ├── text_analytics.py   # Text analysis utilities
-│   └── validation.py       # Data validation helpers
-├── prompts/                # Prompt templates
-│   └── templates/          # Template files
+├── src/                    # All application source code
+│   ├── settings.py         # Settings management & model registry
+│   ├── settings.example.json # Example configuration
+│   ├── agents/             # AI agent implementations
+│   │   ├── base.py         # Base agent class with retry logic
+│   │   ├── interviewer.py  # Story requirements gathering
+│   │   ├── architect.py    # Structure and character design
+│   │   ├── writer.py       # Prose generation
+│   │   ├── editor.py       # Refinement and polish
+│   │   ├── continuity.py   # Plot hole detection
+│   │   └── validator.py    # Response validation
+│   ├── memory/             # Data models and persistence
+│   │   ├── story_state.py  # Story state (Pydantic models)
+│   │   ├── entities.py     # Entity/Relationship models
+│   │   ├── world_database.py # SQLite + NetworkX database
+│   │   ├── mode_database.py # Model performance database
+│   │   ├── mode_models.py  # Performance tracking models
+│   │   ├── templates.py    # Template data models
+│   │   ├── builtin_templates.py # Built-in story templates
+│   │   └── world_quality.py # World quality tracking
+│   ├── services/           # Business logic layer
+│   │   ├── orchestrator.py # Agent coordination (merged from workflows/)
+│   │   ├── project_service.py # Project CRUD operations
+│   │   ├── story_service.py # Story generation workflow
+│   │   ├── world_service.py # Entity/world management
+│   │   ├── model_service.py # Ollama model operations
+│   │   ├── export_service.py # Export to multiple formats
+│   │   ├── model_mode_service.py # Model performance tracking
+│   │   ├── scoring_service.py # Quality scoring logic
+│   │   ├── template_service.py # Story template management
+│   │   ├── backup_service.py # Project backup/restore
+│   │   ├── import_service.py # Import entities from text
+│   │   ├── comparison_service.py # Model comparison testing
+│   │   ├── suggestion_service.py # AI-powered suggestions
+│   │   ├── world_quality_service.py # World quality enhancement
+│   │   └── llm_client.py   # Unified LLM client
+│   ├── ui/                 # NiceGUI web interface
+│   │   ├── app.py          # Main application setup
+│   │   ├── state.py        # Centralized UI state
+│   │   ├── theme.py        # Colors, styles, dark mode
+│   │   ├── styles.css      # Custom CSS
+│   │   ├── graph_renderer.py # vis.js graph rendering
+│   │   ├── keyboard_shortcuts.py # Keyboard shortcut handling
+│   │   ├── shortcuts.py    # Shortcut registry
+│   │   ├── pages/          # Page components
+│   │   └── components/     # Reusable UI components
+│   ├── utils/              # Utility modules
+│   │   ├── logging_config.py # Logging configuration
+│   │   ├── json_parser.py  # JSON extraction from LLM responses
+│   │   ├── error_handling.py # Error decorators and handlers
+│   │   ├── exceptions.py   # Custom exception hierarchy
+│   │   └── ...             # Other utilities
+│   └── prompts/            # YAML prompt templates
+│       └── templates/      # Template files by agent
 ├── tests/                  # Test suite (2000+ tests)
 │   ├── unit/               # Unit tests
 │   ├── component/          # NiceGUI component tests
 │   ├── integration/        # Integration tests
 │   ├── smoke/              # Quick validation tests
 │   └── e2e/                # End-to-end browser tests
-└── docs/                   # Documentation
-    ├── ARCHITECTURE.md     # System design
-    ├── MODELS.md           # Model recommendations
-    ├── TEMPLATES.md        # Template system guide
-    ├── UX_UI_IMPROVEMENTS.md # UI/UX features
-    └── plans/              # Design documents
+├── docs/                   # Documentation
+│   ├── codemaps/           # Architecture maps
+│   ├── ARCHITECTURE.md     # System design
+│   ├── MODELS.md           # Model recommendations
+│   ├── CONTRIBUTING.md     # Contribution guidelines
+│   ├── TROUBLESHOOTING.md  # Common problems and solutions
+│   └── plans/              # Design documents
+├── output/                 # Runtime data
+│   ├── logs/               # Application logs
+│   ├── stories/            # Saved story files
+│   ├── worlds/             # World databases
+│   └── backups/            # Project backups
+└── scripts/                # Developer utilities
 ```
 
 ## Workflow
@@ -568,7 +555,7 @@ User Input -> Interviewer -> Architect -> [Writer -> Editor -> Continuity] x N -
 
 ## Configuration
 
-Settings can be configured via the web UI or by editing `settings.json`:
+Settings can be configured via the web UI or by editing `src/settings.json`:
 
 ```json
 {
@@ -757,7 +744,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture docum
 5. **Restart Ollama**: Clear any stuck states
 
 For more help, check:
-- **Logs**: `logs/story_factory.log`
+- **Logs**: `output/logs/story_factory.log`
 - **GitHub Issues**: [Report a bug](https://github.com/Aureliolo/story-factory/issues)
 - **Model Guide**: [docs/MODELS.md](docs/MODELS.md)
 
@@ -880,10 +867,10 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 - **[Quick Start Guide](#quick-start)**: Get running in 5 minutes
 - **[Installation Guide](#installation)**: Detailed setup instructions
-- **[Troubleshooting Guide](TROUBLESHOOTING.md)**: Solutions to common problems
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)**: Solutions to common problems
 - **[Model Selection Guide](docs/MODELS.md)**: Choose the best models
 - **[Architecture Documentation](docs/ARCHITECTURE.md)**: Understand the system
-- **[Contributing Guide](CONTRIBUTING.md)**: Help improve the project
+- **[Contributing Guide](docs/CONTRIBUTING.md)**: Help improve the project
 
 ### Support Resources
 

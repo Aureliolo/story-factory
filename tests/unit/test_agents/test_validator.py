@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.validator import ValidatorAgent, validate_or_raise
-from settings import Settings
-from utils.exceptions import ResponseValidationError
+from src.agents.validator import ValidatorAgent, validate_or_raise
+from src.settings import Settings
+from src.utils.exceptions import ResponseValidationError
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def settings():
 @pytest.fixture
 def validator(settings):
     """Create ValidatorAgent with mocked Ollama client."""
-    with patch("agents.base.ollama.Client"):
+    with patch("src.agents.base.ollama.Client"):
         agent = ValidatorAgent(model="test-model", settings=settings)
         return agent
 
@@ -28,14 +28,14 @@ class TestValidatorAgentInit:
 
     def test_init_with_defaults(self, settings):
         """Test agent initializes with default settings."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = ValidatorAgent(settings=settings)
             assert agent.name == "Validator"
             assert agent.role == "Response Validator"
 
     def test_uses_small_model_by_default(self, settings):
         """Test uses small/fast model for validation."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = ValidatorAgent(settings=settings)
             # Should use a small model like qwen3:0.6b or similar
             assert isinstance(agent.model, str)
@@ -173,14 +173,14 @@ class TestValidateOrRaise:
         """Test returns original response when valid."""
         response = "This is valid English content."
 
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             result = validate_or_raise(response, "English")
 
         assert result == response
 
     def test_raises_for_invalid_response(self):
         """Test raises error for invalid response."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             with pytest.raises((ResponseValidationError, ValueError)):
                 validate_or_raise("", "English")
 
@@ -196,7 +196,7 @@ class TestValidateOrRaise:
         """Test creates new validator when not provided."""
         response = "Valid response."
 
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             result = validate_or_raise(response, "English")
 
         assert result == response

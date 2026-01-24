@@ -1,6 +1,6 @@
 """Tests for undo/redo functionality in ui/state.py."""
 
-from ui.state import ActionType, AppState, UndoAction
+from src.ui.state import ActionType, AppState, UndoAction
 
 
 class TestUndoRedoState:

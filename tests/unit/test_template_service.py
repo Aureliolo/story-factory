@@ -5,9 +5,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from memory.story_state import StoryState
-from services.template_service import TemplateService
-from settings import Settings
+from src.memory.story_state import StoryState
+from src.services.template_service import TemplateService
+from src.settings import Settings
 
 
 class TestTemplateServiceErrorHandling:
@@ -22,7 +22,7 @@ class TestTemplateServiceErrorHandling:
     def template_service(self, settings, tmp_path, monkeypatch):
         """Create a TemplateService with mocked TEMPLATES_DIR."""
         # Mock TEMPLATES_DIR to use temp path
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", tmp_path / "templates")
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", tmp_path / "templates")
         return TemplateService(settings)
 
     def test_list_templates_handles_invalid_template_file(
@@ -34,7 +34,7 @@ class TestTemplateServiceErrorHandling:
 
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         # Create an invalid JSON file
         invalid_file = templates_dir / "invalid.json"
@@ -57,7 +57,7 @@ class TestTemplateServiceErrorHandling:
 
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         # Create a valid JSON but invalid StoryTemplate
         template_file = templates_dir / "bad-template.json"
@@ -77,7 +77,7 @@ class TestTemplateServiceErrorHandling:
         """Test apply_template_to_state populates state from template."""
         import logging
 
-        from memory.builtin_templates import BUILTIN_STORY_TEMPLATES
+        from src.memory.builtin_templates import BUILTIN_STORY_TEMPLATES
 
         # Create a story state
         state = StoryState(id="test-state")
@@ -101,11 +101,11 @@ class TestTemplateServiceErrorHandling:
     ):
         """Test import_template generates new ID when colliding with builtin."""
         # Lines 401-402: ID collision handling in import_template
-        from memory.builtin_templates import BUILTIN_STORY_TEMPLATES
+        from src.memory.builtin_templates import BUILTIN_STORY_TEMPLATES
 
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         # Get a builtin template ID
         builtin_id = list(BUILTIN_STORY_TEMPLATES.keys())[0]
@@ -144,7 +144,7 @@ class TestTemplateServiceErrorHandling:
         """Test import_template raises ValueError for invalid file content."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         # Create an invalid JSON file
         invalid_file = tmp_path / "invalid.json"
@@ -157,7 +157,7 @@ class TestTemplateServiceErrorHandling:
         """Test import_template raises FileNotFoundError for missing file."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         missing_file = tmp_path / "nonexistent.json"
 
@@ -173,7 +173,7 @@ class TestTemplateServiceListTemplates:
         """Create a TemplateService with mocked TEMPLATES_DIR."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
         return TemplateService(Settings())
 
     def test_list_templates_loads_valid_custom_templates(
@@ -181,7 +181,7 @@ class TestTemplateServiceListTemplates:
     ):
         """Test list_templates loads valid custom template files."""
         templates_dir = tmp_path / "templates"
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         # Create a valid custom template
         template_data = {

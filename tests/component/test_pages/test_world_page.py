@@ -16,8 +16,8 @@ class TestWorldPageNoProject:
 
     async def test_world_page_shows_no_project_message(self, user: User, test_services):
         """World page shows 'no project selected' when no project is loaded."""
-        from ui.pages.world import WorldPage
-        from ui.state import AppState
+        from src.ui.pages.world import WorldPage
+        from src.ui.state import AppState
 
         @ui.page("/test-world-no-project")
         def test_page():
@@ -37,7 +37,7 @@ class TestWorldPageInterviewRequired:
         self, user: User, test_app_state, test_services
     ):
         """World page shows interview required message when interview not complete."""
-        from ui.pages.world import WorldPage
+        from src.ui.pages.world import WorldPage
 
         # Ensure interview is not complete
         test_app_state.interview_complete = False
@@ -54,7 +54,7 @@ class TestWorldPageInterviewRequired:
         self, user: User, test_app_state, test_services
     ):
         """World page has button to navigate to interview."""
-        from ui.pages.world import WorldPage
+        from src.ui.pages.world import WorldPage
 
         # Ensure interview is not complete
         test_app_state.interview_complete = False
@@ -74,7 +74,7 @@ class TestWorldPageWithData:
 
     async def test_world_page_builds_with_data(self, user: User, test_app_state, test_services):
         """World page builds successfully with world data."""
-        from ui.pages.world import WorldPage
+        from src.ui.pages.world import WorldPage
 
         # Mark interview as complete
         test_app_state.interview_complete = True
@@ -92,7 +92,7 @@ class TestWorldPageWithData:
         self, user: User, test_app_state, test_services
     ):
         """Entity browser uses dark mode compatible classes."""
-        from ui.pages.world import WorldPage
+        from src.ui.pages.world import WorldPage
 
         test_app_state.interview_complete = True
         test_app_state.dark_mode = True

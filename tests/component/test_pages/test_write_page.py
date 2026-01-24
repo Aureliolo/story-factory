@@ -16,8 +16,8 @@ class TestWritePageNoProject:
 
     async def test_write_page_shows_no_project_message(self, user: User, test_services):
         """Write page shows 'no project selected' when no project is loaded."""
-        from ui.pages.write import WritePage
-        from ui.state import AppState
+        from src.ui.pages.write import WritePage
+        from src.ui.state import AppState
 
         @ui.page("/test-write-no-project")
         def test_page():
@@ -35,7 +35,7 @@ class TestWritePageWithProject:
 
     async def test_write_page_builds_with_project(self, user: User, test_app_state, test_services):
         """Write page builds successfully with a project."""
-        from ui.pages.write import WritePage
+        from src.ui.pages.write import WritePage
 
         @ui.page("/test-write-with-project")
         def test_page():
@@ -50,7 +50,7 @@ class TestWritePageWithProject:
         self, user: User, test_app_state, test_services
     ):
         """Write page shows interview section."""
-        from ui.pages.write import WritePage
+        from src.ui.pages.write import WritePage
 
         @ui.page("/test-write-interview")
         def test_page():
@@ -64,7 +64,7 @@ class TestWritePageWithProject:
         self, user: User, test_app_state, test_services
     ):
         """Write page captures client context for background tasks."""
-        from ui.pages.write import WritePage
+        from src.ui.pages.write import WritePage
 
         page_ref = []
 
@@ -86,7 +86,7 @@ class TestWritePageTabs:
 
     async def test_write_page_has_fundamentals_tab(self, user: User, test_app_state, test_services):
         """Write page has Fundamentals tab."""
-        from ui.pages.write import WritePage
+        from src.ui.pages.write import WritePage
 
         @ui.page("/test-write-fundamentals-tab")
         def test_page():
@@ -98,7 +98,7 @@ class TestWritePageTabs:
 
     async def test_write_page_has_live_writing_tab(self, user: User, test_app_state, test_services):
         """Write page has Live Writing tab."""
-        from ui.pages.write import WritePage
+        from src.ui.pages.write import WritePage
 
         @ui.page("/test-write-writing-tab")
         def test_page():

@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.interviewer import InterviewerAgent
-from memory.story_state import StoryBrief
-from settings import Settings
+from src.agents.interviewer import InterviewerAgent
+from src.memory.story_state import StoryBrief
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def settings():
 @pytest.fixture
 def interviewer(settings):
     """Create InterviewerAgent with mocked Ollama client."""
-    with patch("agents.base.ollama.Client"):
+    with patch("src.agents.base.ollama.Client"):
         agent = InterviewerAgent(model="test-model", settings=settings)
         return agent
 
@@ -28,7 +28,7 @@ class TestInterviewerAgentInit:
 
     def test_init_with_defaults(self, settings):
         """Test agent initializes with default settings."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = InterviewerAgent(settings=settings)
             assert agent.name == "Interviewer"
             assert agent.role == "Story Requirements Gatherer"
@@ -36,7 +36,7 @@ class TestInterviewerAgentInit:
 
     def test_init_with_custom_model(self, settings):
         """Test agent initializes with custom model."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = InterviewerAgent(model="custom:model", settings=settings)
             assert agent.model == "custom:model"
 
@@ -176,7 +176,7 @@ class TestInterviewerFinalizeBrief:
 
     def test_raises_on_generation_failure(self, interviewer):
         """Test raises LLMGenerationError when structured generation fails."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         interviewer.generate_structured = MagicMock(
             side_effect=LLMGenerationError("Validation failed")

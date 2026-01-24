@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.architect import ArchitectAgent
-from memory.story_state import (
+from src.agents.architect import ArchitectAgent
+from src.memory.story_state import (
     Chapter,
     ChapterList,
     Character,
@@ -15,7 +15,7 @@ from memory.story_state import (
     StoryBrief,
     StoryState,
 )
-from settings import Settings
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def settings():
 @pytest.fixture
 def architect(settings):
     """Create ArchitectAgent with mocked Ollama client."""
-    with patch("agents.base.ollama.Client"):
+    with patch("src.agents.base.ollama.Client"):
         agent = ArchitectAgent(model="test-model", settings=settings)
         return agent
 
@@ -62,7 +62,7 @@ class TestArchitectAgentInit:
 
     def test_init_with_defaults(self, settings):
         """Test agent initializes with default settings."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = ArchitectAgent(settings=settings)
             assert agent.name == "Architect"
             assert agent.role == "Story Structure Designer"
@@ -164,7 +164,7 @@ class TestArchitectCreateCharacters:
 
     def test_raises_error_on_generation_failure(self, architect, sample_story_state):
         """Test raises error when structured generation fails."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         architect.generate_structured = MagicMock(
             side_effect=LLMGenerationError("Validation failed")
@@ -175,7 +175,7 @@ class TestArchitectCreateCharacters:
 
     def test_raises_error_when_not_enough_characters(self, architect, sample_story_state):
         """Test raises LLMGenerationError when LLM can't generate minimum characters."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         # Mock returning only 2 characters (less than minimum of 4)
         mock_result = CharacterList(
@@ -326,7 +326,7 @@ class TestArchitectCreateChapterOutline:
 
     def test_raises_error_when_not_enough_chapters(self, architect, sample_story_state):
         """Test raises LLMGenerationError when unable to generate enough chapters."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         sample_story_state.plot_summary = "An epic journey"
         sample_story_state.plot_points = [PlotPoint(description="Beginning")]

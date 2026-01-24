@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.scoring_service import ScoringService
+from src.services.scoring_service import ScoringService
 
 
 class TestScoringServiceExceptionHandling:

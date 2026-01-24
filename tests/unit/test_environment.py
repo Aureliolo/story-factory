@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from utils.environment import (
+from src.utils.environment import (
     _check_dependencies,
     _check_python_version,
     check_environment,
@@ -18,8 +18,8 @@ class TestCheckEnvironment:
     def test_check_environment_calls_both_checks(self, tmp_path, monkeypatch):
         """Test that check_environment calls both validation functions."""
         with (
-            patch("utils.environment._check_python_version") as mock_python,
-            patch("utils.environment._check_dependencies") as mock_deps,
+            patch("src.utils.environment._check_python_version") as mock_python,
+            patch("src.utils.environment._check_dependencies") as mock_deps,
         ):
             check_environment()
 

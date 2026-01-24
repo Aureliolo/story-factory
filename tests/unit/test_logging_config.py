@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from utils.logging_config import (
+from src.utils.logging_config import (
     ContextFilter,
     _context_filter,
     log_context,
@@ -119,7 +119,7 @@ class TestSetupLogging:
 
     def test_setup_logging_default_file(self, tmp_path, monkeypatch):
         """Test setup_logging uses default log file when log_file='default'."""
-        from utils import logging_config
+        from src.utils import logging_config
 
         root_logger = logging.getLogger()
         original_handlers = root_logger.handlers[:]

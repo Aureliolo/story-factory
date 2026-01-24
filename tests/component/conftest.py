@@ -24,7 +24,7 @@ def test_settings():
     Returns:
         settings (Settings): A Settings instance configured for component tests.
     """
-    from settings import Settings
+    from src.settings import Settings
 
     return Settings()
 
@@ -36,7 +36,7 @@ def test_services(test_settings, tmp_path):
     IMPORTANT: Must patch STORIES_DIR/WORLDS_DIR to prevent tests from
     writing to the real output directory.
     """
-    from services import ServiceContainer
+    from src.services import ServiceContainer
 
     stories_dir = tmp_path / "stories"
     worlds_dir = tmp_path / "worlds"
@@ -45,13 +45,13 @@ def test_services(test_settings, tmp_path):
 
     # Patch at ALL locations where these constants are imported
     with (
-        patch("settings.STORIES_DIR", stories_dir),
-        patch("settings.WORLDS_DIR", worlds_dir),
-        patch("services.project_service.STORIES_DIR", stories_dir),
-        patch("services.project_service.WORLDS_DIR", worlds_dir),
-        patch("services.backup_service.STORIES_DIR", stories_dir),
-        patch("services.backup_service.WORLDS_DIR", worlds_dir),
-        patch("services.export_service.STORIES_DIR", stories_dir),
+        patch("src.settings.STORIES_DIR", stories_dir),
+        patch("src.settings.WORLDS_DIR", worlds_dir),
+        patch("src.services.project_service.STORIES_DIR", stories_dir),
+        patch("src.services.project_service.WORLDS_DIR", worlds_dir),
+        patch("src.services.backup_service.STORIES_DIR", stories_dir),
+        patch("src.services.backup_service.WORLDS_DIR", worlds_dir),
+        patch("src.services.export_service.STORIES_DIR", stories_dir),
     ):
         yield ServiceContainer(test_settings)
 
@@ -59,7 +59,7 @@ def test_services(test_settings, tmp_path):
 @pytest.fixture
 def test_world_db(tmp_path: Path):
     """Create a test WorldDatabase with sample data."""
-    from memory.world_database import WorldDatabase
+    from src.memory.world_database import WorldDatabase
 
     db = WorldDatabase(tmp_path / "test_world.db")
 
@@ -86,7 +86,7 @@ def test_world_db(tmp_path: Path):
 @pytest.fixture
 def test_story_state():
     """Create a test StoryState."""
-    from memory.story_state import StoryBrief, StoryState
+    from src.memory.story_state import StoryBrief, StoryState
 
     brief = StoryBrief(
         premise="A test story premise",
@@ -123,7 +123,7 @@ def test_app_state(test_story_state, test_world_db):
     Returns:
         ui.state.AppState: AppState with the project set to the provided story and world.
     """
-    from ui.state import AppState
+    from src.ui.state import AppState
 
     state = AppState()
     state.set_project(test_story_state.id, test_story_state, test_world_db)

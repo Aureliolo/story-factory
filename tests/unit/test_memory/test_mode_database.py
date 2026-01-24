@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from memory.mode_database import ModeDatabase
-from memory.mode_models import GenerationScore, ModelPerformanceSummary, TuningRecommendation
+from src.memory.mode_database import ModeDatabase
+from src.memory.mode_models import GenerationScore, ModelPerformanceSummary, TuningRecommendation
 
 
 class TestModeDatabase:
@@ -615,7 +615,7 @@ class TestModeDatabase:
         recs = db.get_recent_recommendations()
         assert len(recs) == 1
         # Should fallback to MODEL_SWAP
-        from memory.mode_models import RecommendationType
+        from src.memory.mode_models import RecommendationType
 
         assert recs[0].recommendation_type == RecommendationType.MODEL_SWAP
 
@@ -1695,7 +1695,7 @@ class TestModeDatabase:
 
     def test_record_prompt_metrics_disabled(self, db: ModeDatabase, monkeypatch) -> None:
         """Test that prompt metrics are not recorded when disabled in settings."""
-        from settings import Settings
+        from src.settings import Settings
 
         # Create settings with prompt_metrics_enabled=False
         mock_settings = Settings()

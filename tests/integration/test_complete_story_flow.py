@@ -10,7 +10,7 @@ Tests the full workflow combining all phases:
 
 import pytest
 
-from memory.story_state import Chapter, Character, StoryBrief
+from src.memory.story_state import Chapter, Character, StoryBrief
 
 
 class TestCompleteWorkflow:

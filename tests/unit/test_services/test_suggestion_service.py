@@ -4,15 +4,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
-from services.suggestion_service import (
+from src.memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
+from src.services.suggestion_service import (
     CategorySuggestions,
     ProjectNames,
     SuggestionService,
     WritingSuggestions,
 )
-from settings import Settings
-from utils.exceptions import SuggestionError
+from src.settings import Settings
+from src.utils.exceptions import SuggestionError
 
 
 @pytest.fixture
@@ -97,7 +97,7 @@ def test_build_context_minimal_state(suggestion_service):
     assert isinstance(context, str)
 
 
-@patch("services.suggestion_service.BaseAgent")
+@patch("src.services.suggestion_service.BaseAgent")
 def test_generate_suggestions_success(mock_agent_class, suggestion_service, sample_story_state):
     """Test successful suggestion generation."""
     # Mock agent response with Pydantic model
@@ -132,7 +132,7 @@ def test_generate_suggestions_success(mock_agent_class, suggestion_service, samp
     assert len(suggestions["plot"]) > 0
 
 
-@patch("services.suggestion_service.BaseAgent")
+@patch("src.services.suggestion_service.BaseAgent")
 def test_generate_suggestions_single_category_success(
     mock_agent_class, suggestion_service, sample_story_state
 ):
@@ -151,7 +151,7 @@ def test_generate_suggestions_single_category_success(
     assert len(suggestions["plot"]) == 2
 
 
-@patch("services.suggestion_service.BaseAgent")
+@patch("src.services.suggestion_service.BaseAgent")
 def test_generate_suggestions_llm_error_raises(
     mock_agent_class, suggestion_service, sample_story_state
 ):
@@ -233,7 +233,7 @@ def test_build_context_with_all_plot_points_completed(suggestion_service):
 class TestGenerateProjectNames:
     """Tests for generate_project_names method."""
 
-    @patch("services.suggestion_service.BaseAgent")
+    @patch("src.services.suggestion_service.BaseAgent")
     def test_generate_project_names_success(
         self, mock_agent_class, suggestion_service, sample_story_state
     ):
@@ -262,7 +262,7 @@ class TestGenerateProjectNames:
         assert "The Chen Files" in names
         assert all(isinstance(n, str) for n in names)
 
-    @patch("services.suggestion_service.BaseAgent")
+    @patch("src.services.suggestion_service.BaseAgent")
     def test_generate_project_names_limited_count(
         self, mock_agent_class, suggestion_service, sample_story_state
     ):
@@ -278,7 +278,7 @@ class TestGenerateProjectNames:
         # Should return at most 'count' names
         assert len(names) <= 3
 
-    @patch("services.suggestion_service.BaseAgent")
+    @patch("src.services.suggestion_service.BaseAgent")
     def test_generate_project_names_llm_error_raises(
         self, mock_agent_class, suggestion_service, sample_story_state
     ):
@@ -292,7 +292,7 @@ class TestGenerateProjectNames:
 
         assert "LLM connection failed" in str(exc_info.value)
 
-    @patch("services.suggestion_service.BaseAgent")
+    @patch("src.services.suggestion_service.BaseAgent")
     def test_generate_project_names_strips_whitespace(
         self, mock_agent_class, suggestion_service, sample_story_state
     ):
@@ -314,7 +314,7 @@ class TestGenerateProjectNames:
         assert "Title with trailing spaces" in names
         assert "Both ends" in names
 
-    @patch("services.suggestion_service.BaseAgent")
+    @patch("src.services.suggestion_service.BaseAgent")
     def test_generate_project_names_filters_empty(
         self, mock_agent_class, suggestion_service, sample_story_state
     ):
@@ -333,7 +333,7 @@ class TestGenerateProjectNames:
         assert "" not in names
         assert "   " not in names
 
-    @patch("services.suggestion_service.BaseAgent")
+    @patch("src.services.suggestion_service.BaseAgent")
     def test_generate_project_names_with_plot_points(self, mock_agent_class, suggestion_service):
         """Test project name generation includes plot points in context."""
         state = StoryState(

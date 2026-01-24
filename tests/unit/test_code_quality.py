@@ -16,25 +16,24 @@ MAX_FILE_LINES = 1000
 
 # Directories to check for Python files
 SOURCE_DIRS = [
-    PROJECT_ROOT / "agents",
-    PROJECT_ROOT / "memory",
-    PROJECT_ROOT / "services",
-    PROJECT_ROOT / "ui",
-    PROJECT_ROOT / "workflows",
-    PROJECT_ROOT / "utils",
+    PROJECT_ROOT / "src" / "agents",
+    PROJECT_ROOT / "src" / "memory",
+    PROJECT_ROOT / "src" / "services",
+    PROJECT_ROOT / "src" / "ui",
+    PROJECT_ROOT / "src" / "utils",
 ]
 
 # Files that are explicitly allowed to exceed the limit (with justification)
 # TODO: These files should be refactored into smaller modules
 ALLOWED_LARGE_FILES: dict[str, str] = {
-    "ui/pages/world.py": "Complex graph visualization with entity CRUD, analysis, and import features - should be split into components",
-    "services/world_quality_service.py": "Quality scoring and entity generation with multiple entity types - should be split by entity type",
-    "workflows/orchestrator.py": "Main story generation workflow coordinating all agents - should be split into sub-workflows",
-    "ui/pages/write.py": "Main writing interface with interview, structure, and editing - should be split into components",
-    "memory/world_database.py": "SQLite + NetworkX world database with CRUD, queries, and migrations - should be split by concern",
-    "memory/mode_database.py": "Mode presets and custom mode management - should be split into presets and storage",
-    "services/world_service.py": "World building service with entity extraction and generation - should be split by operation type",
-    "ui/pages/models.py": "Model management with download queue, batch operations, and tag configuration - should be split into components",
+    "src/ui/pages/world.py": "Complex graph visualization with entity CRUD, analysis, and import features - should be split into components",
+    "src/services/world_quality_service.py": "Quality scoring and entity generation with multiple entity types - should be split by entity type",
+    "src/services/orchestrator.py": "Main story generation workflow coordinating all agents - should be split into sub-workflows",
+    "src/ui/pages/write.py": "Main writing interface with interview, structure, and editing - should be split into components",
+    "src/memory/world_database.py": "SQLite + NetworkX world database with CRUD, queries, and migrations - should be split by concern",
+    "src/memory/mode_database.py": "Mode presets and custom mode management - should be split into presets and storage",
+    "src/services/world_service.py": "World building service with entity extraction and generation - should be split by operation type",
+    "src/ui/pages/models.py": "Model management with download queue, batch operations, and tag configuration - should be split into components",
 }
 
 

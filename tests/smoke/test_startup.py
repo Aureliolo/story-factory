@@ -16,25 +16,25 @@ class TestImports:
 
     def test_import_settings(self):
         """Settings module imports cleanly."""
-        from settings import AGENT_ROLES, Settings
+        from src.settings import AGENT_ROLES, Settings
 
         assert Settings is not None
         assert AGENT_ROLES is not None
 
     def test_import_services(self):
         """Services module imports cleanly."""
-        from services import ServiceContainer
+        from src.services import ServiceContainer
 
         assert ServiceContainer is not None
 
     def test_import_agents(self):
         """Agent modules import cleanly."""
-        from agents.architect import ArchitectAgent
-        from agents.base import BaseAgent
-        from agents.continuity import ContinuityAgent
-        from agents.editor import EditorAgent
-        from agents.interviewer import InterviewerAgent
-        from agents.writer import WriterAgent
+        from src.agents.architect import ArchitectAgent
+        from src.agents.base import BaseAgent
+        from src.agents.continuity import ContinuityAgent
+        from src.agents.editor import EditorAgent
+        from src.agents.interviewer import InterviewerAgent
+        from src.agents.writer import WriterAgent
 
         assert BaseAgent is not None
         assert InterviewerAgent is not None
@@ -45,23 +45,23 @@ class TestImports:
 
     def test_import_memory(self):
         """Memory modules import cleanly."""
-        from memory.story_state import StoryState
-        from memory.world_database import WorldDatabase
+        from src.memory.story_state import StoryState
+        from src.memory.world_database import WorldDatabase
 
         assert StoryState is not None
         assert WorldDatabase is not None
 
     def test_import_ui(self):
         """UI modules import cleanly."""
-        from ui.app import StoryFactoryApp
-        from ui.state import AppState
+        from src.ui.app import StoryFactoryApp
+        from src.ui.state import AppState
 
         assert StoryFactoryApp is not None
         assert AppState is not None
 
     def test_import_workflows(self):
         """Workflow modules import cleanly."""
-        from workflows.orchestrator import StoryOrchestrator
+        from src.services.orchestrator import StoryOrchestrator
 
         assert StoryOrchestrator is not None
 
@@ -71,7 +71,7 @@ class TestSettingsInitialization:
 
     def test_settings_default_values(self):
         """Settings has sensible defaults when no file exists."""
-        from settings import Settings
+        from src.settings import Settings
 
         settings = Settings()
         assert settings.ollama_url == "http://localhost:11434"
@@ -83,7 +83,7 @@ class TestSettingsInitialization:
         """Settings loads even when saved models don't exist."""
         import json
 
-        from settings import Settings
+        from src.settings import Settings
 
         config_file = tmp_path / "settings.json"
         config_file.write_text(
@@ -97,7 +97,7 @@ class TestSettingsInitialization:
             )
         )
 
-        with patch("settings.SETTINGS_FILE", config_file):
+        with patch("src.settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
             assert settings.default_model == "nonexistent-model:latest"
             assert settings.agent_models.get("writer") == "also-nonexistent:7b"
@@ -108,12 +108,12 @@ class TestServiceContainerInitialization:
 
     def test_service_container_creates_all_services(self):
         """ServiceContainer initializes all services."""
-        from services import ServiceContainer
-        from settings import Settings
+        from src.services import ServiceContainer
+        from src.settings import Settings
 
         settings = Settings()
 
-        with patch("services.model_service.ollama") as mock_ollama:
+        with patch("src.services.model_service.ollama") as mock_ollama:
             mock_ollama.Client.return_value = MagicMock()
             services = ServiceContainer(settings)
 
@@ -129,7 +129,7 @@ class TestUIComponentsConstruction:
 
     def test_app_state_creation(self):
         """AppState can be created with defaults."""
-        from ui.state import AppState
+        from src.ui.state import AppState
 
         state = AppState()
         assert state is not None
@@ -138,13 +138,13 @@ class TestUIComponentsConstruction:
 
     def test_story_factory_app_construction(self):
         """StoryFactoryApp can be constructed."""
-        from services import ServiceContainer
-        from settings import Settings
-        from ui.app import StoryFactoryApp
+        from src.services import ServiceContainer
+        from src.settings import Settings
+        from src.ui.app import StoryFactoryApp
 
         settings = Settings()
 
-        with patch("services.model_service.ollama") as mock_ollama:
+        with patch("src.services.model_service.ollama") as mock_ollama:
             mock_ollama.Client.return_value = MagicMock()
             services = ServiceContainer(settings)
             app = StoryFactoryApp(services)

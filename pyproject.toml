@@ -85,10 +85,11 @@ story-factory = "main:main"
 
 # Setuptools configuration
 [tool.setuptools]
-packages = {find = {exclude = ["tests*"]}}
+package-dir = {"" = "src"}
+packages = {find = {where = ["src"], exclude = ["tests*"]}}
 
 [tool.setuptools.package-data]
-ui = ["*.css"]
+"src.ui" = ["*.css"]
 
 # Ruff configuration
 [tool.ruff]
@@ -175,7 +176,7 @@ markers = [
 
 # Coverage configuration
 [tool.coverage.run]
-source = ["agents", "services", "workflows", "memory", "utils", "settings.py"]
+source = ["src"]
 omit = [
     "tests/*",
     "*/site-packages/*",
@@ -183,7 +184,7 @@ omit = [
     "*/test_*.py",
     "*/conftest.py",
     "main.py",
-    "ui/*",
+    "src/ui/*",
 ]
 
 [tool.coverage.report]

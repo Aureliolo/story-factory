@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory.story_state import StoryBrief, StoryState
-from services.import_service import (
+from src.memory.story_state import StoryBrief, StoryState
+from src.services.import_service import (
     ExtractedCharacter,
     ExtractedCharacterList,
     ExtractedItem,
@@ -16,9 +16,9 @@ from services.import_service import (
     ExtractedRelationshipList,
     ImportService,
 )
-from services.model_mode_service import ModelModeService
-from settings import Settings
-from utils.exceptions import WorldGenerationError
+from src.services.model_mode_service import ModelModeService
+from src.settings import Settings
+from src.utils.exceptions import WorldGenerationError
 
 
 @pytest.fixture
@@ -348,7 +348,7 @@ class TestExtractCharactersMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_characters(sample_text, story_state)
 
             assert len(result) == 2
@@ -371,7 +371,7 @@ class TestExtractCharactersMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_characters(sample_text, story_state=None)
 
             assert len(result) == 1
@@ -392,7 +392,7 @@ class TestExtractCharactersMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_characters(sample_text)
 
             assert len(result) == 1
@@ -414,7 +414,7 @@ class TestExtractCharactersMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_characters(sample_text)
 
             assert len(result) == 1
@@ -423,7 +423,7 @@ class TestExtractCharactersMocked:
     def test_extract_characters_error(self, mock_import_service, sample_text):
         """Test handling of errors during character extraction."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=Exception("Model error"),
         ):
             with pytest.raises(WorldGenerationError, match="Character extraction failed"):
@@ -432,7 +432,7 @@ class TestExtractCharactersMocked:
     def test_extract_characters_connection_error(self, mock_import_service, sample_text):
         """Test handling of ConnectionError."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=ConnectionError("Connection refused"),
         ):
             with pytest.raises(WorldGenerationError, match="Character extraction failed"):
@@ -441,7 +441,7 @@ class TestExtractCharactersMocked:
     def test_extract_characters_timeout_error(self, mock_import_service, sample_text):
         """Test handling of TimeoutError."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=TimeoutError("Request timed out"),
         ):
             with pytest.raises(WorldGenerationError, match="Character extraction failed"):
@@ -474,7 +474,7 @@ class TestExtractLocationsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_locations(sample_text, story_state)
 
             assert len(result) == 2
@@ -497,7 +497,7 @@ class TestExtractLocationsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_locations(sample_text, story_state=None)
 
             assert len(result) == 1
@@ -518,7 +518,7 @@ class TestExtractLocationsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_locations(sample_text)
 
             assert len(result) == 1
@@ -538,7 +538,7 @@ class TestExtractLocationsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_locations(sample_text)
 
             assert len(result) == 1
@@ -547,7 +547,7 @@ class TestExtractLocationsMocked:
     def test_extract_locations_error(self, mock_import_service, sample_text):
         """Test handling of errors during location extraction."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=Exception("Model error"),
         ):
             with pytest.raises(WorldGenerationError, match="Location extraction failed"):
@@ -556,7 +556,7 @@ class TestExtractLocationsMocked:
     def test_extract_locations_connection_error(self, mock_import_service, sample_text):
         """Test handling of ConnectionError."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=ConnectionError("Connection refused"),
         ):
             with pytest.raises(WorldGenerationError, match="Location extraction failed"):
@@ -565,7 +565,7 @@ class TestExtractLocationsMocked:
     def test_extract_locations_timeout_error(self, mock_import_service, sample_text):
         """Test handling of TimeoutError."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=TimeoutError("Timed out"),
         ):
             with pytest.raises(WorldGenerationError, match="Location extraction failed"):
@@ -600,7 +600,7 @@ class TestExtractItemsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_items(sample_text, story_state)
 
             assert len(result) == 2
@@ -625,7 +625,7 @@ class TestExtractItemsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_items(sample_text, story_state=None)
 
             assert len(result) == 1
@@ -646,7 +646,7 @@ class TestExtractItemsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_items(sample_text)
 
             assert len(result) == 1
@@ -667,7 +667,7 @@ class TestExtractItemsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.extract_items(sample_text)
 
             assert len(result) == 1
@@ -676,7 +676,7 @@ class TestExtractItemsMocked:
     def test_extract_items_error(self, mock_import_service, sample_text):
         """Test handling of errors during item extraction."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=Exception("Model error"),
         ):
             with pytest.raises(WorldGenerationError, match="Item extraction failed"):
@@ -685,7 +685,7 @@ class TestExtractItemsMocked:
     def test_extract_items_connection_error(self, mock_import_service, sample_text):
         """Test handling of ConnectionError."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=ConnectionError("Connection refused"),
         ):
             with pytest.raises(WorldGenerationError, match="Item extraction failed"):
@@ -694,7 +694,7 @@ class TestExtractItemsMocked:
     def test_extract_items_timeout_error(self, mock_import_service, sample_text):
         """Test handling of TimeoutError."""
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=TimeoutError("Timed out"),
         ):
             with pytest.raises(WorldGenerationError, match="Item extraction failed"):
@@ -733,7 +733,7 @@ class TestInferRelationshipsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.infer_relationships(characters, sample_text)
 
             assert len(result) == 2
@@ -743,7 +743,7 @@ class TestInferRelationshipsMocked:
 
     def test_infer_relationships_handles_empty_characters(self, mock_import_service, sample_text):
         """Test that empty characters list returns empty result without LLM call."""
-        with patch("services.import_service.generate_structured") as mock_gen:
+        with patch("src.services.import_service.generate_structured") as mock_gen:
             result = mock_import_service.infer_relationships([], sample_text)
 
             assert result == []
@@ -765,7 +765,7 @@ class TestInferRelationshipsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.infer_relationships(characters, sample_text)
 
             assert len(result) == 1
@@ -789,7 +789,7 @@ class TestInferRelationshipsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.infer_relationships(characters, sample_text)
 
             assert len(result) == 1
@@ -814,7 +814,7 @@ class TestInferRelationshipsMocked:
             ]
         )
 
-        with patch("services.import_service.generate_structured", return_value=mock_response):
+        with patch("src.services.import_service.generate_structured", return_value=mock_response):
             result = mock_import_service.infer_relationships(characters, sample_text)
 
             assert len(result) == 1
@@ -824,7 +824,7 @@ class TestInferRelationshipsMocked:
         characters = [{"name": "Alice"}, {"name": "Bob"}]
 
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=Exception("Model error"),
         ):
             with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
@@ -835,7 +835,7 @@ class TestInferRelationshipsMocked:
         characters = [{"name": "Alice"}]
 
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=ConnectionError("Connection refused"),
         ):
             with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
@@ -846,7 +846,7 @@ class TestInferRelationshipsMocked:
         characters = [{"name": "Alice"}]
 
         with patch(
-            "services.import_service.generate_structured",
+            "src.services.import_service.generate_structured",
             side_effect=TimeoutError("Timed out"),
         ):
             with pytest.raises(WorldGenerationError, match="Relationship inference failed"):
@@ -1026,7 +1026,7 @@ class TestGenerateStructuredCalls:
         )
 
         with patch(
-            "services.import_service.generate_structured", return_value=mock_response
+            "src.services.import_service.generate_structured", return_value=mock_response
         ) as mock_gen:
             mock_import_service.extract_characters(sample_text, story_state)
 
@@ -1053,7 +1053,7 @@ class TestGenerateStructuredCalls:
         )
 
         with patch(
-            "services.import_service.generate_structured", return_value=mock_response
+            "src.services.import_service.generate_structured", return_value=mock_response
         ) as mock_gen:
             mock_import_service.extract_locations(sample_text, story_state)
 
@@ -1076,7 +1076,7 @@ class TestGenerateStructuredCalls:
         )
 
         with patch(
-            "services.import_service.generate_structured", return_value=mock_response
+            "src.services.import_service.generate_structured", return_value=mock_response
         ) as mock_gen:
             mock_import_service.extract_items(sample_text, story_state)
 
@@ -1102,7 +1102,7 @@ class TestGenerateStructuredCalls:
         )
 
         with patch(
-            "services.import_service.generate_structured", return_value=mock_response
+            "src.services.import_service.generate_structured", return_value=mock_response
         ) as mock_gen:
             mock_import_service.infer_relationships(characters, sample_text)
 

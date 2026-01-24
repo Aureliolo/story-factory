@@ -4,15 +4,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.continuity import (
+from src.agents.continuity import (
     ContinuityAgent,
     ContinuityIssue,
     ContinuityIssueList,
     DialoguePattern,
     DialoguePatternList,
 )
-from memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
-from settings import Settings
+from src.memory.story_state import Chapter, Character, PlotPoint, StoryBrief, StoryState
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def settings():
 @pytest.fixture
 def continuity(settings):
     """Create ContinuityAgent with mocked Ollama client."""
-    with patch("agents.base.ollama.Client"):
+    with patch("src.agents.base.ollama.Client"):
         agent = ContinuityAgent(model="test-model", settings=settings)
         return agent
 
@@ -96,14 +96,14 @@ class TestContinuityAgentInit:
 
     def test_init_with_defaults(self, settings):
         """Test agent initializes with default settings."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = ContinuityAgent(settings=settings)
             assert agent.name == "Continuity Checker"
             assert agent.role == "Consistency Guardian"
 
     def test_init_with_custom_model(self, settings):
         """Test agent initializes with custom model."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = ContinuityAgent(model="continuity-model:7b", settings=settings)
             assert agent.model == "continuity-model:7b"
 
@@ -170,7 +170,7 @@ class TestContinuityCheckChapter:
 
     def test_raises_on_generation_exception(self, continuity, sample_story_state):
         """Test raises LLMGenerationError when generate_structured fails."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
 
@@ -231,7 +231,7 @@ class TestContinuityCheckFullStory:
 
     def test_raises_on_generation_exception(self, continuity, sample_story_state):
         """Test raises LLMGenerationError when generate_structured fails."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         sample_story_state.chapters[0].content = "Chapter 1 content..."
         sample_story_state.chapters[1].content = "Chapter 2 content..."
@@ -273,7 +273,7 @@ class TestContinuityValidateAgainstOutline:
 
     def test_raises_on_generation_exception(self, continuity, sample_story_state):
         """Test raises LLMGenerationError when generate_structured fails."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
 
@@ -609,7 +609,7 @@ class TestContinuityVoiceConsistency:
 
     def test_check_character_voice_raises_on_exception(self, continuity, sample_story_state):
         """Test raises LLMGenerationError when generate_structured fails."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
 
@@ -739,7 +739,7 @@ class TestContinuityVoiceConsistency:
 
     def test_extract_dialogue_patterns_raises_on_exception(self, continuity, sample_story_state):
         """Test extract_dialogue_patterns raises LLMGenerationError on exception."""
-        from utils.exceptions import LLMGenerationError
+        from src.utils.exceptions import LLMGenerationError
 
         continuity.generate_structured = MagicMock(side_effect=Exception("LLM error"))
 
