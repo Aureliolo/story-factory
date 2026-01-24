@@ -14,7 +14,6 @@ from src.memory.mode_models import (
 from src.services import ServiceContainer
 from src.settings import AGENT_ROLES
 from src.ui.state import AppState
-from src.utils import extract_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ class SettingsPage:
         with ui.column().classes("w-full gap-6 p-4"):
             ui.label("Settings").classes("text-2xl font-bold")
 
-            # Top row: Connection, Workflow, Memory, Generation Mode, Story Structure
+            # Top row: Connection, Workflow, Memory, Generation Mode, Adaptive Learning
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch"):
                 with ui.element("div").style("flex: 1 1 240px; min-width: 240px;"):
                     self._build_connection_section()
@@ -68,10 +67,10 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
                     self._build_mode_section()
 
-                with ui.element("div").style("flex: 1 1 260px; min-width: 260px;"):
-                    self._build_story_structure_section()
+                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
+                    self._build_learning_section()
 
-            # Bottom row: Creativity, Model Selection, Adaptive Learning, World Generation
+            # Bottom row: Creativity, Model Selection, Story Structure, World Generation
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch mt-4"):
                 with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
                     self._build_temperature_section()
@@ -79,10 +78,10 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1.2 1 380px; min-width: 380px;"):
                     self._build_model_section()
 
-                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
-                    self._build_learning_section()
+                with ui.element("div").style("flex: 1 1 200px; min-width: 200px;"):
+                    self._build_story_structure_section()
 
-                with ui.element("div").style("flex: 1 1 420px; min-width: 420px;"):
+                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
                     self._build_world_gen_section()
 
             # Save button
@@ -413,17 +412,11 @@ class SettingsPage:
                     current_mode = PRESET_MODES.get(self.settings.current_mode)
                     if current_mode:
                         with ui.expansion("Mode Details", icon="info").classes("w-full mt-2"):
-                            with ui.column().classes("gap-1 text-sm"):
-                                for role, model in current_mode.agent_models.items():
-                                    temp = current_mode.agent_temperatures.get(
-                                        role, self.settings.get_temperature_for_agent(role)
-                                    )
-                                    with ui.row().classes("items-center gap-2"):
-                                        ui.label(f"{role.title()}:").classes("font-medium w-24")
-                                        ui.label(extract_model_name(model)).classes(
-                                            "text-gray-600 dark:text-gray-400"
-                                        )
-                                        ui.label(f"({temp})").classes("text-xs text-gray-500")
+                            with ui.column().classes("gap-2 text-sm"):
+                                # Description
+                                ui.label(current_mode.description).classes(
+                                    "text-gray-600 dark:text-gray-400 italic"
+                                )
 
                     # VRAM strategy
                     vram_options = {
@@ -454,14 +447,14 @@ class SettingsPage:
                 "Configure how the system learns from generation quality",
             )
 
-            with ui.column().classes("w-full gap-4"):
+            with ui.column().classes("w-full gap-3"):
                 # Autonomy level
                 autonomy_options = {
-                    AutonomyLevel.MANUAL.value: "Manual - All changes require approval",
-                    AutonomyLevel.CAUTIOUS.value: "Cautious - Auto-apply minor changes",
-                    AutonomyLevel.BALANCED.value: "Balanced - Auto-apply high confidence",
-                    AutonomyLevel.AGGRESSIVE.value: "Aggressive - Auto-apply all, notify",
-                    AutonomyLevel.EXPERIMENTAL.value: "Experimental - Try variations",
+                    AutonomyLevel.MANUAL.value: "Manual - Require approval",
+                    AutonomyLevel.CAUTIOUS.value: "Cautious - Auto minor",
+                    AutonomyLevel.BALANCED.value: "Balanced - Auto confident",
+                    AutonomyLevel.AGGRESSIVE.value: "Aggressive - Auto all",
+                    AutonomyLevel.EXPERIMENTAL.value: "Experimental",
                 }
                 self._autonomy_select = (
                     ui.select(
@@ -474,75 +467,67 @@ class SettingsPage:
                     .tooltip("How autonomous the tuning system should be")
                 )
 
-                # Learning triggers
-                ui.label("Learning Triggers").classes(
-                    "text-sm font-medium text-gray-600 dark:text-gray-400"
-                )
+                # Learning triggers as compact checkboxes
                 trigger_labels = {
-                    LearningTrigger.OFF.value: "Off (disabled)",
-                    LearningTrigger.AFTER_PROJECT.value: "After completing a story",
+                    LearningTrigger.AFTER_PROJECT.value: "After story",
                     LearningTrigger.PERIODIC.value: "Every N chapters",
-                    LearningTrigger.CONTINUOUS.value: "Continuous background analysis",
+                    LearningTrigger.CONTINUOUS.value: "Continuous",
                 }
 
                 self._trigger_checkboxes = {}
-                with ui.column().classes("gap-1 pl-2"):
+                with ui.row().classes("flex-wrap gap-x-4 gap-y-1"):
                     for trigger_value, label in trigger_labels.items():
-                        if trigger_value == LearningTrigger.OFF.value:
-                            continue  # Skip OFF, use others as toggles
                         is_enabled = trigger_value in self.settings.learning_triggers
                         self._trigger_checkboxes[trigger_value] = ui.checkbox(
                             label, value=is_enabled
-                        ).classes("text-sm")
+                        ).classes("text-xs")
 
-                # Periodic interval (show when periodic is checked)
+                # Settings row
                 with ui.row().classes("w-full items-end gap-2"):
                     self._periodic_interval = (
                         ui.number(
-                            label="Periodic interval (chapters)",
+                            label="Interval",
                             value=self.settings.learning_periodic_interval,
                             min=1,
                             max=20,
                         )
-                        .classes("flex-grow")
+                        .classes("w-20")
                         .props("outlined dense")
-                        .tooltip("Analyze every N chapters when periodic trigger is enabled")
+                        .tooltip("Chapters between analysis")
                     )
 
                     self._min_samples = (
                         ui.number(
-                            label="Min samples",
+                            label="Samples",
                             value=self.settings.learning_min_samples,
                             min=1,
                             max=50,
                         )
-                        .classes("w-24")
+                        .classes("w-20")
                         .props("outlined dense")
-                        .tooltip("Minimum samples before making recommendations")
+                        .tooltip("Min samples for recommendations")
                     )
 
-                # Confidence threshold slider
-                with ui.column().classes("w-full"):
-                    with ui.row().classes("w-full items-center justify-between"):
-                        ui.label("Auto-apply Confidence").classes("text-sm")
-                        self._confidence_label = ui.label(
-                            f"{self.settings.learning_confidence_threshold:.0%}"
-                        ).classes(
-                            "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
+                    # Compact confidence with inline label
+                    with ui.column().classes("flex-grow"):
+                        with ui.row().classes("items-center justify-between"):
+                            ui.label("Confidence").classes("text-xs text-gray-500")
+                            self._confidence_label = ui.label(
+                                f"{self.settings.learning_confidence_threshold:.0%}"
+                            ).classes("text-xs font-mono")
+
+                        self._confidence_slider = ui.slider(
+                            min=0.5,
+                            max=1.0,
+                            step=0.05,
+                            value=self.settings.learning_confidence_threshold,
+                        ).classes("w-full")
+
+                        self._confidence_label.bind_text_from(
+                            self._confidence_slider,
+                            "value",
+                            backward=lambda v: f"{v:.0%}",
                         )
-
-                    self._confidence_slider = ui.slider(
-                        min=0.5,
-                        max=1.0,
-                        step=0.05,
-                        value=self.settings.learning_confidence_threshold,
-                    ).classes("w-full")
-
-                    self._confidence_label.bind_text_from(
-                        self._confidence_slider,
-                        "value",
-                        backward=lambda v: f"{v:.0%}",
-                    )
 
     def _build_world_gen_section(self) -> None:
         """Build world generation settings section."""
@@ -554,7 +539,7 @@ class SettingsPage:
                 "Actual counts are randomized between min and max values.",
             )
 
-            # Store inputs for saving (replacing sliders with number inputs)
+            # Store inputs for saving
             self._world_gen_inputs: dict[str, tuple[ui.number, ui.number]] = {}
 
             entity_configs = [
@@ -566,8 +551,15 @@ class SettingsPage:
                 ("relationships", "Relationships", "share", 1, 40),
             ]
 
-            # 2-column grid for compact layout
-            with ui.element("div").classes("grid grid-cols-2 gap-3"):
+            # Table-style layout with headers
+            with ui.element("div").classes("w-full"):
+                # Header row
+                with ui.row().classes("items-center gap-2 mb-2 text-xs text-gray-500"):
+                    ui.element("div").classes("w-28")  # Spacer for label column
+                    ui.label("Min").classes("w-14 text-center")
+                    ui.label("Max").classes("w-14 text-center")
+
+                # Entity rows
                 for key, label, icon, abs_min, abs_max in entity_configs:
                     min_attr = f"world_gen_{key}_min"
                     max_attr = f"world_gen_{key}_max"
@@ -575,20 +567,17 @@ class SettingsPage:
                     current_max = getattr(self.settings, max_attr)
 
                     with ui.row().classes("items-center gap-2"):
-                        ui.icon(icon, size="xs").classes("text-gray-500")
-                        ui.label(label).classes("text-sm font-medium w-24")
+                        ui.icon(icon, size="xs").classes("text-gray-500 w-5")
+                        ui.label(label).classes("text-sm w-24")
                         min_input = (
                             ui.number(value=current_min, min=abs_min, max=abs_max, step=1)
                             .props("outlined dense")
-                            .classes("w-16")
-                            .tooltip(f"Min {label.lower()}")
+                            .classes("w-14")
                         )
-                        ui.label("-").classes("text-gray-500")
                         max_input = (
                             ui.number(value=current_max, min=abs_min, max=abs_max, step=1)
                             .props("outlined dense")
-                            .classes("w-16")
-                            .tooltip(f"Max {label.lower()}")
+                            .classes("w-14")
                         )
 
                         self._world_gen_inputs[key] = (min_input, max_input)

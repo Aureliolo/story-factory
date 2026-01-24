@@ -16,6 +16,9 @@ from src.memory.mode_models import LearningTrigger
 # Configure module logger
 logger = logging.getLogger(__name__)
 
+# Cross-platform subprocess flags (CREATE_NO_WINDOW only exists on Windows)
+_SUBPROCESS_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 SETTINGS_FILE = Path(__file__).parent / "settings.json"
 
@@ -1112,7 +1115,11 @@ def get_installed_models(timeout: int | None = None) -> list[str]:
     actual_timeout = timeout if timeout is not None else 10
     try:
         result = subprocess.run(
-            ["ollama", "list"], capture_output=True, text=True, timeout=actual_timeout
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=actual_timeout,
+            creationflags=_SUBPROCESS_FLAGS,
         )
         models = []
         for line in result.stdout.strip().split("\n")[1:]:  # Skip header
@@ -1143,7 +1150,11 @@ def get_installed_models_with_sizes(timeout: int | None = None) -> dict[str, flo
     actual_timeout = timeout if timeout is not None else 10
     try:
         result = subprocess.run(
-            ["ollama", "list"], capture_output=True, text=True, timeout=actual_timeout
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=actual_timeout,
+            creationflags=_SUBPROCESS_FLAGS,
         )
         # Check return code before parsing
         if result.returncode != 0:
@@ -1221,6 +1232,7 @@ def get_available_vram(timeout: int | None = None) -> int:
             capture_output=True,
             text=True,
             timeout=actual_timeout,
+            creationflags=_SUBPROCESS_FLAGS,
         )
         vram_mb = int(result.stdout.strip().split("\n")[0])
         return vram_mb // 1024
