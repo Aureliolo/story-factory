@@ -83,7 +83,7 @@ class TestTemplateServiceErrorHandling:
         state = StoryState(id="test-state")
 
         # Get a built-in template
-        template = list(BUILTIN_STORY_TEMPLATES.values())[0]
+        template = next(iter(BUILTIN_STORY_TEMPLATES.values()))
 
         # Create a mock world_db
         mock_world_db = MagicMock()
@@ -108,7 +108,7 @@ class TestTemplateServiceErrorHandling:
         monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         # Get a builtin template ID
-        builtin_id = list(BUILTIN_STORY_TEMPLATES.keys())[0]
+        builtin_id = next(iter(BUILTIN_STORY_TEMPLATES.keys()))
 
         # Create a template file that has the same ID as a builtin
         template_data = {

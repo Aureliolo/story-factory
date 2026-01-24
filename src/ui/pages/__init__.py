@@ -9,11 +9,11 @@ from .world import WorldPage
 from .write import WritePage
 
 __all__ = [
-    "WritePage",
-    "WorldPage",
-    "ProjectsPage",
-    "SettingsPage",
-    "ModelsPage",
     "AnalyticsPage",
     "ComparisonPage",
+    "ModelsPage",
+    "ProjectsPage",
+    "SettingsPage",
+    "WorldPage",
+    "WritePage",
 ]

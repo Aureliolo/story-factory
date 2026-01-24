@@ -2,7 +2,7 @@
 ollama==0.6.1
 instructor==1.14.4
 openai==2.15.0
-nicegui==3.5.0
+nicegui==3.6.1
 pydantic==2.12.5
 networkx==3.6.1
 ebooklib==0.20
@@ -19,7 +19,7 @@ playwright==1.57.0
 pytest-playwright==0.7.2
 
 # Code quality
-ruff==0.14.13
+ruff==0.14.14
 mypy==1.19.1
 pre-commit==4.5.1
 

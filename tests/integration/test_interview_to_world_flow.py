@@ -22,7 +22,7 @@ class TestProjectCreation:
 
     def test_project_creates_with_id(self, services):
         """Test that created projects have IDs."""
-        story_state, world_db = services.project.create_project("ID Test")
+        story_state, _world_db = services.project.create_project("ID Test")
 
         # Verify project has a valid UUID
         assert story_state.id is not None
@@ -46,7 +46,7 @@ class TestProjectCreation:
     def test_load_project(self, services):
         """Test loading a saved project."""
         # Create and save
-        story_state, world_db = services.project.create_project("Load Test")
+        story_state, _world_db = services.project.create_project("Load Test")
         story_state.brief = StoryBrief(
             premise="Test premise",
             genre="Fantasy",
@@ -60,7 +60,7 @@ class TestProjectCreation:
         services.project.save_project(story_state)
 
         # Load
-        loaded_state, loaded_db = services.project.load_project(story_state.id)
+        loaded_state, _loaded_db = services.project.load_project(story_state.id)
 
         assert loaded_state.id == story_state.id
         assert loaded_state.project_name == "Load Test"
@@ -96,7 +96,7 @@ class TestWorldDatabase:
 
     def test_add_entity_to_world(self, services):
         """Test adding entities to world database."""
-        story_state, world_db = services.project.create_project("Entity Test")
+        _story_state, world_db = services.project.create_project("Entity Test")
 
         # Add a character
         entity_id = world_db.add_entity(
@@ -112,7 +112,7 @@ class TestWorldDatabase:
 
     def test_add_relationship(self, services):
         """Test adding relationships between entities."""
-        story_state, world_db = services.project.create_project("Relationship Test")
+        _story_state, world_db = services.project.create_project("Relationship Test")
 
         # Add two characters
         alice_id = world_db.add_entity("character", "Alice", "Protagonist")
@@ -133,7 +133,7 @@ class TestWorldDatabase:
         services.project.save_project(story_state)
 
         # Load and verify entity persists
-        loaded_state, loaded_db = services.project.load_project(story_state.id)
+        _loaded_state, loaded_db = services.project.load_project(story_state.id)
         entities = loaded_db.list_entities(entity_type="character")
 
         assert len(entities) == 1
@@ -165,7 +165,7 @@ class TestStoryStateManagement:
 
     def test_story_state_tracks_status(self, services):
         """Test that story state tracks workflow status."""
-        story_state, world_db = services.project.create_project("Status Test")
+        story_state, _world_db = services.project.create_project("Status Test")
 
         # Initial status
         assert story_state.status == "interview"
@@ -200,7 +200,7 @@ class TestStoryStateManagement:
 
     def test_story_brief_persistence(self, services):
         """Test that story brief persists correctly."""
-        story_state, world_db = services.project.create_project("Brief Test")
+        story_state, _world_db = services.project.create_project("Brief Test")
 
         # Set brief
         story_state.brief = StoryBrief(

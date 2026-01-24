@@ -3049,7 +3049,7 @@ class TestRefinementLoopEdgeCases:
 
         # Should still return relationship despite error on 2nd iteration
         # because we have valid results from 1st iteration
-        rel, scores, iterations = service.generate_relationship_with_quality(
+        rel, scores, _iterations = service.generate_relationship_with_quality(
             story_state, entity_names=["Alice", "Bob", "Charlie"], existing_rels=[]
         )
 

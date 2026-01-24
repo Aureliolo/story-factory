@@ -218,7 +218,11 @@ class ComparisonPage:
         logger.debug(f"Selected models: {self._selected_models}")
 
     async def _generate_comparison(self) -> None:
-        """Generate chapter comparison with selected models."""
+        """
+        Initiates generation of a chapter comparison for the currently selected chapter and models, processes progress events from the generator, stores the resulting ComparisonRecord, and updates the UI.
+
+        Performs validation of project presence, chapter selection, and that 2-4 models are chosen; notifies the user on validation failures or generation errors. Updates internal state (_is_generating and _current_comparison) and progress UI while the comparison is being produced.
+        """
         if self._is_generating:
             return
 
@@ -265,7 +269,7 @@ class ComparisonPage:
             try:
                 while True:
                     event_dict = next(comparison_gen)
-                    if "completed" in event_dict and event_dict["completed"]:
+                    if event_dict.get("completed"):
                         model_id = event_dict["model_id"]
                         model_name = extract_model_name(model_id)
                         if self._progress_label:

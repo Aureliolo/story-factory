@@ -129,7 +129,7 @@ class TestProjectService:
         original, _ = service.create_project("Original")
 
         # Duplicate it
-        duplicate, dup_db = service.duplicate_project(original.id)
+        duplicate, _dup_db = service.duplicate_project(original.id)
 
         assert duplicate.id != original.id
         assert duplicate.project_name == "Copy of Original"
@@ -320,14 +320,18 @@ class TestProjectServiceExceptionHandling:
     """Tests for exception handling and edge cases in ProjectService."""
 
     def test_create_project_with_template(self, tmp_settings, monkeypatch, tmp_path):
-        """Test creating a project with a template applies the template (lines 120-126)."""
+        """
+        Verifies that creating a project with a built-in template applies the template data to the new project.
+
+        Asserts the created project's name is preserved, its status is "interview", and the template populates the project's brief with genre "Fantasy".
+        """
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
         # Use a built-in template
-        state, world_db = service.create_project("Templated Story", template_id="fantasy-epic")
+        state, _world_db = service.create_project("Templated Story", template_id="fantasy-epic")
 
         # Verify project was created
         assert state.project_name == "Templated Story"
@@ -344,7 +348,7 @@ class TestProjectServiceExceptionHandling:
         service = ProjectService(tmp_settings)
 
         # Use a nonexistent template ID
-        state, world_db = service.create_project(
+        state, _world_db = service.create_project(
             "Story Without Template", template_id="nonexistent-template"
         )
 
@@ -614,8 +618,8 @@ class TestProjectServiceGetByName:
         service = ProjectService(tmp_settings)
 
         # Create projects
-        state1, world_db1 = service.create_project("Delete Me")
-        state2, _ = service.create_project("Keep Me")
+        _state1, world_db1 = service.create_project("Delete Me")
+        _state2, _ = service.create_project("Keep Me")
 
         # Close the database to allow deletion on Windows
         world_db1.close()
