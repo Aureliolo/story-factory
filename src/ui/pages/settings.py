@@ -369,6 +369,18 @@ class SettingsPage:
                     .tooltip("Characters to analyze when reviewing chapter quality")
                 )
 
+                self._full_text_preview_chars = (
+                    ui.number(
+                        label="Editor preview (chars)",
+                        value=self.settings.full_text_preview_chars,
+                        min=500,
+                        max=10000,
+                    )
+                    .classes("w-full")
+                    .props("outlined dense")
+                    .tooltip("Characters sent to editor for suggestions")
+                )
+
     def _build_mode_section(self) -> None:
         """Build generation mode settings."""
         with ui.card().classes("w-full h-full"):
@@ -418,20 +430,17 @@ class SettingsPage:
                                     "text-gray-600 dark:text-gray-400 italic"
                                 )
 
-                    # VRAM strategy
+                    # VRAM strategy (persisted in settings)
                     vram_options = {
                         VramStrategy.SEQUENTIAL.value: "Sequential - Full unload between agents",
                         VramStrategy.PARALLEL.value: "Parallel - Keep models loaded",
                         VramStrategy.ADAPTIVE.value: "Adaptive - Smart loading (recommended)",
                     }
-                    current_vram = (
-                        current_mode.vram_strategy if current_mode else VramStrategy.ADAPTIVE.value
-                    )
                     self._vram_strategy_select = (
                         ui.select(
                             label="VRAM Strategy",
                             options=vram_options,
-                            value=current_vram,
+                            value=self.settings.vram_strategy,
                         )
                         .classes("w-full mt-3")
                         .props("outlined dense")
@@ -676,11 +685,14 @@ class SettingsPage:
             self.settings.max_tokens = int(self._max_tokens_input.value)
             self.settings.previous_chapter_context_chars = int(self._prev_chapter_chars.value)
             self.settings.chapter_analysis_chars = int(self._chapter_analysis_chars.value)
+            self.settings.full_text_preview_chars = int(self._full_text_preview_chars.value)
 
             # Generation mode
             self.settings.use_mode_system = self._use_mode_system.value
             if hasattr(self, "_mode_select"):
                 self.settings.current_mode = self._mode_select.value
+            if hasattr(self, "_vram_strategy_select"):
+                self.settings.vram_strategy = self._vram_strategy_select.value
 
             # Learning settings
             self.settings.learning_autonomy = self._autonomy_select.value

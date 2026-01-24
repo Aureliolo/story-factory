@@ -59,12 +59,13 @@ class ServiceContainer:
         """
         self.settings = settings or Settings.load()
         self.project = ProjectService(self.settings)
-        self.story = StoryService(self.settings)
         self.world = WorldService(self.settings)
         self.model = ModelService(self.settings)
         self.export = ExportService(self.settings)
         self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
+        # StoryService needs mode_service for adaptive learning hooks
+        self.story = StoryService(self.settings, mode_service=self.mode)
         self.world_quality = WorldQualityService(self.settings, self.mode)
         self.suggestion = SuggestionService(self.settings)
         self.template = TemplateService(self.settings)

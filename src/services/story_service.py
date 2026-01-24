@@ -28,16 +28,18 @@ class StoryService:
     chapter writing workflows.
     """
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, mode_service: Any | None = None):
         """Initialize story service.
 
         Args:
             settings: Application settings.
+            mode_service: Optional ModelModeService for adaptive learning.
         """
         validate_not_none(settings, "settings")
         validate_type(settings, "settings", Settings)
         logger.debug("Initializing StoryService")
         self.settings = settings
+        self.mode_service = mode_service  # For learning hooks
         # Use OrderedDict for LRU cache behavior
         self._orchestrators: OrderedDict[str, StoryOrchestrator] = OrderedDict()
         logger.debug("StoryService initialized successfully")
@@ -60,8 +62,11 @@ class StoryService:
             self._orchestrators.move_to_end(state.id)
             return self._orchestrators[state.id]
 
-        # Create new orchestrator
-        orchestrator = StoryOrchestrator(settings=self.settings)
+        # Create new orchestrator with mode service for learning hooks
+        orchestrator = StoryOrchestrator(
+            settings=self.settings,
+            mode_service=self.mode_service,
+        )
         orchestrator.story_state = state
         self._orchestrators[state.id] = orchestrator
 
@@ -92,6 +97,61 @@ class StoryService:
             state.timeline = orchestrator.story_state.timeline
             state.current_chapter = orchestrator.story_state.current_chapter
             state.status = orchestrator.story_state.status
+
+    def _on_story_complete(self, state: StoryState) -> list[Any] | None:
+        """Trigger learning hooks when a story is completed.
+
+        Args:
+            state: The completed story state.
+
+        Returns:
+            List of recommendations if any, or None.
+        """
+        if not self.mode_service:
+            return None
+
+        try:
+            recommendations = self.mode_service.on_project_complete()
+            if recommendations:
+                logger.info(
+                    f"Generated {len(recommendations)} learning recommendations "
+                    f"for project {state.id}"
+                )
+                # Handle recommendations based on autonomy level
+                pending = self.mode_service.handle_recommendations(recommendations)
+                if pending:
+                    logger.info(f"{len(pending)} recommendations pending user approval")
+                return list(pending)  # Explicit cast for type checker
+            logger.debug(f"No recommendations generated for project {state.id}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to process project completion learning: {e}")
+            return None
+
+    def complete_project(self, state: StoryState) -> dict[str, Any]:
+        """Mark a project as complete and trigger learning.
+
+        Call this when the user explicitly marks a story as finished.
+        This triggers the learning system to generate recommendations
+        based on the project's generation data.
+
+        Args:
+            state: The story state to complete.
+
+        Returns:
+            Dictionary with completion info and any pending recommendations.
+        """
+        logger.info(f"Completing project {state.id}")
+        state.status = "completed"
+
+        # Trigger learning
+        recommendations = self._on_story_complete(state)
+
+        return {
+            "project_id": state.id,
+            "status": "completed",
+            "pending_recommendations": recommendations or [],
+        }
 
     # ========== INTERVIEW PHASE ==========
 
@@ -528,6 +588,9 @@ class StoryService:
             yield event
 
         self._sync_state(orchestrator, state)
+
+        # Trigger project completion learning
+        self._on_story_complete(state)
 
     def write_short_story(self, state: StoryState) -> Generator[WorkflowEvent, None, str]:
         """Write a short story (single chapter).

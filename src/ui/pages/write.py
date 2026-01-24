@@ -14,12 +14,13 @@ from nicegui.elements.markdown import Markdown
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
-from src.memory.mode_models import PRESET_MODES
+from src.memory.mode_models import PRESET_MODES, TuningRecommendation
 from src.services import ServiceContainer
 from src.services.story_service import GenerationCancelled
 from src.services.world_service import WorldBuildOptions
 from src.ui.components.chat import ChatComponent
 from src.ui.components.generation_status import GenerationStatus
+from src.ui.components.recommendation_dialog import show_recommendations
 from src.ui.graph_renderer import render_entity_summary_html
 from src.ui.state import AppState
 from src.ui.theme import get_status_color
@@ -1150,6 +1151,9 @@ class WritePage:
                 self.services.project.save_project(self.state.project)
                 self._notify("Chapter complete!", type="positive")
 
+                # Check for learning recommendations
+                self._check_learning_recommendations()
+
         finally:
             self.state.is_writing = False
             self.state.reset_generation_flags()
@@ -1236,6 +1240,9 @@ class WritePage:
                 self.services.project.save_project(self.state.project)
                 self._notify("All chapters complete!", type="positive")
 
+                # Check for learning recommendations (story complete = more likely to have recs)
+                self._check_learning_recommendations()
+
         finally:
             self.state.is_writing = False
             self.state.reset_generation_flags()
@@ -1245,6 +1252,93 @@ class WritePage:
                         self._generation_status.hide()
                 except RuntimeError:
                     logger.debug("Client context not available for hiding status")
+
+    def _check_learning_recommendations(self) -> None:
+        """Check for and display any pending learning recommendations."""
+        if not self.services.mode:
+            return
+
+        # Check if learning is enabled
+        settings = self.services.settings
+        if "off" in settings.learning_triggers:
+            return
+
+        try:
+            # Check if the mode service should tune based on triggers
+            if not self.services.mode.should_tune():
+                return
+
+            # Get pending recommendations
+            recommendations = self.services.mode.get_pending_recommendations()
+            if not recommendations:
+                logger.debug("No pending recommendations to show")
+                return
+
+            logger.info(f"Showing {len(recommendations)} pending recommendations")
+
+            # Show recommendation dialog
+            show_recommendations(
+                recommendations=recommendations,
+                on_apply=self._apply_recommendations,
+                on_dismiss=self._dismiss_recommendations,
+            )
+        except Exception as e:
+            logger.warning(f"Error checking learning recommendations: {e}")
+
+    def _apply_recommendations(self, recommendations: list[TuningRecommendation]) -> None:
+        """Apply selected recommendations.
+
+        Args:
+            recommendations: List of recommendations to apply.
+        """
+        if not self.services.mode:
+            return
+
+        try:
+            applied_count = 0
+            for rec in recommendations:
+                try:
+                    self.services.mode.apply_recommendation(rec)
+                    applied_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to apply recommendation {rec.id}: {e}")
+
+            if applied_count > 0:
+                self._notify(f"Applied {applied_count} recommendation(s)", type="positive")
+                logger.info(f"Applied {applied_count} learning recommendations")
+            else:
+                self._notify("No recommendations applied", type="info")
+        except Exception as e:
+            logger.error(f"Error applying recommendations: {e}")
+            self._notify("Failed to apply recommendations", type="negative")
+
+    def _dismiss_recommendations(self) -> None:
+        """Handle dismissal of recommendations."""
+        logger.debug("Recommendations dismissed by user")
+
+    def _record_regeneration_signal(self, project_id: str, chapter_num: int) -> None:
+        """Record regeneration as an implicit negative signal for learning.
+
+        When a user regenerates a chapter, it indicates dissatisfaction with
+        the previous output. This signal helps the learning system understand
+        model performance.
+
+        Args:
+            project_id: The project ID.
+            chapter_num: The chapter being regenerated.
+        """
+        if not self.services.mode:
+            return
+
+        try:
+            # Mark the most recent score for this chapter as regenerated
+            self.services.mode.on_regenerate(project_id, str(chapter_num))
+            logger.debug(
+                f"Recorded regeneration signal for project {project_id}, chapter {chapter_num}"
+            )
+        except Exception as e:
+            # Don't fail the regeneration if signal recording fails
+            logger.warning(f"Failed to record regeneration signal: {e}")
 
     async def _regenerate_with_feedback(self) -> None:
         """Regenerate the current chapter with user feedback."""
@@ -1273,6 +1367,9 @@ class WritePage:
         project = self.state.project
         chapter_num = self.state.current_chapter
         feedback = self._regenerate_feedback_input.value
+
+        # Record regeneration as implicit negative signal for learning
+        self._record_regeneration_signal(project.id, chapter_num)
 
         try:
             # Reset generation flags

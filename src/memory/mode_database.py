@@ -190,12 +190,29 @@ class ModeDatabase:
                     description TEXT,
                     agent_models_json TEXT NOT NULL,
                     agent_temperatures_json TEXT NOT NULL,
+                    size_preference TEXT NOT NULL DEFAULT 'medium',
                     vram_strategy TEXT NOT NULL DEFAULT 'adaptive',
                     is_experimental INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
             """)
+            conn.commit()
+
+            # Run migrations for schema updates
+            self._run_migrations(conn)
+
+    def _run_migrations(self, conn: sqlite3.Connection) -> None:
+        """Run database migrations for schema updates."""
+        cursor = conn.execute("PRAGMA table_info(custom_modes)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        # Migration: Add size_preference column to custom_modes
+        if "size_preference" not in columns:
+            logger.info("Migrating custom_modes: adding size_preference column")
+            conn.execute(
+                "ALTER TABLE custom_modes ADD COLUMN size_preference TEXT NOT NULL DEFAULT 'medium'"
+            )
             conn.commit()
 
     # === Generation Scores ===
@@ -636,6 +653,7 @@ class ModeDatabase:
         name: str,
         agent_models: dict[str, str],
         agent_temperatures: dict[str, float],
+        size_preference: str = "medium",
         vram_strategy: str = "adaptive",
         description: str = "",
         is_experimental: bool = False,
@@ -643,6 +661,16 @@ class ModeDatabase:
         """Save or update a custom generation mode.
 
         Uses INSERT ... ON CONFLICT to preserve created_at on updates.
+
+        Args:
+            mode_id: Unique identifier for the mode.
+            name: Display name for the mode.
+            agent_models: Mapping of agent_role to model_id.
+            agent_temperatures: Mapping of agent_role to temperature.
+            size_preference: Model size preference (largest, medium, smallest).
+            vram_strategy: VRAM management strategy.
+            description: User-facing description.
+            is_experimental: Whether this mode tries variations.
 
         Raises:
             sqlite3.Error: If database operation fails.
@@ -653,14 +681,15 @@ class ModeDatabase:
                     """
                     INSERT INTO custom_modes (
                         id, name, description, agent_models_json,
-                        agent_temperatures_json, vram_strategy, is_experimental,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                        agent_temperatures_json, size_preference, vram_strategy,
+                        is_experimental, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         description = excluded.description,
                         agent_models_json = excluded.agent_models_json,
                         agent_temperatures_json = excluded.agent_temperatures_json,
+                        size_preference = excluded.size_preference,
                         vram_strategy = excluded.vram_strategy,
                         is_experimental = excluded.is_experimental,
                         updated_at = datetime('now')
@@ -671,6 +700,7 @@ class ModeDatabase:
                         description,
                         json.dumps(agent_models),
                         json.dumps(agent_temperatures),
+                        size_preference,
                         vram_strategy,
                         1 if is_experimental else 0,
                     ),
