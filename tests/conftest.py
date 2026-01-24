@@ -53,6 +53,20 @@ def clear_settings_cache_per_test():
     Settings.clear_cache()
 
 
+@pytest.fixture(autouse=True)
+def clear_prompt_registry_cache_per_test():
+    """Clear prompt registry cache before each test to ensure isolation.
+
+    The prompt registry is a module-level singleton that caches templates.
+    This can cause test pollution if tests modify settings.prompt_templates_dir.
+    """
+    import src.agents.base as base_module
+
+    base_module._prompt_registry = None
+    yield
+    base_module._prompt_registry = None
+
+
 @pytest.fixture(scope="session")
 def cached_settings() -> Settings:
     """Create settings once per test session for performance.
