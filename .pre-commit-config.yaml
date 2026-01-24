@@ -65,8 +65,8 @@ repos:
     rev: 1.7.0
     hooks:
       - id: interrogate
-        args: [-vv]
-        exclude: ^tests/
+        args: [-vv, src, scripts]
+        pass_filenames: false
 
   # Run tests with coverage enforcement
   # NOTE: Skipped by default in CI (pre-commit.ci) due to time constraints
