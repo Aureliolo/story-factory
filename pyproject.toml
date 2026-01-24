@@ -68,6 +68,7 @@ dev = [
     "ruff==0.14.14",
     "mypy==1.19.1",
     "pre-commit==4.5.1",
+    "interrogate==1.7.0",
     "types-networkx==3.6.1.20251220",
     "types-Pillow==10.2.0.20240822",
     "types-reportlab==4.4.9.20260117",
@@ -148,9 +149,9 @@ module = [
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# Scripts are standalone utilities, not part of the main package
-module = ["scripts.*", "control_panel"]
-ignore_errors = true
+# Scripts use customtkinter which lacks type stubs
+module = ["scripts.control_panel"]
+disable_error_code = ["import", "attr-defined", "no-untyped-call"]
 
 [[tool.mypy.overrides]]
 # NiceGUI 3.6+ has features (app.colors, ui.on_exception) not in type stubs yet
@@ -221,3 +222,26 @@ exclude_lines = [
 precision = 1
 show_missing = true
 skip_covered = false
+
+# Interrogate configuration (docstring coverage)
+[tool.interrogate]
+fail_under = 100
+ignore_init_module = true
+ignore_init_method = true
+ignore_magic = true
+ignore_semiprivate = false
+ignore_private = false
+ignore_property_decorators = true
+ignore_module = false
+ignore_nested_functions = true
+ignore_nested_classes = true
+ignore_setters = true
+verbose = 0
+quiet = false
+color = true
+omit_covered_files = false
+exclude = [
+    "tests",
+    "setup.py",
+    "src/ui/pages",  # UI pages have many nested callback functions
+]

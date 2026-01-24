@@ -11,6 +11,9 @@ import socket
 import subprocess
 import sys
 import threading
+import time
+import urllib.error
+import urllib.request
 import webbrowser
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -189,7 +192,9 @@ class ProcessManager:
             return False
 
     def _kill_process_on_port(self, port: int) -> bool:
-        """Kill any process using the specified port.
+        """Kill any process using the specified port (Windows only).
+
+        On non-Windows platforms, this method returns False without action.
 
         Args:
             port: The port number.
@@ -237,13 +242,15 @@ class OllamaManager:
         """Load the Ollama URL from settings.
 
         Returns:
-            The Ollama URL.
+            The Ollama URL from settings, or DEFAULT_OLLAMA_URL if not configured.
         """
         if SETTINGS_FILE.exists():
             try:
                 with open(SETTINGS_FILE) as f:
                     settings = json.load(f)
-                    return settings.get("ollama_url", DEFAULT_OLLAMA_URL)
+                    if "ollama_url" in settings:
+                        return str(settings["ollama_url"])
+                    logger.debug("ollama_url not in settings, using default")
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning("Failed to load settings: %s", e)
         return DEFAULT_OLLAMA_URL
@@ -254,13 +261,11 @@ class OllamaManager:
         Returns:
             True if Ollama is healthy, False otherwise.
         """
-        import urllib.request
-
         try:
             req = urllib.request.Request(f"{self._url}/api/tags", method="GET")
             with urllib.request.urlopen(req, timeout=2) as response:
-                return response.status == 200
-        except Exception:
+                return bool(response.status == 200)
+        except (urllib.error.URLError, TimeoutError, OSError):
             return False
 
     def start_ollama(self) -> bool:
@@ -292,8 +297,6 @@ class OllamaManager:
                         creationflags=subprocess.CREATE_NO_WINDOW,
                     )
                     # Give it time to start
-                    import time
-
                     for _ in range(5):
                         time.sleep(1)
                         if self.check_health():
@@ -316,8 +319,6 @@ class OllamaManager:
                 stderr=subprocess.DEVNULL,
                 creationflags=creation_flags,
             )
-
-            import time
 
             for _ in range(5):
                 time.sleep(1)
@@ -400,7 +401,7 @@ class LogWatcher:
                         break
 
                 # Filter empty lines first, then take last n and truncate
-                non_empty_lines = [ln.strip() for ln in lines if ln.strip()]
+                non_empty_lines = [stripped for ln in lines if (stripped := ln.strip())]
                 result = []
                 for line in non_empty_lines[-n:]:
                     if len(line) > 150:
@@ -465,9 +466,6 @@ class ControlPanel(ctk.CTk):
         # Set dark mode
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
-
-        # Track auto-scroll state
-        self._auto_scroll = True
 
         # Build the UI
         self._create_header()
@@ -822,7 +820,9 @@ class ControlPanel(ctk.CTk):
         def wrapper():
             try:
                 result = func()
-                if result or result is None:
+                # Success: function returned a truthy value (PID or True)
+                # Failure: function returned a falsy value (None or False)
+                if result:
                     self.after(0, lambda: self._set_status_message(success_msg, "#28a745"))
                 else:
                     self.after(0, lambda: self._set_status_message(error_msg, "#dc3545"))
@@ -865,8 +865,6 @@ class ControlPanel(ctk.CTk):
 
         def restart():
             self._process_manager.stop_app()
-            import time
-
             time.sleep(1)
             return self._process_manager.start_app()
 

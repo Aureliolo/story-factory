@@ -60,6 +60,14 @@ repos:
       - id: check-json
       - id: check-added-large-files
 
+  # Docstring coverage enforcement
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        args: [-vv]
+        exclude: ^tests/
+
   # Run tests with coverage enforcement
   # NOTE: Skipped by default in CI (pre-commit.ci) due to time constraints
   # Run locally: pre-commit run pytest-coverage --hook-stage push

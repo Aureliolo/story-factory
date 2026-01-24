@@ -113,32 +113,32 @@ class TestCheckPythonVersion:
 class TestCheckDependencies:
     """Tests for _check_dependencies function."""
 
-    def test_skips_when_no_requirements(self, tmp_path):
-        """Test that check is skipped when requirements.txt doesn't exist."""
+    def test_skips_when_no_pyproject(self, tmp_path):
+        """Test that check is skipped when pyproject.toml doesn't exist."""
         # Should not raise
         _check_dependencies(tmp_path)
 
-    def test_skips_comments_and_empty_lines(self, tmp_path):
-        """Test that check skips comments and empty lines."""
-        requirements = tmp_path / "requirements.txt"
-        requirements.write_text("# This is a comment\n\n  \n# Another comment\n")
+    def test_skips_empty_dependencies(self, tmp_path):
+        """Test that check skips when dependencies list is empty."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("[project]\ndependencies = []\n")
 
         # Should not raise
         _check_dependencies(tmp_path)
 
     def test_passes_when_all_dependencies_installed(self, tmp_path):
         """Test that check passes when all dependencies are installed."""
-        requirements = tmp_path / "requirements.txt"
+        pyproject = tmp_path / "pyproject.toml"
         # Use a package that's definitely installed (pytest)
-        requirements.write_text("pytest==9.0.0\n")
+        pyproject.write_text('[project]\ndependencies = ["pytest==9.0.0"]\n')
 
         # Should not raise (pytest is installed and likely >= 9.0.0)
         _check_dependencies(tmp_path)
 
     def test_exits_when_dependency_missing(self, tmp_path, capsys):
         """Test that check exits when a dependency is missing."""
-        requirements = tmp_path / "requirements.txt"
-        requirements.write_text("nonexistent-package-12345==1.0.0\n")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\ndependencies = ["nonexistent-package-12345==1.0.0"]\n')
 
         with pytest.raises(SystemExit) as exc_info:
             _check_dependencies(tmp_path)
@@ -150,9 +150,9 @@ class TestCheckDependencies:
 
     def test_exits_when_dependency_outdated(self, tmp_path, capsys, monkeypatch):
         """Test that check exits when a dependency is outdated."""
-        requirements = tmp_path / "requirements.txt"
+        pyproject = tmp_path / "pyproject.toml"
         # Require a version higher than installed
-        requirements.write_text("pytest==999.0.0\n")
+        pyproject.write_text('[project]\ndependencies = ["pytest==999.0.0"]\n')
 
         with pytest.raises(SystemExit) as exc_info:
             _check_dependencies(tmp_path)
@@ -163,8 +163,8 @@ class TestCheckDependencies:
 
     def test_handles_packaging_import_error(self, tmp_path, capsys, monkeypatch):
         """Test that check handles packaging ImportError gracefully."""
-        requirements = tmp_path / "requirements.txt"
-        requirements.write_text("pytest==9.0.0\n")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\ndependencies = ["pytest==9.0.0"]\n')
 
         # Mock packaging import to fail
         import builtins
@@ -186,19 +186,30 @@ class TestCheckDependencies:
 
     def test_skips_non_pinned_dependencies(self, tmp_path):
         """Test that check skips dependencies without pinned versions."""
-        requirements = tmp_path / "requirements.txt"
-        requirements.write_text("pytest>=9.0.0\npytest-cov\n")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\ndependencies = ["pytest>=9.0.0", "pytest-cov"]\n')
 
         # Should not raise (these don't match the ==version pattern)
         _check_dependencies(tmp_path)
 
     def test_shows_pip_install_hint(self, tmp_path, capsys):
         """Test that check shows pip install hint on failure."""
-        requirements = tmp_path / "requirements.txt"
-        requirements.write_text("nonexistent-package-12345==1.0.0\n")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\ndependencies = ["nonexistent-package-12345==1.0.0"]\n')
 
         with pytest.raises(SystemExit):
             _check_dependencies(tmp_path)
 
         captured = capsys.readouterr()
-        assert "pip install -r requirements.txt" in captured.err
+        assert "pip install ." in captured.err
+
+    def test_handles_parse_error(self, tmp_path, capsys):
+        """Test that check warns on parse errors but doesn't exit."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("invalid toml {{{")
+
+        # Should not raise (warns but continues)
+        _check_dependencies(tmp_path)
+
+        captured = capsys.readouterr()
+        assert "Warning: Could not parse dependencies" in captured.err

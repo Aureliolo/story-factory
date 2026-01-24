@@ -2,13 +2,58 @@
 
 import json
 import subprocess
+import sys
 import tempfile
 import time
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from scripts.control_panel import LogWatcher, OllamaManager, ProcessManager
+
+# Mock customtkinter before importing control_panel (CI doesn't have GUI libraries)
+# Create proper mock classes that can be subclassed
+class MockCTk:
+    """Mock CTk base class."""
+
+    def __init__(self):
+        pass
+
+    def title(self, *args):
+        pass
+
+    def geometry(self, *args):
+        pass
+
+    def minsize(self, *args):
+        pass
+
+    def protocol(self, *args):
+        pass
+
+    def after(self, *args):
+        pass
+
+    def destroy(self):
+        pass
+
+    def mainloop(self):
+        pass
+
+
+mock_ctk = MagicMock()
+mock_ctk.CTk = MockCTk
+mock_ctk.CTkFrame = MagicMock(return_value=MagicMock())
+mock_ctk.CTkLabel = MagicMock(return_value=MagicMock())
+mock_ctk.CTkButton = MagicMock(return_value=MagicMock())
+mock_ctk.CTkTextbox = MagicMock(return_value=MagicMock())
+mock_ctk.CTkCheckBox = MagicMock(return_value=MagicMock())
+mock_ctk.CTkFont = MagicMock(return_value=MagicMock())
+mock_ctk.BooleanVar = MagicMock(return_value=MagicMock())
+mock_ctk.set_appearance_mode = MagicMock()
+mock_ctk.set_default_color_theme = MagicMock()
+sys.modules["customtkinter"] = mock_ctk
+
+from scripts.control_panel import LogWatcher, OllamaManager, ProcessManager  # noqa: E402
 
 
 class TestProcessManager:
@@ -330,6 +375,16 @@ class TestOllamaManager:
                 manager = OllamaManager()
                 assert manager.get_url() == "http://localhost:11434"
 
+    def test_init_url_missing_key(self):
+        """Should use default URL when settings file exists but lacks ollama_url key."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"other_setting": "value"}, f)
+            f.flush()
+
+            with patch("scripts.control_panel.SETTINGS_FILE", Path(f.name)):
+                manager = OllamaManager()
+                assert manager.get_url() == "http://localhost:11434"
+
     @patch("urllib.request.urlopen")
     def test_check_health_success(self, mock_urlopen):
         """Should return True when Ollama responds with 200."""
@@ -347,7 +402,7 @@ class TestOllamaManager:
     @patch("urllib.request.urlopen")
     def test_check_health_failure(self, mock_urlopen):
         """Should return False when Ollama is not responding."""
-        mock_urlopen.side_effect = Exception("Connection refused")
+        mock_urlopen.side_effect = OSError("Connection refused")
 
         with patch("scripts.control_panel.SETTINGS_FILE") as mock_path:
             mock_path.exists.return_value = False
@@ -1018,12 +1073,26 @@ class TestControlPanel:
         # Verify after() was scheduled
         panel.after.assert_called()
 
-    def test_run_in_thread_failure(self):
+    def test_run_in_thread_failure_false(self):
         """Should call error callback when function returns False."""
         panel = self._create_mock_panel()
 
         def fail_func():
             return False
+
+        panel._run_in_thread(fail_func, "Success!", "Failed")
+
+        # Wait for thread to complete
+        time.sleep(0.1)
+
+        panel.after.assert_called()
+
+    def test_run_in_thread_failure_none(self):
+        """Should call error callback when function returns None."""
+        panel = self._create_mock_panel()
+
+        def fail_func():
+            return None
 
         panel._run_in_thread(fail_func, "Success!", "Failed")
 

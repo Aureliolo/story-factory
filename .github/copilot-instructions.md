@@ -46,7 +46,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 **100% test coverage is MANDATORY for every commit**. The CI enforces 100% coverage on core modules (`src/agents/`, `src/services/`, `src/memory/`, `src/utils/`, `src/settings.py`). If your code reduces coverage, the CI will fail and you must add tests before the PR can be merged.
 
 ### Development Flow
-- **Install dependencies**: `pip install -r requirements.txt`
+- **Install dependencies**: `pip install -e ".[all]"`
 - **Build**: Not applicable (Python project, no build step)
 - **Test**: `pytest` (runs all tests in `tests/` directory)
 - **Test with coverage**: `pytest --cov=. --cov-report=term --cov-fail-under=100 tests/unit tests/smoke tests/integration`
@@ -73,8 +73,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 ```
 story-factory/
 ├── main.py                     # Entry point (supports both web UI and CLI modes)
-├── pyproject.toml              # Tool configuration (ruff, mypy, pytest, coverage)
-├── requirements.txt            # Python dependencies
+├── pyproject.toml              # Project configuration with dependencies (ruff, mypy, pytest, coverage)
 ├── Makefile                    # Development task shortcuts
 ├── src/                        # All application source code
 │   ├── settings.py             # Settings management and model registry
@@ -246,7 +245,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 
 6. **Dependencies**:
    - Minimize external dependencies
-   - When adding new dependencies, add them to `requirements.txt`
+   - When adding new dependencies, add them to `pyproject.toml`
    - Pin dependencies to exact versions (e.g., `nicegui==3.5.0`) - Dependabot handles upgrades
 
 7. **Documentation**:

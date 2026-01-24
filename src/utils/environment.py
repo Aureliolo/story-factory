@@ -12,7 +12,7 @@ from pathlib import Path
 def check_environment() -> None:
     """Check Python version and dependencies meet requirements.
 
-    Reads Python version from pyproject.toml and dependencies from requirements.txt,
+    Reads Python version and dependencies from pyproject.toml,
     then validates the current environment meets all requirements.
 
     Raises:
@@ -72,12 +72,13 @@ def _check_python_version(project_root: Path) -> None:
 
 
 def _check_dependencies(project_root: Path) -> None:
-    """Check installed packages against requirements.txt."""
-    requirements_path = project_root / "requirements.txt"
-    if not requirements_path.exists():
+    """Check installed packages against pyproject.toml dependencies."""
+    pyproject_path = project_root / "pyproject.toml"
+    if not pyproject_path.exists():
         return
 
     try:
+        import tomllib
         from importlib.metadata import version as get_version
 
         from packaging.version import Version
@@ -85,30 +86,35 @@ def _check_dependencies(project_root: Path) -> None:
         print("Warning: Cannot check dependencies (packaging not installed)", file=sys.stderr)
         return
 
+    try:
+        with open(pyproject_path, "rb") as f:
+            config = tomllib.load(f)
+
+        dependencies = config.get("project", {}).get("dependencies", [])
+    except (KeyError, ValueError, OSError) as e:
+        print(f"Warning: Could not parse dependencies from pyproject.toml: {e}", file=sys.stderr)
+        return
+
     missing = []
     version_mismatch = []
 
-    with open(requirements_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
+    for dep in dependencies:
+        # Parse package==version format
+        match = re.match(r"^([a-zA-Z0-9_-]+)==([0-9.]+)", dep)
+        if not match:
+            continue
 
-            match = re.match(r"^([a-zA-Z0-9_-]+)==([0-9.]+)", line)
-            if not match:
-                continue
+        package_name = match.group(1)
+        required_version = match.group(2)
 
-            package_name = match.group(1)
-            required_version = match.group(2)
-
-            try:
-                installed_version = get_version(package_name)
-                if Version(installed_version) < Version(required_version):
-                    version_mismatch.append(
-                        f"  {package_name}: installed {installed_version}, requires {required_version}"
-                    )
-            except Exception:
-                missing.append(f"  {package_name}=={required_version}")
+        try:
+            installed_version = get_version(package_name)
+            if Version(installed_version) < Version(required_version):
+                version_mismatch.append(
+                    f"  {package_name}: installed {installed_version}, requires {required_version}"
+                )
+        except Exception:
+            missing.append(f"  {package_name}=={required_version}")
 
     if missing or version_mismatch:
         print("Error: Missing or outdated dependencies:", file=sys.stderr)
@@ -118,5 +124,5 @@ def _check_dependencies(project_root: Path) -> None:
         if version_mismatch:
             print("\nOutdated packages:", file=sys.stderr)
             print("\n".join(version_mismatch), file=sys.stderr)
-        print("\nRun: pip install -r requirements.txt", file=sys.stderr)
+        print("\nRun: pip install .", file=sys.stderr)
         sys.exit(1)

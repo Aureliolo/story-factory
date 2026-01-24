@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **No bypassing CI.** Never use `git push --no-verify` or modify test coverage thresholds to make tests pass. If tests fail, fix the actual issue. Pre-push hooks exist to catch problems before they reach CI.
 
-**No skipping coverage.** Never exclude files from coverage requirements to make tests pass. Write proper tests to achieve 100% coverage. The only acceptable exclusion is `# pragma: no cover` on pure UI widget creation code (code that only creates GUI widgets with no business logic). If coverage is failing, write tests for the uncovered code.
+**No skipping coverage.** Never exclude files from coverage requirements to make tests pass. Write proper tests to achieve 100% coverage. Acceptable exclusions are: (1) `# pragma: no cover` on pure UI widget creation code (code that only creates GUI widgets with no business logic), and (2) standalone utility scripts in `scripts/` that are not part of the main application. If coverage is failing for core application code, write tests for the uncovered code.
 
 ## Project Overview
 

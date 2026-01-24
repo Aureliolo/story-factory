@@ -10,7 +10,7 @@ healthcheck:  ## Run system health check
 	python scripts/healthcheck.py
 
 install:  ## Install dependencies
-	pip install -r requirements.txt
+	pip install -e ".[all]"
 	playwright install chromium
 
 test:  ## Run all tests (unit + smoke + integration, excludes e2e)
