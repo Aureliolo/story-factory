@@ -21,9 +21,11 @@ from src.memory.mode_models import (
     LearningTrigger,
     QualityScores,
     RecommendationType,
+    SizePreference,
     TuningRecommendation,
     VramStrategy,
     get_preset_mode,
+    get_size_tier,
     list_preset_modes,
 )
 from src.services.llm_client import generate_structured
@@ -121,12 +123,23 @@ class ModelModeService:
                 logger.error(error_msg)
                 raise ValueError(error_msg) from e
 
+            # Parse size preference (default to MEDIUM for backwards compatibility)
+            size_pref_str = custom.get("size_preference", SizePreference.MEDIUM.value)
+            try:
+                size_preference = SizePreference(size_pref_str)
+            except ValueError:
+                logger.warning(
+                    f"Invalid size_preference '{size_pref_str}' in mode '{mode_id}', using MEDIUM"
+                )
+                size_preference = SizePreference.MEDIUM
+
             mode = GenerationMode(
                 id=custom["id"],
                 name=custom["name"],
                 description=custom.get("description", ""),
                 agent_models=custom["agent_models"],
                 agent_temperatures=custom["agent_temperatures"],
+                size_preference=size_preference,
                 vram_strategy=vram_strategy,
                 is_preset=False,
                 is_experimental=bool(custom.get("is_experimental", False)),
@@ -143,6 +156,13 @@ class ModelModeService:
 
         # Add custom modes
         for custom in self._db.list_custom_modes():
+            # Parse size preference (default to MEDIUM for backwards compatibility)
+            size_pref_str = custom.get("size_preference", SizePreference.MEDIUM.value)
+            try:
+                size_preference = SizePreference(size_pref_str)
+            except ValueError:
+                size_preference = SizePreference.MEDIUM
+
             modes.append(
                 GenerationMode(
                     id=custom["id"],
@@ -150,6 +170,7 @@ class ModelModeService:
                     description=custom.get("description", ""),
                     agent_models=custom["agent_models"],
                     agent_temperatures=custom["agent_temperatures"],
+                    size_preference=size_preference,
                     vram_strategy=VramStrategy(custom["vram_strategy"]),
                     is_preset=False,
                     is_experimental=bool(custom.get("is_experimental", False)),
@@ -166,6 +187,9 @@ class ModelModeService:
             name=mode.name,
             agent_models=mode.agent_models,
             agent_temperatures=mode.agent_temperatures,
+            size_preference=mode.size_preference.value
+            if isinstance(mode.size_preference, SizePreference)
+            else mode.size_preference,
             vram_strategy=mode.vram_strategy.value
             if isinstance(mode.vram_strategy, VramStrategy)
             else mode.vram_strategy,
@@ -191,18 +215,18 @@ class ModelModeService:
     def get_model_for_agent(self, agent_role: str) -> str:
         """Get the model ID for an agent based on current mode.
 
-        Model selection is fully automatic. The mode's agent_models is only
-        used for explicit user overrides. If empty or not specified for a role,
-        uses automatic selection based on installed models.
+        Model selection uses the mode's size_preference to steer toward
+        larger or smaller models. The mode's agent_models is only used
+        for explicit user overrides.
 
         Args:
             agent_role: The agent role (writer, architect, etc.)
 
         Returns:
-            Model ID selected automatically or from user override.
+            Model ID selected based on size preference or from user override.
 
         Raises:
-            ValueError: If no models are installed.
+            ValueError: If no models are installed or tagged for the role.
         """
         validate_not_empty(agent_role, "agent_role")
         mode = self.get_current_mode()
@@ -213,11 +237,135 @@ class ModelModeService:
             logger.debug(f"Using user-specified model {model_id} for {agent_role}")
             return model_id
 
-        # Use automatic selection based on installed models
+        # Use size-preference-aware selection
         vram = get_available_vram()
-        selected = self.settings.get_model_for_agent(agent_role, vram)
-        logger.debug(f"Auto-selected {selected} for {agent_role} (vram={vram}GB)")
+        size_pref = SizePreference(mode.size_preference)
+        selected = self._select_model_with_size_preference(agent_role, size_pref, vram)
+        logger.info(
+            f"Auto-selected {selected} for {agent_role} "
+            f"(mode={mode.id}, size_pref={size_pref.value}, vram={vram}GB)"
+        )
         return selected
+
+    def _select_model_with_size_preference(
+        self,
+        agent_role: str,
+        size_pref: SizePreference,
+        available_vram: int,
+    ) -> str:
+        """Select a model based on size preference.
+
+        Args:
+            agent_role: The agent role to select for.
+            size_pref: Size preference (LARGEST, MEDIUM, SMALLEST).
+            available_vram: Available VRAM in GB.
+
+        Returns:
+            Selected model ID.
+
+        Raises:
+            ValueError: If no tagged models are available.
+        """
+        from src.settings import RECOMMENDED_MODELS, get_installed_models_with_sizes
+
+        installed_models = get_installed_models_with_sizes()
+
+        if not installed_models:
+            # Return a recommended model as default for CI/testing
+            default = next(iter(RECOMMENDED_MODELS.keys()))
+            logger.warning(f"No models installed - returning default '{default}' for {agent_role}")
+            return default
+
+        # Find models tagged for this role
+        candidates: list[dict] = []
+        for model_id, size_gb in installed_models.items():
+            tags = self.settings.get_model_tags(model_id)
+            if agent_role in tags:
+                # Get quality from RECOMMENDED_MODELS if available
+                quality = 5.0
+                for rec_id, info in RECOMMENDED_MODELS.items():
+                    if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
+                        quality = info.get("quality", 5.0)
+                        break
+
+                estimated_vram = int(size_gb * 1.2)
+                fits_vram = estimated_vram <= available_vram
+                tier = get_size_tier(size_gb)
+
+                candidates.append(
+                    {
+                        "model_id": model_id,
+                        "size_gb": size_gb,
+                        "quality": quality,
+                        "tier": tier.value,
+                        "fits_vram": fits_vram,
+                    }
+                )
+
+        if not candidates:
+            installed_list = ", ".join(installed_models.keys())
+            raise ValueError(
+                f"No model tagged for role '{agent_role}'. "
+                f"Installed models: [{installed_list}]. "
+                f"Configure model tags in Settings > Models tab."
+            )
+
+        # Calculate tier score based on size preference
+        # Higher score = more preferred
+        for c in candidates:
+            c["tier_score"] = self._calculate_tier_score(c["size_gb"], size_pref)
+
+        # Separate models that fit VRAM from those that don't
+        fitting = [c for c in candidates if c["fits_vram"]]
+        non_fitting = [c for c in candidates if not c["fits_vram"]]
+
+        # Prefer models that fit VRAM
+        pool = fitting if fitting else non_fitting
+
+        # Sort by: tier_score (primary), quality (secondary), size based on preference (tertiary)
+        if size_pref == SizePreference.LARGEST:
+            # For largest preference: higher tier_score, higher quality, larger size
+            pool.sort(key=lambda x: (x["tier_score"], x["quality"], x["size_gb"]), reverse=True)
+        elif size_pref == SizePreference.SMALLEST:
+            # For smallest preference: higher tier_score, higher quality, smaller size
+            pool.sort(key=lambda x: (x["tier_score"], x["quality"], -x["size_gb"]), reverse=True)
+        else:  # MEDIUM
+            # For medium: higher tier_score, higher quality, prefer middle sizes
+            pool.sort(key=lambda x: (x["tier_score"], x["quality"]), reverse=True)
+
+        best = pool[0]
+        if not fitting:
+            logger.warning(
+                f"No model fits VRAM ({available_vram}GB) for {agent_role}. "
+                f"Selected {best['model_id']} ({best['size_gb']:.1f}GB) anyway."
+            )
+
+        return str(best["model_id"])
+
+    def _calculate_tier_score(self, size_gb: float, size_pref: SizePreference) -> float:
+        """Calculate a preference score for a model based on size preference.
+
+        Args:
+            size_gb: Model size in GB.
+            size_pref: The desired size preference.
+
+        Returns:
+            Score from 0-10, higher = more preferred.
+        """
+        tier = get_size_tier(size_gb)
+
+        # Define ideal sizes for each preference
+        if size_pref == SizePreference.LARGEST:
+            # Prefer large > medium > small > tiny
+            tier_scores = {"large": 10, "medium": 7, "small": 4, "tiny": 1}
+        elif size_pref == SizePreference.SMALLEST:
+            # Prefer tiny > small > medium > large
+            tier_scores = {"large": 1, "medium": 4, "small": 7, "tiny": 10}
+        else:  # MEDIUM
+            # Prefer medium > small > large > tiny (balanced)
+            tier_scores = {"large": 5, "medium": 10, "small": 7, "tiny": 2}
+
+        return tier_scores.get(tier.value, 5)
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
         """Get the temperature for an agent based on current mode.
@@ -770,6 +918,37 @@ Rate each dimension from 0-10:
         """Export all scores to CSV."""
         return self._db.export_scores_csv(output_path)
 
-    def get_pending_recommendations(self) -> list[dict[str, Any]]:
-        """Get recommendations awaiting user action."""
-        return self._db.get_pending_recommendations()
+    def get_pending_recommendations(self) -> list[TuningRecommendation]:
+        """Get recommendations awaiting user action as TuningRecommendation objects."""
+        return self._db.get_recent_recommendations(limit=20)
+
+    def on_regenerate(self, project_id: str, chapter_id: str) -> None:
+        """Record regeneration as a negative implicit signal.
+
+        When a user regenerates a chapter, it indicates dissatisfaction with
+        the previous output. This updates the most recent score for that
+        chapter to mark it as regenerated.
+
+        Args:
+            project_id: The project ID.
+            chapter_id: The chapter being regenerated.
+        """
+        try:
+            # Find the most recent score for this project/chapter
+            scores = self._db.get_scores_for_project(project_id)
+            for score in scores:
+                if score.get("chapter_id") == chapter_id:
+                    score_id = score.get("id")
+                    if score_id:
+                        self._db.update_score(score_id, was_regenerated=True)
+                        logger.debug(
+                            f"Marked score {score_id} as regenerated for "
+                            f"project {project_id}, chapter {chapter_id}"
+                        )
+                        return
+            logger.debug(
+                f"No score found to mark as regenerated for "
+                f"project {project_id}, chapter {chapter_id}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record regeneration signal: {e}")

@@ -40,19 +40,43 @@ class AutonomyLevel(str, Enum):
     EXPERIMENTAL = "experimental"  # Try variations to gather data
 
 
+class SizePreference(str, Enum):
+    """Model size preference for automatic selection.
+
+    Modes use this to steer model selection toward larger or smaller models
+    based on quality vs speed trade-offs.
+    """
+
+    LARGEST = "largest"  # quality_max/quality_creative - prefer largest models
+    MEDIUM = "medium"  # balanced - prefer medium-sized models
+    SMALLEST = "smallest"  # draft_fast - prefer smallest models for speed
+
+
 class GenerationMode(BaseModel):
     """A generation mode defines model assignments and settings per agent.
 
     Modes can be presets (built-in) or custom (user-created).
+    Presets use size_preference to steer automatic model selection.
+    Custom modes can specify explicit agent_models or use size_preference.
     """
 
     id: str = Field(description="Unique identifier for the mode")
     name: str = Field(description="Display name")
     description: str = Field(default="", description="User-facing description")
 
-    agent_models: dict[str, str] = Field(description="Mapping of agent_role to model_id")
-    agent_temperatures: dict[str, float] = Field(description="Mapping of agent_role to temperature")
+    agent_models: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of agent_role to model_id (empty = auto-select)",
+    )
+    agent_temperatures: dict[str, float] = Field(
+        default_factory=dict,
+        description="Mapping of agent_role to temperature (empty = use defaults)",
+    )
 
+    size_preference: SizePreference = Field(
+        default=SizePreference.MEDIUM,
+        description="Model size preference for automatic selection",
+    )
     vram_strategy: VramStrategy = Field(
         default=VramStrategy.ADAPTIVE,
         description="How to manage VRAM when switching models",
@@ -282,31 +306,19 @@ PRESET_MODES: dict[str, GenerationMode] = {
         id="quality_max",
         name="Maximum Quality",
         description="Uses largest available models, sequential loading for max VRAM",
-        agent_models={},  # Auto-select: largest available per role
-        agent_temperatures={
-            "architect": 0.3,
-            "writer": 0.9,
-            "editor": 0.5,
-            "continuity": 0.1,
-            "interviewer": 0.5,
-            "validator": 0.1,
-        },
+        agent_models={},  # Auto-select based on size_preference
+        agent_temperatures={},  # Use Settings defaults
+        size_preference=SizePreference.LARGEST,
         vram_strategy=VramStrategy.SEQUENTIAL,
         is_preset=True,
     ),
     "quality_creative": GenerationMode(
         id="quality_creative",
         name="Creative Focus",
-        description="High temperature for creative writing, largest models",
-        agent_models={},  # Auto-select: largest available per role
-        agent_temperatures={
-            "architect": 0.3,
-            "writer": 1.0,  # Higher for creativity
-            "editor": 0.6,
-            "continuity": 0.2,
-            "interviewer": 0.5,
-            "validator": 0.1,
-        },
+        description="Largest models with higher creativity settings",
+        agent_models={},  # Auto-select based on size_preference
+        agent_temperatures={},  # Use Settings defaults
+        size_preference=SizePreference.LARGEST,
         vram_strategy=VramStrategy.SEQUENTIAL,
         is_preset=True,
     ),
@@ -314,15 +326,9 @@ PRESET_MODES: dict[str, GenerationMode] = {
         id="balanced",
         name="Balanced",
         description="Good quality with reasonable speed, adaptive VRAM",
-        agent_models={},  # Auto-select: medium models preferred
-        agent_temperatures={
-            "architect": 0.4,
-            "writer": 0.8,
-            "editor": 0.5,
-            "continuity": 0.2,
-            "interviewer": 0.5,
-            "validator": 0.1,
-        },
+        agent_models={},  # Auto-select based on size_preference
+        agent_temperatures={},  # Use Settings defaults
+        size_preference=SizePreference.MEDIUM,
         vram_strategy=VramStrategy.ADAPTIVE,
         is_preset=True,
     ),
@@ -330,15 +336,9 @@ PRESET_MODES: dict[str, GenerationMode] = {
         id="draft_fast",
         name="Fast Draft",
         description="Quick iteration with smaller models, parallel loading",
-        agent_models={},  # Auto-select: smaller models for speed
-        agent_temperatures={
-            "architect": 0.4,
-            "writer": 0.8,
-            "editor": 0.5,
-            "continuity": 0.2,
-            "interviewer": 0.5,
-            "validator": 0.1,
-        },
+        agent_models={},  # Auto-select based on size_preference
+        agent_temperatures={},  # Use Settings defaults
+        size_preference=SizePreference.SMALLEST,
         vram_strategy=VramStrategy.PARALLEL,
         is_preset=True,
     ),
@@ -347,14 +347,8 @@ PRESET_MODES: dict[str, GenerationMode] = {
         name="Experimental",
         description="Varies models to gather comparative data",
         agent_models={},  # Auto-select with variation
-        agent_temperatures={
-            "architect": 0.4,
-            "writer": 0.9,
-            "editor": 0.5,
-            "continuity": 0.2,
-            "interviewer": 0.5,
-            "validator": 0.1,
-        },
+        agent_temperatures={},  # Use Settings defaults
+        size_preference=SizePreference.MEDIUM,
         vram_strategy=VramStrategy.ADAPTIVE,
         is_preset=True,
         is_experimental=True,

@@ -1,0 +1,271 @@
+"""Tests for mode steering and size preference functionality."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from src.memory.mode_models import (
+    PRESET_MODES,
+    GenerationMode,
+    ModelSizeTier,
+    SizePreference,
+    get_size_tier,
+)
+from src.services.model_mode_service import ModelModeService
+from src.settings import Settings
+
+
+class TestSizePreference:
+    """Tests for the SizePreference enum."""
+
+    def test_size_preference_values(self):
+        """Verify SizePreference enum has expected values."""
+        assert SizePreference.LARGEST.value == "largest"
+        assert SizePreference.MEDIUM.value == "medium"
+        assert SizePreference.SMALLEST.value == "smallest"
+
+    def test_size_preference_from_string(self):
+        """Verify SizePreference can be created from string."""
+        assert SizePreference("largest") == SizePreference.LARGEST
+        assert SizePreference("medium") == SizePreference.MEDIUM
+        assert SizePreference("smallest") == SizePreference.SMALLEST
+
+
+class TestPresetModes:
+    """Tests for PRESET_MODES with size preferences."""
+
+    def test_quality_max_has_largest_preference(self):
+        """Quality max mode should prefer largest models."""
+        mode = PRESET_MODES["quality_max"]
+        assert mode.size_preference == SizePreference.LARGEST.value
+
+    def test_quality_creative_has_largest_preference(self):
+        """Quality creative mode should prefer largest models."""
+        mode = PRESET_MODES["quality_creative"]
+        assert mode.size_preference == SizePreference.LARGEST.value
+
+    def test_balanced_has_medium_preference(self):
+        """Balanced mode should prefer medium models."""
+        mode = PRESET_MODES["balanced"]
+        assert mode.size_preference == SizePreference.MEDIUM.value
+
+    def test_draft_fast_has_smallest_preference(self):
+        """Draft fast mode should prefer smallest models."""
+        mode = PRESET_MODES["draft_fast"]
+        assert mode.size_preference == SizePreference.SMALLEST.value
+
+    def test_experimental_has_medium_preference(self):
+        """Experimental mode should prefer medium models."""
+        mode = PRESET_MODES["experimental"]
+        assert mode.size_preference == SizePreference.MEDIUM.value
+
+    def test_preset_modes_have_empty_temperatures(self):
+        """All preset modes should have empty agent_temperatures."""
+        for mode_id, mode in PRESET_MODES.items():
+            assert mode.agent_temperatures == {}, (
+                f"Mode {mode_id} should have empty agent_temperatures, "
+                f"got {mode.agent_temperatures}"
+            )
+
+
+class TestGenerationModeModel:
+    """Tests for the GenerationMode Pydantic model."""
+
+    def test_default_size_preference_is_medium(self):
+        """Default size preference should be medium."""
+        mode = GenerationMode(
+            id="test",
+            name="Test Mode",
+        )
+        assert mode.size_preference == SizePreference.MEDIUM.value
+
+    def test_can_set_size_preference(self):
+        """Size preference can be set explicitly."""
+        mode = GenerationMode(
+            id="test",
+            name="Test Mode",
+            size_preference=SizePreference.LARGEST,
+        )
+        assert mode.size_preference == SizePreference.LARGEST.value
+
+    def test_agent_models_default_empty(self):
+        """Agent models should default to empty dict."""
+        mode = GenerationMode(
+            id="test",
+            name="Test Mode",
+        )
+        assert mode.agent_models == {}
+
+    def test_agent_temperatures_default_empty(self):
+        """Agent temperatures should default to empty dict."""
+        mode = GenerationMode(
+            id="test",
+            name="Test Mode",
+        )
+        assert mode.agent_temperatures == {}
+
+
+class TestGetSizeTier:
+    """Tests for the get_size_tier function."""
+
+    def test_large_model(self):
+        """Models >= 20GB should be classified as large."""
+        assert get_size_tier(20.0) == ModelSizeTier.LARGE
+        assert get_size_tier(40.0) == ModelSizeTier.LARGE
+
+    def test_medium_model(self):
+        """Models >= 8GB and < 20GB should be classified as medium."""
+        assert get_size_tier(8.0) == ModelSizeTier.MEDIUM
+        assert get_size_tier(15.0) == ModelSizeTier.MEDIUM
+        assert get_size_tier(19.9) == ModelSizeTier.MEDIUM
+
+    def test_small_model(self):
+        """Models >= 3GB and < 8GB should be classified as small."""
+        assert get_size_tier(3.0) == ModelSizeTier.SMALL
+        assert get_size_tier(5.0) == ModelSizeTier.SMALL
+        assert get_size_tier(7.9) == ModelSizeTier.SMALL
+
+    def test_tiny_model(self):
+        """Models < 3GB should be classified as tiny."""
+        assert get_size_tier(0.5) == ModelSizeTier.TINY
+        assert get_size_tier(2.9) == ModelSizeTier.TINY
+
+
+class TestModelModeServiceTierScore:
+    """Tests for tier score calculation in ModelModeService."""
+
+    @pytest.fixture
+    def service(self) -> ModelModeService:
+        """Create a ModelModeService with mocked dependencies."""
+        settings = Settings()
+        with patch("src.services.model_mode_service.ModeDatabase"):
+            return ModelModeService(settings)
+
+    def test_tier_score_largest_prefers_large(self, service: ModelModeService):
+        """LARGEST preference should score large models highest."""
+        large_score = service._calculate_tier_score(25.0, SizePreference.LARGEST)
+        medium_score = service._calculate_tier_score(10.0, SizePreference.LARGEST)
+        small_score = service._calculate_tier_score(5.0, SizePreference.LARGEST)
+        tiny_score = service._calculate_tier_score(1.0, SizePreference.LARGEST)
+
+        assert large_score > medium_score > small_score > tiny_score
+
+    def test_tier_score_smallest_prefers_tiny(self, service: ModelModeService):
+        """SMALLEST preference should score tiny models highest."""
+        large_score = service._calculate_tier_score(25.0, SizePreference.SMALLEST)
+        medium_score = service._calculate_tier_score(10.0, SizePreference.SMALLEST)
+        small_score = service._calculate_tier_score(5.0, SizePreference.SMALLEST)
+        tiny_score = service._calculate_tier_score(1.0, SizePreference.SMALLEST)
+
+        assert tiny_score > small_score > medium_score > large_score
+
+    def test_tier_score_medium_prefers_medium(self, service: ModelModeService):
+        """MEDIUM preference should score medium models highest."""
+        large_score = service._calculate_tier_score(25.0, SizePreference.MEDIUM)
+        medium_score = service._calculate_tier_score(10.0, SizePreference.MEDIUM)
+        small_score = service._calculate_tier_score(5.0, SizePreference.MEDIUM)
+        tiny_score = service._calculate_tier_score(1.0, SizePreference.MEDIUM)
+
+        assert medium_score > small_score > large_score > tiny_score
+
+
+class TestModelModeServiceModelSelection:
+    """Tests for model selection with size preference."""
+
+    @pytest.fixture
+    def service(self) -> ModelModeService:
+        """Create a ModelModeService with mocked dependencies."""
+        settings = Settings()
+        with patch("src.services.model_mode_service.ModeDatabase"):
+            return ModelModeService(settings)
+
+    @patch("src.settings.get_installed_models_with_sizes")
+    def test_select_largest_for_quality_max(
+        self, mock_get_models: MagicMock, service: ModelModeService
+    ):
+        """LARGEST preference should select largest available model."""
+        mock_get_models.return_value = {
+            "small-model:3b": 3.0,
+            "medium-model:8b": 8.0,
+            "large-model:20b": 20.0,
+        }
+        service.settings.custom_model_tags = {
+            "small-model:3b": ["writer"],
+            "medium-model:8b": ["writer"],
+            "large-model:20b": ["writer"],
+        }
+
+        result = service._select_model_with_size_preference("writer", SizePreference.LARGEST, 48)
+
+        assert result == "large-model:20b"
+
+    @patch("src.settings.get_installed_models_with_sizes")
+    def test_select_smallest_for_draft_fast(
+        self, mock_get_models: MagicMock, service: ModelModeService
+    ):
+        """SMALLEST preference should select smallest available model."""
+        mock_get_models.return_value = {
+            "tiny-model:1b": 1.0,
+            "small-model:3b": 3.0,
+            "large-model:20b": 20.0,
+        }
+        service.settings.custom_model_tags = {
+            "tiny-model:1b": ["writer"],
+            "small-model:3b": ["writer"],
+            "large-model:20b": ["writer"],
+        }
+
+        result = service._select_model_with_size_preference("writer", SizePreference.SMALLEST, 48)
+
+        assert result == "tiny-model:1b"
+
+    @patch("src.settings.get_installed_models_with_sizes")
+    def test_respects_vram_constraint(self, mock_get_models: MagicMock, service: ModelModeService):
+        """Should prefer models that fit in VRAM even with LARGEST preference."""
+        mock_get_models.return_value = {
+            "small-model:3b": 3.0,  # Fits in 8GB
+            "large-model:20b": 20.0,  # Doesn't fit
+        }
+        service.settings.custom_model_tags = {
+            "small-model:3b": ["writer"],
+            "large-model:20b": ["writer"],
+        }
+
+        result = service._select_model_with_size_preference(
+            "writer",
+            SizePreference.LARGEST,
+            8,  # Only 8GB VRAM
+        )
+
+        # Should select small model because large doesn't fit
+        assert result == "small-model:3b"
+
+    @patch("src.settings.get_installed_models_with_sizes")
+    def test_raises_when_no_tagged_models(
+        self, mock_get_models: MagicMock, service: ModelModeService
+    ):
+        """Should raise ValueError when no models are tagged for the role."""
+        mock_get_models.return_value = {
+            "untagged-model:3b": 3.0,
+        }
+        service.settings.custom_model_tags = {}
+
+        with pytest.raises(ValueError, match="No model tagged for role"):
+            service._select_model_with_size_preference("writer", SizePreference.MEDIUM, 48)
+
+
+class TestVramStrategySetting:
+    """Tests for VRAM strategy in Settings."""
+
+    def test_default_vram_strategy(self):
+        """Default VRAM strategy should be adaptive."""
+        settings = Settings()
+        assert settings.vram_strategy == "adaptive"
+
+    def test_vram_strategy_can_be_set(self):
+        """VRAM strategy can be changed."""
+        settings = Settings()
+        settings.vram_strategy = "sequential"
+        assert settings.vram_strategy == "sequential"
+        settings.vram_strategy = "parallel"
+        assert settings.vram_strategy == "parallel"

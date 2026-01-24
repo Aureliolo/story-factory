@@ -310,6 +310,7 @@ class Settings:
     # Generation mode settings
     current_mode: str = "balanced"  # ID of active generation mode
     use_mode_system: bool = True  # Whether to use mode-based model selection
+    vram_strategy: str = "adaptive"  # sequential, parallel, adaptive
 
     # Learning/tuning settings
     learning_triggers: list[str] = field(
