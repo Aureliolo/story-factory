@@ -2,8 +2,8 @@
 
 import pytest
 
-from services.story_service import GenerationCancelled
-from ui.state import AppState
+from src.services.story_service import GenerationCancelled
+from src.ui.state import AppState
 
 
 class TestAppStateGenerationControl:

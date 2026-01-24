@@ -2,14 +2,14 @@
 
 import pytest
 
-from memory.story_state import Chapter, StoryBrief, StoryState
-from services.export_service import (
+from src.memory.story_state import Chapter, StoryBrief, StoryState
+from src.services.export_service import (
     EXPORT_TEMPLATES,
     ExportOptions,
     ExportService,
     ExportTemplate,
 )
-from settings import Settings
+from src.settings import Settings
 
 
 class TestExportTemplates:

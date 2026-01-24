@@ -15,10 +15,10 @@ class TestModelSelectionFallback:
 
     def test_default_model_fallback_to_auto(self, tmp_path):
         """Default model falls back to 'auto' when not installed."""
-        from services import ServiceContainer
-        from settings import Settings
+        from src.services import ServiceContainer
+        from src.settings import Settings
 
-        with patch("services.model_service.ollama") as mock_ollama:
+        with patch("src.services.model_service.ollama") as mock_ollama:
             mock_client = MagicMock()
             mock_client.list.return_value = MockListResponse(["installed-model:latest"])
             mock_ollama.Client.return_value = mock_client
@@ -26,7 +26,7 @@ class TestModelSelectionFallback:
             config_file = tmp_path / "settings.json"
             config_file.write_text(json.dumps({"default_model": "uninstalled-model:latest"}))
 
-            with patch("settings.SETTINGS_FILE", config_file):
+            with patch("src.settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
 
@@ -41,10 +41,10 @@ class TestModelSelectionFallback:
 
     def test_agent_model_fallback_to_auto(self, tmp_path):
         """Per-agent models fall back to 'auto' when not installed."""
-        from services import ServiceContainer
-        from settings import Settings
+        from src.services import ServiceContainer
+        from src.settings import Settings
 
-        with patch("services.model_service.ollama") as mock_ollama:
+        with patch("src.services.model_service.ollama") as mock_ollama:
             mock_client = MagicMock()
             mock_client.list.return_value = MockListResponse(["installed-model:latest"])
             mock_ollama.Client.return_value = mock_client
@@ -62,7 +62,7 @@ class TestModelSelectionFallback:
                 )
             )
 
-            with patch("settings.SETTINGS_FILE", config_file):
+            with patch("src.settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
 
@@ -82,10 +82,10 @@ class TestModelSelectionFallback:
 
     def test_all_models_uninstalled(self, tmp_path):
         """Handles case when no models are installed."""
-        from services import ServiceContainer
-        from settings import Settings
+        from src.services import ServiceContainer
+        from src.settings import Settings
 
-        with patch("services.model_service.ollama") as mock_ollama:
+        with patch("src.services.model_service.ollama") as mock_ollama:
             mock_client = MagicMock()
             mock_client.list.return_value = MockListResponse([])
             mock_ollama.Client.return_value = mock_client
@@ -100,7 +100,7 @@ class TestModelSelectionFallback:
                 )
             )
 
-            with patch("settings.SETTINGS_FILE", config_file):
+            with patch("src.settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
 
@@ -121,11 +121,11 @@ class TestSettingsPageConstruction:
 
     def test_settings_page_with_valid_models(self, tmp_path):
         """Settings page constructs correctly with valid models."""
-        from services import ServiceContainer
-        from settings import Settings
-        from ui.state import AppState
+        from src.services import ServiceContainer
+        from src.settings import Settings
+        from src.ui.state import AppState
 
-        with patch("services.model_service.ollama") as mock_ollama:
+        with patch("src.services.model_service.ollama") as mock_ollama:
             mock_client = MagicMock()
             mock_client.list.return_value = MockListResponse(["model-a:latest", "model-b:7b"])
             mock_ollama.Client.return_value = mock_client
@@ -133,7 +133,7 @@ class TestSettingsPageConstruction:
             config_file = tmp_path / "settings.json"
             config_file.write_text(json.dumps({"default_model": "model-a:latest"}))
 
-            with patch("settings.SETTINGS_FILE", config_file):
+            with patch("src.settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
                 AppState()  # Verify it constructs
@@ -145,11 +145,11 @@ class TestSettingsPageConstruction:
 
     def test_settings_page_with_stale_config(self, tmp_path):
         """Settings page handles stale config without crashing."""
-        from services import ServiceContainer
-        from settings import Settings
-        from ui.state import AppState
+        from src.services import ServiceContainer
+        from src.settings import Settings
+        from src.ui.state import AppState
 
-        with patch("services.model_service.ollama") as mock_ollama:
+        with patch("src.services.model_service.ollama") as mock_ollama:
             mock_client = MagicMock()
             mock_client.list.return_value = MockListResponse(["only-model:latest"])
             mock_ollama.Client.return_value = mock_client
@@ -171,7 +171,7 @@ class TestSettingsPageConstruction:
                 )
             )
 
-            with patch("settings.SETTINGS_FILE", config_file):
+            with patch("src.settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
                 AppState()  # Verify it constructs

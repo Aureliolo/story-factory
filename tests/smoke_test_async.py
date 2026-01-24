@@ -17,9 +17,9 @@ def test_imports():
     logger.info("Testing imports...")
 
     try:
-        from services.story_service import GenerationCancelled
-        from ui.components.generation_status import GenerationStatus
-        from ui.state import AppState
+        from src.services.story_service import GenerationCancelled
+        from src.ui.components.generation_status import GenerationStatus
+        from src.ui.state import AppState
 
         # Verify imported items are valid types
         assert issubclass(GenerationCancelled, Exception)
@@ -44,7 +44,7 @@ def test_app_state():
     logger.info("Testing AppState...")
 
     try:
-        from ui.state import AppState
+        from src.ui.state import AppState
 
         state = AppState()
 
@@ -77,7 +77,7 @@ def test_generation_cancelled():
     logger.info("Testing GenerationCancelled...")
 
     try:
-        from services.story_service import GenerationCancelled
+        from src.services.story_service import GenerationCancelled
 
         exc = GenerationCancelled("Test")
         assert isinstance(exc, Exception)

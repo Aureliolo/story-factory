@@ -16,8 +16,8 @@ Usage:
 import argparse
 import logging
 
-from utils.environment import check_environment
-from utils.logging_config import setup_logging
+from src.utils.environment import check_environment
+from src.utils.logging_config import setup_logging
 
 # Check Python version and dependencies before running app logic
 check_environment()
@@ -33,9 +33,9 @@ def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False) 
         port: Port to listen on.
         reload: Enable auto-reload for development.
     """
-    from services import ServiceContainer
-    from settings import Settings
-    from ui import create_app
+    from src.services import ServiceContainer
+    from src.settings import Settings
+    from src.ui import create_app
 
     logger.info("Starting Story Factory web UI...")
 
@@ -55,7 +55,7 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
         load_story: Path to a saved story to load.
         list_stories: If True, list saved stories and exit.
     """
-    from workflows.orchestrator import StoryOrchestrator
+    from src.services.orchestrator import StoryOrchestrator
 
     if list_stories:
         orchestrator = StoryOrchestrator()
@@ -231,7 +231,7 @@ def main() -> None:
         "--log-file",
         type=str,
         default="default",
-        help="Log file path (default: logs/story_factory.log, use 'none' to disable)",
+        help="Log file path (default: output/logs/story_factory.log, use 'none' to disable)",
     )
 
     args = parser.parse_args()

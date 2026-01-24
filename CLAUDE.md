@@ -68,21 +68,21 @@ main.py
 ```
 
 **Layer responsibilities:**
-- **services/**: Business logic layer - no UI imports, receives settings via DI
-- **ui/**: NiceGUI components - only calls services, manages UI state via AppState
-- **agents/**: AI agent implementations - extend BaseAgent, use retry logic
-- **memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX)
-- **workflows/**: StoryOrchestrator coordinates agents through the story creation pipeline
+- **src/services/**: Business logic layer - no UI imports, receives settings via DI; includes orchestrator.py
+- **src/ui/**: NiceGUI components - only calls services, manages UI state via AppState
+- **src/agents/**: AI agent implementations - extend BaseAgent, use retry logic
+- **src/memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX)
+- **src/prompts/**: YAML prompt templates loaded at runtime
 
 **Key patterns:**
 - Pages implement `build()` method, receive `AppState` and `ServiceContainer`
-- Centralized UI state in `ui/state.py` (AppState class)
-- JSON extraction from LLM responses via `utils/json_parser.py`
+- Centralized UI state in `src/ui/state.py` (AppState class)
+- JSON extraction from LLM responses via `src/utils/json_parser.py`
 - Error handling decorators: `@handle_ollama_errors`, `@retry_with_fallback`
 - Thread-safe database operations with `threading.RLock`
 - LRU cache for orchestrators to prevent memory leaks
 - Rate limiting for concurrent LLM requests (max 2 concurrent)
-- Centralized exception hierarchy in `utils/exceptions.py`
+- Centralized exception hierarchy in `src/utils/exceptions.py`
 
 ## Agent Workflow
 
@@ -106,14 +106,15 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 
 ## Key Files
 
-- `settings.py`: Settings management, model registry, configurable timeouts
-- `settings.json`: User configuration (gitignored, copy from `settings.example.json`)
-- `ui/state.py`: Centralized UI state (AppState)
-- `services/__init__.py`: ServiceContainer for dependency injection
-- `agents/base.py`: BaseAgent with retry logic, rate limiting, configurable timeout
-- `utils/exceptions.py`: Centralized exception hierarchy (StoryFactoryError, LLMError, etc.)
-- `utils/constants.py`: Shared constants (language codes, etc.)
-- `memory/world_database.py`: SQLite + NetworkX with thread safety and schema migrations
+- `src/settings.py`: Settings management, model registry, configurable timeouts
+- `src/settings.json`: User configuration (gitignored, copy from `src/settings.example.json`)
+- `src/ui/state.py`: Centralized UI state (AppState)
+- `src/services/__init__.py`: ServiceContainer for dependency injection
+- `src/services/orchestrator.py`: StoryOrchestrator coordinates agents through the story creation pipeline
+- `src/agents/base.py`: BaseAgent with retry logic, rate limiting, configurable timeout
+- `src/utils/exceptions.py`: Centralized exception hierarchy (StoryFactoryError, LLMError, etc.)
+- `src/utils/constants.py`: Shared constants (language codes, etc.)
+- `src/memory/world_database.py`: SQLite + NetworkX with thread safety and schema migrations
 
 ## Testing
 
@@ -142,4 +143,5 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 
 - Stories: `output/stories/` (JSON files, UUIDs as IDs)
 - World databases: `output/worlds/` (SQLite)
-- Logs: `logs/story_factory.log`
+- Logs: `output/logs/story_factory.log`
+- Backups: `output/backups/`

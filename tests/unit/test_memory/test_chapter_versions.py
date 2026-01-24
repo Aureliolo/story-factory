@@ -2,7 +2,7 @@
 
 import pytest
 
-from memory.story_state import Chapter, ChapterVersion
+from src.memory.story_state import Chapter, ChapterVersion
 
 
 class TestChapterVersion:

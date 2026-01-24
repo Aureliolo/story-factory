@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.editor import EditorAgent
-from memory.story_state import StoryBrief, StoryState
-from settings import Settings
+from src.agents.editor import EditorAgent
+from src.memory.story_state import StoryBrief, StoryState
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def settings():
 @pytest.fixture
 def editor(settings):
     """Create EditorAgent with mocked Ollama client."""
-    with patch("agents.base.ollama.Client"):
+    with patch("src.agents.base.ollama.Client"):
         agent = EditorAgent(model="test-model", settings=settings)
         return agent
 
@@ -59,14 +59,14 @@ class TestEditorAgentInit:
 
     def test_init_with_defaults(self, settings):
         """Test agent initializes with default settings."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = EditorAgent(settings=settings)
             assert agent.name == "Editor"
             assert agent.role == "Prose Polisher"
 
     def test_init_with_custom_model(self, settings):
         """Test agent initializes with custom model."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = EditorAgent(model="editor-model:7b", settings=settings)
             assert agent.model == "editor-model:7b"
 

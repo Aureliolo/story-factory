@@ -2,7 +2,7 @@
 
 import pytest
 
-from utils.validation import (
+from src.utils.validation import (
     validate_in_range,
     validate_non_negative,
     validate_not_empty,

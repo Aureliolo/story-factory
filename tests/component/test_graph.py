@@ -9,7 +9,7 @@ import pytest
 from nicegui import ui
 from nicegui.testing import User
 
-from settings import Settings
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ class TestGraphComponent:
 
     async def test_graph_component_builds_without_error(self, user: User, test_world_db):
         """Graph component builds without NiceGUI runtime errors."""
-        from ui.components.graph import GraphComponent
+        from src.ui.components.graph import GraphComponent
 
         @ui.page("/test-graph")
         def test_page():
@@ -36,7 +36,7 @@ class TestGraphComponent:
 
     async def test_graph_component_with_data(self, user: User, test_world_db):
         """Graph component renders with actual world data."""
-        from ui.components.graph import GraphComponent
+        from src.ui.components.graph import GraphComponent
 
         @ui.page("/test-graph-data")
         def test_page():
@@ -54,7 +54,7 @@ class TestMiniGraph:
 
     async def test_mini_graph_renders(self, user: User, test_world_db):
         """mini_graph function creates a graph without errors."""
-        from ui.components.graph import mini_graph
+        from src.ui.components.graph import mini_graph
 
         @ui.page("/test-mini-graph")
         def test_page():
@@ -71,7 +71,7 @@ class TestGraphRenderer:
 
     def test_render_graph_html_returns_dataclass(self, test_world_db, test_settings):
         """render_graph_html returns GraphRenderResult dataclass."""
-        from ui.graph_renderer import GraphRenderResult, render_graph_html
+        from src.ui.graph_renderer import GraphRenderResult, render_graph_html
 
         result = render_graph_html(
             test_world_db,
@@ -87,7 +87,7 @@ class TestGraphRenderer:
 
     def test_render_entity_summary_html_no_script_tags(self, test_world_db):
         """Entity summary HTML doesn't contain script tags."""
-        from ui.graph_renderer import render_entity_summary_html
+        from src.ui.graph_renderer import render_entity_summary_html
 
         html = render_entity_summary_html(test_world_db)
 
@@ -95,7 +95,7 @@ class TestGraphRenderer:
 
     def test_render_graph_html_contains_entity_data(self, test_world_db, test_settings):
         """Graph JavaScript contains entity data from world database."""
-        from ui.graph_renderer import render_graph_html
+        from src.ui.graph_renderer import render_graph_html
 
         result = render_graph_html(
             test_world_db,
@@ -109,7 +109,7 @@ class TestGraphRenderer:
 
     def test_render_graph_html_has_valid_js(self, test_world_db, test_settings):
         """Graph JavaScript is valid and can initialize vis.Network."""
-        from ui.graph_renderer import render_graph_html
+        from src.ui.graph_renderer import render_graph_html
 
         result = render_graph_html(
             test_world_db,
@@ -125,7 +125,7 @@ class TestGraphRenderer:
 
     def test_render_graph_html_has_drag_to_connect(self, test_world_db, test_settings):
         """Graph JavaScript includes drag-to-connect functionality."""
-        from ui.graph_renderer import render_graph_html
+        from src.ui.graph_renderer import render_graph_html
 
         result = render_graph_html(
             test_world_db,

@@ -1,6 +1,6 @@
 """Tests for memory/story_state.py."""
 
-from memory.story_state import (
+from src.memory.story_state import (
     Chapter,
     ChapterList,
     Character,

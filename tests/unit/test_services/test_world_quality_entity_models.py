@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from memory.story_state import StoryBrief, StoryState
-from services.world_quality_service import WorldQualityService
-from settings import Settings
+from src.memory.story_state import StoryBrief, StoryState
+from src.services.world_quality_service import WorldQualityService
+from src.settings import Settings
 
 
 @pytest.fixture

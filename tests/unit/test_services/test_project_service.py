@@ -2,8 +2,8 @@
 
 import pytest
 
-from memory.world_database import WorldDatabase
-from services.project_service import ProjectService, _validate_path
+from src.memory.world_database import WorldDatabase
+from src.services.project_service import ProjectService, _validate_path
 
 
 class TestProjectService:
@@ -12,8 +12,8 @@ class TestProjectService:
     def test_create_project(self, tmp_settings, monkeypatch, tmp_path):
         """Test creating a new project."""
         # Monkeypatch the output directories
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
         state, world_db = service.create_project("Test Story")
@@ -26,8 +26,8 @@ class TestProjectService:
 
     def test_create_project_default_name(self, tmp_settings, monkeypatch, tmp_path):
         """Test creating a project with default name."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
         state, _ = service.create_project()
@@ -36,8 +36,8 @@ class TestProjectService:
 
     def test_list_projects_empty(self, tmp_settings, monkeypatch, tmp_path):
         """Test listing projects when none exist."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         (tmp_path / "stories").mkdir(parents=True, exist_ok=True)
 
@@ -48,8 +48,8 @@ class TestProjectService:
 
     def test_list_projects(self, tmp_settings, monkeypatch, tmp_path):
         """Test listing existing projects."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -66,8 +66,8 @@ class TestProjectService:
 
     def test_load_project(self, tmp_settings, monkeypatch, tmp_path):
         """Test loading an existing project."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -85,8 +85,8 @@ class TestProjectService:
 
     def test_load_nonexistent_project(self, tmp_settings, monkeypatch, tmp_path):
         """Test loading a project that doesn't exist."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         (tmp_path / "stories").mkdir(parents=True, exist_ok=True)
 
@@ -97,8 +97,8 @@ class TestProjectService:
 
     def test_delete_project(self, tmp_settings, monkeypatch, tmp_path):
         """Test deleting a project."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -120,8 +120,8 @@ class TestProjectService:
 
     def test_duplicate_project(self, tmp_settings, monkeypatch, tmp_path):
         """Test duplicating a project."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -205,8 +205,8 @@ class TestProjectServiceAdditional:
         """Test list_projects returns empty list when STORIES_DIR doesn't exist."""
         # Create service first (which creates directories)
         nonexistent = tmp_path / "nonexistent"
-        monkeypatch.setattr("services.project_service.STORIES_DIR", nonexistent)
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", nonexistent)
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -224,8 +224,8 @@ class TestProjectServiceAdditional:
         """Test list_projects skips corrupt JSON files."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         # Create a valid project first
         service = ProjectService(tmp_settings)
@@ -248,8 +248,8 @@ class TestProjectServiceAdditional:
         stories_dir.mkdir(parents=True)
         worlds_dir = tmp_path / "worlds"
         worlds_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", worlds_dir)
 
         # Create a legacy project file without world_db_path
         project_id = "legacy-test-id"
@@ -275,8 +275,8 @@ class TestProjectServiceAdditional:
 
     def test_update_project_name(self, tmp_settings, monkeypatch, tmp_path):
         """Test updating a project's name."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -296,8 +296,8 @@ class TestProjectServiceAdditional:
     def test_get_project_path(self, tmp_settings, monkeypatch, tmp_path):
         """Test get_project_path returns correct path."""
         stories_dir = tmp_path / "stories"
-        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
         path = service.get_project_path("test-uuid-123")
@@ -307,8 +307,8 @@ class TestProjectServiceAdditional:
     def test_get_world_db_path(self, tmp_settings, monkeypatch, tmp_path):
         """Test get_world_db_path returns correct path."""
         worlds_dir = tmp_path / "worlds"
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", worlds_dir)
 
         service = ProjectService(tmp_settings)
         path = service.get_world_db_path("test-uuid-123")
@@ -321,8 +321,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_create_project_with_template(self, tmp_settings, monkeypatch, tmp_path):
         """Test creating a project with a template applies the template (lines 120-126)."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -338,8 +338,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_create_project_with_nonexistent_template(self, tmp_settings, monkeypatch, tmp_path):
         """Test creating a project with a nonexistent template still creates the project."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -356,8 +356,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_create_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
         """Test that create_project re-raises exceptions after logging (lines 133-135)."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -365,7 +365,7 @@ class TestProjectServiceExceptionHandling:
         def mock_world_db_init(*args, **kwargs):
             raise RuntimeError("Database creation failed")
 
-        monkeypatch.setattr("services.project_service.WorldDatabase", mock_world_db_init)
+        monkeypatch.setattr("src.services.project_service.WorldDatabase", mock_world_db_init)
 
         with pytest.raises(RuntimeError, match="Database creation failed"):
             service.create_project("Test Project")
@@ -378,8 +378,8 @@ class TestProjectServiceExceptionHandling:
         stories_dir.mkdir(parents=True)
         worlds_dir = tmp_path / "worlds"
         worlds_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", worlds_dir)
 
         # Create a valid project file
         project_id = "test-exception-id"
@@ -400,15 +400,15 @@ class TestProjectServiceExceptionHandling:
         def mock_world_db_init(*args, **kwargs):
             raise RuntimeError("World database initialization failed")
 
-        monkeypatch.setattr("services.project_service.WorldDatabase", mock_world_db_init)
+        monkeypatch.setattr("src.services.project_service.WorldDatabase", mock_world_db_init)
 
         with pytest.raises(RuntimeError, match="World database initialization failed"):
             service.load_project(project_id)
 
     def test_save_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
         """Test that save_project re-raises exceptions after logging (lines 216-218)."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -431,8 +431,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_delete_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
         """Test that delete_project re-raises exceptions after logging (lines 313-315)."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -456,8 +456,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_duplicate_project_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
         """Test that duplicate_project re-raises exceptions after logging (lines 366-368)."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -475,8 +475,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_update_project_name_exception_reraises(self, tmp_settings, monkeypatch, tmp_path):
         """Test that update_project_name re-raises exceptions after logging (lines 393-395)."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -495,8 +495,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_duplicate_project_with_custom_name(self, tmp_settings, monkeypatch, tmp_path):
         """Test duplicating a project with a custom name."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -511,8 +511,8 @@ class TestProjectServiceExceptionHandling:
 
     def test_delete_nonexistent_project_returns_false(self, tmp_settings, monkeypatch, tmp_path):
         """Test deleting a project that doesn't exist returns False."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -524,8 +524,8 @@ class TestProjectServiceExceptionHandling:
         """Test that load_project rejects path traversal attempts."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -537,8 +537,8 @@ class TestProjectServiceExceptionHandling:
         """Test that delete_project rejects path traversal attempts."""
         stories_dir = tmp_path / "stories"
         stories_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.project_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -552,8 +552,8 @@ class TestProjectServiceGetByName:
 
     def test_get_project_by_name_found(self, tmp_settings, monkeypatch, tmp_path):
         """Test finding a project by its name."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -569,8 +569,8 @@ class TestProjectServiceGetByName:
 
     def test_get_project_by_name_not_found(self, tmp_settings, monkeypatch, tmp_path):
         """Test getting a project by name that doesn't exist."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -585,8 +585,8 @@ class TestProjectServiceGetByName:
 
     def test_get_project_by_name_empty_list(self, tmp_settings, monkeypatch, tmp_path):
         """Test getting a project by name when no projects exist."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         (tmp_path / "stories").mkdir(parents=True, exist_ok=True)
 
@@ -598,8 +598,8 @@ class TestProjectServiceGetByName:
 
     def test_get_project_by_name_validates_input(self, tmp_settings, monkeypatch, tmp_path):
         """Test get_project_by_name validates input."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -608,8 +608,8 @@ class TestProjectServiceGetByName:
 
     def test_delete_project_by_name_found(self, tmp_settings, monkeypatch, tmp_path):
         """Test deleting a project by its name."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -629,8 +629,8 @@ class TestProjectServiceGetByName:
 
     def test_delete_project_by_name_not_found(self, tmp_settings, monkeypatch, tmp_path):
         """Test deleting a project by name that doesn't exist."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 
@@ -645,8 +645,8 @@ class TestProjectServiceGetByName:
 
     def test_delete_project_by_name_validates_input(self, tmp_settings, monkeypatch, tmp_path):
         """Test delete_project_by_name validates input."""
-        monkeypatch.setattr("services.project_service.STORIES_DIR", tmp_path / "stories")
-        monkeypatch.setattr("services.project_service.WORLDS_DIR", tmp_path / "worlds")
+        monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
+        monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         service = ProjectService(tmp_settings)
 

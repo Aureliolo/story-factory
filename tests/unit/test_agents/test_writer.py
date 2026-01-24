@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agents.writer import WriterAgent
-from memory.story_state import Chapter, Character, Scene, StoryBrief, StoryState
-from settings import Settings
+from src.agents.writer import WriterAgent
+from src.memory.story_state import Chapter, Character, Scene, StoryBrief, StoryState
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def settings():
 @pytest.fixture
 def writer(settings):
     """Create WriterAgent with mocked Ollama client."""
-    with patch("agents.base.ollama.Client"):
+    with patch("src.agents.base.ollama.Client"):
         agent = WriterAgent(model="test-model", settings=settings)
         return agent
 
@@ -78,14 +78,14 @@ class TestWriterAgentInit:
 
     def test_init_with_defaults(self, settings):
         """Test agent initializes with default settings."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = WriterAgent(settings=settings)
             assert agent.name == "Writer"
             assert agent.role == "Prose Craftsman"
 
     def test_init_with_custom_model(self, settings):
         """Test agent initializes with custom model."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = WriterAgent(model="creative-model:7b", settings=settings)
             assert agent.model == "creative-model:7b"
 

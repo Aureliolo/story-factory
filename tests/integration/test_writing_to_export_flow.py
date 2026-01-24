@@ -5,7 +5,7 @@ Tests chapter writing, editing, and exporting completed stories.
 
 import pytest
 
-from memory.story_state import Chapter, Character, StoryBrief
+from src.memory.story_state import Chapter, Character, StoryBrief
 
 
 class TestWritingWorkflow:

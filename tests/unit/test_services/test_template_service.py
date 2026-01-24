@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from memory.story_state import StoryBrief, StoryState
-from memory.templates import StoryTemplate
-from memory.world_database import WorldDatabase
-from services.template_service import TemplateService
+from src.memory.story_state import StoryBrief, StoryState
+from src.memory.templates import StoryTemplate
+from src.memory.world_database import WorldDatabase
+from src.services.template_service import TemplateService
 
 
 class TestTemplateService:
@@ -17,7 +17,7 @@ class TestTemplateService:
         """Test listing built-in templates."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
         templates = service.list_templates()
@@ -37,7 +37,7 @@ class TestTemplateService:
         """Test getting a built-in template."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
         template = service.get_template("mystery-detective")
@@ -51,7 +51,7 @@ class TestTemplateService:
         """Test getting a template that doesn't exist."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
         template = service.get_template("nonexistent-template")
@@ -62,7 +62,7 @@ class TestTemplateService:
         """Test saving a custom template."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -93,7 +93,7 @@ class TestTemplateService:
         """Test that built-in templates cannot be modified."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -107,7 +107,7 @@ class TestTemplateService:
         """Test deleting a custom template."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -132,7 +132,7 @@ class TestTemplateService:
         """Test that built-in templates cannot be deleted."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -143,7 +143,7 @@ class TestTemplateService:
         """Test deleting a template that doesn't exist."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
         result = service.delete_template("nonexistent")
@@ -154,11 +154,11 @@ class TestTemplateService:
         """Test creating a template from an existing project."""
         from datetime import datetime
 
-        from memory.story_state import Character, PlotPoint
+        from src.memory.story_state import Character, PlotPoint
 
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -221,7 +221,7 @@ class TestTemplateService:
 
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -258,7 +258,7 @@ class TestTemplateService:
         """Test listing structure presets."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
         presets = service.list_structure_presets()
@@ -273,7 +273,7 @@ class TestTemplateService:
         """Test getting a structure preset."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
         preset = service.get_structure_preset("three-act")
@@ -288,7 +288,7 @@ class TestTemplateService:
         """Test exporting a template."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -310,7 +310,7 @@ class TestTemplateService:
         """Test that export fails with non-JSON extension."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -322,7 +322,7 @@ class TestTemplateService:
         """Test that export fails for nonexistent template."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -334,7 +334,7 @@ class TestTemplateService:
         """Test importing a template."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -382,7 +382,7 @@ class TestTemplateService:
         """Test that import fails for nonexistent file."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -394,7 +394,7 @@ class TestTemplateService:
         """Test that import fails for invalid template data."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -410,7 +410,7 @@ class TestTemplateService:
         """Test that list_templates includes both built-in and custom templates."""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 
@@ -441,7 +441,7 @@ class TestTemplateService:
 
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True)
-        monkeypatch.setattr("services.template_service.TEMPLATES_DIR", templates_dir)
+        monkeypatch.setattr("src.services.template_service.TEMPLATES_DIR", templates_dir)
 
         service = TemplateService(tmp_settings)
 

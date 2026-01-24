@@ -1,6 +1,6 @@
 """Tests for message analyzer utility."""
 
-from utils.message_analyzer import (
+from src.utils.message_analyzer import (
     analyze_message,
     detect_content_rating,
     detect_language,

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from utils.prompt_registry import PromptRegistry
-from utils.prompt_template import PromptTemplateError
+from src.utils.prompt_registry import PromptRegistry
+from src.utils.prompt_template import PromptTemplateError
 
 
 class TestPromptRegistry:

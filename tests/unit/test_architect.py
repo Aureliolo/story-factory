@@ -5,9 +5,10 @@ from unittest.mock import patch
 
 import pytest
 
-from agents.architect import ArchitectAgent
-from memory.story_state import StoryBrief
-from settings import Settings
+import src.agents.architect as architect_module
+from src.agents.architect import ArchitectAgent
+from src.memory.story_state import StoryBrief
+from src.settings import Settings
 
 
 class TestArchitectParseVariationResponse:
@@ -21,7 +22,7 @@ class TestArchitectParseVariationResponse:
     @pytest.fixture
     def architect(self, settings):
         """Create an ArchitectAgent for testing."""
-        with patch("agents.base.ollama.Client"):
+        with patch("src.agents.base.ollama.Client"):
             agent = ArchitectAgent(model="test-model", settings=settings)
         return agent
 
@@ -149,9 +150,8 @@ class TestArchitectParseVariationResponse:
         self, architect, brief, caplog, monkeypatch
     ):
         """Test _parse_variation_response handles complete JSON extraction failure for characters."""
-        # When extract_json_list returns None (strict=False), no characters are added
-        import agents.architect as architect_module
 
+        # When extract_json_list returns None (strict=False), no characters are added
         # Mock extract_json_list to return None (simulating parse failure with strict=False)
         def mock_extract_json_list(text, strict=True):
             return None
@@ -180,8 +180,6 @@ class TestArchitectParseVariationResponse:
     ):
         """Test _parse_variation_response handles complete JSON extraction failure for plot points."""
         # When extract_json_list returns None for plot points section
-        import agents.architect as architect_module
-
         call_count = [0]
 
         def mock_extract_json_list(text, strict=True):
@@ -225,8 +223,6 @@ class TestArchitectParseVariationResponse:
     ):
         """Test _parse_variation_response handles complete JSON extraction failure for chapters."""
         # When extract_json_list returns None for chapters section
-        import agents.architect as architect_module
-
         call_count = [0]
 
         def mock_extract_json_list(text, strict=True):

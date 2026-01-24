@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from memory.mode_models import QualityScores
-from services.scoring_service import ScoringService
+from src.memory.mode_models import QualityScores
+from src.services.scoring_service import ScoringService
 
 
 class TestScoringService:
