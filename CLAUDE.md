@@ -127,6 +127,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 - Mock models must use a name from `RECOMMENDED_MODELS` (e.g., `huihui_ai/dolphin3-abliterated:8b`) - fake names like `test-model:latest` have no role tags and cause `ValueError: No model tagged for role`
 - `mock_ollama_globally` fixture in conftest.py is autouse - all tests automatically mock Ollama
 - Ollama API responses use both dict (`models.get("models")`) and object (`response.models`) patterns - mocks must support both
+- conftest.py mocks `Settings.get_model_tags()` to return all role tags for the test model - without this, agents fail to auto-select models for their roles
 
 ## Ollama Integration
 
