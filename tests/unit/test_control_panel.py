@@ -1196,6 +1196,22 @@ class TestControlPanel:
 
         panel._log_text.see.assert_not_called()
 
+    def test_poll_logs_unchanged_skips_update(self):
+        """Should skip update when log content hasn't changed."""
+        panel = self._create_mock_panel()
+        lines = ["Line 1", "Line 2"]
+        panel._log_watcher.get_recent_lines.return_value = lines
+        # Simulate that we already have the same content cached
+        panel._last_log_lines = lines
+
+        panel._poll_logs()
+
+        # Should not call configure/delete since content is unchanged
+        panel._log_text.configure.assert_not_called()
+        panel._log_text.delete.assert_not_called()
+        # But should still schedule next poll
+        panel.after.assert_called_with(1000, panel._poll_logs)
+
     def test_run_in_thread_success(self):
         """Should queue success callback when function succeeds."""
         panel = self._create_mock_panel()
