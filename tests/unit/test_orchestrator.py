@@ -2761,3 +2761,115 @@ class TestContinueChapterSaveExceptions:
 
         with pytest.raises(ExportError, match="Unexpected error saving continued chapter"):
             list(orc.continue_chapter(1))
+
+
+class TestOrchestratorLearningIntegration:
+    """Tests for learning system integration in orchestrator."""
+
+    @pytest.fixture
+    def mock_mode_service(self):
+        """Create a mock ModelModeService."""
+        mock = MagicMock()
+        mock.record_generation.return_value = 123  # score_id
+        mock.update_performance_metrics.return_value = None
+        mock.on_chapter_complete.return_value = None
+        return mock
+
+    @pytest.fixture
+    def orchestrator_with_mode_service(self, mock_mode_service):
+        """Create orchestrator with mode service for learning tests."""
+        orchestrator = StoryOrchestrator(mode_service=mock_mode_service)
+        orchestrator.story_state = StoryState(
+            id="test-story",
+            status="writing",
+            brief=StoryBrief(
+                premise="A test story",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="novella",
+                content_rating="none",
+            ),
+            characters=[Character(name="Hero", role="protagonist", description="A brave warrior")],
+            chapters=[Chapter(number=1, title="Beginning", outline="The start of the adventure")],
+        )
+        # Mock agent methods
+        object.__setattr__(
+            orchestrator.writer, "write_chapter", MagicMock(return_value="Chapter content...")
+        )
+        object.__setattr__(
+            orchestrator.editor, "edit_chapter", MagicMock(return_value="Edited content...")
+        )
+        object.__setattr__(orchestrator.continuity, "check_chapter", MagicMock(return_value=[]))
+        object.__setattr__(
+            orchestrator.continuity, "validate_against_outline", MagicMock(return_value=[])
+        )
+        object.__setattr__(orchestrator.continuity, "extract_new_facts", MagicMock(return_value=[]))
+        object.__setattr__(
+            orchestrator.continuity, "extract_character_arcs", MagicMock(return_value={})
+        )
+        object.__setattr__(
+            orchestrator.continuity, "check_plot_points_completed", MagicMock(return_value=[])
+        )
+        object.__setattr__(
+            orchestrator.validator, "validate_response", MagicMock(return_value=None)
+        )
+        return orchestrator
+
+    def test_write_chapter_records_generation(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter calls record_generation on mode_service."""
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.record_generation.assert_called_once()
+        call_args = mock_mode_service.record_generation.call_args
+        assert call_args.kwargs["project_id"] == "test-story"
+        assert call_args.kwargs["agent_role"] == "writer"
+        assert call_args.kwargs["chapter_id"] == "1"
+
+    def test_write_chapter_updates_performance_metrics(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter calls update_performance_metrics on mode_service."""
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.update_performance_metrics.assert_called_once()
+        call_args = mock_mode_service.update_performance_metrics.call_args
+        assert call_args[0][0] == 123  # score_id
+        assert "tokens_generated" in call_args.kwargs
+        assert "time_seconds" in call_args.kwargs
+
+    def test_write_chapter_calls_on_chapter_complete(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter calls on_chapter_complete on mode_service."""
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0
+        mock_mode_service.on_chapter_complete.assert_called_once()
+
+    def test_write_chapter_handles_record_generation_exception(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter handles exceptions from record_generation."""
+        mock_mode_service.record_generation.side_effect = Exception("Learning failed")
+
+        # Should not raise, just log warning
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0  # Chapter should still be written
+
+    def test_write_chapter_handles_metrics_update_exception(
+        self, orchestrator_with_mode_service, mock_mode_service
+    ):
+        """Test that write_chapter handles exceptions from update_performance_metrics."""
+        mock_mode_service.update_performance_metrics.side_effect = Exception("Metrics failed")
+
+        # Should not raise, just log warning
+        events = list(orchestrator_with_mode_service.write_chapter(1))
+
+        assert len(events) > 0  # Chapter should still be written
