@@ -272,12 +272,9 @@ class TestModelModeServiceAdditionalCoverage:
     """Additional tests for full coverage."""
 
     @pytest.fixture
-    def temp_db(self) -> Path:
-        """Create a temporary database file."""
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            return Path(f.name)
+    def temp_db(self, tmp_path: Path) -> Path:
+        """Create a temporary database file using pytest's tmp_path fixture."""
+        return tmp_path / "test_mode.db"
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
@@ -286,9 +283,13 @@ class TestModelModeServiceAdditionalCoverage:
         mock.ollama_url = "http://localhost:11434"
         mock.get_model_for_agent.return_value = "test-model:8b"
         mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
-        mock.get_temperature_for_agent.side_effect = lambda role: mock.agent_temperatures.get(
-            role, 0.7
-        )
+
+        def _get_temp(role: str) -> float:
+            if role not in mock.agent_temperatures:
+                raise ValueError(f"Unknown agent role: {role}")
+            return float(mock.agent_temperatures[role])
+
+        mock.get_temperature_for_agent.side_effect = _get_temp
         return mock
 
     @pytest.fixture
@@ -401,7 +402,10 @@ class TestModelModeServiceAdditionalCoverage:
         # Now simulate regeneration
         service.on_regenerate("test-proj", "ch-1")
 
-        # The score should be marked as regenerated (checked via internal DB)
+        # Verify the score was marked as regenerated
+        score = service._db.get_latest_score_for_chapter("test-proj", "ch-1")
+        assert score is not None
+        assert score["was_regenerated"] == 1
 
     def test_on_regenerate_no_matching_score(self, service: ModelModeService):
         """Test on_regenerate handles no matching score gracefully."""
@@ -411,9 +415,9 @@ class TestModelModeServiceAdditionalCoverage:
 
     def test_on_regenerate_handles_exception(self, service: ModelModeService):
         """Test on_regenerate handles exceptions gracefully."""
-        from unittest.mock import patch
-
-        with patch.object(service._db, "get_scores_for_project", side_effect=Exception("DB error")):
+        with patch.object(
+            service._db, "get_latest_score_for_chapter", side_effect=Exception("DB error")
+        ):
             # Should not raise, just log warning
             service.on_regenerate("test-proj", "ch-1")
 

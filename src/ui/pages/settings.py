@@ -769,8 +769,10 @@ class SettingsPage:
             "max_tokens": self.settings.max_tokens,
             "previous_chapter_context_chars": self.settings.previous_chapter_context_chars,
             "chapter_analysis_chars": self.settings.chapter_analysis_chars,
+            "full_text_preview_chars": self.settings.full_text_preview_chars,
             "use_mode_system": self.settings.use_mode_system,
             "current_mode": self.settings.current_mode,
+            "vram_strategy": self.settings.vram_strategy,
             "learning_autonomy": self.settings.learning_autonomy,
             "learning_triggers": list(self.settings.learning_triggers),
             "learning_periodic_interval": self.settings.learning_periodic_interval,
@@ -809,8 +811,12 @@ class SettingsPage:
         self.settings.max_tokens = snapshot["max_tokens"]
         self.settings.previous_chapter_context_chars = snapshot["previous_chapter_context_chars"]
         self.settings.chapter_analysis_chars = snapshot["chapter_analysis_chars"]
+        if "full_text_preview_chars" in snapshot:
+            self.settings.full_text_preview_chars = snapshot["full_text_preview_chars"]
         self.settings.use_mode_system = snapshot["use_mode_system"]
         self.settings.current_mode = snapshot["current_mode"]
+        if "vram_strategy" in snapshot:
+            self.settings.vram_strategy = snapshot["vram_strategy"]
         self.settings.learning_autonomy = snapshot["learning_autonomy"]
         self.settings.learning_triggers = list(snapshot["learning_triggers"])
         self.settings.learning_periodic_interval = snapshot["learning_periodic_interval"]
@@ -877,10 +883,14 @@ class SettingsPage:
             self._context_size_input.value = self.settings.context_size
         if hasattr(self, "_max_tokens_input") and self._max_tokens_input:
             self._max_tokens_input.value = self.settings.max_tokens
+        if hasattr(self, "_full_text_preview_chars") and self._full_text_preview_chars:
+            self._full_text_preview_chars.value = self.settings.full_text_preview_chars
 
         # Mode settings
         if hasattr(self, "_mode_select") and self._mode_select:
             self._mode_select.value = self.settings.current_mode
+        if hasattr(self, "_vram_strategy_select") and self._vram_strategy_select:
+            self._vram_strategy_select.value = self.settings.vram_strategy
 
         # Learning settings
         if hasattr(self, "_autonomy_select") and self._autonomy_select:

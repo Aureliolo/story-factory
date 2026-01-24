@@ -24,14 +24,14 @@ class RecommendationDialog:
         self,
         recommendations: list[TuningRecommendation],
         on_apply: Callable[[list[TuningRecommendation]], None] | None = None,
-        on_dismiss: Callable[[], None] | None = None,
+        on_dismiss: Callable[[list[TuningRecommendation]], None] | None = None,
     ):
         """Initialize recommendation dialog.
 
         Args:
             recommendations: List of recommendations to display.
             on_apply: Callback when user applies selected recommendations.
-            on_dismiss: Callback when user dismisses without applying.
+            on_dismiss: Callback when user dismisses recommendations.
         """
         self.recommendations = recommendations
         self.on_apply = on_apply
@@ -45,6 +45,9 @@ class RecommendationDialog:
 
     def show(self) -> None:
         """Show the recommendation dialog."""
+        logger.debug(
+            f"Opening recommendation dialog with {len(self.recommendations)} recommendations"
+        )
         with ui.dialog() as self._dialog:
             self._dialog.props("persistent")
             with ui.card().classes("w-full max-w-2xl"):
@@ -56,6 +59,7 @@ class RecommendationDialog:
 
     def _build_header(self) -> None:
         """Build dialog header."""
+        logger.debug("Building recommendation dialog header")
         with ui.row().classes("w-full items-center justify-between mb-4"):
             with ui.row().classes("items-center gap-2"):
                 ui.icon("psychology", size="sm").classes("text-blue-500")
@@ -70,6 +74,7 @@ class RecommendationDialog:
 
     def _build_recommendations(self) -> None:
         """Build recommendation cards."""
+        logger.debug(f"Building {len(self.recommendations)} recommendation cards")
         with ui.column().classes("w-full gap-3 max-h-96 overflow-y-auto"):
             for i, rec in enumerate(self.recommendations):
                 self._build_recommendation_card(i, rec)
@@ -142,9 +147,11 @@ class RecommendationDialog:
     def _toggle_selection(self, index: int) -> None:
         """Toggle selection state for a recommendation."""
         self._selected[index] = not self._selected.get(index, True)
+        logger.debug(f"Toggled recommendation {index} selection to {self._selected[index]}")
 
     def _build_actions(self) -> None:
         """Build action buttons."""
+        logger.debug("Building recommendation dialog actions")
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
             ui.button("Dismiss", on_click=self._on_dismiss).props("flat")
             ui.button("Apply Selected", on_click=self._on_apply).props("color=primary")
@@ -169,27 +176,29 @@ class RecommendationDialog:
         if self._dialog:
             self._dialog.close()
 
-        logger.debug("Recommendations dismissed")
+        logger.debug(f"Dismissing {len(self.recommendations)} recommendations")
 
         if self.on_dismiss:
-            self.on_dismiss()
+            self.on_dismiss(self.recommendations)
 
 
 def show_recommendations(
     recommendations: list[TuningRecommendation],
     on_apply: Callable[[list[TuningRecommendation]], None] | None = None,
-    on_dismiss: Callable[[], None] | None = None,
+    on_dismiss: Callable[[list[TuningRecommendation]], None] | None = None,
 ) -> None:
     """Show recommendation dialog as a convenience function.
 
     Args:
         recommendations: List of recommendations to display.
         on_apply: Callback when user applies selected recommendations.
-        on_dismiss: Callback when user dismisses without applying.
+        on_dismiss: Callback when user dismisses recommendations.
     """
     if not recommendations:
+        logger.debug("No recommendations to show")
         ui.notify("No recommendations to show", type="info")
         return
 
+    logger.debug(f"Showing recommendations dialog for {len(recommendations)} items")
     dialog = RecommendationDialog(recommendations, on_apply, on_dismiss)
     dialog.show()

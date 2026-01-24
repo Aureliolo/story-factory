@@ -776,7 +776,13 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         write_start_time = datetime.now()
         if self.mode_service and self.story_state.id:
             try:
-                model_id = self.writer.model or self.settings.get_model_for_agent("writer")
+                # Get model_id using the same logic as BaseAgent._get_model
+                model_id = self.writer.model
+                if not model_id:
+                    if self.settings.use_mode_system:
+                        model_id = self.mode_service.get_model_for_agent("writer")
+                    else:
+                        model_id = self.settings.get_model_for_agent("writer")
                 genre = self.story_state.brief.genre if self.story_state.brief else None
                 self._current_score_id = self.mode_service.record_generation(
                     project_id=self.story_state.id,

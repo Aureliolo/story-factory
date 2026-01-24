@@ -922,7 +922,60 @@ Rate each dimension from 0-10:
 
     def get_pending_recommendations(self) -> list[TuningRecommendation]:
         """Get recommendations awaiting user action as TuningRecommendation objects."""
-        return self._db.get_recent_recommendations(limit=20)
+        from datetime import datetime
+
+        rows = self._db.get_pending_recommendations(limit=20)
+        recommendations = []
+        for row in rows:
+            try:
+                # Parse timestamp - handle both string and datetime
+                timestamp_raw = row.get("timestamp")
+                if isinstance(timestamp_raw, str):
+                    timestamp = datetime.fromisoformat(timestamp_raw)
+                elif isinstance(timestamp_raw, datetime):
+                    timestamp = timestamp_raw
+                else:
+                    timestamp = datetime.now()
+
+                # Parse recommendation_type - handle both string and enum
+                rec_type_raw = row.get("recommendation_type")
+                if isinstance(rec_type_raw, RecommendationType):
+                    rec_type = rec_type_raw
+                else:
+                    rec_type = RecommendationType(str(rec_type_raw))
+
+                rec = TuningRecommendation(
+                    id=row.get("id"),
+                    timestamp=timestamp,
+                    recommendation_type=rec_type,
+                    current_value=row.get("current_value", ""),
+                    suggested_value=row.get("suggested_value", ""),
+                    affected_role=row.get("affected_role"),
+                    reason=row.get("reason", ""),
+                    confidence=float(row.get("confidence", 0.5)),
+                    evidence=row.get("evidence"),
+                    expected_improvement=row.get("expected_improvement"),
+                )
+                recommendations.append(rec)
+            except Exception as e:
+                logger.warning(f"Failed to parse recommendation {row.get('id')}: {e}")
+        return recommendations
+
+    def dismiss_recommendation(self, recommendation: TuningRecommendation) -> None:
+        """Dismiss a recommendation so it won't resurface.
+
+        Args:
+            recommendation: The recommendation to dismiss.
+        """
+        if recommendation.id is None:
+            logger.warning("Cannot dismiss recommendation without ID")
+            return
+        self._db.update_recommendation_outcome(
+            recommendation_id=recommendation.id,
+            was_applied=False,
+            user_feedback="dismissed",
+        )
+        logger.debug(f"Dismissed recommendation {recommendation.id}")
 
     def on_regenerate(self, project_id: str, chapter_id: str) -> None:
         """Record regeneration as a negative implicit signal.
@@ -936,18 +989,17 @@ Rate each dimension from 0-10:
             chapter_id: The chapter being regenerated.
         """
         try:
-            # Find the most recent score for this project/chapter
-            scores = self._db.get_scores_for_project(project_id)
-            for score in scores:
-                if score.get("chapter_id") == chapter_id:
-                    score_id = score.get("id")
-                    if score_id:
-                        self._db.update_score(score_id, was_regenerated=True)
-                        logger.debug(
-                            f"Marked score {score_id} as regenerated for "
-                            f"project {project_id}, chapter {chapter_id}"
-                        )
-                        return
+            # Find the most recent score for this project/chapter using efficient LIMIT 1 query
+            score = self._db.get_latest_score_for_chapter(project_id, chapter_id)
+            if score:
+                score_id = score.get("id")
+                if score_id:
+                    self._db.update_score(score_id, was_regenerated=True)
+                    logger.debug(
+                        f"Marked score {score_id} as regenerated for "
+                        f"project {project_id}, chapter {chapter_id}"
+                    )
+                    return
             logger.debug(
                 f"No score found to mark as regenerated for "
                 f"project {project_id}, chapter {chapter_id}"

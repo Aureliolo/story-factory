@@ -142,14 +142,14 @@ class StoryService:
             Dictionary with completion info and any pending recommendations.
         """
         logger.info(f"Completing project {state.id}")
-        state.status = "completed"
+        state.status = "complete"
 
         # Trigger learning
         recommendations = self._on_story_complete(state)
 
         return {
             "project_id": state.id,
-            "status": "completed",
+            "status": "complete",
             "pending_recommendations": recommendations or [],
         }
 

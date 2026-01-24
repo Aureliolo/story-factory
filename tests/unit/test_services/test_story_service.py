@@ -1269,9 +1269,9 @@ class TestStoryServiceLearning:
         result = story_service.complete_project(sample_story_state)
 
         assert result["project_id"] == sample_story_state.id
-        assert result["status"] == "completed"
+        assert result["status"] == "complete"
         assert result["pending_recommendations"] == []
-        assert sample_story_state.status == "completed"
+        assert sample_story_state.status == "complete"
 
     def test_complete_project_with_mode_service(self, settings, sample_story_state):
         """Test complete_project with mode_service that returns recommendations."""
@@ -1295,7 +1295,7 @@ class TestStoryServiceLearning:
         result = service.complete_project(sample_story_state)
 
         assert result["project_id"] == sample_story_state.id
-        assert result["status"] == "completed"
+        assert result["status"] == "complete"
         assert len(result["pending_recommendations"]) == 1
         mock_mode_service.on_project_complete.assert_called_once()
         mock_mode_service.handle_recommendations.assert_called_once()
@@ -1312,7 +1312,7 @@ class TestStoryServiceLearning:
 
         # Should still complete but with empty recommendations
         assert result["project_id"] == sample_story_state.id
-        assert result["status"] == "completed"
+        assert result["status"] == "complete"
         assert result["pending_recommendations"] == []
 
     def test_on_story_complete_no_recommendations(self, settings, sample_story_state):

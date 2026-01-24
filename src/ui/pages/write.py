@@ -1264,11 +1264,7 @@ class WritePage:
             return
 
         try:
-            # Check if the mode service should tune based on triggers
-            if not self.services.mode.should_tune():
-                return
-
-            # Get pending recommendations
+            # Get pending recommendations (don't gate on should_tune() to allow AFTER_PROJECT)
             recommendations = self.services.mode.get_pending_recommendations()
             if not recommendations:
                 logger.debug("No pending recommendations to show")
@@ -1298,8 +1294,8 @@ class WritePage:
             applied_count = 0
             for rec in recommendations:
                 try:
-                    self.services.mode.apply_recommendation(rec)
-                    applied_count += 1
+                    if self.services.mode.apply_recommendation(rec):
+                        applied_count += 1
                 except Exception as e:
                     logger.error(f"Failed to apply recommendation {rec.id}: {e}")
 
@@ -1312,9 +1308,25 @@ class WritePage:
             logger.error(f"Error applying recommendations: {e}")
             self._notify("Failed to apply recommendations", type="negative")
 
-    def _dismiss_recommendations(self) -> None:
-        """Handle dismissal of recommendations."""
-        logger.debug("Recommendations dismissed by user")
+    def _dismiss_recommendations(self, recommendations: list[TuningRecommendation]) -> None:
+        """Handle dismissal of recommendations by persisting the rejection.
+
+        Args:
+            recommendations: List of recommendations being dismissed.
+        """
+        if not self.services.mode:
+            logger.debug("No mode service available to dismiss recommendations")
+            return
+
+        dismissed_count = 0
+        for rec in recommendations:
+            try:
+                self.services.mode.dismiss_recommendation(rec)
+                dismissed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to dismiss recommendation: {e}")
+
+        logger.info(f"Dismissed {dismissed_count} recommendation(s)")
 
     def _record_regeneration_signal(self, project_id: str, chapter_num: int) -> None:
         """Record regeneration as an implicit negative signal for learning.

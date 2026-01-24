@@ -502,6 +502,13 @@ class Settings:
                 f"interaction_mode must be one of {valid_modes}, got {self.interaction_mode}"
             )
 
+        # Validate VRAM strategy
+        valid_vram_strategies = ["sequential", "parallel", "adaptive"]
+        if self.vram_strategy not in valid_vram_strategies:
+            raise ValueError(
+                f"vram_strategy must be one of {valid_vram_strategies}, got {self.vram_strategy}"
+            )
+
         # Validate temperatures
         expected_agents = set(AGENT_ROLES)
 

@@ -427,6 +427,32 @@ class ModeDatabase:
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_latest_score_for_chapter(
+        self, project_id: str, chapter_id: str
+    ) -> dict[str, Any] | None:
+        """Get the most recent score for a specific project chapter.
+
+        Args:
+            project_id: The project ID.
+            chapter_id: The chapter ID.
+
+        Returns:
+            The latest score dict or None if not found.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM generation_scores
+                WHERE project_id = ? AND chapter_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+                (project_id, chapter_id),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     def get_score_count(
         self,
         model_id: str | None = None,
@@ -618,8 +644,15 @@ class ModeDatabase:
             )
             conn.commit()
 
-    def get_pending_recommendations(self) -> list[dict[str, Any]]:
-        """Get recommendations that haven't been actioned."""
+    def get_pending_recommendations(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Get recommendations that haven't been actioned.
+
+        Args:
+            limit: Maximum number of recommendations to return.
+
+        Returns:
+            List of recommendation dictionaries.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
@@ -627,7 +660,9 @@ class ModeDatabase:
                 SELECT * FROM recommendations
                 WHERE was_applied = 0 AND user_feedback IS NULL
                 ORDER BY timestamp DESC
-                """
+                LIMIT ?
+                """,
+                (limit,),
             )
             return [dict(row) for row in cursor.fetchall()]
 
