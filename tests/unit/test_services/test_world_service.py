@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from memory.story_state import Character, StoryBrief, StoryState
-from memory.world_database import WorldDatabase
-from services.world_service import WorldService
-from settings import Settings
+from src.memory.story_state import Character, StoryBrief, StoryState
+from src.memory.world_database import WorldDatabase
+from src.services.world_service import WorldService
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -608,7 +608,7 @@ class TestWorldServiceErrorHandling:
 
     def test_extract_entities_from_structure_exception(self, world_service, world_db, monkeypatch):
         """Test exception handling in extract_entities_from_structure."""
-        from memory.story_state import Character, StoryState
+        from src.memory.story_state import Character, StoryState
 
         state = StoryState(id="test-error")
         state.characters = [

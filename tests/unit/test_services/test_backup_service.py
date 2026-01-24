@@ -5,7 +5,7 @@ import zipfile
 
 import pytest
 
-from services.backup_service import BackupService, _validate_backup_path
+from src.services.backup_service import BackupService, _validate_backup_path
 
 
 class TestBackupService:
@@ -18,8 +18,8 @@ class TestBackupService:
         worlds_dir = tmp_path / "worlds"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.backup_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
 
         stories_dir.mkdir(parents=True)
         worlds_dir.mkdir(parents=True)
@@ -68,8 +68,8 @@ class TestBackupService:
         worlds_dir = tmp_path / "worlds"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.backup_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
 
         stories_dir.mkdir(parents=True)
         worlds_dir.mkdir(parents=True)
@@ -99,7 +99,7 @@ class TestBackupService:
         stories_dir = tmp_path / "stories"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
 
         stories_dir.mkdir(parents=True)
 
@@ -117,8 +117,8 @@ class TestBackupService:
         worlds_dir = tmp_path / "worlds"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.backup_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
 
         stories_dir.mkdir(parents=True)
         worlds_dir.mkdir(parents=True)
@@ -160,8 +160,8 @@ class TestBackupService:
         worlds_dir = tmp_path / "worlds"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.backup_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
 
         stories_dir.mkdir(parents=True)
         worlds_dir.mkdir(parents=True)
@@ -212,8 +212,8 @@ class TestBackupService:
         worlds_dir = tmp_path / "worlds"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.backup_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
 
         stories_dir.mkdir(parents=True)
         worlds_dir.mkdir(parents=True)
@@ -251,7 +251,7 @@ class TestBackupService:
         stories_dir = tmp_path / "stories"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
 
         stories_dir.mkdir(parents=True)
 
@@ -459,8 +459,8 @@ class TestBackupService:
         worlds_dir = tmp_path / "worlds"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
-        monkeypatch.setattr("services.backup_service.WORLDS_DIR", worlds_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
 
         stories_dir.mkdir(parents=True)
         worlds_dir.mkdir(parents=True)
@@ -525,7 +525,7 @@ class TestBackupServiceGetMetadata:
         stories_dir = tmp_path / "stories"
         backups_dir = tmp_path / "backups"
 
-        monkeypatch.setattr("services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
         stories_dir.mkdir(parents=True)
 
         tmp_settings.backup_folder = str(backups_dir)

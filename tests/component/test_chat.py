@@ -16,7 +16,7 @@ class TestChatComponent:
 
     async def test_chat_component_builds(self, user: User):
         """Chat component builds without errors."""
-        from ui.components.chat import ChatComponent
+        from src.ui.components.chat import ChatComponent
 
         @ui.page("/test-chat")
         def test_page():
@@ -28,7 +28,7 @@ class TestChatComponent:
 
     async def test_chat_add_message_user(self, user: User):
         """Chat component can add user messages."""
-        from ui.components.chat import ChatComponent
+        from src.ui.components.chat import ChatComponent
 
         chat_ref = []
 
@@ -45,7 +45,7 @@ class TestChatComponent:
 
     async def test_chat_add_message_assistant(self, user: User):
         """Chat component can add assistant messages."""
-        from ui.components.chat import ChatComponent
+        from src.ui.components.chat import ChatComponent
 
         chat_ref = []
 
@@ -62,7 +62,7 @@ class TestChatComponent:
 
     async def test_chat_typing_indicator(self, user: User):
         """Chat component typing indicator works."""
-        from ui.components.chat import ChatComponent
+        from src.ui.components.chat import ChatComponent
 
         chat_ref = []
 
@@ -84,7 +84,7 @@ class TestChatComponent:
 
     async def test_chat_set_messages(self, user: User):
         """Chat component can set multiple messages at once."""
-        from ui.components.chat import ChatComponent
+        from src.ui.components.chat import ChatComponent
 
         chat_ref = []
 
@@ -106,7 +106,7 @@ class TestChatComponent:
 
     async def test_chat_disabled_state(self, user: User):
         """Chat component disabled state works."""
-        from ui.components.chat import ChatComponent
+        from src.ui.components.chat import ChatComponent
 
         chat_ref = []
 
@@ -127,7 +127,7 @@ class TestChatComponent:
 
     async def test_chat_client_context_captured(self, user: User):
         """Chat component captures client context for background tasks."""
-        from ui.components.chat import ChatComponent
+        from src.ui.components.chat import ChatComponent
 
         chat_ref = []
 

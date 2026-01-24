@@ -5,10 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory.story_state import Chapter, StoryState
-from services.comparison_service import ComparisonRecord, ComparisonResult, ComparisonService
-from settings import Settings
-from workflows.orchestrator import WorkflowEvent
+from src.memory.story_state import Chapter, StoryState
+from src.services.comparison_service import ComparisonRecord, ComparisonResult, ComparisonService
+from src.services.orchestrator import WorkflowEvent
+from src.settings import Settings
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ class TestComparisonService:
                 )
             )
 
-    @patch("services.comparison_service.StoryOrchestrator")
+    @patch("src.services.comparison_service.StoryOrchestrator")
     def test_generate_chapter_comparison(
         self, mock_orchestrator_class, comparison_service, story_state
     ):
@@ -133,7 +133,7 @@ class TestComparisonService:
         # Check that orchestrator was called
         assert mock_orchestrator.write_chapter.call_count == 2
 
-    @patch("services.comparison_service.StoryOrchestrator")
+    @patch("src.services.comparison_service.StoryOrchestrator")
     def test_generate_with_error_handling(
         self, mock_orchestrator_class, comparison_service, story_state
     ):
@@ -352,7 +352,7 @@ class TestComparisonService:
         def cancel_check():
             return cancel_flag
 
-        with patch("services.comparison_service.StoryOrchestrator") as mock_orch:
+        with patch("src.services.comparison_service.StoryOrchestrator") as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -387,7 +387,7 @@ class TestComparisonService:
             # Only model-1 should have completed
             assert len([e for e in events if e.get("completed")]) <= 2
 
-    @patch("services.comparison_service.StoryOrchestrator")
+    @patch("src.services.comparison_service.StoryOrchestrator")
     def test_restores_agent_models_without_writer_key(self, mock_orchestrator_class, story_state):
         """Test that agent_models is properly restored when writer key didn't exist initially."""
         # Create settings WITHOUT a writer key in agent_models

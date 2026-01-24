@@ -3,8 +3,8 @@
 import pytest
 from pydantic import BaseModel
 
-from utils.exceptions import JSONParseError
-from utils.json_parser import (
+from src.utils.exceptions import JSONParseError
+from src.utils.json_parser import (
     clean_llm_text,
     extract_json,
     extract_json_list,

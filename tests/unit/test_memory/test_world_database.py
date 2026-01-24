@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from memory.world_database import (
+from src.memory.world_database import (
     MAX_ATTRIBUTES_SIZE_BYTES,
     WorldDatabase,
     _validate_attributes,

@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
-from services import llm_client
-from services.llm_client import generate_structured, get_instructor_client
-from settings import Settings
+from src.services import llm_client
+from src.services.llm_client import generate_structured, get_instructor_client
+from src.settings import Settings
 
 
 class SampleModel(BaseModel):
@@ -37,8 +37,8 @@ def clear_client_cache():
 class TestGetInstructorClient:
     """Tests for get_instructor_client function."""
 
-    @patch("services.llm_client.instructor")
-    @patch("services.llm_client.OpenAI")
+    @patch("src.services.llm_client.instructor")
+    @patch("src.services.llm_client.OpenAI")
     def test_creates_new_client(self, mock_openai_class, mock_instructor, mock_settings):
         """Test that a new client is created when cache is empty."""
         mock_openai_instance = MagicMock()
@@ -56,8 +56,8 @@ class TestGetInstructorClient:
         mock_instructor.from_openai.assert_called_once()
         assert client == mock_instructor_client
 
-    @patch("services.llm_client.instructor")
-    @patch("services.llm_client.OpenAI")
+    @patch("src.services.llm_client.instructor")
+    @patch("src.services.llm_client.OpenAI")
     def test_caches_client(self, mock_openai_class, mock_instructor, mock_settings):
         """Test that the client is cached and reused."""
         mock_openai_instance = MagicMock()
@@ -73,8 +73,8 @@ class TestGetInstructorClient:
         assert mock_instructor.from_openai.call_count == 1
         assert client1 is client2
 
-    @patch("services.llm_client.instructor")
-    @patch("services.llm_client.OpenAI")
+    @patch("src.services.llm_client.instructor")
+    @patch("src.services.llm_client.OpenAI")
     def test_different_settings_create_different_clients(self, mock_openai_class, mock_instructor):
         """Test that different settings create different cached clients."""
         mock_openai_class.return_value = MagicMock()
@@ -100,7 +100,7 @@ class TestGetInstructorClient:
 class TestGenerateStructured:
     """Tests for generate_structured function."""
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_basic_generation(self, mock_get_client, mock_settings):
         """Test basic structured generation."""
         mock_client = MagicMock()
@@ -118,7 +118,7 @@ class TestGenerateStructured:
         assert result.value == 42
         mock_client.chat.completions.create.assert_called_once()
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_includes_system_prompt(self, mock_get_client, mock_settings):
         """Test that system prompt is included in messages."""
         mock_client = MagicMock()
@@ -141,7 +141,7 @@ class TestGenerateStructured:
         assert messages[1]["role"] == "user"
         assert messages[1]["content"] == "User prompt"
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_no_system_prompt(self, mock_get_client, mock_settings):
         """Test generation without system prompt."""
         mock_client = MagicMock()
@@ -160,7 +160,7 @@ class TestGenerateStructured:
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_qwen_model_adds_no_think_prefix(self, mock_get_client, mock_settings):
         """Test that Qwen models get /no_think prefix in system prompt."""
         mock_client = MagicMock()
@@ -180,7 +180,7 @@ class TestGenerateStructured:
         assert messages[0]["role"] == "system"
         assert messages[0]["content"] == "/no_think\nOriginal system prompt"
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_qwen_model_no_system_prompt_no_change(self, mock_get_client, mock_settings):
         """Test that Qwen models without system prompt don't crash."""
         mock_client = MagicMock()
@@ -201,7 +201,7 @@ class TestGenerateStructured:
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_non_qwen_model_no_prefix(self, mock_get_client, mock_settings):
         """Test that non-Qwen models don't get /no_think prefix."""
         mock_client = MagicMock()
@@ -220,7 +220,7 @@ class TestGenerateStructured:
         messages = call_kwargs["messages"]
         assert messages[0]["content"] == "Original system prompt"
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_custom_temperature(self, mock_get_client, mock_settings):
         """Test that custom temperature is passed through."""
         mock_client = MagicMock()
@@ -238,7 +238,7 @@ class TestGenerateStructured:
         call_kwargs = mock_client.chat.completions.create.call_args[1]
         assert call_kwargs["temperature"] == 0.9
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_custom_max_retries(self, mock_get_client, mock_settings):
         """Test that custom max_retries is passed through."""
         mock_client = MagicMock()
@@ -256,7 +256,7 @@ class TestGenerateStructured:
         call_kwargs = mock_client.chat.completions.create.call_args[1]
         assert call_kwargs["max_retries"] == 5
 
-    @patch("services.llm_client.get_instructor_client")
+    @patch("src.services.llm_client.get_instructor_client")
     def test_passes_response_model(self, mock_get_client, mock_settings):
         """Test that response_model is passed to the client."""
         mock_client = MagicMock()

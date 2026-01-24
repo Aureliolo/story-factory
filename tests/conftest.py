@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from memory.story_state import StoryBrief, StoryState
-from memory.world_database import WorldDatabase
-from settings import Settings
+from src.memory.story_state import StoryBrief, StoryState
+from src.memory.world_database import WorldDatabase
+from src.settings import Settings
 
 # Enable NiceGUI testing plugin for component tests
 pytest_plugins = ["nicegui.testing.user_plugin"]
@@ -96,7 +96,7 @@ def orchestrator_temp_dir(tmp_path: Path, monkeypatch):
     """
     stories_dir = tmp_path / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+    monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
     return stories_dir
 
 
@@ -113,7 +113,7 @@ def fast_orchestrator(cached_settings: Settings, orchestrator_temp_dir: Path):
     Returns:
         StoryOrchestrator configured for testing.
     """
-    from workflows.orchestrator import StoryOrchestrator
+    from src.services.orchestrator import StoryOrchestrator
 
     return StoryOrchestrator(settings=cached_settings)
 
@@ -217,7 +217,7 @@ def sample_story_with_chapters(sample_story_state: StoryState) -> StoryState:
     Returns:
         StoryState: The same StoryState instance with two sample characters, three sample chapters, and `status` set to "writing".
     """
-    from memory.story_state import Chapter, Character
+    from src.memory.story_state import Chapter, Character
 
     state = sample_story_state
 

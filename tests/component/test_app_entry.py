@@ -7,9 +7,9 @@ The testing framework intercepts ui.run() so it doesn't actually start a server.
 
 from nicegui import ui
 
-from services import ServiceContainer
-from settings import Settings
-from ui.app import StoryFactoryApp
+from src.services import ServiceContainer
+from src.settings import Settings
+from src.ui.app import StoryFactoryApp
 
 
 def setup_test_app():

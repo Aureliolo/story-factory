@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services import ServiceContainer
-from settings import Settings
+from src.services import ServiceContainer
+from src.settings import Settings
 
 
 class MockModel:
@@ -50,7 +50,7 @@ def mock_ollama_client():
     Provides a mock that returns a list of models matching the format
     expected by services/model_service.py (objects with .models and .model attributes).
     """
-    with patch("services.model_service.ollama") as mock_ollama:
+    with patch("src.services.model_service.ollama") as mock_ollama:
         mock_client = MagicMock()
         mock_client.list.return_value = MockListResponse(["model-a:latest", "model-b:7b"])
         mock_ollama.Client.return_value = mock_client
@@ -64,7 +64,7 @@ def mock_ollama_for_agents():
     Provides comprehensive mocking for all agent interactions.
     Returns a mock client configured to work with agents.
     """
-    with patch("agents.base.ollama") as mock_ollama:
+    with patch("src.agents.base.ollama") as mock_ollama:
         mock_client = MagicMock()
 
         # Default chat response
@@ -96,13 +96,13 @@ def services(tmp_path, mock_ollama_for_agents):
 
     # Patch at ALL locations where these constants are imported
     with (
-        patch("settings.STORIES_DIR", stories_dir),
-        patch("settings.WORLDS_DIR", worlds_dir),
-        patch("services.project_service.STORIES_DIR", stories_dir),
-        patch("services.project_service.WORLDS_DIR", worlds_dir),
-        patch("services.backup_service.STORIES_DIR", stories_dir),
-        patch("services.backup_service.WORLDS_DIR", worlds_dir),
-        patch("services.export_service.STORIES_DIR", stories_dir),
+        patch("src.settings.STORIES_DIR", stories_dir),
+        patch("src.settings.WORLDS_DIR", worlds_dir),
+        patch("src.services.project_service.STORIES_DIR", stories_dir),
+        patch("src.services.project_service.WORLDS_DIR", worlds_dir),
+        patch("src.services.backup_service.STORIES_DIR", stories_dir),
+        patch("src.services.backup_service.WORLDS_DIR", worlds_dir),
+        patch("src.services.export_service.STORIES_DIR", stories_dir),
     ):
         settings = Settings()
         yield ServiceContainer(settings)

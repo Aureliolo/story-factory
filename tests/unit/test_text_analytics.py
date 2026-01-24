@@ -1,6 +1,6 @@
 """Tests for text analytics utilities."""
 
-from utils.text_analytics import (
+from src.utils.text_analytics import (
     PacingMetrics,
     ReadabilityScores,
     analyze_pacing,

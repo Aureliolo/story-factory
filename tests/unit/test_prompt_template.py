@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from utils.prompt_template import PromptTemplate, PromptTemplateError
+from src.utils.prompt_template import PromptTemplate, PromptTemplateError
 
 
 class TestPromptTemplate:

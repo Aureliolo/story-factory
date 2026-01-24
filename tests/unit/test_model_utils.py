@@ -2,7 +2,7 @@
 
 import pytest
 
-from utils.model_utils import extract_model_name
+from src.utils.model_utils import extract_model_name
 
 
 class TestExtractModelName:

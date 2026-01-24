@@ -5,7 +5,7 @@ Tests project creation, interview phase, and world building.
 
 import pytest
 
-from memory.story_state import StoryBrief
+from src.memory.story_state import StoryBrief
 
 
 class TestProjectCreation:

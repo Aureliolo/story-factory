@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory.story_state import Chapter, StoryBrief, StoryState
-from workflows.orchestrator import StoryOrchestrator, WorkflowEvent
+from src.memory.story_state import Chapter, StoryBrief, StoryState
+from src.services.orchestrator import StoryOrchestrator, WorkflowEvent
 
 
 @pytest.fixture(autouse=True)
@@ -14,7 +14,7 @@ def use_temp_stories_dir(tmp_path, monkeypatch):
     """Use temp directory for ALL orchestrator tests to avoid polluting output/stories."""
     stories_dir = tmp_path / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr("workflows.orchestrator.STORIES_DIR", stories_dir)
+    monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
 
 
 class TestProgressTracking:
@@ -197,7 +197,7 @@ class TestETACalculation:
         # May be None since it's not a writing phase with chapters
         assert eta is None or isinstance(eta, float)
 
-    @patch("memory.mode_database.ModeDatabase")
+    @patch("src.memory.mode_database.ModeDatabase")
     def test_calculate_eta_with_historical_data(self, mock_db_class, orchestrator, story_state):
         """ETA calculation should handle database queries gracefully."""
         orchestrator.story_state = story_state

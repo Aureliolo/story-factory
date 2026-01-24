@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from settings import (
+from src.settings import (
     AGENT_ROLES,
     RECOMMENDED_MODELS,
     Settings,
@@ -121,7 +121,7 @@ class TestGetModelInfo:
         """Should return estimated info for unknown models based on size."""
         # Mock installed models to return the unknown model with a size
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {"completely-unknown-model:99b": 10.0},
         )
         info = get_model_info("completely-unknown-model:99b")
@@ -146,7 +146,7 @@ class TestGetModelInfo:
         """Should return default values when model size is unknown."""
         # Mock installed models to return empty or no size for the model
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {},
         )
         info = get_model_info("completely-unknown-model:xyz")
@@ -257,8 +257,8 @@ class TestSettingsSaveLoad:
 
     def test_save_creates_file(self, tmp_path, monkeypatch):
         """Test save creates settings file."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
         settings.save()
@@ -270,8 +270,8 @@ class TestSettingsSaveLoad:
 
     def test_load_returns_defaults_when_no_file(self, tmp_path, monkeypatch):
         """Test load returns defaults when settings file doesn't exist."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings.load()
 
@@ -281,8 +281,8 @@ class TestSettingsSaveLoad:
 
     def test_load_reads_existing_file(self, tmp_path, monkeypatch):
         """Test load reads existing settings file."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file with custom value
         with open(settings_file, "w") as f:
@@ -295,8 +295,8 @@ class TestSettingsSaveLoad:
 
     def test_load_handles_corrupted_json(self, tmp_path, monkeypatch):
         """Test load handles corrupted JSON file."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a corrupted JSON file
         settings_file.write_text("not valid json {{{")
@@ -308,8 +308,8 @@ class TestSettingsSaveLoad:
 
     def test_load_handles_unknown_fields(self, tmp_path, monkeypatch):
         """Test load handles unknown fields in settings file."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file with unknown field
         data = {"ollama_url": "http://localhost:11434", "unknown_field": "value"}
@@ -322,8 +322,8 @@ class TestSettingsSaveLoad:
 
     def test_load_handles_invalid_values(self, tmp_path, monkeypatch):
         """Test load handles invalid setting values."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file with invalid values
         data = {"context_size": 500}  # Too low
@@ -337,8 +337,8 @@ class TestSettingsSaveLoad:
 
     def test_load_caches_settings(self, tmp_path, monkeypatch):
         """Test load() returns cached instance on subsequent calls."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
         Settings.clear_cache()
 
         # First load creates a new instance
@@ -350,8 +350,8 @@ class TestSettingsSaveLoad:
 
     def test_load_with_use_cache_false_reloads(self, tmp_path, monkeypatch):
         """Test load(use_cache=False) forces reload from disk."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
         Settings.clear_cache()
 
         # First load
@@ -369,8 +369,8 @@ class TestSettingsSaveLoad:
 
     def test_clear_cache_clears_cached_instance(self, tmp_path, monkeypatch):
         """Test clear_cache() clears the cached instance."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
         Settings.clear_cache()
 
         # First load creates a cached instance
@@ -392,8 +392,8 @@ class TestRecoverPartialSettings:
         """Test recovers valid fields and logs the recovery."""
         import logging
 
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Data with valid fields
         data = {
@@ -410,8 +410,8 @@ class TestRecoverPartialSettings:
 
     def test_falls_back_to_defaults_when_recovery_fails_validation(self, tmp_path, monkeypatch):
         """Test falls back to complete defaults when recovered settings fail validation."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create data that looks valid but fails overall validation
         # Use agent_temperatures with unknown agent which fails validation
@@ -453,7 +453,7 @@ class TestSettingsGetModelForAgent:
         """Test auto-selects tagged model for writer role."""
         # Mock installed models with sizes - includes a model tagged for writer
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": 13.0,  # Tagged for writer
                 "huihui_ai/dolphin3-abliterated:8b": 5.0,  # Tagged for interviewer
@@ -473,7 +473,7 @@ class TestSettingsGetModelForAgent:
         """Test selects high-reasoning model for architect role."""
         # Mock installed models with sizes - includes models tagged for architect
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "huihui_ai/qwen3-abliterated:30b": 18.0,  # Tagged for architect
                 "huihui_ai/dolphin3-abliterated:8b": 5.0,
@@ -493,7 +493,7 @@ class TestSettingsGetModelForAgent:
         """Test raises error when no installed model has the required tag."""
         # Mock installed models with no matching tags
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "custom-large:30b": 18.0,
                 "custom-medium:12b": 10.0,
@@ -510,7 +510,7 @@ class TestSettingsGetModelForAgent:
     def test_selects_custom_tagged_model(self, monkeypatch):
         """Test selects model with custom tags when configured."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "my-custom-model:7b": 5.0,
                 "another-model:12b": 10.0,
@@ -530,7 +530,7 @@ class TestSettingsGetModelForAgent:
     def test_validator_prefers_tiny_models(self, monkeypatch):
         """Test validator role prefers tiny models."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "qwen3:0.6b": 0.5,  # Tagged for validator, tiny tier
                 "huihui_ai/dolphin3-abliterated:8b": 5.0,  # Small tier
@@ -549,7 +549,7 @@ class TestSettingsGetModelForAgent:
     def test_returns_default_when_no_models_installed(self, monkeypatch, caplog):
         """Test returns default model when no models installed."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {},
         )
 
@@ -565,7 +565,7 @@ class TestSettingsGetModelForAgent:
     def test_selects_smallest_tagged_when_nothing_fits_vram(self, monkeypatch):
         """Test selects smallest tagged model as last resort when nothing fits VRAM."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "large-model:30b": 18.0,  # Needs 21.6GB
                 "medium-model:12b": 10.0,  # Needs 12GB
@@ -590,7 +590,7 @@ class TestSettingsGetModelForAgent:
     def test_raises_error_for_unknown_role(self, monkeypatch):
         """Test raises error for unknown role with no tagged models."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "custom-medium:12b": 10.0,
                 "custom-small:8b": 5.0,
@@ -609,7 +609,7 @@ class TestSettingsGetModelForAgent:
 class TestGetAvailableVram:
     """Tests for get_available_vram function."""
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_vram_from_nvidia_smi(self, mock_run):
         """Test returns VRAM from nvidia-smi output."""
         mock_result = MagicMock()
@@ -622,7 +622,7 @@ class TestGetAvailableVram:
         # Should parse the MB value and convert to GB (8192 MB = 8 GB)
         assert vram == 8
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_default_on_file_not_found(self, mock_run):
         """Test returns default when nvidia-smi not found."""
         mock_run.side_effect = FileNotFoundError("nvidia-smi not found")
@@ -631,7 +631,7 @@ class TestGetAvailableVram:
 
         assert vram == 8  # Default
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_default_on_timeout(self, mock_run):
         """Test returns default on subprocess timeout."""
         import subprocess
@@ -642,7 +642,7 @@ class TestGetAvailableVram:
 
         assert vram == 8  # Default
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_default_on_parse_error(self, mock_run):
         """Test returns default when output can't be parsed."""
         mock_result = MagicMock()
@@ -653,7 +653,7 @@ class TestGetAvailableVram:
 
         assert vram == 8  # Default
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_default_on_os_error(self, mock_run):
         """Test returns default on OSError."""
         mock_run.side_effect = OSError("Permission denied")
@@ -666,7 +666,7 @@ class TestGetAvailableVram:
 class TestGetInstalledModels:
     """Tests for get_installed_models function."""
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_model_list(self, mock_run):
         """Test returns list of installed models."""
         mock_result = MagicMock()
@@ -679,7 +679,7 @@ class TestGetInstalledModels:
         assert "model1:latest" in models
         assert "model2:7b" in models
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_empty_on_file_not_found(self, mock_run):
         """Test returns empty list when ollama not found."""
         mock_run.side_effect = FileNotFoundError("ollama not found")
@@ -688,7 +688,7 @@ class TestGetInstalledModels:
 
         assert models == []
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_empty_on_timeout(self, mock_run):
         """Test returns empty list on timeout."""
         import subprocess
@@ -699,7 +699,7 @@ class TestGetInstalledModels:
 
         assert models == []
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_empty_on_os_error(self, mock_run):
         """Test returns empty list on OSError."""
         mock_run.side_effect = OSError("Permission denied")
@@ -712,7 +712,7 @@ class TestGetInstalledModels:
 class TestGetInstalledModelsWithSizes:
     """Tests for get_installed_models_with_sizes function."""
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_model_sizes(self, mock_run):
         """Test returns dict of models with sizes."""
 
@@ -729,7 +729,7 @@ class TestGetInstalledModelsWithSizes:
         assert models["model1:latest"] == 8.5
         assert models["model2:7b"] == 4.0
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_empty_on_file_not_found(self, mock_run):
         """Test returns empty dict when ollama not found."""
         mock_run.side_effect = FileNotFoundError("ollama not found")
@@ -738,7 +738,7 @@ class TestGetInstalledModelsWithSizes:
 
         assert models == {}
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_empty_on_timeout(self, mock_run):
         """Test returns empty dict on timeout."""
         import subprocess
@@ -749,7 +749,7 @@ class TestGetInstalledModelsWithSizes:
 
         assert models == {}
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_empty_on_os_error(self, mock_run):
         """Test returns empty dict on OSError."""
         mock_run.side_effect = OSError("Permission denied")
@@ -758,7 +758,7 @@ class TestGetInstalledModelsWithSizes:
 
         assert models == {}
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_returns_empty_on_nonzero_exit_code(self, mock_run):
         """Test returns empty dict when ollama list returns non-zero exit code."""
         mock_result = MagicMock()
@@ -770,7 +770,7 @@ class TestGetInstalledModelsWithSizes:
 
         assert models == {}
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_parses_mb_sizes(self, mock_run):
         """Test parses MB size values and converts to GB."""
         mock_result = MagicMock()
@@ -784,7 +784,7 @@ class TestGetInstalledModelsWithSizes:
         # 512 MB = 0.512 GB (using decimal: 1 GB = 1000 MB)
         assert models["small-model:1b"] == 0.512
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_parses_combined_size_format(self, mock_run):
         """Test parses combined format like '4.1GB' without space."""
         mock_result = MagicMock()
@@ -797,7 +797,7 @@ class TestGetInstalledModelsWithSizes:
         assert "model:tag" in models
         assert models["model:tag"] == 4.1
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_handles_invalid_gb_separate_format(self, mock_run):
         """Test handles invalid GB separate format gracefully."""
         mock_result = MagicMock()
@@ -812,7 +812,7 @@ class TestGetInstalledModelsWithSizes:
         assert "model:tag" in models
         assert models["model:tag"] == 0.0
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_handles_invalid_mb_separate_format(self, mock_run):
         """Test handles invalid MB separate format gracefully."""
         mock_result = MagicMock()
@@ -827,7 +827,7 @@ class TestGetInstalledModelsWithSizes:
         assert "model:tag" in models
         assert models["model:tag"] == 0.0
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_handles_invalid_combined_gb_format(self, mock_run):
         """Test handles invalid combined GB format (like 'xyzGB') gracefully."""
         mock_result = MagicMock()
@@ -842,7 +842,7 @@ class TestGetInstalledModelsWithSizes:
         assert "model:tag" in models
         assert models["model:tag"] == 0.0
 
-    @patch("settings.subprocess.run")
+    @patch("src.settings.subprocess.run")
     def test_handles_invalid_combined_mb_format(self, mock_run):
         """Test handles invalid combined MB format (like 'xyzMB') gracefully."""
         mock_result = MagicMock()
@@ -1362,7 +1362,7 @@ class TestValidatorModelSelection:
     def test_selects_tagged_validator_model(self, monkeypatch):
         """Test selects tiny model tagged for validator role."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {"qwen3:0.6b": 0.5},
         )
 
@@ -1377,7 +1377,7 @@ class TestValidatorModelSelection:
     def test_validator_selects_tagged_model(self, monkeypatch):
         """Test validator selects model tagged for validator role."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "custom-tiny:1b": 1.0,
                 "custom-medium:12b": 10.0,
@@ -1401,9 +1401,9 @@ class TestBackupCorruptedSettings:
 
     def test_creates_backup_file(self, tmp_path, monkeypatch):
         """Test creates backup of corrupted settings."""
-        settings_file = tmp_path / "settings.json"
-        backup_file = tmp_path / "settings.json.bak"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        backup_file = tmp_path / "src.settings.json.bak"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a "corrupted" settings file
         settings_file.write_text("corrupted content")
@@ -1415,16 +1415,16 @@ class TestBackupCorruptedSettings:
 
     def test_handles_missing_file(self, tmp_path, monkeypatch):
         """Test handles missing settings file gracefully."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Should not raise when file doesn't exist
         Settings._backup_corrupted_settings()
 
     def test_handles_backup_failure(self, tmp_path, monkeypatch):
         """Test handles OSError when backup fails."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file
         settings_file.write_text("content")
@@ -1442,7 +1442,7 @@ class TestWriterModelSelection:
     def test_selects_tagged_creative_model_for_writer(self, monkeypatch):
         """Test selects creative writing specialist model tagged for writer role."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": 13.0,  # Tagged for writer
                 "other-model:8b": 5.0,
@@ -1461,7 +1461,7 @@ class TestWriterModelSelection:
     def test_selects_alternative_tagged_writer_model(self, monkeypatch):
         """Test selects alternative tagged model when first isn't available."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit": 11.0,
             },
@@ -1487,7 +1487,7 @@ class TestTagBasedModelSelection:
     def test_selects_highest_quality_tagged_model(self, monkeypatch):
         """Test selects highest quality model when multiple tagged models available."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "custom-large:70b": 25.0,
                 "custom-medium:12b": 10.0,
@@ -1513,7 +1513,7 @@ class TestTagBasedModelSelection:
     def test_respects_vram_limit_for_tagged_models(self, monkeypatch):
         """Test only selects tagged models that fit in VRAM."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "custom-large:70b": 25.0,  # Needs 30GB VRAM
                 "custom-medium:12b": 10.0,  # Needs 12GB VRAM
@@ -1539,7 +1539,7 @@ class TestTagBasedModelSelection:
     def test_multiple_roles_on_same_model(self, monkeypatch):
         """Test model can be tagged for multiple roles."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "versatile-model:12b": 10.0,
             },
@@ -1566,7 +1566,7 @@ class TestTagBasedModelSelection:
     def test_raises_error_when_no_tagged_model_fits_vram(self, monkeypatch):
         """Test raises error when tagged models exist but none fit VRAM."""
         monkeypatch.setattr(
-            "settings.get_installed_models_with_sizes",
+            "src.settings.get_installed_models_with_sizes",
             lambda timeout=None: {
                 "large-model:70b": 25.0,  # Needs 30GB VRAM
             },
@@ -1628,8 +1628,8 @@ class TestModelTags:
 
     def test_set_model_tags_saves_tags(self, tmp_path, monkeypatch):
         """Test set_model_tags saves tags to settings."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
         settings.set_model_tags("my-model:7b", ["writer", "editor"])
@@ -1640,8 +1640,8 @@ class TestModelTags:
 
     def test_set_model_tags_removes_empty_tags(self, tmp_path, monkeypatch):
         """Test set_model_tags removes entry when tags are empty."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
         settings.custom_model_tags = {"my-model:7b": ["writer"]}
@@ -1651,8 +1651,8 @@ class TestModelTags:
 
     def test_set_model_tags_updates_existing_tags(self, tmp_path, monkeypatch):
         """Test set_model_tags updates existing tags."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("settings.SETTINGS_FILE", settings_file)
+        settings_file = tmp_path / "src.settings.json"
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
         settings.custom_model_tags = {"my-model:7b": ["writer"]}

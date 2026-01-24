@@ -2,9 +2,9 @@
 
 import pytest
 
-from memory.story_state import Chapter, StoryBrief, StoryState
-from services.export_service import ExportService
-from settings import Settings
+from src.memory.story_state import Chapter, StoryBrief, StoryState
+from src.services.export_service import ExportService
+from src.settings import Settings
 
 
 class TestExportServiceSaveToFile:
@@ -209,7 +209,9 @@ class TestExportServiceReraise:
         def mock_validate_raises(path):
             raise ValueError("Path outside allowed directory")
 
-        monkeypatch.setattr("services.export_service._validate_export_path", mock_validate_raises)
+        monkeypatch.setattr(
+            "src.services.export_service._validate_export_path", mock_validate_raises
+        )
 
         filepath = tmp_path / "test.md"
 

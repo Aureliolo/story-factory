@@ -2,7 +2,7 @@
 
 import pytest
 
-from memory.mode_models import (
+from src.memory.mode_models import (
     PRESET_MODES,
     AutonomyLevel,
     GenerationMode,

@@ -1,6 +1,6 @@
 """Tests for UI page functionality."""
 
-from settings import RECOMMENDED_MODELS
+from src.settings import RECOMMENDED_MODELS
 
 
 class TestModelFiltering:

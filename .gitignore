@@ -46,15 +46,13 @@ output/stories/*
 !output/worlds/
 output/worlds/*
 !output/worlds/.gitkeep
-settings.json
+src/settings.json
 
 # Windows artifacts (from bash commands using /dev/null)
 nul
 
-# Logs
+# Logs (now in output/logs/)
 *.log
-logs/*
-!logs/.gitkeep
 
 # Environment variables
 .env

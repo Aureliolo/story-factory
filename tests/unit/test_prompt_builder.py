@@ -2,8 +2,8 @@
 
 import pytest
 
-from memory.story_state import Character, StoryBrief, StoryState
-from utils.prompt_builder import PromptBuilder
+from src.memory.story_state import Character, StoryBrief, StoryState
+from src.utils.prompt_builder import PromptBuilder
 
 
 class TestPromptBuilder:
