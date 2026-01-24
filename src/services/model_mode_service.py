@@ -224,9 +224,6 @@ class ModelModeService:
 
         Returns:
             Model ID selected based on size preference or from user override.
-
-        Raises:
-            ValueError: If no models are installed or tagged for the role.
         """
         validate_not_empty(agent_role, "agent_role")
         mode = self.get_current_mode()
@@ -237,15 +234,20 @@ class ModelModeService:
             logger.debug(f"Using user-specified model {model_id} for {agent_role}")
             return model_id
 
-        # Use size-preference-aware selection
-        vram = get_available_vram()
-        size_pref = SizePreference(mode.size_preference)
-        selected = self._select_model_with_size_preference(agent_role, size_pref, vram)
-        logger.info(
-            f"Auto-selected {selected} for {agent_role} "
-            f"(mode={mode.id}, size_pref={size_pref.value}, vram={vram}GB)"
-        )
-        return selected
+        # Try size-preference-aware selection
+        try:
+            vram = get_available_vram()
+            size_pref = SizePreference(mode.size_preference)
+            selected = self._select_model_with_size_preference(agent_role, size_pref, vram)
+            logger.info(
+                f"Auto-selected {selected} for {agent_role} "
+                f"(mode={mode.id}, size_pref={size_pref.value}, vram={vram}GB)"
+            )
+            return selected
+        except ValueError:
+            # No tagged models available - fall back to settings
+            logger.debug(f"No tagged models for {agent_role}, falling back to settings")
+            return self.settings.get_model_for_agent(agent_role)
 
     def _select_model_with_size_preference(
         self,
