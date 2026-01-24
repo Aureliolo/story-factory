@@ -21,6 +21,9 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+# Cross-platform subprocess flags (CREATE_NO_WINDOW only exists on Windows)
+SUBPROCESS_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # Configure logging for the control panel itself
 logging.basicConfig(
     level=logging.INFO,
@@ -70,7 +73,7 @@ class ProcessManager:
                 # Start the application with CREATE_NO_WINDOW on Windows
                 creation_flags = 0
                 if sys.platform == "win32":
-                    creation_flags = subprocess.CREATE_NO_WINDOW
+                    creation_flags = SUBPROCESS_FLAGS
 
                 self._process = subprocess.Popen(
                     [sys.executable, "main.py"],
@@ -210,7 +213,7 @@ class ProcessManager:
                     capture_output=True,
                     text=True,
                     timeout=10,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    creationflags=SUBPROCESS_FLAGS,
                 )
                 for line in result.stdout.split("\n"):
                     if f":{port}" in line and "LISTENING" in line:
@@ -221,7 +224,7 @@ class ProcessManager:
                                 ["taskkill", "/F", "/PID", str(pid)],
                                 capture_output=True,
                                 timeout=10,
-                                creationflags=subprocess.CREATE_NO_WINDOW,
+                                creationflags=SUBPROCESS_FLAGS,
                             )
                             logger.info("Killed orphan process (PID: %d)", pid)
                             return True
@@ -286,7 +289,7 @@ class OllamaManager:
                     capture_output=True,
                     text=True,
                     timeout=10,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    creationflags=SUBPROCESS_FLAGS,
                 )
                 if "RUNNING" not in result.stdout:
                     logger.info("Starting Ollama service...")
@@ -294,7 +297,7 @@ class OllamaManager:
                         ["sc", "start", "ollama"],
                         capture_output=True,
                         timeout=10,
-                        creationflags=subprocess.CREATE_NO_WINDOW,
+                        creationflags=SUBPROCESS_FLAGS,
                     )
                     # Give it time to start
                     for _ in range(5):
@@ -311,7 +314,7 @@ class OllamaManager:
         try:
             creation_flags = 0
             if sys.platform == "win32":
-                creation_flags = subprocess.CREATE_NO_WINDOW
+                creation_flags = SUBPROCESS_FLAGS
 
             subprocess.Popen(
                 ["ollama", "serve"],

@@ -123,6 +123,7 @@ class TestProcessManager:
 
     @patch("scripts.control_panel.subprocess.Popen")
     @patch.object(ProcessManager, "_is_port_in_use", return_value=False)
+    @patch("scripts.control_panel.sys.platform", "win32")
     def test_stop_app_success(self, mock_port_check, mock_popen):
         """Should stop the running application."""
         mock_process = MagicMock()
@@ -199,6 +200,7 @@ class TestProcessManager:
 
     @patch("scripts.control_panel.subprocess.Popen")
     @patch.object(ProcessManager, "_is_port_in_use", return_value=False)
+    @patch("scripts.control_panel.sys.platform", "win32")
     def test_stop_app_oserror(self, mock_port_check, mock_popen):
         """Should return False when stopping raises OSError."""
         mock_process = MagicMock()
