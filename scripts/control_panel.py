@@ -815,6 +815,13 @@ class ControlPanel(ctk.CTk):
         """Poll and update log display."""
         lines = self._log_watcher.get_recent_lines(20)
 
+        # Only update if content has changed (prevents scrollbar twitching)
+        if lines == getattr(self, "_last_log_lines", None):
+            self.after(1000, self._poll_logs)
+            return
+
+        self._last_log_lines = lines
+
         self._log_text.configure(state="normal")
         self._log_text.delete("1.0", "end")
 
