@@ -191,7 +191,7 @@ markers = [
 
 # Coverage configuration
 [tool.coverage.run]
-source = ["src"]
+source = ["src", "scripts"]
 omit = [
     "tests/*",
     "*/site-packages/*",
@@ -200,6 +200,10 @@ omit = [
     "*/conftest.py",
     "main.py",
     "src/ui/*",
+    # Standalone utility scripts (not part of main application)
+    "scripts/audit_exceptions.py",
+    "scripts/check_deps.py",
+    "scripts/healthcheck.py",
 ]
 
 [tool.coverage.report]
