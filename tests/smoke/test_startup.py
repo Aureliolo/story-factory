@@ -85,7 +85,7 @@ class TestSettingsInitialization:
 
         from src.settings import Settings
 
-        config_file = tmp_path / "src.settings.json"
+        config_file = tmp_path / "settings.json"
         config_file.write_text(
             json.dumps(
                 {

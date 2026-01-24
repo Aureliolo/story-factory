@@ -23,7 +23,7 @@ class TestModelSelectionFallback:
             mock_client.list.return_value = MockListResponse(["installed-model:latest"])
             mock_ollama.Client.return_value = mock_client
 
-            config_file = tmp_path / "src.settings.json"
+            config_file = tmp_path / "settings.json"
             config_file.write_text(json.dumps({"default_model": "uninstalled-model:latest"}))
 
             with patch("src.settings.SETTINGS_FILE", config_file):
@@ -49,7 +49,7 @@ class TestModelSelectionFallback:
             mock_client.list.return_value = MockListResponse(["installed-model:latest"])
             mock_ollama.Client.return_value = mock_client
 
-            config_file = tmp_path / "src.settings.json"
+            config_file = tmp_path / "settings.json"
             config_file.write_text(
                 json.dumps(
                     {
@@ -90,7 +90,7 @@ class TestModelSelectionFallback:
             mock_client.list.return_value = MockListResponse([])
             mock_ollama.Client.return_value = mock_client
 
-            config_file = tmp_path / "src.settings.json"
+            config_file = tmp_path / "settings.json"
             config_file.write_text(
                 json.dumps(
                     {
@@ -130,7 +130,7 @@ class TestSettingsPageConstruction:
             mock_client.list.return_value = MockListResponse(["model-a:latest", "model-b:7b"])
             mock_ollama.Client.return_value = mock_client
 
-            config_file = tmp_path / "src.settings.json"
+            config_file = tmp_path / "settings.json"
             config_file.write_text(json.dumps({"default_model": "model-a:latest"}))
 
             with patch("src.settings.SETTINGS_FILE", config_file):
@@ -154,7 +154,7 @@ class TestSettingsPageConstruction:
             mock_client.list.return_value = MockListResponse(["only-model:latest"])
             mock_ollama.Client.return_value = mock_client
 
-            config_file = tmp_path / "src.settings.json"
+            config_file = tmp_path / "settings.json"
             config_file.write_text(
                 json.dumps(
                     {

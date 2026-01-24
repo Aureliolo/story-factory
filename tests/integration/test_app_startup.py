@@ -34,7 +34,7 @@ class TestFullStartupSequence:
         from src.settings import Settings
         from src.ui.app import StoryFactoryApp
 
-        config_file = tmp_path / "src.settings.json"
+        config_file = tmp_path / "settings.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -59,7 +59,7 @@ class TestFullStartupSequence:
         from src.settings import Settings
         from src.ui.app import StoryFactoryApp
 
-        config_file = tmp_path / "src.settings.json"
+        config_file = tmp_path / "settings.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -119,7 +119,7 @@ class TestSettingsValidation:
         """
         from src.settings import Settings
 
-        config_file = tmp_path / "src.settings.json"
+        config_file = tmp_path / "settings.json"
         config_file.write_text(json.dumps({"ollama_url": "not-a-valid-url"}))
 
         with patch("src.settings.SETTINGS_FILE", config_file):
@@ -131,7 +131,7 @@ class TestSettingsValidation:
         """Settings uses defaults for missing fields."""
         from src.settings import Settings
 
-        config_file = tmp_path / "src.settings.json"
+        config_file = tmp_path / "settings.json"
         config_file.write_text(json.dumps({}))
 
         with patch("src.settings.SETTINGS_FILE", config_file):
@@ -145,7 +145,7 @@ class TestSettingsValidation:
         """Settings ignores unknown fields in config."""
         from src.settings import Settings
 
-        config_file = tmp_path / "src.settings.json"
+        config_file = tmp_path / "settings.json"
         config_file.write_text(
             json.dumps(
                 {

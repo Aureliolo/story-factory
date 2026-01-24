@@ -257,7 +257,7 @@ class TestSettingsSaveLoad:
 
     def test_save_creates_file(self, tmp_path, monkeypatch):
         """Test save creates settings file."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
@@ -270,7 +270,7 @@ class TestSettingsSaveLoad:
 
     def test_load_returns_defaults_when_no_file(self, tmp_path, monkeypatch):
         """Test load returns defaults when settings file doesn't exist."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings.load()
@@ -281,7 +281,7 @@ class TestSettingsSaveLoad:
 
     def test_load_reads_existing_file(self, tmp_path, monkeypatch):
         """Test load reads existing settings file."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file with custom value
@@ -295,7 +295,7 @@ class TestSettingsSaveLoad:
 
     def test_load_handles_corrupted_json(self, tmp_path, monkeypatch):
         """Test load handles corrupted JSON file."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a corrupted JSON file
@@ -308,7 +308,7 @@ class TestSettingsSaveLoad:
 
     def test_load_handles_unknown_fields(self, tmp_path, monkeypatch):
         """Test load handles unknown fields in settings file."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file with unknown field
@@ -322,7 +322,7 @@ class TestSettingsSaveLoad:
 
     def test_load_handles_invalid_values(self, tmp_path, monkeypatch):
         """Test load handles invalid setting values."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file with invalid values
@@ -337,7 +337,7 @@ class TestSettingsSaveLoad:
 
     def test_load_caches_settings(self, tmp_path, monkeypatch):
         """Test load() returns cached instance on subsequent calls."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
         Settings.clear_cache()
 
@@ -350,7 +350,7 @@ class TestSettingsSaveLoad:
 
     def test_load_with_use_cache_false_reloads(self, tmp_path, monkeypatch):
         """Test load(use_cache=False) forces reload from disk."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
         Settings.clear_cache()
 
@@ -369,7 +369,7 @@ class TestSettingsSaveLoad:
 
     def test_clear_cache_clears_cached_instance(self, tmp_path, monkeypatch):
         """Test clear_cache() clears the cached instance."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
         Settings.clear_cache()
 
@@ -392,7 +392,7 @@ class TestRecoverPartialSettings:
         """Test recovers valid fields and logs the recovery."""
         import logging
 
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Data with valid fields
@@ -410,7 +410,7 @@ class TestRecoverPartialSettings:
 
     def test_falls_back_to_defaults_when_recovery_fails_validation(self, tmp_path, monkeypatch):
         """Test falls back to complete defaults when recovered settings fail validation."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create data that looks valid but fails overall validation
@@ -1401,8 +1401,8 @@ class TestBackupCorruptedSettings:
 
     def test_creates_backup_file(self, tmp_path, monkeypatch):
         """Test creates backup of corrupted settings."""
-        settings_file = tmp_path / "src.settings.json"
-        backup_file = tmp_path / "src.settings.json.bak"
+        settings_file = tmp_path / "settings.json"
+        backup_file = tmp_path / "settings.json.bak"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a "corrupted" settings file
@@ -1415,7 +1415,7 @@ class TestBackupCorruptedSettings:
 
     def test_handles_missing_file(self, tmp_path, monkeypatch):
         """Test handles missing settings file gracefully."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Should not raise when file doesn't exist
@@ -1423,7 +1423,7 @@ class TestBackupCorruptedSettings:
 
     def test_handles_backup_failure(self, tmp_path, monkeypatch):
         """Test handles OSError when backup fails."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         # Create a settings file
@@ -1628,7 +1628,7 @@ class TestModelTags:
 
     def test_set_model_tags_saves_tags(self, tmp_path, monkeypatch):
         """Test set_model_tags saves tags to settings."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
@@ -1640,7 +1640,7 @@ class TestModelTags:
 
     def test_set_model_tags_removes_empty_tags(self, tmp_path, monkeypatch):
         """Test set_model_tags removes entry when tags are empty."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
@@ -1651,7 +1651,7 @@ class TestModelTags:
 
     def test_set_model_tags_updates_existing_tags(self, tmp_path, monkeypatch):
         """Test set_model_tags updates existing tags."""
-        settings_file = tmp_path / "src.settings.json"
+        settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings.SETTINGS_FILE", settings_file)
 
         settings = Settings()
