@@ -1256,7 +1256,7 @@ class WritePage:
     def _check_learning_recommendations(self) -> None:
         """
         Check for pending tuning recommendations and show them to the user if present.
-        
+
         This is a no-op when no mode service is available or when learning is disabled in settings.
         Any errors encountered while retrieving or displaying recommendations are logged and not raised.
         """
@@ -1289,9 +1289,9 @@ class WritePage:
     def _apply_recommendations(self, recommendations: list[TuningRecommendation]) -> None:
         """
         Apply a list of tuning recommendations using the configured mode service.
-        
+
         Attempts to apply each recommendation and shows a user notification indicating how many recommendations were applied. If the mode service is not available, the call is a no-op. Errors applying individual recommendations are logged and do not stop processing the remaining items.
-        
+
         Parameters:
             recommendations (list[TuningRecommendation]): Recommendations to apply.
         """
@@ -1319,9 +1319,9 @@ class WritePage:
     def _dismiss_recommendations(self, recommendations: list[TuningRecommendation]) -> None:
         """
         Persist dismissal of the given tuning recommendations.
-        
+
         If a mode service is available, each recommendation will be marked as dismissed; failures for individual recommendations are logged and do not stop processing.
-        
+
         Parameters:
             recommendations (list[TuningRecommendation]): Recommendations to dismiss.
         """
@@ -1366,7 +1366,7 @@ class WritePage:
     async def _regenerate_with_feedback(self) -> None:
         """
         Regenerate the currently selected chapter using the text entered in the feedback input.
-        
+
         Validates that a project, a selected chapter, and non-empty feedback exist; records the regeneration as a learning signal, prevents concurrent generation, shows progress and status updates, supports user cancellation, saves the updated chapter and version history, refreshes the writing UI, clears the feedback input on success, and notifies the user of success, cancellation, or errors.
         """
         if not self._regenerate_feedback_input or not self._regenerate_feedback_input.value:

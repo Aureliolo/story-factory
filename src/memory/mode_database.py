@@ -52,7 +52,7 @@ class ModeDatabase:
     def _init_db(self) -> None:
         """
         Create and initialize the SQLite schema required by the ModeDatabase.
-        
+
         Creates tables for generation scores, aggregated model performance, recommendations,
         world entity scores, prompt metrics, and custom modes, along with relevant indexes,
         then applies any pending schema migrations.
@@ -211,9 +211,9 @@ class ModeDatabase:
     def _run_migrations(self, conn: sqlite3.Connection) -> None:
         """
         Apply pending schema migrations to the connected SQLite database.
-        
+
         Ensures the custom_modes table contains the `size_preference` column and adds it with a default value of "medium" if missing.
-        
+
         Parameters:
             conn (sqlite3.Connection): Active SQLite connection whose schema may be modified.
         """
@@ -253,7 +253,7 @@ class ModeDatabase:
     ) -> int:
         """
         Record a single generation score row for a project and model.
-        
+
         Parameters:
             project_id (str): Project identifier.
             agent_role (str): Role or persona that generated the content.
@@ -272,10 +272,10 @@ class ModeDatabase:
             edit_distance (int | None): Edit distance from a reference or previous version, if available.
             user_rating (int | None): Optional user-provided rating.
             prompt_hash (str | None): Optional hash of the prompt/template used.
-        
+
         Returns:
             int: The row ID of the inserted generation_scores record (0 if unavailable).
-        
+
         Raises:
             sqlite3.Error: If the database operation fails.
         """
@@ -449,7 +449,7 @@ class ModeDatabase:
     def get_scores_for_project(self, project_id: str) -> list[dict[str, Any]]:
         """
         Retrieve all generation scores for a project ordered by most recent first.
-        
+
         Returns:
             list[dict[str, Any]]: List of rows from `generation_scores` as dictionaries, ordered by `timestamp` descending.
         """
@@ -505,12 +505,12 @@ class ModeDatabase:
     ) -> int:
         """
         Return count of generation score records, optionally filtered by model, agent role, or genre.
-        
+
         Parameters:
             model_id (str | None): If provided, only count scores for this model_id.
             agent_role (str | None): If provided, only count scores for this agent role.
             genre (str | None): If provided, only count scores for this genre.
-        
+
         Returns:
             count (int): Number of matching rows in the generation_scores table.
         """
@@ -688,7 +688,7 @@ class ModeDatabase:
     ) -> None:
         """
         Record the user's outcome and optional feedback for a tuning recommendation in the database.
-        
+
         Parameters:
             recommendation_id (int): ID of the recommendation to update.
             was_applied (bool): `True` if the recommendation was applied, `False` otherwise.
@@ -708,10 +708,10 @@ class ModeDatabase:
     def get_pending_recommendations(self, limit: int = 50) -> list[dict[str, Any]]:
         """
         Return recommendations that have not been applied and lack user feedback, ordered by newest first.
-        
+
         Parameters:
             limit (int): Maximum number of recommendations to return.
-        
+
         Returns:
             list[dict[str, Any]]: Recommendation records as dictionaries, ordered by timestamp descending and limited to `limit`.
         """

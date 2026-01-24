@@ -91,13 +91,13 @@ class ModelModeService:
     def set_mode(self, mode_id: str) -> GenerationMode:
         """
         Activate the generation mode identified by `mode_id`, set it as the current mode, and synchronize its VRAM strategy to application settings.
-        
+
         Parameters:
             mode_id (str): Identifier of a preset or custom generation mode.
-        
+
         Returns:
             GenerationMode: The activated generation mode object.
-        
+
         Raises:
             ValueError: If no mode with `mode_id` exists or if a custom mode contains an invalid VRAM strategy.
         """
@@ -176,9 +176,9 @@ class ModelModeService:
     def list_modes(self) -> list[GenerationMode]:
         """
         Get all available generation modes by combining built-in presets with saved custom modes.
-        
+
         Custom modes are converted into GenerationMode objects; their `size_preference` defaults to `SizePreference.MEDIUM` when missing or invalid, and they are marked with `is_preset=False`. Stored `vram_strategy` values are parsed into the corresponding VramStrategy.
-        
+
         Returns:
             list[GenerationMode]: A list of GenerationMode instances for presets and custom modes.
         """
@@ -212,9 +212,9 @@ class ModelModeService:
     def save_custom_mode(self, mode: GenerationMode) -> None:
         """
         Persist a custom GenerationMode to the application's mode database.
-        
+
         Saves the mode's id, name, per-agent model and temperature overrides, size preference, VRAM strategy, description, and experimental flag to persistent storage and logs the save.
-        
+
         Parameters:
             mode (GenerationMode): The custom mode to persist; must not be `None`.
         """
@@ -294,15 +294,15 @@ class ModelModeService:
     ) -> str:
         """
         Selects the best installed model ID for an agent role based on the requested size preference and available VRAM.
-        
+
         Parameters:
             agent_role (str): Agent role tag to filter models (e.g., "writer", "validator").
             size_pref (SizePreference): Desired model size preference (LARGEST, MEDIUM, SMALLEST).
             available_vram (int): Available VRAM in gigabytes to prefer models that fit.
-        
+
         Returns:
             str: The selected model ID.
-        
+
         Raises:
             ValueError: If no installed model is tagged for the given agent_role.
         """
@@ -385,11 +385,11 @@ class ModelModeService:
     def _calculate_tier_score(self, size_gb: float, size_pref: SizePreference) -> float:
         """
         Score how well a model size matches the given SizePreference on a 0-10 scale.
-        
+
         Parameters:
             size_gb (float): Model size in gigabytes.
             size_pref (SizePreference): Desired size preference enum.
-        
+
         Returns:
             float: A score between 0.0 and 10.0 where higher values indicate a closer match to the preference.
         """
@@ -411,7 +411,7 @@ class ModelModeService:
     def get_temperature_for_agent(self, agent_role: str) -> float:
         """
         Get the temperature for an agent role according to the active generation mode; falls back to application Settings if the mode does not specify a value.
-        
+
         Returns:
             float: Temperature value for the specified agent role.
         """
@@ -428,9 +428,9 @@ class ModelModeService:
     def prepare_model(self, model_id: str) -> None:
         """
         Prepare a model for use according to the configured VRAM strategy.
-        
+
         Reads the VRAM strategy from settings.vram_strategy (user-configurable) and may unload other loaded models depending on that strategy: for SEQUENTIAL, unloads all other models; for ADAPTIVE, unloads others only if available VRAM is less than the model's estimated requirement. Marks the given model as loaded in the service's internal tracker.
-        
+
         Parameters:
             model_id (str): Identifier of the model to prepare.
         """
@@ -864,11 +864,11 @@ Rate each dimension from 0-10:
     def apply_recommendation(self, recommendation: TuningRecommendation) -> bool:
         """
         Apply a tuning recommendation to the current mode and persist its outcome when applicable.
-        
+
         Parameters:
             recommendation (TuningRecommendation): Recommendation describing the action (e.g., model swap or temperature adjustment),
                 the affected role, and the suggested value; if `recommendation.id` is present the outcome will be recorded.
-        
+
         Returns:
             bool: `True` if the recommendation was applied to the in-memory current mode and (when present) recorded in the database,
             `False` otherwise.
@@ -989,10 +989,10 @@ Rate each dimension from 0-10:
     def export_scores_csv(self, output_path: Path | str) -> int:
         """
         Export all recorded scores to a CSV file at the given path.
-        
+
         Parameters:
             output_path (Path | str): Destination file path for the exported CSV.
-        
+
         Returns:
             int: Number of score records written to the CSV.
         """
@@ -1001,9 +1001,9 @@ Rate each dimension from 0-10:
     def get_pending_recommendations(self) -> list[TuningRecommendation]:
         """
         Return pending tuning recommendations retrieved from the database.
-        
+
         Each row is converted into a TuningRecommendation. Timestamps stored as ISO strings are parsed to datetimes (falls back to now if missing), the recommendation type is converted to RecommendationType, and evidence JSON is parsed when present (malformed JSON is logged and left as None). Rows that fail to parse are skipped with a warning.
-        
+
         Returns:
             recommendations (list[TuningRecommendation]): A list of parsed pending recommendations (may be empty).
         """
@@ -1055,9 +1055,9 @@ Rate each dimension from 0-10:
     def dismiss_recommendation(self, recommendation: TuningRecommendation) -> None:
         """
         Mark a tuning recommendation as dismissed so it is recorded as ignored and not re-surfaced.
-        
+
         If the recommendation has an `id`, persist an outcome indicating it was not applied and store `"ignored"` as user feedback in the database. If the recommendation has no `id`, no database change is made and a warning is logged.
-        
+
         Parameters:
             recommendation (TuningRecommendation): The recommendation to dismiss; must include `id` to persist the dismissal.
         """

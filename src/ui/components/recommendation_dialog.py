@@ -28,12 +28,12 @@ class RecommendationDialog:
     ):
         """
         Create a modal dialog configured to display and manage a list of tuning recommendations.
-        
+
         Parameters:
             recommendations (list[TuningRecommendation]): Recommendations to present in the dialog.
             on_apply (Callable[[list[TuningRecommendation]], None] | None): Optional callback invoked with the list of recommendations the user applied.
             on_dismiss (Callable[[list[TuningRecommendation]], None] | None): Optional callback invoked with the full list when the user dismisses the dialog.
-        
+
         Notes:
             All provided recommendations are initially marked as selected. The dialog instance is not created until `show()` is called; internal selection state is stored in `_selected`.
         """
@@ -55,7 +55,7 @@ class RecommendationDialog:
     def show(self) -> None:
         """
         Open and display the recommendation modal dialog.
-        
+
         Builds the dialog contents (header, recommendations list, and action buttons), marks the dialog as persistent, and opens it for user interaction.
         """
         logger.debug(
@@ -73,7 +73,7 @@ class RecommendationDialog:
     def _build_header(self) -> None:
         """
         Render the header area of the recommendations dialog, including icon, title, suggestion count, and a short descriptive subtitle.
-        
+
         Builds the UI row containing the "Tuning Recommendations" title with an icon, a label showing the number of suggestions, and a brief explanatory subheader about the purpose of the recommendations.
         """
         logger.debug("Building recommendation dialog header")
@@ -101,9 +101,9 @@ class RecommendationDialog:
     def _build_recommendation_card(self, index: int, rec: TuningRecommendation) -> None:
         """
         Render a UI card for a single tuning recommendation and bind its controls to the dialog's selection state.
-        
+
         Renders a card showing the recommendation's type and affected role, current → suggested value, reason, confidence percentage, and optional expected improvement. The card's checkbox is bound to the dialog's internal selection mapping and updates selection via _set_selection when changed.
-        
+
         Parameters:
             index (int): Position of the recommendation in the list; used as the key for the dialog's selection state.
             rec (TuningRecommendation): Recommendation object whose fields are displayed in the card.
@@ -191,7 +191,7 @@ class RecommendationDialog:
     def _on_apply(self) -> None:
         """
         Apply the currently selected recommendations and close the dialog.
-        
+
         Closes the dialog if it is open, collects recommendations that are marked selected, and—if there is at least one selected recommendation and an `on_apply` callback—invokes `on_apply` with the list of selected recommendations.
         """
         if self._dialog:
@@ -210,7 +210,7 @@ class RecommendationDialog:
     def _on_dismiss(self) -> None:
         """
         Dismiss the recommendations dialog and notify the dismiss handler.
-        
+
         Closes the modal dialog if it is open and, if an `on_dismiss` callback was provided, invokes it with the full list of recommendations.
         """
         if self._dialog:
@@ -229,7 +229,7 @@ def show_recommendations(
 ) -> None:
     """
     Display a modal dialog listing tuning recommendations and handle user actions.
-    
+
     Parameters:
         recommendations (list[TuningRecommendation]): Recommendations to present in the dialog.
         on_apply (Callable[[list[TuningRecommendation]], None] | None): Optional callback invoked with the list of recommendations selected by the user when "Apply Selected" is chosen.

@@ -311,7 +311,7 @@ class SettingsPage:
     def _build_context_section(self) -> None:
         """
         Create the "Memory & Context" settings card with inputs for context-related limits.
-        
+
         Constructs a UI card containing number inputs for context window (tokens), max output tokens,
         previous chapter memory (chars), analysis context (chars), and editor preview (chars).
         Stores the input component references on self as:
@@ -665,7 +665,7 @@ class SettingsPage:
     def _save_settings(self) -> None:
         """
         Persist current UI-configured settings to the application's settings store and record an undo snapshot.
-        
+
         Reads values from the page's UI controls, applies them to the settings object, validates and saves the settings, then records an undo action containing before/after snapshots for undo/redo. On success, displays a positive notification; on validation error or other failure, logs the issue and displays a negative notification.
         """
         from src.ui.state import ActionType, UndoAction
@@ -765,7 +765,7 @@ class SettingsPage:
     def _capture_settings_snapshot(self) -> dict[str, Any]:
         """
         Create a serializable snapshot of current settings suitable for undo/redo operations.
-        
+
         Returns:
             snapshot (dict[str, Any]): A dictionary snapshot of settings including:
                 - Core connection and model: `ollama_url`, `default_model`, `use_per_agent_models`, `agent_models`, `agent_temperatures`
@@ -815,7 +815,7 @@ class SettingsPage:
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
         """
         Restore the SettingsPage state from a snapshot and persist the restored values.
-        
+
         Parameters:
             snapshot (dict[str, Any]): Snapshot containing saved settings values. Expected keys include core settings such as
                 `ollama_url`, `default_model`, `use_per_agent_models`, `agent_models`, `agent_temperatures`,
@@ -825,7 +825,7 @@ class SettingsPage:
                 `learning_periodic_interval`, `learning_min_samples`, `learning_confidence_threshold`).
                 Optional keys handled when present: `full_text_preview_chars`, `vram_strategy`, and the
                 `world_gen_*_min` / `world_gen_*_max` group for world generation settings.
-        
+
         Behavior:
             Applies values from `snapshot` to the persistent settings, saves the settings, updates UI controls
             to reflect the restored values, and shows an informational notification indicating the restore completed.

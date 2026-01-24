@@ -59,7 +59,7 @@ class StoryOrchestrator:
     ):
         """
         Create a StoryOrchestrator and initialize agents, persistent state, and progress tracking.
-        
+
         Parameters:
             settings (Settings | None): Application settings; when None the default settings are loaded.
             model_override (str | None): Model identifier to force for all agents; when None agents use their configured models.
@@ -732,15 +732,15 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
     ) -> Generator[WorkflowEvent, None, str]:
         """
         Run the full write–edit–continuity pipeline for a single chapter, yielding workflow events during processing.
-        
+
         Detailed behavior:
         - Yields WorkflowEvent objects at key stages (writer start/complete, editor start/complete, continuity checks, progress updates, and final completion) to report progress to the UI.
         - Writes the chapter, applies editor passes, performs continuity checks and iterative revisions, extracts new facts and character-arc updates, marks plot points completed, updates story state, autosaves, and optionally reports learning/training metrics via the configured mode service.
-        
+
         Parameters:
             chapter_number (int): The chapter number to process (must exist in the current story structure).
             feedback (str | None): Optional feedback or revision guidance to incorporate into the initial generation.
-        
+
         Returns:
             chapter_content (str): The final content of the chapter after editing and revisions.
         """

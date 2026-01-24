@@ -31,7 +31,7 @@ class StoryService:
     def __init__(self, settings: Settings, mode_service: Any | None = None):
         """
         Create a StoryService configured with application settings and an optional mode service for learning hooks.
-        
+
         Parameters:
             settings (Settings): Application settings used to configure the service; must be a Settings instance.
             mode_service (Any | None): Optional service that provides adaptive learning hooks (e.g., ModelModeService); stored on the instance for use by orchestrators.
@@ -48,12 +48,12 @@ class StoryService:
     def _get_orchestrator(self, state: StoryState) -> StoryOrchestrator:
         """
         Retrieve the StoryOrchestrator associated with the given StoryState, creating and caching one if absent.
-        
+
         Creates a new orchestrator tied to the provided state and inserts it into an LRU cache; evicts the least-recently-used orchestrator when the cache exceeds settings.orchestrator_cache_size.
-        
+
         Parameters:
             state (StoryState): The story state to obtain an orchestrator for.
-        
+
         Returns:
             StoryOrchestrator: The orchestrator instance for the story.
         """
@@ -101,12 +101,12 @@ class StoryService:
     def _on_story_complete(self, state: StoryState) -> list[Any] | None:
         """
         Invoke learning hooks via the configured mode service when a story is completed.
-        
+
         If a mode service is not configured, no action is taken. When configured, requests recommendations from the mode service and asks the mode service to handle them; returns any recommendations that remain pending user approval.
-        
+
         Parameters:
             state (StoryState): The completed story state (used for logging/context).
-        
+
         Returns:
             list[Any] | None: A list of pending recommendations if any exist, `None` otherwise.
         """
@@ -167,10 +167,10 @@ class StoryService:
     def start_interview(self, state: StoryState) -> str:
         """
         Begin the interview for the given story and record the assistant's initial questions in the state's interview history.
-        
+
         Parameters:
             state (StoryState): The story state representing the project to interview.
-        
+
         Returns:
             str: The assistant's initial interview questions.
         """
@@ -576,14 +576,14 @@ class StoryService:
     ) -> Generator[WorkflowEvent]:
         """
         Stream the generation of every chapter, yielding workflow events as progress is produced.
-        
+
         Parameters:
             state (StoryState): The story state to write into; orchestrator state will be synchronized back to this object.
             cancel_check (Callable[[], bool] | None): Optional callable invoked between events; return `True` to request cancellation.
-        
+
         Yields:
             WorkflowEvent: Progress events emitted during chapter generation.
-        
+
         Raises:
             GenerationCancelled: If `cancel_check` returns `True` indicating the user requested cancellation.
         """
@@ -606,13 +606,13 @@ class StoryService:
     def write_short_story(self, state: StoryState) -> Generator[WorkflowEvent, None, str]:
         """
         Generate a single-chapter short story while streaming progress events.
-        
+
         Parameters:
             state (StoryState): Story state to use and update during generation.
-        
+
         Yields:
             WorkflowEvent: Progress events emitted by the orchestrator during generation.
-        
+
         Returns:
             str: The completed story content from chapter 1, or an empty string if no chapter was produced.
         """

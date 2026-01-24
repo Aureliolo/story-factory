@@ -139,7 +139,7 @@ class TestModelModeServiceTierScore:
     def service(self) -> ModelModeService:
         """
         Create a ModelModeService configured with default Settings and a patched ModeDatabase.
-        
+
         Returns:
             service (ModelModeService): Instance initialized with a default Settings object and ModeDatabase patched to prevent real database access.
         """
@@ -182,7 +182,7 @@ class TestModelModeServiceModelSelection:
     def service(self) -> ModelModeService:
         """
         Create a ModelModeService configured with default Settings and a patched ModeDatabase.
-        
+
         Returns:
             service (ModelModeService): Instance initialized with a default Settings object and ModeDatabase patched to prevent real database access.
         """
@@ -285,7 +285,7 @@ class TestModelModeServiceAdditionalCoverage:
     def temp_db(self, tmp_path: Path) -> Path:
         """
         Create a Path for a temporary test database file named "test_mode.db".
-        
+
         Returns:
             Path: Path to the temporary database file within the provided `tmp_path`.
         """
@@ -295,13 +295,13 @@ class TestModelModeServiceAdditionalCoverage:
     def mock_settings(self) -> MagicMock:
         """
         Create a MagicMock of Settings preconfigured for tests.
-        
+
         The mock exposes:
         - ollama_url set to "http://localhost:11434".
         - get_model_for_agent() returning "test-model:8b".
         - agent_temperatures mapping {"writer": 0.9, "editor": 0.6"}.
         - get_temperature_for_agent(role) returning the temperature as a float for known roles and raising ValueError("Unknown agent role: {role}") for unknown roles.
-        
+
         Returns:
             MagicMock: A mock object conforming to the Settings spec with the above behaviors.
         """
@@ -313,13 +313,13 @@ class TestModelModeServiceAdditionalCoverage:
         def _get_temp(role: str) -> float:
             """
             Retrieve the temperature value for a given agent role from the mock configuration.
-            
+
             Parameters:
                 role (str): Agent role name to look up in mock.agent_temperatures.
-            
+
             Returns:
                 float: Temperature value associated with the specified role.
-            
+
             Raises:
                 ValueError: If the provided role is not present in mock.agent_temperatures.
             """
@@ -334,11 +334,11 @@ class TestModelModeServiceAdditionalCoverage:
     def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
         """
         Create a ModelModeService configured with mocked settings and a temporary database path.
-        
+
         Parameters:
             mock_settings (MagicMock): Mocked Settings object used to configure the service.
             temp_db (Path): Filesystem path to a temporary database used by the service.
-        
+
         Returns:
             ModelModeService: An instance of ModelModeService initialized with the provided mocks.
         """
@@ -481,13 +481,13 @@ class TestPendingRecommendations:
     def mock_settings(self) -> MagicMock:
         """
         Create a MagicMock of Settings preconfigured for tests.
-        
+
         The mock exposes:
         - ollama_url set to "http://localhost:11434".
         - get_model_for_agent() returning "test-model:8b".
         - agent_temperatures mapping {"writer": 0.9, "editor": 0.6"}.
         - get_temperature_for_agent(role) returning the temperature as a float for known roles and raising ValueError("Unknown agent role: {role}") for unknown roles.
-        
+
         Returns:
             MagicMock: A mock object conforming to the Settings spec with the above behaviors.
         """
@@ -499,13 +499,13 @@ class TestPendingRecommendations:
         def _get_temp(role: str) -> float:
             """
             Retrieve the temperature value for a given agent role from the mock configuration.
-            
+
             Parameters:
                 role (str): Agent role name to look up in mock.agent_temperatures.
-            
+
             Returns:
                 float: Temperature value associated with the specified role.
-            
+
             Raises:
                 ValueError: If the provided role is not present in mock.agent_temperatures.
             """
@@ -520,11 +520,11 @@ class TestPendingRecommendations:
     def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
         """
         Create a ModelModeService configured with mocked settings and a temporary database path.
-        
+
         Parameters:
             mock_settings (MagicMock): Mocked Settings object used to configure the service.
             temp_db (Path): Filesystem path to a temporary database used by the service.
-        
+
         Returns:
             ModelModeService: An instance of ModelModeService initialized with the provided mocks.
         """
@@ -573,7 +573,7 @@ class TestPendingRecommendations:
     ):
         """
         Verifies that get_pending_recommendations converts rows with invalid JSON in `evidence_json` into recommendations with `evidence` set to None.
-        
+
         Patches the database to return a single row whose `evidence_json` is not valid JSON and asserts the service still returns one recommendation object with `evidence is None`.
         """
         from datetime import datetime
@@ -668,12 +668,12 @@ class TestVramStrategyIntegration:
     def temp_db(self, tmp_path: Path) -> Path:
         """
         Create a temporary database path for tests.
-        
+
         Parameters:
-        	tmp_path (Path): Base temporary directory provided by pytest.
-        
+                tmp_path (Path): Base temporary directory provided by pytest.
+
         Returns:
-        	db_path (Path): Path to a temporary database file named "test_vram.db" inside `tmp_path`.
+                db_path (Path): Path to a temporary database file named "test_vram.db" inside `tmp_path`.
         """
         return tmp_path / "test_vram.db"
 
@@ -681,14 +681,14 @@ class TestVramStrategyIntegration:
     def mock_settings(self) -> MagicMock:
         """
         Create a Settings-like MagicMock preconfigured for tests.
-        
+
         The mock uses Settings as its spec and includes:
         - ollama_url set to "http://localhost:11434"
         - vram_strategy set to "adaptive"
         - get_model_for_agent returning "test-model:8b"
         - agent_temperatures initialized to {"writer": 0.9}
         - get_temperature_for_agent that returns the configured temperature as a float for known roles and raises ValueError("Unknown agent role: {role}") for unknown roles
-        
+
         Returns:
             MagicMock: A configured MagicMock instance that conforms to the Settings spec.
         """
@@ -701,13 +701,13 @@ class TestVramStrategyIntegration:
         def _get_temp(role: str) -> float:
             """
             Retrieve the temperature value for a given agent role from the mock configuration.
-            
+
             Parameters:
                 role (str): Agent role name to look up in mock.agent_temperatures.
-            
+
             Returns:
                 float: Temperature value associated with the specified role.
-            
+
             Raises:
                 ValueError: If the provided role is not present in mock.agent_temperatures.
             """
@@ -722,7 +722,7 @@ class TestVramStrategyIntegration:
     def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
         """
         Create a ModelModeService configured with the provided settings and database path.
-        
+
         Returns:
             ModelModeService: Instance configured with `mock_settings` and `db_path=temp_db`.
         """
