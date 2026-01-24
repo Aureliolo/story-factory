@@ -126,6 +126,28 @@ class TestCheckDependencies:
         # Should not raise
         _check_dependencies(tmp_path)
 
+    def test_warns_when_no_project_section(self, tmp_path, capsys):
+        """Test that check warns when [project] section is missing."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("[tool.ruff]\nline-length = 100\n")
+
+        # Should not raise (warns but continues)
+        _check_dependencies(tmp_path)
+
+        captured = capsys.readouterr()
+        assert "No [project] section" in captured.err
+
+    def test_warns_when_no_dependencies_key(self, tmp_path, capsys):
+        """Test that check warns when dependencies key is missing."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\n')
+
+        # Should not raise (warns but continues)
+        _check_dependencies(tmp_path)
+
+        captured = capsys.readouterr()
+        assert "No dependencies in pyproject.toml" in captured.err
+
     def test_passes_when_all_dependencies_installed(self, tmp_path):
         """Test that check passes when all dependencies are installed."""
         pyproject = tmp_path / "pyproject.toml"

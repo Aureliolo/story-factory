@@ -78,9 +78,10 @@ def _check_dependencies(project_root: Path) -> None:
 
     try:
         import tomllib
+        from importlib.metadata import PackageNotFoundError
         from importlib.metadata import version as get_version
 
-        from packaging.requirements import Requirement
+        from packaging.requirements import InvalidRequirement, Requirement
     except ImportError:
         print("Warning: Cannot check dependencies (packaging not installed)", file=sys.stderr)
         return
@@ -89,7 +90,14 @@ def _check_dependencies(project_root: Path) -> None:
         with open(pyproject_path, "rb") as f:
             config = tomllib.load(f)
 
-        dependencies = config.get("project", {}).get("dependencies", [])
+        project_section = config.get("project")
+        if project_section is None:
+            print("Warning: No [project] section in pyproject.toml", file=sys.stderr)
+            return
+        dependencies = project_section.get("dependencies")
+        if dependencies is None:
+            print("Warning: No dependencies in pyproject.toml [project] section", file=sys.stderr)
+            return
     except (KeyError, ValueError, OSError) as e:
         print(f"Warning: Could not parse dependencies from pyproject.toml: {e}", file=sys.stderr)
         return
@@ -100,7 +108,7 @@ def _check_dependencies(project_root: Path) -> None:
     for dep_string in dependencies:
         try:
             req = Requirement(dep_string)
-        except Exception:
+        except InvalidRequirement:
             # Not a valid requirement string, skip
             continue
 
@@ -112,7 +120,7 @@ def _check_dependencies(project_root: Path) -> None:
                 version_mismatch.append(
                     f"  {package_name}: installed {installed_version}, requires {req.specifier}"
                 )
-        except Exception:
+        except PackageNotFoundError:
             missing.append(f"  {package_name}{req.specifier}")
 
     if missing or version_mismatch:

@@ -225,6 +225,7 @@ class ProcessManager:
                                 capture_output=True,
                                 timeout=10,
                                 creationflags=SUBPROCESS_FLAGS,
+                                check=True,
                             )
                             logger.info("Killed orphan process (PID: %d)", pid)
                             return True
@@ -249,7 +250,7 @@ class OllamaManager:
         """
         if SETTINGS_FILE.exists():
             try:
-                with open(SETTINGS_FILE) as f:
+                with open(SETTINGS_FILE, encoding="utf-8") as f:
                     settings = json.load(f)
                     if "ollama_url" in settings:
                         return str(settings["ollama_url"])
@@ -406,14 +407,9 @@ class LogWatcher:
                     if seek_pos == 0:
                         break
 
-                # Filter empty lines first, then take last n and truncate
+                # Filter empty lines and take last n
                 non_empty_lines = [stripped for ln in lines if (stripped := ln.strip())]
-                result = []
-                for line in non_empty_lines[-n:]:
-                    if len(line) > 150:
-                        line = line[:147] + "..."
-                    result.append(line)
-                return result
+                return non_empty_lines[-n:]
 
         except OSError as e:
             logger.warning("Failed to read log file: %s", e)
@@ -430,8 +426,8 @@ class LogWatcher:
 
         try:
             size = self._log_path.stat().st_size
-            with open(self._log_path, "w") as f:
-                f.truncate(0)
+            with open(self._log_path, "w", encoding="utf-8"):
+                pass
             logger.info("Cleared log file (%d bytes)", size)
             return size
         except OSError as e:
@@ -785,7 +781,9 @@ class ControlPanel(ctk.CTk):
         else:
             for line in lines:
                 tag = self._get_log_tag(line)
-                self._log_text.insert("end", line + "\n", tag)
+                # Truncate long lines for display (after tag detection)
+                display_line = line[:147] + "..." if len(line) > 150 else line
+                self._log_text.insert("end", display_line + "\n", tag)
 
         self._log_text.configure(state="disabled")
 

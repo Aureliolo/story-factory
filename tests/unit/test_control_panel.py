@@ -591,8 +591,8 @@ class TestLogWatcher:
             assert "Line 1" in lines[0]
             assert "ERROR" in lines[2]
 
-    def test_get_recent_lines_truncates_long_lines(self):
-        """Should truncate lines longer than 150 characters."""
+    def test_get_recent_lines_returns_full_lines(self):
+        """Should return full lines without truncation (truncation is UI concern)."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             long_line = "A" * 200
             f.write(f"{long_line}\n")
@@ -602,8 +602,8 @@ class TestLogWatcher:
             lines = watcher.get_recent_lines(n=1)
 
             assert len(lines) == 1
-            assert len(lines[0]) == 150
-            assert lines[0].endswith("...")
+            # Full line returned - truncation happens in UI layer
+            assert len(lines[0]) == 200
 
     def test_get_recent_lines_empty_file(self):
         """Should return empty list for empty file."""
