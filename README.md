@@ -153,7 +153,7 @@ The application features a comprehensive tabbed interface:
 
 ### Software Dependencies
 - **Ollama**: Required for local LLM serving ([Installation Guide](https://ollama.com/download))
-- **Python Packages**: Automatically installed via `requirements.txt`
+- **Python Packages**: Automatically installed via `pip install .`
 
 > **Note**: While CPU-only mode is possible, GPU acceleration is strongly recommended for reasonable performance.
 
@@ -173,7 +173,7 @@ git clone https://github.com/Aureliolo/story-factory.git
 cd story-factory
 
 # 4. Install Python dependencies
-pip install -r requirements.txt
+pip install .
 
 # 5. Copy example settings
 cp src/settings.example.json src/settings.json
@@ -253,7 +253,7 @@ See [docs/MODELS.md](docs/MODELS.md) for comprehensive model recommendations and
 
 ```bash
 cd story-factory
-pip install -r requirements.txt
+pip install .
 ```
 
 **Dependencies include:**
@@ -577,7 +577,7 @@ Settings can be configured via the web UI or by editing `src/settings.json`:
 
 ```bash
 # Install dev dependencies
-pip install -r requirements.txt
+pip install -e ".[all]"
 
 # Run tests
 pytest
@@ -705,7 +705,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture docum
    python -m venv venv
    source venv/bin/activate  # Linux/macOS
    venv\Scripts\activate     # Windows
-   pip install -r requirements.txt
+   pip install .
    ```
 3. **Check Python version**: Must be 3.14+
    ```bash

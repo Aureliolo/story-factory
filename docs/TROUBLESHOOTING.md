@@ -229,7 +229,7 @@ nvidia-smi
 ### pip Install Failures
 
 **Symptoms**:
-- `pip install -r requirements.txt` fails
+- `pip install .` fails
 - Missing dependencies errors
 - Build errors for packages
 
@@ -250,7 +250,7 @@ nvidia-smi
    venv\Scripts\activate     # Windows
 
    # Install dependencies
-   pip install -r requirements.txt
+   pip install .
    ```
 
 3. **Install build dependencies** (Linux):
@@ -301,7 +301,7 @@ python --version
 
 2. **Reinstall requirements**:
    ```bash
-   pip install --force-reinstall -r requirements.txt
+   pip install --force-reinstall .
    ```
 
 3. **Check PYTHONPATH**:
