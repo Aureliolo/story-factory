@@ -64,6 +64,7 @@ nul
 # Test artifacts
 .pytest_cache/
 .coverage
+.coverage.*
 coverage.json
 coverage.xml
 htmlcov/
