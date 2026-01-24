@@ -390,11 +390,8 @@ class LogWatcher:
                     chunk = f.read(bytes_to_read)
                     current_pos = seek_pos
 
-                    # Decode and split into lines
-                    try:
-                        decoded = chunk.decode("utf-8", errors="replace")
-                    except UnicodeDecodeError:
-                        decoded = chunk.decode("latin-1", errors="replace")
+                    # Decode and split into lines (errors="replace" handles invalid bytes)
+                    decoded = chunk.decode("utf-8", errors="replace")
 
                     new_lines = decoded.split("\n")
                     lines = new_lines + lines
@@ -488,8 +485,8 @@ class ControlPanel(ctk.CTk):
 
         logger.info("Control panel initialized")
 
-    def _create_header(self) -> None:
-        """Create the header section."""
+    def _create_header(self) -> None:  # pragma: no cover
+        """Create the header section (UI widget creation only)."""
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.pack(fill="x", padx=20, pady=(20, 10))
 
@@ -500,8 +497,8 @@ class ControlPanel(ctk.CTk):
         )
         title_label.pack()
 
-    def _create_status_frame(self) -> None:
-        """Create the status indicators section."""
+    def _create_status_frame(self) -> None:  # pragma: no cover
+        """Create the status indicators section (UI widget creation only)."""
         status_frame = ctk.CTkFrame(self)
         status_frame.pack(fill="x", padx=20, pady=10)
 
@@ -524,7 +521,7 @@ class ControlPanel(ctk.CTk):
         # Ollama status card
         self._ollama_card = self._create_status_card(cards_frame, "Ollama", "STOPPED", "red", 1)
 
-    def _create_status_card(
+    def _create_status_card(  # pragma: no cover
         self,
         parent: ctk.CTkFrame,
         title: str,
@@ -532,7 +529,7 @@ class ControlPanel(ctk.CTk):
         color: str,
         column: int,
     ) -> dict:
-        """Create a status card widget.
+        """Create a status card widget (UI widget creation only).
 
         Args:
             parent: Parent frame.
@@ -587,8 +584,8 @@ class ControlPanel(ctk.CTk):
             "info_label": info_label,
         }
 
-    def _create_controls_frame(self) -> None:
-        """Create the control buttons section."""
+    def _create_controls_frame(self) -> None:  # pragma: no cover
+        """Create the control buttons section (UI widget creation only)."""
         controls_frame = ctk.CTkFrame(self)
         controls_frame.pack(fill="x", padx=20, pady=10)
 
@@ -665,8 +662,8 @@ class ControlPanel(ctk.CTk):
         )
         self._ollama_btn.pack(side="left", padx=5)
 
-    def _create_log_frame(self) -> None:
-        """Create the log viewer section."""
+    def _create_log_frame(self) -> None:  # pragma: no cover
+        """Create the log viewer section (UI widget creation only)."""
         log_frame = ctk.CTkFrame(self)
         log_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
@@ -707,8 +704,8 @@ class ControlPanel(ctk.CTk):
         self._log_text._textbox.tag_config("info", foreground="#6c757d")
         self._log_text._textbox.tag_config("debug", foreground="#495057")
 
-    def _create_status_bar(self) -> None:
-        """Create the status bar at the bottom."""
+    def _create_status_bar(self) -> None:  # pragma: no cover
+        """Create the status bar at the bottom (UI widget creation only)."""
         status_bar = ctk.CTkFrame(self, height=30)
         status_bar.pack(fill="x", padx=20, pady=(0, 10))
 
