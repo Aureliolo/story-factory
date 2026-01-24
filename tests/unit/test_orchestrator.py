@@ -3,7 +3,7 @@
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -2795,53 +2795,59 @@ class TestOrchestratorLearningIntegration:
 
     @pytest.fixture
     def orchestrator_with_mode_service(self, mock_mode_service):
-        """
-        Create a StoryOrchestrator configured with a mocked mode service and a preloaded StoryState for learning-integration tests.
+        """Create a StoryOrchestrator with mocked mode service for learning-integration tests.
 
         Parameters:
-            mock_mode_service (Mock): A mock implementation of the mode/learning service to inject into the orchestrator.
+            mock_mode_service (Mock): A mock implementation of the mode/learning service.
 
         Returns:
-            orchestrator (StoryOrchestrator): An orchestrator instance whose story_state is set to a writing test story and whose writer, editor, continuity, and validator agent methods are replaced with mocks.
+            StoryOrchestrator: An orchestrator with story_state set and agent methods mocked.
         """
-        orchestrator = StoryOrchestrator(mode_service=mock_mode_service)
-        orchestrator.story_state = StoryState(
-            id="test-story",
-            status="writing",
-            brief=StoryBrief(
-                premise="A test story",
-                genre="Fantasy",
-                tone="Epic",
-                setting_time="Medieval",
-                setting_place="Kingdom",
-                target_length="novella",
-                content_rating="none",
-            ),
-            characters=[Character(name="Hero", role="protagonist", description="A brave warrior")],
-            chapters=[Chapter(number=1, title="Beginning", outline="The start of the adventure")],
-        )
-        # Mock agent methods
-        object.__setattr__(
-            orchestrator.writer, "write_chapter", MagicMock(return_value="Chapter content...")
-        )
-        object.__setattr__(
-            orchestrator.editor, "edit_chapter", MagicMock(return_value="Edited content...")
-        )
-        object.__setattr__(orchestrator.continuity, "check_chapter", MagicMock(return_value=[]))
-        object.__setattr__(
-            orchestrator.continuity, "validate_against_outline", MagicMock(return_value=[])
-        )
-        object.__setattr__(orchestrator.continuity, "extract_new_facts", MagicMock(return_value=[]))
-        object.__setattr__(
-            orchestrator.continuity, "extract_character_arcs", MagicMock(return_value={})
-        )
-        object.__setattr__(
-            orchestrator.continuity, "check_plot_points_completed", MagicMock(return_value=[])
-        )
-        object.__setattr__(
-            orchestrator.validator, "validate_response", MagicMock(return_value=None)
-        )
-        return orchestrator
+        with patch("src.agents.base.ollama.Client"):
+            orchestrator = StoryOrchestrator(mode_service=mock_mode_service)
+            orchestrator.story_state = StoryState(
+                id="test-story",
+                status="writing",
+                brief=StoryBrief(
+                    premise="A test story",
+                    genre="Fantasy",
+                    tone="Epic",
+                    setting_time="Medieval",
+                    setting_place="Kingdom",
+                    target_length="novella",
+                    content_rating="none",
+                ),
+                characters=[
+                    Character(name="Hero", role="protagonist", description="A brave warrior")
+                ],
+                chapters=[
+                    Chapter(number=1, title="Beginning", outline="The start of the adventure")
+                ],
+            )
+            # Mock agent methods
+            object.__setattr__(
+                orchestrator.writer, "write_chapter", MagicMock(return_value="Chapter content...")
+            )
+            object.__setattr__(
+                orchestrator.editor, "edit_chapter", MagicMock(return_value="Edited content...")
+            )
+            object.__setattr__(orchestrator.continuity, "check_chapter", MagicMock(return_value=[]))
+            object.__setattr__(
+                orchestrator.continuity, "validate_against_outline", MagicMock(return_value=[])
+            )
+            object.__setattr__(
+                orchestrator.continuity, "extract_new_facts", MagicMock(return_value=[])
+            )
+            object.__setattr__(
+                orchestrator.continuity, "extract_character_arcs", MagicMock(return_value={})
+            )
+            object.__setattr__(
+                orchestrator.continuity, "check_plot_points_completed", MagicMock(return_value=[])
+            )
+            object.__setattr__(
+                orchestrator.validator, "validate_response", MagicMock(return_value=None)
+            )
+            return orchestrator
 
     def test_write_chapter_records_generation(
         self, orchestrator_with_mode_service, mock_mode_service
@@ -2909,14 +2915,14 @@ class TestOrchestratorLearningIntegration:
 
         # Configure settings to return a model via use_mode_system path
         orchestrator_with_mode_service.settings.use_mode_system = True
-        mock_mode_service.get_model_for_agent.return_value = "test-model:8b"
+        mock_mode_service.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
 
         events = list(orchestrator_with_mode_service.write_chapter(1))
 
         assert len(events) > 0
         mock_mode_service.get_model_for_agent.assert_called_with("writer")
         call_args = mock_mode_service.record_generation.call_args
-        assert call_args.kwargs["model_id"] == "test-model:8b"
+        assert call_args.kwargs["model_id"] == "huihui_ai/dolphin3-abliterated:8b"
 
     def test_write_chapter_records_generation_with_settings_fallback(
         self, orchestrator_with_mode_service, mock_mode_service
@@ -2928,7 +2934,7 @@ class TestOrchestratorLearningIntegration:
         # Disable mode system so settings fallback is used
         orchestrator_with_mode_service.settings.use_mode_system = False
         orchestrator_with_mode_service.settings.get_model_for_agent = MagicMock(
-            return_value="settings-model:7b"
+            return_value="huihui_ai/dolphin3-abliterated:8b"
         )
 
         events = list(orchestrator_with_mode_service.write_chapter(1))
@@ -2936,4 +2942,4 @@ class TestOrchestratorLearningIntegration:
         assert len(events) > 0
         orchestrator_with_mode_service.settings.get_model_for_agent.assert_called_with("writer")
         call_args = mock_mode_service.record_generation.call_args
-        assert call_args.kwargs["model_id"] == "settings-model:7b"
+        assert call_args.kwargs["model_id"] == "huihui_ai/dolphin3-abliterated:8b"

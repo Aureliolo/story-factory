@@ -3,7 +3,10 @@
 import logging
 from collections import OrderedDict
 from collections.abc import Callable, Generator
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.services.model_mode_service import ModelModeService
 
 from src.agents.continuity import ContinuityIssue
 from src.memory.story_state import Character, StoryBrief, StoryState
@@ -28,13 +31,12 @@ class StoryService:
     chapter writing workflows.
     """
 
-    def __init__(self, settings: Settings, mode_service: Any | None = None):
-        """
-        Create a StoryService configured with application settings and an optional mode service for learning hooks.
+    def __init__(self, settings: Settings, mode_service: ModelModeService | None = None):
+        """Create a StoryService configured with application settings and an optional mode service.
 
         Parameters:
             settings (Settings): Application settings used to configure the service; must be a Settings instance.
-            mode_service (Any | None): Optional service that provides adaptive learning hooks (e.g., ModelModeService); stored on the instance for use by orchestrators.
+            mode_service (ModelModeService | None): Optional service that provides adaptive learning hooks; stored on the instance for use by orchestrators.
         """
         validate_not_none(settings, "settings")
         validate_type(settings, "settings", Settings)
