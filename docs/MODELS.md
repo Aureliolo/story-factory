@@ -421,8 +421,10 @@ Story Factory includes an adaptive learning system that tracks generation perfor
    - **Rating**: Explicit 1-5 star rating
 
 3. **Tuning Triggers**: Recommendations are generated based on:
+   - `off`: No automatic analysis
+   - `after_project`: After story completion
    - `periodic`: After N chapters (e.g., every 10 chapters)
-   - `continuous`: After each generation
+   - `continuous`: Background analysis after each generation
 
 4. **Recommendation Types**:
    | Type | Description |
@@ -433,9 +435,11 @@ Story Factory includes an adaptive learning system that tracks generation perfor
    | `vram_strategy` | Suggests VRAM strategy adjustment |
 
 5. **Autonomy Levels**:
-   - `suggest_only`: Show recommendations, user must approve
-   - `auto_minor`: Auto-apply temperature tweaks, ask for model changes
-   - `auto_all`: Auto-apply all recommendations
+   - `manual`: All changes require approval
+   - `cautious`: Auto-apply temp changes, prompt for model swaps
+   - `balanced`: Auto-apply when confidence > threshold
+   - `aggressive`: Auto-apply all, just notify
+   - `experimental`: Try variations to gather data
 
 ### Settings UI
 
@@ -453,6 +457,30 @@ When recommendations are generated, a dialog shows:
 - Expected improvement
 
 Users can select which recommendations to apply or dismiss them.
+
+### Disabling Learning
+
+To completely opt out of the learning system:
+
+1. Go to **Settings → Learning**
+2. Set **Learning Triggers** to `Off`
+3. Alternatively, set **Autonomy Level** to `suggest_only` to see recommendations without auto-applying
+
+With triggers set to `Off`, no generation data is analyzed and no recommendations are generated.
+
+### Example Scenario
+
+After writing 10 chapters with `dolphin3:8b` for the Writer role:
+- 3 chapters were regenerated (negative signal)
+- Average edit distance was high (200+ characters)
+- `qwen2.5:32b` showed 15% higher prose quality in other projects
+
+The system generates a recommendation:
+> **Model Swap** for Writer role
+> Current: `dolphin3:8b` → Suggested: `qwen2.5:32b`
+> Confidence: 78% | Expected: +15% quality
+
+You can approve to switch models or dismiss to keep current settings.
 
 ---
 

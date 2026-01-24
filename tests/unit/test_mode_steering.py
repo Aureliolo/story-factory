@@ -293,17 +293,16 @@ class TestModelModeServiceAdditionalCoverage:
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
-        """
-        Create a MagicMock of Settings preconfigured for tests.
+        """Create a MagicMock of Settings preconfigured for tests.
 
         The mock exposes:
         - ollama_url set to "http://localhost:11434".
-        - get_model_for_agent() returning "test-model:8b".
-        - agent_temperatures mapping {"writer": 0.9, "editor": 0.6"}.
-        - get_temperature_for_agent(role) returning the temperature as a float for known roles and raising ValueError("Unknown agent role: {role}") for unknown roles.
+        - get_model_for_agent() returning "huihui_ai/dolphin3-abliterated:8b".
+        - agent_temperatures mapping {"writer": 0.9, "editor": 0.6}.
+        - get_temperature_for_agent(role) returning the temperature for known roles.
 
         Returns:
-            MagicMock: A mock object conforming to the Settings spec with the above behaviors.
+            MagicMock: A mock object conforming to the Settings spec.
         """
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
@@ -523,17 +522,16 @@ class TestPendingRecommendations:
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
-        """
-        Create a MagicMock of Settings preconfigured for tests.
+        """Create a MagicMock of Settings preconfigured for tests.
 
         The mock exposes:
         - ollama_url set to "http://localhost:11434".
-        - get_model_for_agent() returning "test-model:8b".
-        - agent_temperatures mapping {"writer": 0.9, "editor": 0.6"}.
-        - get_temperature_for_agent(role) returning the temperature as a float for known roles and raising ValueError("Unknown agent role: {role}") for unknown roles.
+        - get_model_for_agent() returning "huihui_ai/dolphin3-abliterated:8b".
+        - agent_temperatures mapping {"writer": 0.9, "editor": 0.6}.
+        - get_temperature_for_agent(role) returning the temperature for known roles.
 
         Returns:
-            MagicMock: A mock object conforming to the Settings spec with the above behaviors.
+            MagicMock: A mock object conforming to the Settings spec.
         """
         mock = MagicMock(spec=Settings)
         mock.ollama_url = "http://localhost:11434"
@@ -723,15 +721,14 @@ class TestVramStrategyIntegration:
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
-        """
-        Create a Settings-like MagicMock preconfigured for tests.
+        """Create a Settings-like MagicMock preconfigured for tests.
 
         The mock uses Settings as its spec and includes:
         - ollama_url set to "http://localhost:11434"
         - vram_strategy set to "adaptive"
-        - get_model_for_agent returning "test-model:8b"
+        - get_model_for_agent returning "huihui_ai/dolphin3-abliterated:8b"
         - agent_temperatures initialized to {"writer": 0.9}
-        - get_temperature_for_agent that returns the configured temperature as a float for known roles and raises ValueError("Unknown agent role: {role}") for unknown roles
+        - get_temperature_for_agent that returns the temperature for known roles
 
         Returns:
             MagicMock: A configured MagicMock instance that conforms to the Settings spec.

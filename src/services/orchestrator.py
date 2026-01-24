@@ -60,13 +60,12 @@ class StoryOrchestrator:
         model_override: str | None = None,  # Force specific model for all agents
         mode_service: ModelModeService | None = None,  # ModelModeService for learning hooks
     ):
-        """
-        Create a StoryOrchestrator and initialize agents, persistent state, and progress tracking.
+        """Create a StoryOrchestrator and initialize agents, persistent state, and progress tracking.
 
         Parameters:
             settings (Settings | None): Application settings; when None the default settings are loaded.
             model_override (str | None): Model identifier to force for all agents; when None agents use their configured models.
-            mode_service (Any | None): Optional ModelModeService instance used for adaptive learning hooks and performance tracking.
+            mode_service (ModelModeService | None): Optional ModelModeService instance for adaptive learning hooks.
         """
         self.settings = settings or Settings.load()
         self.model_override = model_override

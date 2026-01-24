@@ -186,13 +186,17 @@ class ModelModeService:
             self.settings.vram_strategy = strategy_value
 
     def list_modes(self) -> list[GenerationMode]:
-        """
-        Get all available generation modes by combining built-in presets with saved custom modes.
+        """Get all available generation modes by combining built-in presets with custom modes.
 
-        Custom modes are converted into GenerationMode objects; their `size_preference` defaults to `SizePreference.MEDIUM` when missing or invalid, and they are marked with `is_preset=False`. Stored `vram_strategy` values are parsed into the corresponding VramStrategy.
+        Custom modes are converted into GenerationMode objects with strict validation:
+        missing or invalid `size_preference` raises ValueError (migration/backfill required).
+        Stored `vram_strategy` values are parsed into VramStrategy; invalid values raise.
 
         Returns:
             list[GenerationMode]: A list of GenerationMode instances for presets and custom modes.
+
+        Raises:
+            ValueError: If a custom mode has missing or invalid size_preference.
         """
         modes = list_preset_modes()
 
@@ -297,10 +301,21 @@ class ModelModeService:
             logger.debug(f"Using user-specified model {model_id} for {agent_role}")
             return model_id
 
+        # Validate size_preference before model selection
+        try:
+            size_pref = SizePreference(mode.size_preference)
+        except ValueError as e:
+            valid_options = ", ".join(s.value for s in SizePreference)
+            error_msg = (
+                f"Invalid size_preference '{mode.size_preference}' in mode '{mode.id}'. "
+                f"Valid options: {valid_options}."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
+
         # Try size-preference-aware selection
         try:
             vram = get_available_vram()
-            size_pref = SizePreference(mode.size_preference)
             selected = self._select_model_with_size_preference(agent_role, size_pref, vram)
             logger.info(
                 f"Auto-selected {selected} for {agent_role} "
@@ -1049,7 +1064,17 @@ Rate each dimension from 0-10:
         rows = self._db.get_pending_recommendations(limit=20)
         recommendations = []
         for row in rows:
+            row_id = row.get("id")
             try:
+                # Validate required fields
+                required = ["current_value", "suggested_value", "reason", "confidence"]
+                missing = [k for k in required if row.get(k) is None]
+                if missing:
+                    logger.warning(
+                        f"Skipping recommendation {row_id}: missing {', '.join(missing)}"
+                    )
+                    continue
+
                 # Parse timestamp from string (SQLite stores as ISO format)
                 timestamp_raw = row.get("timestamp")
                 if timestamp_raw:
@@ -1067,25 +1092,23 @@ Rate each dimension from 0-10:
                     try:
                         evidence = json.loads(evidence_json)
                     except json.JSONDecodeError:
-                        logger.warning(
-                            f"Failed to parse evidence JSON for recommendation {row.get('id')}"
-                        )
+                        logger.warning(f"Failed to parse evidence JSON for recommendation {row_id}")
 
                 rec = TuningRecommendation(
-                    id=row.get("id"),
+                    id=row_id,
                     timestamp=timestamp,
                     recommendation_type=rec_type,
-                    current_value=row.get("current_value", ""),
-                    suggested_value=row.get("suggested_value", ""),
+                    current_value=str(row["current_value"]),
+                    suggested_value=str(row["suggested_value"]),
                     affected_role=row.get("affected_role"),
-                    reason=row.get("reason", ""),
-                    confidence=float(row.get("confidence", 0.5)),
+                    reason=str(row["reason"]),
+                    confidence=float(row["confidence"]),
                     evidence=evidence,
                     expected_improvement=row.get("expected_improvement"),
                 )
                 recommendations.append(rec)
             except Exception as e:
-                logger.warning(f"Failed to parse recommendation {row.get('id')}: {e}")
+                logger.warning(f"Failed to parse recommendation {row_id}: {e}")
         return recommendations
 
     def dismiss_recommendation(self, recommendation: TuningRecommendation) -> None:

@@ -130,7 +130,10 @@ class StoryService:
             logger.debug(f"No recommendations generated for project {state.id}")
             return None
         except Exception as e:
-            logger.warning(f"Failed to process project completion learning: {e}")
+            logger.warning(
+                f"Failed to process project completion learning for project {state.id}: {e}",
+                exc_info=True,
+            )
             return None
 
     def complete_project(self, state: StoryState) -> dict[str, Any]:

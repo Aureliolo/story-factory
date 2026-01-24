@@ -112,8 +112,10 @@ class RecommendationDialog:
         logger.debug(f"Building recommendation card {index}: type={rec.recommendation_type}")
         with ui.card().classes("w-full").props("flat bordered"):
             with ui.row().classes("w-full items-start gap-3"):
-                # Checkbox
-                checkbox = ui.checkbox(value=self._selected.get(index, True))
+                # Checkbox with accessibility label
+                checkbox = ui.checkbox(value=self._selected.get(index, True)).props(
+                    f'aria-label="Select recommendation {index + 1}"'
+                )
                 checkbox.on_value_change(
                     lambda e, idx=index: self._set_selection(idx, bool(e.value))
                 )
