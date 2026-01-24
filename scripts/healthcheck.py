@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from settings import STORIES_DIR
+from src.settings import STORIES_DIR
 
 # Suppress logging during healthcheck unless there are errors
 logging.basicConfig(level=logging.ERROR)
@@ -41,7 +41,7 @@ def check_dependencies() -> tuple[bool, str]:
 def check_ollama() -> tuple[bool, str]:
     """Check if Ollama is running and accessible."""
     try:
-        from agents.base import BaseAgent
+        from src.agents.base import BaseAgent
 
         is_healthy, message = BaseAgent.check_ollama_health()
         if is_healthy:
@@ -54,7 +54,7 @@ def check_ollama() -> tuple[bool, str]:
 
 def check_settings() -> tuple[bool, str]:
     """Check if settings file exists and is valid."""
-    from settings import Settings
+    from src.settings import Settings
 
     try:
         settings = Settings.load()
@@ -81,7 +81,7 @@ def check_output_directory() -> tuple[bool, str]:
 
 def check_logs_directory() -> tuple[bool, str]:
     """Check if logs directory exists and is writable."""
-    logs_dir = Path(__file__).parent.parent / "logs"
+    logs_dir = Path(__file__).parent.parent / "output" / "logs"
     try:
         logs_dir.mkdir(parents=True, exist_ok=True)
         test_file = logs_dir / ".write_test"

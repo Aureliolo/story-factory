@@ -23,8 +23,11 @@ from src.utils.exceptions import WorldGenerationError
 
 @pytest.fixture
 def settings():
-    """Create test settings."""
-    return Settings.load()
+    """Create test settings.
+
+    Uses default Settings() to avoid dependency on local settings.json file.
+    """
+    return Settings()
 
 
 @pytest.fixture

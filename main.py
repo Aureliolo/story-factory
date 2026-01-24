@@ -55,11 +55,14 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
         load_story: Path to a saved story to load.
         list_stories: If True, list saved stories and exit.
     """
-    from src.services.orchestrator import StoryOrchestrator
-
     if list_stories:
-        orchestrator = StoryOrchestrator()
-        stories = orchestrator.list_saved_stories()
+        # List stories without creating orchestrator/agents (avoids Ollama connection)
+        from src.services.project_service import ProjectService
+        from src.settings import Settings
+
+        settings = Settings.load()
+        project_service = ProjectService(settings)
+        stories = project_service.list_projects()
         if not stories:
             print("No saved stories found.")
             logger.info("No saved stories found")
@@ -67,14 +70,14 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
             print("Saved Stories:")
             print("-" * 40)
             for i, s in enumerate(stories, 1):
-                premise = (s.get("premise") or "Untitled")[:50]
-                status = s.get("status") or "?"
-                path = s.get("path") or "?"
+                premise = (s.premise or "Untitled")[:50]
                 print(f"{i}. {premise}...")
-                print(f"   Status: {status} | Path: {path}")
+                print(f"   Status: {s.status} | ID: {s.id}")
                 print()
             logger.info(f"Listed {len(stories)} saved stories")
         return
+
+    from src.services.orchestrator import StoryOrchestrator
 
     orchestrator = StoryOrchestrator()
 

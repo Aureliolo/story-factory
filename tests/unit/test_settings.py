@@ -1659,3 +1659,79 @@ class TestModelTags:
         settings.set_model_tags("my-model:7b", ["editor", "validator"])
 
         assert settings.custom_model_tags == {"my-model:7b": ["editor", "validator"]}
+
+
+class TestSettingsFixtureIsolation:
+    """Tests to ensure settings fixtures don't depend on local settings.json."""
+
+    def test_cached_settings_uses_defaults(self, cached_settings):
+        """cached_settings fixture should use default values, not load from file."""
+        # Verify it has default values, not potentially different values from local file
+        assert cached_settings.ollama_url == "http://localhost:11434"
+        assert cached_settings.context_size == 32768
+        assert cached_settings.max_tokens == 8192
+        assert cached_settings.use_per_agent_models is True
+        # Verify the prompt_templates_dir is the default
+        assert cached_settings.prompt_templates_dir == "src/prompts/templates"
+
+    def test_tmp_settings_uses_defaults(self, tmp_settings):
+        """tmp_settings fixture should use default values, not load from file."""
+        # Verify it has default values, not potentially different values from local file
+        assert tmp_settings.ollama_url == "http://localhost:11434"
+        assert tmp_settings.context_size == 32768
+        assert tmp_settings.max_tokens == 8192
+        assert tmp_settings.use_per_agent_models is True
+        # Verify the prompt_templates_dir is the default
+        assert tmp_settings.prompt_templates_dir == "src/prompts/templates"
+
+    def test_settings_constructor_does_not_load_from_file(self):
+        """Settings() should create instance with defaults, not load from file."""
+        # Clear cache to ensure we're not getting a cached loaded instance
+        Settings.clear_cache()
+
+        # Create new settings instance
+        settings = Settings()
+
+        # Verify it has default values
+        assert settings.prompt_templates_dir == "src/prompts/templates"
+        assert settings.ollama_url == "http://localhost:11434"
+
+    def test_settings_load_with_mocked_file(self, tmp_path, monkeypatch):
+        """Settings.load() should respect SETTINGS_FILE mock."""
+        # Create a test settings file with custom values
+        test_settings_file = tmp_path / "test_settings.json"
+        test_data = {
+            "prompt_templates_dir": "custom/path/templates",
+            "ollama_url": "http://custom:11434",
+        }
+        test_settings_file.write_text(json.dumps(test_data))
+
+        # Mock SETTINGS_FILE to point to our test file
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", test_settings_file)
+        Settings.clear_cache()
+
+        # Load settings - should load from mocked file
+        settings = Settings.load()
+
+        # Verify it loaded from our test file, not defaults
+        assert settings.prompt_templates_dir == "custom/path/templates"
+        assert settings.ollama_url == "http://custom:11434"
+
+    def test_settings_load_without_mock_isolated_from_constructor(self, tmp_path, monkeypatch):
+        """Test that Settings.load() and Settings() are independent."""
+        # Setup: Create a temporary settings file with different values
+        test_settings_file = tmp_path / "test_settings.json"
+        test_data = {"prompt_templates_dir": "different/path"}
+        test_settings_file.write_text(json.dumps(test_data))
+
+        # Mock SETTINGS_FILE
+        monkeypatch.setattr("src.settings.SETTINGS_FILE", test_settings_file)
+        Settings.clear_cache()
+
+        # Create instance with constructor - should use defaults
+        settings_default = Settings()
+        assert settings_default.prompt_templates_dir == "src/prompts/templates"
+
+        # Load from file - should use file values
+        settings_loaded = Settings.load()
+        assert settings_loaded.prompt_templates_dir == "different/path"
