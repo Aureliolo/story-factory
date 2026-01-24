@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/Aureliolo/story-factory/branch/main/graph/badge.svg)](https://codecov.io/gh/Aureliolo/story-factory)
 [![docstring coverage](docs/badges/interrogate_badge.svg)](https://pypi.org/project/interrogate/)
 [![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Aureliolo/story-factory?utm_source=oss&utm_medium=github&utm_campaign=Aureliolo%2Fstory-factory&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
@@ -860,7 +860,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architectural guidelines.
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) file for details.
+Copyright (c) 2026 Aurelio Amoroso. All Rights Reserved. See [LICENSE](LICENSE) file for details.
 
 ## Getting Help
 

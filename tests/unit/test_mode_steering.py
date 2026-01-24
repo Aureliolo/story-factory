@@ -603,12 +603,20 @@ class TestPendingRecommendations:
         assert rec.confidence == 0.85
 
     def test_get_pending_recommendations_handles_parse_error(self, service: ModelModeService):
-        """Should handle parsing errors gracefully."""
-        with patch.object(
-            service._db, "get_pending_recommendations", return_value=[{"id": 1, "invalid": True}]
-        ):
+        """Should handle parsing errors gracefully and log warning."""
+        # Row with valid required fields but invalid recommendation_type that causes exception
+        row = {
+            "id": 99,
+            "timestamp": "2026-01-01T12:00:00",
+            "recommendation_type": "INVALID_TYPE_THAT_DOESNT_EXIST",
+            "current_value": "old",
+            "suggested_value": "new",
+            "reason": "Test",
+            "confidence": 0.8,
+        }
+        with patch.object(service._db, "get_pending_recommendations", return_value=[row]):
             recs = service.get_pending_recommendations()
-            assert recs == []
+            assert recs == []  # Parsing fails, row is skipped
 
     def test_get_pending_recommendations_handles_invalid_evidence_json(
         self, service: ModelModeService
@@ -677,6 +685,68 @@ class TestPendingRecommendations:
 
         # Should not raise, just log warning
         service.dismiss_recommendation(rec)
+
+    def test_get_pending_recommendations_missing_timestamp(self, service: ModelModeService):
+        """Should use datetime.now() when timestamp is missing."""
+        from datetime import datetime
+
+        row = {
+            "id": 1,
+            "timestamp": None,  # Missing timestamp
+            "recommendation_type": "model_swap",
+            "current_value": "old",
+            "suggested_value": "new",
+            "affected_role": "writer",
+            "reason": "Test",
+            "confidence": 0.8,
+        }
+        with patch.object(service._db, "get_pending_recommendations", return_value=[row]):
+            before = datetime.now()
+            recs = service.get_pending_recommendations()
+            after = datetime.now()
+            assert len(recs) == 1
+            assert before <= recs[0].timestamp <= after
+
+    def test_get_pending_recommendations_missing_required_fields(self, service: ModelModeService):
+        """Should skip recommendations with missing required fields."""
+        row = {
+            "id": 1,
+            "timestamp": "2026-01-01T12:00:00",
+            "recommendation_type": "model_swap",
+            "current_value": None,  # Missing required field
+            "suggested_value": "new",
+            "reason": "Test",
+            "confidence": 0.8,
+        }
+        with patch.object(service._db, "get_pending_recommendations", return_value=[row]):
+            recs = service.get_pending_recommendations()
+            assert recs == []  # Skipped due to missing field
+
+
+class TestGetModelForAgentValidation:
+    """Tests for get_model_for_agent with invalid mode configuration."""
+
+    @pytest.fixture
+    def service(self, tmp_path: Path) -> ModelModeService:
+        """Create a ModelModeService with real database."""
+        db_path = tmp_path / "test.db"
+        settings = Settings()
+        with patch("src.services.model_mode_service.ModeDatabase") as mock_db_class:
+            mock_db = MagicMock()
+            mock_db_class.return_value = mock_db
+            return ModelModeService(settings, db_path=db_path)
+
+    def test_invalid_size_preference_raises_error(self, service: ModelModeService):
+        """Should raise ValueError for invalid size_preference in mode."""
+        # Create a mock mode object with invalid size_preference
+        invalid_mode = MagicMock()
+        invalid_mode.id = "invalid_mode"
+        invalid_mode.agent_models = {}  # No explicit model assignment
+        invalid_mode.size_preference = "not_a_valid_preference"
+
+        with patch.object(service, "get_current_mode", return_value=invalid_mode):
+            with pytest.raises(ValueError, match="Invalid size_preference"):
+                service.get_model_for_agent("writer")
 
 
 class TestVramStrategySetting:
