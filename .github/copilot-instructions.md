@@ -24,7 +24,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 
 ### Python Best Practices
 - Follow PEP 8 style guidelines for Python code
-- Use type hints where appropriate (Pydantic models for data validation in `memory/story_state.py`, dataclasses in `settings.py`)
+- Use type hints where appropriate (Pydantic models for data validation in `src/memory/story_state.py`, dataclasses in `src/settings.py`)
 - Write clear, descriptive variable and function names
 - Keep functions focused and single-purpose
 - Use docstrings for classes and complex functions
@@ -43,7 +43,7 @@ This is a Python-based multi-agent system for generating stories using local AI 
 **MANDATORY CI VERIFICATION**: After every push, you MUST check that CI passes. If CI fails, fix the issue immediately and push again until all checks are green. Never walk away from a failing CI pipeline.
 
 ### Coverage Requirements
-**100% test coverage is MANDATORY for every commit**. The CI enforces 100% coverage on core modules (`agents/`, `services/`, `workflows/`, `memory/`, `utils/`, `settings.py`). If your code reduces coverage, the CI will fail and you must add tests before the PR can be merged.
+**100% test coverage is MANDATORY for every commit**. The CI enforces 100% coverage on core modules (`src/agents/`, `src/services/`, `src/memory/`, `src/utils/`, `src/settings.py`). If your code reduces coverage, the CI will fail and you must add tests before the PR can be merged.
 
 ### Development Flow
 - **Install dependencies**: `pip install -r requirements.txt`
@@ -65,69 +65,74 @@ This is a Python-based multi-agent system for generating stories using local AI 
   - `tests/e2e/` - End-to-end browser tests (require playwright)
 - Mock Ollama API calls in tests to avoid requiring a running Ollama instance
 - Use pytest fixtures for test setup (shared fixtures in `tests/conftest.py`)
-- Core modules (`agents/`, `services/`, `workflows/`, `memory/`, `utils/`, `settings.py`) must maintain 100% test coverage
-- UI components (`ui/`) are excluded from coverage requirements until NiceGUI component tests are added
+- Core modules (`src/agents/`, `src/services/`, `src/memory/`, `src/utils/`, `src/settings.py`) must maintain 100% test coverage
+- UI components (`src/ui/`) are excluded from coverage requirements until NiceGUI component tests are added
 
 ## Repository Structure
 
-- `main.py`: Entry point for the application (supports both web UI and CLI modes)
-- `settings.py`: Settings management and model registry using dataclasses
-- `settings.json`: User configuration file (not in git, copy from `settings.example.json`)
-- `requirements.txt`: Python dependencies (runtime, testing, and code quality)
-- `pyproject.toml`: Tool configuration (ruff, mypy, pytest, coverage)
-- `Makefile`: Development task shortcuts
-- `docs/`: Documentation files
-  - `MODELS.md`: Model recommendations and usage guidelines
-  - `ARCHITECTURE.md`: System architecture documentation
-  - `UX_UI_IMPROVEMENTS.md`: UI/UX feature documentation
-- `scripts/`: Utility scripts
-  - `healthcheck.py`: System health check utility
-  - `start.ps1`: PowerShell launcher script
-- `agents/`: AI agent implementations (extend BaseAgent)
-  - `base.py`: Base agent class with retry logic, rate limiting, configurable timeout
-  - `interviewer.py`: Gathers story requirements from users
-  - `architect.py`: Designs world, characters, and plot structure
-  - `writer.py`: Generates prose content
-  - `editor.py`: Polishes and refines writing
-  - `continuity.py`: Detects plot holes and inconsistencies
-  - `validator.py`: Validates AI responses
-- `workflows/`: Agent coordination and orchestration
-  - `orchestrator.py`: Manages the multi-agent workflow with LRU cache to prevent memory leaks
-- `memory/`: Story state and world management
-  - `story_state.py`: Pydantic models for story context (StoryState, Character, Chapter)
-  - `entities.py`: Entity and relationship models
-  - `world_database.py`: SQLite + NetworkX world database with thread safety and schema migrations
-- `services/`: Business logic layer (no UI imports, receives settings via DI)
-  - `__init__.py`: ServiceContainer for dependency injection
-  - `project_service.py`: Project CRUD operations
-  - `story_service.py`: Story generation workflow
-  - `world_service.py`: Entity management
-  - `model_service.py`: Ollama model operations
-  - `export_service.py`: Export to various formats (markdown, text, HTML, EPUB, PDF)
-- `utils/`: Utility modules
-  - `json_parser.py`: JSON extraction and parsing from LLM responses
-  - `logging_config.py`: Logging configuration and setup
-  - `error_handling.py`: Error handling decorators (@handle_ollama_errors, @retry_with_fallback)
-  - `exceptions.py`: Centralized exception hierarchy (StoryFactoryError, LLMError, etc.)
-  - `constants.py`: Shared constants (language codes, etc.)
-- `ui/`: User interface components (NiceGUI 3.x)
-  - `app.py`: Main NiceGUI application
-  - `state.py`: Centralized UI state management (AppState class)
-  - `theme.py`: Colors, styles, and theme utilities
-  - `pages/`: Page components implementing `build()` method (write, world, projects, settings, models, analytics)
-  - `components/`: Reusable UI components (header, chat, graph, common)
-- `output/`: Generated outputs (gitignored)
-  - `stories/`: Story output files (JSON with UUIDs as IDs)
-  - `worlds/`: World database files (SQLite)
-- `tests/`: Test suite using pytest (849+ tests, 100% coverage on core modules)
-  - `unit/`: Unit tests
-  - `smoke/`: Quick startup validation tests
-  - `integration/`: Integration tests
-  - `e2e/`: End-to-end browser tests
-  - `conftest.py`: Shared pytest fixtures
-- `logs/`: Application logs (written to `logs/story_factory.log`)
-- `.github/workflows/`: CI/CD workflows
-  - `ci.yml`: Test and code quality checks (100% coverage on core modules)
+```
+story-factory/
+├── main.py                     # Entry point (supports both web UI and CLI modes)
+├── pyproject.toml              # Tool configuration (ruff, mypy, pytest, coverage)
+├── requirements.txt            # Python dependencies
+├── Makefile                    # Development task shortcuts
+├── src/                        # All application source code
+│   ├── settings.py             # Settings management and model registry
+│   ├── settings.json           # User configuration (gitignored, copy from settings.example.json)
+│   ├── agents/                 # AI agent implementations (extend BaseAgent)
+│   │   ├── base.py             # Base agent class with retry logic, rate limiting
+│   │   ├── interviewer.py      # Gathers story requirements from users
+│   │   ├── architect.py        # Designs world, characters, and plot structure
+│   │   ├── writer.py           # Generates prose content
+│   │   ├── editor.py           # Polishes and refines writing
+│   │   ├── continuity.py       # Detects plot holes and inconsistencies
+│   │   └── validator.py        # Validates AI responses
+│   ├── services/               # Business logic layer (no UI imports, receives settings via DI)
+│   │   ├── __init__.py         # ServiceContainer for dependency injection
+│   │   ├── orchestrator.py     # StoryOrchestrator coordinates multi-agent workflow
+│   │   ├── project_service.py  # Project CRUD operations
+│   │   ├── story_service.py    # Story generation workflow
+│   │   ├── world_service.py    # Entity management
+│   │   ├── model_service.py    # Ollama model operations
+│   │   └── export_service.py   # Export formats (markdown, text, HTML, EPUB, PDF)
+│   ├── memory/                 # Story state and world management
+│   │   ├── story_state.py      # Pydantic models (StoryState, Character, Chapter)
+│   │   ├── entities.py         # Entity and relationship models
+│   │   └── world_database.py   # SQLite + NetworkX with thread safety
+│   ├── utils/                  # Utility modules
+│   │   ├── json_parser.py      # JSON extraction from LLM responses
+│   │   ├── logging_config.py   # Logging configuration
+│   │   ├── error_handling.py   # Decorators (@handle_ollama_errors, @retry_with_fallback)
+│   │   ├── exceptions.py       # Centralized exception hierarchy
+│   │   └── constants.py        # Shared constants (language codes, etc.)
+│   ├── prompts/                # YAML prompt templates loaded at runtime
+│   └── ui/                     # User interface (NiceGUI 3.x)
+│       ├── app.py              # Main NiceGUI application
+│       ├── state.py            # Centralized UI state (AppState class)
+│       ├── theme.py            # Colors, styles, and theme utilities
+│       ├── pages/              # Page components implementing build() method
+│       └── components/         # Reusable UI components
+├── docs/                       # Documentation
+│   ├── codemaps/               # Architecture maps
+│   ├── MODELS.md               # Model recommendations
+│   ├── ARCHITECTURE.md         # System architecture
+│   ├── CONTRIBUTING.md         # Contribution guidelines
+│   └── TROUBLESHOOTING.md      # Common issues and solutions
+├── tests/                      # Test suite (1997+ tests, 100% coverage on core modules)
+│   ├── unit/                   # Unit tests
+│   ├── smoke/                  # Quick startup validation tests
+│   ├── integration/            # Integration tests
+│   ├── e2e/                    # End-to-end browser tests
+│   └── conftest.py             # Shared pytest fixtures
+├── output/                     # Runtime data (gitignored)
+│   ├── stories/                # Story output files (JSON with UUIDs)
+│   ├── worlds/                 # World database files (SQLite)
+│   ├── logs/                   # Application logs (story_factory.log)
+│   └── backups/                # Project backups
+├── scripts/                    # Developer utilities
+└── .github/                    # CI/CD workflows
+    └── workflows/ci.yml        # Test and code quality checks
+```
 
 ## Architecture & Key Patterns
 
@@ -142,23 +147,31 @@ main.py
        ├── StoryService           # Story generation workflow
        ├── WorldService           # Entity/relationship management
        ├── ModelService           # Ollama model operations
-       └── ExportService          # Export formats
+       ├── ExportService          # Export formats
+       ├── ModelModeService       # Model performance tracking
+       ├── ScoringService         # Quality scoring
+       ├── WorldQualityService    # World quality enhancement
+       ├── SuggestionService      # AI-powered suggestions
+       ├── TemplateService        # Story template management
+       ├── BackupService          # Project backup/restore
+       ├── ImportService          # Import entities from text
+       └── ComparisonService      # Model comparison testing
 ```
 
 **Layer responsibilities:**
-- **services/**: Business logic layer - no UI imports, receives settings via DI
-- **ui/**: NiceGUI components - only calls services, manages UI state via AppState
-- **agents/**: AI agent implementations - extend BaseAgent, use retry logic
-- **memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX)
-- **workflows/**: StoryOrchestrator coordinates agents through the story creation pipeline
+- **src/services/**: Business logic layer - no UI imports, receives settings via DI; includes orchestrator.py
+- **src/ui/**: NiceGUI components - only calls services, manages UI state via AppState
+- **src/agents/**: AI agent implementations - extend BaseAgent, use retry logic
+- **src/memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX)
+- **src/prompts/**: YAML prompt templates loaded at runtime
 
 ### Key Design Patterns
 
-1. **Service Container Pattern**: All services created once in `services/__init__.py`, injected into pages
-2. **Centralized UI State**: `ui/state.py` manages AppState singleton
-3. **Base Agent Pattern**: All agents extend `agents/base.py` with retry logic and rate limiting
-4. **Error Handling Decorators**: `@handle_ollama_errors`, `@retry_with_fallback` in `utils/error_handling.py`
-5. **JSON Extraction**: Use `utils/json_parser.py` for parsing LLM responses (handles markdown code blocks)
+1. **Service Container Pattern**: All services created once in `src/services/__init__.py`, injected into pages
+2. **Centralized UI State**: `src/ui/state.py` manages AppState singleton
+3. **Base Agent Pattern**: All agents extend `src/agents/base.py` with retry logic and rate limiting
+4. **Error Handling Decorators**: `@handle_ollama_errors`, `@retry_with_fallback` in `src/utils/error_handling.py`
+5. **JSON Extraction**: Use `src/utils/json_parser.py` for parsing LLM responses (handles markdown code blocks)
 6. **Thread-Safe Database**: WorldDatabase uses `threading.RLock` for concurrent access
 7. **LRU Cache**: Orchestrators cached to prevent memory leaks
 8. **Rate Limiting**: Max 2 concurrent LLM requests to prevent overload
@@ -213,22 +226,22 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
    - Don't mix agent responsibilities
    - Use the base agent class for common functionality
    - Follow the established agent interface patterns
-   - All agents extend `BaseAgent` from `agents/base.py`
+   - All agents extend `BaseAgent` from `src/agents/base.py`
 
 3. **State Management**:
-   - Story state is maintained through `memory/story_state.py` module
+   - Story state is maintained through `src/memory/story_state.py` module
    - Use Pydantic models for validation (StoryState, Character, Chapter, etc.)
    - World data stored in SQLite + NetworkX (thread-safe operations)
 
 4. **Error Handling**:
    - Handle Ollama connection errors gracefully
    - Use decorators: `@handle_ollama_errors`, `@retry_with_fallback`
-   - Centralized exceptions in `utils/exceptions.py`
+   - Centralized exceptions in `src/utils/exceptions.py`
    - Provide informative error messages
 
 5. **Configuration**:
-   - Settings managed through dataclasses in `settings.py`
-   - User configuration in `settings.json` (copy from `settings.example.json`)
+   - Settings managed through dataclasses in `src/settings.py`
+   - User configuration in `src/settings.json` (copy from `src/settings.example.json`)
    - All configurable values must be explicitly defined - no `.get()` defaults
 
 6. **Dependencies**:
@@ -243,11 +256,11 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
    - Document complex algorithms and business logic
 
 8. **Logging**:
-   - Logs written to `logs/story_factory.log`
+   - Logs written to `output/logs/story_factory.log`
    - Use `logger = logging.getLogger(__name__)`
    - Log levels: debug (routine), info (significant), warning (unexpected), error (failures)
 
 9. **JSON Parsing**:
-   - Use `utils/json_parser.py` for extracting JSON from LLM responses
+   - Use `src/utils/json_parser.py` for extracting JSON from LLM responses
    - LLMs may include JSON in markdown code blocks or with surrounding text
    - Handle malformed JSON gracefully
