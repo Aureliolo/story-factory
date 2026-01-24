@@ -55,6 +55,8 @@ class SettingsPage:
             ui.label("Settings").classes("text-2xl font-bold")
 
             # All cards in flex container - same height, different widths
+            # Top row: Connection, Workflow, Memory, Model, Generation Mode, Story Structure
+            # Bottom row: Creativity, Adaptive Learning, World Generation
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch"):
                 with ui.element("div").style("flex: 1 1 260px; min-width: 260px;"):
                     self._build_connection_section()
@@ -68,20 +70,20 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1.2 1 380px; min-width: 380px;"):
                     self._build_model_section()
 
-                with ui.element("div").style("flex: 2 1 550px; min-width: 550px;"):
-                    self._build_temperature_section()
-
-                with ui.element("div").style("flex: 1.5 1 400px; min-width: 400px;"):
+                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
                     self._build_mode_section()
 
-                with ui.element("div").style("flex: 1.5 1 400px; min-width: 400px;"):
-                    self._build_learning_section()
+                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
+                    self._build_story_structure_section()
 
                 with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
-                    self._build_world_gen_section()
+                    self._build_temperature_section()
 
                 with ui.element("div").style("flex: 1 1 350px; min-width: 350px;"):
-                    self._build_story_structure_section()
+                    self._build_learning_section()
+
+                with ui.element("div").style("flex: 1.5 1 500px; min-width: 500px;"):
+                    self._build_world_gen_section()
 
             # Save button
             ui.button(
@@ -552,8 +554,8 @@ class SettingsPage:
                 "Actual counts are randomized between min and max values.",
             )
 
-            # Store sliders for saving
-            self._world_gen_sliders: dict[str, tuple[ui.slider, ui.slider]] = {}
+            # Store inputs for saving (replacing sliders with number inputs)
+            self._world_gen_inputs: dict[str, tuple[ui.number, ui.number]] = {}
 
             entity_configs = [
                 ("characters", "Characters", "people", 1, 20),
@@ -564,58 +566,32 @@ class SettingsPage:
                 ("relationships", "Relationships", "share", 1, 40),
             ]
 
-            with ui.column().classes("w-full gap-3"):
+            # 2-column grid for compact layout
+            with ui.element("div").classes("grid grid-cols-2 gap-3"):
                 for key, label, icon, abs_min, abs_max in entity_configs:
                     min_attr = f"world_gen_{key}_min"
                     max_attr = f"world_gen_{key}_max"
                     current_min = getattr(self.settings, min_attr)
                     current_max = getattr(self.settings, max_attr)
 
-                    with ui.column().classes("w-full gap-1"):
-                        with ui.row().classes("w-full items-center justify-between"):
-                            with ui.row().classes("items-center gap-1"):
-                                ui.icon(icon, size="xs").classes("text-gray-500")
-                                ui.label(label).classes("text-sm font-medium")
-                            value_label = ui.label(f"{current_min} - {current_max}").classes(
-                                "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
-                            )
-
-                        with ui.row().classes("w-full gap-2 items-center"):
-                            ui.label("Min").classes("text-xs text-gray-500 w-8")
-                            min_slider = ui.slider(
-                                min=abs_min,
-                                max=abs_max,
-                                step=1,
-                                value=current_min,
-                            ).classes("flex-1")
-
-                        with ui.row().classes("w-full gap-2 items-center"):
-                            ui.label("Max").classes("text-xs text-gray-500 w-8")
-                            max_slider = ui.slider(
-                                min=abs_min,
-                                max=abs_max,
-                                step=1,
-                                value=current_max,
-                            ).classes("flex-1")
-
-                        # Update label when sliders change
-                        def update_label(label_ref, min_s, max_s):
-                            def _update():
-                                # Ensure min <= max
-                                if min_s.value > max_s.value:
-                                    max_s.value = min_s.value
-                                label_ref.text = f"{int(min_s.value)} - {int(max_s.value)}"
-
-                            return _update
-
-                        min_slider.on(
-                            "update:model-value", update_label(value_label, min_slider, max_slider)
+                    with ui.row().classes("items-center gap-2"):
+                        ui.icon(icon, size="xs").classes("text-gray-500")
+                        ui.label(label).classes("text-sm font-medium w-24")
+                        min_input = (
+                            ui.number(value=current_min, min=abs_min, max=abs_max, step=1)
+                            .props("outlined dense")
+                            .classes("w-16")
+                            .tooltip(f"Min {label.lower()}")
                         )
-                        max_slider.on(
-                            "update:model-value", update_label(value_label, min_slider, max_slider)
+                        ui.label("-").classes("text-gray-500")
+                        max_input = (
+                            ui.number(value=current_max, min=abs_min, max=abs_max, step=1)
+                            .props("outlined dense")
+                            .classes("w-16")
+                            .tooltip(f"Max {label.lower()}")
                         )
 
-                        self._world_gen_sliders[key] = (min_slider, max_slider)
+                        self._world_gen_inputs[key] = (min_input, max_input)
 
     def _build_story_structure_section(self) -> None:
         """Build story structure settings section."""
@@ -734,9 +710,9 @@ class SettingsPage:
             self.settings.learning_confidence_threshold = self._confidence_slider.value
 
             # World generation settings
-            for key, (min_slider, max_slider) in self._world_gen_sliders.items():
-                min_val = int(min_slider.value)
-                max_val = int(max_slider.value)
+            for key, (min_input, max_input) in self._world_gen_inputs.items():
+                min_val = int(min_input.value)
+                max_val = int(max_input.value)
                 # Ensure min <= max
                 if min_val > max_val:
                     max_val = min_val
@@ -916,13 +892,13 @@ class SettingsPage:
             self._min_samples.value = self.settings.learning_min_samples
 
         # World generation settings
-        if hasattr(self, "_world_gen_sliders"):
-            for key, (min_slider, max_slider) in self._world_gen_sliders.items():
+        if hasattr(self, "_world_gen_inputs"):
+            for key, (min_input, max_input) in self._world_gen_inputs.items():
                 min_attr = f"world_gen_{key}_min"
                 max_attr = f"world_gen_{key}_max"
                 if hasattr(self.settings, min_attr):
-                    min_slider.value = getattr(self.settings, min_attr)
-                    max_slider.value = getattr(self.settings, max_attr)
+                    min_input.value = getattr(self.settings, min_attr)
+                    max_input.value = getattr(self.settings, max_attr)
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""
