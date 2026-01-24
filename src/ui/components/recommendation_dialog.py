@@ -102,7 +102,8 @@ class RecommendationDialog:
         """
         Render a UI card for a single tuning recommendation and bind its controls to the dialog's selection state.
 
-        Renders a card showing the recommendation's type and affected role, current → suggested value, reason, confidence percentage, and optional expected improvement. The card's checkbox is bound to the dialog's internal selection mapping and updates selection via _set_selection when changed.
+        The card shows the recommendation's type and affected role, the current → suggested value, the reason for the change, the confidence percentage, and an optional expected improvement.
+        Its checkbox is bound to the dialog's internal selection mapping and updates the selection state via `_set_selection` when changed.
 
         Parameters:
             index (int): Position of the recommendation in the list; used as the key for the dialog's selection state.

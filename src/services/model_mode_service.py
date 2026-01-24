@@ -429,7 +429,14 @@ class ModelModeService:
         """
         Prepare a model for use according to the configured VRAM strategy.
 
-        Reads the VRAM strategy from settings.vram_strategy (user-configurable) and may unload other loaded models depending on that strategy: for SEQUENTIAL, unloads all other models; for ADAPTIVE, unloads others only if available VRAM is less than the model's estimated requirement. Marks the given model as loaded in the service's internal tracker.
+        This method reads the VRAM strategy from ``settings.vram_strategy`` (user-configurable)
+        and may unload other loaded models depending on that strategy:
+
+        - ``SEQUENTIAL``: unloads all other models.
+        - ``ADAPTIVE``: unloads other models only if available VRAM is less than the model's
+          estimated requirement.
+
+        The given model is then marked as loaded in the service's internal tracker.
 
         Parameters:
             model_id (str): Identifier of the model to prepare.
@@ -1002,10 +1009,14 @@ Rate each dimension from 0-10:
         """
         Return pending tuning recommendations retrieved from the database.
 
-        Each row is converted into a TuningRecommendation. Timestamps stored as ISO strings are parsed to datetimes (falls back to now if missing), the recommendation type is converted to RecommendationType, and evidence JSON is parsed when present (malformed JSON is logged and left as None). Rows that fail to parse are skipped with a warning.
+        Each database row is converted into a TuningRecommendation object:
+        - Timestamps stored as ISO strings are parsed to datetimes (falls back to now if missing).
+        - Recommendation types are converted to the RecommendationType enum.
+        - Evidence JSON is parsed when present; malformed JSON is logged and evidence is left as None.
+        - Rows that fail to parse are skipped with a warning.
 
         Returns:
-            recommendations (list[TuningRecommendation]): A list of parsed pending recommendations (may be empty).
+            list[TuningRecommendation]: Parsed pending recommendations (may be empty).
         """
         import json
         from datetime import datetime

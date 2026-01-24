@@ -73,7 +73,7 @@ repos:
     hooks:
       - id: interrogate-badge
         name: generate docstring coverage badge
-        entry: interrogate --generate-badge docs/badges -o docstring_coverage.svg src scripts tests
+        entry: interrogate --generate-badge docs/badges -o interrogate_badge.svg src scripts tests
         language: system
         pass_filenames: false
         always_run: true

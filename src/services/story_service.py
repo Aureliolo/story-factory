@@ -102,7 +102,7 @@ class StoryService:
         """
         Invoke learning hooks via the configured mode service when a story is completed.
 
-        If a mode service is not configured, no action is taken. When configured, requests recommendations from the mode service and asks the mode service to handle them; returns any recommendations that remain pending user approval.
+        If a mode service is not configured, no action is taken. When configured, this method requests recommendations from the mode service and asks the mode service to handle them. It returns any recommendations that remain pending user approval.
 
         Parameters:
             state (StoryState): The completed story state (used for logging/context).
