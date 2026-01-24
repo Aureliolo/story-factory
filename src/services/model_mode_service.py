@@ -105,6 +105,8 @@ class ModelModeService:
         mode = get_preset_mode(mode_id)
         if mode:
             self._current_mode = mode
+            # Sync mode's VRAM strategy to settings so UI reflects mode default
+            self._sync_vram_strategy_to_settings(mode)
             logger.info(f"Activated preset mode: {mode.name}")
             return mode
 
@@ -145,10 +147,30 @@ class ModelModeService:
                 is_experimental=bool(custom.get("is_experimental", False)),
             )
             self._current_mode = mode
+            # Sync mode's VRAM strategy to settings so UI reflects mode default
+            self._sync_vram_strategy_to_settings(mode)
             logger.info(f"Activated custom mode: {mode.name}")
             return mode
 
         raise ValueError(f"Mode not found: {mode_id}")
+
+    def _sync_vram_strategy_to_settings(self, mode: GenerationMode) -> None:
+        """Sync the mode's VRAM strategy to settings.
+
+        This ensures the Settings UI reflects the mode's default VRAM strategy,
+        while still allowing the user to override it.
+
+        Args:
+            mode: The mode whose VRAM strategy should be synced.
+        """
+        strategy_value = (
+            mode.vram_strategy.value
+            if isinstance(mode.vram_strategy, VramStrategy)
+            else str(mode.vram_strategy)
+        )
+        if self.settings.vram_strategy != strategy_value:
+            logger.debug(f"Syncing VRAM strategy from mode '{mode.name}': {strategy_value}")
+            self.settings.vram_strategy = strategy_value
 
     def list_modes(self) -> list[GenerationMode]:
         """List all available modes (presets + custom)."""
@@ -391,12 +413,25 @@ class ModelModeService:
         For sequential strategy, unloads other models first.
         For parallel, keeps models loaded.
         For adaptive, unloads if VRAM is constrained.
+
+        The VRAM strategy is read from settings.vram_strategy, which can be
+        configured by the user in the Settings UI to override the mode default.
         """
         from src.settings import get_installed_models_with_sizes, get_model_info
 
         validate_not_empty(model_id, "model_id")
-        mode = self.get_current_mode()
-        strategy = mode.vram_strategy
+
+        # Use settings.vram_strategy as the source of truth (user-configurable override)
+        strategy_str = self.settings.vram_strategy
+        try:
+            strategy = VramStrategy(strategy_str)
+        except ValueError:
+            logger.warning(
+                f"Invalid vram_strategy '{strategy_str}' in settings, falling back to ADAPTIVE"
+            )
+            strategy = VramStrategy.ADAPTIVE
+
+        logger.debug(f"Preparing model {model_id} with VRAM strategy: {strategy.value}")
 
         if strategy == VramStrategy.SEQUENTIAL:
             # Unload all other models

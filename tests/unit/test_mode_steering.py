@@ -576,3 +576,84 @@ class TestVramStrategySetting:
         settings.vram_strategy = "invalid_strategy"
         with pytest.raises(ValueError, match="vram_strategy must be one of"):
             settings.validate()
+
+
+class TestVramStrategyIntegration:
+    """Tests for VRAM strategy integration between modes and settings."""
+
+    @pytest.fixture
+    def temp_db(self, tmp_path: Path) -> Path:
+        """Create a temporary database file."""
+        return tmp_path / "test_vram.db"
+
+    @pytest.fixture
+    def mock_settings(self) -> MagicMock:
+        """Create mock settings."""
+        mock = MagicMock(spec=Settings)
+        mock.ollama_url = "http://localhost:11434"
+        mock.vram_strategy = "adaptive"
+        mock.get_model_for_agent.return_value = "test-model:8b"
+        mock.agent_temperatures = {"writer": 0.9}
+
+        def _get_temp(role: str) -> float:
+            if role not in mock.agent_temperatures:
+                raise ValueError(f"Unknown agent role: {role}")
+            return float(mock.agent_temperatures[role])
+
+        mock.get_temperature_for_agent.side_effect = _get_temp
+        return mock
+
+    @pytest.fixture
+    def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
+        """Create a ModelModeService."""
+        return ModelModeService(mock_settings, db_path=temp_db)
+
+    def test_set_mode_syncs_vram_strategy_to_settings(self, service: ModelModeService):
+        """Setting a mode should sync its VRAM strategy to settings."""
+        # quality_max uses SEQUENTIAL
+        service.set_mode("quality_max")
+        assert service.settings.vram_strategy == "sequential"
+
+        # draft_fast uses PARALLEL
+        service.set_mode("draft_fast")
+        assert service.settings.vram_strategy == "parallel"
+
+        # balanced uses ADAPTIVE
+        service.set_mode("balanced")
+        assert service.settings.vram_strategy == "adaptive"
+
+    def test_prepare_model_uses_settings_vram_strategy(self, service: ModelModeService):
+        """prepare_model should use settings.vram_strategy, not mode's strategy."""
+        from unittest.mock import patch
+
+        # Set mode to quality_max (SEQUENTIAL)
+        service.set_mode("quality_max")
+
+        # Override settings to use parallel
+        service.settings.vram_strategy = "parallel"
+
+        # prepare_model should use "parallel" from settings
+        with patch.object(service, "_unload_all_except") as mock_unload:
+            service.prepare_model("test-model:8b")
+            # PARALLEL strategy should NOT call unload
+            mock_unload.assert_not_called()
+
+    def test_prepare_model_with_sequential_strategy(self, service: ModelModeService):
+        """SEQUENTIAL strategy should unload other models."""
+        from unittest.mock import patch
+
+        service.settings.vram_strategy = "sequential"
+
+        with patch.object(service, "_unload_all_except") as mock_unload:
+            service.prepare_model("test-model:8b")
+            mock_unload.assert_called_once_with("test-model:8b")
+
+    def test_prepare_model_with_invalid_strategy_falls_back(self, service: ModelModeService):
+        """Invalid vram_strategy should fall back to ADAPTIVE."""
+        from unittest.mock import patch
+
+        service.settings.vram_strategy = "invalid_strategy"
+
+        # Should not raise, falls back to ADAPTIVE
+        with patch("src.services.model_mode_service.get_available_vram", return_value=48):
+            service.prepare_model("test-model:8b")
