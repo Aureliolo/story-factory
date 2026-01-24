@@ -52,6 +52,7 @@ dependencies = [
     "python-docx==1.2.0",
     "PyYAML==6.0.3",
     "Jinja2==3.1.6",
+    "customtkinter>=5.2.0",
 ]
 
 [project.optional-dependencies]
@@ -141,8 +142,15 @@ module = [
     "docx",
     "docx.*",
     "yaml",
+    "customtkinter",
+    "customtkinter.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Scripts are standalone utilities, not part of the main package
+module = ["scripts.*", "control_panel"]
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 # NiceGUI 3.6+ has features (app.colors, ui.on_exception) not in type stubs yet
