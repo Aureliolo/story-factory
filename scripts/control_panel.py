@@ -398,6 +398,9 @@ class LogWatcher:
                     decoded = chunk.decode("utf-8", errors="replace")
 
                     new_lines = decoded.split("\n")
+                    if lines and current_pos > 0:
+                        # Stitch together a line that was split across a chunk boundary
+                        new_lines[-1] += lines.pop(0)
                     lines = new_lines + lines
 
                     if seek_pos == 0:

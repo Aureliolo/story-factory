@@ -4,7 +4,6 @@ This module checks that Python version and dependencies meet requirements
 before the rest of the application loads. Import this module early in main.py.
 """
 
-import re
 import sys
 from pathlib import Path
 
@@ -81,7 +80,7 @@ def _check_dependencies(project_root: Path) -> None:
         import tomllib
         from importlib.metadata import version as get_version
 
-        from packaging.version import Version
+        from packaging.requirements import Requirement
     except ImportError:
         print("Warning: Cannot check dependencies (packaging not installed)", file=sys.stderr)
         return
@@ -98,23 +97,23 @@ def _check_dependencies(project_root: Path) -> None:
     missing = []
     version_mismatch = []
 
-    for dep in dependencies:
-        # Parse package==version format
-        match = re.match(r"^([a-zA-Z0-9_-]+)==([0-9.]+)", dep)
-        if not match:
+    for dep_string in dependencies:
+        try:
+            req = Requirement(dep_string)
+        except Exception:
+            # Not a valid requirement string, skip
             continue
 
-        package_name = match.group(1)
-        required_version = match.group(2)
+        package_name = req.name
 
         try:
             installed_version = get_version(package_name)
-            if Version(installed_version) < Version(required_version):
+            if not req.specifier.contains(installed_version):
                 version_mismatch.append(
-                    f"  {package_name}: installed {installed_version}, requires {required_version}"
+                    f"  {package_name}: installed {installed_version}, requires {req.specifier}"
                 )
         except Exception:
-            missing.append(f"  {package_name}=={required_version}")
+            missing.append(f"  {package_name}{req.specifier}")
 
     if missing or version_mismatch:
         print("Error: Missing or outdated dependencies:", file=sys.stderr)

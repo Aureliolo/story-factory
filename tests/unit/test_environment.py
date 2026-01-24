@@ -129,10 +129,10 @@ class TestCheckDependencies:
     def test_passes_when_all_dependencies_installed(self, tmp_path):
         """Test that check passes when all dependencies are installed."""
         pyproject = tmp_path / "pyproject.toml"
-        # Use a package that's definitely installed (pytest)
-        pyproject.write_text('[project]\ndependencies = ["pytest==9.0.0"]\n')
+        # Use a package that's definitely installed (pytest) with >= specifier
+        pyproject.write_text('[project]\ndependencies = ["pytest>=9.0.0"]\n')
 
-        # Should not raise (pytest is installed and likely >= 9.0.0)
+        # Should not raise (pytest is installed and >= 9.0.0)
         _check_dependencies(tmp_path)
 
     def test_exits_when_dependency_missing(self, tmp_path, capsys):
@@ -164,7 +164,7 @@ class TestCheckDependencies:
     def test_handles_packaging_import_error(self, tmp_path, capsys, monkeypatch):
         """Test that check handles packaging ImportError gracefully."""
         pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text('[project]\ndependencies = ["pytest==9.0.0"]\n')
+        pyproject.write_text('[project]\ndependencies = ["pytest>=9.0.0"]\n')
 
         # Mock packaging import to fail
         import builtins
@@ -172,7 +172,7 @@ class TestCheckDependencies:
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == "packaging.version":
+            if name == "packaging.requirements":
                 raise ImportError("No module named 'packaging'")
             return original_import(name, *args, **kwargs)
 
@@ -184,12 +184,13 @@ class TestCheckDependencies:
         captured = capsys.readouterr()
         assert "Cannot check dependencies" in captured.err
 
-    def test_skips_non_pinned_dependencies(self, tmp_path):
-        """Test that check skips dependencies without pinned versions."""
+    def test_handles_various_version_specifiers(self, tmp_path):
+        """Test that check handles various version specifiers correctly."""
         pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text('[project]\ndependencies = ["pytest>=9.0.0", "pytest-cov"]\n')
+        # Use installed packages with version specifiers they satisfy
+        pyproject.write_text('[project]\ndependencies = ["pytest>=9.0.0", "pytest-cov>=7.0.0"]\n')
 
-        # Should not raise (these don't match the ==version pattern)
+        # Should not raise (installed versions satisfy these specifiers)
         _check_dependencies(tmp_path)
 
     def test_shows_pip_install_hint(self, tmp_path, capsys):
@@ -213,3 +214,12 @@ class TestCheckDependencies:
 
         captured = capsys.readouterr()
         assert "Warning: Could not parse dependencies" in captured.err
+
+    def test_skips_invalid_requirement_strings(self, tmp_path):
+        """Test that check skips invalid requirement strings."""
+        pyproject = tmp_path / "pyproject.toml"
+        # Include an invalid requirement string alongside valid ones
+        pyproject.write_text('[project]\ndependencies = ["!!!invalid!!!", "pytest>=9.0.0"]\n')
+
+        # Should not raise - skips invalid, checks valid
+        _check_dependencies(tmp_path)

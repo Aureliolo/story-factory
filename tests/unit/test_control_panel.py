@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
-import time
+import threading
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -643,6 +643,32 @@ class TestLogWatcher:
             assert len(lines) == 10
             assert "Line 999" in lines[-1]
 
+    def test_get_recent_lines_chunk_boundary(self):
+        """Should correctly stitch lines split across chunk boundaries."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            # Create a file where we need to read multiple chunks.
+            # Chunk size is 8192 bytes. Each line is ~60 bytes.
+            # To force multiple chunk reads, we need to request more lines than fit
+            # in one chunk. 8192 / 60 = ~136 lines per chunk.
+            # Request n=200 lines to force reading 2+ chunks.
+            for i in range(300):
+                f.write(f"2024-01-01 12:00:00 [INFO] Padding line number {i:04d} extra\n")
+
+            # Write a unique line at the end
+            f.write("2024-01-01 12:00:00 [INFO] MARKER_LINE_FINAL\n")
+            f.flush()
+
+            watcher = LogWatcher(Path(f.name))
+            # Request 200 lines to force reading multiple chunks
+            lines = watcher.get_recent_lines(n=200)
+
+            # Verify lines are intact (stitching worked correctly)
+            marker_found = any("MARKER_LINE_FINAL" in line for line in lines)
+            assert marker_found, f"Marker line should be intact in: {lines}"
+            # All lines should be complete (contain the full timestamp format)
+            for line in lines:
+                assert "2024-01-01" in line, f"Line appears truncated: {line}"
+
     def test_clear_log_success(self):
         """Should clear log file and return bytes cleared."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
@@ -1063,14 +1089,16 @@ class TestControlPanel:
     def test_run_in_thread_success(self):
         """Should call success callback when function succeeds."""
         panel = self._create_mock_panel()
+        done = threading.Event()
+        panel.after.side_effect = lambda *_: done.set()
 
         def success_func():
             return True
 
         panel._run_in_thread(success_func, "Success!", "Failed")
 
-        # Wait for thread to complete
-        time.sleep(0.1)
+        # Wait for thread to complete (with timeout to prevent hanging)
+        assert done.wait(1), "Thread did not complete in time"
 
         # Verify after() was scheduled
         panel.after.assert_called()
@@ -1078,6 +1106,8 @@ class TestControlPanel:
     def test_run_in_thread_failure_false(self):
         """Should call error callback when function returns False."""
         panel = self._create_mock_panel()
+        done = threading.Event()
+        panel.after.side_effect = lambda *_: done.set()
 
         def fail_func():
             return False
@@ -1085,13 +1115,15 @@ class TestControlPanel:
         panel._run_in_thread(fail_func, "Success!", "Failed")
 
         # Wait for thread to complete
-        time.sleep(0.1)
+        assert done.wait(1), "Thread did not complete in time"
 
         panel.after.assert_called()
 
     def test_run_in_thread_failure_none(self):
         """Should call error callback when function returns None."""
         panel = self._create_mock_panel()
+        done = threading.Event()
+        panel.after.side_effect = lambda *_: done.set()
 
         def fail_func():
             return None
@@ -1099,13 +1131,15 @@ class TestControlPanel:
         panel._run_in_thread(fail_func, "Success!", "Failed")
 
         # Wait for thread to complete
-        time.sleep(0.1)
+        assert done.wait(1), "Thread did not complete in time"
 
         panel.after.assert_called()
 
     def test_run_in_thread_exception(self):
         """Should handle exception in background task."""
         panel = self._create_mock_panel()
+        done = threading.Event()
+        panel.after.side_effect = lambda *_: done.set()
 
         def error_func():
             raise ValueError("Test error")
@@ -1113,7 +1147,7 @@ class TestControlPanel:
         panel._run_in_thread(error_func, "Success!", "Failed")
 
         # Wait for thread to complete
-        time.sleep(0.1)
+        assert done.wait(1), "Thread did not complete in time"
 
         panel.after.assert_called()
 
