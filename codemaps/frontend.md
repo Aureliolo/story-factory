@@ -97,6 +97,7 @@ Main writing interface:
 - Feedback submission for regeneration
 
 ### WorldPage (`ui/pages/world.py`)
+
 Entity/relationship editor:
 - Entity list with filtering
 - Entity detail panel
@@ -105,6 +106,7 @@ Entity/relationship editor:
 - Quality refinement toggle
 
 ### ProjectsPage (`ui/pages/projects.py`)
+
 Project management:
 - Project list with metadata
 - Create new project
@@ -112,6 +114,7 @@ Project management:
 - Backup/restore functionality
 
 ### ModelsPage (`ui/pages/models.py`)
+
 Ollama model management:
 - Installed models list
 - Download new models
@@ -120,6 +123,7 @@ Ollama model management:
 - Health check status
 
 ### SettingsPage (`ui/pages/settings.py`)
+
 Configuration UI:
 - Ollama connection settings
 - Per-agent model assignment
@@ -128,24 +132,28 @@ Configuration UI:
 - Timeout configuration
 
 ### TemplatesPage (`ui/pages/templates.py`)
+
 Story template browser:
 - Built-in templates
 - Template preview
 - Apply to new project
 
 ### AnalyticsPage (`ui/pages/analytics.py`)
+
 Performance metrics:
 - Model performance history
 - Generation time tracking
 - Quality score trends
 
 ### TimelinePage (`ui/pages/timeline.py`)
+
 Story timeline visualization:
 - Event chronology
 - Chapter markers
 - Entity participation
 
 ### ComparisonPage (`ui/pages/comparison.py`)
+
 Model A/B testing:
 - Side-by-side generation
 - Quality comparison
@@ -154,36 +162,42 @@ Model A/B testing:
 ## Components (`ui/components/`)
 
 ### Header (`ui/components/header.py`)
+
 Navigation and project selector:
 - Tab navigation
 - Dark mode toggle
 - Current project display
 
 ### Chat (`ui/components/chat.py`)
+
 Interview chat interface:
 - Message history display
 - Input with send button
 - Processing indicator
 
 ### EntityCard (`ui/components/entity_card.py`)
+
 Entity display component:
 - Type icon
 - Name and description
 - Edit/delete actions
 
 ### Graph (`ui/components/graph.py`)
+
 Relationship graph visualization:
 - NetworkX-based layout
 - Entity nodes with colors by type
 - Relationship edges
 
 ### Timeline (`ui/components/timeline.py`)
+
 Timeline visualization component:
 - Horizontal event layout
 - Chapter markers
 - Zoom/pan controls
 
 ### GenerationStatus (`ui/components/generation_status.py`)
+
 Generation progress display:
 - Phase indicator
 - Progress bar
@@ -191,12 +205,14 @@ Generation progress display:
 - Pause/cancel controls
 
 ### SceneEditor (`ui/components/scene_editor.py`)
+
 Scene-level editing:
 - Scene list with drag-drop
 - Content editing
 - Beat tracking
 
 ### Common (`ui/components/common.py`)
+
 Shared UI utilities:
 - Button styles
 - Card layouts
