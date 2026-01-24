@@ -271,21 +271,10 @@ def sample_story_with_chapters(sample_story_state: StoryState) -> StoryState:
 
 @pytest.fixture(autouse=True)
 def mock_ollama_globally(monkeypatch):
-    """Mock Ollama client and system calls to prevent real connections.
+    """
+    Autouse pytest fixture that installs global mocks for the Ollama client and related system calls for all tests.
 
-    AUTOUSE: All tests automatically mock Ollama to prevent:
-    - Real ollama.Client connections
-    - `ollama list` subprocess calls
-    - `nvidia-smi` subprocess calls
-
-    Individual tests can override with their own patches using `with patch()`.
-    The patch context manager takes precedence over monkeypatch.
-
-    This fixture uses the shared mock utilities from tests/shared/mock_ollama.py
-    to ensure consistent behavior across all test types.
-
-    Args:
-        monkeypatch: Pytest monkeypatch fixture.
+    Prevents real ollama.Client connections and subprocess calls for `ollama list` and `nvidia-smi`. Tests may override these mocks using `patch()`; patch context managers take precedence over monkeypatch. Uses the shared test utilities to provide a consistent mock implementation across the test suite.
     """
     from tests.shared.mock_ollama import setup_ollama_mocks
 
