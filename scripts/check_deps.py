@@ -11,10 +11,26 @@ Usage:
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
+
+
+def _normalize_name(name: str) -> str:
+    """Normalize package name per PEP 503.
+
+    All runs of hyphens, underscores, and periods are replaced with a single hyphen,
+    and the result is lowercased.
+
+    Args:
+        name: Package name to normalize
+
+    Returns:
+        Normalized package name
+    """
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def parse_requirement(req: str) -> tuple[str, str]:
@@ -25,12 +41,12 @@ def parse_requirement(req: str) -> tuple[str, str]:
         req (str): Requirement like "nicegui==3.6.1", "ruff==0.14.14", or just a package name.
 
     Returns:
-        tuple[str, str]: `(name, version)` where `name` is lowercased and hyphens are replaced with underscores, and `version` is the specified version or an empty string if none was provided.
+        tuple[str, str]: (normalized_name, version) where name is PEP 503 normalized and version is the specified version or empty string if none.
     """
     if "==" not in req:
-        return req.lower(), ""
+        return _normalize_name(req), ""
     name, version = req.split("==", 1)
-    return name.lower().replace("-", "_"), version
+    return _normalize_name(name), version
 
 
 def get_installed_version(package: str) -> str | None:
@@ -38,25 +54,36 @@ def get_installed_version(package: str) -> str | None:
     Return the installed version string for the given package, or None if it is not installed or cannot be determined.
 
     Parameters:
-        package (str): Package name to query.
+        package (str): Package name to query (will be normalized for lookup).
 
     Returns:
         str | None: Version string if the package is installed, `None` otherwise.
     """
+    # Normalize the package name for pip show
+    normalized = _normalize_name(package)
+
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "show", package],
+            [sys.executable, "-m", "pip", "show", normalized],
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode != 0:
-            return None
+            # Try with original name in case pip prefers it
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "show", package],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                return None
         for line in result.stdout.splitlines():
             if line.startswith("Version:"):
                 return line.split(":", 1)[1].strip()
         return None
-    except Exception:
+    except (subprocess.SubprocessError, OSError):
         return None
 
 
@@ -67,10 +94,17 @@ def load_required_deps(pyproject_path: Path) -> dict[str, str]:
         pyproject_path: Path to pyproject.toml
 
     Returns:
-        Dict of {package_name: required_version}
+        Dict of {normalized_package_name: required_version}
+
+    Raises:
+        SystemExit: If pyproject.toml cannot be parsed.
     """
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        print(f"Error: Invalid TOML in {pyproject_path}: {e}")
+        sys.exit(1)
 
     deps: dict[str, str] = {}
 
@@ -135,11 +169,13 @@ def check_deps(auto_install: bool = False) -> int:
         to_install = missing + [f"{name}=={req}" for name, _, req in outdated]
         print(f"\nInstalling: {', '.join(to_install)}")
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", *to_install],
+            [sys.executable, "-m", "pip", "install", *to_install],
+            capture_output=True,
+            text=True,
             check=False,
         )
         if result.returncode != 0:
-            print("Error: Failed to install packages")
+            print(f"Error: Failed to install packages\n{result.stderr}")
             return 1
         print("Dependencies updated successfully")
         return 0
