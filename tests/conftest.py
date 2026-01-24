@@ -287,10 +287,20 @@ def mock_ollama_globally(monkeypatch):
     import subprocess
     from unittest.mock import MagicMock
 
-    # Use a model from RECOMMENDED_MODELS that has tags for all agent roles
-    # huihui_ai/dolphin3-abliterated:8b has tags for all roles:
-    # ["interviewer", "architect", "writer", "editor", "continuity", "validator", "quality"]
+    # Use a model that exists in RECOMMENDED_MODELS
+    # Note: This model only has tags ["continuity", "interviewer", "suggestion"] in RECOMMENDED_MODELS
+    # We add all role tags via custom_model_tags mock below
     TEST_MODEL = "huihui_ai/dolphin3-abliterated:8b"
+    ALL_ROLE_TAGS = [
+        "interviewer",
+        "architect",
+        "writer",
+        "editor",
+        "continuity",
+        "validator",
+        "suggestion",
+        "quality",
+    ]
 
     # Create a mock client class that returns safe defaults
     class MockOllamaClient:
@@ -460,6 +470,23 @@ def mock_ollama_globally(monkeypatch):
         return original_subprocess_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+
+    # Mock Settings to give the test model all role tags
+    # This allows agents to auto-select the model for any role
+    try:
+        from settings import Settings
+
+        original_get_model_tags = Settings.get_model_tags
+
+        def mock_get_model_tags(self, model_id: str) -> list[str]:
+            """Return all role tags for the test model."""
+            if model_id == TEST_MODEL:
+                return ALL_ROLE_TAGS
+            return original_get_model_tags(self, model_id)
+
+        monkeypatch.setattr(Settings, "get_model_tags", mock_get_model_tags)
+    except ImportError:
+        pass
 
 
 @pytest.fixture
