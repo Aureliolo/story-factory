@@ -422,6 +422,113 @@ class TestModelModeServiceAdditionalCoverage:
             service.on_regenerate("test-proj", "ch-1")
 
 
+class TestPendingRecommendations:
+    """Tests for pending recommendations and dismissal."""
+
+    @pytest.fixture
+    def temp_db(self, tmp_path: Path) -> Path:
+        """Create a temporary database file using pytest's tmp_path fixture."""
+        return tmp_path / "test_rec.db"
+
+    @pytest.fixture
+    def mock_settings(self) -> MagicMock:
+        """Create mock settings."""
+        mock = MagicMock(spec=Settings)
+        mock.ollama_url = "http://localhost:11434"
+        mock.get_model_for_agent.return_value = "test-model:8b"
+        mock.agent_temperatures = {"writer": 0.9, "editor": 0.6}
+
+        def _get_temp(role: str) -> float:
+            if role not in mock.agent_temperatures:
+                raise ValueError(f"Unknown agent role: {role}")
+            return float(mock.agent_temperatures[role])
+
+        mock.get_temperature_for_agent.side_effect = _get_temp
+        return mock
+
+    @pytest.fixture
+    def service(self, mock_settings: MagicMock, temp_db: Path) -> ModelModeService:
+        """Create a ModelModeService with mocked dependencies."""
+        return ModelModeService(mock_settings, db_path=temp_db)
+
+    def test_get_pending_recommendations_empty(self, service: ModelModeService):
+        """Should return empty list when no recommendations exist."""
+        recs = service.get_pending_recommendations()
+        assert recs == []
+
+    def test_get_pending_recommendations_converts_to_objects(self, service: ModelModeService):
+        """Should convert database rows to TuningRecommendation objects."""
+        from src.memory.mode_models import RecommendationType
+
+        # Insert a recommendation directly into the database
+        service._db.record_recommendation(
+            recommendation_type="model_swap",
+            current_value="small-model:3b",
+            suggested_value="large-model:8b",
+            affected_role="writer",
+            reason="Better quality observed",
+            confidence=0.85,
+            evidence={"avg_score": 4.2},
+            expected_improvement="15% quality increase",
+        )
+
+        recs = service.get_pending_recommendations()
+        assert len(recs) == 1
+        rec = recs[0]
+        assert rec.recommendation_type == RecommendationType.MODEL_SWAP
+        assert rec.current_value == "small-model:3b"
+        assert rec.suggested_value == "large-model:8b"
+        assert rec.affected_role == "writer"
+        assert rec.confidence == 0.85
+
+    def test_get_pending_recommendations_handles_parse_error(self, service: ModelModeService):
+        """Should handle parsing errors gracefully."""
+        with patch.object(
+            service._db, "get_pending_recommendations", return_value=[{"id": 1, "invalid": True}]
+        ):
+            recs = service.get_pending_recommendations()
+            assert recs == []
+
+    def test_dismiss_recommendation(self, service: ModelModeService):
+        """Should persist dismissal to database."""
+        # Insert a recommendation
+        service._db.record_recommendation(
+            recommendation_type="temp_adjust",
+            current_value="0.7",
+            suggested_value="0.9",
+            affected_role="writer",
+            reason="Test reason",
+            confidence=0.8,
+        )
+
+        # Get the recommendation
+        recs = service.get_pending_recommendations()
+        assert len(recs) == 1
+
+        # Dismiss it
+        service.dismiss_recommendation(recs[0])
+
+        # Should no longer appear in pending
+        remaining = service.get_pending_recommendations()
+        assert len(remaining) == 0
+
+    def test_dismiss_recommendation_without_id(self, service: ModelModeService):
+        """Should handle recommendation without ID gracefully."""
+        from src.memory.mode_models import RecommendationType, TuningRecommendation
+
+        rec = TuningRecommendation(
+            id=None,  # No ID
+            recommendation_type=RecommendationType.MODEL_SWAP,
+            current_value="a",
+            suggested_value="b",
+            reason="test",
+            confidence=0.5,
+        )
+
+        # Should not raise, just log warning
+        service.dismiss_recommendation(rec)
+
+
 class TestVramStrategySetting:
     """Tests for VRAM strategy in Settings."""
 
@@ -437,3 +544,10 @@ class TestVramStrategySetting:
         assert settings.vram_strategy == "sequential"
         settings.vram_strategy = "parallel"
         assert settings.vram_strategy == "parallel"
+
+    def test_invalid_vram_strategy_raises(self):
+        """Invalid VRAM strategy should raise ValueError."""
+        settings = Settings()
+        settings.vram_strategy = "invalid_strategy"
+        with pytest.raises(ValueError, match="vram_strategy must be one of"):
+            settings.validate()
