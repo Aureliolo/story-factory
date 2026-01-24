@@ -5,6 +5,7 @@
 ## Application Entry (`ui/app.py`)
 
 ### StoryFactoryApp (`ui/app.py:35-247`)
+
 Main NiceGUI application with path-based routing.
 
 ```python
@@ -27,6 +28,7 @@ app.run(host="127.0.0.1", port=7860)
 | `/compare` | `ComparisonPage` | Model comparison |
 
 **Layout Pattern:**
+
 ```python
 def _page_layout(self, current_path, build_content):
     self._add_styles()
@@ -42,6 +44,7 @@ def _page_layout(self, current_path, build_content):
 ## State Management (`ui/state.py`)
 
 ### AppState (`ui/state.py:46-380`)
+
 Centralized UI state dataclass:
 
 **Project State:**
@@ -76,6 +79,7 @@ state.on_redo(callback)
 ## Pages (`ui/pages/`)
 
 ### Page Protocol
+
 ```python
 class Page(Protocol):
     def build(self) -> None: ...
@@ -84,6 +88,7 @@ class Page(Protocol):
 All pages receive `AppState` and `ServiceContainer` in constructor.
 
 ### WritePage (`ui/pages/write.py`)
+
 Main writing interface:
 - Interview chat (when status="interview")
 - Chapter outline/navigation
