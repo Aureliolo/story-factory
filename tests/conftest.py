@@ -268,48 +268,107 @@ def sample_story_with_chapters(sample_story_state: StoryState) -> StoryState:
     return state
 
 
-@pytest.fixture
-def mock_ollama(monkeypatch):
-    """Mock Ollama client for testing without a real server.
+@pytest.fixture(autouse=True)
+def mock_ollama_globally(monkeypatch):
+    """Mock Ollama client and system calls to prevent real connections.
+
+    AUTOUSE: All tests automatically mock Ollama to prevent:
+    - Real ollama.Client connections
+    - `ollama list` subprocess calls
+    - `nvidia-smi` subprocess calls
+
+    Individual tests can override with their own patches using `with patch()`.
+    The patch context manager takes precedence over monkeypatch.
 
     Args:
         monkeypatch: Pytest monkeypatch fixture.
-
-    Yields:
-        Mock response generator.
     """
+    import subprocess
+    from unittest.mock import MagicMock
 
+    # Create a mock client class that returns safe defaults
     class MockOllamaClient:
         def __init__(self, host=None, timeout=None):
             self.host = host
             self.timeout = timeout
 
         def list(self):
-            class Models:
-                models = [
-                    type("Model", (), {"model": "test-model:latest"})(),
-                ]
+            mock_model = MagicMock()
+            mock_model.model = "test-model:latest"
+            mock_response = MagicMock()
+            mock_response.models = [mock_model]
+            return mock_response
 
-            return Models()
+        def generate(self, model=None, prompt=None, options=None, **kwargs):
+            return {"response": "Mock response from AI"}
 
-        def generate(self, model, prompt, options=None):
-            class Response:
-                response = "Mock response from AI"
-
-            return Response()
+        def chat(self, model=None, messages=None, options=None, **kwargs):
+            return {
+                "message": {"content": "Mock AI response", "role": "assistant"},
+                "done": True,
+            }
 
         def pull(self, model, stream=False):
             if stream:
-                yield {"status": "pulling", "completed": 50, "total": 100}
-                yield {"status": "success", "completed": 100, "total": 100}
+
+                def gen():
+                    yield {"status": "pulling", "completed": 50, "total": 100}
+                    yield {"status": "success", "completed": 100, "total": 100}
+
+                return gen()
             return {"status": "success"}
 
         def delete(self, model):
             return {"status": "success"}
 
+    # Mock ollama.Client at the ollama module level
     monkeypatch.setattr("ollama.Client", MockOllamaClient)
 
-    return MockOllamaClient
+    # Mock subprocess.run to intercept `ollama list` and `nvidia-smi` commands
+    original_subprocess_run = subprocess.run
+
+    def mock_subprocess_run(cmd, *args, **kwargs):
+        """Intercept subprocess calls to ollama and nvidia-smi."""
+        cmd_str = cmd[0] if isinstance(cmd, list) else cmd
+
+        if "ollama" in cmd_str:
+            # Mock `ollama list` output
+            class MockOllamaResult:
+                stdout = "NAME                    ID      SIZE    MODIFIED\ntest-model:latest    abc123  4.1 GB  2 days ago\n"
+                stderr = ""
+                returncode = 0
+
+            return MockOllamaResult()
+
+        if "nvidia-smi" in cmd_str:
+            # Mock nvidia-smi for VRAM detection
+            class MockNvidiaSmiResult:
+                stdout = "8192"  # 8GB VRAM
+                stderr = ""
+                returncode = 0
+
+            return MockNvidiaSmiResult()
+
+        # Pass through other subprocess calls
+        return original_subprocess_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+
+
+@pytest.fixture
+def mock_ollama():
+    """Deprecated: Use mock_ollama_globally (autouse) instead.
+
+    This fixture is kept for backwards compatibility with tests that
+    explicitly request it. The mock_ollama_globally fixture now handles
+    all Ollama mocking automatically.
+
+    Returns:
+        The mocked ollama.Client class (for inspection if needed).
+    """
+    import ollama
+
+    return ollama.Client  # Returns the already-mocked Client
 
 
 @pytest.fixture
