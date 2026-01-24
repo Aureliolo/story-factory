@@ -55,34 +55,34 @@ class SettingsPage:
             ui.label("Settings").classes("text-2xl font-bold")
 
             # All cards in flex container - same height, different widths
-            # Top row: Connection, Workflow, Memory, Model, Generation Mode, Story Structure
-            # Bottom row: Creativity, Adaptive Learning, World Generation
+            # Top row: Connection, Workflow, Memory, Generation Mode, Story Structure (compact)
+            # Bottom row: Creativity, Model Selection, Adaptive Learning, World Generation
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch"):
-                with ui.element("div").style("flex: 1 1 260px; min-width: 260px;"):
+                with ui.element("div").style("flex: 1 1 240px; min-width: 240px;"):
                     self._build_connection_section()
 
-                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
+                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
                     self._build_interaction_section()
 
-                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
+                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
                     self._build_context_section()
 
-                with ui.element("div").style("flex: 1.2 1 380px; min-width: 380px;"):
-                    self._build_model_section()
-
-                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
+                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
                     self._build_mode_section()
 
-                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
+                with ui.element("div").style("flex: 1 1 260px; min-width: 260px;"):
                     self._build_story_structure_section()
 
                 with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
                     self._build_temperature_section()
 
-                with ui.element("div").style("flex: 1 1 350px; min-width: 350px;"):
+                with ui.element("div").style("flex: 1.2 1 380px; min-width: 380px;"):
+                    self._build_model_section()
+
+                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
                     self._build_learning_section()
 
-                with ui.element("div").style("flex: 1.5 1 500px; min-width: 500px;"):
+                with ui.element("div").style("flex: 1 1 420px; min-width: 420px;"):
                     self._build_world_gen_section()
 
             # Save button
