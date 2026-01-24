@@ -617,6 +617,7 @@ class TestWorldServiceErrorHandling:
 
         # Mock add_entity to raise an exception
         def mock_add_entity(*args, **kwargs):
+            """Simulate a database error when adding an entity."""
             raise RuntimeError("Simulated database error")
 
         monkeypatch.setattr(world_db, "add_entity", mock_add_entity)
@@ -629,6 +630,7 @@ class TestWorldServiceErrorHandling:
 
         # Mock _extract_locations_from_text to raise an exception
         def mock_extract(*args, **kwargs):
+            """Simulate an extraction error when parsing chapter content."""
             raise ValueError("Simulated extraction error")
 
         monkeypatch.setattr(world_service, "_extract_locations_from_text", mock_extract)

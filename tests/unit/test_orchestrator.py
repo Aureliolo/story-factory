@@ -793,6 +793,7 @@ class TestBuildStoryStructure:
 
         # Return state with content that triggers validation
         def mock_build(state):
+            """Simulate architect building story structure with foreign language content."""
             state.world_description = "A world with German: Die Welt"
             state.plot_summary = "A plot summary"
             state.status = "writing"
@@ -912,6 +913,7 @@ class TestWritingMethods:
         check_calls = [0]
 
         def mock_check(*args):
+            """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
                 return mock_issues
@@ -1060,6 +1062,7 @@ class TestWritingMethods:
         check_calls = [0]
 
         def mock_check(*args):
+            """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
                 return mock_issues
@@ -1205,6 +1208,7 @@ class TestWritingMethods:
         check_calls = [0]
 
         def mock_check(*args):
+            """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
                 return mock_issues
@@ -1431,6 +1435,7 @@ class TestWritingMethods:
         object.__setattr__(orc.validator, "validate_response", MagicMock(return_value=None))
 
         def on_checkpoint(chapter, content):
+            """Handle checkpoint event by returning True to continue writing."""
             return True  # Continue
 
         # With 3 chapters and default chapters_between_checkpoints=3,
@@ -1835,6 +1840,7 @@ class TestPersistenceMethods:
 
         # Make save_story raise
         def mock_save(*args):
+            """Simulate save failure by raising an OSError."""
             raise OSError("Disk full")
 
         object.__setattr__(orchestrator, "save_story", mock_save)
@@ -2479,6 +2485,7 @@ class TestRebuildWorld:
 
         # Mock build_story_structure to return new content
         def mock_build(state):
+            """Simulate architect rebuilding story structure with new content."""
             state.world_description = "New world"
             state.characters = [Character(name="NewChar", role="protagonist", description="New")]
             state.chapters = [Chapter(number=1, title="New Chapter", outline="New outline")]
@@ -2511,6 +2518,7 @@ class TestRebuildWorld:
         )
 
         def mock_build(state):
+            """Simulate architect building story structure by returning state unchanged."""
             return state
 
         object.__setattr__(orchestrator.architect, "build_story_structure", mock_build)

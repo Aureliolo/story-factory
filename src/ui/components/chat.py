@@ -123,6 +123,7 @@ class ChatComponent:
 
         # Use client context for background task safety
         def _do_add_message() -> None:
+            """Add message to container with proper UI context."""
             if self._message_container is None:
                 return
             with self._message_container:
@@ -185,6 +186,7 @@ class ChatComponent:
         """
 
         def _do_show_typing() -> None:
+            """Update typing indicator visibility and input state."""
             if self._typing_indicator:
                 self._typing_indicator.set_visibility(show)
             self._is_processing = show

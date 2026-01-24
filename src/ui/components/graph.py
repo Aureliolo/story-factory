@@ -136,6 +136,7 @@ class GraphComponent:
         if self.on_edge_context_menu:
 
             def handle_edge_context_menu(e) -> None:
+                """Handle right-click context menu on graph edge."""
                 edge_id = e.args.get("edge_id") if e.args else None
                 if edge_id and self.on_edge_context_menu:
                     self.on_edge_context_menu(edge_id)

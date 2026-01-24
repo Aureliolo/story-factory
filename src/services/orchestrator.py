@@ -731,7 +731,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         self, chapter_number: int, feedback: str | None = None
     ) -> Generator[WorkflowEvent, None, str]:
         """
-        Run the full write–edit–continuity pipeline for a single chapter, yielding workflow events during processing.
+        Run the full write-edit-continuity pipeline for a single chapter, yielding workflow events during processing.
 
         Detailed behavior:
         - Yields WorkflowEvent objects at key stages (writer start/complete, editor start/complete, continuity checks, progress updates, and final completion) to report progress to the UI.

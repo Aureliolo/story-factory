@@ -21,6 +21,7 @@ class TestWorldPageNoProject:
 
         @ui.page("/test-world-no-project")
         def test_page():
+            """Build test page with world page and no project."""
             state = AppState()  # No project set
             page = WorldPage(state, test_services)
             page.build()
@@ -44,6 +45,7 @@ class TestWorldPageInterviewRequired:
 
         @ui.page("/test-world-interview-required")
         def test_page():
+            """Build test page with world page requiring interview."""
             page = WorldPage(test_app_state, test_services)
             page.build()
 
@@ -61,6 +63,7 @@ class TestWorldPageInterviewRequired:
 
         @ui.page("/test-world-interview-button")
         def test_page():
+            """Build test page with world page interview button."""
             page = WorldPage(test_app_state, test_services)
             page.build()
 
@@ -81,6 +84,7 @@ class TestWorldPageWithData:
 
         @ui.page("/test-world-with-data")
         def test_page():
+            """Build test page with world page and world data."""
             page = WorldPage(test_app_state, test_services)
             page.build()
 
@@ -101,6 +105,7 @@ class TestWorldPageWithData:
 
         @ui.page("/test-world-dark-mode")
         def test_page():
+            """Build test page with world page in dark mode."""
             page = WorldPage(test_app_state, test_services)
             page.build()
             page_ref.append(page)

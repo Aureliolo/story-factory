@@ -251,8 +251,11 @@ class StoryFactoryApp:
             self._page_layout("/templates", content)
 
         @ui.page("/compare")
-        def compare_page():
-            def content():
+        def compare_page() -> None:
+            """Build the model comparison page."""
+
+            def content() -> None:
+                """Create comparison page content."""
                 page = ComparisonPage(self.state, self.services)
                 page.build()
 

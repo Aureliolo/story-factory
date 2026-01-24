@@ -354,6 +354,7 @@ class WritePage:
                 )
 
                 def update_chapters(e: Any) -> None:
+                    """Update target chapter count setting from UI input."""
                     value = e.value if e.value else None
                     project.target_chapters = int(value) if value else None
                     self.services.project.save_project(project)
@@ -392,6 +393,7 @@ class WritePage:
                 with ui.row().classes("gap-2 items-center"):
 
                     def update_min_chars(e: Any) -> None:
+                        """Update minimum character count setting from UI input."""
                         value = e.value if e.value else None
                         project.target_characters_min = int(value) if value else None
                         self.services.project.save_project(project)
@@ -408,6 +410,7 @@ class WritePage:
                     ui.label("-").classes("text-gray-400")
 
                     def update_max_chars(e: Any) -> None:
+                        """Update maximum character count setting from UI input."""
                         value = e.value if e.value else None
                         project.target_characters_max = int(value) if value else None
                         self.services.project.save_project(project)
@@ -857,6 +860,7 @@ class WritePage:
             try:
                 # Update progress using callback
                 def on_progress(progress) -> None:
+                    """Handle progress updates from world building by updating UI elements."""
                     progress_label.text = progress.message
                     # Calculate progress as fraction of total steps
                     progress_bar.value = progress.step / progress.total_steps
@@ -1005,6 +1009,7 @@ class WritePage:
 
             # Function to save settings before building
             async def save_settings_and_build() -> None:
+                """Save generation settings from dialog inputs and start the build process."""
                 # Update project with dialog values
                 project.target_chapters = int(chapter_input.value) if chapter_input.value else None
                 project.target_characters_min = (
@@ -1111,6 +1116,7 @@ class WritePage:
                 try:
                     # Run blocking generator in thread pool
                     def write_chapter_blocking():
+                        """Execute the blocking chapter generation and collect all events."""
                         return list(
                             self.services.story.write_chapter(
                                 project, chapter_num, cancel_check=should_cancel
@@ -1191,6 +1197,7 @@ class WritePage:
 
             # Define cancellation check
             def should_cancel() -> bool:
+                """Check if the user has requested to cancel the generation."""
                 return self.state.generation_cancel_requested
 
             # Run generation in background with progressive updates
@@ -1200,6 +1207,7 @@ class WritePage:
                 try:
                     # Run blocking generator in thread pool
                     def write_all_blocking():
+                        """Execute the blocking generation for all chapters and collect events."""
                         return list(
                             self.services.story.write_all_chapters(
                                 project, cancel_check=should_cancel
@@ -1414,6 +1422,7 @@ class WritePage:
 
             # Define cancellation check
             def should_cancel() -> bool:
+                """Check if the user has requested to cancel the regeneration."""
                 return self.state.generation_cancel_requested
 
             # Run regeneration in background with progressive updates
@@ -1423,6 +1432,7 @@ class WritePage:
                 try:
                     # Run blocking generator in thread pool
                     def regenerate_blocking():
+                        """Execute the blocking chapter regeneration with feedback and collect events."""
                         return list(
                             self.services.story.regenerate_chapter_with_feedback(
                                 project, chapter_num, feedback, cancel_check=should_cancel
@@ -1636,6 +1646,7 @@ class WritePage:
                 if not version.is_current:
 
                     def restore_and_close() -> None:
+                        """Restore the viewed version and close the dialog."""
                         self._rollback_to_version(version_id)
                         dialog.close()
 

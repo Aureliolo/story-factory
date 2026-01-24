@@ -65,8 +65,19 @@ repos:
     rev: 1.7.0
     hooks:
       - id: interrogate
-        args: [-vv, src, scripts]
+        args: [-vv, src, scripts, tests]
         pass_filenames: false
+
+  # Generate and commit interrogate badge
+  - repo: local
+    hooks:
+      - id: interrogate-badge
+        name: generate docstring coverage badge
+        entry: interrogate --generate-badge docs/badges -o docstring_coverage.svg src scripts tests
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
 
   # Run tests with coverage enforcement
   # NOTE: Skipped by default in CI (pre-commit.ci) due to time constraints

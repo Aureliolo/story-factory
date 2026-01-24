@@ -233,15 +233,13 @@ ignore_semiprivate = false
 ignore_private = false
 ignore_property_decorators = true
 ignore_module = false
-ignore_nested_functions = true
-ignore_nested_classes = true
+ignore_nested_functions = false
+ignore_nested_classes = false
 ignore_setters = true
 verbose = 0
 quiet = false
 color = true
 omit_covered_files = false
 exclude = [
-    "tests",
     "setup.py",
-    "src/ui/pages",  # UI pages have many nested callback functions
 ]

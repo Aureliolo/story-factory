@@ -644,6 +644,7 @@ class TestBuildWorld:
         progress_updates = []
 
         def on_progress(progress):
+            """Collect progress updates into a list for later assertions."""
             progress_updates.append(progress)
 
         # Setup mocks for generation

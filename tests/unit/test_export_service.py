@@ -207,6 +207,7 @@ class TestExportServiceReraise:
 
         # Mock _validate_export_path to raise ValueError
         def mock_validate_raises(path):
+            """Simulate path validation failure by raising ValueError."""
             raise ValueError("Path outside allowed directory")
 
         monkeypatch.setattr(

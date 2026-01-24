@@ -531,6 +531,7 @@ class WorldPage:
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 async def do_generate() -> None:
+                    """Close the dialog and trigger entity generation with the configured settings."""
                     count = int(count_input.value) if count_input.value else default_count
                     custom = custom_prompt.value.strip() if custom_prompt.value else None
                     dialog.close()
@@ -633,6 +634,7 @@ class WorldPage:
 
                     # Define callback to add selected characters
                     def add_selected_characters(selected: list[tuple[Any, Any]]) -> None:
+                        """Add selected characters to the world database and project."""
                         if not selected:
                             ui.notify("No characters selected", type="info")
                             return
@@ -750,6 +752,7 @@ class WorldPage:
 
                     # Define callback to add selected locations
                     def add_selected_locations(selected: list[tuple[Any, Any]]) -> None:
+                        """Add selected locations to the world database."""
                         if not selected:
                             ui.notify("No locations selected", type="info")
                             return
@@ -875,6 +878,7 @@ class WorldPage:
 
                     # Define callback to add selected factions
                     def add_selected_factions(selected: list[tuple[Any, Any]]) -> None:
+                        """Add selected factions to the world database with location relationships."""
                         if not selected:
                             ui.notify("No factions selected", type="info")
                             return
@@ -995,6 +999,7 @@ class WorldPage:
 
                     # Define callback to add selected items
                     def add_selected_items(selected: list[tuple[Any, Any]]) -> None:
+                        """Add selected items to the world database."""
                         if not selected:
                             ui.notify("No items selected", type="info")
                             return
@@ -1091,6 +1096,7 @@ class WorldPage:
 
                     # Define callback to add selected concepts
                     def add_selected_concepts(selected: list[tuple[Any, Any]]) -> None:
+                        """Add selected concepts to the world database."""
                         if not selected:
                             ui.notify("No concepts selected", type="info")
                             return
@@ -1193,6 +1199,7 @@ class WorldPage:
 
                     # Define callback to add selected relationships
                     def add_selected_relationships(selected: list[tuple[Any, Any]]) -> None:
+                        """Add selected relationships to the world database."""
                         if not selected:
                             ui.notify("No relationships selected", type="info")
                             return
@@ -1337,10 +1344,12 @@ class WorldPage:
         selected = dict.fromkeys(range(len(entities)), True)  # All selected by default
 
         def toggle_selection(idx: int) -> None:
+            """Toggle the selection state of an entity at the given index."""
             selected[idx] = not selected[idx]
             logger.debug(f"Toggled entity {idx}: {selected[idx]}")
 
         def confirm_selection() -> None:
+            """Confirm the selection and invoke the callback with selected entities."""
             selected_entities = [entities[i] for i in range(len(entities)) if selected[i]]
             logger.info(
                 f"User confirmed {len(selected_entities)} of {len(entities)} {entity_type}(s)"
@@ -1349,6 +1358,7 @@ class WorldPage:
             on_confirm(selected_entities)
 
         def cancel_selection() -> None:
+            """Cancel the selection and close the preview dialog."""
             logger.info(f"User cancelled {entity_type} preview")
             dialog.close()
             ui.notify(f"Cancelled adding {entity_type}s", type="info")
@@ -1451,11 +1461,13 @@ class WorldPage:
 
             # Helper functions for select/deselect all
             def select_all() -> None:
+                """Select all entities and refresh the preview dialog."""
                 selected.update(dict.fromkeys(range(len(entities)), True))
                 dialog.close()
                 self._show_entity_preview_dialog(entity_type, entities, on_confirm)
 
             def deselect_all() -> None:
+                """Deselect all entities and refresh the preview dialog."""
                 selected.update(dict.fromkeys(range(len(entities)), False))
                 dialog.close()
                 self._show_entity_preview_dialog(entity_type, entities, on_confirm)
@@ -1521,6 +1533,7 @@ class WorldPage:
                 ui.button("Skip", on_click=dialog.close).props("flat")
 
                 async def do_generate_relationships() -> None:
+                    """Close the dialog and generate relationships for the new entities."""
                     count = int(rel_count.value) if rel_count.value else 2
                     dialog.close()
                     await self._generate_relationships_for_entities(entity_names, count)
@@ -1601,6 +1614,7 @@ class WorldPage:
 
                 # Show preview dialog
                 def add_selected_relationships(selected: list[tuple[Any, Any]]) -> None:
+                    """Add selected relationships to the world database from the preview."""
                     if not selected:
                         ui.notify("No relationships selected", type="info")
                         return
@@ -1725,6 +1739,7 @@ class WorldPage:
 
             # Progress callback to update notification
             def on_progress(progress) -> None:
+                """Update the notification message with current build progress."""
                 notification.message = (
                     f"Step {progress.step}/{progress.total_steps}: {progress.message}"
                 )
@@ -1837,6 +1852,7 @@ class WorldPage:
 
                 # Progress callback to update dialog
                 def on_progress(progress) -> None:
+                    """Update the dialog label and progress bar with current build progress."""
                     progress_label.text = progress.message
                     progress_bar.value = progress.step / progress.total_steps
 
@@ -1972,6 +1988,7 @@ class WorldPage:
                 default_max: int,
                 max_val: int = 50,
             ) -> tuple:
+                """Create a labeled min-max number input pair for generation settings."""
                 with ui.column().classes("gap-1"):
                     ui.label(f"{label} (min-max)").classes("text-xs text-gray-500")
                     with ui.row().classes("gap-1 items-center"):
@@ -2068,6 +2085,7 @@ class WorldPage:
 
             # Function to save settings before building
             async def save_settings_and_build() -> None:
+                """Save the generation settings to the project and start the build."""
                 # Update project with dialog values
                 project.target_chapters = int(chapter_input.value) if chapter_input.value else None
                 project.target_characters_min = (
@@ -2913,6 +2931,7 @@ class WorldPage:
                 ui.button("Cancel", on_click=dialog.close).props("flat")
 
                 def create_relationship():
+                    """Create the relationship between the dragged entities."""
                     if not self.state.world_db:
                         return
 
@@ -3217,6 +3236,7 @@ class WorldPage:
                             )
 
                 def _do_delete() -> None:
+                    """Close the dialog and delete the selected entity."""
                     dialog.close()
                     self._delete_entity()
 

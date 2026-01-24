@@ -47,6 +47,7 @@ def _validate_attributes(attrs: dict[str, Any], max_depth: int = MAX_ATTRIBUTES_
 
     # Check depth
     def _check_depth(obj: Any, current_depth: int) -> None:
+        """Recursively validate nesting depth of attributes."""
         if current_depth > max_depth:
             raise ValueError(f"Attributes exceed maximum nesting depth of {max_depth}")
         if isinstance(obj, dict):

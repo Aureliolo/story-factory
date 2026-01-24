@@ -28,6 +28,7 @@ class TestGraphComponent:
 
         @ui.page("/test-graph")
         def test_page():
+            """Build test page with graph component."""
             graph = GraphComponent(height=300)
             graph.build()
 
@@ -40,6 +41,7 @@ class TestGraphComponent:
 
         @ui.page("/test-graph-data")
         def test_page():
+            """Build test page with graph component and world data."""
             graph = GraphComponent(height=300)
             graph.build()
             graph.set_world_db(test_world_db)
@@ -58,6 +60,7 @@ class TestMiniGraph:
 
         @ui.page("/test-mini-graph")
         def test_page():
+            """Build test page with mini graph component."""
             with ui.column():
                 mini_graph(test_world_db, height=200)
 

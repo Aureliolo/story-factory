@@ -295,6 +295,8 @@ def create_mock_subprocess_run(original_run):
         if cmd_base == "ollama":
 
             class MockOllamaResult:
+                """Mock subprocess result for ollama CLI commands."""
+
                 stdout = (
                     f"NAME                              ID      SIZE    MODIFIED\n"
                     f"{TEST_MODEL}    abc123  8.0 GB  2 days ago\n"
@@ -307,6 +309,8 @@ def create_mock_subprocess_run(original_run):
         if cmd_base == "nvidia-smi":
 
             class MockNvidiaSmiResult:
+                """Mock subprocess result for nvidia-smi commands."""
+
                 stdout = "8192"  # 8GB VRAM
                 stderr = ""
                 returncode = 0

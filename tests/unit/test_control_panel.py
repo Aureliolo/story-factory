@@ -18,24 +18,31 @@ class MockCTk:
         pass
 
     def title(self, *args):
+        """Set the window title."""
         pass
 
     def geometry(self, *args):
+        """Set the window size and position."""
         pass
 
     def minsize(self, *args):
+        """Set the minimum window dimensions."""
         pass
 
     def protocol(self, *args):
+        """Register a callback for window manager protocol events."""
         pass
 
     def after(self, *args):
+        """Schedule a callback to run after a delay."""
         pass
 
     def destroy(self):
+        """Destroy the window and all its children."""
         pass
 
     def mainloop(self):
+        """Start the Tkinter event loop."""
         pass
 
 
@@ -1217,6 +1224,7 @@ class TestControlPanel:
         panel = self._create_mock_panel()
 
         def success_func():
+            """Return True to simulate a successful operation."""
             return True
 
         panel._run_in_thread(success_func, "Success!", "Failed")
@@ -1244,6 +1252,7 @@ class TestControlPanel:
         panel = self._create_mock_panel()
 
         def fail_func():
+            """Return False to simulate a failed operation."""
             return False
 
         panel._run_in_thread(fail_func, "Success!", "Failed")
@@ -1271,6 +1280,7 @@ class TestControlPanel:
         panel = self._create_mock_panel()
 
         def fail_func():
+            """Return None to simulate a failed operation."""
             return None
 
         panel._run_in_thread(fail_func, "Success!", "Failed")
@@ -1298,6 +1308,7 @@ class TestControlPanel:
         panel = self._create_mock_panel()
 
         def error_func():
+            """Raise an exception to simulate an error during execution."""
             raise ValueError("Test error")
 
         panel._run_in_thread(error_func, "Success!", "Failed")

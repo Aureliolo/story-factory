@@ -367,6 +367,7 @@ class TestProjectServiceExceptionHandling:
 
         # Mock WorldDatabase to raise an exception
         def mock_world_db_init(*args, **kwargs):
+            """Mock WorldDatabase init that raises RuntimeError."""
             raise RuntimeError("Database creation failed")
 
         monkeypatch.setattr("src.services.project_service.WorldDatabase", mock_world_db_init)
@@ -402,6 +403,7 @@ class TestProjectServiceExceptionHandling:
 
         # Mock WorldDatabase to raise an exception (after JSON is loaded)
         def mock_world_db_init(*args, **kwargs):
+            """Mock WorldDatabase init that raises RuntimeError."""
             raise RuntimeError("World database initialization failed")
 
         monkeypatch.setattr("src.services.project_service.WorldDatabase", mock_world_db_init)
@@ -424,6 +426,7 @@ class TestProjectServiceExceptionHandling:
         original_open = open
 
         def mock_open(*args, **kwargs):
+            """Mock open that raises PermissionError on write mode."""
             if "w" in str(args[1:]) or kwargs.get("mode", "") == "w":
                 raise PermissionError("Cannot write to file")
             return original_open(*args, **kwargs)
@@ -451,6 +454,7 @@ class TestProjectServiceExceptionHandling:
         from pathlib import Path
 
         def mock_unlink(self):
+            """Mock Path.unlink that raises PermissionError."""
             raise PermissionError("Cannot delete file")
 
         monkeypatch.setattr(Path, "unlink", mock_unlink)
@@ -470,6 +474,7 @@ class TestProjectServiceExceptionHandling:
 
         # Mock shutil.copy2 to raise an exception
         def mock_copy2(*args, **kwargs):
+            """Mock shutil.copy2 that raises OSError."""
             raise OSError("Cannot copy file")
 
         monkeypatch.setattr("shutil.copy2", mock_copy2)
@@ -490,6 +495,7 @@ class TestProjectServiceExceptionHandling:
 
         # Mock save_project to raise an exception
         def mock_save(state):
+            """Mock save_project that raises OSError."""
             raise OSError("Cannot save project")
 
         monkeypatch.setattr(service, "save_project", mock_save)

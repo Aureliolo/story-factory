@@ -20,6 +20,7 @@ class TestChatComponent:
 
         @ui.page("/test-chat")
         def test_page():
+            """Build test page with chat component."""
             chat = ChatComponent(placeholder="Test placeholder")
             chat.build()
 
@@ -34,6 +35,7 @@ class TestChatComponent:
 
         @ui.page("/test-chat-user")
         def test_page():
+            """Build test page with chat component for user messages."""
             chat = ChatComponent()
             chat.build()
             chat_ref.append(chat)
@@ -51,6 +53,7 @@ class TestChatComponent:
 
         @ui.page("/test-chat-assistant")
         def test_page():
+            """Build test page with chat component for assistant messages."""
             chat = ChatComponent()
             chat.build()
             chat_ref.append(chat)
@@ -68,6 +71,7 @@ class TestChatComponent:
 
         @ui.page("/test-chat-typing")
         def test_page():
+            """Build test page with chat component for typing indicator."""
             chat = ChatComponent()
             chat.build()
             chat_ref.append(chat)
@@ -90,6 +94,7 @@ class TestChatComponent:
 
         @ui.page("/test-chat-set")
         def test_page():
+            """Build test page with chat component for setting messages."""
             chat = ChatComponent()
             chat.build()
             chat_ref.append(chat)
@@ -112,6 +117,7 @@ class TestChatComponent:
 
         @ui.page("/test-chat-disabled")
         def test_page():
+            """Build test page with disabled chat component."""
             chat = ChatComponent(disabled=True)
             chat.build()
             chat_ref.append(chat)
@@ -133,6 +139,7 @@ class TestChatComponent:
 
         @ui.page("/test-chat-context")
         def test_page():
+            """Build test page with chat component for client context capture."""
             chat = ChatComponent()
             chat.build()
             chat_ref.append(chat)

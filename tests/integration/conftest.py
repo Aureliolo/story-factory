@@ -69,6 +69,7 @@ def mock_ollama_for_agents():
 
         # Default chat response
         def default_chat(*args, **kwargs):
+            """Return a default mock chat response for agent tests."""
             return MockChatResponse("Default AI response")
 
         mock_client.chat.side_effect = default_chat
