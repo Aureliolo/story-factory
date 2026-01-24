@@ -918,6 +918,39 @@ class TestControlPanel:
         panel._process_manager.start_app.assert_called_once()
         assert result == 12345
 
+    def test_on_restart_clear(self):
+        """Should trigger restart and clear logs in thread."""
+        panel = self._create_mock_panel()
+
+        with patch.object(panel, "_run_in_thread") as mock_run:
+            panel._on_restart_clear()
+
+            mock_run.assert_called_once()
+            # Verify restart_and_clear function is passed
+            restart_func = mock_run.call_args[0][0]
+            assert callable(restart_func)
+
+    def test_on_restart_clear_inner_function(self):
+        """Should execute restart and clear function correctly."""
+        panel = self._create_mock_panel()
+        panel._process_manager.stop_app.return_value = True
+        panel._process_manager.start_app.return_value = 12345
+        panel._log_watcher.clear_log.return_value = 1024
+
+        # Capture the restart_and_clear function
+        with patch.object(panel, "_run_in_thread") as mock_run:
+            panel._on_restart_clear()
+            restart_func = mock_run.call_args[0][0]
+
+        # Execute the captured restart_and_clear function
+        with patch("time.sleep"):
+            result = restart_func()
+
+        panel._process_manager.stop_app.assert_called_once()
+        panel._log_watcher.clear_log.assert_called_once()
+        panel._process_manager.start_app.assert_called_once()
+        assert result == 12345
+
     @patch("scripts.control_panel.webbrowser.open")
     def test_on_browser(self, mock_open):
         """Should open browser to app URL."""

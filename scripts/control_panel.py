@@ -639,6 +639,16 @@ class ControlPanel(ctk.CTk):
         )
         self._restart_btn.pack(side="left", padx=5)
 
+        self._restart_clear_btn = ctk.CTkButton(
+            row1,
+            text="Restart & Clear",
+            command=self._on_restart_clear,
+            width=120,
+            fg_color="#fd7e14",
+            hover_color="#e76a00",
+        )
+        self._restart_clear_btn.pack(side="left", padx=5)
+
         self._browser_btn = ctk.CTkButton(
             row1,
             text="Browser",
@@ -663,9 +673,9 @@ class ControlPanel(ctk.CTk):
 
         self._ollama_btn = ctk.CTkButton(
             row2,
-            text="Ollama",
+            text="Start Ollama",
             command=self._on_start_ollama,
-            width=100,
+            width=110,
             fg_color="#17a2b8",
             hover_color="#138496",
         )
@@ -912,6 +922,22 @@ class ControlPanel(ctk.CTk):
         self._run_in_thread(
             restart,
             f"Restarted! Open {APP_URL}",
+            "Failed to restart",
+        )
+
+    def _on_restart_clear(self) -> None:
+        """Handle Restart & Clear button click."""
+
+        def restart_and_clear():
+            self._process_manager.stop_app()
+            self._log_watcher.clear_log()
+            time.sleep(1)
+            return self._process_manager.start_app()
+
+        self._set_status_message("Restarting & clearing logs...", "#17a2b8")
+        self._run_in_thread(
+            restart_and_clear,
+            f"Restarted with fresh logs! Open {APP_URL}",
             "Failed to restart",
         )
 
