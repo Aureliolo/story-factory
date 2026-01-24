@@ -286,6 +286,11 @@ def mock_ollama_globally(monkeypatch):
     import subprocess
     from unittest.mock import MagicMock
 
+    # Use a model from RECOMMENDED_MODELS that has tags for all agent roles
+    # huihui_ai/dolphin3-abliterated:8b has tags for all roles:
+    # ["interviewer", "architect", "writer", "editor", "continuity", "validator", "quality"]
+    TEST_MODEL = "huihui_ai/dolphin3-abliterated:8b"
+
     # Create a mock client class that returns safe defaults
     class MockOllamaClient:
         def __init__(self, host=None, timeout=None):
@@ -293,10 +298,19 @@ def mock_ollama_globally(monkeypatch):
             self.timeout = timeout
 
         def list(self):
+            # Return a response that works for both API patterns in the codebase:
+            # 1. Object access: response.models, model.model (services/model_service.py)
+            # 2. Dict access: models.get("models", []), m["name"] (agents/base.py)
             mock_model = MagicMock()
-            mock_model.model = "test-model:latest"
+            mock_model.model = TEST_MODEL
+            mock_model.__getitem__ = lambda self, key: TEST_MODEL if key == "name" else None
+
             mock_response = MagicMock()
             mock_response.models = [mock_model]
+            # Support dict-like access for code that does models.get("models", [])
+            mock_response.get = lambda key, default=None: (
+                [{"name": TEST_MODEL}] if key == "models" else default
+            )
             return mock_response
 
         def generate(self, model=None, prompt=None, options=None, **kwargs):
@@ -310,12 +324,12 @@ def mock_ollama_globally(monkeypatch):
 
         def pull(self, model, stream=False):
             if stream:
-
-                def gen():
-                    yield {"status": "pulling", "completed": 50, "total": 100}
-                    yield {"status": "success", "completed": 100, "total": 100}
-
-                return gen()
+                return iter(
+                    [
+                        {"status": "pulling", "completed": 50, "total": 100},
+                        {"status": "success", "completed": 100, "total": 100},
+                    ]
+                )
             return {"status": "success"}
 
         def delete(self, model):
@@ -332,9 +346,10 @@ def mock_ollama_globally(monkeypatch):
         cmd_str = cmd[0] if isinstance(cmd, list) else cmd
 
         if "ollama" in cmd_str:
-            # Mock `ollama list` output
+            # Mock `ollama list` output - use a model from RECOMMENDED_MODELS
+            # that has tags for all agent roles
             class MockOllamaResult:
-                stdout = "NAME                    ID      SIZE    MODIFIED\ntest-model:latest    abc123  4.1 GB  2 days ago\n"
+                stdout = f"NAME                              ID      SIZE    MODIFIED\n{TEST_MODEL}    abc123  8.0 GB  2 days ago\n"
                 stderr = ""
                 returncode = 0
 

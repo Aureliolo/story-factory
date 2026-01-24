@@ -119,17 +119,17 @@ Tables: `entities`, `relationships`, `events`, `event_participants`, `schema_ver
 
 | Utility | File | Purpose |
 |---------|------|---------|
-| `exceptions.py` | Centralized exception hierarchy |
-| `json_parser.py` | LLM response JSON extraction |
-| `validation.py` | Input validation helpers |
-| `error_handling.py` | Decorators: `@handle_ollama_errors`, `@retry_with_fallback` |
-| `logging_config.py` | Logging setup, performance context manager |
-| `prompt_registry.py` | Template loading and rendering |
-| `prompt_builder.py` | Dynamic prompt construction |
-| `constants.py` | Language codes, shared constants |
-| `environment.py` | Environment checks (Python version, deps) |
-| `text_analytics.py` | Reading level, complexity metrics |
-| `message_analyzer.py` | Language/content inference |
+| Exceptions | `exceptions.py` | Centralized exception hierarchy |
+| JSON Parser | `json_parser.py` | LLM response JSON extraction |
+| Validation | `validation.py` | Input validation helpers |
+| Error Handling | `error_handling.py` | Decorators: `@handle_ollama_errors`, `@retry_with_fallback` |
+| Logging Config | `logging_config.py` | Logging setup, performance context manager |
+| Prompt Registry | `prompt_registry.py` | Template loading and rendering |
+| Prompt Builder | `prompt_builder.py` | Dynamic prompt construction |
+| Constants | `constants.py` | Language codes, shared constants |
+| Environment | `environment.py` | Environment checks (Python version, deps) |
+| Text Analytics | `text_analytics.py` | Reading level, complexity metrics |
+| Message Analyzer | `message_analyzer.py` | Language/content inference |
 
 ## Configuration (`settings.py`)
 
