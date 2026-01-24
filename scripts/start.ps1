@@ -20,7 +20,7 @@ function Set-ActionMessage {
 function Get-RecentLogLines {
     param([int]$Lines = 12)
 
-    $logFile = Join-Path $projectRoot "logs\story_factory.log"
+    $logFile = Join-Path $projectRoot "output\logs\story_factory.log"
     $result = @()
 
     if (Test-Path $logFile) {
@@ -159,7 +159,7 @@ function Open-Browser {
 }
 
 function Clear-LogFile {
-    $logFile = Join-Path $projectRoot "logs\story_factory.log"
+    $logFile = Join-Path $projectRoot "output\logs\story_factory.log"
 
     if (Test-Path $logFile) {
         $size = (Get-Item $logFile).Length
@@ -180,7 +180,7 @@ function Clear-AndRestart {
     }
 
     # Clear logs
-    $logFile = Join-Path $projectRoot "logs\story_factory.log"
+    $logFile = Join-Path $projectRoot "output\logs\story_factory.log"
     if (Test-Path $logFile) {
         Clear-Content -Path $logFile
     }
