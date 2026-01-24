@@ -19,7 +19,7 @@ def cleanup_production_log_handlers():
     """Remove file handlers pointing to the production log after each test.
 
     This fixture runs after each test and removes any file handlers
-    that point to the production log file (logs/story_factory.log).
+    that point to the production log file (output/logs/story_factory.log).
     This ensures tests don't accidentally leave handlers that write to
     the production log, while still allowing logging tests to work.
     """

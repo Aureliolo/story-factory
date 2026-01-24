@@ -23,7 +23,7 @@ class PromptRegistry:
 
     Templates are organized in directories by agent:
     ```
-    prompts/templates/
+    src/prompts/templates/
     ├── writer/
     │   ├── system.yaml
     │   ├── write_chapter.yaml
@@ -45,7 +45,7 @@ class PromptRegistry:
 
         Args:
             templates_dir: Directory containing template YAML files.
-                          Defaults to prompts/templates.
+                          Defaults to src/prompts/templates.
         """
         self.templates_dir = Path(templates_dir) if templates_dir else DEFAULT_TEMPLATES_DIR
         self._templates: dict[str, PromptTemplate] = {}

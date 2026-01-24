@@ -107,7 +107,7 @@ class WorldService:
         """Initialize WorldService.
 
         Args:
-            settings: Application settings. If None, loads from src.settings.json.
+            settings: Application settings. If None, loads from src/settings.json.
         """
         logger.debug("Initializing WorldService")
         self.settings = settings or Settings.load()

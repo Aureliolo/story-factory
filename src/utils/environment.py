@@ -18,7 +18,8 @@ def check_environment() -> None:
     Raises:
         SystemExit: If Python version or dependencies are insufficient.
     """
-    project_root = Path(__file__).parent.parent
+    # Go up from utils/ to src/ to project root
+    project_root = Path(__file__).parent.parent.parent
 
     _check_python_version(project_root)
     _check_dependencies(project_root)

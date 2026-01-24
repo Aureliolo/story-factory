@@ -55,7 +55,7 @@ class ServiceContainer:
         """Initialize all services with shared settings.
 
         Args:
-            settings: Application settings. If None, loads from src.settings.json.
+            settings: Application settings. If None, loads from src/settings.json.
         """
         self.settings = settings or Settings.load()
         self.project = ProjectService(self.settings)

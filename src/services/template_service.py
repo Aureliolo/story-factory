@@ -15,8 +15,8 @@ from src.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-# Templates directory
-TEMPLATES_DIR = Path(__file__).parent.parent / "output" / "templates"
+# Templates directory (go up from services/ to src/ to project root, then into output/)
+TEMPLATES_DIR = Path(__file__).parent.parent.parent / "output" / "templates"
 
 
 class TemplateService:

@@ -204,7 +204,7 @@ class ExportService:
         """Initialize ExportService.
 
         Args:
-            settings: Application settings. If None, loads from src.settings.json.
+            settings: Application settings. If None, loads from src/settings.json.
         """
         logger.debug("Initializing ExportService")
         self.settings = settings or Settings.load()

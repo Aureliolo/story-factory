@@ -57,7 +57,9 @@ class ModelModeService:
         """
         logger.debug(f"Initializing ModelModeService: db_path={db_path}")
         self.settings = settings
-        self._db_path = Path(db_path) if db_path else Path("output/model_scores.db")
+        # Default to output/model_scores.db at project root
+        default_db = Path(__file__).parent.parent.parent / "output" / "model_scores.db"
+        self._db_path = Path(db_path) if db_path else default_db
         self._db = ModeDatabase(self._db_path)
 
         # Current mode
