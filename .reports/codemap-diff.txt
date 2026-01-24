@@ -1,0 +1,40 @@
+# Codemap Generation Report
+# Generated: 2026-01-24
+
+## Summary
+- Status: INITIAL GENERATION (no previous codemaps existed)
+- Change Percentage: N/A (first generation)
+- Files Created: 4
+
+## Generated Files
+1. codemaps/architecture.md - Overall architecture (170 lines)
+2. codemaps/backend.md - Backend structure (163 lines)
+3. codemaps/frontend.md - Frontend structure (222 lines)
+4. codemaps/data.md - Data models and schemas (354 lines)
+
+## Codebase Analysis
+- Total Python Source Files: 78 (excluding tests)
+- Services: 14 modules
+- Agents: 7 modules
+- UI Pages: 9 routes
+- Memory/Data Models: 9 modules
+- Utility Modules: 14 modules
+
+## Architecture Highlights
+- Clean architecture with Service Container DI pattern
+- Multi-agent system: Interviewer → Architect → Writer → Editor → Continuity
+- NiceGUI web frontend with path-based routing
+- SQLite + NetworkX hybrid storage for world building
+- Pydantic models for type-safe data handling
+- Ollama integration for local LLM inference
+
+## Key Patterns Documented
+1. ServiceContainer dependency injection
+2. AppState centralized UI state
+3. BaseAgent with retry logic and rate limiting
+4. WorldDatabase thread-safe SQLite operations
+5. StoryOrchestrator workflow coordination
+6. Prompt registry for template management
+
+## No Approval Required
+This is the initial generation of codemaps. No previous version exists for comparison.

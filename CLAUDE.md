@@ -20,6 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **No git history rewriting.** Never use `git commit --amend` or `git push --force`. Always create new commits to fix issues. This preserves history and avoids force-push problems.
 
+**No bypassing CI.** Never use `git push --no-verify` or modify test coverage thresholds to make tests pass. If tests fail, fix the actual issue. Pre-push hooks exist to catch problems before they reach CI.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.
@@ -122,6 +124,12 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 - Shared fixtures in `tests/conftest.py`
 - **Always run tests in background** to avoid blocking on long test runs when working on todo lists
 - **Never run full test suite scans** - only run tests for specific files when needed (e.g., `pytest tests/unit/test_settings.py`). Full test runs take too long and should only be done by CI.
+
+**Test mocking gotchas:**
+- Mock models must use a name from `RECOMMENDED_MODELS` (e.g., `huihui_ai/dolphin3-abliterated:8b`) - fake names like `test-model:latest` have no role tags and cause `ValueError: No model tagged for role`
+- `mock_ollama_globally` fixture in conftest.py is autouse - all tests automatically mock Ollama
+- Ollama API responses use both dict (`models.get("models")`) and object (`response.models`) patterns - mocks must support both
+- conftest.py mocks `Settings.get_model_tags()` to return all role tags for the test model - without this, agents fail to auto-select models for their roles
 
 ## Ollama Integration
 

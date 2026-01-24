@@ -208,13 +208,14 @@ def sample_story_state() -> StoryState:
 
 @pytest.fixture
 def sample_story_with_chapters(sample_story_state: StoryState) -> StoryState:
-    """Create a StoryState with chapters.
+    """
+    Create a StoryState populated with sample characters and chapters.
 
-    Args:
-        sample_story_state: Base story state.
+    Parameters:
+        sample_story_state (StoryState): Base story state to augment.
 
     Returns:
-        StoryState with chapters added.
+        StoryState: The same StoryState instance with two sample characters, three sample chapters, and `status` set to "writing".
     """
     from memory.story_state import Chapter, Character
 
@@ -268,48 +269,41 @@ def sample_story_with_chapters(sample_story_state: StoryState) -> StoryState:
     return state
 
 
-@pytest.fixture
-def mock_ollama(monkeypatch):
-    """Mock Ollama client for testing without a real server.
-
-    Args:
-        monkeypatch: Pytest monkeypatch fixture.
-
-    Yields:
-        Mock response generator.
+@pytest.fixture(autouse=True)
+def mock_ollama_globally(monkeypatch):
     """
+    Autouse pytest fixture that installs global mocks for the Ollama client and related system calls for all tests.
 
-    class MockOllamaClient:
-        def __init__(self, host=None, timeout=None):
-            self.host = host
-            self.timeout = timeout
+    Prevents real ollama.Client connections and subprocess calls for `ollama list` and `nvidia-smi`. Tests may override these mocks using `patch()`; patch context managers take precedence over monkeypatch. Uses the shared test utilities to provide a consistent mock implementation across the test suite.
+    """
+    from tests.shared.mock_ollama import setup_ollama_mocks
 
-        def list(self):
-            class Models:
-                models = [
-                    type("Model", (), {"model": "test-model:latest"})(),
-                ]
+    setup_ollama_mocks(monkeypatch)
 
-            return Models()
 
-        def generate(self, model, prompt, options=None):
-            class Response:
-                response = "Mock response from AI"
+@pytest.fixture
+def mock_ollama():
+    """Deprecated: Use mock_ollama_globally (autouse) instead.
 
-            return Response()
+    This fixture is kept for backwards compatibility with tests that
+    explicitly request it. The mock_ollama_globally fixture now handles
+    all Ollama mocking automatically.
 
-        def pull(self, model, stream=False):
-            if stream:
-                yield {"status": "pulling", "completed": 50, "total": 100}
-                yield {"status": "success", "completed": 100, "total": 100}
-            return {"status": "success"}
+    Returns:
+        The mocked ollama.Client class (for inspection if needed).
+    """
+    import warnings
 
-        def delete(self, model):
-            return {"status": "success"}
+    import ollama
 
-    monkeypatch.setattr("ollama.Client", MockOllamaClient)
+    warnings.warn(
+        "mock_ollama fixture is deprecated; mock_ollama_globally (autouse) "
+        "now handles all Ollama mocking automatically",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-    return MockOllamaClient
+    return ollama.Client  # Returns the already-mocked Client
 
 
 @pytest.fixture
