@@ -13,6 +13,7 @@ app.run(host="127.0.0.1", port=7860)
 ```
 
 **Routes:**
+
 | Path | Page Class | Purpose |
 |------|------------|---------|
 | `/` | `WritePage` | Main writing interface |

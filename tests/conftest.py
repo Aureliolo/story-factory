@@ -314,7 +314,18 @@ def mock_ollama_globally(monkeypatch):
             return mock_response
 
         def generate(self, model=None, prompt=None, options=None, **kwargs):
-            return {"response": "Mock response from AI"}
+            """Return a mock response object compatible with production expectations.
+
+            The real Ollama generate response is accessed in two ways:
+            - Attribute style: response.response
+            - Dict style: response["response"]
+            """
+            mock_result = MagicMock()
+            mock_result.response = "Mock response from AI"
+            mock_result.__getitem__ = lambda self, key: (
+                "Mock response from AI" if key == "response" else None
+            )
+            return mock_result
 
         def chat(self, model=None, messages=None, options=None, **kwargs):
             return {
@@ -343,9 +354,18 @@ def mock_ollama_globally(monkeypatch):
 
     def mock_subprocess_run(cmd, *args, **kwargs):
         """Intercept subprocess calls to ollama and nvidia-smi."""
-        cmd_str = cmd[0] if isinstance(cmd, list) else cmd
+        import os
 
-        if "ollama" in cmd_str:
+        # Get the executable name robustly
+        if isinstance(cmd, list):
+            cmd_str = cmd[0] if cmd else ""
+        else:
+            cmd_str = cmd.split()[0] if cmd else ""
+
+        # Extract base name (handle full paths like /usr/bin/ollama)
+        cmd_base = os.path.basename(cmd_str)
+
+        if cmd_base == "ollama":
             # Mock `ollama list` output - use a model from RECOMMENDED_MODELS
             # that has tags for all agent roles
             class MockOllamaResult:
@@ -355,7 +375,7 @@ def mock_ollama_globally(monkeypatch):
 
             return MockOllamaResult()
 
-        if "nvidia-smi" in cmd_str:
+        if cmd_base == "nvidia-smi":
             # Mock nvidia-smi for VRAM detection
             class MockNvidiaSmiResult:
                 stdout = "8192"  # 8GB VRAM
@@ -381,7 +401,16 @@ def mock_ollama():
     Returns:
         The mocked ollama.Client class (for inspection if needed).
     """
+    import warnings
+
     import ollama
+
+    warnings.warn(
+        "mock_ollama fixture is deprecated; mock_ollama_globally (autouse) "
+        "now handles all Ollama mocking automatically",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     return ollama.Client  # Returns the already-mocked Client
 
