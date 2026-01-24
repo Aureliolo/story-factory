@@ -54,9 +54,7 @@ class SettingsPage:
         with ui.column().classes("w-full gap-6 p-4"):
             ui.label("Settings").classes("text-2xl font-bold")
 
-            # All cards in flex container - same height, different widths
-            # Top row: Connection, Workflow, Memory, Generation Mode, Story Structure (compact)
-            # Bottom row: Creativity, Model Selection, Adaptive Learning, World Generation
+            # Top row: Connection, Workflow, Memory, Generation Mode, Story Structure
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch"):
                 with ui.element("div").style("flex: 1 1 240px; min-width: 240px;"):
                     self._build_connection_section()
@@ -73,6 +71,8 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1 1 260px; min-width: 260px;"):
                     self._build_story_structure_section()
 
+            # Bottom row: Creativity, Model Selection, Adaptive Learning, World Generation
+            with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch mt-4"):
                 with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
                     self._build_temperature_section()
 
