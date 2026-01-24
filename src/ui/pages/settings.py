@@ -666,8 +666,6 @@ class SettingsPage:
         """
         Persist current UI-configured settings to the application's settings store and record an undo snapshot.
 
-        Save the current UI-configured settings and record an undo snapshot.
-
         Read values from the page's UI controls and apply them to the settings object.
         Validate and save the updated settings.
         Record an undo action that contains before and after snapshots for undo and redo.
