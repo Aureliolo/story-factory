@@ -247,7 +247,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 6. **Dependencies**:
    - Minimize external dependencies
    - When adding new dependencies, add them to `requirements.txt`
-   - Pin dependency versions with ranges (e.g., `>=4.0.0,<7.0.0`)
+   - Pin dependencies to exact versions (e.g., `nicegui==3.5.0`) - Dependabot handles upgrades
 
 7. **Documentation**:
    - Update README.md for significant feature changes
