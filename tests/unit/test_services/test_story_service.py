@@ -1259,3 +1259,71 @@ class TestGenerationCancelledException:
         assert str(exc) == "Full cancellation"
         assert exc.chapter_num == 7
         assert exc.progress_state == progress
+
+
+class TestStoryServiceLearning:
+    """Tests for learning system integration."""
+
+    def test_complete_project_no_mode_service(self, story_service, sample_story_state):
+        """Test complete_project when no mode_service is configured."""
+        result = story_service.complete_project(sample_story_state)
+
+        assert result["project_id"] == sample_story_state.id
+        assert result["status"] == "completed"
+        assert result["pending_recommendations"] == []
+        assert sample_story_state.status == "completed"
+
+    def test_complete_project_with_mode_service(self, settings, sample_story_state):
+        """Test complete_project with mode_service that returns recommendations."""
+        from unittest.mock import MagicMock
+
+        from src.memory.mode_models import RecommendationType, TuningRecommendation
+
+        mock_mode_service = MagicMock()
+        mock_rec = TuningRecommendation(
+            recommendation_type=RecommendationType.MODEL_SWAP,
+            current_value="old-model",
+            suggested_value="new-model",
+            reason="Better quality",
+            confidence=0.9,
+            affected_role="writer",
+        )
+        mock_mode_service.on_project_complete.return_value = [mock_rec]
+        mock_mode_service.handle_recommendations.return_value = [mock_rec]
+
+        service = StoryService(settings, mode_service=mock_mode_service)
+        result = service.complete_project(sample_story_state)
+
+        assert result["project_id"] == sample_story_state.id
+        assert result["status"] == "completed"
+        assert len(result["pending_recommendations"]) == 1
+        mock_mode_service.on_project_complete.assert_called_once()
+        mock_mode_service.handle_recommendations.assert_called_once()
+
+    def test_complete_project_with_exception(self, settings, sample_story_state):
+        """Test complete_project handles exceptions gracefully."""
+        from unittest.mock import MagicMock
+
+        mock_mode_service = MagicMock()
+        mock_mode_service.on_project_complete.side_effect = Exception("Learning failed")
+
+        service = StoryService(settings, mode_service=mock_mode_service)
+        result = service.complete_project(sample_story_state)
+
+        # Should still complete but with empty recommendations
+        assert result["project_id"] == sample_story_state.id
+        assert result["status"] == "completed"
+        assert result["pending_recommendations"] == []
+
+    def test_on_story_complete_no_recommendations(self, settings, sample_story_state):
+        """Test _on_story_complete when no recommendations are generated."""
+        from unittest.mock import MagicMock
+
+        mock_mode_service = MagicMock()
+        mock_mode_service.on_project_complete.return_value = []
+
+        service = StoryService(settings, mode_service=mock_mode_service)
+        result = service._on_story_complete(sample_story_state)
+
+        assert result is None
+        mock_mode_service.handle_recommendations.assert_not_called()
