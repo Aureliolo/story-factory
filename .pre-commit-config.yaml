@@ -12,9 +12,20 @@ ci:
   skip: [mypy]
 
 repos:
+  # Check and install dependencies before any other hooks
+  - repo: local
+    hooks:
+      - id: check-deps
+        name: check dependencies
+        entry: python scripts/check_deps.py --auto-install
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit, pre-push]
+
   # Use ruff for linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.13
+    rev: v0.14.14
     hooks:
       - id: ruff
         args: [--fix]
@@ -28,7 +39,7 @@ repos:
         additional_dependencies:
           - pydantic==2.12.5
           - pytest==9.0.2
-          - nicegui==3.5.0
+          - nicegui==3.6.1
           - ollama==0.6.1
           - instructor==1.14.4
           - openai==2.15.0
