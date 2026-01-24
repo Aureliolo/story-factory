@@ -117,14 +117,15 @@ class StoryFactoryApp:
 
         Sets the following palette keys to specific hex values: primary `#2196F3`, secondary `#607D8B`, positive `#4CAF50`, negative `#F44336`, warning `#FF9800`, and info `#00BCD4`.
         """
-        # Access colors via getattr for NiceGUI 3.6+ (type stubs not yet updated)
-        colors = app.colors
-        colors.primary = "#2196F3"
-        colors.secondary = "#607D8B"
-        colors.positive = "#4CAF50"
-        colors.negative = "#F44336"
-        colors.warning = "#FF9800"
-        colors.info = "#00BCD4"
+        # NiceGUI 3.6+ uses app.colors() for global colors (ui.colors is per-page)
+        app.colors(
+            primary="#2196F3",
+            secondary="#607D8B",
+            positive="#4CAF50",
+            negative="#F44336",
+            warning="#FF9800",
+            info="#00BCD4",
+        )
         logger.debug("Global color palette configured")
 
     def _setup_exception_handler(self) -> None:
@@ -132,23 +133,23 @@ class StoryFactoryApp:
 
         This catches exceptions that occur after the page is sent to the client,
         such as errors in async handlers or background tasks.
+
+        Note: In NiceGUI 3.6+, app.on_exception handlers run outside UI context,
+        so they cannot use ui.notify(). Use try/catch in page functions for UI feedback.
         """
 
         def handle_exception(e: Exception) -> None:
             """
-            Handle an unhandled UI exception by recording it and notifying the user.
-
-            Logs the provided exception with stack trace and displays a negative UI notification containing the exception message.
+            Handle an unhandled UI exception by logging it.
 
             Parameters:
                 e (Exception): The exception to handle.
             """
-            logger.exception("Unhandled UI exception")
-            ui.notify(f"An error occurred: {e}", type="negative", timeout=10000)
+            logger.exception("Unhandled UI exception: %s", e)
 
-        # Access on_exception via getattr for NiceGUI 3.6+ (type stubs not yet updated)
-        on_exception = ui.on_exception
-        on_exception(handle_exception)
+        # NiceGUI 3.6+: use app.on_exception for global handling (logging only)
+        # ui.on_exception triggers script mode and cannot be used with @ui.page
+        app.on_exception(handle_exception)
         logger.debug("Global exception handler registered")
 
     def build(self) -> None:
@@ -157,6 +158,7 @@ class StoryFactoryApp:
 
         Configures global colors and the global exception handler, registers page routes and their shared layout for "/", "/world", "/timeline", "/projects", "/settings", "/models", "/analytics", "/templates", and "/compare", and registers the application shutdown handler.
         """
+        # NiceGUI 3.6+: app.colors() and app.on_exception() are safe global calls
         self._setup_global_colors()
         self._setup_exception_handler()
 
