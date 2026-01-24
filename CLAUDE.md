@@ -109,6 +109,12 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - **Python**: 3.14+
 - **Type hints**: Encouraged but not enforced (gradual adoption)
 - **Imports**: Auto-sorted by Ruff
+- **Dependency parsing**: Use `packaging.requirements.Requirement` instead of regex - handles all version specifiers (`==`, `>=`, `~=`, etc.) correctly
+
+## Cross-Platform Gotchas
+
+- `subprocess.CREATE_NO_WINDOW` is Windows-only - use `getattr(subprocess, "CREATE_NO_WINDOW", 0)` for cross-platform code
+- Pre-commit hooks run only on staged files locally, but pre-commit.ci runs on full repo - use `pass_filenames: false` for tools that should check entire directories
 
 ## After Making Changes
 
@@ -137,6 +143,10 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - Shared fixtures in `tests/conftest.py`
 - **Always run tests in background** to avoid blocking on long test runs when working on todo lists
 - **Never run full test suite scans** - only run tests for specific files when needed (e.g., `pytest tests/unit/test_settings.py`). Full test runs take too long and should only be done by CI.
+
+**Test patterns:**
+- Use `threading.Event` instead of `time.sleep()` for thread synchronization in tests
+- When testing Windows-specific code paths, patch `sys.platform` to `"win32"`
 
 **Test mocking gotchas:**
 - Mock models must use a name from `RECOMMENDED_MODELS` (e.g., `huihui_ai/dolphin3-abliterated:8b`) - fake names like `test-model:latest` have no role tags and cause `ValueError: No model tagged for role`
