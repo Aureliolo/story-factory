@@ -43,6 +43,11 @@ class RecommendationDialog:
         for i, _rec in enumerate(recommendations):
             self._selected[i] = True
 
+        logger.debug(
+            f"Initialized RecommendationDialog with {len(self.recommendations)} recommendations, "
+            f"on_apply={self.on_apply is not None}, on_dismiss={self.on_dismiss is not None}"
+        )
+
     def show(self) -> None:
         """Show the recommendation dialog."""
         logger.debug(
@@ -86,11 +91,14 @@ class RecommendationDialog:
             index: Index of the recommendation.
             rec: The recommendation to display.
         """
+        logger.debug(f"Building recommendation card {index}: type={rec.recommendation_type}")
         with ui.card().classes("w-full").props("flat bordered"):
             with ui.row().classes("w-full items-start gap-3"):
                 # Checkbox
                 checkbox = ui.checkbox(value=self._selected.get(index, True))
-                checkbox.on_value_change(lambda e, idx=index: self._toggle_selection(idx))
+                checkbox.on_value_change(
+                    lambda e, idx=index: self._set_selection(idx, bool(e.value))
+                )
 
                 # Content
                 with ui.column().classes("flex-grow"):
@@ -144,10 +152,15 @@ class RecommendationDialog:
                                 "text-xs text-blue-600"
                             )
 
-    def _toggle_selection(self, index: int) -> None:
-        """Toggle selection state for a recommendation."""
-        self._selected[index] = not self._selected.get(index, True)
-        logger.debug(f"Toggled recommendation {index} selection to {self._selected[index]}")
+    def _set_selection(self, index: int, selected: bool) -> None:
+        """Set selection state for a recommendation.
+
+        Args:
+            index: Index of the recommendation.
+            selected: Whether the recommendation is selected.
+        """
+        self._selected[index] = selected
+        logger.debug(f"Set recommendation {index} selection to {selected}")
 
     def _build_actions(self) -> None:
         """Build action buttons."""

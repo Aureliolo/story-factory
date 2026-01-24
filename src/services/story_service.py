@@ -140,7 +140,13 @@ class StoryService:
 
         Returns:
             Dictionary with completion info and any pending recommendations.
+
+        Raises:
+            TypeError: If state is not a StoryState.
+            ValueError: If state is None.
         """
+        validate_not_none(state, "state")
+        validate_type(state, "state", StoryState)
         logger.info(f"Completing project {state.id}")
         state.status = "complete"
 

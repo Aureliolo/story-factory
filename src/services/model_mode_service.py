@@ -840,6 +840,18 @@ Rate each dimension from 0-10:
                     self._current_mode.agent_temperatures[recommendation.affected_role] = float(
                         recommendation.suggested_value
                     )
+                    logger.info(
+                        f"Applied recommendation: {recommendation.affected_role} "
+                        f"temperature now {recommendation.suggested_value}"
+                    )
+
+                    # Record outcome (same as model_swap to prevent resurface)
+                    if recommendation.id:
+                        self._db.update_recommendation_outcome(
+                            recommendation.id,
+                            was_applied=True,
+                            user_feedback="accepted",
+                        )
                     return True
 
         except Exception as e:
@@ -922,6 +934,7 @@ Rate each dimension from 0-10:
 
     def get_pending_recommendations(self) -> list[TuningRecommendation]:
         """Get recommendations awaiting user action as TuningRecommendation objects."""
+        import json
         from datetime import datetime
 
         rows = self._db.get_pending_recommendations(limit=20)
@@ -938,6 +951,17 @@ Rate each dimension from 0-10:
                 # Parse recommendation_type from string
                 rec_type = RecommendationType(str(row.get("recommendation_type")))
 
+                # Parse evidence from JSON (DB column is evidence_json)
+                evidence = None
+                evidence_json = row.get("evidence_json")
+                if evidence_json:
+                    try:
+                        evidence = json.loads(evidence_json)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            f"Failed to parse evidence JSON for recommendation {row.get('id')}"
+                        )
+
                 rec = TuningRecommendation(
                     id=row.get("id"),
                     timestamp=timestamp,
@@ -947,7 +971,7 @@ Rate each dimension from 0-10:
                     affected_role=row.get("affected_role"),
                     reason=row.get("reason", ""),
                     confidence=float(row.get("confidence", 0.5)),
-                    evidence=row.get("evidence"),
+                    evidence=evidence,
                     expected_improvement=row.get("expected_improvement"),
                 )
                 recommendations.append(rec)
@@ -967,7 +991,7 @@ Rate each dimension from 0-10:
         self._db.update_recommendation_outcome(
             recommendation_id=recommendation.id,
             was_applied=False,
-            user_feedback="dismissed",
+            user_feedback="ignored",
         )
         logger.debug(f"Dismissed recommendation {recommendation.id}")
 

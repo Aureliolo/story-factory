@@ -1327,3 +1327,13 @@ class TestStoryServiceLearning:
 
         assert result is None
         mock_mode_service.handle_recommendations.assert_not_called()
+
+    def test_complete_project_validates_state(self, story_service):
+        """Test complete_project validates state parameter."""
+        with pytest.raises(ValueError, match="'state' cannot be None"):
+            story_service.complete_project(None)
+
+    def test_complete_project_validates_state_type(self, story_service):
+        """Test complete_project validates state is StoryState."""
+        with pytest.raises(TypeError, match="'state' must be StoryState"):
+            story_service.complete_project({"id": "fake"})

@@ -439,6 +439,7 @@ class ModeDatabase:
         Returns:
             The latest score dict or None if not found.
         """
+        logger.debug(f"Fetching latest score for project {project_id} chapter {chapter_id}")
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
@@ -451,7 +452,12 @@ class ModeDatabase:
                 (project_id, chapter_id),
             )
             row = cursor.fetchone()
-            return dict(row) if row else None
+            result = dict(row) if row else None
+            if result:
+                logger.debug(f"Found score id={result.get('id')} for chapter {chapter_id}")
+            else:
+                logger.debug(f"No score found for project {project_id} chapter {chapter_id}")
+            return result
 
     def get_score_count(
         self,
