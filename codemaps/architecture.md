@@ -1,6 +1,6 @@
 # Story Factory Architecture
 
-> Generated: 2026-01-24 | Freshness: Current
+> Generated: 2026-01-24 | Updated: 2026-01-24 | Freshness: Current
 
 ## System Overview
 
@@ -123,8 +123,11 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 3. **BaseAgent**: Retry logic, rate limiting (max 2 concurrent), configurable timeout
 4. **WorldDatabase**: SQLite + NetworkX, thread-safe with RLock
 5. **LRU Cache**: Orchestrator caching to prevent memory leaks
-6. **Prompt Registry**: Centralized template management
+6. **Prompt Registry**: Centralized YAML template management with Jinja2
 7. **Exception Hierarchy**: `StoryFactoryError` → `LLMError`, `ExportError`, etc.
+8. **Instructor Integration**: Pydantic-validated structured LLM outputs
+9. **Quality Refinement Loop**: Iterative entity improvement with scoring
+10. **Auto Model Selection**: Tag-based model selection per agent role
 
 ## Data Flow
 
@@ -156,7 +159,7 @@ story-factory/
 │   ├── components/     # Reusable UI components
 │   └── pages/          # Route handlers
 ├── workflows/           # Orchestration (2 files)
-├── utils/               # Shared utilities (14 files)
+├── utils/               # Shared utilities (16 files)
 ├── prompts/             # Prompt templates
 ├── tests/               # Test suites
 │   ├── unit/           # Unit tests

@@ -1,6 +1,6 @@
 # Data Models and Schemas
 
-> Generated: 2026-01-24 | Freshness: Current
+> Generated: 2026-01-24 | Updated: 2026-01-24 | Freshness: Current
 
 ## Core Story Models (`memory/story_state.py`)
 
@@ -181,6 +181,133 @@ class EventParticipant(BaseModel):
     event_id: str
     entity_id: str
     role: str  # actor, location, affected, witness
+```
+
+## Generation Mode Models (`memory/mode_models.py`)
+
+### Enums
+
+```python
+class VramStrategy(str, Enum):
+    SEQUENTIAL = "sequential"  # Unload between agents
+    PARALLEL = "parallel"      # Keep multiple loaded
+    ADAPTIVE = "adaptive"      # Smart loading
+
+class LearningTrigger(str, Enum):
+    OFF = "off"
+    AFTER_PROJECT = "after_project"
+    PERIODIC = "periodic"
+    CONTINUOUS = "continuous"
+
+class AutonomyLevel(str, Enum):
+    MANUAL = "manual"          # All changes require approval
+    CAUTIOUS = "cautious"      # Auto temp, prompt for model swaps
+    BALANCED = "balanced"      # Auto when confidence > 80%
+    AGGRESSIVE = "aggressive"  # Auto all, notify only
+    EXPERIMENTAL = "experimental"
+
+class ModelSizeTier(str, Enum):
+    LARGE = "large"    # 20GB+
+    MEDIUM = "medium"  # 8-20GB
+    SMALL = "small"    # 3-8GB
+    TINY = "tiny"      # <3GB
+```
+
+### GenerationMode (`mode_models.py:43-70`)
+
+```python
+class GenerationMode(BaseModel):
+    id: str
+    name: str
+    description: str
+    agent_models: dict[str, str]       # role → model_id
+    agent_temperatures: dict[str, float]
+    vram_strategy: VramStrategy
+    is_preset: bool
+    is_experimental: bool
+```
+
+### Scoring Models
+
+```python
+class QualityScores(BaseModel):
+    prose_quality: float | None        # 0-10
+    instruction_following: float | None
+    consistency_score: float | None
+
+class PerformanceMetrics(BaseModel):
+    tokens_generated: int | None
+    time_seconds: float | None
+    tokens_per_second: float | None
+    vram_used_gb: float | None
+
+class GenerationScore(BaseModel):
+    project_id: str
+    chapter_id: str | None
+    agent_role: str
+    model_id: str
+    mode_name: str
+    quality: QualityScores
+    performance: PerformanceMetrics
+    signals: ImplicitSignals
+    timestamp: datetime
+```
+
+### Preset Modes
+
+| Mode | Description | VRAM Strategy |
+|------|-------------|---------------|
+| `quality_max` | Largest models, sequential | SEQUENTIAL |
+| `quality_creative` | High temp writer | SEQUENTIAL |
+| `balanced` | Medium models | ADAPTIVE |
+| `draft_fast` | Smaller models | PARALLEL |
+| `experimental` | Varies for data | ADAPTIVE |
+
+## World Quality Models (`memory/world_quality.py`)
+
+### Refinement Tracking
+
+```python
+class IterationRecord(BaseModel):
+    iteration: int
+    entity_data: dict[str, Any]
+    scores: dict[str, Any]
+    average_score: float
+    feedback: str
+
+class RefinementHistory(BaseModel):
+    entity_type: str
+    entity_name: str
+    iterations: list[IterationRecord]
+    best_iteration: int
+    peak_score: float
+```
+
+### Entity Quality Scores (0-10 scale)
+
+| Model | Dimensions |
+|-------|------------|
+| `CharacterQualityScores` | depth, goals, flaws, uniqueness, arc_potential |
+| `LocationQualityScores` | atmosphere, significance, story_relevance, distinctiveness |
+| `RelationshipQualityScores` | tension, dynamics, story_potential, authenticity |
+| `FactionQualityScores` | coherence, influence, conflict_potential, distinctiveness |
+| `ItemQualityScores` | significance, uniqueness, narrative_potential, integration |
+| `ConceptQualityScores` | relevance, depth, manifestation, resonance |
+
+All quality score classes provide:
+- `average` property → float
+- `to_dict()` → dict[str, float | str]
+- `weak_dimensions(threshold=7.0)` → list[str]
+
+### RefinementConfig
+
+```python
+class RefinementConfig(BaseModel):
+    max_iterations: int = 3
+    quality_threshold: float = 7.0
+    creator_temperature: float = 0.9
+    judge_temperature: float = 0.1
+    refinement_temperature: float = 0.7
 ```
 
 ## Database Schema (`memory/world_database.py`)

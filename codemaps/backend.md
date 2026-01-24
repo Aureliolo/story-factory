@@ -1,6 +1,6 @@
 # Backend Structure
 
-> Generated: 2026-01-24 | Freshness: Current
+> Generated: 2026-01-24 | Updated: 2026-01-24 | Freshness: Current
 
 ## Services (`services/`)
 
@@ -42,9 +42,24 @@ services.story.start_interview(state)
 | `BackupService` | `backup_service.py` | Project backup/restore |
 | `ImportService` | `import_service.py` | Entity extraction from text |
 
-### LLM Client (`services/llm_client.py`)
+### LLM Client (`services/llm_client.py:1-104`)
 
-Direct Ollama integration for services that need raw LLM access.
+Shared Instructor client for structured LLM outputs in services.
+
+```python
+# Get cached Instructor client
+client = get_instructor_client(settings)
+
+# Generate structured output with Pydantic validation
+result = generate_structured(
+    settings, model, prompt, ResponseModel,
+    system_prompt="...", temperature=0.1
+)
+```
+
+Key functions:
+- `get_instructor_client(settings)` → Cached Instructor client
+- `generate_structured[T](settings, model, prompt, response_model)` → T
 
 ## Agents (`agents/`)
 
@@ -137,6 +152,8 @@ Tables: `entities`, `relationships`, `events`, `event_participants`, `schema_ver
 | Environment | `environment.py` | Environment checks (Python version, deps) |
 | Text Analytics | `text_analytics.py` | Reading level, complexity metrics |
 | Message Analyzer | `message_analyzer.py` | Language/content inference |
+| Prompt Template | `prompt_template.py` | YAML-based Jinja2 templates |
+| Prompt Registry | `prompt_registry.py` | Template loading and lookup |
 
 ## Configuration (`settings.py`)
 
@@ -171,3 +188,70 @@ Tag-based model selection:
 2. Lookup `agent_models[role]`
 3. If "auto", find installed models tagged for role
 4. Select highest quality that fits VRAM
+
+## Prompt Template System (`prompts/templates/`)
+
+### PromptTemplate (`utils/prompt_template.py:22-258`)
+
+YAML-based prompt templates with Jinja2 rendering.
+
+```python
+@dataclass
+class PromptTemplate:
+    name: str           # Template name (e.g., "write_chapter")
+    version: str        # For metrics tracking
+    agent: str          # Agent role (e.g., "writer")
+    task: str           # Task identifier
+    template: str       # Jinja2 template string
+    required_variables: list[str]
+    optional_variables: list[str]
+    is_system_prompt: bool
+```
+
+Key methods:
+- `render(**kwargs)` → str
+- `get_hash()` → MD5 hash for tracking
+- `from_yaml(path)` → PromptTemplate
+- `validate()` → list[str] (errors)
+
+### PromptRegistry (`utils/prompt_registry.py:15-277`)
+
+Central registry for template loading and lookup.
+
+```python
+registry = PromptRegistry()  # Auto-loads from prompts/templates/
+prompt = registry.render("writer", "write_chapter", chapter_number=1, ...)
+system = registry.render_system("editor")
+```
+
+Key methods:
+- `get(agent, task)` → PromptTemplate
+- `render(agent, task, **kwargs)` → str
+- `get_system(agent)` → PromptTemplate
+- `has_template(agent, task)` → bool
+- `list_templates()` → list[str]
+
+### Template Organization (60 templates)
+
+```
+prompts/templates/
+├── architect/          # 10 templates
+│   ├── system.yaml
+│   ├── create_characters.yaml
+│   ├── create_plot_outline.yaml
+│   └── ...
+├── continuity/         # 9 templates
+│   ├── system.yaml
+│   ├── check_chapter.yaml
+│   └── ...
+├── editor/             # 5 templates
+├── interviewer/        # 4 templates
+├── suggestion/         # 4 templates
+├── validator/          # 2 templates
+├── writer/             # 5 templates
+└── world_quality/      # 21+ templates
+    ├── character/
+    ├── location/
+    ├── faction/
+    └── shared/
+```

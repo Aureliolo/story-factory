@@ -74,3 +74,4 @@ htmlcov/
 .claude/
 *coverage_report.txt
 uv.lock
+.reports/

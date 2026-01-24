@@ -1,6 +1,6 @@
 # Frontend Structure
 
-> Generated: 2026-01-24 | Freshness: Current
+> Generated: 2026-01-24 | Updated: 2026-01-24 | Freshness: Current
 
 ## Application Entry (`ui/app.py`)
 
