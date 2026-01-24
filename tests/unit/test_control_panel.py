@@ -4,7 +4,6 @@ import json
 import subprocess
 import sys
 import tempfile
-import threading
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -740,6 +739,8 @@ class TestControlPanel:
 
     def _create_mock_panel(self):
         """Create a mock ControlPanel instance for testing."""
+        import queue as queue_module
+
         from scripts.control_panel import ControlPanel
 
         with patch.object(ControlPanel, "__init__", return_value=None):
@@ -763,6 +764,9 @@ class TestControlPanel:
             panel._auto_scroll_var = MagicMock()
             panel.after = MagicMock()
             panel.destroy = MagicMock()
+            # Thread-safe UI queue and cached Ollama status
+            panel._ui_queue = queue_module.Queue()
+            panel._ollama_healthy = False
             return panel
 
     @patch("scripts.control_panel.ctk.CTk.__init__", return_value=None)
@@ -790,7 +794,9 @@ class TestControlPanel:
             patch.object(ControlPanel, "_create_controls_frame"),
             patch.object(ControlPanel, "_create_log_frame"),
             patch.object(ControlPanel, "_create_status_bar"),
+            patch.object(ControlPanel, "_drain_ui_queue"),
             patch.object(ControlPanel, "_poll_status"),
+            patch.object(ControlPanel, "_poll_ollama_status"),
             patch.object(ControlPanel, "_poll_logs"),
             patch.object(ControlPanel, "title"),
             patch.object(ControlPanel, "geometry"),
@@ -977,7 +983,7 @@ class TestControlPanel:
         panel._process_manager.is_running.return_value = True
         panel._process_manager.get_pid.return_value = 12345
         panel._process_manager.get_uptime.return_value = timedelta(seconds=65)
-        panel._ollama_manager.check_health.return_value = True
+        panel._ollama_healthy = True  # Cached Ollama status
         panel._ollama_manager.get_url.return_value = "http://localhost:11434"
 
         panel._poll_status()
@@ -985,6 +991,8 @@ class TestControlPanel:
         # Verify Story Factory status updated to running
         panel._sf_card["indicator"].configure.assert_called()
         panel._sf_card["status_label"].configure.assert_called_with(text="RUNNING")
+        # Verify Ollama status updated to running
+        panel._ollama_card["status_label"].configure.assert_called_with(text="RUNNING")
         # Verify poll scheduled
         panel.after.assert_called()
 
@@ -992,7 +1000,7 @@ class TestControlPanel:
         """Should update status when app is stopped."""
         panel = self._create_mock_panel()
         panel._process_manager.is_running.return_value = False
-        panel._ollama_manager.check_health.return_value = False
+        panel._ollama_healthy = False  # Cached Ollama status
 
         panel._poll_status()
 
@@ -1005,7 +1013,7 @@ class TestControlPanel:
         panel._process_manager.is_running.return_value = True
         panel._process_manager.get_pid.return_value = 12345
         panel._process_manager.get_uptime.return_value = timedelta(hours=2, minutes=30)
-        panel._ollama_manager.check_health.return_value = False
+        # _ollama_healthy defaults to False in _create_mock_panel
 
         panel._poll_status()
 
@@ -1018,7 +1026,7 @@ class TestControlPanel:
         panel._process_manager.is_running.return_value = True
         panel._process_manager.get_pid.return_value = 12345
         panel._process_manager.get_uptime.return_value = timedelta(minutes=5, seconds=30)
-        panel._ollama_manager.check_health.return_value = False
+        # _ollama_healthy defaults to False in _create_mock_panel
 
         panel._poll_status()
 
@@ -1031,7 +1039,7 @@ class TestControlPanel:
         panel._process_manager.is_running.return_value = True
         panel._process_manager.get_pid.return_value = 12345
         panel._process_manager.get_uptime.return_value = timedelta(seconds=45)
-        panel._ollama_manager.check_health.return_value = False
+        # _ollama_healthy defaults to False in _create_mock_panel
 
         panel._poll_status()
 
@@ -1044,12 +1052,81 @@ class TestControlPanel:
         panel._process_manager.is_running.return_value = True
         panel._process_manager.get_pid.return_value = None
         panel._process_manager.get_uptime.return_value = None
-        panel._ollama_manager.check_health.return_value = False
+        # _ollama_healthy defaults to False in _create_mock_panel
 
         panel._poll_status()
 
         # Should still update to running
         panel._sf_card["status_label"].configure.assert_called_with(text="RUNNING")
+
+    def test_poll_ollama_status_healthy(self):
+        """Should update cached status when Ollama is healthy."""
+        panel = self._create_mock_panel()
+        panel._ollama_manager.check_health.return_value = True
+
+        panel._poll_ollama_status()
+
+        # Wait for thread to queue the callback
+        import time
+
+        start = time.time()
+        while panel._ui_queue.empty() and (time.time() - start) < 1:
+            time.sleep(0.01)
+
+        assert not panel._ui_queue.empty(), "Thread did not queue a callback"
+
+        # Execute the queued callback
+        callback = panel._ui_queue.get_nowait()
+        callback()
+
+        assert panel._ollama_healthy is True
+
+    def test_poll_ollama_status_unhealthy(self):
+        """Should update cached status when Ollama is not healthy."""
+        panel = self._create_mock_panel()
+        panel._ollama_manager.check_health.return_value = False
+        panel._ollama_healthy = True  # Start with healthy state
+
+        panel._poll_ollama_status()
+
+        # Wait for thread to queue the callback
+        import time
+
+        start = time.time()
+        while panel._ui_queue.empty() and (time.time() - start) < 1:
+            time.sleep(0.01)
+
+        assert not panel._ui_queue.empty(), "Thread did not queue a callback"
+
+        # Execute the queued callback
+        callback = panel._ui_queue.get_nowait()
+        callback()
+
+        assert panel._ollama_healthy is False
+
+    def test_drain_ui_queue_executes_callbacks(self):
+        """Should execute all queued callbacks."""
+        panel = self._create_mock_panel()
+        results = []
+
+        # Queue some callbacks
+        panel._ui_queue.put(lambda: results.append(1))
+        panel._ui_queue.put(lambda: results.append(2))
+        panel._ui_queue.put(lambda: results.append(3))
+
+        panel._drain_ui_queue()
+
+        assert results == [1, 2, 3]
+        assert panel._ui_queue.empty()
+
+    def test_drain_ui_queue_empty(self):
+        """Should handle empty queue gracefully."""
+        panel = self._create_mock_panel()
+
+        # Should not raise
+        panel._drain_ui_queue()
+
+        assert panel._ui_queue.empty()
 
     def test_poll_logs_with_content(self):
         """Should update log display with content."""
@@ -1087,27 +1164,35 @@ class TestControlPanel:
         panel._log_text.see.assert_not_called()
 
     def test_run_in_thread_success(self):
-        """Should call success callback when function succeeds."""
+        """Should queue success callback when function succeeds."""
         panel = self._create_mock_panel()
-        done = threading.Event()
-        panel.after.side_effect = lambda *_: done.set()
 
         def success_func():
             return True
 
         panel._run_in_thread(success_func, "Success!", "Failed")
 
-        # Wait for thread to complete (with timeout to prevent hanging)
-        assert done.wait(1), "Thread did not complete in time"
+        # Wait for thread to complete by polling the queue
+        import time
 
-        # Verify after() was scheduled
-        panel.after.assert_called()
+        start = time.time()
+        while panel._ui_queue.empty() and (time.time() - start) < 1:
+            time.sleep(0.01)
+
+        assert not panel._ui_queue.empty(), "Thread did not queue a callback"
+
+        # Execute the queued callback
+        callback = panel._ui_queue.get_nowait()
+        callback()
+
+        # Verify success message was set
+        panel._status_label.configure.assert_called()
+        call_args = panel._status_label.configure.call_args
+        assert "Success!" in call_args[1]["text"]
 
     def test_run_in_thread_failure_false(self):
-        """Should call error callback when function returns False."""
+        """Should queue error callback when function returns False."""
         panel = self._create_mock_panel()
-        done = threading.Event()
-        panel.after.side_effect = lambda *_: done.set()
 
         def fail_func():
             return False
@@ -1115,15 +1200,26 @@ class TestControlPanel:
         panel._run_in_thread(fail_func, "Success!", "Failed")
 
         # Wait for thread to complete
-        assert done.wait(1), "Thread did not complete in time"
+        import time
 
-        panel.after.assert_called()
+        start = time.time()
+        while panel._ui_queue.empty() and (time.time() - start) < 1:
+            time.sleep(0.01)
+
+        assert not panel._ui_queue.empty(), "Thread did not queue a callback"
+
+        # Execute the queued callback
+        callback = panel._ui_queue.get_nowait()
+        callback()
+
+        # Verify error message was set
+        panel._status_label.configure.assert_called()
+        call_args = panel._status_label.configure.call_args
+        assert "Failed" in call_args[1]["text"]
 
     def test_run_in_thread_failure_none(self):
-        """Should call error callback when function returns None."""
+        """Should queue error callback when function returns None."""
         panel = self._create_mock_panel()
-        done = threading.Event()
-        panel.after.side_effect = lambda *_: done.set()
 
         def fail_func():
             return None
@@ -1131,15 +1227,26 @@ class TestControlPanel:
         panel._run_in_thread(fail_func, "Success!", "Failed")
 
         # Wait for thread to complete
-        assert done.wait(1), "Thread did not complete in time"
+        import time
 
-        panel.after.assert_called()
+        start = time.time()
+        while panel._ui_queue.empty() and (time.time() - start) < 1:
+            time.sleep(0.01)
+
+        assert not panel._ui_queue.empty(), "Thread did not queue a callback"
+
+        # Execute the queued callback
+        callback = panel._ui_queue.get_nowait()
+        callback()
+
+        # Verify error message was set
+        panel._status_label.configure.assert_called()
+        call_args = panel._status_label.configure.call_args
+        assert "Failed" in call_args[1]["text"]
 
     def test_run_in_thread_exception(self):
-        """Should handle exception in background task."""
+        """Should queue error callback when exception occurs."""
         panel = self._create_mock_panel()
-        done = threading.Event()
-        panel.after.side_effect = lambda *_: done.set()
 
         def error_func():
             raise ValueError("Test error")
@@ -1147,9 +1254,23 @@ class TestControlPanel:
         panel._run_in_thread(error_func, "Success!", "Failed")
 
         # Wait for thread to complete
-        assert done.wait(1), "Thread did not complete in time"
+        import time
 
-        panel.after.assert_called()
+        start = time.time()
+        while panel._ui_queue.empty() and (time.time() - start) < 1:
+            time.sleep(0.01)
+
+        assert not panel._ui_queue.empty(), "Thread did not queue a callback"
+
+        # Execute the queued callback
+        callback = panel._ui_queue.get_nowait()
+        callback()
+
+        # Verify error message was set
+        panel._status_label.configure.assert_called()
+        call_args = panel._status_label.configure.call_args
+        assert "Error:" in call_args[1]["text"]
+        assert "Test error" in call_args[1]["text"]
 
 
 class TestMainFunction:

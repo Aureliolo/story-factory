@@ -154,7 +154,7 @@ class TestCheckDependencies:
         # Use a package that's definitely installed (pytest) with >= specifier
         pyproject.write_text('[project]\ndependencies = ["pytest>=9.0.0"]\n')
 
-        # Should not raise (pytest is installed and >= 9.0.0)
+        # Should not raise - dependency is satisfied
         _check_dependencies(tmp_path)
 
     def test_exits_when_dependency_missing(self, tmp_path, capsys):

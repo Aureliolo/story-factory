@@ -109,7 +109,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - **Python**: 3.14+
 - **Type hints**: Encouraged but not enforced (gradual adoption)
 - **Imports**: Auto-sorted by Ruff
-- **Dependency parsing**: Use `packaging.requirements.Requirement` instead of regex - handles all version specifiers (`==`, `>=`, `~=`, etc.) correctly
+- **Dependency parsing**: Use `packaging.requirements.Requirement` instead of regex - handles all version specifiers (`==`, `>=`, `~=`, etc.) correctly.
 
 ## Cross-Platform Gotchas
 
@@ -146,7 +146,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 
 **Test patterns:**
 - Use `threading.Event` instead of `time.sleep()` for thread synchronization in tests
-- When testing Windows-specific code paths, patch `sys.platform` to `"win32"`
+- When testing Windows-specific code paths, patch `sys.platform` to `"win32"`.
 
 **Test mocking gotchas:**
 - Mock models must use a name from `RECOMMENDED_MODELS` (e.g., `huihui_ai/dolphin3-abliterated:8b`) - fake names like `test-model:latest` have no role tags and cause `ValueError: No model tagged for role`

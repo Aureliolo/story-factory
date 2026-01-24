@@ -6,6 +6,7 @@ Replaces the PowerShell-based control panel with a native desktop experience.
 
 import json
 import logging
+import queue
 import signal
 import socket
 import subprocess
@@ -460,6 +461,9 @@ class ControlPanel(ctk.CTk):
         self._ollama_manager = OllamaManager()
         self._log_watcher = LogWatcher()
 
+        # Thread-safe UI dispatch queue
+        self._ui_queue: queue.Queue[Callable[[], None]] = queue.Queue()
+
         # Window setup
         self.title("Story Factory Control Panel")
         self.geometry("600x700")
@@ -476,8 +480,13 @@ class ControlPanel(ctk.CTk):
         self._create_log_frame()
         self._create_status_bar()
 
-        # Start polling
+        # Cached Ollama status (updated by background thread)
+        self._ollama_healthy = False
+
+        # Start thread-safe UI dispatch and polling
+        self._drain_ui_queue()
         self._poll_status()
+        self._poll_ollama_status()
         self._poll_logs()
 
         # Handle window close
@@ -756,8 +765,8 @@ class ControlPanel(ctk.CTk):
             self._sf_card["status_label"].configure(text="STOPPED")
             self._sf_card["info_label"].configure(text="")
 
-        # Update Ollama status
-        if self._ollama_manager.check_health():
+        # Update Ollama status (uses cached value from background thread)
+        if self._ollama_healthy:
             self._ollama_card["indicator"].configure(text_color="#28a745")
             self._ollama_card["status_label"].configure(text="RUNNING")
             self._ollama_card["info_label"].configure(text=self._ollama_manager.get_url())
@@ -768,6 +777,29 @@ class ControlPanel(ctk.CTk):
 
         # Schedule next poll
         self.after(2000, self._poll_status)
+
+    def _poll_ollama_status(self) -> None:
+        """Poll Ollama health in background thread to avoid blocking UI."""
+
+        def check_and_update():
+            healthy = self._ollama_manager.check_health()
+            self._ui_queue.put(lambda: setattr(self, "_ollama_healthy", healthy))
+
+        thread = threading.Thread(target=check_and_update, daemon=True)
+        thread.start()
+
+        # Schedule next poll (longer interval since it's a network call)
+        self.after(3000, self._poll_ollama_status)
+
+    def _drain_ui_queue(self) -> None:
+        """Execute UI callbacks scheduled from worker threads (thread-safe)."""
+        while True:
+            try:
+                callback = self._ui_queue.get_nowait()
+                callback()
+            except queue.Empty:
+                break
+        self.after(50, self._drain_ui_queue)
 
     def _poll_logs(self) -> None:
         """Poll and update log display."""
@@ -827,13 +859,17 @@ class ControlPanel(ctk.CTk):
                 # Success: function returned a truthy value (PID or True)
                 # Failure: function returned a falsy value (None or False)
                 if result:
-                    self.after(0, lambda: self._set_status_message(success_msg, "#28a745"))
+                    self._ui_queue.put(lambda: self._set_status_message(success_msg, "#28a745"))
                 else:
-                    self.after(0, lambda: self._set_status_message(error_msg, "#dc3545"))
+                    self._ui_queue.put(lambda: self._set_status_message(error_msg, "#dc3545"))
             except Exception as exc:
                 logger.exception("Error in background task")
                 err_msg = str(exc)
-                self.after(0, lambda: self._set_status_message(f"Error: {err_msg}", "#dc3545"))
+
+                def make_error_callback(msg: str) -> Callable[[], None]:
+                    return lambda: self._set_status_message(f"Error: {msg}", "#dc3545")
+
+                self._ui_queue.put(make_error_callback(err_msg))
 
         thread = threading.Thread(target=wrapper, daemon=True)
         thread.start()
