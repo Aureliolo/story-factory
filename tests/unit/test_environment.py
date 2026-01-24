@@ -77,6 +77,7 @@ class TestCheckPythonVersion:
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
+            """Raise ImportError for tomllib while allowing other imports."""
             if name == "tomllib":
                 raise ImportError("No module named 'tomllib'")
             return original_import(name, *args, **kwargs)
@@ -194,6 +195,7 @@ class TestCheckDependencies:
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
+            """Raise ImportError for packaging.requirements while allowing other imports."""
             if name == "packaging.requirements":
                 raise ImportError("No module named 'packaging'")
             return original_import(name, *args, **kwargs)

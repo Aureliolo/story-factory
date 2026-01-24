@@ -14,6 +14,7 @@ class TestHandleOllamaErrors:
 
         @handle_ollama_errors(default_return="fallback")
         def failing_function():
+            """Raise LLMConnectionError to test error handling."""
             raise LLMConnectionError("Connection failed")
 
         result = failing_function()
@@ -24,6 +25,7 @@ class TestHandleOllamaErrors:
 
         @handle_ollama_errors(raise_on_error=True)
         def failing_function():
+            """Raise LLMConnectionError to test exception re-raising."""
             raise LLMConnectionError("Connection failed")
 
         with pytest.raises(LLMConnectionError):
@@ -34,6 +36,7 @@ class TestHandleOllamaErrors:
 
         @handle_ollama_errors(default_return=None)
         def failing_function():
+            """Raise ValueError to test generic exception handling."""
             raise ValueError("Some error")
 
         result = failing_function()
@@ -44,6 +47,7 @@ class TestHandleOllamaErrors:
 
         @handle_ollama_errors(default_return="fallback")
         def working_function():
+            """Return a success value without raising any errors."""
             return "success"
 
         result = working_function()
@@ -59,6 +63,7 @@ class TestRetryWithFallback:
 
         @retry_with_fallback(max_retries=3, fallback_value="fallback")
         def flaky_function():
+            """Track attempts and always raise ValueError to test retry behavior."""
             attempts.append(1)
             raise ValueError("Error")
 
@@ -72,6 +77,7 @@ class TestRetryWithFallback:
 
         @retry_with_fallback(max_retries=5, fallback_value="fallback")
         def eventually_succeeds():
+            """Fail twice then succeed on third attempt to test retry success."""
             attempts.append(1)
             if len(attempts) < 3:
                 raise ValueError("Not yet")
@@ -87,6 +93,7 @@ class TestRetryWithFallback:
 
         @retry_with_fallback(max_retries=3, fallback_value="fallback")
         def working_function():
+            """Track attempts and return success immediately on first call."""
             attempts.append(1)
             return "success"
 

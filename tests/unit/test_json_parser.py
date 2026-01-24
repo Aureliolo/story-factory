@@ -14,6 +14,8 @@ from src.utils.json_parser import (
 
 
 class SampleModel(BaseModel):
+    """Sample Pydantic model for JSON parsing tests."""
+
     name: str
     value: int
 

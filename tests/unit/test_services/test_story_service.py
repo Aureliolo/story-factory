@@ -525,6 +525,7 @@ class TestStoryServiceGenerators:
 
             # Mock the generator
             def mock_write_chapter(chapter_num):
+                """Yield mock workflow events for chapter writing."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Starting"
                 )
@@ -550,6 +551,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_write_all():
+                """Yield mock workflow events for writing all chapters."""
                 yield WorkflowEvent(
                     event_type="chapter_start", agent_name="System", message="Chapter 1"
                 )
@@ -573,6 +575,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_write_short():
+                """Yield mock workflow events for short story writing."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Starting"
                 )
@@ -596,6 +599,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_continue(chapter_num, direction=None):
+                """Yield mock workflow events for chapter continuation."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Continuing"
                 )
@@ -624,6 +628,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_edit(text, focus=None):
+                """Yield mock workflow events for passage editing."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Editor", message="Editing"
                 )
@@ -653,6 +658,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_suggestions(text):
+                """Yield mock workflow events for edit suggestions."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Editor", message="Reviewing"
                 )
@@ -679,6 +685,7 @@ class TestStoryServiceGenerators:
             mock_orch = MagicMock()
 
             def mock_review():
+                """Yield mock workflow events for full story review."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Continuity", message="Reviewing"
                 )
@@ -967,6 +974,7 @@ class TestStoryServiceCancellation:
 
             # Mock generator that yields one event before cancellation check
             def mock_write_chapter(chapter_num):
+                """Yield mock workflow events for chapter writing cancellation test."""
                 yield WorkflowEvent(
                     event_type="agent_start", agent_name="Writer", message="Starting"
                 )
@@ -982,6 +990,7 @@ class TestStoryServiceCancellation:
             call_count = [0]
 
             def cancel_check():
+                """Return True after first call to simulate cancellation."""
                 call_count[0] += 1
                 return call_count[0] > 1
 
@@ -1005,6 +1014,7 @@ class TestStoryServiceCancellation:
             mock_orch = MagicMock()
 
             def mock_write_all():
+                """Yield mock workflow events for write all chapters cancellation test."""
                 yield WorkflowEvent(
                     event_type="chapter_start", agent_name="System", message="Chapter 1"
                 )
@@ -1019,6 +1029,7 @@ class TestStoryServiceCancellation:
             call_count = [0]
 
             def cancel_check():
+                """Return True after first call to simulate cancellation."""
                 call_count[0] += 1
                 return call_count[0] > 1
 
@@ -1048,6 +1059,7 @@ class TestStoryServiceRegenerateChapter:
             mock_orch = MagicMock()
 
             def mock_write_chapter(chapter_num, feedback=None):
+                """Yield mock workflow events and update chapter content for regeneration."""
                 # Simulate writing new content
                 sample_story_with_chapters.chapters[0].content = "New improved content."
                 yield WorkflowEvent(
@@ -1105,6 +1117,7 @@ class TestStoryServiceRegenerateChapter:
             mock_orch = MagicMock()
 
             def mock_write_chapter(chapter_num, feedback=None):
+                """Yield mock workflow events with partial content for rollback test."""
                 # Simulate partial writing
                 sample_story_with_chapters.chapters[0].content = "Partial new content..."
                 yield WorkflowEvent(
@@ -1121,6 +1134,7 @@ class TestStoryServiceRegenerateChapter:
             call_count = [0]
 
             def cancel_check():
+                """Return True after first call to trigger cancellation and rollback."""
                 call_count[0] += 1
                 return call_count[0] > 1
 

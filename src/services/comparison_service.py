@@ -143,6 +143,7 @@ class ComparisonService:
                 """Create a progress callback for a specific model."""
 
                 def callback(event: WorkflowEvent) -> dict[str, Any]:
+                    """Map workflow event to comparison progress update."""
                     return {
                         "model_id": mid,
                         "event": event,

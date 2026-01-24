@@ -19,6 +19,7 @@ class TestShortcut:
         """Test creating shortcut with all fields."""
 
         def noop_action() -> None:
+            """Do nothing, used to verify action assignment."""
             pass
 
         shortcut = Shortcut(
@@ -113,6 +114,7 @@ class TestShortcutManager:
         called = []
 
         def action():
+            """Record that the action callback was invoked."""
             called.append(True)
 
         manager.register(

@@ -50,7 +50,13 @@ class ModeDatabase:
         self._init_db()
 
     def _init_db(self) -> None:
-        """Initialize database schema."""
+        """
+        Create and initialize the SQLite schema required by the ModeDatabase.
+
+        Creates tables for generation scores, aggregated model performance, recommendations,
+        world entity scores, prompt metrics, and custom modes, along with relevant indexes,
+        then applies any pending schema migrations.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.executescript("""
                 -- Per-generation scores (granular tracking)
@@ -203,7 +209,14 @@ class ModeDatabase:
             self._run_migrations(conn)
 
     def _run_migrations(self, conn: sqlite3.Connection) -> None:
-        """Run database migrations for schema updates."""
+        """
+        Apply pending schema migrations to the connected SQLite database.
+
+        Ensures the custom_modes table contains the `size_preference` column and adds it with a default value of "medium" if missing.
+
+        Parameters:
+            conn (sqlite3.Connection): Active SQLite connection whose schema may be modified.
+        """
         cursor = conn.execute("PRAGMA table_info(custom_modes)")
         columns = {row[1] for row in cursor.fetchall()}
 
@@ -238,13 +251,33 @@ class ModeDatabase:
         user_rating: int | None = None,
         prompt_hash: str | None = None,
     ) -> int:
-        """Record a generation score.
+        """
+        Record a single generation score row for a project and model.
+
+        Parameters:
+            project_id (str): Project identifier.
+            agent_role (str): Role or persona that generated the content.
+            model_id (str): Identifier of the model used.
+            mode_name (str): Name of the generation mode used.
+            chapter_id (str | None): Optional chapter identifier associated with the generation.
+            genre (str | None): Optional genre label.
+            tokens_generated (int | None): Number of tokens produced by the generation.
+            time_seconds (float | None): Time taken to generate in seconds.
+            tokens_per_second (float | None): Token throughput measured as tokens per second.
+            vram_used_gb (float | None): VRAM consumed in gigabytes.
+            prose_quality (float | None): Prose quality score (higher is better).
+            instruction_following (float | None): Score for how well the output followed instructions.
+            consistency_score (float | None): Score for internal consistency of the generated content.
+            was_regenerated (bool): True if this output was a regeneration of a previous attempt.
+            edit_distance (int | None): Edit distance from a reference or previous version, if available.
+            user_rating (int | None): Optional user-provided rating.
+            prompt_hash (str | None): Optional hash of the prompt/template used.
 
         Returns:
-            The ID of the inserted record.
+            int: The row ID of the inserted generation_scores record (0 if unavailable).
 
         Raises:
-            sqlite3.Error: If database operation fails.
+            sqlite3.Error: If the database operation fails.
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -414,7 +447,12 @@ class ModeDatabase:
             return [dict(row) for row in cursor.fetchall()]
 
     def get_scores_for_project(self, project_id: str) -> list[dict[str, Any]]:
-        """Get all scores for a project."""
+        """
+        Retrieve all generation scores for a project ordered by most recent first.
+
+        Returns:
+            list[dict[str, Any]]: List of rows from `generation_scores` as dictionaries, ordered by `timestamp` descending.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
@@ -465,7 +503,17 @@ class ModeDatabase:
         agent_role: str | None = None,
         genre: str | None = None,
     ) -> int:
-        """Get total number of scores, optionally filtered."""
+        """
+        Return count of generation score records, optionally filtered by model, agent role, or genre.
+
+        Parameters:
+            model_id (str | None): If provided, only count scores for this model_id.
+            agent_role (str | None): If provided, only count scores for this agent role.
+            genre (str | None): If provided, only count scores for this genre.
+
+        Returns:
+            count (int): Number of matching rows in the generation_scores table.
+        """
         query = "SELECT COUNT(*) FROM generation_scores WHERE 1=1"
         params: list[Any] = []
 
@@ -638,7 +686,14 @@ class ModeDatabase:
         was_applied: bool,
         user_feedback: str | None = None,
     ) -> None:
-        """Update the outcome of a recommendation."""
+        """
+        Record the user's outcome and optional feedback for a tuning recommendation in the database.
+
+        Parameters:
+            recommendation_id (int): ID of the recommendation to update.
+            was_applied (bool): `True` if the recommendation was applied, `False` otherwise.
+            user_feedback (str | None): Optional free-text feedback; pass `None` to clear any existing feedback.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -651,13 +706,14 @@ class ModeDatabase:
             conn.commit()
 
     def get_pending_recommendations(self, limit: int = 50) -> list[dict[str, Any]]:
-        """Get recommendations that haven't been actioned.
+        """
+        Return recommendations that have not been applied and lack user feedback, ordered by newest first.
 
-        Args:
-            limit: Maximum number of recommendations to return.
+        Parameters:
+            limit (int): Maximum number of recommendations to return.
 
         Returns:
-            List of recommendation dictionaries.
+            list[dict[str, Any]]: Recommendation records as dictionaries, ordered by timestamp descending and limited to `limit`.
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row

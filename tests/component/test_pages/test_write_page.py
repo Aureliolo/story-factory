@@ -21,6 +21,7 @@ class TestWritePageNoProject:
 
         @ui.page("/test-write-no-project")
         def test_page():
+            """Build test page with write page and no project."""
             state = AppState()  # No project set
             page = WritePage(state, test_services)
             page.build()
@@ -39,6 +40,7 @@ class TestWritePageWithProject:
 
         @ui.page("/test-write-with-project")
         def test_page():
+            """Build test page with write page and project loaded."""
             page = WritePage(test_app_state, test_services)
             page.build()
 
@@ -54,6 +56,7 @@ class TestWritePageWithProject:
 
         @ui.page("/test-write-interview")
         def test_page():
+            """Build test page with write page interview section."""
             page = WritePage(test_app_state, test_services)
             page.build()
 
@@ -70,6 +73,7 @@ class TestWritePageWithProject:
 
         @ui.page("/test-write-context")
         def test_page():
+            """Build test page with write page for client context capture."""
             page = WritePage(test_app_state, test_services)
             page.build()
             page_ref.append(page)
@@ -90,6 +94,7 @@ class TestWritePageTabs:
 
         @ui.page("/test-write-fundamentals-tab")
         def test_page():
+            """Build test page with write page fundamentals tab."""
             page = WritePage(test_app_state, test_services)
             page.build()
 
@@ -102,6 +107,7 @@ class TestWritePageTabs:
 
         @ui.page("/test-write-writing-tab")
         def test_page():
+            """Build test page with write page live writing tab."""
             page = WritePage(test_app_state, test_services)
             page.build()
 
