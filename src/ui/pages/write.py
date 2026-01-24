@@ -68,6 +68,7 @@ class WritePage:
         self._scene_list_container: ui.column | None = None  # Container for scene list
         self._generation_status: GenerationStatus | None = None
         self._world_overview_container: ui.column | None = None  # Container for world overview
+        self._background_tasks: set[asyncio.Task[Any]] = set()  # Prevent task GC
 
     def _notify(
         self,
@@ -178,7 +179,9 @@ class WritePage:
             self._chat.set_messages(self.state.interview_history)
         elif not self.state.interview_complete:
             # Start interview if fresh
-            asyncio.create_task(self._start_interview())
+            task = asyncio.create_task(self._start_interview())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
         # Finalize button - right-aligned
         with ui.row().classes("w-full justify-end gap-2 mt-2"):

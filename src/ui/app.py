@@ -105,8 +105,38 @@ class StoryFactoryApp:
         with ui.column().classes("w-full flex-grow p-0"):
             build_content()
 
+    def _setup_global_colors(self) -> None:
+        """Configure global Quasar color palette using NiceGUI 3.6+ app.colors API."""
+        # Access colors via getattr for NiceGUI 3.6+ (type stubs not yet updated)
+        colors = app.colors
+        colors.primary = "#2196F3"
+        colors.secondary = "#607D8B"
+        colors.positive = "#4CAF50"
+        colors.negative = "#F44336"
+        colors.warning = "#FF9800"
+        colors.info = "#00BCD4"
+        logger.debug("Global color palette configured")
+
+    def _setup_exception_handler(self) -> None:
+        """Set up global exception handler for unhandled UI errors.
+
+        This catches exceptions that occur after the page is sent to the client,
+        such as errors in async handlers or background tasks.
+        """
+
+        def handle_exception(e: Exception) -> None:
+            logger.exception("Unhandled UI exception")
+            ui.notify(f"An error occurred: {e}", type="negative", timeout=10000)
+
+        # Access on_exception via getattr for NiceGUI 3.6+ (type stubs not yet updated)
+        on_exception = ui.on_exception
+        on_exception(handle_exception)
+        logger.debug("Global exception handler registered")
+
     def build(self) -> None:
         """Build the application routes."""
+        self._setup_global_colors()
+        self._setup_exception_handler()
 
         @ui.page("/")
         def write_page() -> None:

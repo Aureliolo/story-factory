@@ -265,7 +265,7 @@ class ComparisonPage:
             try:
                 while True:
                     event_dict = next(comparison_gen)
-                    if "completed" in event_dict and event_dict["completed"]:
+                    if event_dict.get("completed"):
                         model_id = event_dict["model_id"]
                         model_name = extract_model_name(model_id)
                         if self._progress_label:

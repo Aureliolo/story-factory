@@ -6,8 +6,8 @@ from .graph import GraphComponent
 from .header import Header
 
 __all__ = [
-    "Header",
     "ChatComponent",
     "EntityCard",
     "GraphComponent",
+    "Header",
 ]

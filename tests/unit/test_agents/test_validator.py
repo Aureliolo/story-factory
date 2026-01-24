@@ -62,12 +62,12 @@ Sarah watched from her window, thinking about the journey ahead."""
 
     def test_rejects_empty_response(self, validator):
         """Test rejects empty response."""
-        with pytest.raises((ResponseValidationError, ValueError), match="(Empty|cannot be empty)"):
+        with pytest.raises((ResponseValidationError, ValueError), match=r"(Empty|cannot be empty)"):
             validator.validate_response("", "English")
 
     def test_rejects_whitespace_only_response(self, validator):
         """Test rejects whitespace-only response."""
-        with pytest.raises((ResponseValidationError, ValueError), match="(Empty|cannot be empty)"):
+        with pytest.raises((ResponseValidationError, ValueError), match=r"(Empty|cannot be empty)"):
             validator.validate_response("   \n\t  ", "English")
 
     def test_rejects_cjk_when_english_expected(self, validator):

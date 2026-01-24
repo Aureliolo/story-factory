@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 from nicegui import run, ui
 from nicegui.elements.column import Column
@@ -36,6 +37,7 @@ class ProjectsPage:
         self.state = state
         self.services = services
         self._project_list: Column | None = None
+        self._background_tasks: set[asyncio.Task[Any]] = set()  # Prevent task GC
 
     def build(self) -> None:
         """Build the projects page UI."""
@@ -271,7 +273,7 @@ class ProjectsPage:
     async def _duplicate_project(self, project_id: str) -> None:
         """Duplicate a project."""
         try:
-            project, world_db = self.services.project.duplicate_project(project_id)
+            project, _world_db = self.services.project.duplicate_project(project_id)
             ui.notify(f"Duplicated as: {project.project_name}", type="positive")
             self._refresh_project_list()
         except Exception as e:
@@ -681,8 +683,9 @@ class ProjectsPage:
                 ui.notify("Backup deleted", type="positive")
                 dialog.close()
                 # Reopen backup manager to show updated list
-                # Use asyncio.create_task to call async method from sync callback
-                asyncio.create_task(self._show_backup_manager())
+                task = asyncio.create_task(self._show_backup_manager())
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
             except Exception as e:
                 logger.exception(f"Failed to delete backup {backup_filename}")
                 ui.notify(f"Error: {e}", type="negative")

@@ -333,7 +333,7 @@ class ProjectService:
         logger.debug(f"duplicate_project called: project_id={project_id}, new_name={new_name}")
         try:
             # Load original
-            original_state, original_world = self.load_project(project_id)
+            original_state, _original_world = self.load_project(project_id)
 
             # Create new project
             now = datetime.now()

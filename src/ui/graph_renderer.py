@@ -562,7 +562,7 @@ def _calculate_grid_positions(node_count: int, spacing: int = 150) -> list[tuple
     """
     import math
 
-    cols = max(1, int(math.ceil(math.sqrt(node_count))))
+    cols = max(1, math.ceil(math.sqrt(node_count)))
     positions = []
     for i in range(node_count):
         row = i // cols

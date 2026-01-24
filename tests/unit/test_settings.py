@@ -110,7 +110,7 @@ class TestGetModelInfo:
     def test_returns_known_model_info(self):
         """Should return info for known models."""
         # Pick a model from the registry
-        model_id = list(RECOMMENDED_MODELS.keys())[0]
+        model_id = next(iter(RECOMMENDED_MODELS.keys()))
         info = get_model_info(model_id)
         assert "name" in info
         assert "quality" in info
@@ -988,7 +988,7 @@ class TestNewSettingsValidation:
         settings = Settings()
         settings.outline_variations_min = 5
         settings.outline_variations_max = 3
-        with pytest.raises(ValueError, match="outline_variations_min.*cannot exceed"):
+        with pytest.raises(ValueError, match=r"outline_variations_min.*cannot exceed"):
             settings.validate()
 
     # --- Import thresholds ---
@@ -1035,7 +1035,7 @@ class TestNewSettingsValidation:
         settings = Settings()
         settings.event_sentence_min_length = 150
         settings.event_sentence_max_length = 100
-        with pytest.raises(ValueError, match="event_sentence_min_length.*cannot exceed"):
+        with pytest.raises(ValueError, match=r"event_sentence_min_length.*cannot exceed"):
             settings.validate()
 
     # --- User rating bounds ---
@@ -1059,7 +1059,7 @@ class TestNewSettingsValidation:
         settings = Settings()
         settings.user_rating_min = 5
         settings.user_rating_max = 3
-        with pytest.raises(ValueError, match="user_rating_min.*cannot exceed"):
+        with pytest.raises(ValueError, match=r"user_rating_min.*cannot exceed"):
             settings.validate()
 
     # --- Model download threshold ---
@@ -1242,7 +1242,7 @@ class TestMissingValidationCoverage:
         settings = Settings()
         settings.world_gen_characters_min = 10
         settings.world_gen_characters_max = 5
-        with pytest.raises(ValueError, match="world_gen_characters_min.*cannot exceed"):
+        with pytest.raises(ValueError, match=r"world_gen_characters_min.*cannot exceed"):
             settings.validate()
 
     def test_validate_raises_on_invalid_world_gen_locations_min(self):

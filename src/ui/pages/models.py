@@ -68,6 +68,7 @@ class ModelsPage:
         self._download_queue: dict[str, DownloadTask] = {}
         self._download_lock = asyncio.Lock()
         self._max_concurrent_downloads = 3  # Allow 3 concurrent downloads
+        self._background_tasks: set[asyncio.Task[Any]] = set()  # Prevent task GC
 
         # Filter state
         self._filter_fits_vram = True
@@ -500,7 +501,9 @@ class ModelsPage:
 
         # Start downloads outside the iteration
         for task in tasks_to_start:
-            asyncio.create_task(self._execute_download(task))
+            async_task = asyncio.create_task(self._execute_download(task))
+            self._background_tasks.add(async_task)
+            async_task.add_done_callback(self._background_tasks.discard)
 
     async def _execute_download(self, task: DownloadTask) -> None:
         """Execute a single download task."""

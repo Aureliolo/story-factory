@@ -70,14 +70,14 @@ class TestCompleteWorkflow:
         services.project.save_project(story_state)
 
         # Step 7: Verify persistence
-        loaded_state, loaded_db = services.project.load_project(story_state.id)
+        loaded_state, _loaded_db = services.project.load_project(story_state.id)
         assert loaded_state.brief.premise == story_state.brief.premise
         assert len(loaded_state.chapters) == 1
 
     def test_novella_complete_workflow(self, services, tmp_path):
         """Test complete workflow for novella."""
         # Create project
-        story_state, world_db = services.project.create_project("Novella Complete")
+        story_state, _world_db = services.project.create_project("Novella Complete")
 
         # Set brief for novella
         story_state.brief = StoryBrief(
@@ -155,12 +155,12 @@ class TestWorkflowPersistence:
     def test_persist_after_each_phase(self, services):
         """Test saving and loading after each workflow phase."""
         # Phase 1: Create project
-        story_state, world_db = services.project.create_project("Persistence Test")
+        story_state, _world_db = services.project.create_project("Persistence Test")
         project_id = story_state.id
         services.project.save_project(story_state)
 
         # Reload and verify
-        story_state, world_db = services.project.load_project(project_id)
+        story_state, _world_db = services.project.load_project(project_id)
         assert story_state.status == "interview"
 
         # Phase 2: Add brief
@@ -178,7 +178,7 @@ class TestWorkflowPersistence:
         services.project.save_project(story_state)
 
         # Reload and verify
-        story_state, world_db = services.project.load_project(project_id)
+        story_state, _world_db = services.project.load_project(project_id)
         assert story_state.brief is not None
         assert story_state.status == "outlining"
 
@@ -188,7 +188,7 @@ class TestWorkflowPersistence:
         services.project.save_project(story_state)
 
         # Reload and verify
-        story_state, world_db = services.project.load_project(project_id)
+        story_state, _world_db = services.project.load_project(project_id)
         assert len(story_state.chapters) == 1
         assert story_state.status == "writing"
 
@@ -198,7 +198,7 @@ class TestWorkflowPersistence:
         services.project.save_project(story_state)
 
         # Final reload and verify
-        story_state, world_db = services.project.load_project(project_id)
+        story_state, _world_db = services.project.load_project(project_id)
         assert story_state.chapters[0].content == "Test content"
         assert story_state.status == "complete"
 
@@ -282,8 +282,8 @@ class TestProjectLifecycle:
     def test_multiple_projects_isolation(self, services):
         """Test that multiple projects are isolated from each other."""
         # Create two projects
-        story1, world1 = services.project.create_project("Project 1")
-        story2, world2 = services.project.create_project("Project 2")
+        story1, _world1 = services.project.create_project("Project 1")
+        story2, _world2 = services.project.create_project("Project 2")
 
         # Add different data to each
         story1.brief = StoryBrief(

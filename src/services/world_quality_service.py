@@ -9,7 +9,7 @@ Implements a generate-judge-refine loop using:
 import logging
 import random
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 import ollama
 
@@ -49,7 +49,7 @@ class WorldQualityService:
     # Creator roles: Characters/locations/items need descriptive writing (writer),
     # factions/concepts need reasoning (architect), relationships need dynamics (editor).
     # Judge roles: All entities use validator for consistent quality assessment.
-    ENTITY_CREATOR_ROLES: dict[str, str] = {
+    ENTITY_CREATOR_ROLES: ClassVar[dict[str, str]] = {
         "character": "writer",  # Strong character development
         "faction": "architect",  # Political/organizational reasoning
         "location": "writer",  # Atmospheric/descriptive writing
@@ -58,7 +58,7 @@ class WorldQualityService:
         "relationship": "editor",  # Understanding dynamics
     }
 
-    ENTITY_JUDGE_ROLES: dict[str, str] = {
+    ENTITY_JUDGE_ROLES: ClassVar[dict[str, str]] = {
         "character": "validator",  # Character consistency checking
         "faction": "validator",  # Faction coherence checking
         "location": "validator",  # Location plausibility checking

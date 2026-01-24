@@ -450,7 +450,7 @@ class ExportService:
         book.add_item(epub.EpubNav())
 
         # Spine
-        book.spine = ["nav"] + chapters
+        book.spine = ["nav", *chapters]
 
         # Write to bytes
         output = BytesIO()

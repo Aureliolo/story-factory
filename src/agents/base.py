@@ -52,7 +52,7 @@ def _get_llm_semaphore(settings: Settings) -> threading.Semaphore:
 
 
 # Re-export exceptions for backward compatibility
-__all__ = ["BaseAgent", "LLMError", "LLMConnectionError", "LLMGenerationError"]
+__all__ = ["BaseAgent", "LLMConnectionError", "LLMError", "LLMGenerationError"]
 
 # Class-level singleton for prompt registry
 _prompt_registry: PromptRegistry | None = None

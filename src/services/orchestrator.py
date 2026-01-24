@@ -1264,7 +1264,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
         book.add_item(epub.EpubNav())
 
         # Define spine
-        book.spine = ["nav"] + chapters
+        book.spine = ["nav", *chapters]
 
         # Write to bytes
         from io import BytesIO

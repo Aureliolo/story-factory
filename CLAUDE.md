@@ -91,6 +91,16 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
                                             └────── revision loop ───────┘
 ```
 
+## Threading Model
+
+The codebase uses proper thread-safety patterns for concurrent operations:
+- Double-checked locking pattern for singleton initialization
+- `threading.RLock` for database operations in `WorldDatabase`
+- `threading.Semaphore` for LLM rate limiting in `BaseAgent`
+- YAML templates loaded once at startup under lock protection
+
+Note: These patterns also work with experimental free-threaded Python builds (no-GIL, `python3.14t`), though we don't recommend using experimental features in production. PyYAML 6.0.3+ includes thread-safe C extensions for those builds.
+
 ## Code Style
 
 - **Line length**: 100 characters (Ruff)
