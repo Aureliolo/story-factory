@@ -208,13 +208,14 @@ def sample_story_state() -> StoryState:
 
 @pytest.fixture
 def sample_story_with_chapters(sample_story_state: StoryState) -> StoryState:
-    """Create a StoryState with chapters.
+    """
+    Create a StoryState populated with sample characters and chapters.
 
-    Args:
-        sample_story_state: Base story state.
+    Parameters:
+        sample_story_state (StoryState): Base story state to augment.
 
     Returns:
-        StoryState with chapters added.
+        StoryState: The same StoryState instance with two sample characters, three sample chapters, and `status` set to "writing".
     """
     from memory.story_state import Chapter, Character
 
@@ -294,6 +295,13 @@ def mock_ollama_globally(monkeypatch):
     # Create a mock client class that returns safe defaults
     class MockOllamaClient:
         def __init__(self, host=None, timeout=None):
+            """
+            Initialize the mock Ollama client with optional connection parameters.
+
+            Parameters:
+                host (str | None): Host address to emulate for the client; preserved for compatibility with code that supplies a host.
+                timeout (float | None): Request timeout in seconds; stored for compatibility with callers that pass a timeout.
+            """
             self.host = host
             self.timeout = timeout
 
@@ -301,6 +309,14 @@ def mock_ollama_globally(monkeypatch):
             # Return a response that works for both API patterns in the codebase:
             # 1. Object access: response.models, model.model (services/model_service.py)
             # 2. Dict access: models.get("models", []), m["name"] (agents/base.py)
+            """
+            Provide a mock Ollama `list` response that supports both attribute-style and dict-style access patterns.
+
+            The returned object exposes a `.models` attribute containing a single model object whose `.model` attribute equals `TEST_MODEL`, and implements `.get(key, default)` so that `.get("models", [])` returns `[{"name": TEST_MODEL}]`.
+
+            Returns:
+                MagicMock: A mock response compatible with code that expects either object access (`response.models`, `model.model`) or mapping access (`models.get("models", [])`, `m["name"]`).
+            """
             mock_model = MagicMock()
             mock_model.model = TEST_MODEL
             mock_model.__getitem__ = lambda self, key: TEST_MODEL if key == "name" else None
@@ -314,11 +330,13 @@ def mock_ollama_globally(monkeypatch):
             return mock_response
 
         def generate(self, model=None, prompt=None, options=None, **kwargs):
-            """Return a mock response object compatible with production expectations.
+            """
+            Create a mock object that mimics an Ollama `generate` response.
 
-            The real Ollama generate response is accessed in two ways:
-            - Attribute style: response.response
-            - Dict style: response["response"]
+            The mock supports attribute access via `.response` and mapping-style access via `["response"]`.
+
+            Returns:
+                MagicMock: A mock whose `.response` is "Mock response from AI" and which returns that string when indexed with the key "response".
             """
             mock_result = MagicMock()
             mock_result.response = "Mock response from AI"
@@ -328,12 +346,37 @@ def mock_ollama_globally(monkeypatch):
             return mock_result
 
         def chat(self, model=None, messages=None, options=None, **kwargs):
+            """
+            Return a mocked chat response compatible with the code's expected Ollama `chat` output.
+
+            Parameters:
+                model (str | None): Optional model identifier requested for the chat.
+                messages (list[dict] | None): Conversation messages sent to the model (each message is a dict with keys like `role` and `content`).
+                options (dict | None): Optional generation options passed through to the model.
+                **kwargs: Additional keyword arguments accepted for compatibility with the real client.
+
+            Returns:
+                dict: A response dictionary with:
+                    - `message` (dict): A single message from the assistant containing `content` and `role`.
+                    - `done` (bool): `True` to indicate the response is complete.
+            """
             return {
                 "message": {"content": "Mock AI response", "role": "assistant"},
                 "done": True,
             }
 
         def pull(self, model, stream=False):
+            """
+            Return the pull status for a model, optionally as a streaming sequence of progress updates.
+
+            Parameters:
+                model: The model identifier to pull.
+                stream (bool): If True, return an iterator that yields progress dictionaries as the pull proceeds; if False, return a single summary dictionary.
+
+            Returns:
+                dict: When `stream` is False, a summary status dictionary (e.g., `{"status": "success"}`).
+                iterator: When `stream` is True, an iterator that yields progress dictionaries with keys like `status`, `completed`, and `total`.
+            """
             if stream:
                 return iter(
                     [
@@ -344,6 +387,15 @@ def mock_ollama_globally(monkeypatch):
             return {"status": "success"}
 
         def delete(self, model):
+            """
+            Remove a model from the mock Ollama client.
+
+            Parameters:
+                model: Identifier or name of the model to delete.
+
+            Returns:
+                dict: `{'status': 'success'}` indicating the mock deletion succeeded.
+            """
             return {"status": "success"}
 
     # Mock ollama.Client at the ollama module level
@@ -353,7 +405,25 @@ def mock_ollama_globally(monkeypatch):
     original_subprocess_run = subprocess.run
 
     def mock_subprocess_run(cmd, *args, **kwargs):
-        """Intercept subprocess calls to ollama and nvidia-smi."""
+        """
+        Intercept subprocess.run calls used in tests and return controlled mock results for specific commands.
+
+        Parameters:
+            cmd: The command or list passed to subprocess.run; inspected to determine the executable name.
+            *args: Positional arguments forwarded to the original subprocess.run for non-mocked commands.
+            **kwargs: Keyword arguments forwarded to the original subprocess.run for non-mocked commands.
+
+        Behavior:
+            - When the executable base name is "ollama", returns a mock object with `stdout` containing a fake `ollama list`
+              table that includes the TEST_MODEL entry, empty `stderr`, and `returncode` 0.
+            - When the executable base name is "nvidia-smi", returns a mock object with `stdout` set to "8192" (8GB VRAM),
+              empty `stderr`, and `returncode` 0.
+            - For any other executable, delegates the call to `original_subprocess_run` with the original arguments.
+
+        Returns:
+            An object with attributes `stdout`, `stderr`, and `returncode` resembling subprocess.CompletedProcess; for non-mocked
+            commands this is the result returned by `original_subprocess_run`.
+        """
         import os
 
         # Get the executable name robustly
