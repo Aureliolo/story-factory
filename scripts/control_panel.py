@@ -267,24 +267,160 @@ class OllamaManager:
             True if Ollama is healthy, False otherwise.
         """
         try:
-            req = urllib.request.Request(f"{self._url}/api/tags", method="GET")
-            with urllib.request.urlopen(req, timeout=2) as response:
-                return bool(response.status == 200)
-        except (urllib.error.URLError, TimeoutError, OSError):
+            url = f"{self._url}/api/tags"
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=5) as response:
+                status = int(response.status)
+                logger.debug("Health check %s: status=%d", url, status)
+                return status == 200
+        except urllib.error.URLError as e:
+            logger.debug("Health check failed (URLError): %s", e.reason)
+            return False
+        except TimeoutError:
+            logger.debug("Health check failed (timeout)")
+            return False
+        except OSError as e:
+            logger.debug("Health check failed (OSError): %s", e)
             return False
 
-    def start_ollama(self) -> bool:
+    def start_ollama(self) -> tuple[bool, str]:
         """Start the Ollama service.
 
         Returns:
-            True if Ollama was started, False otherwise.
+            Tuple of (success, message) with details about what happened.
         """
+        logger.info("Checking if Ollama is already running...")
         if self.check_health():
-            logger.info("Ollama already running at %s", self._url)
-            return True
+            msg = f"Ollama already running at {self._url}"
+            logger.info(msg)
+            return True, msg
 
         # Try Windows service first
+        service_exists = False
         if sys.platform == "win32":
+            try:
+                logger.info("Checking Windows service status...")
+                result = subprocess.run(
+                    ["sc", "query", "ollama"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    creationflags=SUBPROCESS_FLAGS,
+                )
+                logger.debug(
+                    "sc query result: %s", result.stdout[:200] if result.stdout else "empty"
+                )
+
+                if "does not exist" in result.stdout or result.returncode != 0:
+                    logger.info("Ollama Windows service not installed")
+                    service_exists = False
+                elif "RUNNING" in result.stdout:
+                    # Service running but health check failed - wait and retry
+                    logger.info("Service shows RUNNING but health check failed, waiting...")
+                    for _ in range(5):
+                        time.sleep(1)
+                        if self.check_health():
+                            msg = f"Ollama service is running at {self._url}"
+                            logger.info(msg)
+                            return True, msg
+                    msg = "Ollama service is running but not responding to API requests"
+                    logger.warning(msg)
+                    return False, msg
+                else:
+                    # Service exists but not running - try to start it
+                    service_exists = True
+                    logger.info("Attempting to start Ollama Windows service...")
+                    start_result = subprocess.run(
+                        ["sc", "start", "ollama"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        creationflags=SUBPROCESS_FLAGS,
+                    )
+                    logger.debug(
+                        "sc start result: %s",
+                        start_result.stdout[:200] if start_result.stdout else "empty",
+                    )
+
+                    # Give it time to start
+                    for i in range(5):
+                        time.sleep(1)
+                        logger.debug("Waiting for service... attempt %d", i + 1)
+                        if self.check_health():
+                            msg = f"Ollama service started at {self._url}"
+                            logger.info(msg)
+                            return True, msg
+
+                    # Service started but not responding
+                    stderr = start_result.stderr.strip() if start_result.stderr else ""
+                    stdout = start_result.stdout.strip() if start_result.stdout else ""
+                    details = stderr or stdout or "no details"
+                    msg = f"Ollama service start attempted but not responding. {details}"
+                    logger.warning(msg)
+                    return False, msg
+
+            except subprocess.TimeoutExpired:
+                logger.warning("Windows service check timed out after 10s")
+            except OSError as e:
+                logger.debug("Windows service check failed: %s", e)
+
+        # Try starting ollama serve directly (if service doesn't exist or we're not on Windows)
+        if not service_exists:
+            try:
+                creation_flags = 0
+                if sys.platform == "win32":
+                    creation_flags = SUBPROCESS_FLAGS
+
+                logger.info("Attempting to start Ollama via 'ollama serve'...")
+                subprocess.Popen(
+                    ["ollama", "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=creation_flags,
+                )
+
+                for i in range(5):
+                    time.sleep(1)
+                    logger.debug("Waiting for ollama serve... attempt %d", i + 1)
+                    if self.check_health():
+                        msg = f"Ollama started via 'ollama serve' at {self._url}"
+                        logger.info(msg)
+                        return True, msg
+
+                msg = "Ran 'ollama serve' but Ollama not responding after 5 seconds"
+                logger.warning(msg)
+                return False, msg
+
+            except FileNotFoundError:
+                msg = "Ollama not found in PATH. Install from https://ollama.ai"
+                logger.error(msg)
+                return False, msg
+            except (OSError, subprocess.SubprocessError) as e:
+                msg = f"Failed to start Ollama: {e}"
+                logger.error(msg)
+                return False, msg
+
+        # Should not reach here, but just in case
+        msg = "Failed to start Ollama - unknown error"
+        logger.error(msg)
+        return False, msg
+
+    def stop_ollama(self) -> tuple[bool, str]:
+        """Stop the Ollama service.
+
+        Returns:
+            Tuple of (success, message) with details about what happened.
+        """
+        # Don't rely solely on health check - try to stop anyway
+        # (service might be running but API not responding)
+        initially_healthy = self.check_health()
+        logger.info(
+            "Attempting to stop Ollama (currently %s)...",
+            "responding" if initially_healthy else "not responding",
+        )
+
+        if sys.platform == "win32":
+            # Try stopping Windows service first
             try:
                 result = subprocess.run(
                     ["sc", "query", "ollama"],
@@ -293,53 +429,92 @@ class OllamaManager:
                     timeout=10,
                     creationflags=SUBPROCESS_FLAGS,
                 )
-                if "RUNNING" not in result.stdout:
-                    logger.info("Starting Ollama service...")
-                    subprocess.run(
-                        ["sc", "start", "ollama"],
+                if "RUNNING" in result.stdout:
+                    logger.info("Attempting to stop Ollama Windows service...")
+                    stop_result = subprocess.run(
+                        ["sc", "stop", "ollama"],
                         capture_output=True,
+                        text=True,
                         timeout=10,
                         creationflags=SUBPROCESS_FLAGS,
                     )
-                    # Give it time to start
+                    # Give it time to stop
                     for _ in range(5):
                         time.sleep(1)
-                        if self.check_health():
-                            logger.info("Ollama service started")
-                            return True
-                    logger.warning("Ollama service started but not responding")
-                    return False
-            except (subprocess.TimeoutExpired, OSError) as e:
-                logger.debug("Service check failed: %s", e)
+                        if not self.check_health():
+                            msg = "Ollama service stopped"
+                            logger.info(msg)
+                            return True, msg
+                    stderr = stop_result.stderr.strip() if stop_result.stderr else ""
+                    msg = f"Ollama service stop requested but still running. {stderr}".strip()
+                    logger.warning(msg)
+                    return False, msg
+            except subprocess.TimeoutExpired:
+                logger.debug("Windows service stop timed out, trying taskkill...")
+            except OSError as e:
+                logger.debug("Windows service stop failed: %s", e)
 
-        # Try starting ollama serve directly
-        try:
-            creation_flags = 0
-            if sys.platform == "win32":
-                creation_flags = SUBPROCESS_FLAGS
+            # Try killing ollama process directly
+            try:
+                logger.info("Attempting to stop Ollama via taskkill...")
+                result = subprocess.run(
+                    ["taskkill", "/F", "/IM", "ollama.exe"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    creationflags=SUBPROCESS_FLAGS,
+                )
+                logger.debug(
+                    "taskkill ollama.exe: %s",
+                    result.stdout.strip() if result.stdout else result.stderr,
+                )
 
-            subprocess.Popen(
-                ["ollama", "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=creation_flags,
-            )
+                # Also kill ollama_llama_server.exe if running
+                result2 = subprocess.run(
+                    ["taskkill", "/F", "/IM", "ollama_llama_server.exe"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    creationflags=SUBPROCESS_FLAGS,
+                )
+                logger.debug(
+                    "taskkill ollama_llama_server.exe: %s",
+                    result2.stdout.strip() if result2.stdout else result2.stderr,
+                )
 
-            for _ in range(5):
                 time.sleep(1)
-                if self.check_health():
-                    logger.info("Ollama started via 'ollama serve'")
-                    return True
-
-            logger.warning("Ollama started but not responding")
-            return False
-
-        except FileNotFoundError:
-            logger.error("Ollama not found. Install from https://ollama.ai")
-            return False
-        except (OSError, subprocess.SubprocessError) as e:
-            logger.error("Failed to start Ollama: %s", e)
-            return False
+                if not self.check_health():
+                    # Check if taskkill actually killed something
+                    if "SUCCESS" in (result.stdout or "") or "SUCCESS" in (result2.stdout or ""):
+                        msg = "Ollama stopped via taskkill"
+                    else:
+                        msg = "Ollama is not running (no process found)"
+                    logger.info(msg)
+                    return True, msg
+                msg = "Taskkill ran but Ollama still responding"
+                logger.warning(msg)
+                return False, msg
+            except (subprocess.TimeoutExpired, OSError) as e:
+                msg = f"Failed to stop Ollama: {e}"
+                logger.error(msg)
+                return False, msg
+        else:
+            # Unix: try pkill
+            try:
+                logger.info("Attempting to stop Ollama via pkill...")
+                subprocess.run(["pkill", "-f", "ollama"], timeout=10)
+                time.sleep(1)
+                if not self.check_health():
+                    msg = "Ollama stopped"
+                    logger.info(msg)
+                    return True, msg
+                msg = "pkill ran but Ollama still responding"
+                logger.warning(msg)
+                return False, msg
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+                msg = f"Failed to stop Ollama: {e}"
+                logger.error(msg)
+                return False, msg
 
     def get_url(self) -> str:
         """Get the Ollama API URL.
@@ -671,7 +846,7 @@ class ControlPanel(ctk.CTk):
         )
         self._clear_btn.pack(side="left", padx=5)
 
-        self._ollama_btn = ctk.CTkButton(
+        self._ollama_start_btn = ctk.CTkButton(
             row2,
             text="Start Ollama",
             command=self._on_start_ollama,
@@ -679,7 +854,17 @@ class ControlPanel(ctk.CTk):
             fg_color="#17a2b8",
             hover_color="#138496",
         )
-        self._ollama_btn.pack(side="left", padx=5)
+        self._ollama_start_btn.pack(side="left", padx=5)
+
+        self._ollama_stop_btn = ctk.CTkButton(
+            row2,
+            text="Stop Ollama",
+            command=self._on_stop_ollama,
+            width=110,
+            fg_color="#dc3545",
+            hover_color="#c82333",
+        )
+        self._ollama_stop_btn.pack(side="left", padx=5)
 
     def _create_log_frame(self) -> None:  # pragma: no cover
         """Create the log viewer section (UI widget creation only)."""
@@ -975,11 +1160,39 @@ class ControlPanel(ctk.CTk):
             return
 
         self._set_status_message("Starting Ollama...", "#17a2b8")
-        self._run_in_thread(
-            self._ollama_manager.start_ollama,
-            f"Ollama started at {self._ollama_manager.get_url()}",
-            "Failed to start Ollama",
-        )
+
+        def start_and_report() -> None:
+            """Start Ollama and report detailed status."""
+            try:
+                success, message = self._ollama_manager.start_ollama()
+                color = "#28a745" if success else "#dc3545"
+                self._ui_queue.put(lambda: self._set_status_message(message, color))
+            except Exception as e:
+                logger.exception("Error starting Ollama")
+                error_msg = f"Error: {e}"
+                self._ui_queue.put(lambda: self._set_status_message(error_msg, "#dc3545"))
+
+        thread = threading.Thread(target=start_and_report, daemon=True)
+        thread.start()
+
+    def _on_stop_ollama(self) -> None:
+        """Handle Stop Ollama button click."""
+        # Don't rely solely on health check - try to stop anyway
+        self._set_status_message("Stopping Ollama...", "#17a2b8")
+
+        def stop_and_report() -> None:
+            """Stop Ollama and report detailed status."""
+            try:
+                success, message = self._ollama_manager.stop_ollama()
+                color = "#28a745" if success else "#dc3545"
+                self._ui_queue.put(lambda: self._set_status_message(message, color))
+            except Exception as e:
+                logger.exception("Error stopping Ollama")
+                error_msg = f"Error: {e}"
+                self._ui_queue.put(lambda: self._set_status_message(error_msg, "#dc3545"))
+
+        thread = threading.Thread(target=stop_and_report, daemon=True)
+        thread.start()
 
     def _on_close(self) -> None:
         """Handle window close event.

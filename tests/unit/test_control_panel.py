@@ -419,24 +419,29 @@ class TestOllamaManager:
 
     @patch.object(OllamaManager, "check_health", return_value=True)
     def test_start_ollama_already_running(self, mock_health):
-        """Should return True when Ollama is already running."""
+        """Should return success tuple when Ollama is already running."""
         with patch("scripts.control_panel.SETTINGS_FILE") as mock_path:
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is True
+            assert success is True
+            assert "already running" in message
 
     @patch("scripts.control_panel.subprocess.run")
     @patch("scripts.control_panel.subprocess.Popen")
     @patch("scripts.control_panel.sys.platform", "win32")
     def test_start_ollama_via_service(self, mock_popen, mock_run):
         """Should start Ollama via Windows service."""
-        # Service check returns not running
+        # Service check returns not running (service exists but stopped)
         service_check = MagicMock()
         service_check.stdout = "STATE              : 1  STOPPED"
+        service_check.returncode = 0  # Service exists
 
-        mock_run.side_effect = [service_check, MagicMock()]  # query, start
+        start_result = MagicMock()
+        start_result.stderr = ""
+        start_result.stdout = ""
+        mock_run.side_effect = [service_check, start_result]  # query, start
 
         health_results = [False, False, True]  # First checks fail, last succeeds
 
@@ -447,9 +452,10 @@ class TestOllamaManager:
         ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is True
+            assert success is True
+            assert "service started" in message
 
     @patch("scripts.control_panel.subprocess.run")
     @patch("scripts.control_panel.subprocess.Popen")
@@ -460,7 +466,9 @@ class TestOllamaManager:
         service_check = MagicMock()
         service_check.stdout = "STATE              : 1  STOPPED"
 
-        mock_run.side_effect = [service_check, MagicMock()]
+        start_result = MagicMock()
+        start_result.stderr = ""
+        mock_run.side_effect = [service_check, start_result]
 
         with (
             patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
@@ -469,9 +477,10 @@ class TestOllamaManager:
         ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is False
+            assert success is False
+            assert "not responding" in message
 
     @patch("scripts.control_panel.subprocess.run")
     @patch("scripts.control_panel.subprocess.Popen")
@@ -490,9 +499,10 @@ class TestOllamaManager:
         ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is True
+            assert success is True
+            assert "ollama serve" in message
             mock_popen.assert_called()
 
     @patch("scripts.control_panel.subprocess.run")
@@ -509,9 +519,10 @@ class TestOllamaManager:
         ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is False
+            assert success is False
+            assert "not responding" in message
 
     @patch("scripts.control_panel.subprocess.run")
     @patch("scripts.control_panel.subprocess.Popen")
@@ -527,9 +538,10 @@ class TestOllamaManager:
         ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is False
+            assert success is False
+            assert "not found" in message
 
     @patch("scripts.control_panel.subprocess.run")
     @patch("scripts.control_panel.subprocess.Popen")
@@ -545,9 +557,10 @@ class TestOllamaManager:
         ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is False
+            assert success is False
+            assert "Failed to start" in message
 
     @patch("scripts.control_panel.subprocess.Popen")
     @patch("scripts.control_panel.sys.platform", "linux")
@@ -562,10 +575,91 @@ class TestOllamaManager:
         ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
-            result = manager.start_ollama()
+            success, message = manager.start_ollama()
 
-            assert result is True
+            assert success is True
+            assert "ollama serve" in message
             mock_popen.assert_called()
+
+    @patch.object(OllamaManager, "check_health", return_value=False)
+    def test_stop_ollama_not_running(self, mock_health):
+        """Should return success when Ollama is not running."""
+        with patch("scripts.control_panel.SETTINGS_FILE") as mock_path:
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is True
+            assert "not running" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_stop_ollama_via_service(self, mock_run):
+        """Should stop Ollama via Windows service."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 4  RUNNING"
+
+        stop_result = MagicMock()
+        stop_result.stderr = ""
+        mock_run.side_effect = [service_check, stop_result]
+
+        health_results = [True, True, False]  # Last check shows stopped
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is True
+            assert "service stopped" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_stop_ollama_via_taskkill(self, mock_run):
+        """Should stop Ollama via taskkill when service stop fails."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 1  STOPPED"  # Not running as service
+
+        taskkill_result = MagicMock()
+        taskkill_result.stdout = "SUCCESS: The process was terminated."
+        taskkill_result.stderr = ""
+        mock_run.side_effect = [service_check, taskkill_result, taskkill_result]
+
+        health_results = [True, False]  # Initially running, then stopped
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is True
+            assert "taskkill" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "linux")
+    def test_stop_ollama_linux(self, mock_run):
+        """Should stop Ollama on Linux via pkill."""
+        health_results = [True, False]  # Initially running, then stopped
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is True
+            assert "stopped" in message.lower()
 
 
 class TestLogWatcher:
@@ -1004,10 +1098,39 @@ class TestControlPanel:
         panel = self._create_mock_panel()
         panel._ollama_manager.check_health.return_value = False
 
-        with patch.object(panel, "_run_in_thread") as mock_run:
+        with patch("threading.Thread") as mock_thread:
             panel._on_start_ollama()
 
-            mock_run.assert_called_once()
+            mock_thread.assert_called_once()
+            # Verify thread was started
+            mock_thread.return_value.start.assert_called_once()
+
+    def test_on_stop_ollama_attempts_stop(self):
+        """Should attempt to stop Ollama even when health check fails."""
+        panel = self._create_mock_panel()
+        panel._ollama_manager.check_health.return_value = False
+
+        with (
+            patch.object(panel, "_set_status_message") as mock_status,
+            patch("threading.Thread") as mock_thread,
+        ):
+            panel._on_stop_ollama()
+
+            # Should show "Stopping..." and start a thread
+            mock_status.assert_called_with("Stopping Ollama...", "#17a2b8")
+            mock_thread.assert_called_once()
+            mock_thread.return_value.start.assert_called_once()
+
+    def test_on_stop_ollama_stops(self):
+        """Should stop Ollama when running."""
+        panel = self._create_mock_panel()
+        panel._ollama_manager.check_health.return_value = True
+
+        with patch("threading.Thread") as mock_thread:
+            panel._on_stop_ollama()
+
+            mock_thread.assert_called_once()
+            mock_thread.return_value.start.assert_called_once()
 
     def test_on_close(self):
         """Should destroy window on close."""
