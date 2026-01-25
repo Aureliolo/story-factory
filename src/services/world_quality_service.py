@@ -258,6 +258,9 @@ class WorldQualityService:
         character: Character | None = None
         scores: CharacterQualityScores | None = None
         last_error: str = ""
+        # Early stopping tracking
+        peak_score: float = 0.0
+        consecutive_degradations: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -294,9 +297,25 @@ class WorldQualityService:
                     f"score {scores.average:.1f} (threshold {config.quality_threshold})"
                 )
 
+                # Track peak score and consecutive degradations for early stopping
+                if scores.average > peak_score:
+                    peak_score = scores.average
+                    consecutive_degradations = 0
+                elif scores.average < peak_score:
+                    consecutive_degradations += 1
+
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Character '{character.name}' met quality threshold")
                     return character, scores, iteration + 1
+
+                # Check for early stopping
+                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                    logger.info(
+                        f"Early stopping: Character '{character.name}' quality degraded "
+                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"Stopping at iteration {iteration + 1}."
+                    )
+                    break
 
             except WorldGenerationError as e:
                 last_error = str(e)
@@ -537,6 +556,9 @@ Write all text in {brief.language if brief else "English"}."""
         location: dict[str, Any] = {}
         scores: LocationQualityScores | None = None
         last_error: str = ""
+        # Early stopping tracking
+        peak_score: float = 0.0
+        consecutive_degradations: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -570,9 +592,25 @@ Write all text in {brief.language if brief else "English"}."""
                     f"score {scores.average:.1f}"
                 )
 
+                # Track peak score and consecutive degradations for early stopping
+                if scores.average > peak_score:
+                    peak_score = scores.average
+                    consecutive_degradations = 0
+                elif scores.average < peak_score:
+                    consecutive_degradations += 1
+
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Location '{location.get('name')}' met quality threshold")
                     return location, scores, iteration + 1
+
+                # Check for early stopping
+                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                    logger.info(
+                        f"Early stopping: Location '{location.get('name')}' quality degraded "
+                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"Stopping at iteration {iteration + 1}."
+                    )
+                    break
 
             except WorldGenerationError as e:
                 last_error = str(e)
@@ -814,6 +852,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         relationship: dict[str, Any] = {}
         scores: RelationshipQualityScores | None = None
         last_error: str = ""
+        # Early stopping tracking
+        peak_score: float = 0.0
+        consecutive_degradations: int = 0
 
         needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
 
@@ -865,9 +906,25 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     f"iteration {iteration + 1}: score {scores.average:.1f}"
                 )
 
+                # Track peak score and consecutive degradations for early stopping
+                if scores.average > peak_score:
+                    peak_score = scores.average
+                    consecutive_degradations = 0
+                elif scores.average < peak_score:
+                    consecutive_degradations += 1
+
                 if scores.average >= config.quality_threshold:
                     logger.info("Relationship met quality threshold")
                     return relationship, scores, iteration + 1
+
+                # Check for early stopping
+                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                    logger.info(
+                        f"Early stopping: Relationship '{source} -> {target}' quality degraded "
+                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"Stopping at iteration {iteration + 1}."
+                    )
+                    break
 
             except WorldGenerationError as e:
                 last_error = str(e)
@@ -1220,6 +1277,16 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     # Log analytics
                     self._log_refinement_analytics(history, story_state.id)
                     return faction, scores, iteration + 1
+
+                # Check for early stopping after tracking iteration
+                if history.should_stop_early(config.early_stopping_patience):
+                    logger.info(
+                        f"Early stopping: Faction '{faction.get('name')}' quality degraded "
+                        f"for {history.consecutive_degradations} consecutive iterations "
+                        f"(patience: {config.early_stopping_patience}). "
+                        f"Stopping at iteration {iteration + 1}."
+                    )
+                    break  # Exit loop early
 
             except WorldGenerationError as e:
                 last_error = str(e)
@@ -1583,6 +1650,9 @@ Return ONLY the improved faction."""
         item: dict[str, Any] = {}
         scores: ItemQualityScores | None = None
         last_error: str = ""
+        # Early stopping tracking
+        peak_score: float = 0.0
+        consecutive_degradations: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -1614,9 +1684,25 @@ Return ONLY the improved faction."""
                     f"score {scores.average:.1f}"
                 )
 
+                # Track peak score and consecutive degradations for early stopping
+                if scores.average > peak_score:
+                    peak_score = scores.average
+                    consecutive_degradations = 0
+                elif scores.average < peak_score:
+                    consecutive_degradations += 1
+
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Item '{item.get('name')}' met quality threshold")
                     return item, scores, iteration + 1
+
+                # Check for early stopping
+                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                    logger.info(
+                        f"Early stopping: Item '{item.get('name')}' quality degraded "
+                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"Stopping at iteration {iteration + 1}."
+                    )
+                    break
 
             except WorldGenerationError as e:
                 last_error = str(e)
@@ -1883,6 +1969,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         concept: dict[str, Any] = {}
         scores: ConceptQualityScores | None = None
         last_error: str = ""
+        # Early stopping tracking
+        peak_score: float = 0.0
+        consecutive_degradations: int = 0
         needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
 
         while iteration < config.max_iterations:
@@ -1915,9 +2004,25 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     f"score {scores.average:.1f}"
                 )
 
+                # Track peak score and consecutive degradations for early stopping
+                if scores.average > peak_score:
+                    peak_score = scores.average
+                    consecutive_degradations = 0
+                elif scores.average < peak_score:
+                    consecutive_degradations += 1
+
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Concept '{concept.get('name')}' met quality threshold")
                     return concept, scores, iteration + 1
+
+                # Check for early stopping
+                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                    logger.info(
+                        f"Early stopping: Concept '{concept.get('name')}' quality degraded "
+                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"Stopping at iteration {iteration + 1}."
+                    )
+                    break
 
             except WorldGenerationError as e:
                 last_error = str(e)

@@ -30,6 +30,9 @@ class RefinementHistory(BaseModel):
     improvement_detected: bool = Field(default=False, description="Did iterations improve quality")
     peak_score: float = Field(default=0.0, description="Highest score achieved")
     final_score: float = Field(default=0.0, description="Score of returned entity")
+    consecutive_degradations: int = Field(
+        default=0, description="Count of consecutive score degradations since peak"
+    )
 
     def add_iteration(
         self,
@@ -39,7 +42,7 @@ class RefinementHistory(BaseModel):
         average_score: float,
         feedback: str = "",
     ) -> None:
-        """Add an iteration record."""
+        """Add an iteration record and update consecutive degradation tracking."""
         self.iterations.append(
             IterationRecord(
                 iteration=iteration,
@@ -52,6 +55,11 @@ class RefinementHistory(BaseModel):
         if average_score > self.peak_score:
             self.peak_score = average_score
             self.best_iteration = iteration
+            self.consecutive_degradations = 0  # Reset on new peak
+        elif average_score < self.peak_score:
+            # Score degraded from peak
+            self.consecutive_degradations += 1
+        # Note: if score equals peak, don't reset counter (plateauing after peak)
 
     def get_best_entity(self) -> dict[str, Any] | None:
         """Return entity data from the best-scoring iteration."""
@@ -61,6 +69,20 @@ class RefinementHistory(BaseModel):
             if record.iteration == self.best_iteration:
                 return record.entity_data
         return None
+
+    def should_stop_early(self, patience: int) -> bool:
+        """Check if early stopping criteria is met.
+
+        Args:
+            patience: Number of consecutive degradations to tolerate
+
+        Returns:
+            True if we should stop (consecutive degradations >= patience after peak)
+        """
+        # Only trigger early stopping if:
+        # 1. We have a peak (best_iteration > 0)
+        # 2. Consecutive degradations >= patience
+        return self.best_iteration > 0 and self.consecutive_degradations >= patience
 
     def analyze_improvement(self) -> dict[str, Any]:
         """Analyze whether iterations improved quality."""
@@ -91,6 +113,7 @@ class RefinementHistory(BaseModel):
             "total_iterations": len(self.iterations),
             "score_progression": [r.average_score for r in self.iterations],
             "worsened_after_peak": last_score < self.peak_score,
+            "consecutive_degradations": self.consecutive_degradations,
         }
 
 
@@ -374,6 +397,12 @@ class RefinementConfig(BaseModel):
     refinement_temperature: float = Field(
         default=0.7, ge=0.0, le=2.0, description="Temperature for refinement"
     )
+    early_stopping_patience: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Stop after N consecutive score degradations after peak",
+    )
 
     @classmethod
     def from_settings(cls, settings: Any) -> RefinementConfig:
@@ -384,4 +413,5 @@ class RefinementConfig(BaseModel):
             creator_temperature=getattr(settings, "world_quality_creator_temp", 0.9),
             judge_temperature=getattr(settings, "world_quality_judge_temp", 0.1),
             refinement_temperature=getattr(settings, "world_quality_refinement_temp", 0.7),
+            early_stopping_patience=getattr(settings, "world_quality_early_stopping_patience", 2),
         )
