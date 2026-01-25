@@ -113,7 +113,13 @@ class StoryOrchestrator:
             self.validator.validate_response(response, language, task)
             return response
         except ResponseValidationError as e:
-            logger.error(f"Response validation failed: {e}")
+            logger.error(
+                "Response validation failed for task '%s' (language=%s, len=%d): %s",
+                task,
+                language,
+                len(response),
+                e,
+            )
             raise
 
     @property
@@ -809,7 +815,12 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
                 )
                 logger.debug(f"Started tracking generation score {self._current_score_id}")
             except Exception as e:
-                logger.warning(f"Failed to start generation tracking: {e}")
+                logger.warning(
+                    "Failed to start generation tracking for story %s chapter %d: %s",
+                    self.story_state.id,
+                    chapter_number,
+                    e,
+                )
                 self._current_score_id = None
 
         content = self.writer.write_chapter(self.story_state, chapter, revision_feedback=feedback)
@@ -941,7 +952,12 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
                 self.mode_service.on_chapter_complete()
                 logger.debug("Notified mode service of chapter completion")
             except Exception as e:
-                logger.warning(f"Failed to complete generation tracking: {e}")
+                logger.warning(
+                    "Failed to complete generation tracking for story %s chapter %d: %s",
+                    self.story_state.id,
+                    chapter_number,
+                    e,
+                )
 
         # Auto-save after each chapter to prevent data loss
         try:

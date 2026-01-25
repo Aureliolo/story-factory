@@ -15,8 +15,11 @@ from src.services.project_service import ProjectService
 class TestFullStartupSequence:
     """Test the full startup sequence."""
 
-    def test_startup_with_clean_settings(self, mock_ollama_client, tmp_path):
-        """App starts correctly with default settings."""
+    def test_startup_with_clean_settings(self, mock_ollama_client):
+        """App starts correctly with default settings.
+
+        Note: ModeDatabase is automatically isolated by conftest.py's isolate_mode_database fixture.
+        """
         from src.services import ServiceContainer
         from src.settings import Settings
         from src.ui.app import StoryFactoryApp
@@ -86,8 +89,11 @@ class TestFullStartupSequence:
 class TestServiceInteractions:
     """Test service layer interactions."""
 
-    def test_project_service_initializes(self, mock_ollama_client, tmp_path):
-        """ProjectService initializes correctly."""
+    def test_project_service_initializes(self, mock_ollama_client):
+        """ProjectService initializes correctly.
+
+        Note: ModeDatabase is automatically isolated by conftest.py's isolate_mode_database fixture.
+        """
         from src.services import ServiceContainer
         from src.settings import Settings
 
@@ -95,14 +101,16 @@ class TestServiceInteractions:
         services = ServiceContainer(settings)
         assert isinstance(services.project, ProjectService)
 
-    def test_model_service_uses_settings_url(self, mock_ollama_client, tmp_path):
-        """ModelService uses Ollama URL from src.settings."""
+    def test_model_service_uses_settings_url(self, mock_ollama_client):
+        """ModelService uses Ollama URL from src.settings.
+
+        Note: ModeDatabase is automatically isolated by conftest.py's isolate_mode_database fixture.
+        """
         from src.services import ServiceContainer
         from src.settings import Settings
 
         settings = Settings()
         settings.ollama_url = "http://custom-ollama:11434"
-
         services = ServiceContainer(settings)
 
         assert services.model.settings.ollama_url == "http://custom-ollama:11434"

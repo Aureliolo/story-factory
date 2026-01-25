@@ -338,7 +338,15 @@ class ModeDatabase:
                 conn.commit()
                 return cursor.lastrowid or 0
         except sqlite3.Error as e:
-            logger.error(f"Failed to record score: {e}", exc_info=True)
+            logger.error(
+                "Failed to record score for project=%s model=%s agent=%s chapter=%s: %s",
+                project_id,
+                model_id,
+                agent_role,
+                chapter_id,
+                e,
+                exc_info=True,
+            )
             raise
 
     def update_score(
@@ -442,7 +450,12 @@ class ModeDatabase:
                 )
                 conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"Failed to update performance metrics for {score_id}: {e}", exc_info=True)
+            logger.error(
+                "Failed to update performance metrics for score_id=%s: %s",
+                score_id,
+                e,
+                exc_info=True,
+            )
             raise
 
     def get_scores_for_model(
@@ -702,7 +715,13 @@ class ModeDatabase:
                 conn.commit()
                 return cursor.lastrowid or 0
         except sqlite3.Error as e:
-            logger.error(f"Failed to record recommendation: {e}", exc_info=True)
+            logger.error(
+                "Failed to record recommendation type=%s role=%s: %s",
+                recommendation_type,
+                affected_role,
+                e,
+                exc_info=True,
+            )
             raise
 
     def update_recommendation_outcome(
@@ -829,7 +848,13 @@ class ModeDatabase:
                 )
                 conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"Failed to save custom mode {mode_id}: {e}", exc_info=True)
+            logger.error(
+                "Failed to save custom mode mode_id=%s name=%s: %s",
+                mode_id,
+                name,
+                e,
+                exc_info=True,
+            )
             raise
 
     def get_custom_mode(self, mode_id: str) -> dict[str, Any] | None:
@@ -1235,7 +1260,15 @@ class ModeDatabase:
                 conn.commit()
                 return cursor.lastrowid or 0
         except sqlite3.Error as e:
-            logger.error(f"Failed to record world entity score: {e}", exc_info=True)
+            logger.error(
+                "Failed to record world entity score for project=%s entity=%s type=%s model=%s: %s",
+                project_id,
+                entity_name,
+                entity_type,
+                model_id,
+                e,
+                exc_info=True,
+            )
             raise
 
     def get_world_entity_scores(
@@ -1615,7 +1648,15 @@ class ModeDatabase:
                 conn.commit()
                 return cursor.lastrowid or 0
         except sqlite3.Error as e:
-            logger.error(f"Failed to record prompt metrics: {e}", exc_info=True)
+            logger.error(
+                "Failed to record prompt metrics for hash=%s role=%s task=%s model=%s: %s",
+                prompt_hash,
+                agent_role,
+                task,
+                model_id,
+                e,
+                exc_info=True,
+            )
             raise
 
     def get_prompt_analytics(

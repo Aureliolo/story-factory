@@ -99,6 +99,7 @@ def services(tmp_path, mock_ollama_for_agents):
     worlds_dir.mkdir(parents=True, exist_ok=True)
 
     # Patch at ALL locations where these constants are imported
+    # Note: ModeDatabase is automatically isolated by conftest.py's isolate_mode_database fixture
     with (
         patch("src.settings.STORIES_DIR", stories_dir),
         patch("src.settings.WORLDS_DIR", worlds_dir),

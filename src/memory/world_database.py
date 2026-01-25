@@ -153,9 +153,9 @@ class WorldDatabase:
         if hasattr(self, "_closed") and not self._closed:
             try:
                 self.close()
-            except Exception:
-                # Ignore errors during garbage collection
-                pass
+            except Exception as e:
+                # Log but don't raise during garbage collection
+                logger.debug("Error during WorldDatabase cleanup in __del__: %s", e)
 
     def _init_schema(self) -> None:
         """Initialize database schema with versioning."""
@@ -317,6 +317,7 @@ class WorldDatabase:
         Raises:
             ValueError: If name, entity_type, or attributes are invalid
         """
+        logger.debug("add_entity called: type=%s, name=%s", entity_type, name)
         # Validate inputs
         name = name.strip()
         if not name:
@@ -416,6 +417,9 @@ class WorldDatabase:
         Raises:
             ValueError: If validation fails or field names are invalid
         """
+        logger.debug(
+            "update_entity called: entity_id=%s, fields=%s", entity_id, list(updates.keys())
+        )
         # Filter and validate field names (SQL injection prevention)
         update_fields: dict[str, Any] = {}
         for key, value in updates.items():
@@ -513,6 +517,7 @@ class WorldDatabase:
         Returns:
             True if deleted, False if not found
         """
+        logger.debug("delete_entity called: entity_id=%s", entity_id)
         with self._lock:
             cursor = self.conn.cursor()
             cursor.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
@@ -633,6 +638,12 @@ class WorldDatabase:
         Returns:
             Relationship ID
         """
+        logger.debug(
+            "add_relationship called: source=%s, target=%s, type=%s",
+            source_id,
+            target_id,
+            relation_type,
+        )
         rel_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
         attrs_json = json.dumps(attributes or {})
@@ -1225,6 +1236,12 @@ class WorldDatabase:
         Returns:
             List of paths (each path is a list of entity IDs)
         """
+        logger.debug(
+            "find_all_paths called: source=%s, target=%s, max_length=%d",
+            source_id,
+            target_id,
+            max_length,
+        )
         graph = self.get_graph()
         try:
             return list(nx.all_simple_paths(graph, source_id, target_id, cutoff=max_length))
@@ -1241,6 +1258,9 @@ class WorldDatabase:
         Returns:
             List of connected entities
         """
+        logger.debug(
+            "get_connected_entities called: entity_id=%s, max_depth=%d", entity_id, max_depth
+        )
         graph = self.get_graph()
         if entity_id not in graph:
             return []

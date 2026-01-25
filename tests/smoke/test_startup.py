@@ -107,7 +107,10 @@ class TestServiceContainerInitialization:
     """Test ServiceContainer can be initialized."""
 
     def test_service_container_creates_all_services(self):
-        """ServiceContainer initializes all services."""
+        """ServiceContainer initializes all services.
+
+        Note: ModeDatabase is automatically isolated by conftest.py's isolate_mode_database fixture.
+        """
         from src.services import ServiceContainer
         from src.settings import Settings
 
@@ -137,7 +140,10 @@ class TestUIComponentsConstruction:
         assert state.interview_history == []
 
     def test_story_factory_app_construction(self):
-        """StoryFactoryApp can be constructed."""
+        """StoryFactoryApp can be constructed.
+
+        Note: ModeDatabase is automatically isolated by conftest.py's isolate_mode_database fixture.
+        """
         from src.services import ServiceContainer
         from src.settings import Settings
         from src.ui.app import StoryFactoryApp

@@ -512,7 +512,7 @@ Write all text in {brief.language}."""
             )
             return character
         except Exception as e:
-            logger.error(f"Character creation error: {e}")
+            logger.error("Character creation error for story %s: %s", story_state.id, e)
             raise WorldGenerationError(f"Character creation failed: {e}") from e
 
     def _judge_character_quality(
@@ -571,7 +571,7 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
-            logger.exception(f"Character quality judgment failed: {e}")
+            logger.exception("Character quality judgment failed for '%s': %s", character.name, e)
             raise WorldGenerationError(f"Character quality judgment failed: {e}") from e
 
     def _refine_character(
@@ -630,7 +630,7 @@ Write all text in {brief.language if brief else "English"}."""
                 temperature=temperature,
             )
         except Exception as e:
-            logger.exception(f"Character refinement failed: {e}")
+            logger.exception("Character refinement failed for '%s': %s", character.name, e)
             raise WorldGenerationError(f"Character refinement failed: {e}") from e
 
     # ========== LOCATION GENERATION WITH QUALITY ==========
@@ -923,7 +923,9 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
-            logger.exception(f"Location quality judgment failed: {e}")
+            logger.exception(
+                "Location quality judgment failed for '%s': %s", location.get("name", "Unknown"), e
+            )
             raise WorldGenerationError(f"Location quality judgment failed: {e}") from e
 
     def _refine_location(
@@ -982,16 +984,20 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Location refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid location refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Location refinement LLM error: {e}")
+            logger.error("Location refinement LLM error for '%s': %s", location.get("name"), e)
             raise WorldGenerationError(f"LLM error during location refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Location refinement JSON parsing error: {e}")
+            logger.error(
+                "Location refinement JSON parsing error for '%s': %s", location.get("name"), e
+            )
             raise WorldGenerationError(f"Invalid location refinement response format: {e}") from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error in location refinement: {e}")
+            logger.exception(
+                "Unexpected error in location refinement for '%s': %s", location.get("name"), e
+            )
             raise WorldGenerationError(f"Unexpected location refinement error: {e}") from e
 
     # ========== RELATIONSHIP GENERATION WITH QUALITY ==========
@@ -1271,16 +1277,20 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Relationship creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid relationship JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Relationship creation LLM error: {e}")
+            logger.error("Relationship creation LLM error for story %s: %s", story_state.id, e)
             raise WorldGenerationError(f"LLM error during relationship creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Relationship creation JSON parsing error: {e}")
+            logger.error(
+                "Relationship creation JSON parsing error for story %s: %s", story_state.id, e
+            )
             raise WorldGenerationError(f"Invalid relationship response format: {e}") from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error in relationship creation: {e}")
+            logger.exception(
+                "Unexpected error in relationship creation for story %s: %s", story_state.id, e
+            )
             raise WorldGenerationError(f"Unexpected relationship creation error: {e}") from e
 
     def _judge_relationship_quality(
@@ -1355,7 +1365,12 @@ Output ONLY valid JSON:
         except WorldGenerationError:
             raise
         except Exception as e:
-            logger.exception(f"Relationship quality judgment failed: {e}")
+            logger.exception(
+                "Relationship quality judgment failed for %s->%s: %s",
+                relationship.get("source"),
+                relationship.get("target"),
+                e,
+            )
             raise WorldGenerationError(f"Relationship quality judgment failed: {e}") from e
 
     def _refine_relationship(
@@ -1417,10 +1432,20 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     f"Invalid relationship refinement JSON structure: {data}"
                 )
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Relationship refinement LLM error: {e}")
+            logger.error(
+                "Relationship refinement LLM error for %s->%s: %s",
+                relationship.get("source"),
+                relationship.get("target"),
+                e,
+            )
             raise WorldGenerationError(f"LLM error during relationship refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Relationship refinement JSON parsing error: {e}")
+            logger.error(
+                "Relationship refinement JSON parsing error for %s->%s: %s",
+                relationship.get("source"),
+                relationship.get("target"),
+                e,
+            )
             raise WorldGenerationError(
                 f"Invalid relationship refinement response format: {e}"
             ) from e
@@ -1428,7 +1453,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error in relationship refinement: {e}")
+            logger.exception(
+                "Unexpected error in relationship refinement for %s->%s: %s",
+                relationship.get("source"),
+                relationship.get("target"),
+                e,
+            )
             raise WorldGenerationError(f"Unexpected relationship refinement error: {e}") from e
 
     # ========== FACTION GENERATION WITH QUALITY ==========
@@ -1844,7 +1874,7 @@ Output ONLY valid JSON (all text in {brief.language}):
             # Convert to dict for compatibility with existing code
             return faction.model_dump()
         except Exception as e:
-            logger.exception(f"Faction creation failed: {e}")
+            logger.exception("Faction creation failed for story %s: %s", story_state.id, e)
             raise WorldGenerationError(f"Faction creation failed: {e}") from e
 
     def _judge_faction_quality(
@@ -1926,7 +1956,7 @@ Output ONLY valid JSON:
         except WorldGenerationError:
             raise
         except Exception as e:
-            logger.exception(f"Faction quality judgment failed: {e}")
+            logger.exception("Faction quality judgment failed for '%s': %s", faction.get("name"), e)
             raise WorldGenerationError(f"Faction quality judgment failed: {e}") from e
 
     def _refine_faction(
@@ -1995,7 +2025,7 @@ Return ONLY the improved faction."""
             result["type"] = "faction"
             return result
         except Exception as e:
-            logger.exception(f"Faction refinement failed: {e}")
+            logger.exception("Faction refinement failed for '%s': %s", faction.get("name"), e)
             raise WorldGenerationError(f"Faction refinement failed: {e}") from e
 
     # ========== ITEM GENERATION WITH QUALITY ==========
@@ -2229,16 +2259,18 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Item creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid item JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Item creation LLM error: {e}")
+            logger.error("Item creation LLM error for story %s: %s", story_state.id, e)
             raise WorldGenerationError(f"LLM error during item creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Item creation JSON parsing error: {e}")
+            logger.error("Item creation JSON parsing error for story %s: %s", story_state.id, e)
             raise WorldGenerationError(f"Invalid item response format: {e}") from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error in item creation: {e}")
+            logger.exception(
+                "Unexpected error in item creation for story %s: %s", story_state.id, e
+            )
             raise WorldGenerationError(f"Unexpected item creation error: {e}") from e
 
     def _judge_item_quality(
@@ -2313,7 +2345,7 @@ Output ONLY valid JSON:
         except WorldGenerationError:
             raise
         except Exception as e:
-            logger.exception(f"Item quality judgment failed: {e}")
+            logger.exception("Item quality judgment failed for '%s': %s", item.get("name"), e)
             raise WorldGenerationError(f"Item quality judgment failed: {e}") from e
 
     def _refine_item(
@@ -2374,16 +2406,18 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Item refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid item refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Item refinement LLM error: {e}")
+            logger.error("Item refinement LLM error for '%s': %s", item.get("name"), e)
             raise WorldGenerationError(f"LLM error during item refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Item refinement JSON parsing error: {e}")
+            logger.error("Item refinement JSON parsing error for '%s': %s", item.get("name"), e)
             raise WorldGenerationError(f"Invalid item refinement response format: {e}") from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error in item refinement: {e}")
+            logger.exception(
+                "Unexpected error in item refinement for '%s': %s", item.get("name"), e
+            )
             raise WorldGenerationError(f"Unexpected item refinement error: {e}") from e
 
     # ========== CONCEPT GENERATION WITH QUALITY ==========
@@ -2616,16 +2650,18 @@ Output ONLY valid JSON (all text in {brief.language}):
                 logger.error(f"Concept creation returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid concept JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Concept creation LLM error: {e}")
+            logger.error("Concept creation LLM error for story %s: %s", story_state.id, e)
             raise WorldGenerationError(f"LLM error during concept creation: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Concept creation JSON parsing error: {e}")
+            logger.error("Concept creation JSON parsing error for story %s: %s", story_state.id, e)
             raise WorldGenerationError(f"Invalid concept response format: {e}") from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error in concept creation: {e}")
+            logger.exception(
+                "Unexpected error in concept creation for story %s: %s", story_state.id, e
+            )
             raise WorldGenerationError(f"Unexpected concept creation error: {e}") from e
 
     def _judge_concept_quality(
@@ -2694,7 +2730,7 @@ Output ONLY valid JSON:
         except WorldGenerationError:
             raise
         except Exception as e:
-            logger.exception(f"Concept quality judgment failed: {e}")
+            logger.exception("Concept quality judgment failed for '%s': %s", concept.get("name"), e)
             raise WorldGenerationError(f"Concept quality judgment failed: {e}") from e
 
     def _refine_concept(
@@ -2753,16 +2789,20 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Concept refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid concept refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Concept refinement LLM error: {e}")
+            logger.error("Concept refinement LLM error for '%s': %s", concept.get("name"), e)
             raise WorldGenerationError(f"LLM error during concept refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Concept refinement JSON parsing error: {e}")
+            logger.error(
+                "Concept refinement JSON parsing error for '%s': %s", concept.get("name"), e
+            )
             raise WorldGenerationError(f"Invalid concept refinement response format: {e}") from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error in concept refinement: {e}")
+            logger.exception(
+                "Unexpected error in concept refinement for '%s': %s", concept.get("name"), e
+            )
             raise WorldGenerationError(f"Unexpected concept refinement error: {e}") from e
 
     # ========== BATCH OPERATIONS ==========

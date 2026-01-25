@@ -1887,6 +1887,18 @@ class TestControlPanel:
         # But should still schedule next poll
         panel.after.assert_called_with(1000, panel._poll_logs)
 
+    def test_poll_logs_fetches_large_history(self):
+        """Should fetch 10000 lines for full scrollable history."""
+        panel = self._create_mock_panel()
+        panel._log_watcher.get_recent_lines.return_value = ["Line 1"]
+        panel._auto_scroll_var.get.return_value = True
+
+        panel._poll_logs()
+
+        # Verify get_recent_lines was called with 10000 lines
+        call_args = panel._log_watcher.get_recent_lines.call_args[0][0]
+        assert call_args == 10000
+
     def test_run_in_thread_success(self):
         """Should queue success callback when function succeeds."""
         panel = self._create_mock_panel()

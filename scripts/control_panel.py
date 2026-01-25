@@ -955,6 +955,11 @@ class ControlPanel(ctk.CTk):
         )
         self._log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
+        # Force scrollbar to always be visible by accessing the internal scrollbar
+        # CTkTextbox uses a CTkScrollbar internally
+        if hasattr(self._log_text, "_scrollbar"):
+            self._log_text._scrollbar.grid()  # Ensure scrollbar is gridded
+
         # Configure log colors
         self._log_text._textbox.tag_config("error", foreground="#dc3545")
         self._log_text._textbox.tag_config("warning", foreground="#ffc107")
@@ -1051,8 +1056,9 @@ class ControlPanel(ctk.CTk):
         self.after(50, self._drain_ui_queue)
 
     def _poll_logs(self) -> None:
-        """Poll and update log display."""
-        lines = self._log_watcher.get_recent_lines(20)
+        """Poll and update log display with full scrollable history."""
+        # Fetch last 10000 lines for full scrollable history
+        lines = self._log_watcher.get_recent_lines(10000)
 
         # Only update if content has changed (prevents scrollbar twitching)
         if lines == getattr(self, "_last_log_lines", None):
