@@ -101,77 +101,63 @@ def mock_ollama_client():
 class TestFormatProperties:
     """Tests for _format_properties static method."""
 
-    def test_format_string_properties(self, service):
-        """Should join string properties with commas."""
-        props = ["sharp blade", "magical", "ancient"]
-        result = service._format_properties(props)
-        assert result == "sharp blade, magical, ancient"
-
-    def test_format_dict_properties_with_name(self, service):
-        """Should extract name field from dict properties."""
-        props = [{"name": "glowing"}, {"name": "heavy"}]
-        result = service._format_properties(props)
-        assert result == "glowing, heavy"
-
-    def test_format_dict_properties_with_description(self, service):
-        """Should fall back to description field if no name."""
-        props = [{"description": "emits light"}, {"description": "very heavy"}]
-        result = service._format_properties(props)
-        assert result == "emits light, very heavy"
-
-    def test_format_mixed_properties(self, service):
-        """Should handle mixed string and dict properties."""
-        props = ["magical", {"name": "ancient"}, {"description": "glowing"}]
-        result = service._format_properties(props)
-        assert result == "magical, ancient, glowing"
-
-    def test_format_empty_properties(self, service):
-        """Should return empty string for empty list."""
-        result = service._format_properties([])
-        assert result == ""
-
-    def test_format_properties_with_other_types(self, service):
-        """Should convert other types to string."""
-        props = [123, True, None]
-        result = service._format_properties(props)
-        assert result == "123, True, None"
+    @pytest.mark.parametrize(
+        "input_props, expected",
+        [
+            # String list
+            pytest.param(
+                ["sharp blade", "magical", "ancient"],
+                "sharp blade, magical, ancient",
+                id="string_list",
+            ),
+            # Dict with name
+            pytest.param(
+                [{"name": "glowing"}, {"name": "heavy"}],
+                "glowing, heavy",
+                id="dict_with_name",
+            ),
+            # Dict with description
+            pytest.param(
+                [{"description": "emits light"}, {"description": "very heavy"}],
+                "emits light, very heavy",
+                id="dict_with_description",
+            ),
+            # Mixed string and dict
+            pytest.param(
+                ["magical", {"name": "ancient"}, {"description": "glowing"}],
+                "magical, ancient, glowing",
+                id="mixed_types",
+            ),
+            # Empty list
+            pytest.param([], "", id="empty_list"),
+            # Other types (int, bool, None)
+            pytest.param([123, True, None], "123, True, None", id="other_types"),
+            # None input
+            pytest.param(None, "", id="none_input"),
+            # Single string value (non-list)
+            pytest.param("single property", "single property", id="single_value"),
+            # Empty string name (key exists)
+            pytest.param([{"name": "", "description": "fallback"}], "", id="empty_string_name"),
+            # None name/description values
+            pytest.param([{"name": None}, {"description": None}], ", ", id="none_name"),
+            # Non-string dict values
+            pytest.param(
+                [{"name": 123}, {"description": True}], "123, True", id="non_string_values"
+            ),
+        ],
+    )
+    def test_format_properties(self, service, input_props, expected):
+        """Test _format_properties with various input types."""
+        result = service._format_properties(input_props)
+        assert result == expected
 
     def test_format_dict_without_name_or_description(self, service):
         """Should fall back to str(dict) when neither name nor description present."""
         props = [{"other_key": "value"}, {"foo": "bar"}]
         result = service._format_properties(props)
-        # Falls back to str(dict) representation
+        # Falls back to str(dict) representation, need to check contains
         assert "other_key" in result
         assert "foo" in result
-
-    def test_format_properties_with_none_input(self, service):
-        """Should return empty string for None input."""
-        result = service._format_properties(None)
-        assert result == ""
-
-    def test_format_properties_with_single_value(self, service):
-        """Should handle non-list single value input."""
-        result = service._format_properties("single property")
-        assert result == "single property"
-
-    def test_format_dict_with_empty_string_name(self, service):
-        """Should use empty string name when key exists with empty value."""
-        props = [{"name": "", "description": "fallback"}]
-        result = service._format_properties(props)
-        # Empty string name is still used (key exists)
-        assert result == ""
-
-    def test_format_dict_with_none_name(self, service):
-        """Should convert None name to empty string."""
-        props = [{"name": None}, {"description": None}]
-        result = service._format_properties(props)
-        assert result == ", "  # Two empty strings joined
-
-    def test_format_dict_with_non_string_values(self, service):
-        """Should convert non-string dict values to strings."""
-        props = [{"name": 123}, {"description": True}]
-        result = service._format_properties(props)
-        assert result == "123, True"
 
 
 class TestCharacterQualityScores:

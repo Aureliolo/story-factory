@@ -81,8 +81,12 @@ class WorldQualityService:
             Comma-separated string of property names, or empty string if no properties.
         """
         if not properties:
+            logger.debug(f"_format_properties: early return on falsy input: {properties!r}")
             return ""
         if not isinstance(properties, list):
+            logger.debug(
+                f"_format_properties: coercing non-list input to list: {type(properties).__name__}"
+            )
             properties = [properties]
 
         result: list[str] = []
