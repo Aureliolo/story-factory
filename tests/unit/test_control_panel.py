@@ -607,9 +607,37 @@ class TestOllamaManager:
     @patch("scripts.control_panel.subprocess.run")
     @patch("scripts.control_panel.subprocess.Popen")
     @patch("scripts.control_panel.sys.platform", "win32")
-    def test_start_ollama_service_oserror(self, mock_popen, mock_run):
-        """Should fall back to ollama serve when service check fails with OSError."""
+    def test_start_ollama_service_query_oserror(self, mock_popen, mock_run):
+        """Should fall back to ollama serve when service query fails with OSError."""
         mock_run.side_effect = OSError("Access denied")
+
+        health_results = [False, False, True]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
+        ):
+            mock_settings_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            assert success is True
+            assert "ollama serve" in message
+            mock_popen.assert_called()
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_service_start_oserror(self, mock_popen, mock_run):
+        """Should fall back to ollama serve when service start fails with OSError."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 1  STOPPED"
+        service_check.returncode = 0
+
+        # First call is query (success), second is start (OSError)
+        mock_run.side_effect = [service_check, OSError("Access denied")]
 
         health_results = [False, False, True]
 
