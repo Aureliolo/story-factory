@@ -67,6 +67,23 @@ def clear_prompt_registry_cache_per_test():
     base_module._prompt_registry = None
 
 
+@pytest.fixture(autouse=True)
+def isolate_mode_database(tmp_path, monkeypatch):
+    """Redirect ModeDatabase to temp directory to prevent test data in production DB.
+
+    The ModeDatabase has a DEFAULT_DB_PATH that points to output/model_scores.db.
+    Without this fixture, any test that creates a ModelModeService or ServiceContainer
+    without explicitly providing a db_path would write to the real analytics database.
+
+    This autouse fixture ensures ALL tests use an isolated temp database by default.
+    """
+    import src.memory.mode_database as mode_database_module
+
+    test_db_path = tmp_path / "test_model_scores.db"
+    monkeypatch.setattr(mode_database_module, "DEFAULT_DB_PATH", test_db_path)
+    yield
+
+
 @pytest.fixture(scope="session")
 def cached_settings() -> Settings:
     """Create default settings once per test session for performance.

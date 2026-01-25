@@ -43,6 +43,7 @@ SETTINGS_FILE = PROJECT_ROOT / "src" / "settings.json"
 APP_PORT = 7860
 APP_URL = f"http://localhost:{APP_PORT}"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+LOG_HISTORY_LINES = 10000  # Number of log lines to fetch for scrollable history
 
 
 class ProcessManager:
@@ -955,6 +956,14 @@ class ControlPanel(ctk.CTk):
         )
         self._log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
+        # Force scrollbar to always be visible by accessing the internal scrollbar.
+        # Note: _scrollbar is a private attribute of CTkTextbox. This is fragile and may
+        # break in future customtkinter versions. The hasattr guard provides graceful
+        # degradation if the API changes - the scrollbar will just auto-hide as default.
+        # Tested with customtkinter 5.2.x.
+        if hasattr(self._log_text, "_scrollbar"):
+            self._log_text._scrollbar.grid()  # Ensure scrollbar is gridded
+
         # Configure log colors
         self._log_text._textbox.tag_config("error", foreground="#dc3545")
         self._log_text._textbox.tag_config("warning", foreground="#ffc107")
@@ -1051,10 +1060,18 @@ class ControlPanel(ctk.CTk):
         self.after(50, self._drain_ui_queue)
 
     def _poll_logs(self) -> None:
-        """Poll and update log display."""
-        lines = self._log_watcher.get_recent_lines(20)
+        """Poll and update log display with full scrollable history."""
+        # Fast check: skip expensive file read if size unchanged (saves I/O on every poll)
+        current_size = self._log_watcher.get_file_size()
+        if current_size == getattr(self, "_last_log_size", -1):
+            self.after(1000, self._poll_logs)
+            return
+        self._last_log_size = current_size
 
-        # Only update if content has changed (prevents scrollbar twitching)
+        # Fetch last N lines for full scrollable history
+        lines = self._log_watcher.get_recent_lines(LOG_HISTORY_LINES)
+
+        # Only update UI if content has changed (prevents scrollbar twitching)
         if lines == getattr(self, "_last_log_lines", None):
             self.after(1000, self._poll_logs)
             return

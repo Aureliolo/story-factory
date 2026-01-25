@@ -1840,6 +1840,7 @@ class TestControlPanel:
         """Should update log display with content."""
         panel = self._create_mock_panel()
         panel._log_watcher.get_recent_lines.return_value = ["Line 1", "Line 2"]
+        panel._log_watcher.get_file_size.return_value = 100  # Simulate file size change
         panel._auto_scroll_var.get.return_value = True
 
         panel._poll_logs()
@@ -1853,6 +1854,7 @@ class TestControlPanel:
         """Should show placeholder when no logs."""
         panel = self._create_mock_panel()
         panel._log_watcher.get_recent_lines.return_value = []
+        panel._log_watcher.get_file_size.return_value = 0  # Empty but file exists
         panel._auto_scroll_var.get.return_value = True
 
         panel._poll_logs()
@@ -1865,27 +1867,64 @@ class TestControlPanel:
         """Should not auto-scroll when disabled."""
         panel = self._create_mock_panel()
         panel._log_watcher.get_recent_lines.return_value = ["Line 1"]
+        panel._log_watcher.get_file_size.return_value = 50  # Trigger file read
         panel._auto_scroll_var.get.return_value = False
 
         panel._poll_logs()
 
         panel._log_text.see.assert_not_called()
 
-    def test_poll_logs_unchanged_skips_update(self):
-        """Should skip update when log content hasn't changed."""
+    def test_poll_logs_unchanged_file_size_skips_read(self):
+        """Should skip file read when file size hasn't changed (I/O optimization)."""
         panel = self._create_mock_panel()
-        lines = ["Line 1", "Line 2"]
-        panel._log_watcher.get_recent_lines.return_value = lines
-        # Simulate that we already have the same content cached
-        panel._last_log_lines = lines
+        panel._log_watcher.get_file_size.return_value = 100
+        # Simulate that we already have the same file size cached
+        panel._last_log_size = 100
 
         panel._poll_logs()
 
-        # Should not call configure/delete since content is unchanged
+        # Should not even read the file since size is unchanged
+        panel._log_watcher.get_recent_lines.assert_not_called()
         panel._log_text.configure.assert_not_called()
         panel._log_text.delete.assert_not_called()
         # But should still schedule next poll
         panel.after.assert_called_with(1000, panel._poll_logs)
+
+    def test_poll_logs_unchanged_content_skips_ui_update(self):
+        """Should skip UI update when log content hasn't changed (even if size changed)."""
+        panel = self._create_mock_panel()
+        lines = ["Line 1", "Line 2"]
+        panel._log_watcher.get_recent_lines.return_value = lines
+        panel._log_watcher.get_file_size.return_value = 200  # Different size triggers read
+        panel._last_log_size = 100  # Previous size was different
+        # Simulate that we already have the same content cached (e.g., log rotation)
+        panel._last_log_lines = lines
+
+        panel._poll_logs()
+
+        # Should read file (size changed) but not update UI (content same)
+        panel._log_watcher.get_recent_lines.assert_called_once()
+        panel._log_text.configure.assert_not_called()
+        panel._log_text.delete.assert_not_called()
+        # But should still schedule next poll
+        panel.after.assert_called_with(1000, panel._poll_logs)
+
+    def test_poll_logs_fetches_large_history(self):
+        """Should fetch LOG_HISTORY_LINES for full scrollable history."""
+        from scripts.control_panel import LOG_HISTORY_LINES
+
+        panel = self._create_mock_panel()
+        panel._log_watcher.get_recent_lines.return_value = ["Line 1"]
+        panel._log_watcher.get_file_size.return_value = 100  # Simulate file size change
+        panel._auto_scroll_var.get.return_value = True
+
+        panel._poll_logs()
+
+        # Verify get_recent_lines was called with correct line count
+        # Handle both positional and keyword argument invocations
+        args, kwargs = panel._log_watcher.get_recent_lines.call_args
+        n = kwargs.get("n", args[0] if args else None)
+        assert n == LOG_HISTORY_LINES
 
     def test_run_in_thread_success(self):
         """Should queue success callback when function succeeds."""

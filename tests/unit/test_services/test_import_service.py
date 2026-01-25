@@ -32,7 +32,10 @@ def settings():
 
 @pytest.fixture
 def mode_service(settings):
-    """Create model mode service."""
+    """Create model mode service.
+
+    Note: ModeDatabase is automatically isolated by conftest.py's isolate_mode_database fixture.
+    """
     return ModelModeService(settings)
 
 

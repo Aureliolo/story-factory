@@ -590,7 +590,7 @@ class ModelsPage:
             if label:
                 label.text = text
         except Exception:
-            pass  # Element may have been deleted
+            logger.debug("Label element already deleted, skipping update to: %s", text[:50])
 
     def _safe_update_progress(self, progress_bar: Any, value: float) -> None:
         """Safely update a progress bar's value, handling deleted elements."""
@@ -598,7 +598,7 @@ class ModelsPage:
             if progress_bar:
                 progress_bar.value = value
         except Exception:
-            pass  # Element may have been deleted
+            logger.debug("Progress bar element already deleted, skipping update to: %.1f", value)
 
     def _cleanup_download_card(self, task: DownloadTask) -> None:
         """Remove a download card from the UI."""
@@ -607,7 +607,7 @@ class ModelsPage:
                 task.card.delete()
                 task.card = None
         except Exception:
-            pass  # Card may already be deleted
+            logger.debug("Download card for %s already deleted during cleanup", task.model_id)
 
         # Safely remove from queue
         self._download_queue.pop(task.model_id, None)
@@ -619,7 +619,7 @@ class ModelsPage:
             if self._pull_progress and not self._download_queue:
                 self._pull_progress.set_visibility(False)
         except Exception:
-            pass
+            logger.debug("Progress section element already deleted during visibility update")
 
     def _refresh_model_list(self) -> None:
         """Refresh the model list with current filters."""

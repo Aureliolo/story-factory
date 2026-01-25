@@ -5,6 +5,12 @@ It initializes the app and calls ui.run() for the testing framework.
 The testing framework intercepts ui.run() so it doesn't actually start a server.
 """
 
+import atexit
+import shutil
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
 from nicegui import ui
 
 from src.services import ServiceContainer
@@ -13,12 +19,24 @@ from src.ui.app import StoryFactoryApp
 
 
 def setup_test_app():
-    """Initialize the app for testing."""
+    """Initialize the app for testing.
+
+    Uses a temporary database path to prevent writing to the real analytics database.
+    Registers cleanup handler to remove temp directory on process exit.
+    """
     settings = Settings()
-    services = ServiceContainer(settings)
-    story_app = StoryFactoryApp(services)
-    story_app.build()
-    return story_app
+    # Use temp directory for mode database to avoid polluting real analytics
+    temp_dir = Path(tempfile.mkdtemp())
+    # Register cleanup to prevent temp dir accumulation (runpy.run_path may not
+    # execute finally blocks, but atexit handlers run on normal interpreter shutdown)
+    atexit.register(shutil.rmtree, temp_dir, ignore_errors=True)
+    mode_db_path = temp_dir / "test_mode.db"
+
+    with patch("src.memory.mode_database.DEFAULT_DB_PATH", mode_db_path):
+        services = ServiceContainer(settings)
+        story_app = StoryFactoryApp(services)
+        story_app.build()
+        return story_app
 
 
 # Only run when executed as main (via NiceGUI testing framework's runpy.run_path)
