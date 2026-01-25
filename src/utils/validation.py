@@ -143,15 +143,16 @@ def validate_type(value, param_name: str, expected_type: type) -> None:
 
 
 def validate_string_in_choices(value: str | None, param_name: str, choices: list[str]) -> None:
-    """Validate that a string parameter is one of the allowed choices.
-
-    Args:
-        value: The string value to validate
-        param_name: Name of the parameter for error messages
-        choices: List of allowed values
-
+    """
+    Ensure the string parameter is one of the allowed choices.
+    
+    Parameters:
+        value (str | None): The string to validate.
+        param_name (str): Parameter name used in error messages.
+        choices (list[str]): Allowed string values.
+    
     Raises:
-        ValueError: If value is None, empty, or not in choices
+        ValueError: If `value` is None, empty or only whitespace, or not one of `choices`.
     """
     validate_not_empty(value, param_name)
     if value not in choices:
@@ -163,13 +164,14 @@ _NAME_PREFIXES = ("the ", "a ", "an ")
 
 
 def _normalize_name(name: str) -> str:
-    """Normalize a name for comparison by lowercasing and stripping common prefixes.
-
-    Args:
-        name: The name to normalize.
-
+    """
+    Normalize a name for comparison by removing a leading common article, converting to lowercase, and trimming surrounding whitespace.
+    
+    Parameters:
+        name (str): The input name to normalize.
+    
     Returns:
-        Normalized name (lowercase, prefix-stripped, whitespace-trimmed).
+        str: The name converted to lowercase, trimmed of surrounding whitespace, and with a leading common prefix ("the ", "a ", "an ") removed if present.
     """
     normalized = name.lower().strip()
     for prefix in _NAME_PREFIXES:
@@ -185,26 +187,25 @@ def validate_unique_name(
     check_substring: bool = True,
     min_substring_length: int = 4,
 ) -> tuple[bool, str | None, str | None]:
-    """Validate that a name is unique compared to existing names.
-
-    Performs comprehensive uniqueness validation:
-    1. Exact match check (case-insensitive)
-    2. Prefix-stripped match ("The Guild" vs "Guild")
-    3. Substring containment (optional, for catching "Shadow Council" vs "Council")
-
-    Args:
-        name: The name to validate.
-        existing_names: List of existing names to check against.
-        check_substring: Whether to check for substring containment.
-        min_substring_length: Minimum normalized name length for substring checks.
-            Names shorter than this skip substring validation to avoid false positives.
-
+    """
+    Determine whether a candidate name conflicts with any names in an existing list.
+    
+    Performs these checks (in order): exact match (case-sensitive), case-insensitive match,
+    match after removing common leading articles (e.g., "the", "a", "an"), and optionally
+    substring containment when both normalized names meet the minimum length.
+    Empty or whitespace-only candidate names are treated as unique; empty existing entries are ignored.
+    
+    Parameters:
+        name: Candidate name to validate.
+        existing_names: Sequence of existing names to check against.
+        check_substring: If true, check for substring containment in both directions.
+        min_substring_length: Minimum normalized length required to perform substring checks.
+    
     Returns:
-        Tuple of (is_unique, conflicting_name, reason):
-        - is_unique: True if name is unique, False if duplicate detected.
-        - conflicting_name: The existing name it conflicts with (None if unique).
-        - reason: Description of why it's a duplicate (None if unique).
-            One of: "exact", "case_insensitive", "prefix_match", "substring".
+        A tuple (is_unique, conflicting_name, reason):
+        - is_unique: `True` if no conflict was found, `False` otherwise.
+        - conflicting_name: The existing name that conflicts with `name`, or `None` if unique.
+        - reason: One of `"exact"`, `"case_insensitive"`, `"prefix_match"`, or `"substring"`, or `None` if unique.
     """
     if not name or not name.strip():
         return True, None, None  # Empty names are handled elsewhere

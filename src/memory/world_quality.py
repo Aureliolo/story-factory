@@ -406,10 +406,23 @@ class RefinementConfig(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Any) -> RefinementConfig:
-        """Create config from Settings object.
-
-        All settings fields are required - no default fallbacks per coding guidelines.
-        Missing fields will raise AttributeError.
+        """
+        Builds a RefinementConfig from a Settings-like object by reading required fields.
+        
+        Parameters:
+            settings (Any): Object exposing the following attributes (all required):
+                - world_quality_max_iterations
+                - world_quality_threshold
+                - world_quality_creator_temp
+                - world_quality_judge_temp
+                - world_quality_refinement_temp
+                - world_quality_early_stopping_patience
+        
+        Returns:
+            RefinementConfig: Configuration populated from the corresponding settings attributes.
+        
+        Raises:
+            AttributeError: If any required attribute is missing on the settings object.
         """
         return cls(
             max_iterations=settings.world_quality_max_iterations,
@@ -465,7 +478,21 @@ class JudgeConsistencyConfig(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Any) -> JudgeConsistencyConfig:
-        """Create config from Settings object."""
+        """
+        Create a JudgeConsistencyConfig from a settings-like object.
+        
+        Parameters:
+            settings (Any): An object exposing the following attributes: 
+                judge_consistency_enabled, judge_multi_call_enabled, judge_multi_call_count,
+                judge_confidence_threshold, judge_outlier_detection, judge_outlier_std_threshold,
+                judge_outlier_strategy.
+        
+        Returns:
+            JudgeConsistencyConfig: Configuration populated from the provided settings.
+        
+        Raises:
+            AttributeError: If any required attribute is missing on the settings object.
+        """
         return cls(
             enabled=settings.judge_consistency_enabled,
             multi_call_enabled=settings.judge_multi_call_enabled,
@@ -497,13 +524,14 @@ class ScoreStatistics(BaseModel):
 
     @classmethod
     def calculate(cls, scores: list[float]) -> ScoreStatistics:
-        """Calculate statistics from a list of scores.
-
-        Args:
-            scores: List of numeric scores.
-
+        """
+        Create a ScoreStatistics from a list of numeric judge scores.
+        
+        Parameters:
+            scores (list[float]): Collection of scores to analyze; may be empty.
+        
         Returns:
-            ScoreStatistics with calculated mean, std, and confidence.
+            ScoreStatistics: instance containing the original scores, the mean, the sample standard deviation (std), and a confidence score (1 - coefficient of variation bounded to [0, 1], with special handling when mean <= 0).
         """
         if not scores:
             return cls(scores=[], mean=0.0, std=0.0, confidence=0.0)
@@ -529,13 +557,17 @@ class ScoreStatistics(BaseModel):
         return cls(scores=scores, mean=mean, std=std, confidence=confidence)
 
     def detect_outliers(self, std_threshold: float = 2.0) -> list[int]:
-        """Detect outlier scores using standard deviation method.
-
-        Args:
-            std_threshold: Number of standard deviations from mean to consider outlier.
-
+        """
+        Detect indices of scores that are statistical outliers based on standard deviations from the mean.
+        
+        If the sample standard deviation is zero or there are fewer than 3 scores, no outliers are reported and an empty list is returned.
+        
+        Parameters:
+            std_threshold (float): Threshold in standard deviations; a score with absolute deviation from the mean
+                greater than or equal to this value is considered an outlier.
+        
         Returns:
-            List of indices of outlier scores.
+            list[int]: Indices of scores identified as outliers.
         """
         if self.std == 0 or len(self.scores) < 3:
             return []
@@ -550,13 +582,14 @@ class ScoreStatistics(BaseModel):
         return outliers
 
     def get_filtered_mean(self, exclude_indices: list[int] | None = None) -> float:
-        """Get mean excluding specified indices (e.g., outliers).
-
-        Args:
-            exclude_indices: Indices to exclude. If None, uses self.outliers.
-
+        """
+        Return the mean of the stored scores excluding specified indices.
+        
+        Parameters:
+            exclude_indices (list[int] | None): Indices to exclude from the calculation. If None, `self.outliers` is used.
+        
         Returns:
-            Mean of non-excluded scores.
+            float: Mean of scores after excluding the specified indices. If no indices are excluded or exclusion yields an empty set, returns `self.mean`.
         """
         exclude = exclude_indices if exclude_indices is not None else self.outliers
         if not exclude:
@@ -569,10 +602,13 @@ class ScoreStatistics(BaseModel):
         return sum(filtered) / len(filtered)
 
     def get_median(self) -> float:
-        """Get median score.
-
+        """
+        Return the median of the stored scores.
+        
+        If the scores list is empty, returns 0.0. For an even number of scores, returns the average of the two middle values.
+        
         Returns:
-            Median of scores.
+            The median score, or 0.0 when there are no scores.
         """
         if not self.scores:
             return 0.0
@@ -591,19 +627,18 @@ class ScoreStatistics(BaseModel):
         confidence_threshold: float = 0.7,
         min_samples: int = 3,
     ) -> tuple[bool, float]:
-        """Determine if refinement should continue based on score statistics.
-
-        Uses confidence-based decision making:
-        - High confidence: use standard threshold
-        - Low confidence: use more conservative (higher) threshold
-
-        Args:
-            threshold: Base quality threshold.
-            confidence_threshold: Minimum confidence for reliable decisions.
-            min_samples: Minimum samples needed for confidence-based decisions.
-
+        """
+        Decides whether another refinement iteration is needed and returns the threshold used for that decision.
+        
+        If there are fewer than `min_samples` scores or the calculated confidence is at or above `confidence_threshold`, the base `threshold` is used. If confidence is below `confidence_threshold`, the method increases the threshold proportionally to uncertainty (capped at 9.5) and uses that adjusted value for the decision.
+        
+        Parameters:
+            threshold (float): Base quality threshold to compare against the mean score.
+            confidence_threshold (float): Confidence level above which the base threshold is considered reliable.
+            min_samples (int): Minimum number of score samples required to apply confidence-based adjustment.
+        
         Returns:
-            Tuple of (should_refine, adjusted_threshold).
+            tuple[bool, float]: `(should_refine, adjusted_threshold)` where `should_refine` is `True` if the mean score is less than the threshold applied for this decision, and `adjusted_threshold` is the actual threshold used (either `threshold` or a raised value when confidence is low).
         """
         if len(self.scores) < min_samples:
             # Not enough data for confidence-based decisions

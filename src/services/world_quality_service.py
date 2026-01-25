@@ -150,25 +150,26 @@ class WorldQualityService:
         quality_threshold: float | None = None,
         max_iterations: int | None = None,
     ) -> None:
-        """Record entity quality score to analytics database with refinement metrics.
-
-        Args:
-            project_id: The project ID.
-            entity_type: Type of entity (character, location, faction, etc.)
-            entity_name: Name of the entity.
-            scores: Quality scores dictionary.
-            iterations: Number of refinement iterations used.
-            generation_time: Time in seconds to generate.
-            model_id: The model ID used for generation. If not provided, determines from entity_type.
-            early_stop_triggered: Whether early stopping was triggered.
-            threshold_met: Whether the quality threshold was met.
-            peak_score: Highest score achieved during refinement.
-            final_score: Final score of the returned entity.
-            score_progression: List of scores from each iteration.
-            consecutive_degradations: Number of consecutive score decreases.
-            best_iteration: Iteration number that produced the best score.
-            quality_threshold: The quality threshold used.
-            max_iterations: Maximum iterations configured.
+        """
+        Persist entity quality scores and refinement metrics to the analytics database.
+        
+        Parameters:
+            project_id (str): Project identifier.
+            entity_type (str): Entity category (e.g., "character", "location", "faction").
+            entity_name (str): Name of the entity being recorded.
+            scores (dict[str, Any]): Dictionary of quality metrics; may include keys like `"average"` and `"feedback"`.
+            iterations (int): Number of refinement iterations performed.
+            generation_time (float): Total generation time in seconds.
+            model_id (str | None): Identifier of the model used; if `None`, a creator model is selected based on `entity_type`.
+            early_stop_triggered (bool): Whether the refinement loop stopped early (e.g., due to stagnation or safety triggers).
+            threshold_met (bool): Whether the configured quality threshold was reached during refinement.
+            peak_score (float | None): Highest score observed across iterations.
+            final_score (float | None): Score of the final returned entity.
+            score_progression (list[float] | None): Sequence of scores recorded per iteration.
+            consecutive_degradations (int): Count of consecutive iterations with decreasing scores.
+            best_iteration (int): Iteration index that produced the best observed score.
+            quality_threshold (float | None): Quality threshold used to judge success.
+            max_iterations (int | None): Maximum allowed refinement iterations.
         """
         validate_not_empty(project_id, "project_id")
         validate_not_empty(entity_type, "entity_type")
@@ -267,18 +268,19 @@ class WorldQualityService:
         existing_names: list[str],
         custom_instructions: str | None = None,
     ) -> tuple[Character, CharacterQualityScores, int]:
-        """Generate a character with quality refinement loop.
-
-        Args:
-            story_state: Current story state with brief.
-            existing_names: Names of existing characters to avoid.
-            custom_instructions: Optional custom instructions to refine generation.
-
+        """
+        Generate a character and iteratively refine it until a quality threshold or stopping criteria is reached.
+        
+        Parameters:
+            story_state (StoryState): Current story state containing the brief and identifiers used for generation and analytics.
+            existing_names (list[str]): Names to avoid when generating a new character.
+            custom_instructions (str | None): Optional additional instructions to influence creator model output.
+        
         Returns:
-            Tuple of (Character, QualityScores, iterations_used)
-
+            tuple[Character, CharacterQualityScores, int]: The selected character, its quality scores, and the number of iterations performed.
+        
         Raises:
-            WorldGenerationError: If character generation fails after all retries.
+            WorldGenerationError: If generation fails and no valid iterations were produced.
         """
         config = self.get_config()
         brief = story_state.brief
@@ -635,17 +637,21 @@ Write all text in {brief.language if brief else "English"}."""
         story_state: StoryState,
         existing_names: list[str],
     ) -> tuple[dict[str, Any], LocationQualityScores, int]:
-        """Generate a location with quality refinement loop.
-
-        Args:
-            story_state: Current story state with brief.
-            existing_names: Names of existing locations to avoid.
-
+        """
+        Generate a location and iteratively refine it until it meets the configured quality threshold or retries are exhausted.
+        
+        Parameters:
+            story_state (StoryState): Current story state containing the brief and project id used for prompts and analytics.
+            existing_names (list[str]): Names of existing locations to avoid producing duplicates.
+        
         Returns:
-            Tuple of (location_dict, QualityScores, iterations_used)
-
+            tuple: (location_dict, scores, iterations_used)
+                location_dict (dict): Generated location fields (e.g., name, type, description, significance).
+                scores (LocationQualityScores): Quality evaluation for the returned location.
+                iterations_used (int): Number of create/refine iterations performed for the returned result.
+        
         Raises:
-            WorldGenerationError: If location generation fails after all retries.
+            WorldGenerationError: If no valid location could be produced after all attempts.
         """
         config = self.get_config()
         brief = story_state.brief
@@ -1430,20 +1436,21 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         existing_names: list[str],
         existing_locations: list[str] | None = None,
     ) -> tuple[dict[str, Any], FactionQualityScores, int]:
-        """Generate a faction with quality refinement loop.
-
-        Tracks all iterations and returns the BEST one, not necessarily the last.
-
-        Args:
-            story_state: Current story state with brief.
-            existing_names: Names of existing factions to avoid.
-            existing_locations: Names of existing locations for spatial grounding.
-
+        """
+        Generate a faction using an iterative create-refine-judge loop and return the best iteration.
+        
+        Performs up to the configured maximum iterations, preserves the best-scoring iteration (not necessarily the last), and logs refinement analytics including peak and final scores.
+        
+        Parameters:
+            story_state (StoryState): Current story state containing the brief and context used to ground faction generation.
+            existing_names (list[str]): Existing faction names to avoid duplicates; used to enforce unique naming.
+            existing_locations (list[str] | None): Optional list of location names for spatial grounding and contextual details.
+        
         Returns:
-            Tuple of (faction_dict, QualityScores, iterations_used)
-
+            tuple[dict[str, Any], FactionQualityScores, int]: A tuple of (faction_dict, quality_scores, iterations_used), where `faction_dict` is the chosen faction representation, `quality_scores` are the evaluated scores for that faction, and `iterations_used` is the iteration number returned.
+        
         Raises:
-            WorldGenerationError: If faction generation fails after all retries.
+            WorldGenerationError: If faction generation fails to produce any valid iterations.
         """
         config = self.get_config()
         brief = story_state.brief
@@ -1621,15 +1628,18 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         quality_threshold: float | None = None,
         max_iterations: int | None = None,
     ) -> None:
-        """Log refinement iteration analytics for analysis.
-
-        Args:
-            history: The refinement history for this entity.
-            project_id: The project ID.
-            early_stop_triggered: Whether early stopping was triggered.
-            threshold_met: Whether the quality threshold was met.
-            quality_threshold: The quality threshold used.
-            max_iterations: Maximum iterations configured.
+        """
+        Log and persist refinement iteration analytics for a completed refinement history.
+        
+        Analyzes the provided RefinementHistory, emits a concise info-level summary of iterations and score progression, and records extended refinement metrics to the analytics database via record_entity_quality.
+        
+        Parameters:
+            history (RefinementHistory): The refinement history for the entity being reported.
+            project_id (str): Project identifier under which analytics should be recorded.
+            early_stop_triggered (bool): True if the refinement loop stopped early (e.g., due to consecutive degradations or an early-stop condition).
+            threshold_met (bool): True if the configured quality threshold was reached during refinement.
+            quality_threshold (float | None): The numeric quality threshold that was used for this refinement run, if any.
+            max_iterations (int | None): The configured maximum number of refinement iterations for this run, if any.
         """
         analysis = history.analyze_improvement()
 
@@ -1700,7 +1710,16 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
     ]
 
     def _format_existing_names(self, existing_names: list[str]) -> str:
-        """Format existing faction names for the prompt with clear anti-duplicate guidance."""
+        """
+        Format a list of existing faction names into a prompt-ready string that highlights names to avoid duplicating.
+        
+        Parameters:
+            existing_names (list[str]): Existing faction names to include in the prompt.
+        
+        Returns:
+            str: Newline-separated names each prefixed with "-". If `existing_names` is empty, returns
+            "None yet - you are creating the first faction."
+        """
         if not existing_names:
             return "None yet - you are creating the first faction."
 
@@ -1718,7 +1737,21 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         temperature: float,
         existing_locations: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create a new faction using the creator model."""
+        """
+        Generate a unique faction definition for the given story using the configured creator model.
+        
+        Parameters:
+            story_state (StoryState): Story context and brief used to seed faction generation.
+            existing_names (list[str]): Existing faction names to avoid; used for strict uniqueness checks.
+            temperature (float): Sampling temperature for the creator model.
+            existing_locations (list[str] | None): Optional list of world locations to ground the faction's base.
+        
+        Returns:
+            dict[str, Any]: A faction dictionary with keys including `name`, `type`, `description`, `leader`, `goals`, `values`, and `base_location`. Returns an empty dict when generation should be retried (e.g., name conflict detected).
+        
+        Raises:
+            WorldGenerationError: If faction generation fails due to unrecoverable model/validation errors.
+        """
         from src.utils.validation import validate_unique_name
 
         brief = story_state.brief
@@ -1969,17 +2002,18 @@ Return ONLY the improved faction."""
         story_state: StoryState,
         existing_names: list[str],
     ) -> tuple[dict[str, Any], ItemQualityScores, int]:
-        """Generate an item with quality refinement loop.
-
-        Args:
-            story_state: Current story state with brief.
-            existing_names: Names of existing items to avoid.
-
+        """
+        Generate an item using iterative creation and refinement until it meets quality criteria or retries are exhausted.
+        
+        Parameters:
+            story_state (StoryState): Current story state containing the brief and identifiers used to guide generation.
+            existing_names (list[str]): Existing item names to avoid duplicate naming.
+        
         Returns:
-            Tuple of (item_dict, QualityScores, iterations_used)
-
+            tuple[dict[str, Any], ItemQualityScores, int]: The chosen item dictionary, its quality scores, and the number of iterations used.
+        
         Raises:
-            WorldGenerationError: If item generation fails after all retries.
+            WorldGenerationError: If item generation fails after all attempts.
         """
         config = self.get_config()
         brief = story_state.brief

@@ -471,10 +471,11 @@ class Settings:
             json.dump(asdict(self), f, indent=2)
 
     def validate(self) -> None:
-        """Validate settings values.
-
+        """
+        Validate the Settings instance fields and enforce allowed ranges and formats.
+        
         Raises:
-            ValueError: If any setting value is invalid.
+            ValueError: If any field contains an invalid value (range, enum/choice, or format).
         """
         # Validate URL format
         try:

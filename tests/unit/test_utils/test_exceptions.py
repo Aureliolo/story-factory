@@ -7,7 +7,9 @@ class TestEmptyGenerationError:
     """Tests for EmptyGenerationError exception."""
 
     def test_empty_generation_error_message(self) -> None:
-        """Test EmptyGenerationError stores message."""
+        """
+        Verify that EmptyGenerationError exposes the provided message as its string representation.
+        """
         error = EmptyGenerationError("Generation returned empty content")
         assert str(error) == "Generation returned empty content"
 
