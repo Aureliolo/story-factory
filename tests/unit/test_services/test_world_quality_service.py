@@ -531,6 +531,15 @@ class TestRecordEntityQuality:
             iterations_used=2,
             generation_time_seconds=5.5,
             feedback="Good character",
+            early_stop_triggered=False,
+            threshold_met=False,
+            peak_score=None,
+            final_score=None,
+            score_progression=None,
+            consecutive_degradations=0,
+            best_iteration=0,
+            quality_threshold=None,
+            max_iterations=None,
         )
 
     def test_record_entity_quality_handles_error(self, service, mock_mode_service):
