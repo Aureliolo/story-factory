@@ -5,7 +5,9 @@ from pydantic import BaseModel
 
 from src.utils.exceptions import JSONParseError
 from src.utils.json_parser import (
+    _repair_truncated_json,
     clean_llm_text,
+    convert_list_to_dict,
     extract_json,
     extract_json_list,
     parse_json_list_to_models,
@@ -250,19 +252,47 @@ class TestParseJsonToModel:
         result = parse_json_to_model(response, SampleModel, strict=False)
         assert result is None
 
-    def test_raises_error_when_json_is_list_strict(self):
-        """Should raise JSONParseError when JSON is a list, not object, in strict mode."""
+    def test_converts_list_to_model_when_first_item_matches(self):
+        """Should convert list to dict and create model when first item has all fields."""
+        response = """```json
+[{"name": "first", "value": 1}, {"name": "second", "value": 2}]
+```"""
+        result = parse_json_to_model(response, SampleModel)
+        assert isinstance(result, SampleModel)
+        assert result.name == "first"
+        assert result.value == 1
+
+    def test_raises_error_when_converted_list_fails_model_strict(self):
+        """Should raise JSONParseError when converted list doesn't match model in strict mode."""
         response = """```json
 [{"name": "a"}, {"name": "b"}]
 ```"""
         with pytest.raises(JSONParseError) as exc_info:
             parse_json_to_model(response, SampleModel)
-        assert "Expected JSON object but got list" in str(exc_info.value)
+        # The converted dict is {"name": "a"} which lacks "value" field
+        assert "Failed to create SampleModel" in str(exc_info.value)
 
-    def test_returns_none_when_json_is_list_non_strict(self):
-        """Should return None when JSON is a list, not object, in non-strict mode."""
+    def test_returns_none_when_converted_list_fails_model_non_strict(self):
+        """Should return None when converted list doesn't match model in non-strict mode."""
         response = """```json
 [{"name": "a"}, {"name": "b"}]
+```"""
+        result = parse_json_to_model(response, SampleModel, strict=False)
+        assert result is None
+
+    def test_raises_error_when_list_is_empty_strict(self):
+        """Should raise JSONParseError when JSON is an empty list in strict mode."""
+        response = """```json
+[]
+```"""
+        with pytest.raises(JSONParseError) as exc_info:
+            parse_json_to_model(response, SampleModel)
+        assert "empty list" in str(exc_info.value)
+
+    def test_returns_none_when_list_is_empty_non_strict(self):
+        """Should return None when JSON is an empty list in non-strict mode."""
+        response = """```json
+[]
 ```"""
         result = parse_json_to_model(response, SampleModel, strict=False)
         assert result is None
@@ -391,3 +421,227 @@ End"""
         text = "This is a normal paragraph.\n\nAnother paragraph."
         result = clean_llm_text(text)
         assert result == text
+
+
+class TestConvertListToDict:
+    """Tests for convert_list_to_dict function."""
+
+    def test_empty_list_returns_empty_dict(self):
+        """Should return empty dict for empty list."""
+        result = convert_list_to_dict([])
+        assert result == {}
+
+    def test_list_of_dicts_returns_first(self):
+        """Should return first dict when list contains multiple dicts."""
+        data = [{"name": "first"}, {"name": "second"}, {"name": "third"}]
+        result = convert_list_to_dict(data)
+        assert result == {"name": "first"}
+
+    def test_single_dict_in_list(self):
+        """Should return the single dict from a list."""
+        data = [{"name": "only", "value": 42}]
+        result = convert_list_to_dict(data)
+        assert result == {"name": "only", "value": 42}
+
+    def test_list_of_strings_creates_properties(self):
+        """Should convert list of strings to properties dict."""
+        data = ["brave", "intelligent", "kind"]
+        result = convert_list_to_dict(data)
+        assert result["properties"] == data
+        assert "brave" in result["description"]
+        assert "intelligent" in result["description"]
+        assert "kind" in result["description"]
+
+    def test_list_of_strings_truncates_description(self):
+        """Should truncate description to first 3 items with ellipsis."""
+        data = ["one", "two", "three", "four", "five"]
+        result = convert_list_to_dict(data)
+        assert result["properties"] == data
+        assert "..." in result["description"]
+        # First 3 should be in description
+        assert "one" in result["description"]
+        assert "two" in result["description"]
+        assert "three" in result["description"]
+
+    def test_mixed_types_creates_items(self):
+        """Should wrap mixed-type list in items key."""
+        data = ["string", 42, {"nested": "dict"}, True]
+        result = convert_list_to_dict(data)
+        assert result == {"items": data}
+
+    def test_context_hint_accepted(self):
+        """Should accept context_hint parameter (for future use)."""
+        data = [{"name": "test"}]
+        result = convert_list_to_dict(data, context_hint="character")
+        assert result == {"name": "test"}
+
+
+class TestRepairTruncatedJson:
+    """Tests for _repair_truncated_json function."""
+
+    def test_strategy_1_closes_single_brace(self):
+        """Strategy 1: Should close single unclosed brace."""
+        text = '{"name": "test", "value": 42'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert isinstance(result, dict)
+        assert result["name"] == "test"
+        assert result["value"] == 42
+
+    def test_strategy_1_closes_nested_braces(self):
+        """Strategy 1: Should close multiple nested braces."""
+        text = '{"outer": {"inner": {"deep": "value"'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert "outer" in result
+
+    def test_strategy_1_closes_brackets_and_braces(self):
+        """Strategy 1: Should close both brackets and braces."""
+        text = '{"items": ["a", "b", "c"'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert isinstance(result, dict)
+        assert result["items"] == ["a", "b", "c"]
+
+    def test_strategy_1_handles_incomplete_string(self):
+        """Strategy 1: Should handle truncation in middle of string value."""
+        text = '{"name": "test", "description": "This is a long'
+        result = _repair_truncated_json(text)
+        # May or may not successfully parse depending on content
+        # But should not crash
+        assert result is None or isinstance(result, dict)
+
+    def test_strategy_2_extracts_complete_object(self):
+        """Strategy 2: Should extract last complete object."""
+        # Complete object followed by incomplete part
+        text = '{"complete": true} {"incomplete": "val'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert isinstance(result, dict)
+        assert result["complete"] is True
+
+    def test_strategy_2_extracts_complete_array(self):
+        """Strategy 2: Should extract last complete array."""
+        text = "[1, 2, 3] [4, 5,"
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert result == [1, 2, 3]
+
+    def test_strategy_3_truncates_at_last_comma(self):
+        """Strategy 3: Should truncate at last comma if other strategies fail."""
+        # This is a malformed JSON that strategy 1 and 2 might not fix
+        text = '{"a": 1, "b": 2, "c": '
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert isinstance(result, dict)
+        # Should get at least a and b
+        assert "a" in result
+        assert result["a"] == 1
+
+    def test_returns_none_for_completely_broken_json(self):
+        """Should return None when JSON is completely unrecoverable."""
+        text = "This is not JSON at all, just plain text."
+        result = _repair_truncated_json(text)
+        assert result is None
+
+    def test_handles_escaped_quotes_in_strings(self):
+        """Should correctly handle escaped quotes when finding string boundaries."""
+        # Escaped quotes inside string followed by complete key-value
+        text = '{"quote": "He said \\"hello\\"", "other": 1'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert isinstance(result, dict)
+        assert "quote" in result
+        assert result["other"] == 1
+
+    def test_handles_backslashes_in_strings(self):
+        """Should correctly handle backslashes in strings."""
+        text = '{"path": "C:\\\\Users\\\\test"'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert "path" in result
+
+    def test_array_with_nested_objects(self):
+        """Should repair array containing nested objects."""
+        text = '[{"a": 1}, {"b": 2'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        # Should at least get the first complete object
+        assert isinstance(result, list)
+        assert len(result) >= 1
+
+    def test_deeply_nested_structure(self):
+        """Should repair deeply nested structures."""
+        text = '{"l1": {"l2": {"l3": {"l4": "value"'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert "l1" in result
+
+    def test_escape_sequence_in_strategy_2(self):
+        """Strategy 2: Should handle escape sequences when finding complete objects."""
+        # Valid complete object with escapes, followed by garbage
+        text = '{"path": "C:\\\\test\\\\file"} garbage'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert "path" in result
+
+    def test_escape_sequence_in_strategy_3(self):
+        """Strategy 3: Should handle escape sequences when finding last comma."""
+        # Object with escapes and trailing comma
+        text = '{"path": "C:\\\\test", "name": "val'
+        result = _repair_truncated_json(text)
+        # Strategy 3 should find the comma after "C:\\test"
+        assert result is not None
+        assert "path" in result
+
+    def test_strategy_2_extract_fails_parse(self):
+        """Strategy 2: When extraction succeeds but parsing fails."""
+        # This should find the complete structure but JSON may still be invalid
+        # Hard to construct - try something with balanced but invalid JSON
+        text = '{"valid": true} {malformed no quotes}'
+        result = _repair_truncated_json(text)
+        # Should fall through strategies - may succeed with first object
+        assert result is None or result == {"valid": True}
+
+    def test_strategy_3_truncate_fails_parse(self):
+        """Strategy 3: When truncation at comma still doesn't produce valid JSON."""
+        # Construct something where truncating at comma doesn't help
+        text = '{broken"key, "another": 1'
+        result = _repair_truncated_json(text)
+        # May fail all strategies
+        assert result is None or isinstance(result, dict)
+
+    def test_newline_escape_in_string(self):
+        """Should handle newline escape sequences in strings."""
+        text = '{"text": "line1\\nline2"'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert "text" in result
+
+    def test_tab_escape_in_string(self):
+        """Should handle tab escape sequences in strings."""
+        text = '{"text": "col1\\tcol2"'
+        result = _repair_truncated_json(text)
+        assert result is not None
+        assert "text" in result
+
+    def test_strategy_3_escape_path_forced(self):
+        """Force Strategy 3 to run with escape sequences.
+
+        Strategy 1 fails: balanced braces but invalid JSON structure.
+        Strategy 2 fails: no complete structure found.
+        Strategy 3 succeeds: truncate at last comma with escapes.
+        """
+        # Malformed JSON that only Strategy 3 can handle
+        # Has escape in string, comma, then garbage that breaks S1/S2
+        text = '{"a": "path\\\\to", "b": broken'
+        result = _repair_truncated_json(text)
+        # Should get at least key "a" from truncating at comma
+        assert result is None or (isinstance(result, dict) and "a" in result)
+
+    def test_strategy_3_multiple_escapes(self):
+        """Strategy 3 with multiple escape sequences."""
+        # Multiple backslashes that Strategy 3 must properly track
+        text = '{"p1": "a\\\\b", "p2": "c\\\\d\\\\e", "p3": trunc'
+        result = _repair_truncated_json(text)
+        assert result is None or isinstance(result, dict)

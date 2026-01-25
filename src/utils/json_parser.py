@@ -10,6 +10,185 @@ from src.utils.exceptions import JSONParseError
 logger = logging.getLogger(__name__)
 
 
+def convert_list_to_dict(
+    data: list[Any],
+    context_hint: str | None = None,
+) -> dict[str, Any]:
+    """Convert a list to a dict structure when LLM returns wrong type.
+
+    LLMs sometimes return a list of properties instead of a proper entity dict.
+    This function attempts to convert it to a usable dict structure.
+
+    Args:
+        data: List data from LLM.
+        context_hint: Optional hint about expected structure (e.g., "item", "character").
+
+    Returns:
+        Dict with appropriate structure based on list contents.
+    """
+    if not data:
+        logger.debug("convert_list_to_dict: empty list, returning empty dict")
+        return {}
+
+    # If list contains dicts, it might be a list of entities - return first
+    if all(isinstance(item, dict) for item in data):
+        context_info = f" for context '{context_hint}'" if context_hint else ""
+        logger.warning(
+            f"List contains {len(data)} dict items, returning first as entity{context_info}"
+        )
+        first_item: dict[str, Any] = data[0]
+        return first_item
+
+    # If list contains strings, treat as properties/features
+    if all(isinstance(item, str) for item in data):
+        context_info = f" for context '{context_hint}'" if context_hint else ""
+        logger.warning(f"Converting list of {len(data)} strings to properties dict{context_info}")
+        return {
+            "properties": data,
+            "description": "; ".join(str(x) for x in data[:3]) + ("..." if len(data) > 3 else ""),
+        }
+
+    # Mixed types - convert to generic structure
+    context_info = f" for context '{context_hint}'" if context_hint else ""
+    logger.warning(f"Converting mixed-type list of {len(data)} items to dict{context_info}")
+    return {"items": data}
+
+
+def _count_unescaped_quotes(text: str) -> int:
+    """Count unescaped double quotes in text.
+
+    Args:
+        text: String to analyze.
+
+    Returns:
+        Number of unescaped quote characters.
+    """
+    count = 0
+    escape_next = False
+    for char in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\":
+            escape_next = True
+            continue
+        if char == '"':
+            count += 1
+    return count
+
+
+def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
+    """Attempt multiple strategies to repair truncated JSON.
+
+    Args:
+        text: Potentially truncated JSON string.
+
+    Returns:
+        Parsed JSON if repair successful, None otherwise.
+    """
+    strategies_tried = []
+
+    # Strategy 1: Simple brace/bracket closing
+    try:
+        open_braces = text.count("{") - text.count("}")
+        open_brackets = text.count("[") - text.count("]")
+
+        if open_braces > 0 or open_brackets > 0:
+            repaired = text.rstrip(",: \n\t\"'")
+            # Close any open string (escape-aware)
+            if _count_unescaped_quotes(repaired) % 2 == 1:
+                repaired += '"'
+            repaired += "]" * max(0, open_brackets) + "}" * max(0, open_braces)
+            result = _try_parse_json(repaired)
+            if result is not None:
+                logger.info("Repaired truncated JSON with brace closing")
+                return result
+            strategies_tried.append("brace_closing")
+    except Exception:  # pragma: no cover
+        strategies_tried.append("brace_closing_failed")
+
+    # Strategy 2: Find last complete object/array and parse that
+    try:
+        # Find the last complete JSON structure
+        brace_count = 0
+        bracket_count = 0
+        last_complete_idx = -1
+        in_string = False
+        escape_next = False
+
+        for i, char in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == "\\":
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+
+            if char == "{":
+                brace_count += 1
+            elif char == "}":
+                brace_count -= 1
+                if brace_count == 0 and bracket_count == 0:
+                    last_complete_idx = i + 1
+            elif char == "[":
+                bracket_count += 1
+            elif char == "]":
+                bracket_count -= 1
+                if brace_count == 0 and bracket_count == 0:
+                    last_complete_idx = i + 1
+
+        if last_complete_idx > 0:
+            partial = text[:last_complete_idx]
+            result = _try_parse_json(partial)
+            if result is not None:
+                logger.info("Repaired truncated JSON by extracting complete structure")
+                return result
+            strategies_tried.append("extract_complete")
+    except Exception:  # pragma: no cover
+        strategies_tried.append("extract_complete_failed")
+
+    # Strategy 3: Truncate at last comma and close
+    try:
+        # Find last comma outside of strings
+        last_comma = -1
+        in_string = False
+        escape_next = False
+
+        for i, char in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == "\\":
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if not in_string and char == ",":
+                last_comma = i
+
+        if last_comma > 0:
+            truncated = text[:last_comma]
+            open_braces = truncated.count("{") - truncated.count("}")
+            open_brackets = truncated.count("[") - truncated.count("]")
+            truncated += "]" * max(0, open_brackets) + "}" * max(0, open_braces)
+            result = _try_parse_json(truncated)
+            if result is not None:
+                logger.info("Repaired truncated JSON by truncating at last comma")
+                return result
+            strategies_tried.append("truncate_comma")
+    except Exception:  # pragma: no cover
+        strategies_tried.append("truncate_comma_failed")
+
+    logger.debug(f"All JSON repair strategies failed: {strategies_tried}")
+    return None
+
+
 def clean_llm_text(text: str) -> str:
     """Clean LLM output text by removing thinking tags and other artifacts.
 
@@ -116,26 +295,21 @@ def extract_json(
         logger.debug("Found raw JSON array but failed to parse")
 
     # Strategy 4: Try to repair truncated JSON (common with token limits)
-    # Check if response starts with { and has more opening than closing braces
+    # Check if response has unbalanced braces/brackets
     stripped = response.strip()
-    if stripped.startswith("{") and stripped.count("{") > stripped.count("}"):
-        logger.warning("Detected truncated JSON (unbalanced braces) - likely token limit reached")
-        # Try to close the JSON by adding missing braces
-        try:
-            # Count open braces and brackets
-            open_braces = stripped.count("{") - stripped.count("}")
-            open_brackets = stripped.count("[") - stripped.count("]")
-            # Try to close with empty values and braces
-            repaired = stripped.rstrip(",: \n\t")  # Remove trailing punctuation
-            repaired += '""' if repaired.endswith(":") else ""  # Close incomplete string
-            repaired += "]" * open_brackets + "}" * open_braces
-            logger.debug(f"Attempting JSON repair, preview: {repaired[:200]}")
-            result = _try_parse_json(repaired)
-            if result is not None:
-                logger.info("Successfully repaired truncated JSON")
-                return result
-        except Exception:  # pragma: no cover
-            logger.debug("JSON repair attempt failed")
+    open_braces = stripped.count("{") - stripped.count("}")
+    open_brackets = stripped.count("[") - stripped.count("]")
+
+    if (stripped.startswith("{") or stripped.startswith("[")) and (
+        open_braces > 0 or open_brackets > 0
+    ):
+        logger.warning(
+            f"Detected truncated JSON (unbalanced: {open_braces} braces, "
+            f"{open_brackets} brackets) - likely token limit reached"
+        )
+        result = _repair_truncated_json(stripped)
+        if result is not None:
+            return result
 
     # Strategy 5: Try custom fallback pattern
     if fallback_pattern:
@@ -213,17 +387,22 @@ def parse_json_to_model[T](
     if data is None:
         return None
 
-    if not isinstance(data, dict):
-        error_msg = f"Expected JSON object but got {type(data).__name__}"
-        if strict:
-            logger.error(error_msg)
-            raise JSONParseError(
-                error_msg,
-                response_preview=response[:500],
-                expected_type=model_class.__name__,
-            )
-        logger.debug(error_msg)
-        return None
+    if isinstance(data, list):
+        # LLM returned list instead of dict - try to convert
+        logger.warning(
+            f"Expected JSON object but got list for {model_class.__name__} - attempting conversion"
+        )
+        data = convert_list_to_dict(data, context_hint=model_class.__name__)
+        if not data:
+            error_msg = f"Expected JSON object but got empty list for {model_class.__name__}"
+            if strict:
+                logger.error(error_msg)
+                raise JSONParseError(
+                    error_msg,
+                    response_preview=response[:500],
+                    expected_type=model_class.__name__,
+                )
+            return None
 
     try:
         return model_class(**data)
