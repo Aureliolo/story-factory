@@ -139,8 +139,18 @@ class WorldQualityService:
         iterations: int,
         generation_time: float,
         model_id: str | None = None,
+        *,
+        early_stop_triggered: bool = False,
+        threshold_met: bool = False,
+        peak_score: float | None = None,
+        final_score: float | None = None,
+        score_progression: list[float] | None = None,
+        consecutive_degradations: int = 0,
+        best_iteration: int = 0,
+        quality_threshold: float | None = None,
+        max_iterations: int | None = None,
     ) -> None:
-        """Record entity quality score to analytics database.
+        """Record entity quality score to analytics database with refinement metrics.
 
         Args:
             project_id: The project ID.
@@ -150,6 +160,15 @@ class WorldQualityService:
             iterations: Number of refinement iterations used.
             generation_time: Time in seconds to generate.
             model_id: The model ID used for generation. If not provided, determines from entity_type.
+            early_stop_triggered: Whether early stopping was triggered.
+            threshold_met: Whether the quality threshold was met.
+            peak_score: Highest score achieved during refinement.
+            final_score: Final score of the returned entity.
+            score_progression: List of scores from each iteration.
+            consecutive_degradations: Number of consecutive score decreases.
+            best_iteration: Iteration number that produced the best score.
+            quality_threshold: The quality threshold used.
+            max_iterations: Maximum iterations configured.
         """
         validate_not_empty(project_id, "project_id")
         validate_not_empty(entity_type, "entity_type")
@@ -169,10 +188,20 @@ class WorldQualityService:
                 iterations_used=iterations,
                 generation_time_seconds=generation_time,
                 feedback=scores.get("feedback", ""),
+                early_stop_triggered=early_stop_triggered,
+                threshold_met=threshold_met,
+                peak_score=peak_score,
+                final_score=final_score,
+                score_progression=score_progression,
+                consecutive_degradations=consecutive_degradations,
+                best_iteration=best_iteration,
+                quality_threshold=quality_threshold,
+                max_iterations=max_iterations,
             )
             logger.debug(
                 f"Recorded {entity_type} '{entity_name}' quality to analytics "
-                f"(model={model_id}, avg: {scores.get('average', 0):.1f})"
+                f"(model={model_id}, avg: {scores.get('average', 0):.1f}, "
+                f"threshold_met={threshold_met}, early_stop={early_stop_triggered})"
             )
         except Exception as e:
             # Don't fail generation if analytics recording fails
@@ -318,7 +347,14 @@ class WorldQualityService:
                     logger.info(f"Character '{character.name}' met quality threshold")
                     history.final_iteration = iteration + 1
                     history.final_score = scores.average
-                    self._log_refinement_analytics(history, story_state.id)
+                    self._log_refinement_analytics(
+                        history,
+                        story_state.id,
+                        threshold_met=True,
+                        early_stop_triggered=False,
+                        quality_threshold=config.quality_threshold,
+                        max_iterations=config.max_iterations,
+                    )
                     return character, scores, iteration + 1
 
                 # Check for early stopping after tracking iteration
@@ -368,7 +404,16 @@ class WorldQualityService:
             if best_scores:
                 history.final_iteration = history.best_iteration
                 history.final_score = history.peak_score
-                self._log_refinement_analytics(history, story_state.id)
+                # Check if this was an early stop (we didn't reach max iterations)
+                was_early_stop = len(history.iterations) < config.max_iterations
+                self._log_refinement_analytics(
+                    history,
+                    story_state.id,
+                    threshold_met=history.peak_score >= config.quality_threshold,
+                    early_stop_triggered=was_early_stop,
+                    quality_threshold=config.quality_threshold,
+                    max_iterations=config.max_iterations,
+                )
                 return best_character, best_scores, history.best_iteration
 
         # Fallback to last iteration
@@ -379,7 +424,14 @@ class WorldQualityService:
             )
             history.final_iteration = len(history.iterations)
             history.final_score = scores.average
-            self._log_refinement_analytics(history, story_state.id)
+            self._log_refinement_analytics(
+                history,
+                story_state.id,
+                threshold_met=False,
+                early_stop_triggered=False,
+                quality_threshold=config.quality_threshold,
+                max_iterations=config.max_iterations,
+            )
             return character, scores, len(history.iterations)
 
         raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
@@ -659,7 +711,14 @@ Write all text in {brief.language if brief else "English"}."""
                     logger.info(f"Location '{location.get('name')}' met quality threshold")
                     history.final_iteration = iteration + 1
                     history.final_score = scores.average
-                    self._log_refinement_analytics(history, story_state.id)
+                    self._log_refinement_analytics(
+                        history,
+                        story_state.id,
+                        threshold_met=True,
+                        early_stop_triggered=False,
+                        quality_threshold=config.quality_threshold,
+                        max_iterations=config.max_iterations,
+                    )
                     return location, scores, iteration + 1
 
                 # Check for early stopping after tracking iteration
@@ -707,7 +766,15 @@ Write all text in {brief.language if brief else "English"}."""
             if best_scores:
                 history.final_iteration = history.best_iteration
                 history.final_score = history.peak_score
-                self._log_refinement_analytics(history, story_state.id)
+                was_early_stop = len(history.iterations) < config.max_iterations
+                self._log_refinement_analytics(
+                    history,
+                    story_state.id,
+                    threshold_met=history.peak_score >= config.quality_threshold,
+                    early_stop_triggered=was_early_stop,
+                    quality_threshold=config.quality_threshold,
+                    max_iterations=config.max_iterations,
+                )
                 return best_entity, best_scores, history.best_iteration
 
         # Fallback to last iteration
@@ -718,7 +785,14 @@ Write all text in {brief.language if brief else "English"}."""
             )
             history.final_iteration = len(history.iterations)
             history.final_score = scores.average
-            self._log_refinement_analytics(history, story_state.id)
+            self._log_refinement_analytics(
+                history,
+                story_state.id,
+                threshold_met=False,
+                early_stop_triggered=False,
+                quality_threshold=config.quality_threshold,
+                max_iterations=config.max_iterations,
+            )
             return location, scores, len(history.iterations)
 
         raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
@@ -1016,7 +1090,14 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     logger.info("Relationship met quality threshold")
                     history.final_iteration = iteration + 1
                     history.final_score = scores.average
-                    self._log_refinement_analytics(history, story_state.id)
+                    self._log_refinement_analytics(
+                        history,
+                        story_state.id,
+                        threshold_met=True,
+                        early_stop_triggered=False,
+                        quality_threshold=config.quality_threshold,
+                        max_iterations=config.max_iterations,
+                    )
                     return relationship, scores, iteration + 1
 
                 # Check for early stopping after tracking iteration
@@ -1064,7 +1145,15 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             if best_scores:
                 history.final_iteration = history.best_iteration
                 history.final_score = history.peak_score
-                self._log_refinement_analytics(history, story_state.id)
+                was_early_stop = len(history.iterations) < config.max_iterations
+                self._log_refinement_analytics(
+                    history,
+                    story_state.id,
+                    threshold_met=history.peak_score >= config.quality_threshold,
+                    early_stop_triggered=was_early_stop,
+                    quality_threshold=config.quality_threshold,
+                    max_iterations=config.max_iterations,
+                )
                 return best_entity, best_scores, history.best_iteration
 
         # Fallback to last iteration
@@ -1076,7 +1165,14 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             )
             history.final_iteration = len(history.iterations)
             history.final_score = scores.average
-            self._log_refinement_analytics(history, story_state.id)
+            self._log_refinement_analytics(
+                history,
+                story_state.id,
+                threshold_met=False,
+                early_stop_triggered=False,
+                quality_threshold=config.quality_threshold,
+                max_iterations=config.max_iterations,
+            )
             return relationship, scores, len(history.iterations)
 
         raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
@@ -1412,7 +1508,14 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     history.final_iteration = iteration + 1
                     history.final_score = scores.average
                     # Log analytics
-                    self._log_refinement_analytics(history, story_state.id)
+                    self._log_refinement_analytics(
+                        history,
+                        story_state.id,
+                        threshold_met=True,
+                        early_stop_triggered=False,
+                        quality_threshold=config.quality_threshold,
+                        max_iterations=config.max_iterations,
+                    )
                     return faction, scores, iteration + 1
 
                 # Check for early stopping after tracking iteration
@@ -1496,12 +1599,38 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         )
 
         # Log analytics
-        self._log_refinement_analytics(history, story_state.id)
+        was_early_stop = len(history.iterations) < config.max_iterations
+        self._log_refinement_analytics(
+            history,
+            story_state.id,
+            threshold_met=history.final_score >= config.quality_threshold,
+            early_stop_triggered=was_early_stop,
+            quality_threshold=config.quality_threshold,
+            max_iterations=config.max_iterations,
+        )
 
         return faction, scores, history.final_iteration
 
-    def _log_refinement_analytics(self, history: RefinementHistory, project_id: str) -> None:
-        """Log refinement iteration analytics for analysis."""
+    def _log_refinement_analytics(
+        self,
+        history: RefinementHistory,
+        project_id: str,
+        *,
+        early_stop_triggered: bool = False,
+        threshold_met: bool = False,
+        quality_threshold: float | None = None,
+        max_iterations: int | None = None,
+    ) -> None:
+        """Log refinement iteration analytics for analysis.
+
+        Args:
+            history: The refinement history for this entity.
+            project_id: The project ID.
+            early_stop_triggered: Whether early stopping was triggered.
+            threshold_met: Whether the quality threshold was met.
+            quality_threshold: The quality threshold used.
+            max_iterations: Maximum iterations configured.
+        """
         analysis = history.analyze_improvement()
 
         logger.info(
@@ -1511,19 +1640,19 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             f"  - Best iteration: {analysis['best_iteration']} ({history.peak_score:.1f})\n"
             f"  - Final returned: iteration {history.final_iteration} ({history.final_score:.1f})\n"
             f"  - Improved over first: {analysis['improved']}\n"
-            f"  - Worsened after peak: {analysis.get('worsened_after_peak', False)}"
+            f"  - Worsened after peak: {analysis.get('worsened_after_peak', False)}\n"
+            f"  - Threshold met: {threshold_met}\n"
+            f"  - Early stop triggered: {early_stop_triggered}"
         )
 
         # Record to analytics database with extended scores info
-        # Convert list to string for SQLite compatibility
-        progression_str = " -> ".join(f"{s:.1f}" for s in analysis["score_progression"])
         extended_scores = {
             "final_score": history.final_score,
             "peak_score": history.peak_score,
-            "score_progression": progression_str,
             "best_iteration": analysis["best_iteration"],
             "improved": analysis["improved"],
             "worsened_after_peak": analysis.get("worsened_after_peak", False),
+            "average": history.final_score,  # For backwards compatibility
         }
         self.record_entity_quality(
             project_id=project_id,
@@ -1532,7 +1661,55 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             scores=extended_scores,
             iterations=analysis["total_iterations"],
             generation_time=0.0,  # Not tracked at this level
+            early_stop_triggered=early_stop_triggered,
+            threshold_met=threshold_met,
+            peak_score=history.peak_score,
+            final_score=history.final_score,
+            score_progression=analysis["score_progression"],
+            consecutive_degradations=history.consecutive_degradations,
+            best_iteration=analysis["best_iteration"],
+            quality_threshold=quality_threshold,
+            max_iterations=max_iterations,
         )
+
+    # Diversity hints for faction naming to avoid generic names
+    FACTION_NAMING_HINTS: ClassVar[list[str]] = [
+        "Use an evocative, specific name - avoid generic names like 'The Guild' or 'The Order'",
+        "Draw from historical organizations for inspiration (e.g., Hanseatic League, Templars)",
+        "Name could reflect their methods (e.g., 'The Whispered Accord', 'Iron Covenant')",
+        "Name could be ironic or misleading (e.g., a violent group called 'The Peacemakers')",
+        "Name could reference their origin or founding myth",
+        "Name could be in a constructed language or archaic form",
+        "Name should be memorable and distinct from common fantasy tropes",
+    ]
+
+    FACTION_STRUCTURE_HINTS: ClassVar[list[str]] = [
+        "Consider a non-hierarchical structure (cells, councils, rotating leadership)",
+        "Structure could mirror their beliefs (egalitarian values = flat structure)",
+        "Consider secret inner circles or public-facing vs. true leadership",
+        "Structure could be based on expertise, seniority, or divine mandate",
+        "Consider how new members join and advance within the organization",
+    ]
+
+    FACTION_IDEOLOGY_HINTS: ClassVar[list[str]] = [
+        "Core beliefs should create internal tensions or contradictions",
+        "Ideology could be a corruption or evolution of older beliefs",
+        "Consider what the faction fears or opposes, not just what they support",
+        "Ideology should naturally conflict with at least one other group",
+        "Consider the gap between stated ideals and actual practices",
+    ]
+
+    def _format_existing_names(self, existing_names: list[str]) -> str:
+        """Format existing faction names for the prompt with clear anti-duplicate guidance."""
+        if not existing_names:
+            return "None yet - you are creating the first faction."
+
+        formatted = []
+        for name in existing_names:
+            # Also show variations that should be avoided
+            formatted.append(f"- {name}")
+
+        return "\n".join(formatted)
 
     def _create_faction(
         self,
@@ -1542,6 +1719,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         existing_locations: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a new faction using the creator model."""
+        from src.utils.validation import validate_unique_name
+
         brief = story_state.brief
         if not brief:
             return {}
@@ -1554,6 +1733,14 @@ EXISTING LOCATIONS IN THIS WORLD: {", ".join(existing_locations)}
 (If applicable, use one of these existing locations as the faction's base)
 """
 
+        # Select random diversity hints for this generation
+        naming_hint = random.choice(self.FACTION_NAMING_HINTS)
+        structure_hint = random.choice(self.FACTION_STRUCTURE_HINTS)
+        ideology_hint = random.choice(self.FACTION_IDEOLOGY_HINTS)
+
+        # Format existing names with clear guidance
+        existing_names_formatted = self._format_existing_names(existing_names)
+
         prompt = f"""Create a compelling faction/organization for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
@@ -1561,9 +1748,22 @@ SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
-EXISTING FACTIONS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
-(Create a NEW faction with a different name that complements these existing ones)
+=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+EXISTING FACTIONS (DO NOT DUPLICATE OR CREATE SIMILAR NAMES):
+{existing_names_formatted}
+
+STRICT RULES:
+- Case variations (e.g., "The Guild" vs "THE GUILD") are NOT acceptable
+- Similar names (e.g., "Shadow Council" vs "Council of Shadows") are NOT acceptable
+- Names that contain existing faction names are NOT acceptable
+- Prefix variations (e.g., "The Order" vs "Order") are NOT acceptable
+- Create something COMPLETELY DIFFERENT from the above
 {location_context}
+=== DIVERSITY GUIDANCE (follow these for this faction) ===
+NAMING: {naming_hint}
+STRUCTURE: {structure_hint}
+IDEOLOGY: {ideology_hint}
+
 Create a faction with:
 1. Internal coherence - clear structure, beliefs, and rules
 2. World influence - meaningful impact on the setting
@@ -1593,12 +1793,17 @@ Output ONLY valid JSON (all text in {brief.language}):
                 temperature=temperature,
             )
 
-            # Validate name is not a duplicate
-            if faction.name and faction.name in existing_names:
-                logger.warning(
-                    f"Faction name '{faction.name}' is duplicate, clearing to force retry"
+            # Comprehensive uniqueness validation
+            if faction.name:
+                is_unique, conflicting_name, reason = validate_unique_name(
+                    faction.name, existing_names
                 )
-                return {}  # Return empty to trigger retry
+                if not is_unique:
+                    logger.warning(
+                        f"Faction name '{faction.name}' conflicts with '{conflicting_name}' "
+                        f"(reason: {reason}), clearing to force retry"
+                    )
+                    return {}  # Return empty to trigger retry
 
             # Convert to dict for compatibility with existing code
             return faction.model_dump()
@@ -1838,7 +2043,14 @@ Return ONLY the improved faction."""
                     logger.info(f"Item '{item.get('name')}' met quality threshold")
                     history.final_iteration = iteration + 1
                     history.final_score = scores.average
-                    self._log_refinement_analytics(history, story_state.id)
+                    self._log_refinement_analytics(
+                        history,
+                        story_state.id,
+                        threshold_met=True,
+                        early_stop_triggered=False,
+                        quality_threshold=config.quality_threshold,
+                        max_iterations=config.max_iterations,
+                    )
                     return item, scores, iteration + 1
 
                 # Check for early stopping after tracking iteration
@@ -1886,7 +2098,15 @@ Return ONLY the improved faction."""
             if best_scores:
                 history.final_iteration = history.best_iteration
                 history.final_score = history.peak_score
-                self._log_refinement_analytics(history, story_state.id)
+                was_early_stop = len(history.iterations) < config.max_iterations
+                self._log_refinement_analytics(
+                    history,
+                    story_state.id,
+                    threshold_met=history.peak_score >= config.quality_threshold,
+                    early_stop_triggered=was_early_stop,
+                    quality_threshold=config.quality_threshold,
+                    max_iterations=config.max_iterations,
+                )
                 return best_entity, best_scores, history.best_iteration
 
         # Fallback to last iteration
@@ -1897,7 +2117,14 @@ Return ONLY the improved faction."""
             )
             history.final_iteration = len(history.iterations)
             history.final_score = scores.average
-            self._log_refinement_analytics(history, story_state.id)
+            self._log_refinement_analytics(
+                history,
+                story_state.id,
+                threshold_met=False,
+                early_stop_triggered=False,
+                quality_threshold=config.quality_threshold,
+                max_iterations=config.max_iterations,
+            )
             return item, scores, len(history.iterations)
 
         raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
@@ -2204,7 +2431,14 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     logger.info(f"Concept '{concept.get('name')}' met quality threshold")
                     history.final_iteration = iteration + 1
                     history.final_score = scores.average
-                    self._log_refinement_analytics(history, story_state.id)
+                    self._log_refinement_analytics(
+                        history,
+                        story_state.id,
+                        threshold_met=True,
+                        early_stop_triggered=False,
+                        quality_threshold=config.quality_threshold,
+                        max_iterations=config.max_iterations,
+                    )
                     return concept, scores, iteration + 1
 
                 # Check for early stopping after tracking iteration
@@ -2252,7 +2486,15 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             if best_scores:
                 history.final_iteration = history.best_iteration
                 history.final_score = history.peak_score
-                self._log_refinement_analytics(history, story_state.id)
+                was_early_stop = len(history.iterations) < config.max_iterations
+                self._log_refinement_analytics(
+                    history,
+                    story_state.id,
+                    threshold_met=history.peak_score >= config.quality_threshold,
+                    early_stop_triggered=was_early_stop,
+                    quality_threshold=config.quality_threshold,
+                    max_iterations=config.max_iterations,
+                )
                 return best_entity, best_scores, history.best_iteration
 
         # Fallback to last iteration
@@ -2263,7 +2505,14 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             )
             history.final_iteration = len(history.iterations)
             history.final_score = scores.average
-            self._log_refinement_analytics(history, story_state.id)
+            self._log_refinement_analytics(
+                history,
+                story_state.id,
+                threshold_met=False,
+                early_stop_triggered=False,
+                quality_threshold=config.quality_threshold,
+                max_iterations=config.max_iterations,
+            )
             return concept, scores, len(history.iterations)
 
         raise WorldGenerationError(  # pragma: no cover - defensive, unreachable

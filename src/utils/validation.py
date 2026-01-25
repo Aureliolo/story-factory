@@ -156,3 +156,85 @@ def validate_string_in_choices(value: str | None, param_name: str, choices: list
     validate_not_empty(value, param_name)
     if value not in choices:
         raise ValueError(f"Parameter '{param_name}' must be one of {choices}, got '{value}'")
+
+
+# Common prefixes to strip when comparing names for duplicates
+_NAME_PREFIXES = ("the ", "a ", "an ")
+
+
+def _normalize_name(name: str) -> str:
+    """Normalize a name for comparison by lowercasing and stripping common prefixes.
+
+    Args:
+        name: The name to normalize.
+
+    Returns:
+        Normalized name (lowercase, prefix-stripped, whitespace-trimmed).
+    """
+    normalized = name.lower().strip()
+    for prefix in _NAME_PREFIXES:
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :].strip()
+            break
+    return normalized
+
+
+def validate_unique_name(
+    name: str,
+    existing_names: list[str],
+    check_substring: bool = True,
+    min_substring_length: int = 4,
+) -> tuple[bool, str | None, str | None]:
+    """Validate that a name is unique compared to existing names.
+
+    Performs comprehensive uniqueness validation:
+    1. Exact match check (case-insensitive)
+    2. Prefix-stripped match ("The Guild" vs "Guild")
+    3. Substring containment (optional, for catching "Shadow Council" vs "Council")
+
+    Args:
+        name: The name to validate.
+        existing_names: List of existing names to check against.
+        check_substring: Whether to check for substring containment.
+        min_substring_length: Minimum normalized name length for substring checks.
+            Names shorter than this skip substring validation to avoid false positives.
+
+    Returns:
+        Tuple of (is_unique, conflicting_name, reason):
+        - is_unique: True if name is unique, False if duplicate detected.
+        - conflicting_name: The existing name it conflicts with (None if unique).
+        - reason: Description of why it's a duplicate (None if unique).
+            One of: "exact", "case_insensitive", "prefix_match", "substring".
+    """
+    if not name or not name.strip():
+        return True, None, None  # Empty names are handled elsewhere
+
+    normalized_new = _normalize_name(name)
+
+    for existing in existing_names:
+        if not existing or not existing.strip():
+            continue
+
+        normalized_existing = _normalize_name(existing)
+
+        # Check exact match (case-insensitive)
+        if name.lower().strip() == existing.lower().strip():
+            if name.strip() == existing.strip():
+                return False, existing, "exact"
+            return False, existing, "case_insensitive"
+
+        # Check prefix-stripped match
+        if normalized_new == normalized_existing:
+            return False, existing, "prefix_match"
+
+        # Check substring containment (both directions)
+        if check_substring:
+            # Only check if both names are long enough to avoid false positives
+            if len(normalized_new) >= min_substring_length:
+                if len(normalized_existing) >= min_substring_length:
+                    if normalized_new in normalized_existing:
+                        return False, existing, "substring"
+                    if normalized_existing in normalized_new:
+                        return False, existing, "substring"
+
+    return True, None, None

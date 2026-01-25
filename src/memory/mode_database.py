@@ -213,20 +213,45 @@ class ModeDatabase:
         Apply pending schema migrations to the connected SQLite database.
 
         Ensures the custom_modes table contains the `size_preference` column and adds it with a default value of "medium" if missing.
+        Also adds refinement effectiveness tracking columns to world_entity_scores.
 
         Parameters:
             conn (sqlite3.Connection): Active SQLite connection whose schema may be modified.
         """
+        # Migration: custom_modes size_preference
         cursor = conn.execute("PRAGMA table_info(custom_modes)")
-        columns = {row[1] for row in cursor.fetchall()}
+        custom_modes_columns = {row[1] for row in cursor.fetchall()}
 
-        # Migration: Add size_preference column to custom_modes
-        if "size_preference" not in columns:
+        if "size_preference" not in custom_modes_columns:
             logger.info("Migrating custom_modes: adding size_preference column")
             conn.execute(
                 "ALTER TABLE custom_modes ADD COLUMN size_preference TEXT NOT NULL DEFAULT 'medium'"
             )
             conn.commit()
+
+        # Migration: world_entity_scores refinement effectiveness tracking
+        cursor = conn.execute("PRAGMA table_info(world_entity_scores)")
+        world_entity_columns = {row[1] for row in cursor.fetchall()}
+
+        # New columns for refinement effectiveness tracking
+        refinement_columns = [
+            ("early_stop_triggered", "INTEGER DEFAULT 0"),
+            ("threshold_met", "INTEGER DEFAULT 0"),
+            ("peak_score", "REAL"),
+            ("final_score", "REAL"),
+            ("score_progression_json", "TEXT"),
+            ("consecutive_degradations", "INTEGER DEFAULT 0"),
+            ("best_iteration", "INTEGER DEFAULT 0"),
+            ("quality_threshold", "REAL"),
+            ("max_iterations", "INTEGER"),
+        ]
+
+        for col_name, col_def in refinement_columns:
+            if col_name not in world_entity_columns:
+                logger.info(f"Migrating world_entity_scores: adding {col_name} column")
+                conn.execute(f"ALTER TABLE world_entity_scores ADD COLUMN {col_name} {col_def}")
+
+        conn.commit()
 
     # === Generation Scores ===
 
@@ -1120,8 +1145,17 @@ class ModeDatabase:
         iterations_used: int | None = None,
         generation_time_seconds: float | None = None,
         feedback: str | None = None,
+        early_stop_triggered: bool = False,
+        threshold_met: bool = False,
+        peak_score: float | None = None,
+        final_score: float | None = None,
+        score_progression: list[float] | None = None,
+        consecutive_degradations: int = 0,
+        best_iteration: int = 0,
+        quality_threshold: float | None = None,
+        max_iterations: int | None = None,
     ) -> int:
-        """Record a world entity quality score.
+        """Record a world entity quality score with refinement effectiveness metrics.
 
         Args:
             project_id: The project ID.
@@ -1133,6 +1167,15 @@ class ModeDatabase:
             iterations_used: Number of refinement iterations used.
             generation_time_seconds: Time taken to generate.
             feedback: Quality feedback from judge.
+            early_stop_triggered: Whether early stopping was triggered due to score degradation.
+            threshold_met: Whether the quality threshold was met.
+            peak_score: Highest score achieved during refinement.
+            final_score: Final score of the returned entity.
+            score_progression: List of scores from each iteration.
+            consecutive_degradations: Number of consecutive score decreases before stopping.
+            best_iteration: Iteration number that produced the best score.
+            quality_threshold: The quality threshold used for this entity.
+            max_iterations: Maximum iterations configured for this entity.
 
         Returns:
             The ID of the inserted record.
@@ -1148,6 +1191,9 @@ class ModeDatabase:
         score_4 = score_values[3] if len(score_values) > 3 else None
         average_score = scores.get("average")
 
+        # Convert score progression to JSON
+        score_progression_json = json.dumps(score_progression) if score_progression else None
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.execute(
@@ -1155,8 +1201,11 @@ class ModeDatabase:
                     INSERT INTO world_entity_scores (
                         project_id, entity_id, entity_type, entity_name, model_id,
                         score_1, score_2, score_3, score_4, average_score,
-                        iterations_used, generation_time_seconds, feedback
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        iterations_used, generation_time_seconds, feedback,
+                        early_stop_triggered, threshold_met, peak_score, final_score,
+                        score_progression_json, consecutive_degradations, best_iteration,
+                        quality_threshold, max_iterations
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         project_id,
@@ -1172,6 +1221,15 @@ class ModeDatabase:
                         iterations_used,
                         generation_time_seconds,
                         feedback,
+                        1 if early_stop_triggered else 0,
+                        1 if threshold_met else 0,
+                        peak_score,
+                        final_score,
+                        score_progression_json,
+                        consecutive_degradations,
+                        best_iteration,
+                        quality_threshold,
+                        max_iterations,
                     ),
                 )
                 conn.commit()
@@ -1749,3 +1807,163 @@ class ModeDatabase:
                 (f"-{validated_days} days",),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    # === Refinement Effectiveness Analytics ===
+
+    def get_refinement_effectiveness_summary(
+        self,
+        entity_type: str | None = None,
+        days: int = 30,
+    ) -> dict[str, Any]:
+        """Get summary statistics for refinement effectiveness.
+
+        Analyzes how well the refinement loop is working by looking at:
+        - Threshold met rate: How often we reach quality threshold
+        - Early stop rate: How often we stop early due to degradation
+        - Average iterations: Typical refinement effort
+        - Score loss: How much we lose from peak to final
+        - Best is final rate: How often the returned entity is actually the best
+
+        Args:
+            entity_type: Filter by entity type (character, faction, etc.).
+            days: Number of days to include in analysis.
+
+        Returns:
+            Dictionary with effectiveness metrics:
+            - total_entities: Number of entities analyzed
+            - threshold_met_rate: Percentage that met quality threshold
+            - early_stop_rate: Percentage that triggered early stopping
+            - avg_iterations: Average number of iterations used
+            - avg_score_loss: Average difference between peak and final score
+            - best_is_final_rate: Percentage where best iteration was returned
+            - by_entity_type: Breakdown by entity type
+        """
+        validated_days = int(days)
+        if validated_days < 0:
+            raise ValueError("days must be a non-negative integer")
+
+        where_clauses = ["DATE(timestamp) >= DATE('now', ?)"]
+        params: list[Any] = [f"-{validated_days} days"]
+
+        if entity_type:
+            where_clauses.append("entity_type = ?")
+            params.append(entity_type)
+
+        where_sql = " AND ".join(where_clauses)
+
+        with sqlite3.connect(self.db_path) as conn:
+            # Overall statistics
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    COUNT(*) as total_entities,
+                    SUM(threshold_met) as threshold_met_count,
+                    SUM(early_stop_triggered) as early_stop_count,
+                    AVG(iterations_used) as avg_iterations,
+                    AVG(CASE WHEN peak_score IS NOT NULL AND final_score IS NOT NULL
+                        THEN peak_score - final_score ELSE 0 END) as avg_score_loss,
+                    SUM(CASE WHEN best_iteration = iterations_used THEN 1 ELSE 0 END)
+                        as best_is_final_count
+                FROM world_entity_scores
+                WHERE {where_sql}
+                """,
+                params,
+            )
+            row = cursor.fetchone()
+
+            total = row[0] or 0
+            summary: dict[str, Any] = {
+                "total_entities": total,
+                "threshold_met_rate": round((row[1] or 0) / total * 100, 1) if total > 0 else 0.0,
+                "early_stop_rate": round((row[2] or 0) / total * 100, 1) if total > 0 else 0.0,
+                "avg_iterations": round(row[3], 2) if row[3] else None,
+                "avg_score_loss": round(row[4], 3) if row[4] else 0.0,
+                "best_is_final_rate": round((row[5] or 0) / total * 100, 1) if total > 0 else 0.0,
+                "by_entity_type": [],
+            }
+
+            # Breakdown by entity type
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    entity_type,
+                    COUNT(*) as count,
+                    SUM(threshold_met) as threshold_met,
+                    SUM(early_stop_triggered) as early_stopped,
+                    AVG(iterations_used) as avg_iterations,
+                    AVG(CASE WHEN peak_score IS NOT NULL AND final_score IS NOT NULL
+                        THEN peak_score - final_score ELSE 0 END) as avg_score_loss
+                FROM world_entity_scores
+                WHERE {where_sql}
+                GROUP BY entity_type
+                ORDER BY count DESC
+                """,
+                params,
+            )
+            for r in cursor.fetchall():
+                count = r[1] or 0
+                summary["by_entity_type"].append(
+                    {
+                        "entity_type": r[0],
+                        "count": count,
+                        "threshold_met_rate": round((r[2] or 0) / count * 100, 1)
+                        if count > 0
+                        else 0.0,
+                        "early_stop_rate": round((r[3] or 0) / count * 100, 1)
+                        if count > 0
+                        else 0.0,
+                        "avg_iterations": round(r[4], 2) if r[4] else None,
+                        "avg_score_loss": round(r[5], 3) if r[5] else 0.0,
+                    }
+                )
+
+            return summary
+
+    def get_refinement_progression_data(
+        self,
+        entity_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Get detailed refinement progression data for analysis.
+
+        Returns individual entity refinement records with full progression details.
+
+        Args:
+            entity_type: Filter by entity type.
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of records with entity info and progression data.
+        """
+        query = """
+            SELECT
+                id, timestamp, project_id, entity_type, entity_name,
+                iterations_used, peak_score, final_score, best_iteration,
+                threshold_met, early_stop_triggered, consecutive_degradations,
+                quality_threshold, score_progression_json
+            FROM world_entity_scores
+            WHERE score_progression_json IS NOT NULL
+        """
+        params: list[Any] = []
+
+        if entity_type:
+            query += " AND entity_type = ?"
+            params.append(entity_type)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            results = []
+            for row in cursor.fetchall():
+                record = dict(row)
+                # Parse JSON progression
+                if record.get("score_progression_json"):
+                    record["score_progression"] = json.loads(record["score_progression_json"])
+                    del record["score_progression_json"]
+                else:
+                    record["score_progression"] = []
+                results.append(record)
+            return results

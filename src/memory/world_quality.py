@@ -419,3 +419,203 @@ class RefinementConfig(BaseModel):
             refinement_temperature=settings.world_quality_refinement_temp,
             early_stopping_patience=settings.world_quality_early_stopping_patience,
         )
+
+
+class JudgeConsistencyConfig(BaseModel):
+    """Configuration for judge consistency improvements.
+
+    Controls how the system handles score variability and outliers
+    to make refinement decisions more reliable.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether judge consistency features are enabled",
+    )
+    multi_call_enabled: bool = Field(
+        default=False,
+        description="Whether to make multiple judge calls and average (expensive)",
+    )
+    multi_call_count: int = Field(
+        default=3,
+        ge=2,
+        le=5,
+        description="Number of judge calls to make if multi_call_enabled",
+    )
+    confidence_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence for reliable refinement decisions",
+    )
+    outlier_detection: bool = Field(
+        default=True,
+        description="Whether to detect and handle outlier scores",
+    )
+    outlier_std_threshold: float = Field(
+        default=2.0,
+        ge=1.0,
+        le=4.0,
+        description="Standard deviations from mean to consider outlier",
+    )
+    outlier_strategy: str = Field(
+        default="median",
+        description="How to handle outliers: 'median', 'mean', or 'retry'",
+    )
+
+    @classmethod
+    def from_settings(cls, settings: Any) -> JudgeConsistencyConfig:
+        """Create config from Settings object."""
+        return cls(
+            enabled=settings.judge_consistency_enabled,
+            multi_call_enabled=settings.judge_multi_call_enabled,
+            multi_call_count=settings.judge_multi_call_count,
+            confidence_threshold=settings.judge_confidence_threshold,
+            outlier_detection=settings.judge_outlier_detection,
+            outlier_std_threshold=settings.judge_outlier_std_threshold,
+            outlier_strategy=settings.judge_outlier_strategy,
+        )
+
+
+class ScoreStatistics(BaseModel):
+    """Statistics for a collection of judge scores.
+
+    Used to detect outliers and calculate confidence in refinement decisions.
+    """
+
+    scores: list[float] = Field(default_factory=list, description="Raw scores")
+    mean: float = Field(default=0.0, description="Mean of scores")
+    std: float = Field(default=0.0, description="Standard deviation of scores")
+    confidence: float = Field(
+        default=1.0,
+        description="Confidence in the score (1.0 - coefficient of variation)",
+    )
+    outliers: list[int] = Field(
+        default_factory=list,
+        description="Indices of outlier scores",
+    )
+
+    @classmethod
+    def calculate(cls, scores: list[float]) -> ScoreStatistics:
+        """Calculate statistics from a list of scores.
+
+        Args:
+            scores: List of numeric scores.
+
+        Returns:
+            ScoreStatistics with calculated mean, std, and confidence.
+        """
+        if not scores:
+            return cls(scores=[], mean=0.0, std=0.0, confidence=0.0)
+
+        n = len(scores)
+        mean = sum(scores) / n
+
+        if n == 1:
+            return cls(scores=scores, mean=mean, std=0.0, confidence=1.0)
+
+        # Calculate standard deviation
+        variance = sum((s - mean) ** 2 for s in scores) / (n - 1)
+        std = variance**0.5
+
+        # Coefficient of variation (relative std)
+        # Confidence = 1.0 - CV (bounded to [0, 1])
+        if mean > 0:
+            cv = std / mean
+            confidence = max(0.0, min(1.0, 1.0 - cv))
+        else:
+            confidence = 0.0 if std > 0 else 1.0
+
+        return cls(scores=scores, mean=mean, std=std, confidence=confidence)
+
+    def detect_outliers(self, std_threshold: float = 2.0) -> list[int]:
+        """Detect outlier scores using standard deviation method.
+
+        Args:
+            std_threshold: Number of standard deviations from mean to consider outlier.
+
+        Returns:
+            List of indices of outlier scores.
+        """
+        if self.std == 0 or len(self.scores) < 3:
+            return []
+
+        outliers = []
+        for i, score in enumerate(self.scores):
+            z_score = abs(score - self.mean) / self.std
+            if z_score >= std_threshold:
+                outliers.append(i)
+
+        self.outliers = outliers
+        return outliers
+
+    def get_filtered_mean(self, exclude_indices: list[int] | None = None) -> float:
+        """Get mean excluding specified indices (e.g., outliers).
+
+        Args:
+            exclude_indices: Indices to exclude. If None, uses self.outliers.
+
+        Returns:
+            Mean of non-excluded scores.
+        """
+        exclude = exclude_indices if exclude_indices is not None else self.outliers
+        if not exclude:
+            return self.mean
+
+        filtered = [s for i, s in enumerate(self.scores) if i not in exclude]
+        if not filtered:
+            return self.mean
+
+        return sum(filtered) / len(filtered)
+
+    def get_median(self) -> float:
+        """Get median score.
+
+        Returns:
+            Median of scores.
+        """
+        if not self.scores:
+            return 0.0
+
+        sorted_scores = sorted(self.scores)
+        n = len(sorted_scores)
+        mid = n // 2
+
+        if n % 2 == 0:
+            return (sorted_scores[mid - 1] + sorted_scores[mid]) / 2
+        return sorted_scores[mid]
+
+    def should_refine(
+        self,
+        threshold: float,
+        confidence_threshold: float = 0.7,
+        min_samples: int = 3,
+    ) -> tuple[bool, float]:
+        """Determine if refinement should continue based on score statistics.
+
+        Uses confidence-based decision making:
+        - High confidence: use standard threshold
+        - Low confidence: use more conservative (higher) threshold
+
+        Args:
+            threshold: Base quality threshold.
+            confidence_threshold: Minimum confidence for reliable decisions.
+            min_samples: Minimum samples needed for confidence-based decisions.
+
+        Returns:
+            Tuple of (should_refine, adjusted_threshold).
+        """
+        if len(self.scores) < min_samples:
+            # Not enough data for confidence-based decisions
+            return self.mean < threshold, threshold
+
+        if self.confidence >= confidence_threshold:
+            # High confidence - use standard threshold
+            return self.mean < threshold, threshold
+
+        # Low confidence - use more conservative threshold
+        # Scale up threshold proportionally to uncertainty
+        uncertainty_factor = 1.0 + (1.0 - self.confidence)
+        adjusted_threshold = min(threshold * uncertainty_factor, 9.5)
+
+        return self.mean < adjusted_threshold, adjusted_threshold

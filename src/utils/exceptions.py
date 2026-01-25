@@ -10,7 +10,12 @@ Exception Hierarchy:
     │   └── ResponseValidationError (AI response validation)
     ├── ConfigError (configuration parsing/validation failures)
     ├── ExportError (export/file related errors)
-    └── WorldGenerationError (world entity generation failures)
+    ├── WorldGenerationError (world entity generation failures)
+    │   ├── EmptyGenerationError (empty/invalid entity content)
+    │   └── DuplicateNameError (duplicate entity name detected)
+    ├── GenerationCancelledError (user cancelled generation)
+    ├── SuggestionError (AI suggestion generation failures)
+    └── JSONParseError (JSON parsing failures)
 
 Usage:
     from src.utils.exceptions import LLMError, LLMConnectionError
@@ -153,3 +158,38 @@ class JSONParseError(StoryFactoryError):
         super().__init__(message)
         self.response_preview = response_preview
         self.expected_type = expected_type
+
+
+class EmptyGenerationError(WorldGenerationError):
+    """Raised when entity generation returns empty or invalid content.
+
+    This indicates the LLM returned an empty name, empty description,
+    or otherwise invalid entity that cannot be used.
+    """
+
+    pass
+
+
+class DuplicateNameError(WorldGenerationError):
+    """Raised when a generated entity has a duplicate name.
+
+    This indicates the generated entity name matches or is too similar
+    to an existing entity name in the world.
+
+    Attributes:
+        generated_name: The name that was generated.
+        existing_name: The existing name it conflicts with.
+        reason: Why it's considered a duplicate (exact, case-insensitive, prefix, substring).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        generated_name: str | None = None,
+        existing_name: str | None = None,
+        reason: str | None = None,
+    ):
+        super().__init__(message)
+        self.generated_name = generated_name
+        self.existing_name = existing_name
+        self.reason = reason
