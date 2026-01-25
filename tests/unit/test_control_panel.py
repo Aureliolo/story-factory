@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import urllib.error
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -417,6 +418,26 @@ class TestOllamaManager:
             manager = OllamaManager()
             assert manager.check_health() is False
 
+    @patch("urllib.request.urlopen")
+    def test_check_health_urlerror(self, mock_urlopen):
+        """Should return False on URLError."""
+        mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
+
+        with patch("scripts.control_panel.SETTINGS_FILE") as mock_path:
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            assert manager.check_health() is False
+
+    @patch("urllib.request.urlopen")
+    def test_check_health_timeout(self, mock_urlopen):
+        """Should return False on timeout."""
+        mock_urlopen.side_effect = TimeoutError("Request timed out")
+
+        with patch("scripts.control_panel.SETTINGS_FILE") as mock_path:
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            assert manager.check_health() is False
+
     @patch.object(OllamaManager, "check_health", return_value=True)
     def test_start_ollama_already_running(self, mock_health):
         """Should return success tuple when Ollama is already running."""
@@ -465,9 +486,11 @@ class TestOllamaManager:
         # Service check returns not running
         service_check = MagicMock()
         service_check.stdout = "STATE              : 1  STOPPED"
+        service_check.returncode = 0
 
         start_result = MagicMock()
         start_result.stderr = ""
+        start_result.stdout = ""
         mock_run.side_effect = [service_check, start_result]
 
         with (
@@ -483,14 +506,36 @@ class TestOllamaManager:
             assert "not responding" in message
 
     @patch("scripts.control_panel.subprocess.run")
-    @patch("scripts.control_panel.subprocess.Popen")
     @patch("scripts.control_panel.sys.platform", "win32")
-    def test_start_ollama_via_serve(self, mock_popen, mock_run):
-        """Should start Ollama via 'ollama serve' when service fails."""
-        # Service check fails (timeout)
-        mock_run.side_effect = subprocess.TimeoutExpired("sc", 10)
+    def test_start_ollama_service_running_not_responding(self, mock_run):
+        """Should return False when service is RUNNING but health check fails."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 4  RUNNING"
+        service_check.returncode = 0
+        mock_run.return_value = service_check
 
-        health_results = [False, False, False, True]  # Last check succeeds
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", return_value=False),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            assert success is False
+            assert "not responding" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_service_running_eventually_responds(self, mock_run):
+        """Should return success when service is RUNNING and health check eventually succeeds."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 4  RUNNING"
+        service_check.returncode = 0
+        mock_run.return_value = service_check
+
+        health_results = [False, False, True]  # Eventually succeeds
 
         with (
             patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
@@ -498,6 +543,190 @@ class TestOllamaManager:
             patch("time.sleep"),
         ):
             mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            assert success is True
+            assert "running" in message.lower()
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_service_not_installed(self, mock_popen, mock_run):
+        """Should fall back to desktop app when service doesn't exist."""
+        service_check = MagicMock()
+        service_check.stdout = "The specified service does not exist"
+        service_check.returncode = 1
+        mock_run.return_value = service_check
+
+        health_results = [False, False, True]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
+        ):
+            mock_settings_path.exists.return_value = False
+            manager = OllamaManager()
+            success, _ = manager.start_ollama()
+
+            assert success is True
+            # Should have fallen back to ollama serve
+            mock_popen.assert_called()
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_service_start_timeout(self, mock_popen, mock_run):
+        """Should fall back to ollama serve when service start times out."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 1  STOPPED"
+        service_check.returncode = 0
+
+        # First call is query (success), second is start (timeout)
+        mock_run.side_effect = [service_check, subprocess.TimeoutExpired("sc", 10)]
+
+        health_results = [False, False, True]  # Eventually succeeds via serve
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
+        ):
+            mock_settings_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            # Should have fallen back to ollama serve
+            assert success is True
+            assert "ollama serve" in message
+            mock_popen.assert_called()
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_service_oserror(self, mock_popen, mock_run):
+        """Should fall back to ollama serve when service check fails with OSError."""
+        mock_run.side_effect = OSError("Access denied")
+
+        health_results = [False, False, True]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
+        ):
+            mock_settings_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            assert success is True
+            assert "ollama serve" in message
+            mock_popen.assert_called()
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.os.environ.get")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_via_desktop_app(self, mock_environ_get, mock_popen, mock_run):
+        """Should start Ollama desktop app when available."""
+        mock_run.side_effect = subprocess.TimeoutExpired("sc", 10)
+        mock_environ_get.return_value = "C:\\Users\\Test\\AppData\\Local"
+
+        health_results = [False, False, True]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+            patch("scripts.control_panel.Path") as mock_path_class,
+        ):
+            mock_path.exists.return_value = False
+            mock_app_path = MagicMock()
+            mock_app_path.exists.return_value = True
+            mock_path_class.return_value.__truediv__.return_value.__truediv__.return_value.__truediv__.return_value = mock_app_path
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            assert success is True
+            assert "desktop app" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.os.environ.get")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_desktop_app_not_responding(self, mock_environ_get, mock_popen, mock_run):
+        """Should return False when desktop app starts but doesn't respond."""
+        mock_run.side_effect = subprocess.TimeoutExpired("sc", 10)
+        mock_environ_get.return_value = "C:\\Users\\Test\\AppData\\Local"
+
+        # Health check always fails
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", return_value=False),
+            patch("time.sleep"),
+            patch("scripts.control_panel.Path") as mock_path_class,
+        ):
+            mock_path.exists.return_value = False
+            mock_app_path = MagicMock()
+            mock_app_path.exists.return_value = True
+            mock_path_class.return_value.__truediv__.return_value.__truediv__.return_value.__truediv__.return_value = mock_app_path
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            assert success is False
+            assert "not responding" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.os.environ.get")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_desktop_app_fails_fallback(self, mock_environ_get, mock_popen, mock_run):
+        """Should fall back to ollama serve when desktop app fails."""
+        mock_run.side_effect = subprocess.TimeoutExpired("sc", 10)
+        mock_environ_get.return_value = "C:\\Users\\Test\\AppData\\Local"
+
+        # First Popen fails (desktop app), second succeeds (ollama serve)
+        mock_popen.side_effect = [OSError("Desktop app failed"), MagicMock()]
+
+        health_results = [False, False, True]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+            patch("scripts.control_panel.Path") as mock_path_class,
+        ):
+            mock_path.exists.return_value = False
+            mock_app_path = MagicMock()
+            mock_app_path.exists.return_value = True
+            mock_path_class.return_value.__truediv__.return_value.__truediv__.return_value.__truediv__.return_value = mock_app_path
+            manager = OllamaManager()
+            success, message = manager.start_ollama()
+
+            assert success is True
+            assert "ollama serve" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.subprocess.Popen")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_start_ollama_via_serve(self, mock_popen, mock_run):
+        """Should start Ollama via 'ollama serve' when service fails and no desktop app."""
+        # Service check fails (timeout)
+        mock_run.side_effect = subprocess.TimeoutExpired("sc", 10)
+
+        health_results = [False, False, False, True]  # Last check succeeds
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
+        ):
+            mock_settings_path.exists.return_value = False
             manager = OllamaManager()
             success, message = manager.start_ollama()
 
@@ -513,11 +742,12 @@ class TestOllamaManager:
         mock_run.side_effect = subprocess.TimeoutExpired("sc", 10)
 
         with (
-            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
             patch.object(OllamaManager, "check_health", return_value=False),
             patch("time.sleep"),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
         ):
-            mock_path.exists.return_value = False
+            mock_settings_path.exists.return_value = False
             manager = OllamaManager()
             success, message = manager.start_ollama()
 
@@ -533,10 +763,11 @@ class TestOllamaManager:
         mock_popen.side_effect = FileNotFoundError("ollama not found")
 
         with (
-            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
             patch.object(OllamaManager, "check_health", return_value=False),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
         ):
-            mock_path.exists.return_value = False
+            mock_settings_path.exists.return_value = False
             manager = OllamaManager()
             success, message = manager.start_ollama()
 
@@ -552,10 +783,11 @@ class TestOllamaManager:
         mock_popen.side_effect = OSError("Permission denied")
 
         with (
-            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_settings_path,
             patch.object(OllamaManager, "check_health", return_value=False),
+            patch("scripts.control_panel.os.environ.get", return_value=""),
         ):
-            mock_path.exists.return_value = False
+            mock_settings_path.exists.return_value = False
             manager = OllamaManager()
             success, message = manager.start_ollama()
 
@@ -660,6 +892,175 @@ class TestOllamaManager:
 
             assert success is True
             assert "stopped" in message.lower()
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_stop_ollama_service_timeout(self, mock_run):
+        """Should fall back to taskkill when service stop times out."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 4  RUNNING"
+
+        # First call query succeeds, second (stop) times out, then taskkill succeeds
+        taskkill_result = MagicMock()
+        taskkill_result.stdout = "SUCCESS: The process was terminated."
+        taskkill_result.stderr = ""
+        mock_run.side_effect = [
+            service_check,
+            subprocess.TimeoutExpired("sc stop", 10),
+            taskkill_result,
+            taskkill_result,
+        ]
+
+        health_results = [True, False]  # Eventually stopped
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is True
+            assert "taskkill" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_stop_ollama_service_still_running(self, mock_run):
+        """Should return failure when service won't stop."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 4  RUNNING"
+
+        stop_result = MagicMock()
+        stop_result.stderr = "Access denied"
+        mock_run.side_effect = [service_check, stop_result]
+
+        # Health check keeps returning True (service won't stop)
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", return_value=True),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is False
+            assert "still running" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_stop_ollama_taskkill_still_running(self, mock_run):
+        """Should return failure when taskkill runs but Ollama still responds."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 1  STOPPED"  # Not running as service
+
+        taskkill_result = MagicMock()
+        taskkill_result.stdout = "SUCCESS: The process was terminated."
+        taskkill_result.stderr = ""
+        mock_run.side_effect = [service_check, taskkill_result, taskkill_result]
+
+        # Health check keeps returning True (process respawns somehow)
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", return_value=True),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is False
+            assert "still responding" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_stop_ollama_service_oserror_fallback(self, mock_run):
+        """Should fall back to taskkill when service stop raises OSError."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 4  RUNNING"
+
+        taskkill_result = MagicMock()
+        taskkill_result.stdout = "SUCCESS: The process was terminated."
+        taskkill_result.stderr = ""
+        mock_run.side_effect = [
+            service_check,
+            OSError("Access denied"),
+            taskkill_result,
+            taskkill_result,
+        ]
+
+        health_results = [True, False]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", side_effect=health_results),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is True
+            assert "taskkill" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
+    def test_stop_ollama_taskkill_timeout(self, mock_run):
+        """Should return failure when taskkill times out."""
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 1  STOPPED"
+
+        mock_run.side_effect = [
+            service_check,
+            subprocess.TimeoutExpired("taskkill", 10),
+        ]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", return_value=True),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is False
+            assert "Failed" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "linux")
+    def test_stop_ollama_linux_still_running(self, mock_run):
+        """Should return failure when pkill runs but Ollama still responds."""
+        # Health check keeps returning True
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", return_value=True),
+            patch("time.sleep"),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is False
+            assert "still responding" in message
+
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "linux")
+    def test_stop_ollama_linux_pkill_error(self, mock_run):
+        """Should return failure when pkill fails."""
+        mock_run.side_effect = OSError("pkill not found")
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch.object(OllamaManager, "check_health", return_value=True),
+        ):
+            mock_path.exists.return_value = False
+            manager = OllamaManager()
+            success, message = manager.stop_ollama()
+
+            assert success is False
+            assert "Failed" in message
 
 
 class TestLogWatcher:
@@ -1083,15 +1484,16 @@ class TestControlPanel:
         assert "No logs to clear" in args[1]["text"]
 
     def test_on_start_ollama_already_running(self):
-        """Should show message when Ollama is already running."""
+        """Should show starting message and launch thread (health check now in thread)."""
         panel = self._create_mock_panel()
-        panel._ollama_manager.check_health.return_value = True
-        panel._ollama_manager.get_url.return_value = "http://localhost:11434"
 
-        panel._on_start_ollama()
+        with patch("threading.Thread") as mock_thread:
+            panel._on_start_ollama()
 
-        args = panel._status_label.configure.call_args
-        assert "already running" in args[1]["text"]
+            # Should show "Starting..." immediately
+            args = panel._status_label.configure.call_args
+            assert "Starting" in args[1]["text"]
+            mock_thread.assert_called_once()
 
     def test_on_start_ollama_starts(self):
         """Should start Ollama when not running."""
@@ -1104,6 +1506,99 @@ class TestControlPanel:
             mock_thread.assert_called_once()
             # Verify thread was started
             mock_thread.return_value.start.assert_called_once()
+
+    def test_on_start_ollama_thread_already_running(self):
+        """Should report already running when health check succeeds."""
+        import queue as queue_module
+
+        panel = self._create_mock_panel()
+        panel._ollama_manager.check_health.return_value = True
+        panel._ollama_manager.get_url.return_value = "http://localhost:11434"
+        panel._ui_queue = queue_module.Queue()
+
+        with patch("threading.Thread") as mock_thread:
+            panel._on_start_ollama()
+            target_func = mock_thread.call_args[1]["target"]
+            target_func()
+
+            assert not panel._ui_queue.empty()
+            callback = panel._ui_queue.get()
+            assert callable(callback)
+
+    def test_on_start_ollama_thread_success(self):
+        """Should report success after starting Ollama."""
+        import queue as queue_module
+
+        panel = self._create_mock_panel()
+        panel._ollama_manager.check_health.return_value = False
+        panel._ollama_manager.start_ollama.return_value = (True, "Started successfully")
+        panel._ui_queue = queue_module.Queue()
+
+        with patch("threading.Thread") as mock_thread:
+            panel._on_start_ollama()
+            target_func = mock_thread.call_args[1]["target"]
+            target_func()
+
+            assert not panel._ui_queue.empty()
+
+    def test_on_start_ollama_thread_exception(self):
+        """Should handle exceptions in start thread gracefully."""
+        import queue as queue_module
+
+        panel = self._create_mock_panel()
+        panel._ollama_manager.check_health.side_effect = Exception("Test error")
+        panel._ui_queue = queue_module.Queue()
+
+        # Call the actual method (not mocked thread)
+        panel._on_start_ollama()
+
+        # Get the thread target function and call it
+        with patch("threading.Thread") as mock_thread:
+            panel._on_start_ollama()
+            # Get the target function from the Thread call
+            target_func = mock_thread.call_args[1]["target"]
+
+            # Run the target function - it should catch the exception
+            target_func()
+
+            # Check that an error message was queued
+            assert not panel._ui_queue.empty()
+            callback = panel._ui_queue.get()
+            # The callback should set an error message
+            assert callable(callback)
+
+    def test_on_stop_ollama_thread_success(self):
+        """Should report success after stopping Ollama."""
+        import queue as queue_module
+
+        panel = self._create_mock_panel()
+        panel._ollama_manager.stop_ollama.return_value = (True, "Stopped successfully")
+        panel._ui_queue = queue_module.Queue()
+
+        with patch("threading.Thread") as mock_thread:
+            panel._on_stop_ollama()
+            target_func = mock_thread.call_args[1]["target"]
+            target_func()
+
+            assert not panel._ui_queue.empty()
+
+    def test_on_stop_ollama_thread_exception(self):
+        """Should handle exceptions in stop thread gracefully."""
+        import queue as queue_module
+
+        panel = self._create_mock_panel()
+        panel._ollama_manager.stop_ollama.side_effect = Exception("Stop error")
+        panel._ui_queue = queue_module.Queue()
+
+        with patch("threading.Thread") as mock_thread:
+            panel._on_stop_ollama()
+            target_func = mock_thread.call_args[1]["target"]
+
+            # Run the target function - it should catch the exception
+            target_func()
+
+            # Check that an error message was queued
+            assert not panel._ui_queue.empty()
 
     def test_on_stop_ollama_attempts_stop(self):
         """Should attempt to stop Ollama even when health check fails."""

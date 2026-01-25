@@ -6,6 +6,7 @@ Replaces the PowerShell-based control panel with a native desktop experience.
 
 import json
 import logging
+import os
 import queue
 import signal
 import socket
@@ -328,49 +329,90 @@ class OllamaManager:
                     return False, msg
                 else:
                     # Service exists but not running - try to start it
-                    service_exists = True
                     logger.info("Attempting to start Ollama Windows service...")
-                    start_result = subprocess.run(
-                        ["sc", "start", "ollama"],
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                        creationflags=SUBPROCESS_FLAGS,
-                    )
-                    logger.debug(
-                        "sc start result: %s",
-                        start_result.stdout[:200] if start_result.stdout else "empty",
-                    )
+                    try:
+                        start_result = subprocess.run(
+                            ["sc", "start", "ollama"],
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                            creationflags=SUBPROCESS_FLAGS,
+                        )
+                        logger.debug(
+                            "sc start result: %s",
+                            start_result.stdout[:200] if start_result.stdout else "empty",
+                        )
 
-                    # Give it time to start
-                    for i in range(5):
-                        time.sleep(1)
-                        logger.debug("Waiting for service... attempt %d", i + 1)
-                        if self.check_health():
-                            msg = f"Ollama service started at {self._url}"
-                            logger.info(msg)
-                            return True, msg
+                        # Give it time to start
+                        for i in range(5):
+                            time.sleep(1)
+                            logger.debug("Waiting for service... attempt %d", i + 1)
+                            if self.check_health():
+                                msg = f"Ollama service started at {self._url}"
+                                logger.info(msg)
+                                return True, msg
 
-                    # Service started but not responding
-                    stderr = start_result.stderr.strip() if start_result.stderr else ""
-                    stdout = start_result.stdout.strip() if start_result.stdout else ""
-                    details = stderr or stdout or "no details"
-                    msg = f"Ollama service start attempted but not responding. {details}"
-                    logger.warning(msg)
-                    return False, msg
+                        # Service started but not responding
+                        stderr = start_result.stderr.strip() if start_result.stderr else ""
+                        stdout = start_result.stdout.strip() if start_result.stdout else ""
+                        details = stderr or stdout or "no details"
+                        msg = f"Ollama service start attempted but not responding. {details}"
+                        logger.warning(msg)
+                        return False, msg
+
+                    except subprocess.TimeoutExpired:
+                        logger.warning("Windows service start timed out, trying other methods...")
+                        # Fall through to try desktop app / ollama serve
+                    except OSError as e:
+                        logger.warning(
+                            "Windows service start failed: %s, trying other methods...", e
+                        )
+                        # Fall through to try desktop app / ollama serve
 
             except subprocess.TimeoutExpired:
                 logger.warning("Windows service check timed out after 10s")
             except OSError as e:
                 logger.debug("Windows service check failed: %s", e)
 
-        # Try starting ollama serve directly (if service doesn't exist or we're not on Windows)
+        # Try starting Ollama (if service doesn't exist or we're not on Windows)
         if not service_exists:
-            try:
-                creation_flags = 0
-                if sys.platform == "win32":
-                    creation_flags = SUBPROCESS_FLAGS
+            creation_flags = SUBPROCESS_FLAGS if sys.platform == "win32" else 0
 
+            # On Windows, try starting the desktop app first (has tray icon)
+            if sys.platform == "win32":
+                ollama_app = (
+                    Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "Ollama.exe"
+                )
+                if ollama_app.exists():
+                    try:
+                        logger.info("Starting Ollama desktop app: %s", ollama_app)
+                        subprocess.Popen(
+                            [str(ollama_app)],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            creationflags=creation_flags,
+                        )
+
+                        for i in range(8):  # Desktop app may take longer to start
+                            time.sleep(1)
+                            logger.debug("Waiting for Ollama desktop app... attempt %d", i + 1)
+                            if self.check_health():
+                                msg = f"Ollama desktop app started at {self._url}"
+                                logger.info(msg)
+                                return True, msg
+
+                        msg = "Started Ollama desktop app but not responding after 8 seconds"
+                        logger.warning(msg)
+                        return False, msg
+
+                    except (OSError, subprocess.SubprocessError) as e:
+                        logger.warning("Failed to start Ollama desktop app: %s", e)
+                        # Fall through to try ollama serve
+                else:
+                    logger.debug("Ollama desktop app not found at %s", ollama_app)
+
+            # Fall back to ollama serve (CLI)
+            try:
                 logger.info("Attempting to start Ollama via 'ollama serve'...")
                 subprocess.Popen(
                     ["ollama", "serve"],
@@ -401,9 +443,9 @@ class OllamaManager:
                 return False, msg
 
         # Should not reach here, but just in case
-        msg = "Failed to start Ollama - unknown error"
-        logger.error(msg)
-        return False, msg
+        msg = "Failed to start Ollama - unknown error"  # pragma: no cover
+        logger.error(msg)  # pragma: no cover
+        return False, msg  # pragma: no cover
 
     def stop_ollama(self) -> tuple[bool, str]:
         """Stop the Ollama service.
@@ -1154,16 +1196,19 @@ class ControlPanel(ctk.CTk):
 
     def _on_start_ollama(self) -> None:
         """Handle Ollama button click."""
-        if self._ollama_manager.check_health():
-            url = self._ollama_manager.get_url()
-            self._set_status_message(f"Ollama already running at {url}", "#28a745")
-            return
-
+        # Don't block UI - do health check in background thread too
         self._set_status_message("Starting Ollama...", "#17a2b8")
 
         def start_and_report() -> None:
             """Start Ollama and report detailed status."""
             try:
+                # Check if already running first
+                if self._ollama_manager.check_health():
+                    url = self._ollama_manager.get_url()
+                    msg = f"Ollama already running at {url}"
+                    self._ui_queue.put(lambda: self._set_status_message(msg, "#28a745"))
+                    return
+
                 success, message = self._ollama_manager.start_ollama()
                 color = "#28a745" if success else "#dc3545"
                 self._ui_queue.put(lambda: self._set_status_message(message, color))
