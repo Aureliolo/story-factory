@@ -7,10 +7,13 @@ import pytest
 from src.memory.story_state import Character, StoryBrief, StoryState
 from src.memory.world_quality import (
     CharacterQualityScores,
+    ConceptQualityScores,
     FactionQualityScores,
+    ItemQualityScores,
     LocationQualityScores,
     RefinementConfig,
     RefinementHistory,
+    RelationshipQualityScores,
 )
 from src.services.world_quality_service import WorldQualityService
 from src.settings import Settings
@@ -438,6 +441,122 @@ class TestLocationGenerationEarlyStopping:
         mock_judge.side_effect = scores
 
         _loc, final_scores, iterations = service.generate_location_with_quality(
+            story_state, existing_names=[]
+        )
+
+        # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
+        assert mock_judge.call_count == 3
+        # Returns best iteration number (1) and best scores (8.0)
+        assert iterations == 1
+        assert final_scores.average == 8.0
+
+
+class TestRelationshipGenerationEarlyStopping:
+    """Tests for relationship generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_relationship")
+    @patch.object(WorldQualityService, "_judge_relationship_quality")
+    @patch.object(WorldQualityService, "_refine_relationship")
+    def test_early_stopping_after_consecutive_degradations(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that relationship generation stops early after consecutive degradations."""
+        test_rel = {
+            "source": "Alice",
+            "target": "Bob",
+            "relation_type": "allies",
+            "description": "They work together",
+        }
+        mock_create.return_value = test_rel
+        mock_refine.return_value = test_rel
+
+        # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
+        scores = [
+            RelationshipQualityScores(
+                tension=8.0, dynamics=8.0, story_potential=8.0, authenticity=8.0
+            ),
+            RelationshipQualityScores(
+                tension=7.5, dynamics=7.5, story_potential=7.5, authenticity=7.5
+            ),
+            RelationshipQualityScores(
+                tension=7.0, dynamics=7.0, story_potential=7.0, authenticity=7.0
+            ),
+        ]
+        mock_judge.side_effect = scores
+
+        _rel, final_scores, iterations = service.generate_relationship_with_quality(
+            story_state, entity_names=["Alice", "Bob"], existing_rels=[]
+        )
+
+        # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
+        assert mock_judge.call_count == 3
+        # Returns best iteration number (1) and best scores (8.0)
+        assert iterations == 1
+        assert final_scores.average == 8.0
+
+
+class TestItemGenerationEarlyStopping:
+    """Tests for item generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_item")
+    @patch.object(WorldQualityService, "_judge_item_quality")
+    @patch.object(WorldQualityService, "_refine_item")
+    def test_early_stopping_after_consecutive_degradations(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that item generation stops early after consecutive degradations."""
+        test_item = {"name": "TestItem", "description": "A test item"}
+        mock_create.return_value = test_item
+        mock_refine.return_value = test_item
+
+        # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
+        scores = [
+            ItemQualityScores(
+                significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+            ),
+            ItemQualityScores(
+                significance=7.5, uniqueness=7.5, narrative_potential=7.5, integration=7.5
+            ),
+            ItemQualityScores(
+                significance=7.0, uniqueness=7.0, narrative_potential=7.0, integration=7.0
+            ),
+        ]
+        mock_judge.side_effect = scores
+
+        _item, final_scores, iterations = service.generate_item_with_quality(
+            story_state, existing_names=[]
+        )
+
+        # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
+        assert mock_judge.call_count == 3
+        # Returns best iteration number (1) and best scores (8.0)
+        assert iterations == 1
+        assert final_scores.average == 8.0
+
+
+class TestConceptGenerationEarlyStopping:
+    """Tests for concept generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_concept")
+    @patch.object(WorldQualityService, "_judge_concept_quality")
+    @patch.object(WorldQualityService, "_refine_concept")
+    def test_early_stopping_after_consecutive_degradations(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that concept generation stops early after consecutive degradations."""
+        test_concept = {"name": "TestConcept", "description": "A test concept"}
+        mock_create.return_value = test_concept
+        mock_refine.return_value = test_concept
+
+        # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
+        scores = [
+            ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0),
+            ConceptQualityScores(relevance=7.5, depth=7.5, manifestation=7.5, resonance=7.5),
+            ConceptQualityScores(relevance=7.0, depth=7.0, manifestation=7.0, resonance=7.0),
+        ]
+        mock_judge.side_effect = scores
+
+        _concept, final_scores, iterations = service.generate_concept_with_quality(
             story_state, existing_names=[]
         )
 
