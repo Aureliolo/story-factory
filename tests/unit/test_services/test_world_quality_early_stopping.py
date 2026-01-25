@@ -4,9 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.memory.story_state import StoryBrief, StoryState
+from src.memory.story_state import Character, StoryBrief, StoryState
 from src.memory.world_quality import (
+    CharacterQualityScores,
     FactionQualityScores,
+    LocationQualityScores,
     RefinementConfig,
     RefinementHistory,
 )
@@ -327,6 +329,119 @@ class TestFactionGenerationEarlyStopping:
         )
 
         # Should only run 3 iterations (early stopping saves compute)
+        assert mock_judge.call_count == 3
+        # Returns best iteration number (1) and best scores (8.0)
+        assert iterations == 1
+        assert final_scores.average == 8.0
+
+
+class TestCharacterGenerationEarlyStopping:
+    """Tests for character generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_character")
+    @patch.object(WorldQualityService, "_judge_character_quality")
+    @patch.object(WorldQualityService, "_refine_character")
+    def test_early_stopping_after_consecutive_degradations(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that character generation stops early after consecutive degradations."""
+        test_char = Character(name="TestChar", role="protagonist", description="A test character")
+        mock_create.return_value = test_char
+        mock_refine.return_value = test_char
+
+        # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
+        scores = [
+            CharacterQualityScores(
+                depth=8.2, goals=8.2, flaws=8.2, uniqueness=8.2, arc_potential=8.2
+            ),
+            CharacterQualityScores(
+                depth=7.9, goals=7.9, flaws=7.9, uniqueness=7.9, arc_potential=7.9
+            ),
+            CharacterQualityScores(
+                depth=7.6, goals=7.6, flaws=7.6, uniqueness=7.6, arc_potential=7.6
+            ),
+        ]
+        mock_judge.side_effect = scores
+
+        _char, final_scores, iterations = service.generate_character_with_quality(
+            story_state, existing_names=[]
+        )
+
+        # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
+        assert mock_judge.call_count == 3
+        # Returns best iteration number (1) and best scores (8.2)
+        assert iterations == 1
+        assert final_scores.average == 8.2
+
+    @patch.object(WorldQualityService, "_create_character")
+    @patch.object(WorldQualityService, "_judge_character_quality")
+    @patch.object(WorldQualityService, "_refine_character")
+    def test_no_early_stopping_on_improvement(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that improvement resets degradation counter and allows threshold exit."""
+        test_char = Character(name="TestChar", role="protagonist", description="A test character")
+        mock_create.return_value = test_char
+        mock_refine.return_value = test_char
+
+        # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
+        scores = [
+            CharacterQualityScores(
+                depth=8.0, goals=8.0, flaws=8.0, uniqueness=8.0, arc_potential=8.0
+            ),
+            CharacterQualityScores(
+                depth=7.5, goals=7.5, flaws=7.5, uniqueness=7.5, arc_potential=7.5
+            ),
+            CharacterQualityScores(
+                depth=9.5, goals=9.5, flaws=9.5, uniqueness=9.5, arc_potential=9.5
+            ),
+        ]
+        mock_judge.side_effect = scores
+
+        _char, final_scores, iterations = service.generate_character_with_quality(
+            story_state, existing_names=[]
+        )
+
+        # Should complete 3 iterations - single degradation doesn't trigger early stop
+        assert mock_judge.call_count == 3
+        # Returns iteration 3 since it met threshold (9.5 >= 9.0)
+        assert iterations == 3
+        assert final_scores.average == 9.5
+
+
+class TestLocationGenerationEarlyStopping:
+    """Tests for location generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_location")
+    @patch.object(WorldQualityService, "_judge_location_quality")
+    @patch.object(WorldQualityService, "_refine_location")
+    def test_early_stopping_after_consecutive_degradations(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test that location generation stops early after consecutive degradations."""
+        test_loc = {"name": "TestLocation", "description": "A test location"}
+        mock_create.return_value = test_loc
+        mock_refine.return_value = test_loc
+
+        # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
+        scores = [
+            LocationQualityScores(
+                atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+            ),
+            LocationQualityScores(
+                atmosphere=7.5, significance=7.5, story_relevance=7.5, distinctiveness=7.5
+            ),
+            LocationQualityScores(
+                atmosphere=7.0, significance=7.0, story_relevance=7.0, distinctiveness=7.0
+            ),
+        ]
+        mock_judge.side_effect = scores
+
+        _loc, final_scores, iterations = service.generate_location_with_quality(
+            story_state, existing_names=[]
+        )
+
+        # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
         # Returns best iteration number (1) and best scores (8.0)
         assert iterations == 1
