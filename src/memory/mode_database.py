@@ -1817,11 +1817,11 @@ class ModeDatabase:
     ) -> dict[str, Any]:
         """
         Summarizes refinement-loop effectiveness for world entities over a recent time window.
-        
+
         Parameters:
             entity_type: Optional filter for the entity type to include (e.g., "character", "faction").
             days: Number of days to include in the analysis; must be a non-negative integer.
-        
+
         Returns:
             A dictionary containing refinement effectiveness metrics:
             - total_entities: Number of entities analyzed.
@@ -1926,14 +1926,14 @@ class ModeDatabase:
     ) -> list[dict[str, Any]]:
         """
         Retrieve recent world-entity refinement progression records with parsed progression data.
-        
+
         Only records that have a stored score progression are returned; each result includes parsed
         `score_progression` as a list of numeric scores.
-        
+
         Parameters:
             entity_type (str | None): If provided, restrict results to this entity type.
             limit (int): Maximum number of records to return, ordered by newest first.
-        
+
         Returns:
             list[dict[str, Any]]: A list of records containing keys:
                 - id, timestamp, project_id, entity_type, entity_name

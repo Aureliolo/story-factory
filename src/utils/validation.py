@@ -145,12 +145,12 @@ def validate_type(value, param_name: str, expected_type: type) -> None:
 def validate_string_in_choices(value: str | None, param_name: str, choices: list[str]) -> None:
     """
     Ensure the string parameter is one of the allowed choices.
-    
+
     Parameters:
         value (str | None): The string to validate.
         param_name (str): Parameter name used in error messages.
         choices (list[str]): Allowed string values.
-    
+
     Raises:
         ValueError: If `value` is None, empty or only whitespace, or not one of `choices`.
     """
@@ -166,10 +166,10 @@ _NAME_PREFIXES = ("the ", "a ", "an ")
 def _normalize_name(name: str) -> str:
     """
     Normalize a name for comparison by removing a leading common article, converting to lowercase, and trimming surrounding whitespace.
-    
+
     Parameters:
         name (str): The input name to normalize.
-    
+
     Returns:
         str: The name converted to lowercase, trimmed of surrounding whitespace, and with a leading common prefix ("the ", "a ", "an ") removed if present.
     """
@@ -189,18 +189,18 @@ def validate_unique_name(
 ) -> tuple[bool, str | None, str | None]:
     """
     Determine whether a candidate name conflicts with any names in an existing list.
-    
+
     Performs these checks (in order): exact match (case-sensitive), case-insensitive match,
     match after removing common leading articles (e.g., "the", "a", "an"), and optionally
     substring containment when both normalized names meet the minimum length.
     Empty or whitespace-only candidate names are treated as unique; empty existing entries are ignored.
-    
+
     Parameters:
         name: Candidate name to validate.
         existing_names: Sequence of existing names to check against.
         check_substring: If true, check for substring containment in both directions.
         min_substring_length: Minimum normalized length required to perform substring checks.
-    
+
     Returns:
         A tuple (is_unique, conflicting_name, reason):
         - is_unique: `True` if no conflict was found, `False` otherwise.

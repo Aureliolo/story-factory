@@ -408,7 +408,7 @@ class RefinementConfig(BaseModel):
     def from_settings(cls, settings: Any) -> RefinementConfig:
         """
         Builds a RefinementConfig from a Settings-like object by reading required fields.
-        
+
         Parameters:
             settings (Any): Object exposing the following attributes (all required):
                 - world_quality_max_iterations
@@ -417,10 +417,10 @@ class RefinementConfig(BaseModel):
                 - world_quality_judge_temp
                 - world_quality_refinement_temp
                 - world_quality_early_stopping_patience
-        
+
         Returns:
             RefinementConfig: Configuration populated from the corresponding settings attributes.
-        
+
         Raises:
             AttributeError: If any required attribute is missing on the settings object.
         """
@@ -480,16 +480,16 @@ class JudgeConsistencyConfig(BaseModel):
     def from_settings(cls, settings: Any) -> JudgeConsistencyConfig:
         """
         Create a JudgeConsistencyConfig from a settings-like object.
-        
+
         Parameters:
-            settings (Any): An object exposing the following attributes: 
+            settings (Any): An object exposing the following attributes:
                 judge_consistency_enabled, judge_multi_call_enabled, judge_multi_call_count,
                 judge_confidence_threshold, judge_outlier_detection, judge_outlier_std_threshold,
                 judge_outlier_strategy.
-        
+
         Returns:
             JudgeConsistencyConfig: Configuration populated from the provided settings.
-        
+
         Raises:
             AttributeError: If any required attribute is missing on the settings object.
         """
@@ -526,10 +526,10 @@ class ScoreStatistics(BaseModel):
     def calculate(cls, scores: list[float]) -> ScoreStatistics:
         """
         Create a ScoreStatistics from a list of numeric judge scores.
-        
+
         Parameters:
             scores (list[float]): Collection of scores to analyze; may be empty.
-        
+
         Returns:
             ScoreStatistics: instance containing the original scores, the mean, the sample standard deviation (std), and a confidence score (1 - coefficient of variation bounded to [0, 1], with special handling when mean <= 0).
         """
@@ -559,13 +559,13 @@ class ScoreStatistics(BaseModel):
     def detect_outliers(self, std_threshold: float = 2.0) -> list[int]:
         """
         Detect indices of scores that are statistical outliers based on standard deviations from the mean.
-        
+
         If the sample standard deviation is zero or there are fewer than 3 scores, no outliers are reported and an empty list is returned.
-        
+
         Parameters:
             std_threshold (float): Threshold in standard deviations; a score with absolute deviation from the mean
                 greater than or equal to this value is considered an outlier.
-        
+
         Returns:
             list[int]: Indices of scores identified as outliers.
         """
@@ -584,10 +584,10 @@ class ScoreStatistics(BaseModel):
     def get_filtered_mean(self, exclude_indices: list[int] | None = None) -> float:
         """
         Return the mean of the stored scores excluding specified indices.
-        
+
         Parameters:
             exclude_indices (list[int] | None): Indices to exclude from the calculation. If None, `self.outliers` is used.
-        
+
         Returns:
             float: Mean of scores after excluding the specified indices. If no indices are excluded or exclusion yields an empty set, returns `self.mean`.
         """
@@ -604,9 +604,9 @@ class ScoreStatistics(BaseModel):
     def get_median(self) -> float:
         """
         Return the median of the stored scores.
-        
+
         If the scores list is empty, returns 0.0. For an even number of scores, returns the average of the two middle values.
-        
+
         Returns:
             The median score, or 0.0 when there are no scores.
         """
@@ -629,14 +629,14 @@ class ScoreStatistics(BaseModel):
     ) -> tuple[bool, float]:
         """
         Decides whether another refinement iteration is needed and returns the threshold used for that decision.
-        
+
         If there are fewer than `min_samples` scores or the calculated confidence is at or above `confidence_threshold`, the base `threshold` is used. If confidence is below `confidence_threshold`, the method increases the threshold proportionally to uncertainty (capped at 9.5) and uses that adjusted value for the decision.
-        
+
         Parameters:
             threshold (float): Base quality threshold to compare against the mean score.
             confidence_threshold (float): Confidence level above which the base threshold is considered reliable.
             min_samples (int): Minimum number of score samples required to apply confidence-based adjustment.
-        
+
         Returns:
             tuple[bool, float]: `(should_refine, adjusted_threshold)` where `should_refine` is `True` if the mean score is less than the threshold applied for this decision, and `adjusted_threshold` is the actual threshold used (either `threshold` or a raised value when confidence is low).
         """

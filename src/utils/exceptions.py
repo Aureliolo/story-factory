@@ -157,12 +157,12 @@ class JSONParseError(StoryFactoryError):
     ):
         """
         Initialize the JSONParseError with an error message and optional parsing context.
-        
+
         Parameters:
             message (str): Human-readable error message describing the parse failure.
             response_preview (str | None): Optional preview (typically up to the first ~500 characters) of the raw response that failed to parse, for debugging.
             expected_type (str | None): Optional description of the expected JSON type or structure (e.g., "dict", "list", or model class name).
-        
+
         Notes:
             The provided `response_preview` and `expected_type` are stored on the instance as
             `response_preview` and `expected_type` respectively.
@@ -203,7 +203,7 @@ class DuplicateNameError(WorldGenerationError):
     ):
         """
         Initialize a DuplicateNameError with an error message and optional context about the name conflict.
-        
+
         Parameters:
             message (str): Human-readable error message.
             generated_name (str | None): The generated name that caused the conflict, if available.

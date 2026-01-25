@@ -473,7 +473,7 @@ class Settings:
     def validate(self) -> None:
         """
         Validate the Settings instance fields and enforce allowed ranges and formats.
-        
+
         Raises:
             ValueError: If any field contains an invalid value (range, enum/choice, or format).
         """
