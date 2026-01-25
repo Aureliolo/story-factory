@@ -500,38 +500,28 @@ class OllamaManager:
             except OSError as e:
                 logger.debug("Windows service stop failed: %s", e)
 
-            # Try killing ollama process directly
+            # Try killing ollama processes directly
             try:
                 logger.info("Attempting to stop Ollama via taskkill...")
-                result = subprocess.run(
-                    ["taskkill", "/F", "/IM", "ollama.exe"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    creationflags=SUBPROCESS_FLAGS,
-                )
-                logger.debug(
-                    "taskkill ollama.exe: %s",
-                    result.stdout.strip() if result.stdout else result.stderr,
-                )
+                any_killed = False
 
-                # Also kill ollama_llama_server.exe if running
-                result2 = subprocess.run(
-                    ["taskkill", "/F", "/IM", "ollama_llama_server.exe"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    creationflags=SUBPROCESS_FLAGS,
-                )
-                logger.debug(
-                    "taskkill ollama_llama_server.exe: %s",
-                    result2.stdout.strip() if result2.stdout else result2.stderr,
-                )
+                # Kill all Ollama-related processes
+                for proc_name in ["ollama app.exe", "ollama.exe", "ollama_llama_server.exe"]:
+                    result = subprocess.run(
+                        ["taskkill", "/F", "/IM", proc_name],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        creationflags=SUBPROCESS_FLAGS,
+                    )
+                    output = result.stdout.strip() if result.stdout else result.stderr.strip()
+                    logger.debug("taskkill %s: %s", proc_name, output)
+                    if "SUCCESS" in (result.stdout or ""):
+                        any_killed = True
 
                 time.sleep(1)
                 if not self.check_health():
-                    # Check if taskkill actually killed something
-                    if "SUCCESS" in (result.stdout or "") or "SUCCESS" in (result2.stdout or ""):
+                    if any_killed:
                         msg = "Ollama stopped via taskkill"
                     else:
                         msg = "Ollama is not running (no process found)"

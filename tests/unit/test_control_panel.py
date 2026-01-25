@@ -887,7 +887,8 @@ class TestOllamaManager:
         taskkill_result = MagicMock()
         taskkill_result.stdout = "SUCCESS: The process was terminated."
         taskkill_result.stderr = ""
-        mock_run.side_effect = [service_check, taskkill_result, taskkill_result]
+        # 1 sc query + 3 taskkill calls (ollama app.exe, ollama.exe, ollama_llama_server.exe)
+        mock_run.side_effect = [service_check, taskkill_result, taskkill_result, taskkill_result]
 
         health_results = [True, False]  # Initially running, then stopped
 
@@ -928,13 +929,14 @@ class TestOllamaManager:
         service_check = MagicMock()
         service_check.stdout = "STATE              : 4  RUNNING"
 
-        # First call query succeeds, second (stop) times out, then taskkill succeeds
+        # First call query succeeds, second (stop) times out, then 3 taskkill calls
         taskkill_result = MagicMock()
         taskkill_result.stdout = "SUCCESS: The process was terminated."
         taskkill_result.stderr = ""
         mock_run.side_effect = [
             service_check,
             subprocess.TimeoutExpired("sc stop", 10),
+            taskkill_result,
             taskkill_result,
             taskkill_result,
         ]
@@ -987,7 +989,8 @@ class TestOllamaManager:
         taskkill_result = MagicMock()
         taskkill_result.stdout = "SUCCESS: The process was terminated."
         taskkill_result.stderr = ""
-        mock_run.side_effect = [service_check, taskkill_result, taskkill_result]
+        # 1 sc query + 3 taskkill calls
+        mock_run.side_effect = [service_check, taskkill_result, taskkill_result, taskkill_result]
 
         # Health check keeps returning True (process respawns somehow)
         with (
@@ -1012,9 +1015,11 @@ class TestOllamaManager:
         taskkill_result = MagicMock()
         taskkill_result.stdout = "SUCCESS: The process was terminated."
         taskkill_result.stderr = ""
+        # 1 sc query + 1 sc stop (OSError) + 3 taskkill calls
         mock_run.side_effect = [
             service_check,
             OSError("Access denied"),
+            taskkill_result,
             taskkill_result,
             taskkill_result,
         ]
