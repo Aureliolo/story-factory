@@ -337,7 +337,7 @@ class Settings:
     world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 
     # Judge consistency settings (for more reliable quality judgments)
-    judge_consistency_enabled: bool = True  # Enable judge consistency features
+    judge_consistency_enabled: bool = False  # Opt-in: enable judge consistency features
     judge_multi_call_enabled: bool = False  # Make multiple judge calls and average (expensive)
     judge_multi_call_count: int = 3  # Number of judge calls if multi_call_enabled
     judge_confidence_threshold: float = 0.7  # Min confidence for reliable decisions

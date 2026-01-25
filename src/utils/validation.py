@@ -4,6 +4,10 @@ This module provides reusable validation functions that raise clear
 ValueError or TypeError exceptions for invalid inputs.
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def validate_not_none(value, param_name: str):
     """Validate that a required parameter is not None.
@@ -208,9 +212,16 @@ def validate_unique_name(
         - reason: One of `"exact"`, `"case_insensitive"`, `"prefix_match"`, or `"substring"`, or `None` if unique.
     """
     if not name or not name.strip():
+        logger.debug("Empty name provided, skipping validation")
         return True, None, None  # Empty names are handled elsewhere
 
     normalized_new = _normalize_name(name)
+    logger.debug(
+        "Validating name '%s' (normalized: '%s') against %d existing names",
+        name,
+        normalized_new,
+        len(existing_names),
+    )
 
     for existing in existing_names:
         if not existing or not existing.strip():
@@ -221,11 +232,14 @@ def validate_unique_name(
         # Check exact match (case-insensitive)
         if name.lower().strip() == existing.lower().strip():
             if name.strip() == existing.strip():
+                logger.debug("Name conflict: exact match with '%s'", existing)
                 return False, existing, "exact"
+            logger.debug("Name conflict: case-insensitive match with '%s'", existing)
             return False, existing, "case_insensitive"
 
         # Check prefix-stripped match
         if normalized_new == normalized_existing:
+            logger.debug("Name conflict: prefix match with '%s'", existing)
             return False, existing, "prefix_match"
 
         # Check substring containment (both directions)
@@ -234,8 +248,11 @@ def validate_unique_name(
             if len(normalized_new) >= min_substring_length:
                 if len(normalized_existing) >= min_substring_length:
                     if normalized_new in normalized_existing:
+                        logger.debug("Name conflict: substring of '%s'", existing)
                         return False, existing, "substring"
                     if normalized_existing in normalized_new:
+                        logger.debug("Name conflict: contains substring '%s'", existing)
                         return False, existing, "substring"
 
+    logger.debug("Name '%s' is unique", name)
     return True, None, None

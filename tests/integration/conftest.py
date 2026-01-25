@@ -16,6 +16,7 @@ class MockModel:
     """
 
     def __init__(self, model: str):
+        """Initialize mock model with model name."""
         self.model = model
 
 
@@ -27,6 +28,7 @@ class MockListResponse:
     """
 
     def __init__(self, models: list[str]):
+        """Initialize mock list response with model names."""
         self.models = [MockModel(m) for m in models]
 
 
@@ -34,6 +36,7 @@ class MockChatResponse:
     """Mock response from ollama.Client().chat()."""
 
     def __init__(self, content: str):
+        """Initialize mock chat response with content."""
         self.message = {"content": content}
 
     def __getitem__(self, key):

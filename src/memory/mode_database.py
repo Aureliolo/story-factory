@@ -1852,6 +1852,7 @@ class ModeDatabase:
         where_sql = " AND ".join(where_clauses)
 
         with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row  # Access columns by name for robustness
             # Overall statistics
             cursor = conn.execute(
                 f"""
@@ -1871,14 +1872,22 @@ class ModeDatabase:
             )
             row = cursor.fetchone()
 
-            total = row[0] or 0
+            total = row["total_entities"] or 0
             summary: dict[str, Any] = {
                 "total_entities": total,
-                "threshold_met_rate": round((row[1] or 0) / total * 100, 1) if total > 0 else 0.0,
-                "early_stop_rate": round((row[2] or 0) / total * 100, 1) if total > 0 else 0.0,
-                "avg_iterations": round(row[3], 2) if row[3] else None,
-                "avg_score_loss": round(row[4], 3) if row[4] else 0.0,
-                "best_is_final_rate": round((row[5] or 0) / total * 100, 1) if total > 0 else 0.0,
+                "threshold_met_rate": (
+                    round((row["threshold_met_count"] or 0) / total * 100, 1) if total > 0 else 0.0
+                ),
+                "early_stop_rate": (
+                    round((row["early_stop_count"] or 0) / total * 100, 1) if total > 0 else 0.0
+                ),
+                "avg_iterations": (
+                    round(row["avg_iterations"], 2) if row["avg_iterations"] else None
+                ),
+                "avg_score_loss": round(row["avg_score_loss"], 3) if row["avg_score_loss"] else 0.0,
+                "best_is_final_rate": (
+                    round((row["best_is_final_count"] or 0) / total * 100, 1) if total > 0 else 0.0
+                ),
                 "by_entity_type": [],
             }
 
@@ -1901,19 +1910,23 @@ class ModeDatabase:
                 params,
             )
             for r in cursor.fetchall():
-                count = r[1] or 0
+                count = r["count"] or 0
                 summary["by_entity_type"].append(
                     {
-                        "entity_type": r[0],
+                        "entity_type": r["entity_type"],
                         "count": count,
-                        "threshold_met_rate": round((r[2] or 0) / count * 100, 1)
-                        if count > 0
+                        "threshold_met_rate": (
+                            round((r["threshold_met"] or 0) / count * 100, 1) if count > 0 else 0.0
+                        ),
+                        "early_stop_rate": (
+                            round((r["early_stopped"] or 0) / count * 100, 1) if count > 0 else 0.0
+                        ),
+                        "avg_iterations": round(r["avg_iterations"], 2)
+                        if r["avg_iterations"]
+                        else None,
+                        "avg_score_loss": round(r["avg_score_loss"], 3)
+                        if r["avg_score_loss"]
                         else 0.0,
-                        "early_stop_rate": round((r[3] or 0) / count * 100, 1)
-                        if count > 0
-                        else 0.0,
-                        "avg_iterations": round(r[4], 2) if r[4] else None,
-                        "avg_score_loss": round(r[5], 3) if r[5] else 0.0,
                     }
                 )
 

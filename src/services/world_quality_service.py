@@ -1721,6 +1721,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             "None yet - you are creating the first faction."
         """
         if not existing_names:
+            logger.debug("Formatting existing faction names: none provided")
             return "None yet - you are creating the first faction."
 
         formatted = []
@@ -1728,6 +1729,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             # Also show variations that should be avoided
             formatted.append(f"- {name}")
 
+        logger.debug("Formatted %d existing faction names for prompt", len(formatted))
         return "\n".join(formatted)
 
     def _create_faction(
@@ -2802,17 +2804,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 names.append(faction_name)
                 logger.info(
                     f"Faction '{faction_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}"
+                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
                 )
-                # Record to analytics
-                self.record_entity_quality(
-                    project_id=story_state.id,
-                    entity_type="faction",
-                    entity_name=faction_name,
-                    scores=scores.to_dict(),
-                    iterations=iterations,
-                    generation_time=elapsed,
-                )
+                # Analytics already recorded via _log_refinement_analytics in generate_faction_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
                 logger.error(f"Failed to generate faction {i + 1}/{count}: {e}")
@@ -2864,17 +2858,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 names.append(item_name)
                 logger.info(
                     f"Item '{item_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}"
+                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
                 )
-                # Record to analytics
-                self.record_entity_quality(
-                    project_id=story_state.id,
-                    entity_type="item",
-                    entity_name=item_name,
-                    scores=scores.to_dict(),
-                    iterations=iterations,
-                    generation_time=elapsed,
-                )
+                # Analytics already recorded via _log_refinement_analytics in generate_item_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
                 logger.error(f"Failed to generate item {i + 1}/{count}: {e}")
@@ -2923,17 +2909,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 names.append(concept_name)
                 logger.info(
                     f"Concept '{concept_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}"
+                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
                 )
-                # Record to analytics
-                self.record_entity_quality(
-                    project_id=story_state.id,
-                    entity_type="concept",
-                    entity_name=concept_name,
-                    scores=scores.to_dict(),
-                    iterations=iterations,
-                    generation_time=elapsed,
-                )
+                # Analytics already recorded via _log_refinement_analytics in generate_concept_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
                 logger.error(f"Failed to generate concept {i + 1}/{count}: {e}")
@@ -2988,17 +2966,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 names.append(char.name)
                 logger.info(
                     f"Character '{char.name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}"
+                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
                 )
-                # Record to analytics
-                self.record_entity_quality(
-                    project_id=story_state.id,
-                    entity_type="character",
-                    entity_name=char.name,
-                    scores=scores.to_dict(),
-                    iterations=iterations,
-                    generation_time=elapsed,
-                )
+                # Analytics already recorded via _log_refinement_analytics in generate_character_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
                 logger.error(f"Failed to generate character {i + 1}/{count}: {e}")
@@ -3050,17 +3020,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 names.append(loc_name)
                 logger.info(
                     f"Location '{loc_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}"
+                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
                 )
-                # Record to analytics
-                self.record_entity_quality(
-                    project_id=story_state.id,
-                    entity_type="location",
-                    entity_name=loc_name,
-                    scores=scores.to_dict(),
-                    iterations=iterations,
-                    generation_time=elapsed,
-                )
+                # Analytics already recorded via _log_refinement_analytics in generate_location_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
                 logger.error(f"Failed to generate location {i + 1}/{count}: {e}")
@@ -3116,17 +3078,10 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 rel_name = f"{rel.get('source', '')} -> {rel.get('target', '')}"
                 logger.info(
                     f"Relationship '{rel_name}' complete "
-                    f"after {iterations} iteration(s), quality: {scores.average:.1f}"
+                    f"after {iterations} iteration(s), quality: {scores.average:.1f}, "
+                    f"generation_time: {elapsed:.2f}s"
                 )
-                # Record to analytics
-                self.record_entity_quality(
-                    project_id=story_state.id,
-                    entity_type="relationship",
-                    entity_name=rel_name,
-                    scores=scores.to_dict(),
-                    iterations=iterations,
-                    generation_time=elapsed,
-                )
+                # Analytics already recorded via _log_refinement_analytics in generate_relationship_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
                 logger.error(f"Failed to generate relationship {i + 1}/{count}: {e}")

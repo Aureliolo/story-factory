@@ -1864,8 +1864,10 @@ class TestRefinementEffectivenessTracking:
         assert record["best_iteration"] == 2
         assert record["quality_threshold"] == 8.0
         assert record["max_iterations"] == 5
-        # JSON progression stored correctly
-        assert record["score_progression_json"] == "[6.5, 8.2, 7.75]"
+        # JSON progression stored correctly (use json.loads to avoid brittle string comparison)
+        import json
+
+        assert json.loads(record["score_progression_json"]) == [6.5, 8.2, 7.75]
 
     def test_record_world_entity_score_with_threshold_met(self, db: ModeDatabase) -> None:
         """Test recording score when threshold is met."""
@@ -2092,8 +2094,6 @@ class TestRefinementEffectivenessTracking:
         self, db: ModeDatabase
     ) -> None:
         """Test progression data when score_progression_json is empty string."""
-        import sqlite3
-
         # Directly insert a record with empty string (not NULL) for score_progression_json
         # This tests the defensive else branch that handles malformed data
         with sqlite3.connect(db.db_path) as conn:

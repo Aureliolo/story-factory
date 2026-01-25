@@ -4,9 +4,12 @@ These models track quality scores from the judge/refinement loop, enabling
 iterative improvement of characters, locations, and relationships.
 """
 
-from typing import Any
+import logging
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class IterationRecord(BaseModel):
@@ -471,7 +474,7 @@ class JudgeConsistencyConfig(BaseModel):
         le=4.0,
         description="Standard deviations from mean to consider outlier",
     )
-    outlier_strategy: str = Field(
+    outlier_strategy: Literal["median", "mean", "retry"] = Field(
         default="median",
         description="How to handle outliers: 'median', 'mean', or 'retry'",
     )
@@ -493,7 +496,8 @@ class JudgeConsistencyConfig(BaseModel):
         Raises:
             AttributeError: If any required attribute is missing on the settings object.
         """
-        return cls(
+        logger.debug("Building JudgeConsistencyConfig from settings")
+        config = cls(
             enabled=settings.judge_consistency_enabled,
             multi_call_enabled=settings.judge_multi_call_enabled,
             multi_call_count=settings.judge_multi_call_count,
@@ -502,6 +506,13 @@ class JudgeConsistencyConfig(BaseModel):
             outlier_std_threshold=settings.judge_outlier_std_threshold,
             outlier_strategy=settings.judge_outlier_strategy,
         )
+        logger.debug(
+            "JudgeConsistencyConfig created: enabled=%s, multi_call=%s, outlier_detection=%s",
+            config.enabled,
+            config.multi_call_enabled,
+            config.outlier_detection,
+        )
+        return config
 
 
 class ScoreStatistics(BaseModel):
@@ -533,7 +544,9 @@ class ScoreStatistics(BaseModel):
         Returns:
             ScoreStatistics: instance containing the original scores, the mean, the sample standard deviation (std), and a confidence score (1 - coefficient of variation bounded to [0, 1], with special handling when mean <= 0).
         """
+        logger.debug("Calculating ScoreStatistics for %d scores", len(scores))
         if not scores:
+            logger.debug("Empty scores list, returning zero statistics")
             return cls(scores=[], mean=0.0, std=0.0, confidence=0.0)
 
         n = len(scores)
@@ -554,6 +567,12 @@ class ScoreStatistics(BaseModel):
         else:
             confidence = 0.0 if std > 0 else 1.0
 
+        logger.debug(
+            "ScoreStatistics calculated: mean=%.3f, std=%.3f, confidence=%.3f",
+            mean,
+            std,
+            confidence,
+        )
         return cls(scores=scores, mean=mean, std=std, confidence=confidence)
 
     def detect_outliers(self, std_threshold: float = 2.0) -> list[int]:
@@ -570,6 +589,7 @@ class ScoreStatistics(BaseModel):
             list[int]: Indices of scores identified as outliers.
         """
         if self.std == 0 or len(self.scores) < 3:
+            logger.debug("Skipping outlier detection: std=%.3f, n=%d", self.std, len(self.scores))
             return []
 
         outliers = []
@@ -579,6 +599,13 @@ class ScoreStatistics(BaseModel):
                 outliers.append(i)
 
         self.outliers = outliers
+        if outliers:
+            logger.debug(
+                "Detected %d outliers at indices %s (threshold=%.1f std)",
+                len(outliers),
+                outliers,
+                std_threshold,
+            )
         return outliers
 
     def get_filtered_mean(self, exclude_indices: list[int] | None = None) -> float:
@@ -642,15 +669,42 @@ class ScoreStatistics(BaseModel):
         """
         if len(self.scores) < min_samples:
             # Not enough data for confidence-based decisions
-            return self.mean < threshold, threshold
+            should_refine = self.mean < threshold
+            logger.debug(
+                "should_refine: insufficient samples (%d < %d), using base threshold %.2f, mean=%.3f, refine=%s",
+                len(self.scores),
+                min_samples,
+                threshold,
+                self.mean,
+                should_refine,
+            )
+            return should_refine, threshold
 
         if self.confidence >= confidence_threshold:
             # High confidence - use standard threshold
-            return self.mean < threshold, threshold
+            should_refine = self.mean < threshold
+            logger.debug(
+                "should_refine: high confidence (%.3f >= %.3f), threshold=%.2f, mean=%.3f, refine=%s",
+                self.confidence,
+                confidence_threshold,
+                threshold,
+                self.mean,
+                should_refine,
+            )
+            return should_refine, threshold
 
         # Low confidence - use more conservative threshold
         # Scale up threshold proportionally to uncertainty
         uncertainty_factor = 1.0 + (1.0 - self.confidence)
         adjusted_threshold = min(threshold * uncertainty_factor, 9.5)
-
-        return self.mean < adjusted_threshold, adjusted_threshold
+        should_refine = self.mean < adjusted_threshold
+        logger.debug(
+            "should_refine: low confidence (%.3f < %.3f), adjusted threshold %.2f -> %.2f, mean=%.3f, refine=%s",
+            self.confidence,
+            confidence_threshold,
+            threshold,
+            adjusted_threshold,
+            self.mean,
+            should_refine,
+        )
+        return should_refine, adjusted_threshold
