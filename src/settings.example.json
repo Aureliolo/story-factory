@@ -55,6 +55,7 @@
   "world_quality_creator_temp": 0.9,
   "world_quality_judge_temp": 0.1,
   "world_quality_refinement_temp": 0.7,
+  "world_quality_early_stopping_patience": 2,
   "world_gen_characters_min": 4,
   "world_gen_characters_max": 7,
   "world_gen_locations_min": 3,
