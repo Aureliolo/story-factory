@@ -1709,6 +1709,7 @@ class WorldPage:
             ).classes("text-gray-600 dark:text-gray-400 whitespace-pre-line")
 
             async def confirm_and_build() -> None:
+                """Close the confirmation dialog and trigger a full rebuild of the story structure."""
                 dialog.close()
                 await self._build_structure(rebuild=True)
 

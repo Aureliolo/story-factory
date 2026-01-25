@@ -1784,3 +1784,331 @@ class TestModeDatabaseMigrations:
         mode = db.get_custom_mode("test-mode")
         assert mode is not None
         assert mode.get("size_preference") == "medium"
+
+    def test_world_entity_scores_has_refinement_columns(self, tmp_path: Path) -> None:
+        """Test that world_entity_scores table has refinement effectiveness columns."""
+        db_path = tmp_path / "test.db"
+
+        # Create a fresh database - should have all columns
+        ModeDatabase(db_path)
+
+        # Check that the refinement effectiveness columns exist
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("PRAGMA table_info(world_entity_scores)")
+            columns = {row[1] for row in cursor.fetchall()}
+            assert "early_stop_triggered" in columns
+            assert "threshold_met" in columns
+            assert "peak_score" in columns
+            assert "final_score" in columns
+            assert "score_progression_json" in columns
+            assert "consecutive_degradations" in columns
+            assert "best_iteration" in columns
+            assert "quality_threshold" in columns
+            assert "max_iterations" in columns
+        finally:
+            conn.close()
+
+
+class TestRefinementEffectivenessTracking:
+    """Tests for refinement effectiveness tracking features."""
+
+    @pytest.fixture
+    def db(self, tmp_path: Path) -> ModeDatabase:
+        """
+        Create a temporary ModeDatabase instance backed by a file named "test_scores.db" inside the given path.
+
+        Parameters:
+            tmp_path (Path): Directory in which the temporary database file will be created.
+
+        Returns:
+            ModeDatabase: A ModeDatabase instance connected to the created test database file.
+        """
+        db_path = tmp_path / "test_scores.db"
+        return ModeDatabase(db_path)
+
+    def test_record_world_entity_score_with_refinement_metrics(self, db: ModeDatabase) -> None:
+        """Test recording world entity score with all refinement metrics."""
+        scores = {"depth": 8.0, "consistency": 7.5, "average": 7.75}
+        score_id = db.record_world_entity_score(
+            project_id="test-project",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="huihui_ai/dolphin3-abliterated:8b",
+            scores=scores,
+            iterations_used=3,
+            generation_time_seconds=5.5,
+            feedback="Good character",
+            early_stop_triggered=True,
+            threshold_met=False,
+            peak_score=8.2,
+            final_score=7.75,
+            score_progression=[6.5, 8.2, 7.75],
+            consecutive_degradations=1,
+            best_iteration=2,
+            quality_threshold=8.0,
+            max_iterations=5,
+        )
+
+        assert score_id > 0
+
+        # Verify stored values
+        entity_scores = db.get_world_entity_scores(project_id="test-project")
+        assert len(entity_scores) == 1
+        record = entity_scores[0]
+        assert record["early_stop_triggered"] == 1
+        assert record["threshold_met"] == 0
+        assert record["peak_score"] == 8.2
+        assert record["final_score"] == 7.75
+        assert record["consecutive_degradations"] == 1
+        assert record["best_iteration"] == 2
+        assert record["quality_threshold"] == 8.0
+        assert record["max_iterations"] == 5
+        # JSON progression stored correctly (use json.loads to avoid brittle string comparison)
+        import json
+
+        assert json.loads(record["score_progression_json"]) == [6.5, 8.2, 7.75]
+
+    def test_record_world_entity_score_with_threshold_met(self, db: ModeDatabase) -> None:
+        """Test recording score when threshold is met."""
+        scores = {"average": 8.5}
+        db.record_world_entity_score(
+            project_id="test-project",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="test-model",
+            scores=scores,
+            early_stop_triggered=False,
+            threshold_met=True,
+            peak_score=8.5,
+            final_score=8.5,
+            score_progression=[8.5],
+            best_iteration=1,
+        )
+
+        entity_scores = db.get_world_entity_scores(project_id="test-project")
+        assert entity_scores[0]["threshold_met"] == 1
+        assert entity_scores[0]["early_stop_triggered"] == 0
+
+    def test_get_refinement_effectiveness_summary_basic(self, db: ModeDatabase) -> None:
+        """Test getting refinement effectiveness summary."""
+        # Add some records with different outcomes
+        # Record 1: threshold met on first try
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="character",
+            entity_name="Hero1",
+            model_id="model-a",
+            scores={"average": 8.5},
+            iterations_used=1,
+            threshold_met=True,
+            early_stop_triggered=False,
+            peak_score=8.5,
+            final_score=8.5,
+            score_progression=[8.5],
+            best_iteration=1,
+        )
+        # Record 2: early stopped, didn't meet threshold
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="character",
+            entity_name="Hero2",
+            model_id="model-a",
+            scores={"average": 7.0},
+            iterations_used=3,
+            threshold_met=False,
+            early_stop_triggered=True,
+            peak_score=7.5,
+            final_score=7.0,
+            score_progression=[6.0, 7.5, 7.0],
+            best_iteration=2,
+        )
+        # Record 3: completed all iterations, threshold met
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-a",
+            scores={"average": 8.0},
+            iterations_used=3,
+            threshold_met=True,
+            early_stop_triggered=False,
+            peak_score=8.0,
+            final_score=8.0,
+            score_progression=[6.5, 7.5, 8.0],
+            best_iteration=3,
+        )
+
+        summary = db.get_refinement_effectiveness_summary()
+
+        assert summary["total_entities"] == 3
+        # 2 out of 3 met threshold = 66.7%
+        assert summary["threshold_met_rate"] == pytest.approx(66.7, rel=0.1)
+        # 1 out of 3 early stopped = 33.3%
+        assert summary["early_stop_rate"] == pytest.approx(33.3, rel=0.1)
+        # Average iterations: (1 + 3 + 3) / 3 = 2.33
+        assert summary["avg_iterations"] == pytest.approx(2.33, rel=0.1)
+        # Score loss: only Hero2 has loss (7.5 - 7.0 = 0.5), others are 0
+        # Total loss = 0 + 0.5 + 0 = 0.5, avg = 0.5/3 = 0.167
+        assert summary["avg_score_loss"] >= 0
+
+    def test_get_refinement_effectiveness_summary_with_entity_type_filter(
+        self, db: ModeDatabase
+    ) -> None:
+        """Test effectiveness summary filtered by entity type."""
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"average": 8.0},
+            iterations_used=2,
+            threshold_met=True,
+            peak_score=8.0,
+            final_score=8.0,
+        )
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-a",
+            scores={"average": 6.0},
+            iterations_used=3,
+            threshold_met=False,
+            peak_score=7.0,
+            final_score=6.0,
+        )
+
+        summary = db.get_refinement_effectiveness_summary(entity_type="character")
+        assert summary["total_entities"] == 1
+        assert summary["threshold_met_rate"] == 100.0
+
+    def test_get_refinement_effectiveness_summary_negative_days_raises(
+        self, db: ModeDatabase
+    ) -> None:
+        """Test that negative days raises ValueError."""
+        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+            db.get_refinement_effectiveness_summary(days=-1)
+
+    def test_get_refinement_effectiveness_summary_empty_database(self, db: ModeDatabase) -> None:
+        """Test effectiveness summary with no data."""
+        summary = db.get_refinement_effectiveness_summary()
+        assert summary["total_entities"] == 0
+        assert summary["threshold_met_rate"] == 0.0
+        assert summary["early_stop_rate"] == 0.0
+        assert summary["avg_iterations"] is None
+
+    def test_get_refinement_progression_data(self, db: ModeDatabase) -> None:
+        """Test getting detailed refinement progression data."""
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"average": 8.0},
+            iterations_used=3,
+            threshold_met=True,
+            peak_score=8.0,
+            final_score=8.0,
+            score_progression=[6.0, 7.5, 8.0],
+            best_iteration=3,
+            quality_threshold=7.5,
+        )
+
+        data = db.get_refinement_progression_data()
+        assert len(data) == 1
+        record = data[0]
+        assert record["entity_name"] == "Hero"
+        assert record["score_progression"] == [6.0, 7.5, 8.0]
+        assert record["peak_score"] == 8.0
+        assert record["final_score"] == 8.0
+        assert record["best_iteration"] == 3
+
+    def test_get_refinement_progression_data_with_entity_type_filter(
+        self, db: ModeDatabase
+    ) -> None:
+        """Test progression data filtered by entity type."""
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="character",
+            entity_name="Hero",
+            model_id="model-a",
+            scores={"average": 8.0},
+            score_progression=[8.0],
+        )
+        db.record_world_entity_score(
+            project_id="p1",
+            entity_type="location",
+            entity_name="Castle",
+            model_id="model-a",
+            scores={"average": 7.0},
+            score_progression=[7.0],
+        )
+
+        data = db.get_refinement_progression_data(entity_type="character")
+        assert len(data) == 1
+        assert data[0]["entity_type"] == "character"
+
+    def test_get_refinement_progression_data_respects_limit(self, db: ModeDatabase) -> None:
+        """Test that progression data respects limit parameter."""
+        for i in range(10):
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type="character",
+                entity_name=f"Hero{i}",
+                model_id="model-a",
+                scores={"average": 8.0},
+                score_progression=[8.0],
+            )
+
+        data = db.get_refinement_progression_data(limit=5)
+        assert len(data) == 5
+
+    def test_refinement_effectiveness_by_entity_type_breakdown(self, db: ModeDatabase) -> None:
+        """Test that summary includes breakdown by entity type."""
+        # Add records for different entity types
+        for entity_type in ["character", "character", "location"]:
+            db.record_world_entity_score(
+                project_id="p1",
+                entity_type=entity_type,
+                entity_name=f"Entity-{entity_type}",
+                model_id="model-a",
+                scores={"average": 8.0},
+                iterations_used=2,
+                threshold_met=True,
+                early_stop_triggered=False,
+            )
+
+        summary = db.get_refinement_effectiveness_summary()
+        assert len(summary["by_entity_type"]) == 2
+
+        char_breakdown = next(
+            b for b in summary["by_entity_type"] if b["entity_type"] == "character"
+        )
+        assert char_breakdown["count"] == 2
+
+        loc_breakdown = next(b for b in summary["by_entity_type"] if b["entity_type"] == "location")
+        assert loc_breakdown["count"] == 1
+
+    def test_get_refinement_progression_data_with_empty_string_progression(
+        self, db: ModeDatabase
+    ) -> None:
+        """Test progression data when score_progression_json is empty string."""
+        # Directly insert a record with empty string (not NULL) for score_progression_json
+        # This tests the defensive else branch that handles malformed data
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO world_entity_scores (
+                    timestamp, project_id, entity_type, entity_name, model_id,
+                    average_score, iterations_used, score_progression_json
+                ) VALUES (datetime('now'), 'p1', 'character', 'Hero', 'model-a',
+                          7.5, 1, '')
+                """
+            )
+
+        data = db.get_refinement_progression_data()
+        assert len(data) == 1
+        record = data[0]
+        assert record["entity_name"] == "Hero"
+        assert record["score_progression"] == []  # Empty list for empty string JSON

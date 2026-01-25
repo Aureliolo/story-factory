@@ -16,7 +16,7 @@ class MockCTk:
     """Mock CTk base class."""
 
     def __init__(self):
-        pass
+        """Initialize mock CTk window."""
 
     def title(self, *args):
         """Set the window title."""

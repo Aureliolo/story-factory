@@ -336,6 +336,15 @@ class Settings:
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
     world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 
+    # Judge consistency settings (for more reliable quality judgments)
+    judge_consistency_enabled: bool = False  # Opt-in: enable judge consistency features
+    judge_multi_call_enabled: bool = False  # Make multiple judge calls and average (expensive)
+    judge_multi_call_count: int = 3  # Number of judge calls if multi_call_enabled
+    judge_confidence_threshold: float = 0.7  # Min confidence for reliable decisions
+    judge_outlier_detection: bool = True  # Detect and handle outlier scores
+    judge_outlier_std_threshold: float = 2.0  # Std devs from mean to consider outlier
+    judge_outlier_strategy: str = "median"  # How to handle outliers: median, mean, retry
+
     # World generation counts (randomized within range for variety)
     world_gen_characters_min: int = 4
     world_gen_characters_max: int = 12
@@ -462,10 +471,11 @@ class Settings:
             json.dump(asdict(self), f, indent=2)
 
     def validate(self) -> None:
-        """Validate settings values.
+        """
+        Validate the Settings instance fields and enforce allowed ranges and formats.
 
         Raises:
-            ValueError: If any setting value is invalid.
+            ValueError: If any field contains an invalid value (range, enum/choice, or format).
         """
         # Validate URL format
         try:
@@ -597,6 +607,31 @@ class Settings:
         ]:
             if not 0.0 <= temp_value <= 2.0:
                 raise ValueError(f"{temp_name} must be between 0.0 and 2.0, got {temp_value}")
+
+        # Validate judge consistency settings
+        if not 2 <= self.judge_multi_call_count <= 5:
+            raise ValueError(
+                f"judge_multi_call_count must be between 2 and 5, got {self.judge_multi_call_count}"
+            )
+
+        if not 0.0 <= self.judge_confidence_threshold <= 1.0:
+            raise ValueError(
+                f"judge_confidence_threshold must be between 0.0 and 1.0, "
+                f"got {self.judge_confidence_threshold}"
+            )
+
+        if not 1.0 <= self.judge_outlier_std_threshold <= 4.0:
+            raise ValueError(
+                f"judge_outlier_std_threshold must be between 1.0 and 4.0, "
+                f"got {self.judge_outlier_std_threshold}"
+            )
+
+        valid_outlier_strategies = ["median", "mean", "retry"]
+        if self.judge_outlier_strategy not in valid_outlier_strategies:
+            raise ValueError(
+                f"judge_outlier_strategy must be one of {valid_outlier_strategies}, "
+                f"got {self.judge_outlier_strategy}"
+            )
 
         # Validate world generation count settings
         world_gen_ranges = [
