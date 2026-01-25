@@ -8,6 +8,12 @@ is_system_prompt: false
 template: |
   Improve this location based on quality feedback.
 
+  IMPORTANT GUIDELINES:
+  - Make targeted, minimal changes - do not rewrite the entire location
+  - Preserve aspects that scored well in the evaluation
+  - Focus improvement on the 1-2 lowest-scoring dimensions only
+  - Keep the location's core identity, name, and distinguishing features intact
+
   ORIGINAL LOCATION:
   Name: {{ location_name }}
   Description: {{ location_description }}
@@ -24,7 +30,7 @@ template: |
 
   WEAK AREAS TO IMPROVE: {{ weak_dimensions | join(", ") if weak_dimensions else "None - minor improvements only" }}
 
-  Keep the name "{{ location_name }}", but enhance the weak areas.
+  Keep the name "{{ location_name }}", but enhance only the weak areas.
   Make the location more vivid and useful while maintaining consistency.
   Write all text in {{ language }}.
 
