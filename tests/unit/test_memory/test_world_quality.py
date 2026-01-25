@@ -292,7 +292,7 @@ class TestJudgeConsistencyConfig:
     def test_default_values(self) -> None:
         """Test default configuration values."""
         config = JudgeConsistencyConfig()
-        assert config.enabled is True
+        assert config.enabled is False  # Opt-in: disabled by default
         assert config.multi_call_enabled is False
         assert config.multi_call_count == 3
         assert config.confidence_threshold == 0.7

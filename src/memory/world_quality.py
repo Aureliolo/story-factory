@@ -445,8 +445,8 @@ class JudgeConsistencyConfig(BaseModel):
     """
 
     enabled: bool = Field(
-        default=True,
-        description="Whether judge consistency features are enabled",
+        default=False,
+        description="Whether judge consistency features are enabled (opt-in)",
     )
     multi_call_enabled: bool = Field(
         default=False,
@@ -590,6 +590,7 @@ class ScoreStatistics(BaseModel):
         """
         if self.std == 0 or len(self.scores) < 3:
             logger.debug("Skipping outlier detection: std=%.3f, n=%d", self.std, len(self.scores))
+            self.outliers = []  # Clear stale outliers on early return
             return []
 
         outliers = []

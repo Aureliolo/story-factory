@@ -1834,7 +1834,7 @@ class TestRefinementEffectivenessTracking:
             project_id="test-project",
             entity_type="character",
             entity_name="Hero",
-            model_id="test-model",
+            model_id="huihui_ai/dolphin3-abliterated:8b",
             scores=scores,
             iterations_used=3,
             generation_time_seconds=5.5,

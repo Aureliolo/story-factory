@@ -30,7 +30,7 @@ from src.services.model_mode_service import ModelModeService
 from src.settings import Settings
 from src.utils.exceptions import WorldGenerationError
 from src.utils.json_parser import extract_json
-from src.utils.validation import validate_not_empty
+from src.utils.validation import validate_not_empty, validate_unique_name
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +406,10 @@ class WorldQualityService:
             if best_scores:
                 history.final_iteration = history.best_iteration
                 history.final_score = history.peak_score
-                # Check if this was an early stop (we didn't reach max iterations)
+                # Early stop = exited before max iterations due to degradation patience.
+                # If we're in this block (returning best entity), we didn't meet
+                # threshold early (that returns from within the loop), so
+                # iterations < max means degradation-based early stop triggered.
                 was_early_stop = len(history.iterations) < config.max_iterations
                 self._log_refinement_analytics(
                     history,
@@ -1754,8 +1757,6 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         Raises:
             WorldGenerationError: If faction generation fails due to unrecoverable model/validation errors.
         """
-        from src.utils.validation import validate_unique_name
-
         brief = story_state.brief
         if not brief:
             return {}

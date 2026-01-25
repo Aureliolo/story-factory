@@ -1838,6 +1838,11 @@ class ModeDatabase:
                 - avg_iterations: Average iterations for that type (rounded to 2 decimals) or None.
                 - avg_score_loss: Average score loss for that type (rounded to 3 decimals).
         """
+        logger.debug(
+            "Getting refinement effectiveness summary: entity_type=%s, days=%d",
+            entity_type,
+            days,
+        )
         validated_days = int(days)
         if validated_days < 0:
             raise ValueError("days must be a non-negative integer")
@@ -1930,6 +1935,12 @@ class ModeDatabase:
                     }
                 )
 
+            logger.debug(
+                "Refinement effectiveness summary: total=%d, threshold_met=%.1f%%, early_stop=%.1f%%",
+                summary["total_entities"],
+                summary["threshold_met_rate"],
+                summary["early_stop_rate"],
+            )
             return summary
 
     def get_refinement_progression_data(
@@ -1954,6 +1965,11 @@ class ModeDatabase:
                 - threshold_met, early_stop_triggered, consecutive_degradations, quality_threshold
                 - score_progression (list[float])
         """
+        logger.debug(
+            "Getting refinement progression data: entity_type=%s, limit=%d",
+            entity_type,
+            limit,
+        )
         query = """
             SELECT
                 id, timestamp, project_id, entity_type, entity_name,
@@ -1985,4 +2001,5 @@ class ModeDatabase:
                 else:
                     record["score_progression"] = []
                 results.append(record)
+            logger.debug("Retrieved %d refinement progression records", len(results))
             return results
