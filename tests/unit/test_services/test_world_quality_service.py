@@ -136,6 +136,31 @@ class TestFormatProperties:
         result = service._format_properties(props)
         assert result == "123, True, None"
 
+    def test_format_dict_without_name_or_description(self, service):
+        """Should fall back to str(dict) when neither name nor description present."""
+        props = [{"other_key": "value"}, {"foo": "bar"}]
+        result = service._format_properties(props)
+        # Falls back to str(dict) representation
+        assert "other_key" in result
+        assert "foo" in result
+
+    def test_format_properties_with_none_input(self, service):
+        """Should return empty string for None input."""
+        result = service._format_properties(None)
+        assert result == ""
+
+    def test_format_properties_with_single_value(self, service):
+        """Should handle non-list single value input."""
+        result = service._format_properties("single property")
+        assert result == "single property"
+
+    def test_format_dict_with_empty_string_name(self, service):
+        """Should use empty string name when key exists with empty value."""
+        props = [{"name": "", "description": "fallback"}]
+        result = service._format_properties(props)
+        # Empty string name is still used (key exists)
+        assert result == ""
+
 
 class TestCharacterQualityScores:
     """Tests for CharacterQualityScores model."""

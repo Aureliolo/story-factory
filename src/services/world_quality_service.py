@@ -68,25 +68,36 @@ class WorldQualityService:
     }
 
     @staticmethod
-    def _format_properties(properties: list[Any]) -> str:
+    def _format_properties(properties: list[Any] | Any | None) -> str:
         """Format a list of properties into a comma-separated string.
 
         Handles both string and dict properties (LLM sometimes returns dicts).
+        Also handles None or non-list inputs gracefully.
 
         Args:
-            properties: List of properties (strings or dicts).
+            properties: List of properties (strings or dicts), or None/single value.
 
         Returns:
-            Comma-separated string of property names.
+            Comma-separated string of property names, or empty string if no properties.
         """
+        if not properties:
+            return ""
+        if not isinstance(properties, list):
+            properties = [properties]
+
         result: list[str] = []
         for prop in properties:
             if isinstance(prop, str):
                 result.append(prop)
             elif isinstance(prop, dict):
                 # Try to extract a name or description from dict
-                name = prop.get("name") or prop.get("description") or str(prop)
-                result.append(name)
+                # Use key existence check to handle empty strings correctly
+                if "name" in prop:
+                    result.append(prop["name"])
+                elif "description" in prop:
+                    result.append(prop["description"])
+                else:
+                    result.append(str(prop))
             else:
                 result.append(str(prop))
         return ", ".join(result)
