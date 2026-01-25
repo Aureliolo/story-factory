@@ -98,6 +98,45 @@ def mock_ollama_client():
     return MagicMock()
 
 
+class TestFormatProperties:
+    """Tests for _format_properties static method."""
+
+    def test_format_string_properties(self, service):
+        """Should join string properties with commas."""
+        props = ["sharp blade", "magical", "ancient"]
+        result = service._format_properties(props)
+        assert result == "sharp blade, magical, ancient"
+
+    def test_format_dict_properties_with_name(self, service):
+        """Should extract name field from dict properties."""
+        props = [{"name": "glowing"}, {"name": "heavy"}]
+        result = service._format_properties(props)
+        assert result == "glowing, heavy"
+
+    def test_format_dict_properties_with_description(self, service):
+        """Should fall back to description field if no name."""
+        props = [{"description": "emits light"}, {"description": "very heavy"}]
+        result = service._format_properties(props)
+        assert result == "emits light, very heavy"
+
+    def test_format_mixed_properties(self, service):
+        """Should handle mixed string and dict properties."""
+        props = ["magical", {"name": "ancient"}, {"description": "glowing"}]
+        result = service._format_properties(props)
+        assert result == "magical, ancient, glowing"
+
+    def test_format_empty_properties(self, service):
+        """Should return empty string for empty list."""
+        result = service._format_properties([])
+        assert result == ""
+
+    def test_format_properties_with_other_types(self, service):
+        """Should convert other types to string."""
+        props = [123, True, None]
+        result = service._format_properties(props)
+        assert result == "123, True, None"
+
+
 class TestCharacterQualityScores:
     """Tests for CharacterQualityScores model."""
 

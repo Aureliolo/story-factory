@@ -841,10 +841,25 @@ class TestOllamaManager:
             assert "ollama serve" in message
             mock_popen.assert_called()
 
+    @patch("scripts.control_panel.subprocess.run")
+    @patch("scripts.control_panel.sys.platform", "win32")
     @patch.object(OllamaManager, "check_health", return_value=False)
-    def test_stop_ollama_not_running(self, mock_health):
+    def test_stop_ollama_not_running(self, mock_health, mock_run):
         """Should return success when Ollama is not running."""
-        with patch("scripts.control_panel.SETTINGS_FILE") as mock_path:
+        # Mock sc query showing service not running
+        service_check = MagicMock()
+        service_check.stdout = "STATE              : 1  STOPPED"
+
+        # Mock taskkill showing no process found for all three process names
+        taskkill_result = MagicMock()
+        taskkill_result.stdout = "ERROR: The process was not found."
+        taskkill_result.stderr = ""
+        mock_run.side_effect = [service_check, taskkill_result, taskkill_result, taskkill_result]
+
+        with (
+            patch("scripts.control_panel.SETTINGS_FILE") as mock_path,
+            patch("time.sleep"),
+        ):
             mock_path.exists.return_value = False
             manager = OllamaManager()
             success, message = manager.stop_ollama()

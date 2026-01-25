@@ -148,13 +148,15 @@ def extract_json(
 
     # Failure path
     error_msg = f"No valid JSON found in response. Response preview: {response[:200]}..."
-    logger.error(error_msg)
     if strict:
+        logger.error(error_msg)
         raise JSONParseError(
             error_msg,
             response_preview=response[:500],
             expected_type="dict or list",
         )
+    # When strict=False, caller expects JSON to possibly not exist (optional parsing)
+    logger.debug(error_msg)
     return None
 
 
