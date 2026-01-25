@@ -92,10 +92,13 @@ class WorldQualityService:
             elif isinstance(prop, dict):
                 # Try to extract a name or description from dict
                 # Use key existence check to handle empty strings correctly
+                # Coerce to string to handle non-string values (e.g., None, int)
                 if "name" in prop:
-                    result.append(prop["name"])
+                    value = prop["name"]
+                    result.append("" if value is None else str(value))
                 elif "description" in prop:
-                    result.append(prop["description"])
+                    value = prop["description"]
+                    result.append("" if value is None else str(value))
                 else:
                     result.append(str(prop))
             else:

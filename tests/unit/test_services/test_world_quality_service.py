@@ -161,6 +161,18 @@ class TestFormatProperties:
         # Empty string name is still used (key exists)
         assert result == ""
 
+    def test_format_dict_with_none_name(self, service):
+        """Should convert None name to empty string."""
+        props = [{"name": None}, {"description": None}]
+        result = service._format_properties(props)
+        assert result == ", "  # Two empty strings joined
+
+    def test_format_dict_with_non_string_values(self, service):
+        """Should convert non-string dict values to strings."""
+        props = [{"name": 123}, {"description": True}]
+        result = service._format_properties(props)
+        assert result == "123, True"
+
 
 class TestCharacterQualityScores:
     """Tests for CharacterQualityScores model."""
