@@ -8,7 +8,9 @@ import pytest
 from src.memory.world_database import (
     MAX_ATTRIBUTES_SIZE_BYTES,
     WorldDatabase,
-    _validate_attributes,
+    _check_nesting_depth,
+    _flatten_deep_attributes,
+    _validate_and_normalize_attributes,
 )
 
 
@@ -677,13 +679,97 @@ class TestWorldDatabaseGraphOperations:
             assert "type" in rels[0]
 
 
-class TestValidateAttributes:
-    """Tests for _validate_attributes function."""
+class TestFlattenDeepAttributes:
+    """Tests for _flatten_deep_attributes function."""
 
-    def test_valid_attributes(self):
-        """Test valid attributes pass validation."""
+    def test_flatten_primitives_unchanged(self):
+        """Test primitive types are not flattened."""
+        assert _flatten_deep_attributes("string", max_depth=3) == "string"
+        assert _flatten_deep_attributes(42, max_depth=3) == 42
+        assert _flatten_deep_attributes(3.14, max_depth=3) == 3.14
+        assert _flatten_deep_attributes(True, max_depth=3) is True
+        assert _flatten_deep_attributes(None, max_depth=3) is None
+
+    def test_flatten_primitive_at_max_depth(self):
+        """Test primitives at max depth are returned unchanged."""
+        # When traversing to max depth and finding a primitive, return it as-is
+        # Structure: {"a": {"b": "leaf"}} with max_depth=2
+        # depth 0->dict, depth 1->a's dict, depth 2->"b" value is "leaf"
+        attrs = {"a": {"b": "leaf_value"}}
+        result = _flatten_deep_attributes(attrs, max_depth=2, current_depth=0)
+        # At depth 2, "leaf_value" is a primitive and should be returned unchanged
+        assert result["a"]["b"] == "leaf_value"
+
+    def test_flatten_shallow_dict_unchanged(self):
+        """Test shallow dicts are not modified."""
+        attrs = {"name": "Test", "age": 25}
+        result = _flatten_deep_attributes(attrs, max_depth=3)
+        assert result == {"name": "Test", "age": 25}
+
+    def test_flatten_deep_dict_to_string(self):
+        """Test deeply nested dicts are converted to strings."""
+        # MAX_ATTRIBUTES_DEPTH is 3, so at depth 3 we should flatten
+        # Starting at current_depth=1: depth 1->a, depth 2->b, depth 3->c's value gets stringified
+        deep_attrs = {"a": {"b": {"c": {"d": {"e": "too deep"}}}}}
+        result = _flatten_deep_attributes(deep_attrs, max_depth=3, current_depth=1)
+
+        # At depth 3, the value of "b" (which is {"c": ...}) gets stringified
+        assert result["a"]["b"] == "{'c': {'d': {'e': 'too deep'}}}"
+
+    def test_flatten_deep_list_to_string(self):
+        """Test deeply nested lists are converted to strings."""
+        deep_attrs = {"a": {"b": {"c": [{"d": "too deep"}]}}}
+        result = _flatten_deep_attributes(deep_attrs, max_depth=3, current_depth=1)
+
+        # At depth 3, the value of "b" gets stringified
+        assert result["a"]["b"] == "{'c': [{'d': 'too deep'}]}"
+
+    def test_flatten_mixed_nesting(self):
+        """Test mixed dict and list nesting is flattened correctly."""
+        deep_attrs = {"l1": [{"l2": [{"l3": [{"l4": "too deep"}]}]}]}
+        result = _flatten_deep_attributes(deep_attrs, max_depth=3, current_depth=1)
+
+        # depth 1: l1's value (list), depth 2: list item (dict) gets stringified at depth 3
+        assert isinstance(result["l1"], list)
+        # At depth 3, the dict inside the list gets stringified
+        assert isinstance(result["l1"][0], str)
+        assert "l2" in result["l1"][0]
+
+
+class TestCheckNestingDepth:
+    """Tests for _check_nesting_depth function."""
+
+    def test_shallow_dict_not_deep(self):
+        """Test shallow dicts don't exceed depth."""
+        attrs = {"name": "Test", "age": 25}
+        assert _check_nesting_depth(attrs, max_depth=3, current_depth=1) is False
+
+    def test_deep_dict_exceeds_depth(self):
+        """Test deeply nested dicts exceed depth."""
+        attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
+        assert _check_nesting_depth(attrs, max_depth=3, current_depth=1) is True
+
+    def test_deep_list_exceeds_depth(self):
+        """Test deeply nested lists exceed depth."""
+        attrs = {"l1": [{"l2": [{"l3": [{"l4": "too deep"}]}]}]}
+        assert _check_nesting_depth(attrs, max_depth=3, current_depth=1) is True
+
+    def test_primitives_at_normal_depth(self):
+        """Test primitives at normal depth don't exceed limits."""
+        # Primitives within depth limits should return False
+        assert _check_nesting_depth("string", max_depth=3, current_depth=1) is False
+        assert _check_nesting_depth(42, max_depth=3, current_depth=1) is False
+        assert _check_nesting_depth(True, max_depth=3, current_depth=2) is False
+
+
+class TestValidateAndNormalizeAttributes:
+    """Tests for _validate_and_normalize_attributes function."""
+
+    def test_valid_attributes_unchanged(self):
+        """Test valid attributes pass through unchanged."""
         attrs = {"name": "Test", "age": 25, "nested": {"key": "value"}}
-        _validate_attributes(attrs)  # Should not raise
+        result = _validate_and_normalize_attributes(attrs)
+        assert result == attrs
 
     def test_attributes_exceed_size(self):
         """Test attributes exceeding size limit raise error."""
@@ -692,23 +778,39 @@ class TestValidateAttributes:
         attrs = {"large": large_value}
 
         with pytest.raises(ValueError, match="exceed maximum size"):
-            _validate_attributes(attrs)
+            _validate_and_normalize_attributes(attrs)
 
-    def test_attributes_exceed_depth(self):
-        """Test attributes exceeding depth limit raise error."""
+    def test_deep_attributes_flattened(self, caplog):
+        """Test deeply nested attributes are flattened with warning."""
+        import logging
+
         # Create deeply nested attrs (more than MAX_ATTRIBUTES_DEPTH)
+        # _validate_and_normalize_attributes calls with current_depth=1
+        # So depth 1->l1, depth 2->l2, depth 3->l3's value gets stringified
         attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
 
-        with pytest.raises(ValueError, match="exceed maximum nesting depth"):
-            _validate_attributes(attrs)
+        with caplog.at_level(logging.WARNING):
+            result = _validate_and_normalize_attributes(attrs)
 
-    def test_attributes_list_depth(self):
-        """Test deeply nested lists also checked."""
+        # Should not raise, but should flatten and log warning
+        assert "l1" in result
+        # At depth 3, the value of l2 (the dict {"l3": ...}) should be stringified
+        assert isinstance(result["l1"]["l2"], str)
+        assert "l3" in result["l1"]["l2"]  # l3 should be in the string
+        assert "flattening deep structures" in caplog.text
+
+    def test_deep_list_flattened(self, caplog):
+        """Test deeply nested lists are flattened with warning."""
+        import logging
+
         # Lists at each level
         attrs = {"l1": [{"l2": [{"l3": [{"l4": "too deep"}]}]}]}
 
-        with pytest.raises(ValueError, match="exceed maximum nesting depth"):
-            _validate_attributes(attrs)
+        with caplog.at_level(logging.WARNING):
+            _validate_and_normalize_attributes(attrs)
+
+        # Should not raise, but should flatten
+        assert "flattening deep structures" in caplog.text
 
 
 class TestWorldDatabaseDestructor:
@@ -743,13 +845,27 @@ class TestWorldDatabaseAddEntityValidation:
         with pytest.raises(ValueError, match="Invalid entity type"):
             db.add_entity("invalid_type", "Test")
 
-    def test_add_entity_with_attributes_validation(self, db):
-        """Test add_entity validates attributes."""
+    def test_add_entity_deep_attributes_flattened(self, db, caplog):
+        """Test add_entity flattens deeply nested attributes."""
+        import logging
+
         # Create deeply nested attributes that exceed depth limit
+        # depth 1->l1, depth 2->l2, depth 3->l2's value gets stringified
         deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
 
-        with pytest.raises(ValueError, match="exceed maximum nesting depth"):
-            db.add_entity("character", "Test", attributes=deep_attrs)
+        with caplog.at_level(logging.WARNING):
+            entity_id = db.add_entity("character", "Test", attributes=deep_attrs)
+
+        # Should succeed, not raise
+        assert entity_id is not None
+
+        # Verify flattening occurred
+        entity = db.get_entity(entity_id)
+        assert entity is not None
+        # The deep nesting should be flattened - l2's value becomes a string
+        assert isinstance(entity.attributes["l1"]["l2"], str)
+        assert "l3" in entity.attributes["l1"]["l2"]
+        assert "flattening deep structures" in caplog.text
 
 
 class TestWorldDatabaseRelationshipFeatures:
@@ -900,6 +1016,30 @@ class TestWorldDatabaseUpdateValidation:
 
         with pytest.raises(ValueError, match="Invalid entity type"):
             db.update_entity(entity_id, type="invalid_type")
+
+    def test_update_entity_deep_attributes_flattened(self, db, caplog):
+        """Test update_entity flattens deeply nested attributes."""
+        import logging
+
+        entity_id = db.add_entity("character", "Test")
+
+        # Create deeply nested attributes that exceed depth limit
+        # depth 1->l1, depth 2->l2, depth 3->l2's value gets stringified
+        deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
+
+        with caplog.at_level(logging.WARNING):
+            result = db.update_entity(entity_id, attributes=deep_attrs)
+
+        # Should succeed, not raise
+        assert result is True
+
+        # Verify flattening occurred
+        entity = db.get_entity(entity_id)
+        assert entity is not None
+        # The deep nesting should be flattened - l2's value becomes a string
+        assert isinstance(entity.attributes["l1"]["l2"], str)
+        assert "l3" in entity.attributes["l1"]["l2"]
+        assert "flattening deep structures" in caplog.text
 
 
 class TestWorldDatabaseAddEntityValidationExtra:
