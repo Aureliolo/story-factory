@@ -273,7 +273,8 @@ def _try_parse_json(json_str: str) -> dict[str, Any] | list[Any] | None:
         parsed: dict[str, Any] | list[Any] = json.loads(json_str.strip())
         return parsed
     except json.JSONDecodeError as e:
-        logger.debug("try_parse failed: %s (input preview: %.100s...)", e, json_str[:100])
+        # %.100s format specifier already limits to 100 chars, no need for manual slicing
+        logger.debug("try_parse failed: %s (input preview: %.100s...)", e, json_str)
         return None
 
 

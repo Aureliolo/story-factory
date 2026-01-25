@@ -984,11 +984,17 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Location refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid location refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error("Location refinement LLM error for '%s': %s", location.get("name"), e)
+            logger.error(
+                "Location refinement LLM error for '%s': %s",
+                location.get("name") or "Unknown",
+                e,
+            )
             raise WorldGenerationError(f"LLM error during location refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(
-                "Location refinement JSON parsing error for '%s': %s", location.get("name"), e
+                "Location refinement JSON parsing error for '%s': %s",
+                location.get("name") or "Unknown",
+                e,
             )
             raise WorldGenerationError(f"Invalid location refinement response format: {e}") from e
         except WorldGenerationError:
@@ -996,7 +1002,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             raise
         except Exception as e:
             logger.exception(
-                "Unexpected error in location refinement for '%s': %s", location.get("name"), e
+                "Unexpected error in location refinement for '%s': %s",
+                location.get("name") or "Unknown",
+                e,
             )
             raise WorldGenerationError(f"Unexpected location refinement error: {e}") from e
 
@@ -1367,8 +1375,8 @@ Output ONLY valid JSON:
         except Exception as e:
             logger.exception(
                 "Relationship quality judgment failed for %s->%s: %s",
-                relationship.get("source"),
-                relationship.get("target"),
+                relationship.get("source") or "Unknown",
+                relationship.get("target") or "Unknown",
                 e,
             )
             raise WorldGenerationError(f"Relationship quality judgment failed: {e}") from e
@@ -1434,16 +1442,16 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.error(
                 "Relationship refinement LLM error for %s->%s: %s",
-                relationship.get("source"),
-                relationship.get("target"),
+                relationship.get("source") or "Unknown",
+                relationship.get("target") or "Unknown",
                 e,
             )
             raise WorldGenerationError(f"LLM error during relationship refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(
                 "Relationship refinement JSON parsing error for %s->%s: %s",
-                relationship.get("source"),
-                relationship.get("target"),
+                relationship.get("source") or "Unknown",
+                relationship.get("target") or "Unknown",
                 e,
             )
             raise WorldGenerationError(
@@ -1455,8 +1463,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         except Exception as e:
             logger.exception(
                 "Unexpected error in relationship refinement for %s->%s: %s",
-                relationship.get("source"),
-                relationship.get("target"),
+                relationship.get("source") or "Unknown",
+                relationship.get("target") or "Unknown",
                 e,
             )
             raise WorldGenerationError(f"Unexpected relationship refinement error: {e}") from e
@@ -1956,7 +1964,11 @@ Output ONLY valid JSON:
         except WorldGenerationError:
             raise
         except Exception as e:
-            logger.exception("Faction quality judgment failed for '%s': %s", faction.get("name"), e)
+            logger.exception(
+                "Faction quality judgment failed for '%s': %s",
+                faction.get("name") or "Unknown",
+                e,
+            )
             raise WorldGenerationError(f"Faction quality judgment failed: {e}") from e
 
     def _refine_faction(
@@ -2025,7 +2037,9 @@ Return ONLY the improved faction."""
             result["type"] = "faction"
             return result
         except Exception as e:
-            logger.exception("Faction refinement failed for '%s': %s", faction.get("name"), e)
+            logger.exception(
+                "Faction refinement failed for '%s': %s", faction.get("name") or "Unknown", e
+            )
             raise WorldGenerationError(f"Faction refinement failed: {e}") from e
 
     # ========== ITEM GENERATION WITH QUALITY ==========
@@ -2345,7 +2359,9 @@ Output ONLY valid JSON:
         except WorldGenerationError:
             raise
         except Exception as e:
-            logger.exception("Item quality judgment failed for '%s': %s", item.get("name"), e)
+            logger.exception(
+                "Item quality judgment failed for '%s': %s", item.get("name") or "Unknown", e
+            )
             raise WorldGenerationError(f"Item quality judgment failed: {e}") from e
 
     def _refine_item(
@@ -2406,17 +2422,21 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Item refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid item refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error("Item refinement LLM error for '%s': %s", item.get("name"), e)
+            logger.error("Item refinement LLM error for '%s': %s", item.get("name") or "Unknown", e)
             raise WorldGenerationError(f"LLM error during item refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
-            logger.error("Item refinement JSON parsing error for '%s': %s", item.get("name"), e)
+            logger.error(
+                "Item refinement JSON parsing error for '%s': %s", item.get("name") or "Unknown", e
+            )
             raise WorldGenerationError(f"Invalid item refinement response format: {e}") from e
         except WorldGenerationError:
             # Re-raise domain exceptions as-is
             raise
         except Exception as e:
             logger.exception(
-                "Unexpected error in item refinement for '%s': %s", item.get("name"), e
+                "Unexpected error in item refinement for '%s': %s",
+                item.get("name") or "Unknown",
+                e,
             )
             raise WorldGenerationError(f"Unexpected item refinement error: {e}") from e
 
@@ -2730,7 +2750,11 @@ Output ONLY valid JSON:
         except WorldGenerationError:
             raise
         except Exception as e:
-            logger.exception("Concept quality judgment failed for '%s': %s", concept.get("name"), e)
+            logger.exception(
+                "Concept quality judgment failed for '%s': %s",
+                concept.get("name") or "Unknown",
+                e,
+            )
             raise WorldGenerationError(f"Concept quality judgment failed: {e}") from e
 
     def _refine_concept(
@@ -2789,11 +2813,15 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 logger.error(f"Concept refinement returned invalid JSON structure: {data}")
                 raise WorldGenerationError(f"Invalid concept refinement JSON structure: {data}")
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error("Concept refinement LLM error for '%s': %s", concept.get("name"), e)
+            logger.error(
+                "Concept refinement LLM error for '%s': %s", concept.get("name") or "Unknown", e
+            )
             raise WorldGenerationError(f"LLM error during concept refinement: {e}") from e
         except (ValueError, KeyError, TypeError) as e:
             logger.error(
-                "Concept refinement JSON parsing error for '%s': %s", concept.get("name"), e
+                "Concept refinement JSON parsing error for '%s': %s",
+                concept.get("name") or "Unknown",
+                e,
             )
             raise WorldGenerationError(f"Invalid concept refinement response format: {e}") from e
         except WorldGenerationError:
@@ -2801,7 +2829,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
             raise
         except Exception as e:
             logger.exception(
-                "Unexpected error in concept refinement for '%s': %s", concept.get("name"), e
+                "Unexpected error in concept refinement for '%s': %s",
+                concept.get("name") or "Unknown",
+                e,
             )
             raise WorldGenerationError(f"Unexpected concept refinement error: {e}") from e
 
