@@ -258,16 +258,12 @@ class WorldQualityService:
 
         logger.info(f"Generating character with quality threshold {config.quality_threshold}")
 
+        # Track all iterations for best-selection using RefinementHistory
+        history = RefinementHistory(entity_type="character", entity_name="")
         iteration = 0
         character: Character | None = None
         scores: CharacterQualityScores | None = None
         last_error: str = ""
-        # Early stopping tracking
-        peak_score: float = 0.0
-        consecutive_degradations: int = 0
-        best_character: Character | None = None
-        best_scores: CharacterQualityScores | None = None
-        best_iteration: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -294,35 +290,43 @@ class WorldQualityService:
                     iteration += 1
                     continue
 
+                # Update history entity name
+                if not history.entity_name:
+                    history.entity_name = character.name
+
                 # Judge quality - this can raise if parsing fails
                 scores = self._judge_character_quality(
                     character, story_state, config.judge_temperature
                 )
 
-                logger.info(
-                    f"Character '{character.name}' iteration {iteration + 1}: "
-                    f"score {scores.average:.1f} (threshold {config.quality_threshold})"
+                # Track this iteration
+                history.add_iteration(
+                    iteration=iteration + 1,
+                    entity_data=character.model_dump(),
+                    scores=scores.to_dict(),
+                    average_score=scores.average,
+                    feedback=scores.feedback,
                 )
 
-                # Track peak score and consecutive degradations for early stopping
-                if scores.average > peak_score:
-                    peak_score = scores.average
-                    consecutive_degradations = 0
-                    best_character = character.model_copy(deep=True)
-                    best_scores = scores
-                    best_iteration = iteration + 1
-                elif scores.average < peak_score:
-                    consecutive_degradations += 1
+                logger.info(
+                    f"Character '{character.name}' iteration {iteration + 1}: "
+                    f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
+                    f"at iteration {history.best_iteration})"
+                )
 
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Character '{character.name}' met quality threshold")
+                    history.final_iteration = iteration + 1
+                    history.final_score = scores.average
+                    self._log_refinement_analytics(history, story_state.id)
                     return character, scores, iteration + 1
 
-                # Check for early stopping
-                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                # Check for early stopping after tracking iteration
+                if history.should_stop_early(config.early_stopping_patience):
                     logger.info(
                         f"Early stopping: Character '{character.name}' quality degraded "
-                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"for {history.consecutive_degradations} consecutive iterations "
+                        f"(patience: {config.early_stopping_patience}). "
                         f"Stopping at iteration {iteration + 1}."
                     )
                     break
@@ -333,32 +337,55 @@ class WorldQualityService:
 
             iteration += 1
 
-        # If we get here, all iterations failed or didn't meet quality threshold
-        if character is None or scores is None:
+        # Didn't meet threshold - return BEST iteration, not last
+        if not history.iterations:
             raise WorldGenerationError(
                 f"Failed to generate character after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
 
-        # Return best character if we have one, otherwise return last
-        if best_character and best_scores:
-            # Calculate final iteration (1-based) accounting for early stop vs normal completion
-            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
-            if best_iteration != final_iteration:
-                logger.warning(
-                    f"Character '{character.name}' iterations got worse after peak. "
-                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
-                    f"Returning best iteration."
-                )
-            return best_character, best_scores, best_iteration
+        # Pick best iteration (not necessarily the last one)
+        best_entity = history.get_best_entity()
 
-        # We have a character but it didn't meet threshold - return it with a warning
-        logger.warning(
-            f"Character '{character.name}' did not meet quality threshold "
-            f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+        if best_entity and history.best_iteration != len(history.iterations):
+            # We have a better iteration than the last one
+            logger.warning(
+                f"Character '{history.entity_name}' iterations got WORSE after peak. "
+                f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
+                f"Final: iteration {len(history.iterations)} "
+                f"({history.iterations[-1].average_score:.1f}). "
+                f"Returning best iteration."
+            )
+
+        # Return best entity or last one
+        if best_entity:
+            best_character = Character(**best_entity)
+            # Reconstruct scores from best iteration
+            for record in history.iterations:
+                if record.iteration == history.best_iteration:
+                    best_scores = CharacterQualityScores(**record.scores)
+                    break
+            if best_scores:
+                history.final_iteration = history.best_iteration
+                history.final_score = history.peak_score
+                self._log_refinement_analytics(history, story_state.id)
+                return best_character, best_scores, history.best_iteration
+
+        # Fallback to last iteration
+        if character and scores:
+            logger.warning(
+                f"Character '{character.name}' did not meet quality threshold "
+                f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+            )
+            history.final_iteration = len(history.iterations)
+            history.final_score = scores.average
+            self._log_refinement_analytics(history, story_state.id)
+            return character, scores, len(history.iterations)
+
+        raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
+            f"Failed to generate character after {config.max_iterations} attempts. "
+            f"Last error: {last_error}"
         )
-        return character, scores, iteration
 
     def _create_character(
         self,
@@ -575,16 +602,12 @@ Write all text in {brief.language if brief else "English"}."""
 
         logger.info(f"Generating location with quality threshold {config.quality_threshold}")
 
+        # Track all iterations for best-selection using RefinementHistory
+        history = RefinementHistory(entity_type="location", entity_name="")
         iteration = 0
         location: dict[str, Any] = {}
         scores: LocationQualityScores | None = None
         last_error: str = ""
-        # Early stopping tracking
-        peak_score: float = 0.0
-        consecutive_degradations: int = 0
-        best_location: dict[str, Any] = {}
-        best_scores: LocationQualityScores | None = None
-        best_iteration: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -609,34 +632,42 @@ Write all text in {brief.language if brief else "English"}."""
                     iteration += 1
                     continue
 
+                # Update history entity name
+                if not history.entity_name:
+                    history.entity_name = location.get("name", "Unknown")
+
                 scores = self._judge_location_quality(
                     location, story_state, config.judge_temperature
                 )
 
-                logger.info(
-                    f"Location '{location.get('name')}' iteration {iteration + 1}: "
-                    f"score {scores.average:.1f}"
+                # Track this iteration
+                history.add_iteration(
+                    iteration=iteration + 1,
+                    entity_data=location.copy(),
+                    scores=scores.to_dict(),
+                    average_score=scores.average,
+                    feedback=scores.feedback,
                 )
 
-                # Track peak score and consecutive degradations for early stopping
-                if scores.average > peak_score:
-                    peak_score = scores.average
-                    consecutive_degradations = 0
-                    best_location = location.copy()
-                    best_scores = scores
-                    best_iteration = iteration + 1
-                elif scores.average < peak_score:
-                    consecutive_degradations += 1
+                logger.info(
+                    f"Location '{location.get('name')}' iteration {iteration + 1}: "
+                    f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
+                    f"at iteration {history.best_iteration})"
+                )
 
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Location '{location.get('name')}' met quality threshold")
+                    history.final_iteration = iteration + 1
+                    history.final_score = scores.average
+                    self._log_refinement_analytics(history, story_state.id)
                     return location, scores, iteration + 1
 
-                # Check for early stopping
-                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                # Check for early stopping after tracking iteration
+                if history.should_stop_early(config.early_stopping_patience):
                     logger.info(
                         f"Early stopping: Location '{location.get('name')}' quality degraded "
-                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"for {history.consecutive_degradations} consecutive iterations "
+                        f"(patience: {config.early_stopping_patience}). "
                         f"Stopping at iteration {iteration + 1}."
                     )
                     break
@@ -647,32 +678,53 @@ Write all text in {brief.language if brief else "English"}."""
 
             iteration += 1
 
-        # If we get here, all iterations failed or didn't meet quality threshold
-        if not location.get("name") or scores is None:
+        # Didn't meet threshold - return BEST iteration, not last
+        if not history.iterations:
             raise WorldGenerationError(
                 f"Failed to generate location after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
 
-        # Return best location if we have one, otherwise return last
-        if best_location.get("name") and best_scores:
-            # Calculate final iteration (1-based) accounting for early stop vs normal completion
-            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
-            if best_iteration != final_iteration:
-                logger.warning(
-                    f"Location '{location.get('name')}' iterations got worse after peak. "
-                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
-                    f"Returning best iteration."
-                )
-            return best_location, best_scores, best_iteration
+        # Pick best iteration (not necessarily the last one)
+        best_entity = history.get_best_entity()
 
-        # We have a location but it didn't meet threshold - return it with a warning
-        logger.warning(
-            f"Location '{location.get('name')}' did not meet quality threshold "
-            f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+        if best_entity and history.best_iteration != len(history.iterations):
+            logger.warning(
+                f"Location '{history.entity_name}' iterations got WORSE after peak. "
+                f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
+                f"Final: iteration {len(history.iterations)} "
+                f"({history.iterations[-1].average_score:.1f}). "
+                f"Returning best iteration."
+            )
+
+        # Return best entity or last one
+        if best_entity:
+            # Reconstruct scores from best iteration
+            for record in history.iterations:
+                if record.iteration == history.best_iteration:
+                    best_scores = LocationQualityScores(**record.scores)
+                    break
+            if best_scores:
+                history.final_iteration = history.best_iteration
+                history.final_score = history.peak_score
+                self._log_refinement_analytics(history, story_state.id)
+                return best_entity, best_scores, history.best_iteration
+
+        # Fallback to last iteration
+        if location.get("name") and scores:
+            logger.warning(
+                f"Location '{location.get('name')}' did not meet quality threshold "
+                f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+            )
+            history.final_iteration = len(history.iterations)
+            history.final_score = scores.average
+            self._log_refinement_analytics(history, story_state.id)
+            return location, scores, len(history.iterations)
+
+        raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
+            f"Failed to generate location after {config.max_iterations} attempts. "
+            f"Last error: {last_error}"
         )
-        return location, scores, iteration
 
     def _create_location(
         self,
@@ -890,17 +942,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         logger.info(f"Generating relationship with quality threshold {config.quality_threshold}")
 
+        # Track all iterations for best-selection using RefinementHistory
+        history = RefinementHistory(entity_type="relationship", entity_name="")
         iteration = 0
         relationship: dict[str, Any] = {}
         scores: RelationshipQualityScores | None = None
         last_error: str = ""
-        # Early stopping tracking
-        peak_score: float = 0.0
-        consecutive_degradations: int = 0
-        best_relationship: dict[str, Any] = {}
-        best_scores: RelationshipQualityScores | None = None
-        best_iteration: int = 0
-
         needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
 
         while iteration < config.max_iterations:
@@ -942,34 +989,42 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 # Got a valid relationship - can proceed to refinement on next iteration
                 needs_fresh_creation = False
 
+                # Update history entity name
+                if not history.entity_name:
+                    history.entity_name = f"{source} -> {target}"
+
                 scores = self._judge_relationship_quality(
                     relationship, story_state, config.judge_temperature
                 )
 
-                logger.info(
-                    f"Relationship '{source} -> {target}' "
-                    f"iteration {iteration + 1}: score {scores.average:.1f}"
+                # Track this iteration
+                history.add_iteration(
+                    iteration=iteration + 1,
+                    entity_data=relationship.copy(),
+                    scores=scores.to_dict(),
+                    average_score=scores.average,
+                    feedback=scores.feedback,
                 )
 
-                # Track peak score and consecutive degradations for early stopping
-                if scores.average > peak_score:
-                    peak_score = scores.average
-                    consecutive_degradations = 0
-                    best_relationship = relationship.copy()
-                    best_scores = scores
-                    best_iteration = iteration + 1
-                elif scores.average < peak_score:
-                    consecutive_degradations += 1
+                logger.info(
+                    f"Relationship '{source} -> {target}' iteration {iteration + 1}: "
+                    f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
+                    f"at iteration {history.best_iteration})"
+                )
 
                 if scores.average >= config.quality_threshold:
                     logger.info("Relationship met quality threshold")
+                    history.final_iteration = iteration + 1
+                    history.final_score = scores.average
+                    self._log_refinement_analytics(history, story_state.id)
                     return relationship, scores, iteration + 1
 
-                # Check for early stopping
-                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                # Check for early stopping after tracking iteration
+                if history.should_stop_early(config.early_stopping_patience):
                     logger.info(
                         f"Early stopping: Relationship '{source} -> {target}' quality degraded "
-                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"for {history.consecutive_degradations} consecutive iterations "
+                        f"(patience: {config.early_stopping_patience}). "
                         f"Stopping at iteration {iteration + 1}."
                     )
                     break
@@ -980,34 +1035,54 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
             iteration += 1
 
-        # If we get here, all iterations failed or didn't meet quality threshold
-        if not relationship.get("source") or not relationship.get("target") or scores is None:
+        # Didn't meet threshold - return BEST iteration, not last
+        if not history.iterations:
             raise WorldGenerationError(
                 f"Failed to generate relationship after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
 
-        # Return best relationship if we have one, otherwise return last
-        if best_relationship.get("source") and best_scores:
-            # Calculate final iteration (1-based) accounting for early stop vs normal completion
-            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
-            if best_iteration != final_iteration:
-                logger.warning(
-                    f"Relationship '{relationship.get('source')} -> {relationship.get('target')}' "
-                    f"iterations got worse after peak. "
-                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
-                    f"Returning best iteration."
-                )
-            return best_relationship, best_scores, best_iteration
+        # Pick best iteration (not necessarily the last one)
+        best_entity = history.get_best_entity()
 
-        # We have a relationship but it didn't meet threshold - return it with a warning
-        logger.warning(
-            f"Relationship '{relationship.get('source')} -> {relationship.get('target')}' "
-            f"did not meet quality threshold ({scores.average:.1f} < {config.quality_threshold}), "
-            f"returning anyway"
+        if best_entity and history.best_iteration != len(history.iterations):
+            logger.warning(
+                f"Relationship '{history.entity_name}' iterations got WORSE after peak. "
+                f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
+                f"Final: iteration {len(history.iterations)} "
+                f"({history.iterations[-1].average_score:.1f}). "
+                f"Returning best iteration."
+            )
+
+        # Return best entity or last one
+        if best_entity:
+            # Reconstruct scores from best iteration
+            for record in history.iterations:
+                if record.iteration == history.best_iteration:
+                    best_scores = RelationshipQualityScores(**record.scores)
+                    break
+            if best_scores:
+                history.final_iteration = history.best_iteration
+                history.final_score = history.peak_score
+                self._log_refinement_analytics(history, story_state.id)
+                return best_entity, best_scores, history.best_iteration
+
+        # Fallback to last iteration
+        if relationship.get("source") and relationship.get("target") and scores:
+            logger.warning(
+                f"Relationship '{relationship.get('source')} -> {relationship.get('target')}' "
+                f"did not meet quality threshold ({scores.average:.1f} < {config.quality_threshold}), "
+                f"returning anyway"
+            )
+            history.final_iteration = len(history.iterations)
+            history.final_score = scores.average
+            self._log_refinement_analytics(history, story_state.id)
+            return relationship, scores, len(history.iterations)
+
+        raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
+            f"Failed to generate relationship after {config.max_iterations} attempts. "
+            f"Last error: {last_error}"
         )
-        return relationship, scores, iteration
 
     def _is_duplicate_relationship(
         self,
@@ -1708,16 +1783,12 @@ Return ONLY the improved faction."""
 
         logger.info(f"Generating item with quality threshold {config.quality_threshold}")
 
+        # Track all iterations for best-selection using RefinementHistory
+        history = RefinementHistory(entity_type="item", entity_name="")
         iteration = 0
         item: dict[str, Any] = {}
         scores: ItemQualityScores | None = None
         last_error: str = ""
-        # Early stopping tracking
-        peak_score: float = 0.0
-        consecutive_degradations: int = 0
-        best_item: dict[str, Any] = {}
-        best_scores: ItemQualityScores | None = None
-        best_iteration: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -1742,32 +1813,40 @@ Return ONLY the improved faction."""
                     iteration += 1
                     continue
 
+                # Update history entity name
+                if not history.entity_name:
+                    history.entity_name = item.get("name", "Unknown")
+
                 scores = self._judge_item_quality(item, story_state, config.judge_temperature)
+
+                # Track this iteration
+                history.add_iteration(
+                    iteration=iteration + 1,
+                    entity_data=item.copy(),
+                    scores=scores.to_dict(),
+                    average_score=scores.average,
+                    feedback=scores.feedback,
+                )
 
                 logger.info(
                     f"Item '{item.get('name')}' iteration {iteration + 1}: "
-                    f"score {scores.average:.1f}"
+                    f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
+                    f"at iteration {history.best_iteration})"
                 )
-
-                # Track peak score and consecutive degradations for early stopping
-                if scores.average > peak_score:
-                    peak_score = scores.average
-                    consecutive_degradations = 0
-                    best_item = item.copy()
-                    best_scores = scores
-                    best_iteration = iteration + 1
-                elif scores.average < peak_score:
-                    consecutive_degradations += 1
 
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Item '{item.get('name')}' met quality threshold")
+                    history.final_iteration = iteration + 1
+                    history.final_score = scores.average
+                    self._log_refinement_analytics(history, story_state.id)
                     return item, scores, iteration + 1
 
-                # Check for early stopping
-                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                # Check for early stopping after tracking iteration
+                if history.should_stop_early(config.early_stopping_patience):
                     logger.info(
                         f"Early stopping: Item '{item.get('name')}' quality degraded "
-                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"for {history.consecutive_degradations} consecutive iterations "
+                        f"(patience: {config.early_stopping_patience}). "
                         f"Stopping at iteration {iteration + 1}."
                     )
                     break
@@ -1778,30 +1857,53 @@ Return ONLY the improved faction."""
 
             iteration += 1
 
-        if not item.get("name") or scores is None:
+        # Didn't meet threshold - return BEST iteration, not last
+        if not history.iterations:
             raise WorldGenerationError(
                 f"Failed to generate item after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
 
-        # Return best item if we have one, otherwise return last
-        if best_item.get("name") and best_scores:
-            # Calculate final iteration (1-based) accounting for early stop vs normal completion
-            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
-            if best_iteration != final_iteration:
-                logger.warning(
-                    f"Item '{item.get('name')}' iterations got worse after peak. "
-                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
-                    f"Returning best iteration."
-                )
-            return best_item, best_scores, best_iteration
+        # Pick best iteration (not necessarily the last one)
+        best_entity = history.get_best_entity()
 
-        logger.warning(
-            f"Item '{item.get('name')}' did not meet quality threshold "
-            f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+        if best_entity and history.best_iteration != len(history.iterations):
+            logger.warning(
+                f"Item '{history.entity_name}' iterations got WORSE after peak. "
+                f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
+                f"Final: iteration {len(history.iterations)} "
+                f"({history.iterations[-1].average_score:.1f}). "
+                f"Returning best iteration."
+            )
+
+        # Return best entity or last one
+        if best_entity:
+            # Reconstruct scores from best iteration
+            for record in history.iterations:
+                if record.iteration == history.best_iteration:
+                    best_scores = ItemQualityScores(**record.scores)
+                    break
+            if best_scores:
+                history.final_iteration = history.best_iteration
+                history.final_score = history.peak_score
+                self._log_refinement_analytics(history, story_state.id)
+                return best_entity, best_scores, history.best_iteration
+
+        # Fallback to last iteration
+        if item.get("name") and scores:
+            logger.warning(
+                f"Item '{item.get('name')}' did not meet quality threshold "
+                f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+            )
+            history.final_iteration = len(history.iterations)
+            history.final_score = scores.average
+            self._log_refinement_analytics(history, story_state.id)
+            return item, scores, len(history.iterations)
+
+        raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
+            f"Failed to generate item after {config.max_iterations} attempts. "
+            f"Last error: {last_error}"
         )
-        return item, scores, iteration
 
     def _create_item(
         self,
@@ -2046,16 +2148,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         logger.info(f"Generating concept with quality threshold {config.quality_threshold}")
 
+        # Track all iterations for best-selection using RefinementHistory
+        history = RefinementHistory(entity_type="concept", entity_name="")
         iteration = 0
         concept: dict[str, Any] = {}
         scores: ConceptQualityScores | None = None
         last_error: str = ""
-        # Early stopping tracking
-        peak_score: float = 0.0
-        consecutive_degradations: int = 0
-        best_concept: dict[str, Any] = {}
-        best_scores: ConceptQualityScores | None = None
-        best_iteration: int = 0
         needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
 
         while iteration < config.max_iterations:
@@ -2080,33 +2178,41 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     iteration += 1
                     continue
 
+                # Update history entity name
+                if not history.entity_name:
+                    history.entity_name = concept.get("name", "Unknown")
+
                 scores = self._judge_concept_quality(concept, story_state, config.judge_temperature)
                 needs_fresh_creation = False  # Successfully created, now can refine
 
-                logger.info(
-                    f"Concept '{concept.get('name')}' iteration {iteration + 1}: "
-                    f"score {scores.average:.1f}"
+                # Track this iteration
+                history.add_iteration(
+                    iteration=iteration + 1,
+                    entity_data=concept.copy(),
+                    scores=scores.to_dict(),
+                    average_score=scores.average,
+                    feedback=scores.feedback,
                 )
 
-                # Track peak score and consecutive degradations for early stopping
-                if scores.average > peak_score:
-                    peak_score = scores.average
-                    consecutive_degradations = 0
-                    best_concept = concept.copy()
-                    best_scores = scores
-                    best_iteration = iteration + 1
-                elif scores.average < peak_score:
-                    consecutive_degradations += 1
+                logger.info(
+                    f"Concept '{concept.get('name')}' iteration {iteration + 1}: "
+                    f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
+                    f"at iteration {history.best_iteration})"
+                )
 
                 if scores.average >= config.quality_threshold:
                     logger.info(f"Concept '{concept.get('name')}' met quality threshold")
+                    history.final_iteration = iteration + 1
+                    history.final_score = scores.average
+                    self._log_refinement_analytics(history, story_state.id)
                     return concept, scores, iteration + 1
 
-                # Check for early stopping
-                if peak_score > 0 and consecutive_degradations >= config.early_stopping_patience:
+                # Check for early stopping after tracking iteration
+                if history.should_stop_early(config.early_stopping_patience):
                     logger.info(
                         f"Early stopping: Concept '{concept.get('name')}' quality degraded "
-                        f"for {consecutive_degradations} consecutive iterations. "
+                        f"for {history.consecutive_degradations} consecutive iterations "
+                        f"(patience: {config.early_stopping_patience}). "
                         f"Stopping at iteration {iteration + 1}."
                     )
                     break
@@ -2117,30 +2223,53 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
             iteration += 1
 
-        if not concept.get("name") or scores is None:
+        # Didn't meet threshold - return BEST iteration, not last
+        if not history.iterations:
             raise WorldGenerationError(
                 f"Failed to generate concept after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
 
-        # Return best concept if we have one, otherwise return last
-        if best_concept.get("name") and best_scores:
-            # Calculate final iteration (1-based) accounting for early stop vs normal completion
-            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
-            if best_iteration != final_iteration:
-                logger.warning(
-                    f"Concept '{concept.get('name')}' iterations got worse after peak. "
-                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
-                    f"Returning best iteration."
-                )
-            return best_concept, best_scores, best_iteration
+        # Pick best iteration (not necessarily the last one)
+        best_entity = history.get_best_entity()
 
-        logger.warning(
-            f"Concept '{concept.get('name')}' did not meet quality threshold "
-            f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+        if best_entity and history.best_iteration != len(history.iterations):
+            logger.warning(
+                f"Concept '{history.entity_name}' iterations got WORSE after peak. "
+                f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
+                f"Final: iteration {len(history.iterations)} "
+                f"({history.iterations[-1].average_score:.1f}). "
+                f"Returning best iteration."
+            )
+
+        # Return best entity or last one
+        if best_entity:
+            # Reconstruct scores from best iteration
+            for record in history.iterations:
+                if record.iteration == history.best_iteration:
+                    best_scores = ConceptQualityScores(**record.scores)
+                    break
+            if best_scores:
+                history.final_iteration = history.best_iteration
+                history.final_score = history.peak_score
+                self._log_refinement_analytics(history, story_state.id)
+                return best_entity, best_scores, history.best_iteration
+
+        # Fallback to last iteration
+        if concept.get("name") and scores:
+            logger.warning(
+                f"Concept '{concept.get('name')}' did not meet quality threshold "
+                f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
+            )
+            history.final_iteration = len(history.iterations)
+            history.final_score = scores.average
+            self._log_refinement_analytics(history, story_state.id)
+            return concept, scores, len(history.iterations)
+
+        raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
+            f"Failed to generate concept after {config.max_iterations} attempts. "
+            f"Last error: {last_error}"
         )
-        return concept, scores, iteration
 
     def _create_concept(
         self,

@@ -406,12 +406,16 @@ class RefinementConfig(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Any) -> RefinementConfig:
-        """Create config from Settings object."""
+        """Create config from Settings object.
+
+        All settings fields are required - no default fallbacks per coding guidelines.
+        Missing fields will raise AttributeError.
+        """
         return cls(
-            max_iterations=getattr(settings, "world_quality_max_iterations", 3),
-            quality_threshold=getattr(settings, "world_quality_threshold", 7.0),
-            creator_temperature=getattr(settings, "world_quality_creator_temp", 0.9),
-            judge_temperature=getattr(settings, "world_quality_judge_temp", 0.1),
-            refinement_temperature=getattr(settings, "world_quality_refinement_temp", 0.7),
-            early_stopping_patience=getattr(settings, "world_quality_early_stopping_patience", 2),
+            max_iterations=settings.world_quality_max_iterations,
+            quality_threshold=settings.world_quality_threshold,
+            creator_temperature=settings.world_quality_creator_temp,
+            judge_temperature=settings.world_quality_judge_temp,
+            refinement_temperature=settings.world_quality_refinement_temp,
+            early_stopping_patience=settings.world_quality_early_stopping_patience,
         )
