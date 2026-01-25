@@ -599,6 +599,59 @@ class SettingsPage:
 
                         self._world_gen_inputs[key] = (min_input, max_input)
 
+            # Quality refinement settings (subsection)
+            ui.separator().classes("my-3")
+            with ui.row().classes("items-center gap-2 mb-2"):
+                ui.icon("auto_fix_high", size="xs").classes("text-gray-500")
+                ui.label("Quality Refinement").classes("text-sm font-medium")
+
+            # Quality threshold and iterations in a row
+            with ui.row().classes("items-center gap-4"):
+                with ui.column().classes("gap-1"):
+                    ui.label("Threshold").classes("text-xs text-gray-500")
+                    self._quality_threshold_input = (
+                        ui.number(
+                            value=self.settings.world_quality_threshold,
+                            min=0.0,
+                            max=10.0,
+                            step=0.5,
+                        )
+                        .props("outlined dense")
+                        .classes("w-16")
+                        .tooltip("Minimum quality score (0-10) to accept entity")
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Max Iter.").classes("text-xs text-gray-500")
+                    self._quality_max_iterations_input = (
+                        ui.number(
+                            value=self.settings.world_quality_max_iterations,
+                            min=1,
+                            max=20,
+                            step=1,
+                        )
+                        .props("outlined dense")
+                        .classes("w-16")
+                        .tooltip("Maximum refinement iterations per entity")
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Patience").classes("text-xs text-gray-500")
+                    self._quality_patience_input = (
+                        ui.number(
+                            value=self.settings.world_quality_early_stopping_patience,
+                            min=1,
+                            max=10,
+                            step=1,
+                        )
+                        .props("outlined dense")
+                        .classes("w-16")
+                        .tooltip(
+                            "Stop early after N consecutive score degradations. "
+                            "Saves compute when quality isn't improving."
+                        )
+                    )
+
     def _build_story_structure_section(self) -> None:
         """Build story structure settings section."""
         with ui.card().classes("w-full h-full"):
@@ -736,6 +789,18 @@ class SettingsPage:
                 setattr(self.settings, f"world_gen_{key}_min", min_val)
                 setattr(self.settings, f"world_gen_{key}_max", max_val)
 
+            # Quality refinement settings
+            if hasattr(self, "_quality_threshold_input"):
+                self.settings.world_quality_threshold = float(self._quality_threshold_input.value)
+            if hasattr(self, "_quality_max_iterations_input"):
+                self.settings.world_quality_max_iterations = int(
+                    self._quality_max_iterations_input.value
+                )
+            if hasattr(self, "_quality_patience_input"):
+                self.settings.world_quality_early_stopping_patience = int(
+                    self._quality_patience_input.value
+                )
+
             # Story structure settings (chapter counts)
             if hasattr(self, "_chapter_inputs"):
                 for key, input_widget in self._chapter_inputs.items():
@@ -814,6 +879,10 @@ class SettingsPage:
             "world_gen_concepts_max": self.settings.world_gen_concepts_max,
             "world_gen_relationships_min": self.settings.world_gen_relationships_min,
             "world_gen_relationships_max": self.settings.world_gen_relationships_max,
+            # Quality refinement
+            "world_quality_threshold": self.settings.world_quality_threshold,
+            "world_quality_max_iterations": self.settings.world_quality_max_iterations,
+            "world_quality_early_stopping_patience": self.settings.world_quality_early_stopping_patience,
         }
 
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
@@ -883,6 +952,16 @@ class SettingsPage:
             self.settings.world_gen_concepts_max = snapshot["world_gen_concepts_max"]
             self.settings.world_gen_relationships_min = snapshot["world_gen_relationships_min"]
             self.settings.world_gen_relationships_max = snapshot["world_gen_relationships_max"]
+
+        # Quality refinement (with backward compatibility for old snapshots)
+        if "world_quality_threshold" in snapshot:
+            self.settings.world_quality_threshold = snapshot["world_quality_threshold"]
+        if "world_quality_max_iterations" in snapshot:
+            self.settings.world_quality_max_iterations = snapshot["world_quality_max_iterations"]
+        if "world_quality_early_stopping_patience" in snapshot:
+            self.settings.world_quality_early_stopping_patience = snapshot[
+                "world_quality_early_stopping_patience"
+            ]
 
         # Save changes
         self.settings.save()
@@ -956,6 +1035,14 @@ class SettingsPage:
                 if hasattr(self.settings, min_attr):
                     min_input.value = getattr(self.settings, min_attr)
                     max_input.value = getattr(self.settings, max_attr)
+
+        # Quality refinement settings
+        if hasattr(self, "_quality_threshold_input") and self._quality_threshold_input:
+            self._quality_threshold_input.value = self.settings.world_quality_threshold
+        if hasattr(self, "_quality_max_iterations_input") and self._quality_max_iterations_input:
+            self._quality_max_iterations_input.value = self.settings.world_quality_max_iterations
+        if hasattr(self, "_quality_patience_input") and self._quality_patience_input:
+            self._quality_patience_input.value = self.settings.world_quality_early_stopping_patience
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""

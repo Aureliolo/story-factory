@@ -16,13 +16,17 @@ from src.settings import Settings
 
 @pytest.fixture
 def settings():
-    """Create settings with early stopping enabled."""
+    """Create settings with early stopping enabled.
+
+    Uses threshold of 9.0 to ensure scores (8.0-8.5) don't meet it,
+    allowing the early stopping logic to be properly tested.
+    """
     return Settings(
         ollama_url="http://localhost:11434",
         ollama_timeout=60,
         world_quality_enabled=True,
         world_quality_max_iterations=10,
-        world_quality_threshold=7.0,
+        world_quality_threshold=9.0,  # High threshold so 8.x scores don't exit early
         world_quality_creator_temp=0.9,
         world_quality_judge_temp=0.1,
         world_quality_refinement_temp=0.7,
@@ -199,10 +203,10 @@ class TestRefinementConfig:
         RefinementConfig(early_stopping_patience=10)
 
         # Invalid values
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValueError):  # Pydantic validation error
             RefinementConfig(early_stopping_patience=0)
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             RefinementConfig(early_stopping_patience=11)
 
 
@@ -235,14 +239,14 @@ class TestFactionGenerationEarlyStopping:
         ]
         mock_judge.side_effect = scores
 
-        faction, final_scores, iterations = service.generate_faction_with_quality(
+        _faction, final_scores, iterations = service.generate_faction_with_quality(
             story_state, existing_names=[], existing_locations=[]
         )
 
-        # Should stop at iteration 3 (2 consecutive degradations from peak at iteration 1)
-        assert iterations == 3
+        # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
-        # Should return best iteration (iteration 1 with score 8.2)
+        # Returns best iteration number (1) and best scores (8.2)
+        assert iterations == 1
         assert final_scores.average == 8.2
 
     @patch.object(WorldQualityService, "_create_faction")
@@ -251,12 +255,17 @@ class TestFactionGenerationEarlyStopping:
     def test_no_early_stopping_on_single_degradation(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test that single degradation doesn't trigger early stopping."""
+        """Test that single degradation doesn't trigger early stopping.
+
+        Score progression: 8.0 -> 7.5 -> 9.5 (improves and meets threshold)
+        The single degradation (8.0->7.5) doesn't trigger early stopping,
+        allowing the loop to continue and eventually meet threshold.
+        """
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
         mock_refine.return_value = test_faction
 
-        # Score progression: 8.0 -> 7.5 -> 8.5 (improves again, no early stop)
+        # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
         scores = [
             FactionQualityScores(
                 coherence=8.0, influence=8.0, conflict_potential=8.0, distinctiveness=8.0
@@ -265,19 +274,20 @@ class TestFactionGenerationEarlyStopping:
                 coherence=7.5, influence=7.5, conflict_potential=7.5, distinctiveness=7.5
             ),
             FactionQualityScores(
-                coherence=8.5, influence=8.5, conflict_potential=8.5, distinctiveness=8.5
+                coherence=9.5, influence=9.5, conflict_potential=9.5, distinctiveness=9.5
             ),
         ]
         mock_judge.side_effect = scores
 
-        faction, final_scores, iterations = service.generate_faction_with_quality(
+        _faction, final_scores, iterations = service.generate_faction_with_quality(
             story_state, existing_names=[], existing_locations=[]
         )
 
-        # Should complete all 3 iterations without early stopping
+        # Should complete 3 iterations - single degradation doesn't trigger early stop
         assert mock_judge.call_count == 3
-        # Should return final iteration since it met threshold
-        assert final_scores.average == 8.5
+        # Returns iteration 3 since it met threshold (9.5 >= 9.0)
+        assert iterations == 3
+        assert final_scores.average == 9.5
 
     @patch.object(WorldQualityService, "_create_faction")
     @patch.object(WorldQualityService, "_judge_faction_quality")
@@ -285,7 +295,11 @@ class TestFactionGenerationEarlyStopping:
     def test_early_stopping_saves_compute(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test that early stopping prevents running all max_iterations."""
+        """Test that early stopping prevents running all max_iterations.
+
+        Scores degrade consistently after peak, triggering early stopping
+        after patience (2) consecutive degradations, saving compute.
+        """
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
         mock_refine.return_value = test_faction
@@ -308,12 +322,12 @@ class TestFactionGenerationEarlyStopping:
         ]
         mock_judge.side_effect = scores
 
-        faction, final_scores, iterations = service.generate_faction_with_quality(
+        _faction, final_scores, iterations = service.generate_faction_with_quality(
             story_state, existing_names=[], existing_locations=[]
         )
 
-        # Should stop at iteration 3, not reach max_iterations (10)
-        assert iterations == 3
+        # Should only run 3 iterations (early stopping saves compute)
         assert mock_judge.call_count == 3
-        # Should return best (first) iteration
+        # Returns best iteration number (1) and best scores (8.0)
+        assert iterations == 1
         assert final_scores.average == 8.0
