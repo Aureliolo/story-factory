@@ -304,7 +304,7 @@ All quality score classes provide:
 ```python
 class RefinementConfig(BaseModel):
     max_iterations: int = 3
-    quality_threshold: float = 7.0
+    quality_threshold: float = 7.5
     creator_temperature: float = 0.9
     judge_temperature: float = 0.1
     refinement_temperature: float = 0.7
@@ -407,7 +407,7 @@ CREATE TABLE schema_version (
 **Quality:**
 - `world_quality_enabled`: bool
 - `world_quality_max_iterations`: int = 3
-- `world_quality_threshold`: float = 7.0
+- `world_quality_threshold`: float = 7.5
 
 ### ModelInfo TypedDict (`settings.py:28-39`)
 ```python
