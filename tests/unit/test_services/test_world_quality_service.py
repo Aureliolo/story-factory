@@ -1289,6 +1289,33 @@ class TestGenerateLocationWithQuality:
         with pytest.raises(ValueError, match="must have a brief"):
             service.generate_location_with_quality(state, existing_names=[])
 
+    @patch.object(WorldQualityService, "_create_location")
+    @patch.object(WorldQualityService, "_judge_location_quality")
+    def test_generate_location_error_during_iteration(
+        self, mock_judge, mock_create, service, story_state
+    ):
+        """Test location generation handles errors during iteration."""
+        test_loc = {
+            "name": "Test Location",
+            "description": "A test location",
+            "significance": "Testing errors",
+        }
+        mock_create.return_value = test_loc
+        # First judgment succeeds with low score, second raises error
+        low_scores = LocationQualityScores(
+            atmosphere=5.0, significance=5.0, story_relevance=5.0, distinctiveness=5.0
+        )
+        mock_judge.side_effect = [low_scores, WorldGenerationError("Judge failed")]
+
+        # Should still return location despite error on 2nd iteration
+        # because we have valid results from 1st iteration
+        loc, scores, _iterations = service.generate_location_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert loc["name"] == "Test Location"
+        assert scores.average == low_scores.average
+
 
 class TestIsDuplicateRelationship:
     """Tests for _is_duplicate_relationship method."""

@@ -344,6 +344,37 @@ class TestCharacterGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_character")
     @patch.object(WorldQualityService, "_judge_character_quality")
     @patch.object(WorldQualityService, "_refine_character")
+    def test_zero_scores_fallback_path(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test character generation with zero scores falls back to last iteration.
+
+        When all scores are 0, peak_score is never exceeded, so best_character
+        is never set. The function falls back to returning the last character.
+        """
+        test_char = Character(name="ZeroChar", role="protagonist", description="Zero scores")
+        mock_create.return_value = test_char
+        mock_refine.return_value = test_char
+
+        # All zero scores - peak_score (0.0) is never exceeded
+        zero_scores = CharacterQualityScores(
+            depth=0, goals=0, flaws=0, uniqueness=0, arc_potential=0
+        )
+        mock_judge.return_value = zero_scores
+
+        char, final_scores, _iterations = service.generate_character_with_quality(
+            story_state, existing_names=[]
+        )
+
+        # Should run all max_iterations (10) since no threshold met and no early stopping on zeros
+        assert mock_judge.call_count == 10
+        # Returns last iteration since best_character was never set (peak_score never exceeded)
+        assert char.name == "ZeroChar"
+        assert final_scores.average == 0
+
+    @patch.object(WorldQualityService, "_create_character")
+    @patch.object(WorldQualityService, "_judge_character_quality")
+    @patch.object(WorldQualityService, "_refine_character")
     def test_early_stopping_after_consecutive_degradations(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
@@ -418,6 +449,30 @@ class TestLocationGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_location")
     @patch.object(WorldQualityService, "_judge_location_quality")
     @patch.object(WorldQualityService, "_refine_location")
+    def test_zero_scores_fallback_path(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test location generation with zero scores falls back to last iteration."""
+        test_loc = {"name": "ZeroLoc", "description": "Zero scores"}
+        mock_create.return_value = test_loc
+        mock_refine.return_value = test_loc
+
+        zero_scores = LocationQualityScores(
+            atmosphere=0, significance=0, story_relevance=0, distinctiveness=0
+        )
+        mock_judge.return_value = zero_scores
+
+        loc, final_scores, _iterations = service.generate_location_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert mock_judge.call_count == 10
+        assert loc["name"] == "ZeroLoc"
+        assert final_scores.average == 0
+
+    @patch.object(WorldQualityService, "_create_location")
+    @patch.object(WorldQualityService, "_judge_location_quality")
+    @patch.object(WorldQualityService, "_refine_location")
     def test_early_stopping_after_consecutive_degradations(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
@@ -453,6 +508,35 @@ class TestLocationGenerationEarlyStopping:
 
 class TestRelationshipGenerationEarlyStopping:
     """Tests for relationship generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_relationship")
+    @patch.object(WorldQualityService, "_judge_relationship_quality")
+    @patch.object(WorldQualityService, "_refine_relationship")
+    def test_zero_scores_fallback_path(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test relationship generation with zero scores falls back to last iteration."""
+        test_rel = {
+            "source": "Alice",
+            "target": "Bob",
+            "relation_type": "knows",
+            "description": "Zero",
+        }
+        mock_create.return_value = test_rel
+        mock_refine.return_value = test_rel
+
+        zero_scores = RelationshipQualityScores(
+            tension=0, dynamics=0, story_potential=0, authenticity=0
+        )
+        mock_judge.return_value = zero_scores
+
+        rel, final_scores, _iterations = service.generate_relationship_with_quality(
+            story_state, entity_names=["Alice", "Bob"], existing_rels=[]
+        )
+
+        assert mock_judge.call_count == 10
+        assert rel["source"] == "Alice"
+        assert final_scores.average == 0
 
     @patch.object(WorldQualityService, "_create_relationship")
     @patch.object(WorldQualityService, "_judge_relationship_quality")
@@ -501,6 +585,30 @@ class TestItemGenerationEarlyStopping:
     @patch.object(WorldQualityService, "_create_item")
     @patch.object(WorldQualityService, "_judge_item_quality")
     @patch.object(WorldQualityService, "_refine_item")
+    def test_zero_scores_fallback_path(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test item generation with zero scores falls back to last iteration."""
+        test_item = {"name": "ZeroItem", "description": "Zero scores"}
+        mock_create.return_value = test_item
+        mock_refine.return_value = test_item
+
+        zero_scores = ItemQualityScores(
+            significance=0, uniqueness=0, narrative_potential=0, integration=0
+        )
+        mock_judge.return_value = zero_scores
+
+        item, final_scores, _iterations = service.generate_item_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert mock_judge.call_count == 10
+        assert item["name"] == "ZeroItem"
+        assert final_scores.average == 0
+
+    @patch.object(WorldQualityService, "_create_item")
+    @patch.object(WorldQualityService, "_judge_item_quality")
+    @patch.object(WorldQualityService, "_refine_item")
     def test_early_stopping_after_consecutive_degradations(
         self, mock_refine, mock_judge, mock_create, service, story_state
     ):
@@ -536,6 +644,28 @@ class TestItemGenerationEarlyStopping:
 
 class TestConceptGenerationEarlyStopping:
     """Tests for concept generation with early stopping."""
+
+    @patch.object(WorldQualityService, "_create_concept")
+    @patch.object(WorldQualityService, "_judge_concept_quality")
+    @patch.object(WorldQualityService, "_refine_concept")
+    def test_zero_scores_fallback_path(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test concept generation with zero scores falls back to last iteration."""
+        test_concept = {"name": "ZeroConcept", "description": "Zero scores"}
+        mock_create.return_value = test_concept
+        mock_refine.return_value = test_concept
+
+        zero_scores = ConceptQualityScores(relevance=0, depth=0, manifestation=0, resonance=0)
+        mock_judge.return_value = zero_scores
+
+        concept, final_scores, _iterations = service.generate_concept_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert mock_judge.call_count == 10
+        assert concept["name"] == "ZeroConcept"
+        assert final_scores.average == 0
 
     @patch.object(WorldQualityService, "_create_concept")
     @patch.object(WorldQualityService, "_judge_concept_quality")
