@@ -966,12 +966,18 @@ class TestGenerateCharacterWithQuality:
 
     @patch.object(WorldQualityService, "_create_character")
     @patch.object(WorldQualityService, "_judge_character_quality")
+    @patch.object(WorldQualityService, "_refine_character")
     def test_generate_character_returns_below_threshold_after_max_iterations(
-        self, mock_judge, mock_create, service, story_state
+        self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test character returns below threshold if max iterations exceeded."""
+        """Test character returns below threshold if max iterations exceeded.
+
+        With best-iteration tracking, returns iteration 1 when all scores are equal
+        (no improvement detected).
+        """
         test_char = Character(name="Low Quality", role="supporting", description="Basic")
         mock_create.return_value = test_char
+        mock_refine.return_value = test_char  # Mock refinement to prevent errors
 
         low_scores = CharacterQualityScores(
             depth=5.0, goals=5.0, flaws=5.0, uniqueness=5.0, arc_potential=5.0
@@ -984,7 +990,8 @@ class TestGenerateCharacterWithQuality:
 
         assert char.name == "Low Quality"
         assert scores.average < 7.0
-        assert iterations == 3  # max_iterations
+        # Returns best iteration (1) since all scores are equal
+        assert iterations == 1
 
     @patch.object(WorldQualityService, "_create_character")
     def test_generate_character_raises_error_when_creation_fails(
@@ -1267,6 +1274,40 @@ class TestGenerateLocationWithQuality:
 
         with pytest.raises(ValueError, match="must have a brief"):
             service.generate_location_with_quality(state, existing_names=[])
+
+    @patch.object(WorldQualityService, "_create_location")
+    @patch.object(WorldQualityService, "_judge_location_quality")
+    @patch.object(WorldQualityService, "_refine_location")
+    def test_generate_location_error_during_iteration(
+        self, mock_refine, mock_judge, mock_create, service, story_state
+    ):
+        """Test location generation handles errors during iteration."""
+        test_loc = {
+            "name": "Test Location",
+            "description": "A test location",
+            "significance": "Testing errors",
+        }
+        mock_create.return_value = test_loc
+        mock_refine.return_value = test_loc
+        # First judgment succeeds with low score, second raises error, third returns low score
+        # Service continues after error so needs values for all iterations
+        low_scores = LocationQualityScores(
+            atmosphere=5.0, significance=5.0, story_relevance=5.0, distinctiveness=5.0
+        )
+        mock_judge.side_effect = [
+            low_scores,
+            WorldGenerationError("Judge failed"),
+            low_scores,
+        ]
+
+        # Should still return location despite error on 2nd iteration
+        # because we have valid results from 1st iteration
+        loc, scores, _iterations = service.generate_location_with_quality(
+            story_state, existing_names=[]
+        )
+
+        assert loc["name"] == "Test Location"
+        assert scores.average == low_scores.average
 
 
 class TestIsDuplicateRelationship:
@@ -2545,12 +2586,17 @@ class TestEdgeCases:
 
     @patch.object(WorldQualityService, "_create_location")
     @patch.object(WorldQualityService, "_judge_location_quality")
+    @patch.object(WorldQualityService, "_refine_location")
     def test_location_generation_returns_below_threshold_after_max(
-        self, mock_judge, mock_create, service, story_state
+        self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test location returned even below threshold after max iterations."""
+        """Test location returned even below threshold after max iterations.
+
+        With best-iteration tracking, returns iteration 1 when all scores are equal.
+        """
         test_loc = {"name": "Basic", "description": "Simple location"}
         mock_create.return_value = test_loc
+        mock_refine.return_value = test_loc  # Mock refinement to prevent errors
 
         low_scores = LocationQualityScores(
             atmosphere=5.0, significance=5.0, story_relevance=5.0, distinctiveness=5.0
@@ -2563,7 +2609,8 @@ class TestEdgeCases:
 
         assert loc["name"] == "Basic"
         assert scores.average < 7.0
-        assert iterations == 3  # max_iterations
+        # Returns best iteration (1) since all scores are equal
+        assert iterations == 1
 
     def test_empty_description_mini_description(self, service):
         """Test mini description with empty full description."""
@@ -3121,10 +3168,15 @@ class TestRefinementLoopEdgeCases:
 
     @patch.object(WorldQualityService, "_create_relationship")
     @patch.object(WorldQualityService, "_judge_relationship_quality")
+    @patch.object(WorldQualityService, "_refine_relationship")
     def test_generate_relationship_below_threshold_after_max(
-        self, mock_judge, mock_create, service, story_state
+        self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test relationship generation returns below threshold after max iterations."""
+        """Test relationship generation returns below threshold after max iterations.
+
+        With early stopping, if scores don't improve or degrade, the loop
+        runs until max_iterations (no early stop on plateau). Returns best iteration.
+        """
         test_rel = {
             "source": "Alice",
             "target": "Bob",
@@ -3132,6 +3184,7 @@ class TestRefinementLoopEdgeCases:
             "description": "Basic",
         }
         mock_create.return_value = test_rel
+        mock_refine.return_value = test_rel  # Mock refinement to prevent errors
 
         low_scores = RelationshipQualityScores(
             tension=5.0, dynamics=5.0, story_potential=5.0, authenticity=5.0
@@ -3144,7 +3197,8 @@ class TestRefinementLoopEdgeCases:
 
         assert rel["source"] == "Alice"
         assert scores.average < 7.0
-        assert iterations == 3  # max_iterations
+        # Returns best iteration (iteration 1 since all scores are equal)
+        assert iterations == 1
 
     # ========== Faction Loop Edge Cases ==========
 
@@ -3278,12 +3332,17 @@ class TestRefinementLoopEdgeCases:
 
     @patch.object(WorldQualityService, "_create_item")
     @patch.object(WorldQualityService, "_judge_item_quality")
+    @patch.object(WorldQualityService, "_refine_item")
     def test_generate_item_below_threshold_after_max(
-        self, mock_judge, mock_create, service, story_state
+        self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test item generation returns below threshold after max iterations."""
+        """Test item generation returns below threshold after max iterations.
+
+        With best-iteration tracking, returns iteration 1 when all scores are equal.
+        """
         test_item = {"name": "Test Item", "description": "Basic"}
         mock_create.return_value = test_item
+        mock_refine.return_value = test_item  # Mock refinement to prevent errors
 
         low_scores = ItemQualityScores(
             significance=5.0, uniqueness=5.0, narrative_potential=5.0, integration=5.0
@@ -3296,7 +3355,8 @@ class TestRefinementLoopEdgeCases:
 
         assert item["name"] == "Test Item"
         assert scores.average < 7.0
-        assert iterations == 3
+        # Returns best iteration (1) since all scores are equal
+        assert iterations == 1
 
     # ========== Concept Loop Edge Cases ==========
 
@@ -3353,12 +3413,17 @@ class TestRefinementLoopEdgeCases:
 
     @patch.object(WorldQualityService, "_create_concept")
     @patch.object(WorldQualityService, "_judge_concept_quality")
+    @patch.object(WorldQualityService, "_refine_concept")
     def test_generate_concept_below_threshold_after_max(
-        self, mock_judge, mock_create, service, story_state
+        self, mock_refine, mock_judge, mock_create, service, story_state
     ):
-        """Test concept generation returns below threshold after max iterations."""
+        """Test concept generation returns below threshold after max iterations.
+
+        With best-iteration tracking, returns iteration 1 when all scores are equal.
+        """
         test_concept = {"name": "Test Concept", "description": "Basic"}
         mock_create.return_value = test_concept
+        mock_refine.return_value = test_concept  # Mock refinement to prevent errors
 
         low_scores = ConceptQualityScores(
             relevance=5.0, depth=5.0, manifestation=5.0, resonance=5.0
@@ -3371,7 +3436,8 @@ class TestRefinementLoopEdgeCases:
 
         assert concept["name"] == "Test Concept"
         assert scores.average < 7.0
-        assert iterations == 3
+        # Returns best iteration (1) since all scores are equal
+        assert iterations == 1
 
 
 class TestBatchOperationsPartialFailure:

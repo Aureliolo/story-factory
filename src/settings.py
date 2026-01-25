@@ -334,6 +334,7 @@ class Settings:
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
     world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
+    world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 
     # World generation counts (randomized within range for variety)
     world_gen_characters_min: int = 4
@@ -581,6 +582,12 @@ class Settings:
             raise ValueError(
                 f"world_quality_threshold must be between 0.0 and 10.0, "
                 f"got {self.world_quality_threshold}"
+            )
+
+        if not 1 <= self.world_quality_early_stopping_patience <= 10:
+            raise ValueError(
+                f"world_quality_early_stopping_patience must be between 1 and 10, "
+                f"got {self.world_quality_early_stopping_patience}"
             )
 
         for temp_name, temp_value in [

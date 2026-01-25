@@ -1221,6 +1221,24 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="world_quality_refinement_temp must be between"):
             settings.validate()
 
+    def test_validate_raises_on_invalid_world_quality_early_stopping_patience_low(self):
+        """Should raise ValueError for world_quality_early_stopping_patience below 1."""
+        settings = Settings()
+        settings.world_quality_early_stopping_patience = 0  # Below 1
+        with pytest.raises(
+            ValueError, match="world_quality_early_stopping_patience must be between"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_quality_early_stopping_patience_high(self):
+        """Should raise ValueError for world_quality_early_stopping_patience above 10."""
+        settings = Settings()
+        settings.world_quality_early_stopping_patience = 11  # Above 10
+        with pytest.raises(
+            ValueError, match="world_quality_early_stopping_patience must be between"
+        ):
+            settings.validate()
+
     # --- World gen entity min/max validation (lines 561, 565, 569) ---
 
     def test_validate_raises_on_invalid_world_gen_characters_min(self):
