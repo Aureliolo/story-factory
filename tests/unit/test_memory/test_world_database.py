@@ -1,5 +1,6 @@
 """Tests for WorldDatabase."""
 
+import logging
 from collections.abc import Generator
 from unittest.mock import patch
 
@@ -713,16 +714,16 @@ class TestFlattenDeepAttributes:
         deep_attrs = {"a": {"b": {"c": {"d": {"e": "too deep"}}}}}
         result = _flatten_deep_attributes(deep_attrs, max_depth=3, current_depth=1)
 
-        # At depth 3, the value of "b" (which is {"c": ...}) gets stringified
-        assert result["a"]["b"] == "{'c': {'d': {'e': 'too deep'}}}"
+        # At depth 3, the value of "b" (which is {"c": ...}) gets JSON-serialized
+        assert result["a"]["b"] == '{"c": {"d": {"e": "too deep"}}}'
 
     def test_flatten_deep_list_to_string(self):
         """Test deeply nested lists are converted to strings."""
         deep_attrs = {"a": {"b": {"c": [{"d": "too deep"}]}}}
         result = _flatten_deep_attributes(deep_attrs, max_depth=3, current_depth=1)
 
-        # At depth 3, the value of "b" gets stringified
-        assert result["a"]["b"] == "{'c': [{'d': 'too deep'}]}"
+        # At depth 3, the value of "b" gets JSON-serialized
+        assert result["a"]["b"] == '{"c": [{"d": "too deep"}]}'
 
     def test_flatten_mixed_nesting(self):
         """Test mixed dict and list nesting is flattened correctly."""
@@ -734,6 +735,21 @@ class TestFlattenDeepAttributes:
         # At depth 3, the dict inside the list gets stringified
         assert isinstance(result["l1"][0], str)
         assert "l2" in result["l1"][0]
+
+    def test_flatten_non_json_serializable_fallback(self, caplog):
+        """Test fallback to str() when JSON serialization fails."""
+        # Create an object that can't be JSON serialized (e.g., a set or custom object)
+        # Use a set which is not JSON-serializable
+        deep_attrs = {"a": {"b": {"c": {"d", "e", "f"}}}}  # set at depth 3
+
+        with caplog.at_level(logging.WARNING):
+            result = _flatten_deep_attributes(deep_attrs, max_depth=3, current_depth=1)
+
+        # Should fall back to str() representation
+        assert isinstance(result["a"]["b"], str)
+        # str(set) produces something like "{'d', 'e', 'f'}"
+        assert "d" in result["a"]["b"] or "e" in result["a"]["b"] or "f" in result["a"]["b"]
+        assert "Failed to JSON-serialize" in caplog.text
 
 
 class TestCheckNestingDepth:
@@ -782,11 +798,9 @@ class TestValidateAndNormalizeAttributes:
 
     def test_deep_attributes_flattened(self, caplog):
         """Test deeply nested attributes are flattened with warning."""
-        import logging
-
         # Create deeply nested attrs (more than MAX_ATTRIBUTES_DEPTH)
         # _validate_and_normalize_attributes calls with current_depth=1
-        # So depth 1->l1, depth 2->l2, depth 3->l3's value gets stringified
+        # With max_depth=3, the value of 'l2' (at depth 3) gets JSON-serialized
         attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
 
         with caplog.at_level(logging.WARNING):
@@ -794,15 +808,13 @@ class TestValidateAndNormalizeAttributes:
 
         # Should not raise, but should flatten and log warning
         assert "l1" in result
-        # At depth 3, the value of l2 (the dict {"l3": ...}) should be stringified
+        # At depth 3, the value of l2 (the dict {"l3": ...}) should be JSON-serialized
         assert isinstance(result["l1"]["l2"], str)
         assert "l3" in result["l1"]["l2"]  # l3 should be in the string
         assert "flattening deep structures" in caplog.text
 
     def test_deep_list_flattened(self, caplog):
         """Test deeply nested lists are flattened with warning."""
-        import logging
-
         # Lists at each level
         attrs = {"l1": [{"l2": [{"l3": [{"l4": "too deep"}]}]}]}
 
@@ -847,10 +859,8 @@ class TestWorldDatabaseAddEntityValidation:
 
     def test_add_entity_deep_attributes_flattened(self, db, caplog):
         """Test add_entity flattens deeply nested attributes."""
-        import logging
-
         # Create deeply nested attributes that exceed depth limit
-        # depth 1->l1, depth 2->l2, depth 3->l2's value gets stringified
+        # With max_depth=3, the value of 'l2' (at depth 3) gets JSON-serialized
         deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
 
         with caplog.at_level(logging.WARNING):
@@ -862,7 +872,7 @@ class TestWorldDatabaseAddEntityValidation:
         # Verify flattening occurred
         entity = db.get_entity(entity_id)
         assert entity is not None
-        # The deep nesting should be flattened - l2's value becomes a string
+        # The deep nesting should be flattened - l2's value becomes a JSON string
         assert isinstance(entity.attributes["l1"]["l2"], str)
         assert "l3" in entity.attributes["l1"]["l2"]
         assert "flattening deep structures" in caplog.text
@@ -1019,12 +1029,10 @@ class TestWorldDatabaseUpdateValidation:
 
     def test_update_entity_deep_attributes_flattened(self, db, caplog):
         """Test update_entity flattens deeply nested attributes."""
-        import logging
-
         entity_id = db.add_entity("character", "Test")
 
         # Create deeply nested attributes that exceed depth limit
-        # depth 1->l1, depth 2->l2, depth 3->l2's value gets stringified
+        # With max_depth=3, the value of 'l2' (at depth 3) gets JSON-serialized
         deep_attrs = {"l1": {"l2": {"l3": {"l4": {"l5": "too deep"}}}}}
 
         with caplog.at_level(logging.WARNING):
@@ -1036,7 +1044,7 @@ class TestWorldDatabaseUpdateValidation:
         # Verify flattening occurred
         entity = db.get_entity(entity_id)
         assert entity is not None
-        # The deep nesting should be flattened - l2's value becomes a string
+        # The deep nesting should be flattened - l2's value becomes a JSON string
         assert isinstance(entity.attributes["l1"]["l2"], str)
         assert "l3" in entity.attributes["l1"]["l2"]
         assert "flattening deep structures" in caplog.text

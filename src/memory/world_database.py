@@ -35,7 +35,7 @@ def _flatten_deep_attributes(
 ) -> Any:
     """Flatten attributes that exceed max nesting depth.
 
-    Converts deeply nested structures to string representations at the max depth
+    Converts deeply nested structures to JSON string representations at the max depth
     to preserve data while meeting storage constraints.
 
     Args:
@@ -50,7 +50,15 @@ def _flatten_deep_attributes(
         # At max depth, convert complex types to string representation
         if isinstance(obj, (str, int, float, bool, type(None))):
             return obj
-        return str(obj)
+        # Use deterministic JSON representation for nested structures
+        logger.debug(f"Flattening nested {type(obj).__name__} at depth {current_depth}")
+        try:
+            return json.dumps(obj, ensure_ascii=False, sort_keys=True)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Failed to JSON-serialize attributes at max depth; falling back to str()"
+            )
+            return str(obj)
 
     if isinstance(obj, dict):
         return {
