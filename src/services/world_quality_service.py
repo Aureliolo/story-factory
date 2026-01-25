@@ -261,6 +261,9 @@ class WorldQualityService:
         # Early stopping tracking
         peak_score: float = 0.0
         consecutive_degradations: int = 0
+        best_character: Character | None = None
+        best_scores: CharacterQualityScores | None = None
+        best_iteration: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -301,6 +304,9 @@ class WorldQualityService:
                 if scores.average > peak_score:
                     peak_score = scores.average
                     consecutive_degradations = 0
+                    best_character = character
+                    best_scores = scores
+                    best_iteration = iteration + 1
                 elif scores.average < peak_score:
                     consecutive_degradations += 1
 
@@ -329,6 +335,17 @@ class WorldQualityService:
                 f"Failed to generate character after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
+
+        # Return best character if we have one, otherwise return last
+        if best_character and best_scores:
+            if best_iteration != iteration:
+                logger.warning(
+                    f"Character '{character.name}' iterations got worse after peak. "
+                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
+                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Returning best iteration."
+                )
+            return best_character, best_scores, best_iteration
 
         # We have a character but it didn't meet threshold - return it with a warning
         logger.warning(
@@ -559,6 +576,9 @@ Write all text in {brief.language if brief else "English"}."""
         # Early stopping tracking
         peak_score: float = 0.0
         consecutive_degradations: int = 0
+        best_location: dict[str, Any] = {}
+        best_scores: LocationQualityScores | None = None
+        best_iteration: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -596,6 +616,9 @@ Write all text in {brief.language if brief else "English"}."""
                 if scores.average > peak_score:
                     peak_score = scores.average
                     consecutive_degradations = 0
+                    best_location = location.copy()
+                    best_scores = scores
+                    best_iteration = iteration + 1
                 elif scores.average < peak_score:
                     consecutive_degradations += 1
 
@@ -624,6 +647,17 @@ Write all text in {brief.language if brief else "English"}."""
                 f"Failed to generate location after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
+
+        # Return best location if we have one, otherwise return last
+        if best_location.get("name") and best_scores:
+            if best_iteration != iteration:
+                logger.warning(
+                    f"Location '{location.get('name')}' iterations got worse after peak. "
+                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
+                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Returning best iteration."
+                )
+            return best_location, best_scores, best_iteration
 
         # We have a location but it didn't meet threshold - return it with a warning
         logger.warning(
