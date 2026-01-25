@@ -1352,6 +1352,8 @@ class TestControlPanel:
             patch.object(ControlPanel, "geometry"),
             patch.object(ControlPanel, "minsize"),
             patch.object(ControlPanel, "protocol"),
+            patch.object(ControlPanel, "grid_columnconfigure", create=True),
+            patch.object(ControlPanel, "grid_rowconfigure", create=True),
         ):
             ControlPanel()  # Create instance to verify managers are initialized
 

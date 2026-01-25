@@ -684,6 +684,19 @@ class ControlPanel(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
+        # Configure grid layout for dynamic resizing
+        # Row 0: Header (fixed)
+        # Row 1: Status (fixed)
+        # Row 2: Controls (fixed)
+        # Row 3: Logs (expands to fill available space)
+        # Row 4: Status bar (fixed)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)  # Header - fixed
+        self.grid_rowconfigure(1, weight=0)  # Status - fixed
+        self.grid_rowconfigure(2, weight=0)  # Controls - fixed
+        self.grid_rowconfigure(3, weight=1)  # Logs - expands
+        self.grid_rowconfigure(4, weight=0)  # Status bar - fixed
+
         # Build the UI
         self._create_header()
         self._create_status_frame()
@@ -708,7 +721,7 @@ class ControlPanel(ctk.CTk):
     def _create_header(self) -> None:  # pragma: no cover
         """Create the header section (UI widget creation only)."""
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        header_frame.pack(fill="x", padx=20, pady=(20, 10))
+        header_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
 
         title_label = ctk.CTkLabel(
             header_frame,
@@ -720,7 +733,7 @@ class ControlPanel(ctk.CTk):
     def _create_status_frame(self) -> None:  # pragma: no cover
         """Create the status indicators section (UI widget creation only)."""
         status_frame = ctk.CTkFrame(self)
-        status_frame.pack(fill="x", padx=20, pady=10)
+        status_frame.grid(row=1, column=0, sticky="ew", padx=20, pady=10)
 
         status_label = ctk.CTkLabel(
             status_frame,
@@ -807,7 +820,7 @@ class ControlPanel(ctk.CTk):
     def _create_controls_frame(self) -> None:  # pragma: no cover
         """Create the control buttons section (UI widget creation only)."""
         controls_frame = ctk.CTkFrame(self)
-        controls_frame.pack(fill="x", padx=20, pady=10)
+        controls_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=10)
 
         controls_label = ctk.CTkLabel(
             controls_frame,
@@ -905,11 +918,15 @@ class ControlPanel(ctk.CTk):
     def _create_log_frame(self) -> None:  # pragma: no cover
         """Create the log viewer section (UI widget creation only)."""
         log_frame = ctk.CTkFrame(self)
-        log_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        log_frame.grid(row=3, column=0, sticky="nsew", padx=20, pady=10)
+
+        # Configure log_frame to expand its contents
+        log_frame.grid_columnconfigure(0, weight=1)
+        log_frame.grid_rowconfigure(1, weight=1)  # Row 1 is the textbox
 
         # Header with title and auto-scroll toggle
         header = ctk.CTkFrame(log_frame, fg_color="transparent")
-        header.pack(fill="x", padx=15, pady=(10, 5))
+        header.grid(row=0, column=0, sticky="ew", padx=15, pady=(10, 5))
 
         log_label = ctk.CTkLabel(
             header,
@@ -929,14 +946,14 @@ class ControlPanel(ctk.CTk):
         )
         auto_scroll_check.pack(side="right")
 
-        # Log text area
+        # Log text area - expands to fill all available space
         self._log_text = ctk.CTkTextbox(
             log_frame,
             font=ctk.CTkFont(family="Consolas", size=11),
             wrap="word",
             state="disabled",
         )
-        self._log_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self._log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
         # Configure log colors
         self._log_text._textbox.tag_config("error", foreground="#dc3545")
@@ -947,7 +964,7 @@ class ControlPanel(ctk.CTk):
     def _create_status_bar(self) -> None:  # pragma: no cover
         """Create the status bar at the bottom (UI widget creation only)."""
         status_bar = ctk.CTkFrame(self, height=30)
-        status_bar.pack(fill="x", padx=20, pady=(0, 10))
+        status_bar.grid(row=4, column=0, sticky="ew", padx=20, pady=(0, 10))
 
         self._status_label = ctk.CTkLabel(
             status_bar,
