@@ -380,8 +380,12 @@ class OllamaManager:
 
             # On Windows, try starting the desktop app first (has tray icon)
             if sys.platform == "win32":
+                # The desktop app is "ollama app.exe" (with space), not "Ollama.exe"
                 ollama_app = (
-                    Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "Ollama.exe"
+                    Path(os.environ.get("LOCALAPPDATA", ""))
+                    / "Programs"
+                    / "Ollama"
+                    / "ollama app.exe"
                 )
                 if ollama_app.exists():
                     try:
