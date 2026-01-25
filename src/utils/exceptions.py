@@ -155,6 +155,18 @@ class JSONParseError(StoryFactoryError):
         response_preview: str | None = None,
         expected_type: str | None = None,
     ):
+        """
+        Initialize the JSONParseError with an error message and optional parsing context.
+
+        Parameters:
+            message (str): Human-readable error message describing the parse failure.
+            response_preview (str | None): Optional preview (typically up to the first ~500 characters) of the raw response that failed to parse, for debugging.
+            expected_type (str | None): Optional description of the expected JSON type or structure (e.g., "dict", "list", or model class name).
+
+        Notes:
+            The provided `response_preview` and `expected_type` are stored on the instance as
+            `response_preview` and `expected_type` respectively.
+        """
         super().__init__(message)
         self.response_preview = response_preview
         self.expected_type = expected_type
@@ -189,6 +201,15 @@ class DuplicateNameError(WorldGenerationError):
         existing_name: str | None = None,
         reason: str | None = None,
     ):
+        """
+        Initialize a DuplicateNameError with an error message and optional context about the name conflict.
+
+        Parameters:
+            message (str): Human-readable error message.
+            generated_name (str | None): The generated name that caused the conflict, if available.
+            existing_name (str | None): The existing name that conflicts with the generated name, if known.
+            reason (str | None): Description of why the names are considered duplicates (e.g., "exact match", "case-insensitive match", "prefix", "substring").
+        """
         super().__init__(message)
         self.generated_name = generated_name
         self.existing_name = existing_name

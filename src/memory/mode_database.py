@@ -1815,28 +1815,28 @@ class ModeDatabase:
         entity_type: str | None = None,
         days: int = 30,
     ) -> dict[str, Any]:
-        """Get summary statistics for refinement effectiveness.
+        """
+        Summarizes refinement-loop effectiveness for world entities over a recent time window.
 
-        Analyzes how well the refinement loop is working by looking at:
-        - Threshold met rate: How often we reach quality threshold
-        - Early stop rate: How often we stop early due to degradation
-        - Average iterations: Typical refinement effort
-        - Score loss: How much we lose from peak to final
-        - Best is final rate: How often the returned entity is actually the best
-
-        Args:
-            entity_type: Filter by entity type (character, faction, etc.).
-            days: Number of days to include in analysis.
+        Parameters:
+            entity_type: Optional filter for the entity type to include (e.g., "character", "faction").
+            days: Number of days to include in the analysis; must be a non-negative integer.
 
         Returns:
-            Dictionary with effectiveness metrics:
-            - total_entities: Number of entities analyzed
-            - threshold_met_rate: Percentage that met quality threshold
-            - early_stop_rate: Percentage that triggered early stopping
-            - avg_iterations: Average number of iterations used
-            - avg_score_loss: Average difference between peak and final score
-            - best_is_final_rate: Percentage where best iteration was returned
-            - by_entity_type: Breakdown by entity type
+            A dictionary containing refinement effectiveness metrics:
+            - total_entities: Number of entities analyzed.
+            - threshold_met_rate: Percentage of entities that met their quality threshold (rounded to 0.1%).
+            - early_stop_rate: Percentage of entities that triggered early stopping due to degradation (rounded to 0.1%).
+            - avg_iterations: Average number of refinement iterations used (rounded to 2 decimals) or None if not available.
+            - avg_score_loss: Average difference between peak and final score (rounded to 3 decimals).
+            - best_is_final_rate: Percentage of cases where the best iteration equals the returned iteration (rounded to 0.1%).
+            - by_entity_type: List of per-entity-type breakdowns; each item contains:
+                - entity_type: The entity type name.
+                - count: Number of entities of that type.
+                - threshold_met_rate: Percentage for that type (rounded to 0.1%).
+                - early_stop_rate: Percentage for that type (rounded to 0.1%).
+                - avg_iterations: Average iterations for that type (rounded to 2 decimals) or None.
+                - avg_score_loss: Average score loss for that type (rounded to 3 decimals).
         """
         validated_days = int(days)
         if validated_days < 0:
@@ -1924,16 +1924,22 @@ class ModeDatabase:
         entity_type: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        """Get detailed refinement progression data for analysis.
+        """
+        Retrieve recent world-entity refinement progression records with parsed progression data.
 
-        Returns individual entity refinement records with full progression details.
+        Only records that have a stored score progression are returned; each result includes parsed
+        `score_progression` as a list of numeric scores.
 
-        Args:
-            entity_type: Filter by entity type.
-            limit: Maximum number of records to return.
+        Parameters:
+            entity_type (str | None): If provided, restrict results to this entity type.
+            limit (int): Maximum number of records to return, ordered by newest first.
 
         Returns:
-            List of records with entity info and progression data.
+            list[dict[str, Any]]: A list of records containing keys:
+                - id, timestamp, project_id, entity_type, entity_name
+                - iterations_used, peak_score, final_score, best_iteration
+                - threshold_met, early_stop_triggered, consecutive_degradations, quality_threshold
+                - score_progression (list[float])
         """
         query = """
             SELECT

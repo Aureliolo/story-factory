@@ -1815,7 +1815,15 @@ class TestRefinementEffectivenessTracking:
 
     @pytest.fixture
     def db(self, tmp_path: Path) -> ModeDatabase:
-        """Create a test database."""
+        """
+        Create a temporary ModeDatabase instance backed by a file named "test_scores.db" inside the given path.
+
+        Parameters:
+            tmp_path (Path): Directory in which the temporary database file will be created.
+
+        Returns:
+            ModeDatabase: A ModeDatabase instance connected to the created test database file.
+        """
         db_path = tmp_path / "test_scores.db"
         return ModeDatabase(db_path)
 
