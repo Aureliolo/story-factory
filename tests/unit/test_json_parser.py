@@ -252,19 +252,47 @@ class TestParseJsonToModel:
         result = parse_json_to_model(response, SampleModel, strict=False)
         assert result is None
 
-    def test_raises_error_when_json_is_list_strict(self):
-        """Should raise JSONParseError when JSON is a list, not object, in strict mode."""
+    def test_converts_list_to_model_when_first_item_matches(self):
+        """Should convert list to dict and create model when first item has all fields."""
+        response = """```json
+[{"name": "first", "value": 1}, {"name": "second", "value": 2}]
+```"""
+        result = parse_json_to_model(response, SampleModel)
+        assert isinstance(result, SampleModel)
+        assert result.name == "first"
+        assert result.value == 1
+
+    def test_raises_error_when_converted_list_fails_model_strict(self):
+        """Should raise JSONParseError when converted list doesn't match model in strict mode."""
         response = """```json
 [{"name": "a"}, {"name": "b"}]
 ```"""
         with pytest.raises(JSONParseError) as exc_info:
             parse_json_to_model(response, SampleModel)
-        assert "Expected JSON object but got list" in str(exc_info.value)
+        # The converted dict is {"name": "a"} which lacks "value" field
+        assert "Failed to create SampleModel" in str(exc_info.value)
 
-    def test_returns_none_when_json_is_list_non_strict(self):
-        """Should return None when JSON is a list, not object, in non-strict mode."""
+    def test_returns_none_when_converted_list_fails_model_non_strict(self):
+        """Should return None when converted list doesn't match model in non-strict mode."""
         response = """```json
 [{"name": "a"}, {"name": "b"}]
+```"""
+        result = parse_json_to_model(response, SampleModel, strict=False)
+        assert result is None
+
+    def test_raises_error_when_list_is_empty_strict(self):
+        """Should raise JSONParseError when JSON is an empty list in strict mode."""
+        response = """```json
+[]
+```"""
+        with pytest.raises(JSONParseError) as exc_info:
+            parse_json_to_model(response, SampleModel)
+        assert "empty list" in str(exc_info.value)
+
+    def test_returns_none_when_list_is_empty_non_strict(self):
+        """Should return None when JSON is an empty list in non-strict mode."""
+        response = """```json
+[]
 ```"""
         result = parse_json_to_model(response, SampleModel, strict=False)
         assert result is None

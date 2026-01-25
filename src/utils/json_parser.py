@@ -32,20 +32,49 @@ def convert_list_to_dict(
 
     # If list contains dicts, it might be a list of entities - return first
     if all(isinstance(item, dict) for item in data):
-        logger.warning(f"List contains {len(data)} dict items, returning first as entity")
-        return data[0] if data else {}
+        context_info = f" for context '{context_hint}'" if context_hint else ""
+        logger.warning(
+            f"List contains {len(data)} dict items, returning first as entity{context_info}"
+        )
+        first_item: dict[str, Any] = data[0]
+        return first_item
 
     # If list contains strings, treat as properties/features
     if all(isinstance(item, str) for item in data):
-        logger.warning(f"Converting list of {len(data)} strings to properties dict")
+        context_info = f" for context '{context_hint}'" if context_hint else ""
+        logger.warning(f"Converting list of {len(data)} strings to properties dict{context_info}")
         return {
             "properties": data,
             "description": "; ".join(str(x) for x in data[:3]) + ("..." if len(data) > 3 else ""),
         }
 
     # Mixed types - convert to generic structure
-    logger.warning(f"Converting mixed-type list of {len(data)} items to dict")
+    context_info = f" for context '{context_hint}'" if context_hint else ""
+    logger.warning(f"Converting mixed-type list of {len(data)} items to dict{context_info}")
     return {"items": data}
+
+
+def _count_unescaped_quotes(text: str) -> int:
+    """Count unescaped double quotes in text.
+
+    Args:
+        text: String to analyze.
+
+    Returns:
+        Number of unescaped quote characters.
+    """
+    count = 0
+    escape_next = False
+    for char in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\":
+            escape_next = True
+            continue
+        if char == '"':
+            count += 1
+    return count
 
 
 def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
@@ -66,8 +95,8 @@ def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
 
         if open_braces > 0 or open_brackets > 0:
             repaired = text.rstrip(",: \n\t\"'")
-            # Close any open string
-            if repaired.count('"') % 2 == 1:
+            # Close any open string (escape-aware)
+            if _count_unescaped_quotes(repaired) % 2 == 1:
                 repaired += '"'
             repaired += "]" * max(0, open_brackets) + "}" * max(0, open_braces)
             result = _try_parse_json(repaired)
@@ -94,7 +123,7 @@ def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
             if char == "\\":
                 escape_next = True
                 continue
-            if char == '"' and not escape_next:
+            if char == '"':
                 in_string = not in_string
                 continue
             if in_string:
@@ -358,17 +387,22 @@ def parse_json_to_model[T](
     if data is None:
         return None
 
-    if not isinstance(data, dict):
-        error_msg = f"Expected JSON object but got {type(data).__name__}"
-        if strict:
-            logger.error(error_msg)
-            raise JSONParseError(
-                error_msg,
-                response_preview=response[:500],
-                expected_type=model_class.__name__,
-            )
-        logger.debug(error_msg)
-        return None
+    if isinstance(data, list):
+        # LLM returned list instead of dict - try to convert
+        logger.warning(
+            f"Expected JSON object but got list for {model_class.__name__} - attempting conversion"
+        )
+        data = convert_list_to_dict(data, context_hint=model_class.__name__)
+        if not data:
+            error_msg = f"Expected JSON object but got empty list for {model_class.__name__}"
+            if strict:
+                logger.error(error_msg)
+                raise JSONParseError(
+                    error_msg,
+                    response_preview=response[:500],
+                    expected_type=model_class.__name__,
+                )
+            return None
 
     try:
         return model_class(**data)
