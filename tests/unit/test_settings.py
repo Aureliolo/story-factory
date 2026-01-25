@@ -27,6 +27,7 @@ class TestSettings:
         assert settings.max_tokens == 8192
         assert settings.use_per_agent_models is True
         assert settings.interaction_mode == "checkpoint"
+        assert settings.world_quality_threshold == 7.5
 
     def test_get_temperature_for_agent(self):
         """Should return correct temperature for each agent role."""

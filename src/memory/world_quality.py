@@ -386,7 +386,7 @@ class RefinementConfig(BaseModel):
 
     max_iterations: int = Field(default=3, ge=1, le=10, description="Max refinement iterations")
     quality_threshold: float = Field(
-        default=7.0, ge=0.0, le=10.0, description="Minimum average score"
+        default=7.5, ge=0.0, le=10.0, description="Minimum average score"
     )
     creator_temperature: float = Field(
         default=0.9, ge=0.0, le=2.0, description="Temperature for creation"

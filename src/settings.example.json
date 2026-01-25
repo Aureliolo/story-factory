@@ -51,7 +51,7 @@
   "subprocess_timeout": 10,
   "world_quality_enabled": true,
   "world_quality_max_iterations": 3,
-  "world_quality_threshold": 7.0,
+  "world_quality_threshold": 7.5,
   "world_quality_creator_temp": 0.9,
   "world_quality_judge_temp": 0.1,
   "world_quality_refinement_temp": 0.7,

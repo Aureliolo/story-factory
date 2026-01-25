@@ -330,7 +330,7 @@ class Settings:
     # World quality refinement settings
     world_quality_enabled: bool = True  # Enable quality refinement for world generation
     world_quality_max_iterations: int = 3  # Maximum refinement iterations per entity
-    world_quality_threshold: float = 7.0  # Minimum quality score (0-10) to accept entity
+    world_quality_threshold: float = 7.5  # Min score (0-10) - entities plateau at 7.5-7.8
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
     world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
