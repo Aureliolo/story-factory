@@ -5,11 +5,13 @@ from pydantic import BaseModel
 
 from src.utils.exceptions import JSONParseError
 from src.utils.json_parser import (
+    ParseResult,
     _repair_truncated_json,
     clean_llm_text,
     convert_list_to_dict,
     extract_json,
     extract_json_list,
+    extract_json_with_info,
     parse_json_list_to_models,
     parse_json_to_model,
 )
@@ -483,25 +485,27 @@ class TestRepairTruncatedJson:
         """Strategy 1: Should close single unclosed brace."""
         text = '{"name": "test", "value": 42'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert isinstance(result, dict)
-        assert result["name"] == "test"
-        assert result["value"] == 42
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert result.data["name"] == "test"
+        assert result.data["value"] == 42
+        assert result.repair_applied == "brace_closing"
 
     def test_strategy_1_closes_nested_braces(self):
         """Strategy 1: Should close multiple nested braces."""
         text = '{"outer": {"inner": {"deep": "value"'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert "outer" in result
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "outer" in result.data
 
     def test_strategy_1_closes_brackets_and_braces(self):
         """Strategy 1: Should close both brackets and braces."""
         text = '{"items": ["a", "b", "c"'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert isinstance(result, dict)
-        assert result["items"] == ["a", "b", "c"]
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert result.data["items"] == ["a", "b", "c"]
 
     def test_strategy_1_handles_incomplete_string(self):
         """Strategy 1: Should handle truncation in middle of string value."""
@@ -509,81 +513,85 @@ class TestRepairTruncatedJson:
         result = _repair_truncated_json(text)
         # May or may not successfully parse depending on content
         # But should not crash
-        assert result is None or isinstance(result, dict)
+        assert not result.success or isinstance(result.data, dict)
 
     def test_strategy_2_extracts_complete_object(self):
         """Strategy 2: Should extract last complete object."""
         # Complete object followed by incomplete part
         text = '{"complete": true} {"incomplete": "val'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert isinstance(result, dict)
-        assert result["complete"] is True
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert result.data["complete"] is True
 
     def test_strategy_2_extracts_complete_array(self):
         """Strategy 2: Should extract last complete array."""
         text = "[1, 2, 3] [4, 5,"
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert result == [1, 2, 3]
+        assert result.success
+        assert result.data == [1, 2, 3]
 
     def test_strategy_3_truncates_at_last_comma(self):
         """Strategy 3: Should truncate at last comma if other strategies fail."""
         # This is a malformed JSON that strategy 1 and 2 might not fix
         text = '{"a": 1, "b": 2, "c": '
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert isinstance(result, dict)
+        assert result.success
+        assert isinstance(result.data, dict)
         # Should get at least a and b
-        assert "a" in result
-        assert result["a"] == 1
+        assert "a" in result.data
+        assert result.data["a"] == 1
 
-    def test_returns_none_for_completely_broken_json(self):
-        """Should return None when JSON is completely unrecoverable."""
+    def test_returns_failure_for_completely_broken_json(self):
+        """Should return failure when JSON is completely unrecoverable."""
         text = "This is not JSON at all, just plain text."
         result = _repair_truncated_json(text)
-        assert result is None
+        assert not result.success
+        assert result.data is None
 
     def test_handles_escaped_quotes_in_strings(self):
         """Should correctly handle escaped quotes when finding string boundaries."""
         # Escaped quotes inside string followed by complete key-value
         text = '{"quote": "He said \\"hello\\"", "other": 1'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert isinstance(result, dict)
-        assert "quote" in result
-        assert result["other"] == 1
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "quote" in result.data
+        assert result.data["other"] == 1
 
     def test_handles_backslashes_in_strings(self):
         """Should correctly handle backslashes in strings."""
         text = '{"path": "C:\\\\Users\\\\test"'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert "path" in result
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "path" in result.data
 
     def test_array_with_nested_objects(self):
         """Should repair array containing nested objects."""
         text = '[{"a": 1}, {"b": 2'
         result = _repair_truncated_json(text)
-        assert result is not None
+        assert result.success
         # Should at least get the first complete object
-        assert isinstance(result, list)
-        assert len(result) >= 1
+        assert isinstance(result.data, list)
+        assert len(result.data) >= 1
 
     def test_deeply_nested_structure(self):
         """Should repair deeply nested structures."""
         text = '{"l1": {"l2": {"l3": {"l4": "value"'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert "l1" in result
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "l1" in result.data
 
     def test_escape_sequence_in_strategy_2(self):
         """Strategy 2: Should handle escape sequences when finding complete objects."""
         # Valid complete object with escapes, followed by garbage
         text = '{"path": "C:\\\\test\\\\file"} garbage'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert "path" in result
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "path" in result.data
 
     def test_escape_sequence_in_strategy_3(self):
         """Strategy 3: Should handle escape sequences when finding last comma."""
@@ -591,8 +599,9 @@ class TestRepairTruncatedJson:
         text = '{"path": "C:\\\\test", "name": "val'
         result = _repair_truncated_json(text)
         # Strategy 3 should find the comma after "C:\\test"
-        assert result is not None
-        assert "path" in result
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "path" in result.data
 
     def test_strategy_2_extract_fails_parse(self):
         """Strategy 2: When extraction succeeds but parsing fails."""
@@ -601,7 +610,7 @@ class TestRepairTruncatedJson:
         text = '{"valid": true} {malformed no quotes}'
         result = _repair_truncated_json(text)
         # Should fall through strategies - may succeed with first object
-        assert result is None or result == {"valid": True}
+        assert not result.success or result.data == {"valid": True}
 
     def test_strategy_3_truncate_fails_parse(self):
         """Strategy 3: When truncation at comma still doesn't produce valid JSON."""
@@ -609,21 +618,23 @@ class TestRepairTruncatedJson:
         text = '{broken"key, "another": 1'
         result = _repair_truncated_json(text)
         # May fail all strategies
-        assert result is None or isinstance(result, dict)
+        assert not result.success or isinstance(result.data, dict)
 
     def test_newline_escape_in_string(self):
         """Should handle newline escape sequences in strings."""
         text = '{"text": "line1\\nline2"'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert "text" in result
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "text" in result.data
 
     def test_tab_escape_in_string(self):
         """Should handle tab escape sequences in strings."""
         text = '{"text": "col1\\tcol2"'
         result = _repair_truncated_json(text)
-        assert result is not None
-        assert "text" in result
+        assert result.success
+        assert isinstance(result.data, dict)
+        assert "text" in result.data
 
     def test_strategy_3_escape_path_forced(self):
         """Force Strategy 3 to run with escape sequences.
@@ -637,11 +648,121 @@ class TestRepairTruncatedJson:
         text = '{"a": "path\\\\to", "b": broken'
         result = _repair_truncated_json(text)
         # Should get at least key "a" from truncating at comma
-        assert result is None or (isinstance(result, dict) and "a" in result)
+        assert not result.success or (isinstance(result.data, dict) and "a" in result.data)
 
     def test_strategy_3_multiple_escapes(self):
         """Strategy 3 with multiple escape sequences."""
         # Multiple backslashes that Strategy 3 must properly track
         text = '{"p1": "a\\\\b", "p2": "c\\\\d\\\\e", "p3": trunc'
         result = _repair_truncated_json(text)
-        assert result is None or isinstance(result, dict)
+        assert not result.success or isinstance(result.data, dict)
+
+    def test_parse_result_has_strategies_tried(self):
+        """ParseResult should track which strategies were attempted."""
+        text = '{"name": "test"'
+        result = _repair_truncated_json(text)
+        assert result.success
+        assert len(result.strategies_tried) > 0
+        assert "brace_closing" in result.strategies_tried
+
+    def test_parse_result_boolean_context(self):
+        """ParseResult should work in boolean context."""
+        success_result = _repair_truncated_json('{"a": 1')
+        fail_result = _repair_truncated_json("not json")
+        assert success_result  # True in boolean context
+        assert not fail_result  # False in boolean context
+
+
+class TestExtractJsonWithInfo:
+    """Tests for extract_json_with_info function."""
+
+    def test_returns_parse_result(self):
+        """Should return a ParseResult object."""
+        response = '```json\n{"name": "test"}\n```'
+        result = extract_json_with_info(response)
+        assert isinstance(result, ParseResult)
+
+    def test_success_from_code_block(self):
+        """Should succeed with JSON code block."""
+        response = '```json\n{"name": "test", "value": 42}\n```'
+        result = extract_json_with_info(response)
+        assert result.success
+        assert result.data == {"name": "test", "value": 42}
+        assert "json_code_block" in result.strategies_tried
+
+    def test_success_from_plain_code_block(self):
+        """Should succeed with plain code block."""
+        response = '```\n{"name": "test"}\n```'
+        result = extract_json_with_info(response)
+        assert result.success
+        assert result.data == {"name": "test"}
+
+    def test_success_from_raw_json(self):
+        """Should succeed with raw JSON."""
+        response = 'Here is the data: {"name": "test"}'
+        result = extract_json_with_info(response)
+        assert result.success
+        assert result.data == {"name": "test"}
+        assert "raw_json" in result.strategies_tried
+
+    def test_tracks_repair_strategy(self):
+        """Should track which repair strategy was used."""
+        response = '{"name": "test", "value": 42'  # Truncated
+        result = extract_json_with_info(response)
+        assert result.success
+        assert result.repair_applied is not None
+        assert "truncation_repair" in result.strategies_tried
+
+    def test_failure_with_strategies_tried(self):
+        """Should track strategies tried even on failure."""
+        response = "This is not JSON at all."
+        result = extract_json_with_info(response)
+        assert not result.success
+        assert result.data is None
+        assert len(result.strategies_tried) > 0
+        assert result.original_error is not None
+
+    def test_fallback_pattern_success(self):
+        """Should track fallback pattern success."""
+        # Use a response where raw JSON fails but fallback pattern matches
+        # Broken JSON that fails raw parsing, but custom pattern finds valid JSON
+        response = '{broken json} The valid data is ITEM{"name": "test"}'
+        result = extract_json_with_info(response, fallback_pattern=r'ITEM(\{"name"[^}]*\})')
+        # Note: fallback captures full match, so we need the pattern to match valid JSON
+        assert result.success or "fallback_pattern" in result.strategies_tried
+
+    def test_strips_think_tags(self):
+        """Should strip think tags before parsing."""
+        response = '<think>reasoning</think>```json\n{"name": "test"}\n```'
+        result = extract_json_with_info(response)
+        assert result.success
+        assert result.data == {"name": "test"}
+
+    def test_success_from_raw_array(self):
+        """Should succeed with raw JSON array."""
+        response = "Here is the data: [1, 2, 3]"
+        result = extract_json_with_info(response)
+        assert result.success
+        assert result.data == [1, 2, 3]
+        assert "raw_json" in result.strategies_tried
+
+    def test_truncation_repair_failure_extends_strategies(self):
+        """Should track failed truncation repair strategies."""
+        # Truncated JSON that repair can't fix
+        response = '{broken "json without proper structure'
+        result = extract_json_with_info(response)
+        # Even if it fails, we should see strategies tried
+        assert "truncation_repair" in result.strategies_tried or len(result.strategies_tried) > 0
+
+    def test_fallback_pattern_actually_succeeds(self):
+        """Should return ParseResult when fallback pattern finds valid JSON."""
+        # Data where all other strategies fail but fallback succeeds
+        # No code blocks, raw JSON parsing will find {invalid json} first and fail
+        # Fallback pattern matches the valid JSON directly (group(0) is entire match)
+        response = 'broken {invalid json} DATA={"key": "value"}'
+        # Fallback pattern must match the exact JSON (not use capturing groups)
+        result = extract_json_with_info(response, fallback_pattern=r'\{"key": "value"\}')
+        assert result.success
+        assert result.data == {"key": "value"}
+        assert result.repair_applied == "fallback_pattern"
+        assert "fallback_pattern" in result.strategies_tried

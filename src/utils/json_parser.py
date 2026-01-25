@@ -3,11 +3,31 @@
 import json
 import logging
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from src.utils.exceptions import JSONParseError
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ParseResult:
+    """Structured result from JSON parsing with diagnostic information.
+
+    Provides detailed information about the parsing process, including
+    which repair strategies were attempted and which succeeded.
+    """
+
+    data: dict[str, Any] | list[Any] | None = None
+    success: bool = False
+    repair_applied: str | None = None
+    strategies_tried: list[str] = field(default_factory=list)
+    original_error: str | None = None
+
+    def __bool__(self) -> bool:
+        """Allow ParseResult to be used in boolean context."""
+        return self.success
 
 
 def convert_list_to_dict(
@@ -54,6 +74,38 @@ def convert_list_to_dict(
     return {"items": data}
 
 
+def _iterate_json_chars(text: str) -> list[tuple[int, str, bool]]:
+    """Iterate through JSON string characters, tracking string context.
+
+    This helper function handles escape sequences properly and returns
+    character positions with their string context.
+
+    Args:
+        text: JSON string to iterate.
+
+    Yields:
+        Tuples of (index, character, in_string) for each non-escaped character.
+    """
+    result: list[tuple[int, str, bool]] = []
+    in_string = False
+    escape_next = False
+
+    for i, char in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\":
+            escape_next = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            result.append((i, char, not in_string))  # Quote itself is at boundary
+            continue
+        result.append((i, char, in_string))
+
+    return result
+
+
 def _count_unescaped_quotes(text: str) -> int:
     """Count unescaped double quotes in text.
 
@@ -63,30 +115,19 @@ def _count_unescaped_quotes(text: str) -> int:
     Returns:
         Number of unescaped quote characters.
     """
-    count = 0
-    escape_next = False
-    for char in text:
-        if escape_next:
-            escape_next = False
-            continue
-        if char == "\\":
-            escape_next = True
-            continue
-        if char == '"':
-            count += 1
-    return count
+    return sum(1 for _, char, _ in _iterate_json_chars(text) if char == '"')
 
 
-def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
+def _repair_truncated_json(text: str) -> ParseResult:
     """Attempt multiple strategies to repair truncated JSON.
 
     Args:
         text: Potentially truncated JSON string.
 
     Returns:
-        Parsed JSON if repair successful, None otherwise.
+        ParseResult with repair information and parsed data if successful.
     """
-    strategies_tried = []
+    strategies_tried: list[str] = []
 
     # Strategy 1: Simple brace/bracket closing
     try:
@@ -102,30 +143,25 @@ def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
             result = _try_parse_json(repaired)
             if result is not None:
                 logger.info("Repaired truncated JSON with brace closing")
-                return result
+                strategies_tried.append("brace_closing")
+                return ParseResult(
+                    data=result,
+                    success=True,
+                    repair_applied="brace_closing",
+                    strategies_tried=strategies_tried,
+                )
             strategies_tried.append("brace_closing")
     except Exception:  # pragma: no cover
         strategies_tried.append("brace_closing_failed")
 
     # Strategy 2: Find last complete object/array and parse that
     try:
-        # Find the last complete JSON structure
+        # Find the last complete JSON structure using helper
         brace_count = 0
         bracket_count = 0
         last_complete_idx = -1
-        in_string = False
-        escape_next = False
 
-        for i, char in enumerate(text):
-            if escape_next:
-                escape_next = False
-                continue
-            if char == "\\":
-                escape_next = True
-                continue
-            if char == '"':
-                in_string = not in_string
-                continue
+        for i, char, in_string in _iterate_json_chars(text):
             if in_string:
                 continue
 
@@ -147,28 +183,23 @@ def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
             result = _try_parse_json(partial)
             if result is not None:
                 logger.info("Repaired truncated JSON by extracting complete structure")
-                return result
+                strategies_tried.append("extract_complete")
+                return ParseResult(
+                    data=result,
+                    success=True,
+                    repair_applied="extract_complete",
+                    strategies_tried=strategies_tried,
+                )
             strategies_tried.append("extract_complete")
     except Exception:  # pragma: no cover
         strategies_tried.append("extract_complete_failed")
 
     # Strategy 3: Truncate at last comma and close
     try:
-        # Find last comma outside of strings
+        # Find last comma outside of strings using helper
         last_comma = -1
-        in_string = False
-        escape_next = False
 
-        for i, char in enumerate(text):
-            if escape_next:
-                escape_next = False
-                continue
-            if char == "\\":
-                escape_next = True
-                continue
-            if char == '"':
-                in_string = not in_string
-                continue
+        for i, char, in_string in _iterate_json_chars(text):
             if not in_string and char == ",":
                 last_comma = i
 
@@ -180,13 +211,25 @@ def _repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
             result = _try_parse_json(truncated)
             if result is not None:
                 logger.info("Repaired truncated JSON by truncating at last comma")
-                return result
+                strategies_tried.append("truncate_comma")
+                return ParseResult(
+                    data=result,
+                    success=True,
+                    repair_applied="truncate_comma",
+                    strategies_tried=strategies_tried,
+                )
             strategies_tried.append("truncate_comma")
     except Exception:  # pragma: no cover
         strategies_tried.append("truncate_comma_failed")
 
     logger.debug(f"All JSON repair strategies failed: {strategies_tried}")
-    return None
+    return ParseResult(
+        data=None,
+        success=False,
+        repair_applied=None,
+        strategies_tried=strategies_tried,
+        original_error="All repair strategies failed",
+    )
 
 
 def clean_llm_text(text: str) -> str:
@@ -307,9 +350,9 @@ def extract_json(
             f"Detected truncated JSON (unbalanced: {open_braces} braces, "
             f"{open_brackets} brackets) - likely token limit reached"
         )
-        result = _repair_truncated_json(stripped)
-        if result is not None:
-            return result
+        repair_result = _repair_truncated_json(stripped)
+        if repair_result.success:
+            return repair_result.data
 
     # Strategy 5: Try custom fallback pattern
     if fallback_pattern:
@@ -332,6 +375,121 @@ def extract_json(
     # When strict=False, caller expects JSON to possibly not exist (optional parsing)
     logger.debug(error_msg)
     return None
+
+
+def extract_json_with_info(
+    response: str,
+    fallback_pattern: str | None = None,
+) -> ParseResult:
+    """Extract JSON with detailed diagnostic information.
+
+    Similar to extract_json, but returns a ParseResult with information about
+    which repair strategies were attempted and which succeeded.
+
+    Args:
+        response: The LLM response text
+        fallback_pattern: Optional regex pattern to try if other methods fail
+
+    Returns:
+        ParseResult with data, success status, and repair information.
+    """
+    strategies_tried: list[str] = []
+
+    # Strip <think>...</think> tags
+    response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
+    response = re.sub(r"</?think>", "", response)
+
+    # Strategy 1: Try ```json code block
+    strategies_tried.append("json_code_block")
+    json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
+    if json_match:
+        result = _try_parse_json(json_match.group(1))
+        if result is not None:
+            return ParseResult(
+                data=result,
+                success=True,
+                repair_applied=None,
+                strategies_tried=strategies_tried,
+            )
+
+    # Strategy 2: Try ``` code block
+    strategies_tried.append("plain_code_block")
+    code_match = re.search(r"```\s*(.*?)\s*```", response, re.DOTALL)
+    if code_match:
+        result = _try_parse_json(code_match.group(1))
+        if result is not None:
+            return ParseResult(
+                data=result,
+                success=True,
+                repair_applied=None,
+                strategies_tried=strategies_tried,
+            )
+
+    # Strategy 3: Try raw JSON
+    strategies_tried.append("raw_json")
+    json_obj_match = re.search(r"(\{[\s\S]*\})", response)
+    if json_obj_match:
+        result = _try_parse_json(json_obj_match.group(1))
+        if result is not None:
+            return ParseResult(
+                data=result,
+                success=True,
+                repair_applied=None,
+                strategies_tried=strategies_tried,
+            )
+
+    json_arr_match = re.search(r"(\[[\s\S]*\])", response)
+    if json_arr_match:
+        result = _try_parse_json(json_arr_match.group(1))
+        if result is not None:
+            return ParseResult(
+                data=result,
+                success=True,
+                repair_applied=None,
+                strategies_tried=strategies_tried,
+            )
+
+    # Strategy 4: Truncation repair
+    stripped = response.strip()
+    open_braces = stripped.count("{") - stripped.count("}")
+    open_brackets = stripped.count("[") - stripped.count("]")
+
+    if (stripped.startswith("{") or stripped.startswith("[")) and (
+        open_braces > 0 or open_brackets > 0
+    ):
+        strategies_tried.append("truncation_repair")
+        repair_result = _repair_truncated_json(stripped)
+        if repair_result.success:
+            return ParseResult(
+                data=repair_result.data,
+                success=True,
+                repair_applied=repair_result.repair_applied,
+                strategies_tried=strategies_tried + repair_result.strategies_tried,
+            )
+        strategies_tried.extend(repair_result.strategies_tried)
+
+    # Strategy 5: Fallback pattern
+    if fallback_pattern:
+        strategies_tried.append("fallback_pattern")
+        fallback_match = re.search(fallback_pattern, response, re.DOTALL)
+        if fallback_match:
+            result = _try_parse_json(fallback_match.group(0))
+            if result is not None:
+                return ParseResult(
+                    data=result,
+                    success=True,
+                    repair_applied="fallback_pattern",
+                    strategies_tried=strategies_tried,
+                )
+
+    # Failure
+    return ParseResult(
+        data=None,
+        success=False,
+        repair_applied=None,
+        strategies_tried=strategies_tried,
+        original_error=f"No valid JSON found. Preview: {response[:200]}...",
+    )
 
 
 def extract_json_list(response: str, strict: bool = True) -> list[Any] | None:
