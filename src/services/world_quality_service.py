@@ -308,7 +308,7 @@ class WorldQualityService:
                 if scores.average > peak_score:
                     peak_score = scores.average
                     consecutive_degradations = 0
-                    best_character = character
+                    best_character = character.model_copy(deep=True)
                     best_scores = scores
                     best_iteration = iteration + 1
                 elif scores.average < peak_score:
@@ -342,11 +342,13 @@ class WorldQualityService:
 
         # Return best character if we have one, otherwise return last
         if best_character and best_scores:
-            if best_iteration != iteration:
+            # Calculate final iteration (1-based) accounting for early stop vs normal completion
+            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
+            if best_iteration != final_iteration:
                 logger.warning(
                     f"Character '{character.name}' iterations got worse after peak. "
                     f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
                     f"Returning best iteration."
                 )
             return best_character, best_scores, best_iteration
@@ -654,11 +656,13 @@ Write all text in {brief.language if brief else "English"}."""
 
         # Return best location if we have one, otherwise return last
         if best_location.get("name") and best_scores:
-            if best_iteration != iteration:
+            # Calculate final iteration (1-based) accounting for early stop vs normal completion
+            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
+            if best_iteration != final_iteration:
                 logger.warning(
                     f"Location '{location.get('name')}' iterations got worse after peak. "
                     f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
                     f"Returning best iteration."
                 )
             return best_location, best_scores, best_iteration
@@ -985,12 +989,14 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         # Return best relationship if we have one, otherwise return last
         if best_relationship.get("source") and best_scores:
-            if best_iteration != iteration:
+            # Calculate final iteration (1-based) accounting for early stop vs normal completion
+            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
+            if best_iteration != final_iteration:
                 logger.warning(
                     f"Relationship '{relationship.get('source')} -> {relationship.get('target')}' "
                     f"iterations got worse after peak. "
                     f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
                     f"Returning best iteration."
                 )
             return best_relationship, best_scores, best_iteration
@@ -1780,11 +1786,13 @@ Return ONLY the improved faction."""
 
         # Return best item if we have one, otherwise return last
         if best_item.get("name") and best_scores:
-            if best_iteration != iteration:
+            # Calculate final iteration (1-based) accounting for early stop vs normal completion
+            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
+            if best_iteration != final_iteration:
                 logger.warning(
                     f"Item '{item.get('name')}' iterations got worse after peak. "
                     f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
                     f"Returning best iteration."
                 )
             return best_item, best_scores, best_iteration
@@ -2117,11 +2125,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         # Return best concept if we have one, otherwise return last
         if best_concept.get("name") and best_scores:
-            if best_iteration != iteration:
+            # Calculate final iteration (1-based) accounting for early stop vs normal completion
+            final_iteration = iteration if iteration >= config.max_iterations else iteration + 1
+            if best_iteration != final_iteration:
                 logger.warning(
                     f"Concept '{concept.get('name')}' iterations got worse after peak. "
                     f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
-                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Final: iteration {final_iteration} ({scores.average:.1f}). "
                     f"Returning best iteration."
                 )
             return best_concept, best_scores, best_iteration

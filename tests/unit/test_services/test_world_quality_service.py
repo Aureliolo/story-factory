@@ -1277,8 +1277,9 @@ class TestGenerateLocationWithQuality:
 
     @patch.object(WorldQualityService, "_create_location")
     @patch.object(WorldQualityService, "_judge_location_quality")
+    @patch.object(WorldQualityService, "_refine_location")
     def test_generate_location_error_during_iteration(
-        self, mock_judge, mock_create, service, story_state
+        self, mock_refine, mock_judge, mock_create, service, story_state
     ):
         """Test location generation handles errors during iteration."""
         test_loc = {
@@ -1287,11 +1288,17 @@ class TestGenerateLocationWithQuality:
             "significance": "Testing errors",
         }
         mock_create.return_value = test_loc
-        # First judgment succeeds with low score, second raises error
+        mock_refine.return_value = test_loc
+        # First judgment succeeds with low score, second raises error, third returns low score
+        # Service continues after error so needs values for all iterations
         low_scores = LocationQualityScores(
             atmosphere=5.0, significance=5.0, story_relevance=5.0, distinctiveness=5.0
         )
-        mock_judge.side_effect = [low_scores, WorldGenerationError("Judge failed")]
+        mock_judge.side_effect = [
+            low_scores,
+            WorldGenerationError("Judge failed"),
+            low_scores,
+        ]
 
         # Should still return location despite error on 2nd iteration
         # because we have valid results from 1st iteration

@@ -46,14 +46,22 @@ def settings():
 def mock_mode_service():
     """Create mock mode service."""
     mode_service = MagicMock()
-    mode_service.get_model_for_agent.return_value = "test-model"
+    # Use a real model name from RECOMMENDED_MODELS to avoid role tag errors
+    mode_service.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
     return mode_service
 
 
 @pytest.fixture
-def service(settings, mock_mode_service):
+def mock_ollama_client():
+    """Mock Ollama client to avoid network calls in tests."""
+    return MagicMock()
+
+
+@pytest.fixture
+def service(settings, mock_mode_service, mock_ollama_client):
     """Create WorldQualityService with mocked dependencies."""
     svc = WorldQualityService(settings, mock_mode_service)
+    svc._client = mock_ollama_client
     svc._analytics_db = MagicMock()
     return svc
 
@@ -159,7 +167,7 @@ class TestRefinementHistoryEarlyStopping:
         assert history.consecutive_degradations == 3
         assert history.should_stop_early(patience=2)
 
-    def test_plateau_after_peak_increments_degradation_counter(self):
+    def test_plateau_after_peak_does_not_increment_degradation_counter(self):
         """Test that plateauing (equal score) doesn't reset counter but doesn't increment."""
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 

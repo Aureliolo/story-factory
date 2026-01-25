@@ -627,7 +627,7 @@ class SettingsPage:
                         ui.number(
                             value=self.settings.world_quality_max_iterations,
                             min=1,
-                            max=20,
+                            max=10,
                             step=1,
                         )
                         .props("outlined dense")
