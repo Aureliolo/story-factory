@@ -889,6 +889,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         # Early stopping tracking
         peak_score: float = 0.0
         consecutive_degradations: int = 0
+        best_relationship: dict[str, Any] = {}
+        best_scores: RelationshipQualityScores | None = None
+        best_iteration: int = 0
 
         needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
 
@@ -944,6 +947,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 if scores.average > peak_score:
                     peak_score = scores.average
                     consecutive_degradations = 0
+                    best_relationship = relationship.copy()
+                    best_scores = scores
+                    best_iteration = iteration + 1
                 elif scores.average < peak_score:
                     consecutive_degradations += 1
 
@@ -972,6 +978,18 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 f"Failed to generate relationship after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
+
+        # Return best relationship if we have one, otherwise return last
+        if best_relationship.get("source") and best_scores:
+            if best_iteration != iteration:
+                logger.warning(
+                    f"Relationship '{relationship.get('source')} -> {relationship.get('target')}' "
+                    f"iterations got worse after peak. "
+                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
+                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Returning best iteration."
+                )
+            return best_relationship, best_scores, best_iteration
 
         # We have a relationship but it didn't meet threshold - return it with a warning
         logger.warning(
@@ -1687,6 +1705,9 @@ Return ONLY the improved faction."""
         # Early stopping tracking
         peak_score: float = 0.0
         consecutive_degradations: int = 0
+        best_item: dict[str, Any] = {}
+        best_scores: ItemQualityScores | None = None
+        best_iteration: int = 0
 
         while iteration < config.max_iterations:
             try:
@@ -1722,6 +1743,9 @@ Return ONLY the improved faction."""
                 if scores.average > peak_score:
                     peak_score = scores.average
                     consecutive_degradations = 0
+                    best_item = item.copy()
+                    best_scores = scores
+                    best_iteration = iteration + 1
                 elif scores.average < peak_score:
                     consecutive_degradations += 1
 
@@ -1749,6 +1773,17 @@ Return ONLY the improved faction."""
                 f"Failed to generate item after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
+
+        # Return best item if we have one, otherwise return last
+        if best_item.get("name") and best_scores:
+            if best_iteration != iteration:
+                logger.warning(
+                    f"Item '{item.get('name')}' iterations got worse after peak. "
+                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
+                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Returning best iteration."
+                )
+            return best_item, best_scores, best_iteration
 
         logger.warning(
             f"Item '{item.get('name')}' did not meet quality threshold "
@@ -2006,6 +2041,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         # Early stopping tracking
         peak_score: float = 0.0
         consecutive_degradations: int = 0
+        best_concept: dict[str, Any] = {}
+        best_scores: ConceptQualityScores | None = None
+        best_iteration: int = 0
         needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
 
         while iteration < config.max_iterations:
@@ -2042,6 +2080,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 if scores.average > peak_score:
                     peak_score = scores.average
                     consecutive_degradations = 0
+                    best_concept = concept.copy()
+                    best_scores = scores
+                    best_iteration = iteration + 1
                 elif scores.average < peak_score:
                     consecutive_degradations += 1
 
@@ -2069,6 +2110,17 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 f"Failed to generate concept after {config.max_iterations} attempts. "
                 f"Last error: {last_error}"
             )
+
+        # Return best concept if we have one, otherwise return last
+        if best_concept.get("name") and best_scores:
+            if best_iteration != iteration:
+                logger.warning(
+                    f"Concept '{concept.get('name')}' iterations got worse after peak. "
+                    f"Best: iteration {best_iteration} ({best_scores.average:.1f}), "
+                    f"Final: iteration {iteration} ({scores.average:.1f}). "
+                    f"Returning best iteration."
+                )
+            return best_concept, best_scores, best_iteration
 
         logger.warning(
             f"Concept '{concept.get('name')}' did not meet quality threshold "
