@@ -348,3 +348,45 @@ class TestJudgeConsistencyConfig:
         # Above maximum
         with pytest.raises(ValueError):
             JudgeConsistencyConfig(outlier_std_threshold=5.0)
+
+    def test_from_settings(self) -> None:
+        """Test from_settings creates config from settings object."""
+        from unittest.mock import MagicMock
+
+        mock_settings = MagicMock()
+        mock_settings.judge_consistency_enabled = False
+        mock_settings.judge_multi_call_enabled = True
+        mock_settings.judge_multi_call_count = 4
+        mock_settings.judge_confidence_threshold = 0.8
+        mock_settings.judge_outlier_detection = False
+        mock_settings.judge_outlier_std_threshold = 2.5
+        mock_settings.judge_outlier_strategy = "retry"
+
+        config = JudgeConsistencyConfig.from_settings(mock_settings)
+
+        assert config.enabled is False
+        assert config.multi_call_enabled is True
+        assert config.multi_call_count == 4
+        assert config.confidence_threshold == 0.8
+        assert config.outlier_detection is False
+        assert config.outlier_std_threshold == 2.5
+        assert config.outlier_strategy == "retry"
+
+
+class TestScoreStatisticsEdgeCases:
+    """Additional edge case tests for ScoreStatistics."""
+
+    def test_calculate_zero_mean_with_variance(self) -> None:
+        """Test calculate with zero mean but positive variance returns confidence 0.0."""
+        # Scores that average to 0 but have variance
+        stats = ScoreStatistics.calculate([-5.0, 0.0, 5.0])
+        assert stats.mean == 0.0
+        assert stats.std > 0.0
+        assert stats.confidence == 0.0  # Zero mean with variance = 0 confidence
+
+    def test_get_filtered_mean_all_excluded(self) -> None:
+        """Test get_filtered_mean returns mean when all scores excluded."""
+        stats = ScoreStatistics.calculate([6.0, 7.0, 8.0])
+        # Exclude all indices
+        filtered_mean = stats.get_filtered_mean(exclude_indices=[0, 1, 2])
+        assert filtered_mean == stats.mean  # Falls back to regular mean

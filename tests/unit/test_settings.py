@@ -1374,6 +1374,57 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="content_truncation_for_judgment must be between"):
             settings.validate()
 
+    # --- Judge consistency settings validation (lines 611, 617, 623, 630) ---
+
+    def test_validate_raises_on_invalid_judge_multi_call_count_low(self):
+        """Should raise ValueError for judge_multi_call_count below 2."""
+        settings = Settings()
+        settings.judge_multi_call_count = 1  # Below 2
+        with pytest.raises(ValueError, match="judge_multi_call_count must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_judge_multi_call_count_high(self):
+        """Should raise ValueError for judge_multi_call_count above 5."""
+        settings = Settings()
+        settings.judge_multi_call_count = 6  # Above 5
+        with pytest.raises(ValueError, match="judge_multi_call_count must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_judge_confidence_threshold_low(self):
+        """Should raise ValueError for judge_confidence_threshold below 0.0."""
+        settings = Settings()
+        settings.judge_confidence_threshold = -0.1  # Below 0.0
+        with pytest.raises(ValueError, match="judge_confidence_threshold must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_judge_confidence_threshold_high(self):
+        """Should raise ValueError for judge_confidence_threshold above 1.0."""
+        settings = Settings()
+        settings.judge_confidence_threshold = 1.5  # Above 1.0
+        with pytest.raises(ValueError, match="judge_confidence_threshold must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_judge_outlier_std_threshold_low(self):
+        """Should raise ValueError for judge_outlier_std_threshold below 1.0."""
+        settings = Settings()
+        settings.judge_outlier_std_threshold = 0.5  # Below 1.0
+        with pytest.raises(ValueError, match="judge_outlier_std_threshold must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_judge_outlier_std_threshold_high(self):
+        """Should raise ValueError for judge_outlier_std_threshold above 4.0."""
+        settings = Settings()
+        settings.judge_outlier_std_threshold = 5.0  # Above 4.0
+        with pytest.raises(ValueError, match="judge_outlier_std_threshold must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_judge_outlier_strategy(self):
+        """Should raise ValueError for invalid judge_outlier_strategy."""
+        settings = Settings()
+        settings.judge_outlier_strategy = "invalid"  # Not in valid list
+        with pytest.raises(ValueError, match="judge_outlier_strategy must be one of"):
+            settings.validate()
+
 
 class TestValidatorModelSelection:
     """Tests for validator model selection."""

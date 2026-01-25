@@ -2079,3 +2079,28 @@ class TestRefinementEffectivenessTracking:
 
         loc_breakdown = next(b for b in summary["by_entity_type"] if b["entity_type"] == "location")
         assert loc_breakdown["count"] == 1
+
+    def test_get_refinement_progression_data_with_empty_string_progression(
+        self, db: ModeDatabase
+    ) -> None:
+        """Test progression data when score_progression_json is empty string."""
+        import sqlite3
+
+        # Directly insert a record with empty string (not NULL) for score_progression_json
+        # This tests the defensive else branch that handles malformed data
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO world_entity_scores (
+                    timestamp, project_id, entity_type, entity_name, model_id,
+                    average_score, iterations_used, score_progression_json
+                ) VALUES (datetime('now'), 'p1', 'character', 'Hero', 'model-a',
+                          7.5, 1, '')
+                """
+            )
+
+        data = db.get_refinement_progression_data()
+        assert len(data) == 1
+        record = data[0]
+        assert record["entity_name"] == "Hero"
+        assert record["score_progression"] == []  # Empty list for empty string JSON
