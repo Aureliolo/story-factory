@@ -575,7 +575,11 @@ PENDING PLOT POINTS:
 List ONLY the numbers of plot points that were CLEARLY addressed or completed in this chapter.
 Output format: Just the numbers separated by commas (e.g., "0, 2, 5") or "none" if no plot points were addressed."""
 
-        response = self.generate(prompt, temperature=self.settings.temp_plot_checking)
+        # Use min_response_length=1 because valid responses can be very short
+        # (e.g., "0" for first plot point, "none" for no completions)
+        response = self.generate(
+            prompt, temperature=self.settings.temp_plot_checking, min_response_length=1
+        )
 
         completed_indices = []
         response_clean = response.lower().strip()

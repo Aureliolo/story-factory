@@ -67,6 +67,44 @@ class WorldQualityService:
         "relationship": "validator",  # Relationship validity checking
     }
 
+    @staticmethod
+    def _format_properties(properties: list[Any] | Any | None) -> str:
+        """Format a list of properties into a comma-separated string.
+
+        Handles both string and dict properties (LLM sometimes returns dicts).
+        Also handles None or non-list inputs gracefully.
+
+        Args:
+            properties: List of properties (strings or dicts), or None/single value.
+
+        Returns:
+            Comma-separated string of property names, or empty string if no properties.
+        """
+        if not properties:
+            return ""
+        if not isinstance(properties, list):
+            properties = [properties]
+
+        result: list[str] = []
+        for prop in properties:
+            if isinstance(prop, str):
+                result.append(prop)
+            elif isinstance(prop, dict):
+                # Try to extract a name or description from dict
+                # Use key existence check to handle empty strings correctly
+                # Coerce to string to handle non-string values (e.g., None, int)
+                if "name" in prop:
+                    value = prop["name"]
+                    result.append("" if value is None else str(value))
+                elif "description" in prop:
+                    value = prop["description"]
+                    result.append("" if value is None else str(value))
+                else:
+                    result.append(str(prop))
+            else:
+                result.append(str(prop))
+        return ", ".join(result)
+
     def __init__(self, settings: Settings, mode_service: ModelModeService):
         """Initialize WorldQualityService.
 
@@ -223,7 +261,9 @@ class WorldQualityService:
 
         while iteration < config.max_iterations:
             try:
-                if iteration == 0:
+                # Create new character on first iteration OR if previous returned None
+                # (e.g., validation failure or duplicate name)
+                if iteration == 0 or character is None:
                     # Initial generation
                     character = self._create_character(
                         story_state, existing_names, config.creator_temperature, custom_instructions
@@ -500,7 +540,9 @@ Write all text in {brief.language if brief else "English"}."""
 
         while iteration < config.max_iterations:
             try:
-                if iteration == 0:
+                # Create new location on first iteration OR if previous returned empty
+                # (e.g., duplicate name detection returns {} to force retry)
+                if iteration == 0 or not location.get("name"):
                     location = self._create_location(
                         story_state, existing_names, config.creator_temperature
                     )
@@ -773,9 +815,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         scores: RelationshipQualityScores | None = None
         last_error: str = ""
 
+        needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
+
         while iteration < config.max_iterations:
             try:
-                if iteration == 0:
+                # Create new relationship on first iteration OR if previous was invalid/duplicate
+                if needs_fresh_creation:
                     relationship = self._create_relationship(
                         story_state, entity_names, existing_rels, config.creator_temperature
                     )
@@ -793,6 +838,7 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                         f"Relationship creation returned incomplete on iteration {iteration + 1}"
                     )
                     logger.error(last_error)
+                    needs_fresh_creation = True  # Retry with fresh creation
                     iteration += 1
                     continue
 
@@ -803,8 +849,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                 if self._is_duplicate_relationship(source, target, rel_type, existing_rels):
                     last_error = f"Generated duplicate relationship {source} -> {target}"
                     logger.warning(last_error)
+                    needs_fresh_creation = True  # Retry with fresh creation
                     iteration += 1
                     continue
+
+                # Got a valid relationship - can proceed to refinement on next iteration
+                needs_fresh_creation = False
 
                 scores = self._judge_relationship_quality(
                     relationship, story_state, config.judge_temperature
@@ -1121,7 +1171,9 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         while iteration < config.max_iterations:
             try:
-                if iteration == 0:
+                # Create new faction on first iteration OR if previous returned empty
+                # (e.g., duplicate name detection returns {} to force retry)
+                if iteration == 0 or not faction.get("name"):
                     faction = self._create_faction(
                         story_state, existing_names, config.creator_temperature, existing_locations
                     )
@@ -1534,7 +1586,9 @@ Return ONLY the improved faction."""
 
         while iteration < config.max_iterations:
             try:
-                if iteration == 0:
+                # Create new item on first iteration OR if previous returned empty
+                # (e.g., duplicate name detection returns {} to force retry)
+                if iteration == 0 or not item.get("name"):
                     item = self._create_item(
                         story_state, existing_names, config.creator_temperature
                     )
@@ -1670,7 +1724,7 @@ ITEM TO EVALUATE:
 Name: {item.get("name", "Unknown")}
 Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
-Properties: {", ".join(item.get("properties", []))}
+Properties: {self._format_properties(item.get("properties", []))}
 
 Rate each dimension 0-10:
 - SIGNIFICANCE: Story importance, plot relevance
@@ -1746,7 +1800,7 @@ ORIGINAL ITEM:
 Name: {item.get("name", "Unknown")}
 Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
-Properties: {", ".join(item.get("properties", []))}
+Properties: {self._format_properties(item.get("properties", []))}
 
 QUALITY SCORES (0-10):
 - Significance: {scores.significance}

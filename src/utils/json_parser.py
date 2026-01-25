@@ -148,13 +148,15 @@ def extract_json(
 
     # Failure path
     error_msg = f"No valid JSON found in response. Response preview: {response[:200]}..."
-    logger.error(error_msg)
     if strict:
+        logger.error(error_msg)
         raise JSONParseError(
             error_msg,
             response_preview=response[:500],
             expected_type="dict or list",
         )
+    # When strict=False, caller expects JSON to possibly not exist (optional parsing)
+    logger.debug(error_msg)
     return None
 
 
@@ -213,26 +215,28 @@ def parse_json_to_model[T](
 
     if not isinstance(data, dict):
         error_msg = f"Expected JSON object but got {type(data).__name__}"
-        logger.error(error_msg)
         if strict:
+            logger.error(error_msg)
             raise JSONParseError(
                 error_msg,
                 response_preview=response[:500],
                 expected_type=model_class.__name__,
             )
+        logger.debug(error_msg)
         return None
 
     try:
         return model_class(**data)
     except (TypeError, ValueError) as e:
         error_msg = f"Failed to create {model_class.__name__}: {e}"
-        logger.error(error_msg)
         if strict:
+            logger.error(error_msg)
             raise JSONParseError(
                 error_msg,
                 response_preview=response[:500],
                 expected_type=model_class.__name__,
             ) from e
+        logger.debug(error_msg)
         return None
 
 
@@ -269,7 +273,8 @@ def parse_json_list_to_models[T](
             results.append(model_class(**item))
         except (TypeError, ValueError) as e:
             error_msg = f"Failed to create {model_class.__name__} at index {i}: {e}"
-            logger.error(error_msg)
+            # Log at debug for individual item failures since we continue processing
+            logger.debug(error_msg)
             failed_items.append((i, str(e)))
 
     # Check if we met minimum count requirement
