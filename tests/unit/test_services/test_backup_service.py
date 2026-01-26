@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import zipfile
+from unittest import mock
 
 import pytest
 
@@ -853,6 +854,97 @@ class TestBackupVerifier:
         assert result.valid is True
         assert any("No checksums" in w for w in result.warnings)
 
+    def test_verify_invalid_manifest_json(self, tmp_path):
+        """Test verification fails when manifest exists but has invalid JSON."""
+        zip_path = tmp_path / "invalid_manifest.zip"
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", "{ invalid json }")
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.manifest_valid is False
+        assert any("Invalid JSON in metadata" in e for e in result.errors)
+
+    def test_verify_checksum_for_file_not_in_archive(self, tmp_path):
+        """Test checksum verification skips files not in archive (line 169)."""
+        zip_path = tmp_path / "checksum_missing_file.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["project.json", "missing.json"],
+            "checksums": {
+                "project.json": hashlib.sha256(b'{"id": "test"}').hexdigest(),
+                "missing.json": "abc123",  # File not in archive
+            },
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        # Should fail file completeness but checksum for missing file is skipped
+        assert result.valid is False
+        assert result.files_complete is False
+
+    def test_verify_checksum_creates_file_result_when_not_in_completeness(self, tmp_path):
+        """Test checksum verification creates FileCheckResult for files not in file list (lines 180-182)."""
+        zip_path = tmp_path / "checksum_only.zip"
+
+        content = json.dumps({"id": "test"}).encode()
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": [],  # Empty files list
+            "checksums": {"project.json": hashlib.sha256(content).hexdigest()},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", content)
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        # Should pass (empty file list means files_complete is True)
+        # The checksum check should create a new FileCheckResult
+        file_results_for_project = [
+            fr for fr in result.file_results if fr.filename == "project.json"
+        ]
+        assert len(file_results_for_project) == 1
+        assert file_results_for_project[0].checksum_valid is True
+
+    def test_verify_no_version_in_metadata_defaults_to_compatible(self, tmp_path):
+        """Test verification treats missing backup_format_version as compatible (defaults to v1)."""
+        zip_path = tmp_path / "no_version.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "files": ["project.json"],
+            # No backup_format_version field - defaults to 1
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        # Should pass - missing version defaults to 1 which is compatible
+        assert result.valid is True
+        assert result.version_compatible is True
+
 
 class TestBackupServiceWithVerification:
     """Tests for BackupService with verification enabled."""
@@ -884,6 +976,40 @@ class TestBackupServiceWithVerification:
         # Restore should succeed with valid backup
         new_id = service.restore_backup(backup_path.name)
         assert new_id is not None
+
+    def test_restore_fails_with_many_errors_shows_truncated_message(self, tmp_settings, tmp_path):
+        """Test restore shows truncated error message when >3 errors (line 518)."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+        tmp_settings.backup_verify_on_restore = True
+
+        # Create backup with multiple issues to generate >3 errors
+        zip_path = backups_dir / "many_errors.zip"
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["f1.json", "f2.json", "f3.json", "f4.json", "f5.json"],
+            "checksums": {
+                "test.json": "wrong1",
+            },
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("test.json", json.dumps({"id": "test"}))
+            # Missing files f1-f5
+
+        service = BackupService(tmp_settings)
+
+        with pytest.raises(ValueError) as exc_info:
+            service.restore_backup("many_errors.zip")
+
+        # Should show truncated message with "more errors"
+        error_msg = str(exc_info.value)
+        assert "more errors" in error_msg
 
     def test_restore_fails_on_invalid_backup(self, tmp_settings, tmp_path):
         """Test restore fails when verification fails."""
@@ -986,3 +1112,141 @@ class TestBackupServiceWithVerification:
             story_content = zf.read(f"{project_id}.json")
             expected_checksum = hashlib.sha256(story_content).hexdigest()
             assert metadata["checksums"][f"{project_id}.json"] == expected_checksum
+
+    def test_verify_file_completeness_error_handling(self, tmp_path, monkeypatch):
+        """Test _check_file_completeness error handling (lines 150-152)."""
+        zip_path = tmp_path / "test.zip"
+
+        # Create a valid backup
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["project.json"],
+            "checksums": {},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+
+        # Mock the file completeness check to throw error after manifest check passes
+        call_count = {"count": 0}
+        original_read = zipfile.ZipFile.read
+
+        def mock_read(self, name):
+            """Mock read that fails on second metadata read."""
+            if name == "backup_metadata.json":
+                call_count["count"] += 1
+                # First call (manifest check) succeeds
+                if call_count["count"] == 1:
+                    return original_read(self, name)
+                # Second call (file completeness check) fails
+                raise KeyError("Simulated read error")
+            return original_read(self, name)
+
+        monkeypatch.setattr(zipfile.ZipFile, "read", mock_read)
+
+        result = verifier.verify(zip_path)
+
+        assert result.files_complete is False
+        assert any("Error checking file completeness" in e for e in result.errors)
+
+    def test_verify_checksums_error_handling(self, tmp_path, monkeypatch):
+        """Test _check_checksums error handling (lines 199-200)."""
+        zip_path = tmp_path / "test.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["project.json"],
+            "checksums": {"project.json": "abc123"},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+
+        call_count = {"count": 0}
+        original_read = zipfile.ZipFile.read
+
+        def mock_read(self, name):
+            """Mock read that fails on third metadata read."""
+            if name == "backup_metadata.json":
+                call_count["count"] += 1
+                # First 2 calls (manifest + completeness) succeed
+                if call_count["count"] <= 2:
+                    return original_read(self, name)
+                # Third call (checksums check) fails
+                raise KeyError("Simulated checksum error")
+            return original_read(self, name)
+
+        monkeypatch.setattr(zipfile.ZipFile, "read", mock_read)
+
+        result = verifier.verify(zip_path)
+
+        assert any("Error checking checksums" in w for w in result.warnings)
+
+    def test_verify_sqlite_integrity_not_ok(self, tmp_path):
+        """Test SQLite integrity check returns non-ok result (lines 224-225)."""
+        zip_path = tmp_path / "test.zip"
+
+        # Create a valid SQLite database
+        db_path = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE test (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        db_content = db_path.read_bytes()
+        checksum = hashlib.sha256(db_content).hexdigest()
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["test.db"],
+            "checksums": {"test.db": checksum},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("test.db", db_content)
+
+        verifier = BackupVerifier()
+
+        # Create mock cursor that returns non-ok integrity result
+        mock_cursor = mock.MagicMock()
+        mock_cursor.fetchone.return_value = ("integrity check failed: data corruption",)
+
+        mock_conn = mock.MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+
+        with mock.patch("sqlite3.connect", return_value=mock_conn):
+            result = verifier.verify(zip_path)
+
+        assert result.sqlite_integrity_valid is False
+        assert any("SQLite integrity check failed" in e for e in result.errors)
+
+    def test_verify_version_compatibility_error_handling(self, tmp_path):
+        """Test _check_version_compatibility error handling (lines 274-276)."""
+        from src.services.backup_service import BackupVerificationResult
+
+        verifier = BackupVerifier()
+
+        # Create a mock zipfile that raises an error during version check
+        mock_zf = mock.MagicMock()
+        mock_zf.read.side_effect = KeyError("Simulated version check error")
+
+        result = BackupVerificationResult(valid=True)
+
+        # Call the internal method directly to test exception handling
+        verifier._check_version_compatibility(mock_zf, result)
+
+        assert result.version_compatible is True  # Still compatible on error
+        assert any("No backup format version" in w for w in result.warnings)
