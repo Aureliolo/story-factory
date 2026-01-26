@@ -511,3 +511,164 @@ class TestProgressCallback:
 
         assert len(item_updates) == 4
         assert all(p.entity_type == "item" for p in item_updates)
+
+    def test_faction_cancellation_and_progress(self, world_quality_service, sample_story_state):
+        """Faction generation supports cancel_check and progress_callback."""
+        cancel_after = 1
+        call_count = [0]
+        progress_updates = []
+
+        def cancel_check():
+            """Cancel after first faction is generated."""
+            return call_count[0] >= cancel_after
+
+        def mock_faction(*args, **kwargs):
+            """Return mock faction data and track call count."""
+            call_count[0] += 1
+            return (
+                {"name": f"Faction{call_count[0]}", "description": "A group"},
+                MagicMock(average=7.5),
+                1,
+            )
+
+        def progress_callback(progress: EntityGenerationProgress):
+            """Collect faction progress updates."""
+            progress_updates.append(progress)
+
+        with patch.object(
+            world_quality_service, "generate_faction_with_quality", side_effect=mock_faction
+        ):
+            results = world_quality_service.generate_factions_with_quality(
+                sample_story_state,
+                existing_names=[],
+                count=3,
+                cancel_check=cancel_check,
+                progress_callback=progress_callback,
+            )
+
+        # Should have completed 1 and cancelled before second
+        assert len(results) == 1
+        assert len(progress_updates) == 2  # 1 generating + 1 complete
+        assert all(p.entity_type == "faction" for p in progress_updates)
+
+    def test_item_cancellation(self, world_quality_service, sample_story_state):
+        """Item generation respects cancel_check."""
+        cancel_after = 1
+        call_count = [0]
+
+        def cancel_check():
+            """Cancel after first item is generated."""
+            return call_count[0] >= cancel_after
+
+        def mock_item(*args, **kwargs):
+            """Return mock item data and track call count."""
+            call_count[0] += 1
+            return (
+                {"name": f"Item{call_count[0]}", "description": "A thing"},
+                MagicMock(average=7.5),
+                1,
+            )
+
+        with patch.object(
+            world_quality_service, "generate_item_with_quality", side_effect=mock_item
+        ):
+            results = world_quality_service.generate_items_with_quality(
+                sample_story_state,
+                existing_names=[],
+                count=3,
+                cancel_check=cancel_check,
+            )
+
+        # Should have completed 1 and cancelled before second
+        assert len(results) == 1
+
+    def test_concept_cancellation_and_progress(self, world_quality_service, sample_story_state):
+        """Concept generation supports cancel_check and progress_callback."""
+        cancel_after = 1
+        call_count = [0]
+        progress_updates = []
+
+        def cancel_check():
+            """Cancel after first concept is generated."""
+            return call_count[0] >= cancel_after
+
+        def mock_concept(*args, **kwargs):
+            """Return mock concept data and track call count."""
+            call_count[0] += 1
+            return (
+                {"name": f"Concept{call_count[0]}", "description": "An idea"},
+                MagicMock(average=7.5),
+                1,
+            )
+
+        def progress_callback(progress: EntityGenerationProgress):
+            """Collect concept progress updates."""
+            progress_updates.append(progress)
+
+        with patch.object(
+            world_quality_service, "generate_concept_with_quality", side_effect=mock_concept
+        ):
+            results = world_quality_service.generate_concepts_with_quality(
+                sample_story_state,
+                existing_names=[],
+                count=3,
+                cancel_check=cancel_check,
+                progress_callback=progress_callback,
+            )
+
+        # Should have completed 1 and cancelled before second
+        assert len(results) == 1
+        assert len(progress_updates) == 2  # 1 generating + 1 complete
+        assert all(p.entity_type == "concept" for p in progress_updates)
+
+    def test_relationship_cancellation_and_progress(
+        self, world_quality_service, sample_story_state
+    ):
+        """Relationship generation supports cancel_check and progress_callback."""
+        cancel_after = 1
+        call_count = [0]
+        progress_updates = []
+
+        def cancel_check():
+            """Cancel after first relationship is generated."""
+            return call_count[0] >= cancel_after
+
+        def mock_relationship(*args, **kwargs):
+            """Return mock relationship data and track call count."""
+            call_count[0] += 1
+            return (
+                {
+                    "source": "Entity1",
+                    "target": "Entity2",
+                    "relationship_type": "knows",
+                    "description": "A connection",
+                },
+                MagicMock(average=7.5),
+                1,
+            )
+
+        def progress_callback(progress: EntityGenerationProgress):
+            """Collect relationship progress updates."""
+            progress_updates.append(progress)
+
+        # Entity names for relationship generation
+        entity_names = ["Entity1", "Entity2", "Entity3", "Entity4"]
+
+        with patch.object(
+            world_quality_service,
+            "generate_relationship_with_quality",
+            side_effect=mock_relationship,
+        ):
+            results = world_quality_service.generate_relationships_with_quality(
+                sample_story_state,
+                entity_names=entity_names,
+                existing_rels=[],
+                count=3,
+                cancel_check=cancel_check,
+                progress_callback=progress_callback,
+            )
+
+        # Should have completed 1 and cancelled before second
+        assert len(results) == 1
+        assert len(progress_updates) == 2  # 1 generating + 1 complete
+        assert all(p.entity_type == "relationship" for p in progress_updates)
