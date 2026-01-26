@@ -300,6 +300,141 @@ class TestSettingsValidation:
 
         assert "LLM checking will have no effect" in caplog.text
 
+    def test_validate_raises_on_non_bool_relationship_validation_enabled(self):
+        """Should raise ValueError for non-boolean relationship_validation_enabled."""
+        settings = Settings()
+        settings.relationship_validation_enabled = "true"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="relationship_validation_enabled must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_non_bool_orphan_detection_enabled(self):
+        """Should raise ValueError for non-boolean orphan_detection_enabled."""
+        settings = Settings()
+        settings.orphan_detection_enabled = 1  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="orphan_detection_enabled must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_non_bool_circular_detection_enabled(self):
+        """Should raise ValueError for non-boolean circular_detection_enabled."""
+        settings = Settings()
+        settings.circular_detection_enabled = "yes"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="circular_detection_enabled must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_fuzzy_match_threshold_too_low(self):
+        """Should raise ValueError for fuzzy_match_threshold below 0.5."""
+        settings = Settings()
+        settings.fuzzy_match_threshold = 0.3
+        with pytest.raises(
+            ValueError, match=r"fuzzy_match_threshold must be between 0\.5 and 1\.0"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_fuzzy_match_threshold_too_high(self):
+        """Should raise ValueError for fuzzy_match_threshold above 1.0."""
+        settings = Settings()
+        settings.fuzzy_match_threshold = 1.5
+        with pytest.raises(
+            ValueError, match=r"fuzzy_match_threshold must be between 0\.5 and 1\.0"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_max_relationships_too_low(self):
+        """Should raise ValueError for max_relationships_per_entity below 1."""
+        settings = Settings()
+        settings.max_relationships_per_entity = 0
+        with pytest.raises(
+            ValueError, match="max_relationships_per_entity must be between 1 and 50"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_max_relationships_too_high(self):
+        """Should raise ValueError for max_relationships_per_entity above 50."""
+        settings = Settings()
+        settings.max_relationships_per_entity = 100
+        with pytest.raises(
+            ValueError, match="max_relationships_per_entity must be between 1 and 50"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_circular_relationship_types_not_list(self):
+        """Should raise ValueError for circular_relationship_types that's not a list."""
+        settings = Settings()
+        settings.circular_relationship_types = "owns,reports_to"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="circular_relationship_types must be a list"):
+            settings.validate()
+
+    def test_validate_raises_on_circular_relationship_types_contains_non_strings(self):
+        """Should raise ValueError for circular_relationship_types containing non-strings."""
+        settings = Settings()
+        settings.circular_relationship_types = ["owns", 123, "reports_to"]  # type: ignore[list-item]
+        with pytest.raises(
+            ValueError, match="circular_relationship_types must contain only strings"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_not_dict(self):
+        """Should raise ValueError for relationship_minimums that's not a dict."""
+        settings = Settings()
+        settings.relationship_minimums = [("character", {"protagonist": 5})]  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="relationship_minimums must be a dict"):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_key_not_string(self):
+        """Should raise ValueError for relationship_minimums with non-string keys."""
+        settings = Settings()
+        settings.relationship_minimums = {123: {"protagonist": 5}}  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match="relationship_minimums keys must be strings"):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_value_not_dict(self):
+        """Should raise ValueError for relationship_minimums with non-dict values."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": [("protagonist", 5)]}  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match=r"relationship_minimums\[character\] must be a dict"):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_role_not_string(self):
+        """Should raise ValueError for relationship_minimums with non-string role keys."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": {123: 5}}  # type: ignore[dict-item]
+        with pytest.raises(
+            ValueError, match=r"relationship_minimums\[character\] keys must be strings"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_count_not_int(self):
+        """Should raise ValueError for relationship_minimums with non-int min_count."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": {"protagonist": "five"}}  # type: ignore[dict-item]
+        with pytest.raises(
+            ValueError,
+            match=r"relationship_minimums\[character\]\[protagonist\] must be a non-negative integer",
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_count_negative(self):
+        """Should raise ValueError for relationship_minimums with negative min_count."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": {"protagonist": -1}}
+        with pytest.raises(
+            ValueError,
+            match=r"relationship_minimums\[character\]\[protagonist\] must be a non-negative integer",
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_minimum_exceeds_max_relationships(self):
+        """Should raise ValueError when minimum exceeds max_relationships_per_entity."""
+        settings = Settings()
+        settings.max_relationships_per_entity = 5
+        settings.relationship_minimums = {"character": {"protagonist": 10}}  # Exceeds max of 5
+        with pytest.raises(
+            ValueError,
+            match=r"relationship_minimums\[character\]\[protagonist\] \(10\) exceeds "
+            r"max_relationships_per_entity \(5\)",
+        ):
+            settings.validate()
+
 
 class TestSettingsSaveLoad:
     """Tests for Settings save and load methods."""

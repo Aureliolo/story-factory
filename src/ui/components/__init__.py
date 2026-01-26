@@ -6,6 +6,7 @@ from .entity_card import EntityCard
 from .graph import GraphComponent
 from .header import Header
 from .recommendation_dialog import RecommendationDialog, show_recommendations
+from .world_health_dashboard import WorldHealthDashboard, build_health_summary_compact
 from .world_timeline import WorldTimelineComponent
 
 __all__ = [
@@ -15,6 +16,8 @@ __all__ = [
     "GraphComponent",
     "Header",
     "RecommendationDialog",
+    "WorldHealthDashboard",
     "WorldTimelineComponent",
+    "build_health_summary_compact",
     "show_recommendations",
 ]

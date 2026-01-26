@@ -90,6 +90,9 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1 1 400px; min-width: 400px;"):
                     self._build_advanced_llm_section()
 
+                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
+                    self._build_relationship_validation_section()
+
             # Save button
             ui.button(
                 "Save Settings",
@@ -998,6 +1001,124 @@ class SettingsPage:
                                 tooltip_text="Score variance tolerance for plateau detection (0.0-2.0)",
                             )
 
+    def _build_relationship_validation_section(self) -> None:
+        """Build relationship validation and world health settings section."""
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Relationship Validation",
+                "fact_check",
+                "Configure validation, orphan detection, and circular relationship checking.",
+            )
+
+            with ui.column().classes("w-full gap-4"):
+                # Validation toggle
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Validate on Creation").classes("text-sm font-medium")
+                        ui.label("Check entity existence").classes("text-xs text-gray-500")
+
+                    self._relationship_validation_switch = ui.switch(
+                        value=self.settings.relationship_validation_enabled,
+                    ).tooltip("Validate source/target entities exist when creating relationships")
+
+                # Orphan detection toggle
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Orphan Detection").classes("text-sm font-medium")
+                        ui.label("Find entities without relationships").classes(
+                            "text-xs text-gray-500"
+                        )
+
+                    self._orphan_detection_switch = ui.switch(
+                        value=self.settings.orphan_detection_enabled,
+                    ).tooltip("Enable detection of orphan entities in world health checks")
+
+                # Circular detection toggle
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Circular Detection").classes("text-sm font-medium")
+                        ui.label("Find relationship loops").classes("text-xs text-gray-500")
+
+                    self._circular_detection_switch = ui.switch(
+                        value=self.settings.circular_detection_enabled,
+                    ).tooltip("Enable detection of circular relationship chains")
+
+                ui.separator().classes("my-2")
+
+                # Fuzzy match threshold
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Fuzzy Match Threshold").classes("text-sm font-medium")
+                        ui.label("Similarity for name matching").classes("text-xs text-gray-500")
+
+                    self._fuzzy_threshold_input = (
+                        ui.number(
+                            value=self.settings.fuzzy_match_threshold,
+                            min=0.5,
+                            max=1.0,
+                            step=0.05,
+                        )
+                        .props("outlined dense")
+                        .classes("w-20")
+                        .tooltip("Minimum similarity (0.5-1.0) for fuzzy entity name matching")
+                    )
+
+                # Max relationships per entity
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Max Relationships").classes("text-sm font-medium")
+                        ui.label("Per entity for suggestions").classes("text-xs text-gray-500")
+
+                    self._max_relationships_input = (
+                        ui.number(
+                            value=self.settings.max_relationships_per_entity,
+                            min=1,
+                            max=50,
+                            step=1,
+                        )
+                        .props("outlined dense")
+                        .classes("w-20")
+                        .tooltip("Maximum relationships to suggest per entity (1-50)")
+                    )
+
+                # Circular relationship types (editable)
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Circular Check Types").classes("text-sm font-medium")
+                        ui.label("Comma-separated relationship types").classes(
+                            "text-xs text-gray-500"
+                        )
+
+                    self._circular_types_input = (
+                        ui.input(
+                            value=", ".join(self.settings.circular_relationship_types),
+                        )
+                        .props("outlined dense")
+                        .classes("w-64")
+                        .tooltip(
+                            "Relationship types to check for cycles (e.g., owns, reports_to, parent_of)"
+                        )
+                    )
+
+                ui.separator().classes("my-2")
+
+                # Relationship minimums info (read-only display)
+                with ui.expansion("Relationship Minimums", icon="info", value=False).classes(
+                    "w-full"
+                ):
+                    ui.label("Minimum relationships per entity type/role:").classes(
+                        "text-xs text-gray-500 mb-2"
+                    )
+                    for entity_type, roles in self.settings.relationship_minimums.items():
+                        with ui.row().classes("items-center gap-2 mb-1"):
+                            ui.icon("folder", size="xs").classes("text-blue-500")
+                            ui.label(f"{entity_type}:").classes("text-xs font-medium w-20")
+                            roles_str = ", ".join(f"{r}={c}" for r, c in roles.items())
+                            ui.label(roles_str).classes("text-xs text-gray-600")
+                    ui.label("Edit settings.json directly to customize minimums").classes(
+                        "text-xs text-gray-400 italic mt-2"
+                    )
+
     async def _test_connection(self) -> None:
         """Test Ollama connection."""
         # Update URL first
@@ -1154,6 +1275,27 @@ class SettingsPage:
                     setattr(self.settings, setting_attr, value)
                     logger.debug(f"Updated {setting_attr} to {value}")
 
+            # Relationship validation settings
+            if hasattr(self, "_relationship_validation_switch"):
+                self.settings.relationship_validation_enabled = (
+                    self._relationship_validation_switch.value
+                )
+            if hasattr(self, "_orphan_detection_switch"):
+                self.settings.orphan_detection_enabled = self._orphan_detection_switch.value
+            if hasattr(self, "_circular_detection_switch"):
+                self.settings.circular_detection_enabled = self._circular_detection_switch.value
+            if hasattr(self, "_fuzzy_threshold_input"):
+                self.settings.fuzzy_match_threshold = float(self._fuzzy_threshold_input.value)
+            if hasattr(self, "_max_relationships_input"):
+                self.settings.max_relationships_per_entity = int(
+                    self._max_relationships_input.value
+                )
+            if hasattr(self, "_circular_types_input"):
+                # Parse comma-separated types, strip whitespace, filter empty
+                types_str = self._circular_types_input.value or ""
+                types_list = [t.strip() for t in types_str.split(",") if t.strip()]
+                self.settings.circular_relationship_types = types_list
+
             # Validate and save first - only record undo if successful
             self.settings.validate()
             self.settings.save()
@@ -1237,6 +1379,13 @@ class SettingsPage:
             # Data integrity
             "entity_version_retention": self.settings.entity_version_retention,
             "backup_verify_on_restore": self.settings.backup_verify_on_restore,
+            # Relationship validation
+            "relationship_validation_enabled": self.settings.relationship_validation_enabled,
+            "orphan_detection_enabled": self.settings.orphan_detection_enabled,
+            "circular_detection_enabled": self.settings.circular_detection_enabled,
+            "fuzzy_match_threshold": self.settings.fuzzy_match_threshold,
+            "max_relationships_per_entity": self.settings.max_relationships_per_entity,
+            "circular_relationship_types": self.settings.circular_relationship_types.copy(),
         }
 
         # Advanced LLM settings (WP1/WP2) - add using key iteration
@@ -1375,6 +1524,22 @@ class SettingsPage:
             if key in snapshot:
                 setattr(self.settings, key, snapshot[key])
 
+        # Relationship validation (with backward compatibility for old snapshots)
+        if "relationship_validation_enabled" in snapshot:
+            self.settings.relationship_validation_enabled = snapshot[
+                "relationship_validation_enabled"
+            ]
+        if "orphan_detection_enabled" in snapshot:
+            self.settings.orphan_detection_enabled = snapshot["orphan_detection_enabled"]
+        if "circular_detection_enabled" in snapshot:
+            self.settings.circular_detection_enabled = snapshot["circular_detection_enabled"]
+        if "fuzzy_match_threshold" in snapshot:
+            self.settings.fuzzy_match_threshold = snapshot["fuzzy_match_threshold"]
+        if "max_relationships_per_entity" in snapshot:
+            self.settings.max_relationships_per_entity = snapshot["max_relationships_per_entity"]
+        if "circular_relationship_types" in snapshot:
+            self.settings.circular_relationship_types = snapshot["circular_relationship_types"]
+
         # Save changes
         self.settings.save()
 
@@ -1492,6 +1657,25 @@ class SettingsPage:
         for ui_attr, setting_attr in advanced_llm_ui_map:
             if hasattr(self, ui_attr) and getattr(self, ui_attr):
                 getattr(self, ui_attr).value = getattr(self.settings, setting_attr)
+
+        # Relationship validation settings
+        if (
+            hasattr(self, "_relationship_validation_switch")
+            and self._relationship_validation_switch
+        ):
+            self._relationship_validation_switch.value = (
+                self.settings.relationship_validation_enabled
+            )
+        if hasattr(self, "_orphan_detection_switch") and self._orphan_detection_switch:
+            self._orphan_detection_switch.value = self.settings.orphan_detection_enabled
+        if hasattr(self, "_circular_detection_switch") and self._circular_detection_switch:
+            self._circular_detection_switch.value = self.settings.circular_detection_enabled
+        if hasattr(self, "_fuzzy_threshold_input") and self._fuzzy_threshold_input:
+            self._fuzzy_threshold_input.value = self.settings.fuzzy_match_threshold
+        if hasattr(self, "_max_relationships_input") and self._max_relationships_input:
+            self._max_relationships_input.value = self.settings.max_relationships_per_entity
+        if hasattr(self, "_circular_types_input") and self._circular_types_input:
+            self._circular_types_input.value = ", ".join(self.settings.circular_relationship_types)
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""

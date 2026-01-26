@@ -399,6 +399,27 @@ class Settings:
     world_gen_relationships_min: int = 8
     world_gen_relationships_max: int = 25
 
+    # World health and validation settings
+    relationship_validation_enabled: bool = True  # Validate relationships on creation
+    orphan_detection_enabled: bool = True  # Enable orphan entity detection
+    circular_detection_enabled: bool = True  # Enable circular relationship detection
+    circular_relationship_types: list[str] = field(
+        default_factory=lambda: ["owns", "reports_to", "parent_of", "located_in", "contains"]
+    )
+    fuzzy_match_threshold: float = 0.8  # Threshold for fuzzy entity name matching
+
+    # Relationship minimums per entity type/role (for suggestions)
+    relationship_minimums: dict[str, dict[str, int]] = field(
+        default_factory=lambda: {
+            "character": {"protagonist": 5, "antagonist": 4, "supporting": 2, "minor": 1},
+            "location": {"central": 4, "significant": 2, "minor": 1},
+            "faction": {"major": 4, "minor": 2},
+            "item": {"key": 3, "common": 1},
+            "concept": {"central_theme": 4, "minor_theme": 2},
+        }
+    )
+    max_relationships_per_entity: int = 10  # Max relationships to suggest per entity
+
     # Prompt template settings
     prompt_templates_dir: str = "src/prompts/templates"
     prompt_metrics_enabled: bool = True
@@ -1025,6 +1046,74 @@ class Settings:
                 "content_check_use_llm is enabled but content_check_enabled is False. "
                 "LLM checking will have no effect."
             )
+
+        # Validate world health settings
+        if not isinstance(self.relationship_validation_enabled, bool):
+            raise ValueError(
+                f"relationship_validation_enabled must be a boolean, "
+                f"got {type(self.relationship_validation_enabled)}"
+            )
+        if not isinstance(self.orphan_detection_enabled, bool):
+            raise ValueError(
+                f"orphan_detection_enabled must be a boolean, "
+                f"got {type(self.orphan_detection_enabled)}"
+            )
+        if not isinstance(self.circular_detection_enabled, bool):
+            raise ValueError(
+                f"circular_detection_enabled must be a boolean, "
+                f"got {type(self.circular_detection_enabled)}"
+            )
+        if not 0.5 <= self.fuzzy_match_threshold <= 1.0:
+            raise ValueError(
+                f"fuzzy_match_threshold must be between 0.5 and 1.0, "
+                f"got {self.fuzzy_match_threshold}"
+            )
+        if not 1 <= self.max_relationships_per_entity <= 50:
+            raise ValueError(
+                f"max_relationships_per_entity must be between 1 and 50, "
+                f"got {self.max_relationships_per_entity}"
+            )
+
+        # Validate circular_relationship_types
+        if not isinstance(self.circular_relationship_types, list):
+            raise ValueError(
+                f"circular_relationship_types must be a list, "
+                f"got {type(self.circular_relationship_types)}"
+            )
+        if not all(isinstance(t, str) for t in self.circular_relationship_types):
+            raise ValueError("circular_relationship_types must contain only strings")
+
+        # Validate relationship_minimums structure
+        if not isinstance(self.relationship_minimums, dict):
+            raise ValueError(
+                f"relationship_minimums must be a dict, got {type(self.relationship_minimums)}"
+            )
+        for entity_type, roles in self.relationship_minimums.items():
+            if not isinstance(entity_type, str):
+                raise ValueError(
+                    f"relationship_minimums keys must be strings, got {type(entity_type)}"
+                )
+            if not isinstance(roles, dict):
+                raise ValueError(
+                    f"relationship_minimums[{entity_type}] must be a dict, got {type(roles)}"
+                )
+            for role, min_count in roles.items():
+                if not isinstance(role, str):
+                    raise ValueError(
+                        f"relationship_minimums[{entity_type}] keys must be strings, "
+                        f"got {type(role)}"
+                    )
+                if not isinstance(min_count, int) or min_count < 0:
+                    raise ValueError(
+                        f"relationship_minimums[{entity_type}][{role}] must be a non-negative "
+                        f"integer, got {min_count}"
+                    )
+                # Ensure max_relationships_per_entity >= minimum count
+                if min_count > self.max_relationships_per_entity:
+                    raise ValueError(
+                        f"relationship_minimums[{entity_type}][{role}] ({min_count}) exceeds "
+                        f"max_relationships_per_entity ({self.max_relationships_per_entity})"
+                    )
 
     # Class-level cache for settings (speeds up repeated load() calls)
     _cached_instance: ClassVar[Settings | None] = None

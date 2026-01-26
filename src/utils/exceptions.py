@@ -247,3 +247,49 @@ class DuplicateNameError(WorldGenerationError):
         self.generated_name = generated_name
         self.existing_name = existing_name
         self.reason = reason
+
+
+class RelationshipValidationError(WorldGenerationError):
+    """Raised when relationship validation fails.
+
+    This indicates an attempt to create a relationship with invalid
+    source/target entities, self-referential relationship, or other
+    validation failures.
+
+    Attributes:
+        source_id: The source entity ID that was provided.
+        target_id: The target entity ID that was provided.
+        reason: Why the validation failed (e.g., "source_not_found", "self_loop").
+        suggestions: List of suggested fixes or alternatives.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        source_id: str | None = None,
+        target_id: str | None = None,
+        reason: str | None = None,
+        suggestions: list[str] | None = None,
+    ):
+        """
+        Initialize RelationshipValidationError with context about the failed relationship.
+
+        Parameters:
+            message (str): Human-readable error message.
+            source_id (str | None): The source entity ID that was provided.
+            target_id (str | None): The target entity ID that was provided.
+            reason (str | None): Why validation failed (e.g., "source_not_found",
+                "target_not_found", "self_loop").
+            suggestions (list[str] | None): List of suggested fixes or alternatives.
+        """
+        super().__init__(message)
+        self.source_id = source_id
+        self.target_id = target_id
+        self.reason = reason
+        self.suggestions = suggestions or []
+        logger.debug(
+            "RelationshipValidationError initialized: source_id=%s, target_id=%s, reason=%s",
+            source_id,
+            target_id,
+            reason,
+        )

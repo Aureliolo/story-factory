@@ -1,0 +1,49 @@
+name: check_contradiction
+version: "1.0"
+description: "Checks if two claims about entities contradict each other"
+agent: validator
+task: check_contradiction
+is_system_prompt: false
+
+template: |
+  Analyze whether these two claims about story entities contradict each other.
+
+  CLAIM A:
+  Entity: {{ claim_a.entity_name }} ({{ claim_a.entity_type }})
+  Claim: {{ claim_a.claim }}
+  Source: {{ claim_a.source_text }}
+
+  CLAIM B:
+  Entity: {{ claim_b.entity_name }} ({{ claim_b.entity_type }})
+  Claim: {{ claim_b.claim }}
+  Source: {{ claim_b.source_text }}
+
+  Analyze for contradictions considering:
+  1. Direct logical contradictions (X is A, X is not A)
+  2. Temporal inconsistencies (events in wrong order)
+  3. Character attribute conflicts (age, appearance, abilities)
+  4. Location/geography conflicts
+  5. Relationship contradictions (X loves Y, X hates Y)
+
+  IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no explanations, no additional text before or after the JSON.
+
+  Output JSON:
+  {
+    "is_contradiction": true/false,
+    "severity": "low" | "medium" | "high" | "critical",
+    "explanation": "Why these claims do or don't contradict",
+    "resolution_suggestion": "How to resolve if contradictory",
+    "confidence": 0.0-1.0
+  }
+
+  Severity levels:
+  - "low": Minor inconsistency, won't confuse readers
+  - "medium": Noticeable but not plot-breaking
+  - "high": Significant contradiction affecting story logic
+  - "critical": Major plot hole or character inconsistency
+
+variables:
+  required:
+    - claim_a
+    - claim_b
+  optional: []
