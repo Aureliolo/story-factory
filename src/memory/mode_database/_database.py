@@ -26,8 +26,8 @@ from src.utils.exceptions import ValidationError
 logger = logging.getLogger(__name__)
 
 
-# Go up from memory/ to src/ to project root, then into output/
-DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "output" / "model_scores.db"
+# Go up from mode_database/ to memory/ to src/ to project root, then into output/
+DEFAULT_DB_PATH = Path(__file__).parent.parent.parent.parent / "output" / "model_scores.db"
 
 
 class ModeDatabase:
