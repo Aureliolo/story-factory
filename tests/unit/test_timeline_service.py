@@ -15,6 +15,31 @@ from src.memory.timeline_types import (
 )
 from src.services.timeline_service import TimelineService
 from src.settings import Settings
+from src.utils.constants import ENTITY_COLORS, get_entity_color
+
+
+class TestEntityColors:
+    """Tests for entity color constants and functions."""
+
+    def test_get_entity_color_known_types(self):
+        """Test getting colors for known entity types."""
+        assert get_entity_color("character") == ENTITY_COLORS["character"]
+        assert get_entity_color("location") == ENTITY_COLORS["location"]
+        assert get_entity_color("item") == ENTITY_COLORS["item"]
+        assert get_entity_color("faction") == ENTITY_COLORS["faction"]
+        assert get_entity_color("concept") == ENTITY_COLORS["concept"]
+        assert get_entity_color("event") == ENTITY_COLORS["event"]
+
+    def test_get_entity_color_case_insensitive(self):
+        """Test getting colors is case insensitive."""
+        assert get_entity_color("CHARACTER") == ENTITY_COLORS["character"]
+        assert get_entity_color("Location") == ENTITY_COLORS["location"]
+
+    def test_get_entity_color_unknown_type_returns_concept(self):
+        """Test unknown entity types return concept color as default."""
+        assert get_entity_color("unknown_type") == ENTITY_COLORS["concept"]
+        assert get_entity_color("mystical_artifact") == ENTITY_COLORS["concept"]
+        assert get_entity_color("") == ENTITY_COLORS["concept"]
 
 
 class TestStoryTimestamp:
@@ -231,6 +256,25 @@ class TestExtractLifecycleFromAttributes:
         assert lifecycle is not None
         assert lifecycle.birth is None
         assert lifecycle.death is None
+
+    def test_extract_malformed_lifecycle_not_dict(self):
+        """Test when lifecycle data is not a dict (malformed)."""
+        from typing import Any
+
+        # String instead of dict
+        attributes: dict[str, Any] = {"lifecycle": "invalid string lifecycle"}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is None
+
+        # List instead of dict
+        attributes = {"lifecycle": [1, 2, 3]}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is None
+
+        # Integer instead of dict
+        attributes = {"lifecycle": 42}
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is None
 
 
 class TestTimelineService:
