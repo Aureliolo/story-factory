@@ -143,6 +143,45 @@ class TestCircuitBreaker:
         assert status["failure_count"] == 2
         assert status["failure_threshold"] == 5
 
+    def test_get_status_includes_time_until_half_open_when_open(self):
+        """get_status includes time_until_half_open when circuit is OPEN."""
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=60.0)
+
+        # Open the circuit
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        status = cb.get_status()
+        assert status["state"] == "open"
+        assert "time_until_half_open" in status
+        # Should be close to 60 seconds (minus small elapsed time)
+        assert 55.0 <= status["time_until_half_open"] <= 60.0
+
+    def test_record_success_noop_when_disabled(self):
+        """record_success does nothing when circuit breaker is disabled."""
+        cb = CircuitBreaker(name="test", enabled=False, failure_threshold=2)
+        # Open the circuit (won't actually open since disabled)
+        cb._state = CircuitState.HALF_OPEN
+        cb._success_count = 0
+
+        # record_success should return early without doing anything
+        cb.record_success()
+
+        # State should remain unchanged (disabled means no state tracking)
+        assert cb._success_count == 0
+
+    def test_check_timeout_noop_when_no_failures(self):
+        """_check_timeout returns early when no failures have been recorded."""
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=0.1)
+
+        # Manually set to OPEN without recording failures
+        cb._state = CircuitState.OPEN
+        cb._last_failure_time = None
+
+        # Get state property triggers _check_timeout, but should not transition
+        # because _last_failure_time is None
+        assert cb.state == CircuitState.OPEN
+
     def test_thread_safety(self):
         """Circuit breaker operations are thread-safe."""
         cb = CircuitBreaker(name="test", failure_threshold=100)

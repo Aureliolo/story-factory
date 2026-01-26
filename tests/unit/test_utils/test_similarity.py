@@ -115,6 +115,34 @@ class TestSemanticDuplicateChecker:
 
         assert emb == []
 
+    def test_get_embedding_handles_empty_response(self, mock_ollama_client):
+        """Empty embedding in API response returns empty list."""
+        mock_ollama_client.embeddings.return_value = {"embedding": []}
+
+        checker = SemanticDuplicateChecker()
+        emb = checker.get_embedding("test")
+
+        assert emb == []
+
+    def test_get_embedding_handles_unexpected_exception(self, mock_ollama_client):
+        """Unexpected exceptions are logged and return empty embedding."""
+        mock_ollama_client.embeddings.side_effect = RuntimeError("Unexpected error")
+
+        checker = SemanticDuplicateChecker()
+        emb = checker.get_embedding("test")
+
+        assert emb == []
+
+    def test_get_embedding_reinitializes_client_if_none(self, mock_ollama_client):
+        """Client is reinitialized if set to None."""
+        mock_ollama_client.embeddings.return_value = {"embedding": [1.0, 2.0, 3.0]}
+
+        checker = SemanticDuplicateChecker()
+        checker._client = None  # Simulate client being cleared
+
+        emb = checker.get_embedding("test")
+        assert emb == [1.0, 2.0, 3.0]
+
     def test_check_similarity_returns_score(self, mock_ollama_client):
         """check_similarity returns cosine similarity between names."""
         # Shadow Council and Council of Shadows should be similar
@@ -127,6 +155,19 @@ class TestSemanticDuplicateChecker:
         similarity = checker.check_similarity("Shadow Council", "Council of Shadows")
 
         assert similarity > 0.9  # Should be high
+
+    def test_check_similarity_returns_zero_on_embedding_failure(self, mock_ollama_client):
+        """check_similarity returns 0.0 if either embedding fails."""
+        # First embedding succeeds, second fails
+        mock_ollama_client.embeddings.side_effect = [
+            {"embedding": [1.0, 0.5, 0.3]},
+            ConnectionError("API down"),
+        ]
+
+        checker = SemanticDuplicateChecker()
+        similarity = checker.check_similarity("Shadow Council", "Council of Shadows")
+
+        assert similarity == 0.0
 
     def test_find_semantic_duplicate_detects_similar_names(self, mock_ollama_client):
         """find_semantic_duplicate detects semantically similar names."""
@@ -170,6 +211,63 @@ class TestSemanticDuplicateChecker:
 
         is_dup, _match, _score = checker.find_semantic_duplicate("test", [])
         assert is_dup is False
+
+    def test_find_semantic_duplicate_no_new_embedding(self, mock_ollama_client):
+        """Returns no duplicate if new name embedding fails."""
+        mock_ollama_client.embeddings.side_effect = ConnectionError("API down")
+
+        checker = SemanticDuplicateChecker()
+        is_dup, match, score = checker.find_semantic_duplicate("test", ["existing"])
+
+        assert is_dup is False
+        assert match is None
+        assert score == 0.0
+
+    def test_find_semantic_duplicate_skips_empty_existing_names(self, mock_ollama_client):
+        """Empty or whitespace existing names are skipped."""
+        mock_ollama_client.embeddings.side_effect = [
+            {"embedding": [1.0, 0.0, 0.0]},  # New name
+            {"embedding": [0.9, 0.1, 0.0]},  # "valid" existing name
+        ]
+
+        checker = SemanticDuplicateChecker(similarity_threshold=0.85)
+        _is_dup, _match, _score = checker.find_semantic_duplicate("test", ["", "   ", "valid"])
+
+        # Should skip empty names and only check "valid"
+        assert mock_ollama_client.embeddings.call_count == 2
+
+    def test_find_semantic_duplicate_skips_failed_existing_embedding(self, mock_ollama_client):
+        """Existing names with failed embeddings are skipped."""
+        mock_ollama_client.embeddings.side_effect = [
+            {"embedding": [1.0, 0.0, 0.0]},  # New name
+            ConnectionError("API down"),  # First existing - fails
+            {"embedding": [0.9, 0.1, 0.0]},  # Second existing - succeeds
+        ]
+
+        checker = SemanticDuplicateChecker(similarity_threshold=0.85)
+        is_dup, _match, score = checker.find_semantic_duplicate("test", ["failing", "similar"])
+
+        # Should continue to second existing name
+        assert is_dup is True or score > 0.0  # Will match or return best score
+
+    def test_find_semantic_duplicate_returns_best_match_below_threshold(self, mock_ollama_client):
+        """Returns best match info even when below threshold."""
+        # Set up embeddings that are somewhat similar but below threshold
+        mock_ollama_client.embeddings.side_effect = [
+            {"embedding": [1.0, 0.0, 0.0]},  # New name
+            {"embedding": [0.6, 0.6, 0.6]},  # First existing (lower similarity)
+            {"embedding": [0.7, 0.5, 0.5]},  # Second existing (higher similarity)
+        ]
+
+        checker = SemanticDuplicateChecker(similarity_threshold=0.95)  # High threshold
+        is_dup, match, score = checker.find_semantic_duplicate(
+            "test", ["less similar", "more similar"]
+        )
+
+        # Not a duplicate (below threshold), but best_similarity is tracked
+        assert is_dup is False
+        assert match is None  # No match returned when below threshold
+        assert score > 0.0  # But score is returned
 
     def test_clear_cache(self, mock_ollama_client):
         """clear_cache removes cached embeddings."""

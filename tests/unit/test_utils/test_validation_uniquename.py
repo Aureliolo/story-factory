@@ -1,5 +1,7 @@
 """Unit tests for validate_unique_name in validation.py."""
 
+from unittest.mock import MagicMock, patch
+
 from src.utils.validation import _normalize_name, validate_unique_name
 
 
@@ -158,3 +160,112 @@ class TestValidateUniqueName:
         is_unique, _conflict, reason = validate_unique_name("A Shadow Guild", existing)
         assert is_unique is False
         assert reason == "prefix_match"
+
+
+class TestSemanticDuplicateChecking:
+    """Tests for semantic duplicate checking in validate_unique_name."""
+
+    @patch("src.utils.validation.get_semantic_checker")
+    def test_semantic_check_detects_duplicate(self, mock_get_checker) -> None:
+        """Test that semantic checking detects similar names."""
+        mock_checker = MagicMock()
+        mock_checker.find_semantic_duplicate.return_value = (
+            True,
+            "Council of Shadows",
+            0.92,
+        )
+        mock_get_checker.return_value = mock_checker
+
+        is_unique, conflict, reason = validate_unique_name(
+            "Shadow Council",
+            ["Council of Shadows", "The Brotherhood"],
+            check_semantic=True,
+            semantic_threshold=0.85,
+        )
+
+        assert is_unique is False
+        assert conflict == "Council of Shadows"
+        assert reason == "semantic"
+
+    @patch("src.utils.validation.get_semantic_checker")
+    def test_semantic_check_allows_different_names(self, mock_get_checker) -> None:
+        """Test that semantic checking allows clearly different names."""
+        mock_checker = MagicMock()
+        mock_checker.find_semantic_duplicate.return_value = (False, None, 0.3)
+        mock_get_checker.return_value = mock_checker
+
+        is_unique, conflict, reason = validate_unique_name(
+            "The Happy Bakers",
+            ["Council of Shadows", "The Brotherhood"],
+            check_semantic=True,
+            semantic_threshold=0.85,
+        )
+
+        assert is_unique is True
+        assert conflict is None
+        assert reason is None
+
+    @patch("src.utils.validation.get_semantic_checker")
+    def test_semantic_check_disabled_by_default(self, mock_get_checker) -> None:
+        """Test that semantic checking is disabled by default."""
+        is_unique, _conflict, _reason = validate_unique_name(
+            "Shadow Council",
+            ["Council of Shadows"],
+            check_semantic=False,  # Explicitly disabled
+        )
+
+        # Semantic checker should not be called
+        mock_get_checker.assert_not_called()
+        # Name should be considered unique (no string match)
+        assert is_unique is True
+
+    @patch("src.utils.validation.get_semantic_checker")
+    def test_semantic_check_with_custom_url_and_model(self, mock_get_checker) -> None:
+        """Test that custom ollama_url and embedding_model are passed."""
+        mock_checker = MagicMock()
+        mock_checker.find_semantic_duplicate.return_value = (False, None, 0.3)
+        mock_get_checker.return_value = mock_checker
+
+        validate_unique_name(
+            "Test Name",
+            ["Existing"],
+            check_semantic=True,
+            ollama_url="http://custom:11434",
+            embedding_model="custom-model",
+        )
+
+        # Verify custom parameters were passed
+        mock_get_checker.assert_called_once()
+        call_kwargs = mock_get_checker.call_args.kwargs
+        assert call_kwargs.get("ollama_url") == "http://custom:11434"
+        assert call_kwargs.get("embedding_model") == "custom-model"
+
+    @patch("src.utils.validation.get_semantic_checker")
+    def test_semantic_check_handles_exception_gracefully(self, mock_get_checker) -> None:
+        """Test that semantic check failures don't block validation."""
+        mock_get_checker.side_effect = ConnectionError("Ollama not running")
+
+        # Should not raise, just skip semantic check
+        is_unique, conflict, reason = validate_unique_name(
+            "Shadow Council",
+            ["Council of Shadows"],
+            check_semantic=True,
+        )
+
+        # String-based checks pass, semantic check skipped on error
+        assert is_unique is True
+        assert conflict is None
+        assert reason is None
+
+    @patch("src.utils.validation.get_semantic_checker")
+    def test_semantic_check_skipped_for_empty_existing_names(self, mock_get_checker) -> None:
+        """Test that semantic check is skipped if existing_names is empty."""
+        is_unique, _conflict, _reason = validate_unique_name(
+            "Shadow Council",
+            [],  # Empty list
+            check_semantic=True,
+        )
+
+        # Semantic checker should not be called for empty list
+        mock_get_checker.assert_not_called()
+        assert is_unique is True

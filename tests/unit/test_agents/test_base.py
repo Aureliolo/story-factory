@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 
 from src.agents.base import BaseAgent
 from src.settings import Settings
-from src.utils.exceptions import LLMGenerationError
+from src.utils.circuit_breaker import reset_global_circuit_breaker
+from src.utils.exceptions import CircuitOpenError, LLMGenerationError
 
 
 # Test model for structured output tests
@@ -722,6 +723,86 @@ class TestBaseAgentPromptTemplate:
         result = agent.get_system_prompt_from_template()
 
         assert result is None
+
+
+class TestCircuitBreakerIntegration:
+    """Tests for circuit breaker integration in BaseAgent."""
+
+    def setup_method(self):
+        """Reset global circuit breaker before each test."""
+        reset_global_circuit_breaker()
+
+    def teardown_method(self):
+        """Reset global circuit breaker after each test."""
+        reset_global_circuit_breaker()
+
+    def test_generate_raises_circuit_open_error_when_open(self):
+        """Test that generate() raises CircuitOpenError when circuit is open."""
+        from src.utils.circuit_breaker import get_circuit_breaker
+
+        # Create agent with circuit breaker enabled
+        settings = Settings(
+            circuit_breaker_enabled=True,
+            circuit_breaker_failure_threshold=2,
+            circuit_breaker_timeout=60.0,
+        )
+        agent = create_mock_agent()
+        agent.settings = settings
+
+        # Open the circuit breaker
+        cb = get_circuit_breaker(
+            failure_threshold=2,
+            timeout_seconds=60.0,
+            enabled=True,
+        )
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        # Now generate() should raise CircuitOpenError
+        with pytest.raises(CircuitOpenError, match="Circuit breaker is open"):
+            agent.generate("test prompt")
+
+    def test_generate_structured_raises_circuit_open_error_when_open(self):
+        """Test that generate_structured() raises CircuitOpenError when circuit is open."""
+        from src.utils.circuit_breaker import get_circuit_breaker
+
+        # Create agent with circuit breaker enabled
+        settings = Settings(
+            circuit_breaker_enabled=True,
+            circuit_breaker_failure_threshold=2,
+            circuit_breaker_timeout=60.0,
+        )
+        agent = create_mock_agent()
+        agent.settings = settings
+
+        # Open the circuit breaker
+        cb = get_circuit_breaker(
+            failure_threshold=2,
+            timeout_seconds=60.0,
+            enabled=True,
+        )
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        # Now generate_structured() should raise CircuitOpenError
+        with pytest.raises(CircuitOpenError, match="Circuit breaker is open"):
+            agent.generate_structured("test prompt", SampleOutputModel)
+
+    def test_generate_works_when_circuit_closed(self):
+        """Test that generate() works normally when circuit is closed."""
+        from src.utils.circuit_breaker import get_circuit_breaker
+
+        # Ensure circuit is closed
+        cb = get_circuit_breaker(enabled=True)
+        cb.reset()
+
+        agent = create_mock_agent()
+        agent.settings = Settings(circuit_breaker_enabled=True)
+        agent.client.chat.return_value = {"message": {"content": "test response"}}
+
+        result = agent.generate("test prompt")
+
+        assert result == "test response"
 
 
 class TestBaseAgentGenerationMetrics:

@@ -1832,3 +1832,90 @@ class TestSettingsFixtureIsolation:
         # Load from file - should use file values
         settings_loaded = Settings.load()
         assert settings_loaded.prompt_templates_dir == "different/path"
+
+
+class TestWP1WP2SettingsValidation:
+    """Tests for WP1/WP2 settings validation."""
+
+    def test_validate_raises_on_invalid_decay_curve(self):
+        """Should raise ValueError for invalid refinement temp decay curve."""
+        settings = Settings()
+        settings.world_quality_refinement_temp_decay = "invalid"
+        with pytest.raises(ValueError, match="world_quality_refinement_temp_decay must be one of"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_min_iterations(self):
+        """Should raise ValueError for early stopping min_iterations out of range."""
+        settings = Settings()
+        settings.world_quality_early_stopping_min_iterations = 0
+        with pytest.raises(
+            ValueError, match="world_quality_early_stopping_min_iterations must be between"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_variance_tolerance(self):
+        """Should raise ValueError for early stopping variance_tolerance out of range."""
+        settings = Settings()
+        settings.world_quality_early_stopping_variance_tolerance = 5.0
+        with pytest.raises(
+            ValueError, match="world_quality_early_stopping_variance_tolerance must be between"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_circuit_breaker_failure_threshold(self):
+        """Should raise ValueError for circuit breaker failure_threshold out of range."""
+        settings = Settings()
+        settings.circuit_breaker_failure_threshold = 0
+        with pytest.raises(ValueError, match="circuit_breaker_failure_threshold must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_circuit_breaker_success_threshold(self):
+        """Should raise ValueError for circuit breaker success_threshold out of range."""
+        settings = Settings()
+        settings.circuit_breaker_success_threshold = 0
+        with pytest.raises(ValueError, match="circuit_breaker_success_threshold must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_circuit_breaker_timeout(self):
+        """Should raise ValueError for circuit breaker timeout out of range."""
+        settings = Settings()
+        settings.circuit_breaker_timeout = 5.0  # Below minimum of 10
+        with pytest.raises(ValueError, match="circuit_breaker_timeout must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_retry_temp_increase(self):
+        """Should raise ValueError for retry_temp_increase out of range."""
+        settings = Settings()
+        settings.retry_temp_increase = 2.0  # Above maximum of 1.0
+        with pytest.raises(ValueError, match="retry_temp_increase must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_retry_simplify_on_attempt(self):
+        """Should raise ValueError for retry_simplify_on_attempt out of range."""
+        settings = Settings()
+        settings.retry_simplify_on_attempt = 1  # Below minimum of 2
+        with pytest.raises(ValueError, match="retry_simplify_on_attempt must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_semantic_duplicate_threshold(self):
+        """Should raise ValueError for semantic_duplicate_threshold out of range."""
+        settings = Settings()
+        settings.semantic_duplicate_threshold = 0.3  # Below minimum of 0.5
+        with pytest.raises(ValueError, match="semantic_duplicate_threshold must be between"):
+            settings.validate()
+
+    def test_valid_new_settings_pass_validation(self):
+        """Valid new settings should pass validation."""
+        settings = Settings(
+            world_quality_refinement_temp_decay="exponential",
+            world_quality_early_stopping_min_iterations=3,
+            world_quality_early_stopping_variance_tolerance=0.5,
+            circuit_breaker_failure_threshold=10,
+            circuit_breaker_success_threshold=3,
+            circuit_breaker_timeout=120.0,
+            retry_temp_increase=0.2,
+            retry_simplify_on_attempt=4,
+            semantic_duplicate_threshold=0.9,
+        )
+        # Should not raise
+        settings.validate()
