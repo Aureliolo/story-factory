@@ -1462,8 +1462,9 @@ class TestEntityVersioning:
     def test_version_retention_policy(self, db):
         """Test that old versions are deleted when limit exceeded."""
         # Patch settings to use retention limit of 3
-        with patch("src.memory.world_database.Settings") as mock_settings:
-            mock_settings.load.return_value.entity_version_retention = 3
+        with patch("src.settings.Settings") as mock_settings:
+            mock_instance = mock_settings.load.return_value
+            mock_instance.entity_version_retention = 3
 
             entity_id = db.add_entity("character", "Alice")
             for i in range(5):
@@ -1559,3 +1560,41 @@ class TestEntityVersioning:
         assert data["attributes"]["age"] == 25
         assert data["attributes"]["skills"] == ["sword", "magic"]
         assert data["attributes"]["nested"]["key"] == "value"
+
+    def test_save_version_entity_not_found(self, db):
+        """Test that save_entity_version returns None when entity not found."""
+        result = db.save_entity_version("nonexistent-id", "edited")
+
+        assert result is None
+
+    def test_revert_entity_not_found_after_version_lookup(self, db):
+        """Test that revert raises error when entity was deleted after version lookup."""
+        # Create entity and save version
+        entity_id = db.add_entity("character", "Alice")
+
+        # Get the version
+        versions = db.get_entity_versions(entity_id)
+        assert len(versions) == 1
+
+        # Delete entity but versions still exist (via direct SQL)
+        cursor = db.conn.cursor()
+        cursor.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
+        db.conn.commit()
+
+        # Now try to revert - should fail because entity is gone
+        with pytest.raises(ValueError, match=r"Entity .* not found"):
+            db.revert_entity_to_version(entity_id, 1)
+
+    def test_version_retention_with_settings_fallback(self, db):
+        """Test version retention uses default when settings fail to load."""
+        # This tests the fallback path when Settings.load() fails
+        with patch("src.settings.Settings.load", side_effect=Exception("Settings error")):
+            entity_id = db.add_entity("character", "Alice")
+
+            # Should use default retention of 10
+            for i in range(15):
+                db.update_entity(entity_id, description=f"Update {i}")
+
+            versions = db.get_entity_versions(entity_id)
+            # Should keep 10 versions (default fallback)
+            assert len(versions) == 10

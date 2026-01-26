@@ -206,6 +206,8 @@ class BackupVerifier:
         db_files = [f for f in zf.namelist() if f.endswith(".db")]
 
         for db_filename in db_files:
+            temp_path: Path | None = None
+            conn: sqlite3.Connection | None = None
             try:
                 # Extract to temp file for integrity check
                 db_content = zf.read(db_filename)
@@ -213,26 +215,27 @@ class BackupVerifier:
                     temp_path = Path(temp_file.name)
                     temp_file.write(db_content)
 
-                try:
-                    conn = sqlite3.connect(str(temp_path))
-                    cursor = conn.cursor()
-                    cursor.execute("PRAGMA integrity_check")
-                    integrity_result = cursor.fetchone()[0]
-                    conn.close()
+                conn = sqlite3.connect(str(temp_path))
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA integrity_check")
+                integrity_result = cursor.fetchone()[0]
 
-                    if integrity_result != "ok":
-                        result.sqlite_integrity_valid = False
-                        result.errors.append(
-                            f"SQLite integrity check failed for {db_filename}: {integrity_result}"
-                        )
-                    else:
-                        logger.debug(f"SQLite integrity check passed: {db_filename}")
-                finally:
-                    temp_path.unlink(missing_ok=True)
+                if integrity_result != "ok":
+                    result.sqlite_integrity_valid = False
+                    result.errors.append(
+                        f"SQLite integrity check failed for {db_filename}: {integrity_result}"
+                    )
+                else:
+                    logger.debug(f"SQLite integrity check passed: {db_filename}")
 
             except sqlite3.DatabaseError as e:
                 result.sqlite_integrity_valid = False
                 result.errors.append(f"SQLite database error for {db_filename}: {e}")
+            finally:
+                if conn:
+                    conn.close()
+                if temp_path:
+                    temp_path.unlink(missing_ok=True)
 
     def _check_json_parseability(
         self, zf: zipfile.ZipFile, result: BackupVerificationResult

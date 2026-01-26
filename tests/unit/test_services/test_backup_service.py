@@ -42,8 +42,12 @@ class TestBackupService:
         story_path = stories_dir / f"{project_id}.json"
         story_path.write_text(json.dumps(story_data))
 
+        # Create a valid SQLite database for world
         world_path = worlds_dir / f"{project_id}.db"
-        world_path.write_text("mock db content")
+        conn = sqlite3.connect(str(world_path))
+        conn.execute("CREATE TABLE test (id INTEGER)")
+        conn.commit()
+        conn.close()
 
         # Update settings
         tmp_settings.backup_folder = str(backups_dir)
@@ -186,8 +190,12 @@ class TestBackupService:
         story_path = stories_dir / f"{project_id}.json"
         story_path.write_text(json.dumps(story_data))
 
+        # Create a valid SQLite database for world
         world_path = worlds_dir / f"{project_id}.db"
-        world_path.write_text("world data")
+        conn = sqlite3.connect(str(world_path))
+        conn.execute("CREATE TABLE test (id INTEGER)")
+        conn.commit()
+        conn.close()
 
         service = BackupService(tmp_settings)
         backup_path = service.create_backup(project_id, "Original Project")
@@ -447,6 +455,7 @@ class TestBackupService:
         backups_dir = tmp_path / "backups"
         backups_dir.mkdir(parents=True)
         tmp_settings.backup_folder = str(backups_dir)
+        tmp_settings.backup_verify_on_restore = False  # Skip verification for this test
 
         # Create a zip without metadata
         zip_path = backups_dir / "no_metadata.zip"
