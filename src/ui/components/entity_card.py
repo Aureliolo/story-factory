@@ -6,7 +6,7 @@ from typing import Any
 from nicegui import ui
 
 from src.memory.entities import Entity
-from src.ui.theme import get_entity_color, get_entity_icon
+from src.ui.theme import get_entity_color, get_entity_icon, get_role_border_style
 
 
 def _get_quality_badge_color(score: float) -> str:
@@ -201,12 +201,18 @@ def entity_list_item(
     color = get_entity_color(entity.type)
     icon = get_entity_icon(entity.type)
 
+    # Get role-based border styling using centralized helper
+    border_style = get_role_border_style(entity.attributes)
+
     item_classes = "w-full items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
     if selected:
         item_classes += " bg-blue-50 dark:bg-blue-900"
 
     with (
-        ui.row().classes(item_classes).on("click", lambda: on_select(entity) if on_select else None)
+        ui.row()
+        .classes(item_classes)
+        .style(border_style)
+        .on("click", lambda: on_select(entity) if on_select else None)
     ):
         ui.icon(icon, size="sm").style(f"color: {color};")
         ui.label(entity.name).classes("flex-grow truncate")

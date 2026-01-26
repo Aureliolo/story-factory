@@ -8,7 +8,7 @@ from typing import Any
 
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
-from src.ui.theme import ENTITY_COLORS, RELATION_COLORS
+from src.ui.theme import ENTITY_COLORS, RELATION_COLORS, get_role_graph_style
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +26,25 @@ class GraphRenderResult:
     js: str
 
 
-# Entity type shapes
+# Entity type shapes (fallback for non-icon mode)
 ENTITY_SHAPES = {
     "character": "dot",
     "location": "square",
     "item": "diamond",
     "faction": "triangle",
     "concept": "star",
+}
+
+# Font Awesome 5 icon codes for consistent visualization
+# These match the Material Design icons used in the entity list:
+# character: person -> fa-user, location: place -> fa-map-marker-alt,
+# item: inventory_2 -> fa-box, faction: groups -> fa-users, concept: lightbulb -> fa-lightbulb
+ENTITY_ICON_CODES = {
+    "character": "\uf007",  # fa-user
+    "location": "\uf3c5",  # fa-map-marker-alt
+    "item": "\uf466",  # fa-box
+    "faction": "\uf0c0",  # fa-users
+    "concept": "\uf0eb",  # fa-lightbulb
 }
 
 
@@ -79,23 +91,41 @@ def render_graph_html(
         if filter_types_lower and node_type not in filter_types_lower:
             continue
 
+        base_color = ENTITY_COLORS.get(node_type, "#607D8B")
         node = {
             "id": node_id,
             "label": data.get("name", "Unknown"),
             "group": node_type,
-            "color": ENTITY_COLORS.get(node_type, "#607D8B"),
-            "shape": ENTITY_SHAPES.get(node_type, "dot"),
+            "shape": "icon",
+            "icon": {
+                "face": "'Font Awesome 5 Free'",
+                "code": ENTITY_ICON_CODES.get(node_type, "\uf128"),  # fa-question as fallback
+                "size": 40,
+                "color": base_color,
+                "weight": "900",  # Solid style
+            },
             "title": _build_tooltip(data, max_words),
         }
 
-        # Highlight selected node
+        # Apply role-based styling using centralized helper
+        attributes = data.get("attributes", {})
+        role_style = get_role_graph_style(attributes, base_color)
+        if role_style:
+            node["borderWidth"] = role_style["borderWidth"]
+            node["color"] = role_style["color"]
+            node["icon"]["color"] = role_style["icon_color"]
+            if "shapeProperties" in role_style:
+                node["shapeProperties"] = role_style["shapeProperties"]
+
+        # Highlight selected node (overrides role-based styling)
         if node_id == selected_entity_id:
-            node["borderWidth"] = 3
-            node["borderWidthSelected"] = 4
+            node["borderWidth"] = 4
+            node["borderWidthSelected"] = 5
             node["color"] = {
-                "background": ENTITY_COLORS.get(node_type, "#607D8B"),
+                "background": "#FFD70060",  # Brighter gold background
                 "border": "#FFD700",  # Gold border for selected
             }
+            node["icon"]["color"] = base_color
 
         nodes.append(node)
 

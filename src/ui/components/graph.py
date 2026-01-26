@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_vis_network_loaded() -> None:
-    """Add vis-network library script to current page.
+    """Add vis-network library script and Font Awesome CSS to current page.
 
     This must be called for each page/client that needs the graph,
     since ui.add_body_html only adds to the current client's page.
@@ -25,6 +25,13 @@ def _ensure_vis_network_loaded() -> None:
     # vis-network version tracked in /package.json for Dependabot
     ui.add_body_html(
         '<script src="https://unpkg.com/vis-network@10.0.2/standalone/umd/vis-network.min.js"></script>'
+    )
+    # Font Awesome 5 for consistent icon rendering in graph nodes
+    ui.add_head_html(
+        '<link rel="stylesheet" '
+        'href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" '
+        'integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" '
+        'crossorigin="anonymous" referrerpolicy="no-referrer" />'
     )
 
 

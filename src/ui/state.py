@@ -89,6 +89,13 @@ class AppState:
     entity_search_query: str = ""
     quality_refinement_enabled: bool = True  # Whether to use quality refinement for generation
 
+    # Enhanced entity browser filters (Issue #182)
+    entity_quality_filter: str = "all"  # all, high, medium, low
+    entity_sort_by: str = "name"  # name, type, quality, created, relationships
+    entity_sort_descending: bool = False
+    entity_search_names: bool = True
+    entity_search_descriptions: bool = True
+
     # ========== Feedback Settings ==========
     feedback_mode: str = "per-chapter"  # per-chapter, mid-chapter, on-demand
 

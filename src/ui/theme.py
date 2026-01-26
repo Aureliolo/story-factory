@@ -18,6 +18,14 @@ ENTITY_ICONS = {
     "concept": "lightbulb",
 }
 
+# ========== Role Colors ==========
+# Character role styling colors (#173)
+ROLE_COLORS = {
+    "protagonist": "#FFD700",  # Gold
+    "antagonist": "#F44336",  # Red
+    "mentor": "#2196F3",  # Blue
+}
+
 # ========== Relationship Colors ==========
 RELATION_COLORS = {
     "knows": "#90A4AE",
@@ -196,3 +204,83 @@ def get_text_class(variant: str = "primary") -> str:
         "secondary": "text-gray-600 dark:text-gray-300",
         "muted": "text-gray-500 dark:text-gray-400",
     }.get(variant, "text-gray-800 dark:text-gray-100")
+
+
+def get_role_type(attributes: dict | None) -> str | None:
+    """Detect character role type from entity attributes.
+
+    Args:
+        attributes: Entity attributes dictionary.
+
+    Returns:
+        Role type string ('protagonist', 'antagonist', 'mentor') or None.
+    """
+    role = ((attributes or {}).get("role") or "").lower()
+    if "protagonist" in role or "main" in role:
+        return "protagonist"
+    if "antagonist" in role:
+        return "antagonist"
+    if "mentor" in role:
+        return "mentor"
+    return None
+
+
+def get_role_border_style(attributes: dict | None) -> str:
+    """Get CSS border style for entity based on role.
+
+    Args:
+        attributes: Entity attributes dictionary.
+
+    Returns:
+        CSS style string for border, or empty string if no role styling.
+    """
+    role_type = get_role_type(attributes)
+    if role_type == "protagonist":
+        return f"border: 2px solid {ROLE_COLORS['protagonist']}; box-shadow: 0 0 6px {ROLE_COLORS['protagonist']}80;"
+    if role_type == "antagonist":
+        return f"border: 2px solid {ROLE_COLORS['antagonist']};"
+    if role_type == "mentor":
+        return f"border: 2px solid {ROLE_COLORS['mentor']};"
+    return ""
+
+
+def get_role_graph_style(attributes: dict | None, base_color: str) -> dict | None:
+    """Get graph node style for entity based on role.
+
+    Args:
+        attributes: Entity attributes dictionary.
+        base_color: Base color for the entity type.
+
+    Returns:
+        Dictionary with border/color settings for vis.js, or None if no role styling.
+    """
+    role_type = get_role_type(attributes)
+    if role_type == "protagonist":
+        return {
+            "borderWidth": 3,
+            "shapeProperties": {"borderDashes": False},
+            "color": {
+                "background": f"{ROLE_COLORS['protagonist']}40",
+                "border": ROLE_COLORS["protagonist"],
+            },
+            "icon_color": base_color,
+        }
+    if role_type == "antagonist":
+        return {
+            "borderWidth": 2,
+            "color": {
+                "background": f"{ROLE_COLORS['antagonist']}40",
+                "border": ROLE_COLORS["antagonist"],
+            },
+            "icon_color": base_color,
+        }
+    if role_type == "mentor":
+        return {
+            "borderWidth": 2,
+            "color": {
+                "background": f"{ROLE_COLORS['mentor']}40",
+                "border": ROLE_COLORS["mentor"],
+            },
+            "icon_color": base_color,
+        }
+    return None

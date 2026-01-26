@@ -255,6 +255,7 @@ class TestCircuitBreaker:
         errors = []
 
         def record_failures():
+            """Record 50 failures in a loop for thread-safety testing."""
             try:
                 for _ in range(50):
                     cb.record_failure(Exception("test"))
@@ -262,6 +263,7 @@ class TestCircuitBreaker:
                 errors.append(e)
 
         def record_successes():
+            """Record 50 successes in a loop for thread-safety testing."""
             try:
                 for _ in range(50):
                     cb.record_success()

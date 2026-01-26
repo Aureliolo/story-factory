@@ -6,6 +6,7 @@ Implements a generate-judge-refine loop using:
 - Refinement: Incorporates feedback to improve entities
 """
 
+import asyncio
 import logging
 import random
 import time
@@ -13,6 +14,7 @@ from typing import Any, ClassVar
 
 import ollama
 
+from src.memory.entities import Entity
 from src.memory.mode_database import ModeDatabase
 from src.memory.story_state import (
     Character,
@@ -20,6 +22,7 @@ from src.memory.story_state import (
     Faction,
     Item,
     Location,
+    StoryBrief,
     StoryState,
 )
 from src.memory.world_quality import (
@@ -3301,3 +3304,177 @@ SUMMARY:"""
                 logger.debug(f"Generated mini description for {name}: {mini_desc}")
 
         return results
+
+    async def refine_entity(
+        self,
+        entity: Entity | None,
+        story_brief: StoryBrief | None,
+    ) -> dict[str, Any] | None:
+        """Refine an existing entity to improve its quality.
+
+        Uses the quality service's refinement loop with the existing entity as a base.
+
+        Args:
+            entity: Entity to refine.
+            story_brief: Story brief for context.
+
+        Returns:
+            Dictionary with refined entity data (name, description, attributes), or None on failure.
+        """
+        if not entity or not story_brief:
+            logger.warning("refine_entity called with missing entity or story_brief")
+            return None
+
+        entity_type = entity.type.lower()
+        logger.info(f"Refining {entity_type}: {entity.name}")
+
+        try:
+            # Get quality scores to identify weak areas
+            current_scores = (entity.attributes or {}).get("quality_scores")
+            feedback = ""
+            if current_scores:
+                # Build feedback from low scores
+                weak_areas = []
+                for key, value in current_scores.items():
+                    if key not in ("average", "feedback") and isinstance(value, (int, float)):
+                        if value < 7:
+                            weak_areas.append(f"{key.replace('_', ' ')} ({value:.1f})")
+                if weak_areas:
+                    feedback = f"Focus on improving: {', '.join(weak_areas)}"
+
+            # Build refinement prompt
+            refinement_prompt = f"""Refine this {entity_type} for a story. Keep the core identity but improve quality.
+
+Current {entity_type}:
+- Name: {entity.name}
+- Description: {entity.description}
+- Attributes: {entity.attributes}
+- Role: {(entity.attributes or {}).get("role", "unknown")}
+
+{f"Feedback: {feedback}" if feedback else "Improve overall quality and depth."}
+
+Story context:
+- Title: {getattr(story_brief, "title", "Unknown")}
+- Genre: {getattr(story_brief, "genre", "Unknown")}
+- Themes: {getattr(story_brief, "themes", "Unknown")}
+
+Return a JSON object with:
+- name: string (can refine slightly but keep recognizable)
+- description: string (improved, more detailed)
+- attributes: object (enhanced attributes for this {entity_type} type)"""
+
+            # Use creator model for refinement
+            model_id = self._get_creator_model(entity_type)
+            config = RefinementConfig.from_settings(self.settings)
+
+            response = await asyncio.to_thread(
+                self.client.generate,
+                model=model_id,
+                prompt=refinement_prompt,
+                options={
+                    "temperature": config.refinement_temperature,
+                    "num_predict": 2048,
+                },
+            )
+
+            response_text = str(response.get("response", ""))
+            if not response_text:
+                logger.warning(f"Empty response when refining {entity.name}")
+                return None
+
+            # Parse response
+            result = extract_json(response_text)
+            if not result or not isinstance(result, dict):
+                logger.warning(f"Failed to parse refinement response for {entity.name}")
+                return None
+
+            logger.info(f"Successfully refined {entity_type}: {entity.name}")
+            return result
+
+        except Exception as e:
+            logger.exception(f"Failed to refine entity {entity.name}: {e}")
+            return None
+
+    async def regenerate_entity(
+        self,
+        entity: Entity | None,
+        story_brief: StoryBrief | None,
+        custom_instructions: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Fully regenerate an entity with AI.
+
+        Creates a new version of the entity while preserving its role in the story.
+
+        Args:
+            entity: Entity to regenerate.
+            story_brief: Story brief for context.
+            custom_instructions: Optional user guidance for regeneration.
+
+        Returns:
+            Dictionary with regenerated entity data (name, description, attributes), or None on failure.
+        """
+        if not entity or not story_brief:
+            logger.warning("regenerate_entity called with missing entity or story_brief")
+            return None
+
+        entity_type = entity.type.lower()
+        logger.info(f"Regenerating {entity_type}: {entity.name}")
+
+        try:
+            # Build regeneration prompt
+            instruction_text = custom_instructions or "Create a fresh, high-quality version."
+
+            regeneration_prompt = f"""Create a new version of this {entity_type} for a story.
+
+Original {entity_type} (for reference):
+- Name: {entity.name}
+- Type: {entity.type}
+- Description: {entity.description}
+- Role: {(entity.attributes or {}).get("role", "unknown")}
+
+Instructions: {instruction_text}
+
+Story context:
+- Title: {getattr(story_brief, "title", "Unknown")}
+- Genre: {getattr(story_brief, "genre", "Unknown")}
+- Themes: {getattr(story_brief, "themes", "Unknown")}
+- Setting: {getattr(story_brief, "setting", "Unknown")}
+
+Return a JSON object with:
+- name: string (new name, can be similar or different)
+- description: string (detailed, engaging description)
+- attributes: object (full attributes for this {entity_type} type including role, traits, etc.)"""
+
+            # Use creator model
+            model_id = self._get_creator_model(entity_type)
+            config = RefinementConfig.from_settings(self.settings)
+
+            response = await asyncio.to_thread(
+                self.client.generate,
+                model=model_id,
+                prompt=regeneration_prompt,
+                options={
+                    "temperature": config.creator_temperature,
+                    "num_predict": 2048,
+                },
+            )
+
+            response_text = str(response.get("response", ""))
+            if not response_text:
+                logger.warning(f"Empty response when regenerating {entity.name}")
+                return None
+
+            # Parse response
+            result = extract_json(response_text)
+            if not result or not isinstance(result, dict):
+                logger.warning(f"Failed to parse regeneration response for {entity.name}")
+                return None
+
+            logger.info(
+                f"Successfully regenerated {entity_type}: {entity.name} -> {result.get('name', 'unknown')}"
+            )
+            return result
+
+        except Exception as e:
+            logger.exception(f"Failed to regenerate entity {entity.name}: {e}")
+            return None
