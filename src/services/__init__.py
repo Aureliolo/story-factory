@@ -56,10 +56,14 @@ class ServiceContainer:
     conflict_analysis: ConflictAnalysisService
 
     def __init__(self, settings: Settings | None = None):
-        """Initialize all services with shared settings.
+        """
+        Create and wire service instances that share a Settings object.
 
-        Args:
-            settings: Application settings. If None, loads from src/settings.json.
+        Parameters:
+            settings (Settings | None): Application settings to share across services. If omitted, settings are loaded via Settings.load().
+
+        Notes:
+            Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`).
         """
         self.settings = settings or Settings.load()
         self.project = ProjectService(self.settings)

@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_vis_timeline_loaded() -> None:
-    """Add vis-timeline library script to current page.
+    """
+    Inject the vis-timeline JavaScript and stylesheet into the current page.
 
-    This must be called for each page/client that needs the timeline.
-    NiceGUI handles deduplication if called multiple times.
+    Adds the vis-timeline script and CSS to the document body so the timeline component can be initialized. Calling this function multiple times is safe because NiceGUI deduplicates injected resources.
     """
     # vis-timeline version tracked for Dependabot
     ui.add_body_html(
@@ -55,13 +55,14 @@ class WorldTimelineComponent:
         on_item_select: Callable[[str], Any] | None = None,
         height: int = 400,
     ):
-        """Initialize timeline component.
+        """
+        Initialize the timeline component with optional world data, services, selection callback, and visual height.
 
-        Args:
-            world_db: WorldDatabase to visualize.
-            services: ServiceContainer for timeline service.
-            on_item_select: Callback when an item is selected.
-            height: Timeline container height in pixels.
+        Parameters:
+            world_db (WorldDatabase | None): WorldDatabase to visualize; if None the component will render a placeholder until set.
+            services (ServiceContainer | None): Service container providing the timeline service used to fetch timeline items.
+            on_item_select (Callable[[str], Any] | None): Callback invoked with the selected item's ID when a timeline item is selected.
+            height (int): Height of the timeline container in pixels.
         """
         self.world_db = world_db
         self.services = services
@@ -81,7 +82,11 @@ class WorldTimelineComponent:
         self._callback_id = f"timeline_select_{uuid.uuid4().hex[:8]}"
 
     def build(self) -> None:
-        """Build the timeline UI."""
+        """
+        Build the timeline UI and initialize its interactive components.
+
+        Ensures the vis-timeline assets are loaded, registers the item selection callback if provided, creates the control row (filters, zoom controls, refresh) and the timeline container, and performs the initial render of timeline content.
+        """
         # Ensure vis-timeline library is loaded
         _ensure_vis_timeline_loaded()
 
@@ -89,7 +94,12 @@ class WorldTimelineComponent:
         if self.on_item_select:
 
             def handle_item_select(e: Any) -> None:
-                """Handle item selection event."""
+                """
+                Handle a UI selection event by invoking the configured on_item_select callback with the selected item ID.
+
+                Parameters:
+                    e (Any): Event object whose `args` mapping may contain the key `"item_id"`. If `"item_id"` is present and `self.on_item_select` is set, the callback is called with that ID. Otherwise no action is taken.
+                """
                 item_id = e.args.get("item_id") if e.args else None
                 if item_id and self.on_item_select:
                     self.on_item_select(item_id)
@@ -168,10 +178,11 @@ class WorldTimelineComponent:
             self._render_timeline()
 
     def set_world_db(self, world_db: WorldDatabase | None) -> None:
-        """Set the world database and refresh.
+        """
+        Set the world database used by the component and re-render the timeline.
 
-        Args:
-            world_db: WorldDatabase to visualize.
+        Parameters:
+            world_db (WorldDatabase | None): WorldDatabase to visualize, or None to clear the current database.
         """
         self.world_db = world_db
         self._render_timeline()
@@ -333,13 +344,14 @@ class WorldTimelineComponent:
         ui.run_javascript(js)
 
     def _items_to_visjs(self, items: list[TimelineItem]) -> list[dict]:
-        """Convert TimelineItem objects to vis-timeline format.
+        """
+        Convert TimelineItem objects into vis-timeline item dictionaries suitable for rendering.
 
-        Args:
-            items: List of TimelineItem objects.
+        Parameters:
+            items (list[TimelineItem]): Timeline items to convert; items without a valid start are skipped.
 
         Returns:
-            List of dictionaries for vis-timeline.
+            list[dict]: vis-timeline item dictionaries containing keys such as 'id', 'content', 'group', 'title', 'style', 'start', optional 'end' (for ranges), and 'type' ('point' or 'range').
         """
         visjs_items = []
         base_year = 1000  # Base year for relative ordering
@@ -412,11 +424,12 @@ class WorldTimelineComponent:
         ]
 
     def _toggle_filter(self, entity_type: str, enabled: bool) -> None:
-        """Toggle an entity type filter.
+        """
+        Update the active entity-type filter and re-render the timeline.
 
-        Args:
-            entity_type: Entity type to toggle.
-            enabled: Whether to enable the filter.
+        Parameters:
+            entity_type (str): The entity type to enable or disable (e.g., "character", "faction").
+            enabled (bool): True to include the entity type in the filters, False to exclude it.
         """
         if enabled and entity_type not in self._filter_types:
             self._filter_types.append(entity_type)
@@ -425,10 +438,11 @@ class WorldTimelineComponent:
         self._render_timeline()
 
     def _toggle_events(self, enabled: bool) -> None:
-        """Toggle event visibility.
+        """
+        Toggle inclusion of event items in the active timeline filters.
 
-        Args:
-            enabled: Whether to show events.
+        Parameters:
+            enabled: True to include events in the timeline, False to exclude them.
         """
         self._include_events = enabled
         if enabled and "event" not in self._filter_types:

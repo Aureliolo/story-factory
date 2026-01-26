@@ -77,13 +77,14 @@ CONFLICT_COLORS: dict[str, str] = {
 
 
 def classify_relationship(relation_type: str) -> ConflictCategory:
-    """Classify a relationship type into a conflict category.
+    """
+    Map a relationship type string to its corresponding ConflictCategory.
 
-    Args:
-        relation_type: The relationship type string.
+    Parameters:
+        relation_type (str): Relationship label (e.g., "enemy_of", "trusts", "works with").
 
     Returns:
-        The conflict category for this relationship type.
+        ConflictCategory: The category for the given relationship; defaults to `ConflictCategory.NEUTRAL` if unrecognized.
     """
     # Normalize to lowercase for matching
     normalized = relation_type.lower().replace("-", "_").replace(" ", "_")
@@ -93,13 +94,12 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
 
 
 def get_conflict_color(category: ConflictCategory | str) -> str:
-    """Get the display color for a conflict category.
+    """
+    Return the hex color used to visualize a conflict category.
 
-    Args:
-        category: Conflict category enum or string.
-
+    Unknown or unrecognized categories default to the neutral color.
     Returns:
-        Hex color code.
+        Hex color string (e.g., "#4CAF50") for the given category; defaults to the neutral color if not found.
     """
     if isinstance(category, ConflictCategory):
         return CONFLICT_COLORS.get(category.value, CONFLICT_COLORS["neutral"])
@@ -186,7 +186,12 @@ class ConflictMetrics(BaseModel):
 
     @property
     def has_conflicts(self) -> bool:
-        """Check if there are any rivalry or tension relationships."""
+        """
+        Determine whether any rivalry or tension relationships are present.
+
+        Returns:
+            bool: `True` if `rivalry_count` > 0 or `tension_count` > 0, `False` otherwise.
+        """
         return self.rivalry_count > 0 or self.tension_count > 0
 
 

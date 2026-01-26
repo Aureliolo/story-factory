@@ -37,10 +37,11 @@ class TimelineService:
     """
 
     def __init__(self, settings: Settings):
-        """Initialize timeline service.
+        """
+        Create a TimelineService configured with the provided application settings.
 
-        Args:
-            settings: Application settings.
+        Parameters:
+            settings (Settings): Application settings used to configure timeline behavior and dependencies.
         """
         logger.debug("Initializing TimelineService")
         self.settings = settings
@@ -52,15 +53,16 @@ class TimelineService:
         entity_types: list[str] | None = None,
         include_events: bool = True,
     ) -> list[TimelineItem]:
-        """Get all timeline items from the world database.
+        """
+        Aggregate entities and events from the world database into a list of timeline items.
 
-        Args:
-            world_db: WorldDatabase instance.
-            entity_types: Optional filter for entity types (None = all).
-            include_events: Whether to include events as timeline items.
+        Parameters:
+            world_db (WorldDatabase): Source database to read entities and events from.
+            entity_types (list[str] | None): If provided, include only entities whose type is in this list.
+            include_events (bool): If True, include world events as timeline items.
 
         Returns:
-            List of TimelineItem objects sorted by start timestamp.
+            list[TimelineItem]: Timeline items sorted by each item's start timestamp.
         """
         validate_not_none(world_db, "world_db")
         logger.debug(
@@ -94,16 +96,16 @@ class TimelineService:
         return items
 
     def _entity_to_timeline_item(self, entity: Entity) -> TimelineItem | None:
-        """Convert an entity to a timeline item.
+        """
+        Convert an Entity into a TimelineItem for timeline visualization.
 
-        Uses lifecycle data from attributes if available, otherwise uses
-        created_at timestamp.
+        Uses lifecycle timestamps (birth or first_appearance for start; death or last_appearance for end) when present; otherwise uses the entity's created_at as a relative start timestamp. The returned TimelineItem contains id, entity_id, label, type, start, end, color, description, and group suitable for timeline rendering.
 
-        Args:
-            entity: Entity to convert.
+        Parameters:
+            entity (Entity): The entity to convert; must have a created_at timestamp for relative ordering when explicit lifecycle dates are absent.
 
         Returns:
-            TimelineItem or None if no temporal data available.
+            TimelineItem: A timeline representation of the entity.
         """
         validate_not_none(entity, "entity")
 
@@ -153,13 +155,13 @@ class TimelineService:
         return item
 
     def _event_to_timeline_item(self, event: WorldEvent) -> TimelineItem | None:
-        """Convert an event to a timeline item.
+        """
+        Create a TimelineItem representing a world event for timeline display.
 
-        Args:
-            event: WorldEvent to convert.
+        The start timestamp is taken from `event.timestamp_in_story` when present, otherwise from `event.chapter_number`, and falls back to `event.created_at` if neither is available.
 
         Returns:
-            TimelineItem or None if no temporal data available.
+            TimelineItem representing the event for the timeline.
         """
         validate_not_none(event, "event")
 
@@ -196,13 +198,11 @@ class TimelineService:
         return item
 
     def get_entity_lifecycle(self, entity: Entity) -> EntityLifecycle | None:
-        """Get lifecycle information for an entity.
-
-        Args:
-            entity: Entity to get lifecycle for.
+        """
+        Return the entity's lifecycle extracted from its attributes.
 
         Returns:
-            EntityLifecycle or None if no lifecycle data.
+            EntityLifecycle or None: Lifecycle data parsed from the entity's attributes, or `None` if no lifecycle information is present.
         """
         validate_not_none(entity, "entity")
         validate_type(entity, "entity", Entity)
@@ -214,17 +214,16 @@ class TimelineService:
         entity_id: str,
         lifecycle: EntityLifecycle,
     ) -> bool:
-        """Update lifecycle information for an entity.
+        """
+        Update an entity's lifecycle data stored in the entity's attributes under the "lifecycle" key.
 
-        Stores lifecycle data in the entity's attributes.
-
-        Args:
-            world_db: WorldDatabase instance.
-            entity_id: Entity ID to update.
-            lifecycle: New lifecycle data.
+        Parameters:
+                world_db (WorldDatabase): Database instance used to retrieve and update the entity.
+                entity_id (str): ID of the entity to update.
+                lifecycle (EntityLifecycle): Lifecycle information to persist (birth, death, first_appearance, last_appearance).
 
         Returns:
-            True if updated successfully.
+                bool: True if the entity was found and updated successfully, False otherwise.
         """
         validate_not_none(world_db, "world_db")
         validate_not_none(entity_id, "entity_id")
@@ -260,13 +259,17 @@ class TimelineService:
         return result
 
     def get_timeline_groups(self, items: list[TimelineItem]) -> list[dict]:
-        """Get group definitions for timeline visualization.
+        """
+        Builds unique group definitions from timeline items for use by the timeline renderer.
 
-        Args:
-            items: List of timeline items.
+        Parameters:
+            items (list[TimelineItem]): Timeline items from which group ids and titles are derived.
 
         Returns:
-            List of group definitions for vis.js.
+            list[dict]: A list of group objects with keys:
+                - `id`: group identifier,
+                - `content`: title-cased label for display,
+                - `style`: inline CSS color style for the group.
         """
         groups_seen = set()
         groups = []
@@ -295,15 +298,15 @@ class TimelineService:
         entity_types: list[str] | None = None,
         include_events: bool = True,
     ) -> dict:
-        """Get timeline data formatted for vis.js Timeline component.
+        """
+        Generate data structured for use with the vis.js Timeline component.
 
-        Args:
-            world_db: WorldDatabase instance.
-            entity_types: Optional filter for entity types.
-            include_events: Whether to include events.
+        Parameters:
+            world_db (WorldDatabase): Database providing entities and events to include in the timeline.
+            entity_types (list[str] | None): Optional list of entity type names to include; include all types if None.
 
         Returns:
-            Dictionary with 'items' and 'groups' for vis.js.
+            dict: A mapping with keys "items" (list of vis.js item dicts) and "groups" (list of vis.js group dicts). Items without temporal information are omitted.
         """
         validate_not_none(world_db, "world_db")
 

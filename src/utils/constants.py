@@ -14,13 +14,14 @@ ENTITY_COLORS: dict[str, str] = {
 
 
 def get_entity_color(entity_type: str) -> str:
-    """Get color for an entity type.
+    """
+    Retrieve the hex color associated with an entity type.
 
-    Args:
-        entity_type: Type of entity.
+    Parameters:
+        entity_type (str): Entity type name (case-insensitive).
 
     Returns:
-        Hex color code.
+        str: Hex color code for the given entity type; returns the color for "concept" if the type is not found.
     """
     return ENTITY_COLORS.get(entity_type.lower(), ENTITY_COLORS["concept"])
 

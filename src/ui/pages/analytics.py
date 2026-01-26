@@ -31,11 +31,12 @@ class AnalyticsPage:
     """
 
     def __init__(self, state: AppState, services: ServiceContainer):
-        """Initialize analytics page.
+        """
+        Initialize the AnalyticsPage with the application state and available services.
 
-        Args:
-            state: Application state.
-            services: Service container.
+        Parameters:
+                state (AppState): Application state providing current project and UI context.
+                services (ServiceContainer): Service container exposing dependencies used by the page.
         """
         self.state = state
         self.services = services
@@ -55,7 +56,11 @@ class AnalyticsPage:
         self._filter_genre: str | None = None
 
     def build(self) -> None:
-        """Build the analytics page UI."""
+        """
+        Constructs and renders the full analytics page layout.
+
+        Creates the main page column, adds the header and filters, initializes per-section UI containers (summary, content statistics, generation costs, quality trends, model performance, world quality, and recommendations) and invokes each section's builder to populate its contents.
+        """
         with ui.column().classes("w-full gap-6 p-4"):
             # Header with refresh and export
             self._build_header()
@@ -635,7 +640,11 @@ class AnalyticsPage:
                     )
 
     def _build_generation_costs_section(self) -> None:
-        """Build the generation costs section."""
+        """
+        Populate the generation costs UI section with 30-day cost summaries, breakdowns, and efficiency insights.
+
+        Fetches a 30-day cost summary and optional model- and entity-type breakdowns for the current project when available (or across all projects), and renders a summary grid (total tokens, total time, generation runs, efficiency), optional tables for cost-by-model and cost-by-entity-type, and an efficiency insight card when efficiency is below 80%. On data load failure an error message is displayed; when there are no runs a friendly empty-state message is shown.
+        """
         if self._generation_costs_section is None:
             return
 
@@ -817,13 +826,11 @@ class AnalyticsPage:
             return f"{hours}h {mins}m"
 
     def _format_tokens(self, tokens: int) -> str:
-        """Format token count with K/M suffix.
-
-        Args:
-            tokens: Token count.
+        """
+        Format a token count using K (thousands) or M (millions) suffix when appropriate.
 
         Returns:
-            Formatted string like '1.2K' or '3.5M'.
+            Formatted string representation of the token count (e.g., '999', '1.2K', '3.5M').
         """
         if tokens < 1000:
             return str(tokens)
@@ -833,7 +840,17 @@ class AnalyticsPage:
             return f"{tokens / 1_000_000:.1f}M"
 
     def _build_quality_trends_section(self) -> None:
-        """Build the quality trends over time section."""
+        """
+        Populate the quality trends UI section with recent prose quality and generation speed data.
+
+        Fetches daily averages for "prose_quality" and "tokens_per_second" over the past 30 days for the current filter, then renders:
+        - A header "Quality Trends (30 Days)".
+        - If no trend data is available, a message indicating more content is needed.
+        - If prose quality data is available, a "Prose Quality Over Time" table showing the most recent 10 dates with date, average quality (formatted as X.X/10), and sample count.
+        - If generation speed data is available, a "Generation Speed Over Time" table showing the most recent 10 dates with date, average speed (tokens/second) and sample count.
+
+        On data load failure, displays an error message in the section.
+        """
         if self._quality_trends_section is None:
             return
 

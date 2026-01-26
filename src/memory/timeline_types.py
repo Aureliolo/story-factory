@@ -35,11 +35,14 @@ class StoryTimestamp(BaseModel):
 
     @property
     def sort_key(self) -> tuple[int, int, int, int]:
-        """Generate a sortable key for ordering timestamps.
+        """
+        Provide a tuple key used to order StoryTimestamp values chronologically, with calendar dates before relative orders and unknown times last.
 
         Returns:
-            Tuple of (has_calendar, year, month, day) or relative_order fallback.
-            Calendar dates sort before relative-only timestamps.
+            tuple[int, int, int, int]: A sortable key:
+              - (0, year, month_or_0, day_or_0) when a calendar year is present.
+              - (1, relative_order, 0, 0) when only a relative order is present.
+              - (2, 0, 0, 0) when no ordering information is available.
         """
         if self.year is not None:
             # Calendar-based: sort by year, month, day
@@ -53,10 +56,14 @@ class StoryTimestamp(BaseModel):
 
     @property
     def display_text(self) -> str:
-        """Get human-readable display text.
+        """
+        Produce a human-readable label for the timestamp.
 
         Returns:
-            Original raw_text if available, otherwise formatted date.
+            A string containing `raw_text` if present; otherwise a comma-separated date like
+            "Year <year>, Month <month>, Day <day>" for available calendar fields, or
+            "Event #<relative_order>" if only a relative order is available, or
+            "Unknown time" when no date information exists.
         """
         if self.raw_text:
             return self.raw_text
@@ -78,7 +85,12 @@ class StoryTimestamp(BaseModel):
 
     @property
     def has_date(self) -> bool:
-        """Check if this timestamp has any date information."""
+        """
+        Determine whether the timestamp contains any calendar or relative-order information.
+
+        Returns:
+            True if `year`, `month`, `day`, or `relative_order` is set, False otherwise.
+        """
         return (
             self.year is not None
             or self.month is not None
@@ -143,26 +155,26 @@ class TimelineItem(BaseModel):
 
     @property
     def is_range(self) -> bool:
-        """Check if this is a range item (has start and end) vs point item."""
+        """
+        Determine whether the timeline item represents a range (has an end timestamp).
+
+        Returns:
+            True if the item has an `end` timestamp (range), False otherwise.
+        """
         return self.end is not None
 
 
 def parse_timestamp(text: str) -> StoryTimestamp:
-    """Parse a timestamp string into a StoryTimestamp.
+    """
+    Parse a free-form timestamp string into a StoryTimestamp model.
 
-    Supports various formats:
-    - "Year 1042" or "1042" -> year=1042
-    - "Year 1042, Month 3" -> year=1042, month=3
-    - "Day 15 of Month 7, Year 1042" -> year=1042, month=7, day=15
-    - "Day 3" or "Day 3 of the journey" -> relative_order based on day
-    - "Before the war" -> raw_text only (no structured data)
-    - "Chapter 5" -> relative_order=5
+    Preserves the original input in `raw_text`. Extracts calendar fields (`year`, `month`, `day`) when present; if no year is found, attempts to derive `relative_order` from phrases like "chapter N", "event/part/phase/act N", or from a standalone day value. If no structured information can be determined, the result contains only `raw_text`.
 
-    Args:
-        text: The timestamp string to parse.
+    Parameters:
+        text (str): The timestamp string to parse.
 
     Returns:
-        Parsed StoryTimestamp with raw_text preserved.
+        StoryTimestamp: Parsed timestamp with `raw_text` preserved and any discovered `year`, `month`, `day`, or `relative_order` populated.
     """
     logger.debug(f"Parsing timestamp: {text!r}")
 
@@ -232,15 +244,21 @@ def parse_timestamp(text: str) -> StoryTimestamp:
 
 
 def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifecycle | None:
-    """Extract lifecycle information from entity attributes.
+    """
+    Build an EntityLifecycle from an attributes dictionary's "lifecycle" entry.
 
-    Looks for a 'lifecycle' key in attributes with birth/death timestamps.
+    If present, the "lifecycle" value must be a mapping that may contain any of
+    "birth", "death", "first_appearance", and "last_appearance". Each field may be
+    either a dict of StoryTimestamp fields or a string that will be parsed by
+    parse_timestamp.
 
-    Args:
-        attributes: Entity attributes dictionary.
+    Parameters:
+        attributes (dict[str, Any]): Entity attributes; may include a "lifecycle"
+            mapping describing timestamp data.
 
     Returns:
-        EntityLifecycle if found, None otherwise.
+        EntityLifecycle constructed from the "lifecycle" data, or `None` if the
+        "lifecycle" entry is missing or not a mapping.
     """
     logger.debug(f"Extracting lifecycle from attributes: {list(attributes.keys())}")
 

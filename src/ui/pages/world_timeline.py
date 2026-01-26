@@ -28,11 +28,12 @@ class WorldTimelinePage:
     """
 
     def __init__(self, state: AppState, services: ServiceContainer):
-        """Initialize world timeline page.
+        """
+        Initialize a WorldTimelinePage with application state and services.
 
-        Args:
-            state: Application state.
-            services: Service container.
+        Parameters:
+            state (AppState): Application state used to access project and world data.
+            services (ServiceContainer): Service container providing application services (navigation, notifications, etc.).
         """
         self.state = state
         self.services = services
@@ -41,7 +42,11 @@ class WorldTimelinePage:
         self._timeline: WorldTimelineComponent | None = None
 
     def build(self) -> None:
-        """Build the world timeline page UI."""
+        """
+        Constructs and mounts the World Timeline page UI.
+
+        Renders the info, timeline, and help sections when a project with world data is available. If no project is selected, displays the no-project message instead; if a project exists but world data is missing, displays the no-world message.
+        """
         if not self.state.has_project:
             self._build_no_project_message()
             return
@@ -57,7 +62,9 @@ class WorldTimelinePage:
             self._build_help_section()
 
     def _build_no_project_message(self) -> None:
-        """Build message when no project is selected."""
+        """
+        Render a full-width, centered message panel prompting the user to select a project to view the world timeline.
+        """
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-4 py-16"):
             ui.icon("timeline", size="xl").classes("text-gray-400 dark:text-gray-500")
             ui.label("No Project Selected").classes("text-xl text-gray-500 dark:text-gray-400")
@@ -66,7 +73,11 @@ class WorldTimelinePage:
             )
 
     def _build_no_world_message(self) -> None:
-        """Build message when no world data exists."""
+        """
+        Display a full-width centered message indicating that no world data exists and prompt the user to build the world.
+
+        Renders a panel with an icon, heading, explanatory text, and a "Go to World Builder" button that navigates to "/world".
+        """
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-6 py-16"):
             ui.icon("public", size="xl").classes("text-gray-400")
             ui.label("No World Data").classes(
@@ -83,7 +94,11 @@ class WorldTimelinePage:
             ).props("color=primary size=lg")
 
     def _build_info_section(self) -> None:
-        """Build the info section with timeline statistics."""
+        """
+        Builds the information/header card for the timeline page displaying counts of characters, factions, locations, and events, colored legend dots, and a "World Builder" navigation button.
+
+        Does nothing if the world database is not available.
+        """
         if not self.state.world_db:
             return
 
@@ -189,10 +204,13 @@ class WorldTimelinePage:
                     ).classes("text-sm text-gray-600 dark:text-gray-400")
 
     def _handle_item_select(self, item_id: str) -> None:
-        """Handle timeline item selection.
+        """
+        Handle a timeline item selection and notify the user about the selected entity or event.
 
-        Args:
-            item_id: The selected item ID (e.g., 'entity-uuid' or 'event-uuid').
+        Parameters:
+            item_id (str): Identifier of the selected timeline item. Expected formats are
+                "entity-<id>" for entities and "event-<id>" for events; the function notifies
+                the user with a truncated form of the underlying <id>.
         """
         logger.debug(f"Timeline item selected: {item_id}")
 
