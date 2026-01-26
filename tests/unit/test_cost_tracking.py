@@ -299,7 +299,15 @@ class TestModeDatabaseCostTracking:
 
     @pytest.fixture
     def db(self, tmp_path):
-        """Create a ModeDatabase instance for testing."""
+        """
+        Create a ModeDatabase instance pointing at a temporary test database file.
+        
+        Parameters:
+            tmp_path (pathlib.Path): Temporary directory path provided by pytest.
+        
+        Returns:
+            ModeDatabase: A ModeDatabase configured to use a test SQLite file under the provided temporary path.
+        """
         db_path = tmp_path / "test_mode.db"
         return ModeDatabase(db_path)
 

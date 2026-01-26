@@ -201,7 +201,9 @@ class StoryFactoryApp:
             """Render the World Timeline page."""
 
             def content():
-                """Build the World Timeline page content."""
+                """
+                Render the World Timeline page content within the shared layout.
+                """
                 page = WorldTimelinePage(self.state, self.services)
                 page.build()
 

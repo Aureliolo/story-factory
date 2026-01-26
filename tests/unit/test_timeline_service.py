@@ -238,7 +238,12 @@ class TestTimelineService:
 
     @pytest.fixture
     def settings(self):
-        """Create settings for testing."""
+        """
+        Create a default Settings instance used by tests.
+        
+        Returns:
+            Settings: a new Settings object with default test configuration.
+        """
         return Settings()
 
     @pytest.fixture
@@ -248,7 +253,12 @@ class TestTimelineService:
 
     @pytest.fixture
     def mock_world_db(self):
-        """Create a mock WorldDatabase."""
+        """
+        Create a MagicMock that mimics a WorldDatabase with no entities or events.
+        
+        Returns:
+            mock_db (MagicMock): Mocked WorldDatabase where `list_entities()` and `list_events()` return empty lists.
+        """
         mock_db = MagicMock()
         mock_db.list_entities.return_value = []
         mock_db.list_events.return_value = []

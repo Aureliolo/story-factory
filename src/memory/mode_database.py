@@ -2131,21 +2131,22 @@ class ModeDatabase:
         wasted_iterations: int | None = None,
         completed: bool = False,
     ) -> None:
-        """Update a generation run with accumulated metrics.
-
-        Args:
-            run_id: The run ID to update.
-            total_tokens: Total tokens used.
-            total_time_seconds: Total generation time.
-            total_calls: Total number of generation calls.
-            by_entity_type: Breakdown by entity type.
-            by_model: Breakdown by model.
-            total_iterations: Total refinement iterations.
-            wasted_iterations: Wasted refinement iterations.
-            completed: Whether to mark the run as completed.
-
+        """
+        Update accumulated metrics for an existing generation run and optionally mark it completed.
+        
+        Parameters:
+            run_id (str): Identifier of the generation run to update.
+            total_tokens (int | None): Cumulative tokens used for the run.
+            total_time_seconds (float | None): Cumulative generation time in seconds.
+            total_calls (int | None): Cumulative number of generation calls.
+            by_entity_type (dict[str, dict] | None): Per-entity-type breakdown; stored as JSON.
+            by_model (dict[str, dict] | None): Per-model breakdown; stored as JSON.
+            total_iterations (int | None): Total refinement iterations performed.
+            wasted_iterations (int | None): Refinement iterations considered wasted.
+            completed (bool): If True, sets the run's completion timestamp to now.
+        
         Raises:
-            sqlite3.Error: If database operation fails.
+            sqlite3.Error: If the database update fails.
         """
         updates: list[str] = []
         values: list[Any] = []
@@ -2196,13 +2197,14 @@ class ModeDatabase:
             raise
 
     def complete_generation_run(self, run_id: str) -> None:
-        """Mark a generation run as completed.
-
-        Args:
-            run_id: The run ID to complete.
-
+        """
+        Mark a generation run as completed by setting its completed_at timestamp to the current time.
+        
+        Parameters:
+            run_id (str): Identifier of the generation run to mark completed.
+        
         Raises:
-            sqlite3.Error: If database operation fails.
+            sqlite3.Error: If a database error occurs while updating the run.
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -2222,13 +2224,11 @@ class ModeDatabase:
             raise
 
     def get_generation_run(self, run_id: str) -> dict[str, Any] | None:
-        """Get a generation run by ID.
-
-        Args:
-            run_id: The run ID to retrieve.
-
+        """
+        Retrieve a generation run record by run_id.
+        
         Returns:
-            Run record as dictionary, or None if not found.
+            dict: Run record with JSON fields `by_entity_type` and `by_model` deserialized into dictionaries, or `None` if no matching run is found.
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -2259,15 +2259,16 @@ class ModeDatabase:
         run_type: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        """Get generation runs with optional filters.
-
-        Args:
-            project_id: Filter by project.
-            run_type: Filter by run type.
-            limit: Maximum number of results.
-
+        """
+        Retrieve recent generation runs, optionally filtered by project or run type.
+        
+        Parameters:
+            project_id (str | None): If provided, only runs for this project are returned.
+            run_type (str | None): If provided, only runs of this type are returned.
+            limit (int): Maximum number of runs to return; results are ordered by `started_at` descending.
+        
         Returns:
-            List of run records as dictionaries.
+            list[dict[str, Any]]: A list of run records. Each record includes parsed `by_entity_type` and `by_model` dicts (deserialized from stored JSON) and other columns from the `generation_runs` table.
         """
         query = "SELECT * FROM generation_runs WHERE 1=1"
         params: list[Any] = []
@@ -2307,14 +2308,29 @@ class ModeDatabase:
         project_id: str | None = None,
         days: int = 30,
     ) -> dict[str, Any]:
-        """Get cost summary across generation runs.
-
-        Args:
-            project_id: Optional filter by project.
-            days: Number of days to include.
-
+        """
+        Summarizes generation-run cost and usage metrics for a recent time window.
+        
+        Parameters:
+            project_id (str | None): Optional project identifier to filter results.
+            days (int): Number of days to include (must be greater than or equal to 0).
+        
         Returns:
-            Dictionary with cost summary statistics.
+            dict: Summary containing:
+                - total_runs (int): Number of runs in the window.
+                - total_tokens (int): Sum of tokens across runs.
+                - total_time_seconds (float): Sum of run times in seconds.
+                - total_calls (int): Sum of API/model call counts.
+                - total_iterations (int): Sum of iterations across runs.
+                - wasted_iterations (int): Sum of wasted iterations.
+                - avg_tokens_per_run (float): Average tokens per run.
+                - avg_time_per_run (float): Average run time in seconds.
+                - by_run_type (list[dict]): Breakdown per run_type with keys
+                    "run_type", "count", "tokens", and "time_seconds".
+                - efficiency_ratio (float): Ratio of useful iterations to total iterations (0.0–1.0).
+        
+        Raises:
+            ValueError: If `days` is negative.
         """
         validated_days = int(days)
         if validated_days < 0:
@@ -2399,14 +2415,24 @@ class ModeDatabase:
         project_id: str | None = None,
         days: int = 30,
     ) -> list[dict[str, Any]]:
-        """Get cost breakdown by model from generation scores.
-
-        Args:
-            project_id: Optional filter by project.
-            days: Number of days to include.
-
+        """
+        Produce a per-model cost and usage breakdown for generation activity within a recent time window.
+        
+        Parameters:
+            project_id (str | None): Optional project identifier to filter results; include all projects if None.
+            days (int): Lookback window in days; must be zero or a positive integer.
+        
         Returns:
-            List of model cost breakdowns.
+            list[dict[str, Any]]: A list of mappings, one per model, with keys:
+                - model_id (str): Model identifier.
+                - call_count (int): Number of generation calls recorded for the model.
+                - total_tokens (int): Sum of tokens generated (0 if no tokens recorded).
+                - total_time_seconds (float): Sum of generation time in seconds (0.0 if not recorded).
+                - avg_tokens_per_second (float | None): Average tokens per second for the model, or None if unavailable.
+                - avg_quality (float | None): Average prose quality score for the model, or None if unavailable.
+        
+        Raises:
+            ValueError: If `days` is negative.
         """
         validated_days = int(days)
         if validated_days < 0:
@@ -2458,14 +2484,24 @@ class ModeDatabase:
         project_id: str | None = None,
         days: int = 30,
     ) -> list[dict[str, Any]]:
-        """Get cost breakdown by entity type from world entity scores.
-
-        Args:
-            project_id: Optional filter by project.
-            days: Number of days to include.
-
+        """
+        Produce cost breakdowns aggregated by world entity type over the past `days`.
+        
+        Parameters:
+            project_id (str | None): Optional project identifier to filter results.
+            days (int): Number of days to include in the window; must be zero or positive.
+        
         Returns:
-            List of entity type cost breakdowns.
+            list[dict[str, Any]]: Each dictionary contains:
+                - entity_type: The world entity type.
+                - count: Number of entities sampled.
+                - total_time_seconds: Sum of generation_time_seconds for the entity type.
+                - avg_iterations: Average iterations_used for the entity type.
+                - wasted_iterations: Sum of iterations considered wasted (where threshold_met is false).
+                - avg_quality: Average of average_score for the entity type.
+        
+        Raises:
+            ValueError: If `days` is negative.
         """
         validated_days = int(days)
         if validated_days < 0:

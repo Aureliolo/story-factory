@@ -80,7 +80,12 @@ class TestConflictAnalysisService:
 
     @pytest.fixture
     def settings(self):
-        """Create settings for testing."""
+        """
+        Provide a default Settings instance for tests.
+        
+        Returns:
+            settings (Settings): A new Settings instance with default test configuration.
+        """
         return Settings()
 
     @pytest.fixture
@@ -90,7 +95,12 @@ class TestConflictAnalysisService:
 
     @pytest.fixture
     def mock_world_db(self):
-        """Create a mock WorldDatabase."""
+        """
+        Create a MagicMock that mimics a WorldDatabase with no entities or relationships.
+        
+        Returns:
+            mock_db (MagicMock): A mock WorldDatabase whose `list_entities` and `list_relationships` methods return empty lists.
+        """
         mock_db = MagicMock()
         mock_db.list_entities.return_value = []
         mock_db.list_relationships.return_value = []

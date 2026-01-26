@@ -49,10 +49,11 @@ class GenerationMetrics(BaseModel):
 
     @property
     def tokens_per_second(self) -> float | None:
-        """Calculate tokens per second throughput.
-
+        """
+        Compute generation throughput as completion tokens divided by elapsed time.
+        
         Returns:
-            Tokens per second or None if time is zero.
+            float | None: Tokens per second if `time_seconds` > 0 and `completion_tokens` is set, `None` otherwise.
         """
         if self.time_seconds > 0 and self.completion_tokens:
             return self.completion_tokens / self.time_seconds
@@ -81,14 +82,24 @@ class EntityTypeCostBreakdown(BaseModel):
 
     @property
     def avg_tokens_per_entity(self) -> float:
-        """Calculate average tokens per entity."""
+        """
+        Compute the average number of tokens used per entity.
+        
+        Returns:
+            Average tokens per entity as a float; 0.0 if `count` is zero.
+        """
         if self.count > 0:
             return self.total_tokens / self.count
         return 0.0
 
     @property
     def avg_time_per_entity(self) -> float:
-        """Calculate average time per entity."""
+        """
+        Return the average time spent per entity.
+        
+        Returns:
+            float: Average time per entity in seconds; 0.0 if `count` is zero.
+        """
         if self.count > 0:
             return self.total_time_seconds / self.count
         return 0.0
@@ -112,14 +123,24 @@ class ModelCostBreakdown(BaseModel):
 
     @property
     def tokens_per_second(self) -> float | None:
-        """Calculate average tokens per second."""
+        """
+        Compute the average tokens processed per second.
+        
+        Returns:
+            float | None: Average tokens per second, or `None` if `total_time_seconds` is zero.
+        """
         if self.total_time_seconds > 0:
             return self.total_tokens / self.total_time_seconds
         return None
 
     @property
     def avg_tokens_per_call(self) -> float:
-        """Calculate average tokens per generation call."""
+        """
+        Compute the average number of tokens used per generation call.
+        
+        Returns:
+            The average number of tokens per call as a float; `0.0` if `call_count` is zero.
+        """
         if self.call_count > 0:
             return self.total_tokens / self.call_count
         return 0.0
@@ -161,7 +182,12 @@ class GenerationRunCosts(BaseModel):
 
     @property
     def duration_seconds(self) -> float | None:
-        """Calculate total duration from start to completion."""
+        """
+        Return the run duration in seconds based on started_at and completed_at.
+        
+        Returns:
+            float | None: Number of seconds between `started_at` and `completed_at`, or `None` if either timestamp is missing.
+        """
         if self.completed_at and self.started_at:
             return (self.completed_at - self.started_at).total_seconds()
         return None
@@ -180,7 +206,12 @@ class GenerationRunCosts(BaseModel):
 
     @property
     def avg_tokens_per_call(self) -> float:
-        """Calculate average tokens per generation call."""
+        """
+        Compute the average number of tokens used per generation call.
+        
+        Returns:
+            float: Average tokens per call; 0.0 if `total_calls` is 0.
+        """
         if self.total_calls > 0:
             return self.total_tokens / self.total_calls
         return 0.0
@@ -215,14 +246,23 @@ class CostSummary(BaseModel):
 
     @property
     def avg_tokens_per_run(self) -> float:
-        """Calculate average tokens per run."""
+        """
+        Compute the average number of tokens per run.
+        
+        Returns:
+            The average tokens per run as a float; `0.0` if `total_runs` is 0.
+        """
         if self.total_runs > 0:
             return self.total_tokens / self.total_runs
         return 0.0
 
     @property
     def overall_efficiency(self) -> float:
-        """Calculate overall efficiency ratio."""
+        """
+        Compute the fraction of iterations that were not wasted across all runs.
+        
+        @returns float: A value between 0.0 and 1.0 representing (total_iterations - total_wasted_iterations) / total_iterations; returns 1.0 if total_iterations is zero.
+        """
         if self.total_iterations > 0:
             useful = self.total_iterations - self.total_wasted_iterations
             return useful / self.total_iterations
@@ -247,10 +287,11 @@ class CostSummary(BaseModel):
             return f"{hours}h {mins}m"
 
     def format_total_tokens(self) -> str:
-        """Format total tokens with K/M suffix.
-
+        """
+        Format total_tokens into a human-readable string using K/M suffixes when appropriate.
+        
         Returns:
-            Formatted string like '1.2K' or '3.5M'.
+            A string representing total_tokens; no suffix for values less than 1000, `'K'` for thousands with one decimal place (e.g., `1.2K`) for values from 1,000 to 999,999, and `'M'` for millions with one decimal place (e.g., `3.5M`) for values 1,000,000 and above.
         """
         if self.total_tokens < 1000:
             return str(self.total_tokens)

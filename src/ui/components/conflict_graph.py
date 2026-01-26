@@ -51,13 +51,18 @@ class ConflictGraphComponent:
         on_node_select: Callable[[str], Any] | None = None,
         height: int = 500,
     ):
-        """Initialize conflict graph component.
-
-        Args:
-            world_db: WorldDatabase to visualize.
-            services: ServiceContainer for conflict analysis.
-            on_node_select: Callback when a node is selected.
-            height: Graph container height in pixels.
+        """
+        Initialize the ConflictGraphComponent and configure its initial state and callbacks.
+        
+        Parameters:
+            world_db (WorldDatabase | None): Optional world database whose conflict data will be visualized; can be set later with set_world_db.
+            services (ServiceContainer | None): Optional services container used to fetch conflict graph data (conflict_analysis).
+            on_node_select (Callable[[str], Any] | None): Optional callback invoked with a node's id when a node is selected in the graph.
+            height (int): Height of the graph container in pixels (default 500).
+        
+        Notes:
+            - By default all conflict categories are enabled for filtering and both "character" and "faction" entity types are included.
+            - Internal attributes initialized include UI container references, a unique selection callback id, and a placeholder for the latest ConflictGraphData.
         """
         self.world_db = world_db
         self.services = services
@@ -72,14 +77,23 @@ class ConflictGraphComponent:
         self._graph_data: ConflictGraphData | None = None
 
     def build(self) -> None:
-        """Build the conflict graph UI."""
+        """
+        Construct the conflict graph user interface, load the vis-network library, and wire interactions.
+        
+        This creates the category and entity filter controls, the graph display container, and the metrics panel; registers a node-selection handler if an on_node_select callback was provided; stores references to the graph and metrics containers on the instance; and performs the initial graph render.
+        """
         _ensure_vis_network_loaded()
 
         # Register event handler for node selection
         if self.on_node_select:
 
             def handle_node_select(e: Any) -> None:
-                """Handle node selection event."""
+                """
+                Process a node-selection event and invoke the registered node selection callback if a node id is provided.
+                
+                Parameters:
+                    e (Any): Event object expected to have an `args` mapping that may contain a `"node_id"` key; when present and an `on_node_select` callback is set, the callback is called with that node id.
+                """
                 node_id = e.args.get("node_id") if e.args else None
                 if node_id and self.on_node_select:
                     self.on_node_select(node_id)
@@ -146,10 +160,11 @@ class ConflictGraphComponent:
         self._render_graph()
 
     def set_world_db(self, world_db: WorldDatabase | None) -> None:
-        """Set the world database and refresh.
-
-        Args:
-            world_db: WorldDatabase to visualize.
+        """
+        Set the world database used by the component and re-render the graph.
+        
+        Parameters:
+            world_db (WorldDatabase | None): The world database to visualize, or `None` to clear the current data.
         """
         self.world_db = world_db
         self._render_graph()
@@ -159,7 +174,11 @@ class ConflictGraphComponent:
         self._render_graph()
 
     def _render_graph(self) -> None:
-        """Render the conflict graph HTML and JavaScript."""
+        """
+        Render the current conflict graph into the component's container.
+        
+        Fetches conflict graph data from the configured services and world database, converts it to the vis-network format, injects the HTML/JavaScript needed to initialize the vis-network visualization, and updates the metrics panel. If world data or services are missing, or if no nodes match the active filters, replaces the graph area with a user-facing message and updates metrics accordingly. When the network is created, node click events are emitted to the component's selection callback via its internal event ID.
+        """
         if not self._container:
             return
 
@@ -337,10 +356,18 @@ class ConflictGraphComponent:
         self._update_metrics(self._graph_data.metrics)
 
     def _update_metrics(self, metrics: Any) -> None:
-        """Update the metrics panel.
-
-        Args:
-            metrics: ConflictMetrics or None.
+        """
+        Update the metrics panel to reflect provided conflict metrics.
+        
+        Renders relationship counts by category, an overall conflict density indicator, up to three highest-tension pairs, and up to three faction cluster summaries. If no metrics are provided or the metrics container is unavailable, the panel is cleared and a "No data available" message is shown.
+        
+        Parameters:
+            metrics (ConflictMetrics | None): Metrics object containing the fields
+                `alliance_count`, `rivalry_count`, `tension_count`, `neutral_count`,
+                `conflict_density` (0.0–1.0), `highest_tension_pairs` (iterable of
+                objects with `entity_a_name` and `entity_b_name`), and
+                `faction_clusters` (iterable of clusters with `entity_ids`). Pass
+                None to clear the panel and display the empty-state message.
         """
         if not self._metrics_container:
             return
@@ -419,11 +446,12 @@ class ConflictGraphComponent:
                     ui.label(f"{len(cluster.entity_ids)} members").classes("text-xs text-gray-500")
 
     def _toggle_category(self, category: ConflictCategory, enabled: bool) -> None:
-        """Toggle a conflict category filter.
-
-        Args:
-            category: Category to toggle.
-            enabled: Whether to enable the filter.
+        """
+        Enable or disable a conflict category in the active filters and refresh the visualization.
+        
+        Parameters:
+            category (ConflictCategory): The conflict category to enable or disable.
+            enabled (bool): If True, add the category to active filters; if False, remove it.
         """
         if enabled and category not in self._filter_categories:
             self._filter_categories.append(category)
@@ -432,11 +460,13 @@ class ConflictGraphComponent:
         self._render_graph()
 
     def _toggle_entity_type(self, entity_type: str, enabled: bool) -> None:
-        """Toggle an entity type filter.
-
-        Args:
-            entity_type: Entity type to toggle.
-            enabled: Whether to enable the filter.
+        """
+        Enable or disable filtering for the specified entity type and update the rendered graph.
+        
+        Parameters:
+            entity_type (str): The entity type to toggle (e.g., "character" or "faction").
+            enabled (bool): True to include this entity type in the filters, False to exclude it.
+        
         """
         if enabled and entity_type not in self._entity_types:
             self._entity_types.append(entity_type)
