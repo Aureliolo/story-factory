@@ -3889,6 +3889,136 @@ class TestSuggestRelationshipsForEntity:
         # Should return empty list on error
         assert result == []
 
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_entity_at_max_relationships(
+        self, service, entity, available_entities
+    ):
+        """Test suggestion returns empty when entity already at max relationships."""
+        # Set max_relationships_per_entity to 2
+        service.settings.max_relationships_per_entity = 2
+
+        # Entity already has 2 relationships
+        existing_relationships = [
+            {"source_name": "Alice", "target_name": "Bob", "relation_type": "ally_of"},
+            {"source_name": "Alice", "target_name": "Castle", "relation_type": "lives_in"},
+        ]
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=existing_relationships,
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        # Should return empty list - entity already at max
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_target_resolution_by_id(
+        self, service, entity, available_entities
+    ):
+        """Test suggestion resolves target by ID when provided."""
+        # LLM returns target_entity_id
+        response_json = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "target_entity_id": "loc-001",  # ID provided
+                        "target_entity_name": "The Castle",  # Name doesn't match exactly
+                        "relation_type": "lives_in",
+                        "confidence": 0.9,
+                    }
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        assert len(result) == 1
+        assert result[0]["target_entity_id"] == "loc-001"
+        assert result[0]["target_entity_name"] == "Castle"  # Should be resolved to actual name
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_fuzzy_matching(self, service, entity, available_entities):
+        """Test suggestion uses fuzzy matching when exact match fails."""
+        # LLM returns misspelled name
+        response_json = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "target_entity_name": "Bobb",  # Misspelled
+                        "relation_type": "ally_of",
+                        "confidence": 0.8,
+                    }
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        # Set fuzzy threshold low enough to match "Bobb" -> "Bob"
+        service.settings.fuzzy_match_threshold = 0.7
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        assert len(result) == 1
+        assert result[0]["target_entity_id"] == "char-002"  # Bob's ID
+        assert result[0]["target_entity_name"] == "Bob"
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_unresolved_target_warning(
+        self, service, entity, available_entities, caplog
+    ):
+        """Test suggestion logs warning for unresolved targets."""
+        import logging
+
+        # LLM returns non-existent entity
+        response_json = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "target_entity_name": "Charlie",  # Doesn't exist
+                        "relation_type": "enemy_of",
+                        "confidence": 0.9,
+                    }
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        with caplog.at_level(logging.WARNING):
+            result = await service.suggest_relationships_for_entity(
+                entity=entity,
+                available_entities=available_entities,
+                existing_relationships=[],
+                story_brief=None,
+                num_suggestions=3,
+            )
+
+        # Should return empty - target couldn't be resolved
+        assert result == []
+        # Warning should be logged
+        assert "Could not resolve target entity" in caplog.text
+
 
 class TestExtractEntityClaims:
     """Tests for extract_entity_claims async method."""

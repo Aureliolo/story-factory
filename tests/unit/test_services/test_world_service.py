@@ -923,3 +923,60 @@ class TestWorldHealthMethods:
 
         assert entity is not None
         assert entity.name == "Alice"
+
+    def test_get_world_health_metrics_orphan_detection_disabled(self, world_db):
+        """Test health metrics skips orphan detection when setting disabled."""
+        # Create settings with orphan detection disabled
+        settings = Settings()
+        settings.orphan_detection_enabled = False
+        service = WorldService(settings)
+
+        # Create orphan entities (no relationships)
+        world_db.add_entity("character", "Lonely Alice")
+        world_db.add_entity("character", "Lonely Bob")
+
+        metrics = service.get_world_health_metrics(world_db)
+
+        # Orphan count should be 0 because detection is disabled
+        assert metrics.orphan_count == 0
+        assert metrics.orphan_entities == []
+
+    def test_get_world_health_metrics_circular_detection_disabled(self, world_db):
+        """Test health metrics skips circular detection when setting disabled."""
+        # Create settings with circular detection disabled
+        settings = Settings()
+        settings.circular_detection_enabled = False
+        service = WorldService(settings)
+
+        # Create circular chain
+        a_id = world_db.add_entity("character", "A")
+        b_id = world_db.add_entity("character", "B")
+        c_id = world_db.add_entity("character", "C")
+        world_db.add_relationship(a_id, b_id, "reports_to", validate=False)
+        world_db.add_relationship(b_id, c_id, "reports_to", validate=False)
+        world_db.add_relationship(c_id, a_id, "reports_to", validate=False)
+
+        metrics = service.get_world_health_metrics(world_db)
+
+        # Circular count should be 0 because detection is disabled
+        assert metrics.circular_count == 0
+        assert metrics.circular_relationships == []
+
+    def test_get_world_health_metrics_quality_scores_dict_format(self, world_service, world_db):
+        """Test health metrics correctly extracts quality_scores in dict format."""
+        # Create entity with quality_scores dict (new format)
+        world_db.add_entity(
+            "character",
+            "Alice",
+            attributes={"quality_scores": {"average": 8.5, "depth": 8.0, "clarity": 9.0}},
+        )
+        # Create entity with legacy quality_score (old format)
+        world_db.add_entity("character", "Bob", attributes={"quality_score": 7.0})
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Average quality should reflect both entities
+        assert metrics.average_quality > 0
+        # Both should be counted in distribution
+        assert metrics.quality_distribution["8-10"] >= 1  # Alice
+        assert metrics.quality_distribution["6-8"] >= 1  # Bob

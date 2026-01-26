@@ -357,6 +357,72 @@ class TestSettingsValidation:
         ):
             settings.validate()
 
+    def test_validate_raises_on_circular_relationship_types_not_list(self):
+        """Should raise ValueError for circular_relationship_types that's not a list."""
+        settings = Settings()
+        settings.circular_relationship_types = "owns,reports_to"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="circular_relationship_types must be a list"):
+            settings.validate()
+
+    def test_validate_raises_on_circular_relationship_types_contains_non_strings(self):
+        """Should raise ValueError for circular_relationship_types containing non-strings."""
+        settings = Settings()
+        settings.circular_relationship_types = ["owns", 123, "reports_to"]  # type: ignore[list-item]
+        with pytest.raises(
+            ValueError, match="circular_relationship_types must contain only strings"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_not_dict(self):
+        """Should raise ValueError for relationship_minimums that's not a dict."""
+        settings = Settings()
+        settings.relationship_minimums = [("character", {"protagonist": 5})]  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="relationship_minimums must be a dict"):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_key_not_string(self):
+        """Should raise ValueError for relationship_minimums with non-string keys."""
+        settings = Settings()
+        settings.relationship_minimums = {123: {"protagonist": 5}}  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match="relationship_minimums keys must be strings"):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_value_not_dict(self):
+        """Should raise ValueError for relationship_minimums with non-dict values."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": [("protagonist", 5)]}  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match=r"relationship_minimums\[character\] must be a dict"):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_role_not_string(self):
+        """Should raise ValueError for relationship_minimums with non-string role keys."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": {123: 5}}  # type: ignore[dict-item]
+        with pytest.raises(
+            ValueError, match=r"relationship_minimums\[character\] keys must be strings"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_count_not_int(self):
+        """Should raise ValueError for relationship_minimums with non-int min_count."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": {"protagonist": "five"}}  # type: ignore[dict-item]
+        with pytest.raises(
+            ValueError,
+            match=r"relationship_minimums\[character\]\[protagonist\] must be a non-negative integer",
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_relationship_minimums_count_negative(self):
+        """Should raise ValueError for relationship_minimums with negative min_count."""
+        settings = Settings()
+        settings.relationship_minimums = {"character": {"protagonist": -1}}
+        with pytest.raises(
+            ValueError,
+            match=r"relationship_minimums\[character\]\[protagonist\] must be a non-negative integer",
+        ):
+            settings.validate()
+
 
 class TestSettingsSaveLoad:
     """Tests for Settings save and load methods."""
