@@ -346,6 +346,100 @@ class TestUserTemplateErrorHandling:
             templates = service.list_templates(include_builtin=False)
             assert len(templates) == 0
 
+    def test_init_with_empty_templates_file(self, tmp_path):
+        """Test that empty user templates file is handled gracefully."""
+        empty_file = tmp_path / "user_world_templates.json"
+        empty_file.parent.mkdir(parents=True, exist_ok=True)
+        empty_file.write_text("[]")  # Valid JSON but no templates
+
+        with patch(
+            "src.services.world_template_service.USER_TEMPLATES_FILE",
+            empty_file,
+        ):
+            service = WorldTemplateService()
+            # Service should initialize without error, with no user templates
+            templates = service.list_templates(include_builtin=False)
+            assert len(templates) == 0
+
+    def test_save_template_file_write_error(self, tmp_path):
+        """Test that file write errors are raised as StoryFactoryError."""
+        temp_file = tmp_path / "data" / "user_world_templates.json"
+
+        with patch(
+            "src.services.world_template_service.USER_TEMPLATES_FILE",
+            temp_file,
+        ):
+            service = WorldTemplateService()
+
+            template = WorldTemplate(
+                id="test_template",
+                name="Test Template",
+                description="A test template",
+                is_builtin=False,
+                genre="test",
+            )
+
+            # Mock open to raise OSError
+            with patch("builtins.open", side_effect=OSError("Disk full")):
+                with pytest.raises(StoryFactoryError, match="Failed to save user world templates"):
+                    service.save_template(template)
+
+
+class TestWorldTemplateValidation:
+    """Tests for WorldTemplate validation."""
+
+    def test_recommended_counts_valid(self):
+        """Test that valid recommended_counts pass validation."""
+        template = WorldTemplate(
+            id="valid_counts",
+            name="Valid Counts",
+            description="Test",
+            genre="test",
+            recommended_counts={"characters": (2, 5), "locations": (1, 10)},
+        )
+        assert template.recommended_counts["characters"] == (2, 5)
+        assert template.recommended_counts["locations"] == (1, 10)
+
+    def test_recommended_counts_min_greater_than_max(self):
+        """Test that min > max raises ValidationError."""
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError, match=r"min.*>.*max"):
+            WorldTemplate(
+                id="invalid_counts",
+                name="Invalid Counts",
+                description="Test",
+                genre="test",
+                recommended_counts={"characters": (10, 5)},  # min > max
+            )
+
+    def test_recommended_counts_negative_values(self):
+        """Test that negative values raise ValidationError."""
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError, match="negative values not allowed"):
+            WorldTemplate(
+                id="negative_counts",
+                name="Negative Counts",
+                description="Test",
+                genre="test",
+                recommended_counts={"characters": (-1, 5)},  # negative min
+            )
+
+    def test_recommended_counts_wrong_format(self):
+        """Test that wrong tuple format raises ValidationError via Pydantic type."""
+        import pydantic
+
+        # Pydantic validates tuple length/format before our validator runs
+        with pytest.raises(pydantic.ValidationError, match="at most 2 items"):
+            WorldTemplate(
+                id="invalid_format",
+                name="Invalid Format",
+                description="Test",
+                genre="test",
+                recommended_counts={"characters": (1, 2, 3)},  # type: ignore[dict-item]
+            )
+
 
 class TestUserTemplateGenreLookup:
     """Tests for finding user templates by genre."""

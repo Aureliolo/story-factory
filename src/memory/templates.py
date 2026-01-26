@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,27 @@ class WorldTemplate(BaseModel):
     )
     atmosphere: str = Field(default="", description="Overall atmosphere and mood")
     tags: list[str] = Field(default_factory=list, description="Tags for filtering")
+
+    @field_validator("recommended_counts")
+    @classmethod
+    def _validate_recommended_counts(
+        cls, value: dict[str, tuple[int, int]]
+    ) -> dict[str, tuple[int, int]]:
+        """Validate that recommended_counts contains valid (min, max) pairs.
+
+        Note: Pydantic's type annotation validates tuple format/length before this runs.
+        This validator checks semantic constraints (non-negative, min <= max).
+        """
+        for key, (min_count, max_count) in value.items():
+            if min_count < 0 or max_count < 0:
+                raise ValueError(
+                    f"Invalid recommended_counts for '{key}': negative values not allowed"
+                )
+            if min_count > max_count:
+                raise ValueError(
+                    f"Invalid recommended_counts for '{key}': min ({min_count}) > max ({max_count})"
+                )
+        return value
 
 
 class CharacterTemplate(BaseModel):

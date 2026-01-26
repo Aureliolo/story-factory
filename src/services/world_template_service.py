@@ -35,23 +35,38 @@ class WorldTemplateService:
     def _load_user_templates(self) -> None:
         """Load user-created templates from disk."""
         if USER_TEMPLATES_FILE.exists():
+            logger.debug(f"Loading user templates from {USER_TEMPLATES_FILE}")
             try:
                 with open(USER_TEMPLATES_FILE) as f:
                     data = json.load(f)
+                if not data:
+                    logger.debug("User templates file exists but contains no templates")
+                    return
                 for template_data in data:
                     template = WorldTemplate(**template_data)
                     self._user_templates[template.id] = template
                 logger.info(f"Loaded {len(self._user_templates)} user world templates")
             except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Failed to load user world templates: {e}")
+        else:
+            logger.debug("No user templates file found")
 
     def _save_user_templates(self) -> None:
-        """Save user-created templates to disk."""
-        USER_TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
-        templates_data = [t.model_dump() for t in self._user_templates.values()]
-        with open(USER_TEMPLATES_FILE, "w") as f:
-            json.dump(templates_data, f, indent=2, default=str)
-        logger.debug(f"Saved {len(self._user_templates)} user world templates")
+        """Save user-created templates to disk.
+
+        Raises:
+            StoryFactoryError: If file write fails.
+        """
+        logger.debug(f"Saving {len(self._user_templates)} user templates to {USER_TEMPLATES_FILE}")
+        try:
+            USER_TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+            templates_data = [t.model_dump() for t in self._user_templates.values()]
+            with open(USER_TEMPLATES_FILE, "w") as f:
+                json.dump(templates_data, f, indent=2, default=str)
+            logger.debug(f"Saved {len(self._user_templates)} user world templates")
+        except OSError as e:
+            logger.error(f"Failed to save user world templates: {e}")
+            raise StoryFactoryError(f"Failed to save user world templates: {e}") from e
 
     def list_templates(self, include_builtin: bool = True) -> list[WorldTemplate]:
         """List all available world templates.

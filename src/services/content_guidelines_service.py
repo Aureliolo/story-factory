@@ -37,11 +37,22 @@ class ContentCheckResult:
 
     def add_violation(self, violation: ContentViolation) -> None:
         """Add a violation and mark as failed."""
+        logger.debug(
+            "Recording content violation: category=%s severity=%s",
+            violation.category,
+            violation.severity,
+        )
         if violation.severity == "warning":
             self.warnings.append(violation)
         else:
             self.violations.append(violation)
             self.passed = False
+        logger.debug(
+            "Content check state: passed=%s violations=%d warnings=%d",
+            self.passed,
+            len(self.violations),
+            len(self.warnings),
+        )
 
 
 class ContentGuidelinesService:
@@ -134,12 +145,15 @@ class ContentGuidelinesService:
         result: ContentCheckResult,
     ) -> None:
         """Check content for language/profanity violations."""
+        logger.debug("Checking language guidelines (profile=%s)", profile.language.value)
         if profile.language == LanguageLevel.UNRESTRICTED:
+            logger.debug("Language check skipped - unrestricted profile")
             return  # No restrictions
 
         # Check for strong profanity
         strong_matches = self.PROFANITY_STRONG.findall(content)
         if strong_matches and profile.language in (LanguageLevel.CLEAN, LanguageLevel.MILD):
+            logger.debug("Strong profanity matches: %s", set(strong_matches[:5]))
             result.add_violation(
                 ContentViolation(
                     category="language",
@@ -153,6 +167,7 @@ class ContentGuidelinesService:
         if profile.language == LanguageLevel.CLEAN:
             mild_matches = self.PROFANITY_MILD.findall(content)
             if mild_matches:
+                logger.debug("Mild profanity matches: %s", set(mild_matches[:5]))
                 result.add_violation(
                     ContentViolation(
                         category="language",
@@ -169,12 +184,15 @@ class ContentGuidelinesService:
         result: ContentCheckResult,
     ) -> None:
         """Check content for violence violations."""
+        logger.debug("Checking violence guidelines (profile=%s)", profile.violence.value)
         if profile.violence == ViolenceLevel.GRAPHIC:
+            logger.debug("Violence check skipped - graphic profile")
             return  # No restrictions
 
         # Check for graphic violence
         graphic_matches = self.VIOLENCE_GRAPHIC.findall(content)
         if graphic_matches:
+            logger.debug("Graphic violence matches: %s", set(graphic_matches[:5]))
             result.add_violation(
                 ContentViolation(
                     category="violence",
@@ -188,6 +206,7 @@ class ContentGuidelinesService:
         if profile.violence == ViolenceLevel.MINIMAL:
             moderate_matches = self.VIOLENCE_MODERATE.findall(content)
             if moderate_matches:
+                logger.debug("Moderate violence matches: %s", set(moderate_matches[:5]))
                 result.add_violation(
                     ContentViolation(
                         category="violence",
@@ -204,7 +223,9 @@ class ContentGuidelinesService:
         result: ContentCheckResult,
     ) -> None:
         """Check content for romance/intimacy violations."""
+        logger.debug("Checking romance guidelines (profile=%s)", profile.romance.value)
         if profile.romance == RomanceLevel.EXPLICIT:
+            logger.debug("Romance check skipped - explicit profile")
             return  # No restrictions
 
         # Check for explicit content
@@ -214,6 +235,7 @@ class ContentGuidelinesService:
             RomanceLevel.SWEET,
             RomanceLevel.SENSUAL,
         ):
+            logger.debug("Explicit romance matches: %s", set(explicit_matches[:5]))
             result.add_violation(
                 ContentViolation(
                     category="romance",
@@ -227,6 +249,7 @@ class ContentGuidelinesService:
         if profile.romance == RomanceLevel.NONE:
             mild_matches = self.ROMANCE_MILD.findall(content)
             if mild_matches:
+                logger.debug("Mild romance matches: %s", set(mild_matches[:5]))
                 result.add_violation(
                     ContentViolation(
                         category="romance",
@@ -243,11 +266,14 @@ class ContentGuidelinesService:
         result: ContentCheckResult,
     ) -> None:
         """Check content for dark theme violations."""
+        logger.debug("Checking themes guidelines (profile=%s)", profile.themes.value)
         if profile.themes == ThemeLevel.DARK:
+            logger.debug("Themes check skipped - dark profile")
             return  # No restrictions
 
         dark_matches = self.DARK_THEMES.findall(content)
         if dark_matches:
+            logger.debug("Dark themes matches: %s", set(dark_matches[:5]))
             severity = "violation" if profile.themes == ThemeLevel.LIGHT else "warning"
             result.add_violation(
                 ContentViolation(
@@ -265,9 +291,11 @@ class ContentGuidelinesService:
         result: ContentCheckResult,
     ) -> None:
         """Check content for custom avoid items."""
+        logger.debug("Checking custom avoid list (%d items)", len(profile.custom_avoid))
         content_lower = content.lower()
         for avoid_item in profile.custom_avoid:
             if avoid_item.lower() in content_lower:
+                logger.debug("Custom avoid item found: %r", avoid_item)
                 result.add_violation(
                     ContentViolation(
                         category="custom",
@@ -288,10 +316,12 @@ class ContentGuidelinesService:
         Returns:
             Excerpt string with context.
         """
+        logger.debug("Extracting excerpt for term=%r", term)
         lower_content = content.lower()
         lower_term = term.lower()
         idx = lower_content.find(lower_term)
         if idx == -1:
+            logger.debug("Excerpt term not found")
             return ""
 
         start = max(0, idx - context_chars)
