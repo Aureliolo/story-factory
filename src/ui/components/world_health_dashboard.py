@@ -29,23 +29,6 @@ def _get_health_color(score: float) -> str:
         return "red"
 
 
-def _get_severity_color(severity: str) -> str:
-    """Get color based on severity level.
-
-    Args:
-        severity: Severity string (low, medium, high, critical).
-
-    Returns:
-        Color string.
-    """
-    return {
-        "low": "blue",
-        "medium": "orange",
-        "high": "red",
-        "critical": "deep-purple",
-    }.get(severity.lower(), "grey")
-
-
 class WorldHealthDashboard:
     """Dashboard component for displaying world health metrics.
 
