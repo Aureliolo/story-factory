@@ -318,6 +318,17 @@ class TestWorldHealthMetrics:
         assert len(recs) > 0
         assert any("character" in r.lower() for r in recs)
 
+    def test_generate_recommendations_contradictions(self):
+        """Test recommendation generation for contradictions."""
+        metrics = WorldHealthMetrics(
+            contradiction_count=3,
+        )
+
+        recs = metrics.generate_recommendations()
+
+        assert len(recs) > 0
+        assert any("contradiction" in r.lower() for r in recs)
+
     def test_generate_recommendations_healthy_world(self):
         """Test that healthy world generates no recommendations."""
         metrics = WorldHealthMetrics(

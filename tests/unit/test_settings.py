@@ -300,6 +300,63 @@ class TestSettingsValidation:
 
         assert "LLM checking will have no effect" in caplog.text
 
+    def test_validate_raises_on_non_bool_relationship_validation_enabled(self):
+        """Should raise ValueError for non-boolean relationship_validation_enabled."""
+        settings = Settings()
+        settings.relationship_validation_enabled = "true"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="relationship_validation_enabled must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_non_bool_orphan_detection_enabled(self):
+        """Should raise ValueError for non-boolean orphan_detection_enabled."""
+        settings = Settings()
+        settings.orphan_detection_enabled = 1  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="orphan_detection_enabled must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_non_bool_circular_detection_enabled(self):
+        """Should raise ValueError for non-boolean circular_detection_enabled."""
+        settings = Settings()
+        settings.circular_detection_enabled = "yes"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="circular_detection_enabled must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_fuzzy_match_threshold_too_low(self):
+        """Should raise ValueError for fuzzy_match_threshold below 0.5."""
+        settings = Settings()
+        settings.fuzzy_match_threshold = 0.3
+        with pytest.raises(
+            ValueError, match=r"fuzzy_match_threshold must be between 0\.5 and 1\.0"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_fuzzy_match_threshold_too_high(self):
+        """Should raise ValueError for fuzzy_match_threshold above 1.0."""
+        settings = Settings()
+        settings.fuzzy_match_threshold = 1.5
+        with pytest.raises(
+            ValueError, match=r"fuzzy_match_threshold must be between 0\.5 and 1\.0"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_max_relationships_too_low(self):
+        """Should raise ValueError for max_relationships_per_entity below 1."""
+        settings = Settings()
+        settings.max_relationships_per_entity = 0
+        with pytest.raises(
+            ValueError, match="max_relationships_per_entity must be between 1 and 50"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_max_relationships_too_high(self):
+        """Should raise ValueError for max_relationships_per_entity above 50."""
+        settings = Settings()
+        settings.max_relationships_per_entity = 100
+        with pytest.raises(
+            ValueError, match="max_relationships_per_entity must be between 1 and 50"
+        ):
+            settings.validate()
+
 
 class TestSettingsSaveLoad:
     """Tests for Settings save and load methods."""

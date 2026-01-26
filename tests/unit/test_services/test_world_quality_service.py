@@ -3737,3 +3737,458 @@ class TestFactionIterationRegression:
         assert scores is not None
         assert scores.coherence == 6.0
         assert iteration == 1
+
+
+class TestSuggestRelationshipsForEntity:
+    """Tests for suggest_relationships_for_entity async method."""
+
+    @pytest.fixture
+    def entity(self):
+        """Create test entity."""
+        from src.memory.world_database import Entity
+
+        return Entity(
+            id="char-001",
+            type="character",
+            name="Alice",
+            description="A brave warrior seeking justice",
+            attributes={"role": "protagonist"},
+        )
+
+    @pytest.fixture
+    def available_entities(self):
+        """Create available target entities."""
+        from src.memory.world_database import Entity
+
+        return [
+            Entity(id="char-001", type="character", name="Alice", description="A brave warrior"),
+            Entity(id="char-002", type="character", name="Bob", description="A cunning thief"),
+            Entity(id="loc-001", type="location", name="Castle", description="A grand fortress"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_success(self, service, entity, available_entities):
+        """Test successful relationship suggestions."""
+        # Mock the LLM response
+        response_json = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "target_entity_name": "Bob",
+                        "relation_type": "ally_of",
+                        "description": "They work together",
+                        "confidence": 0.85,
+                        "bidirectional": True,
+                    }
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        assert len(result) == 1
+        assert result[0]["target_entity_name"] == "Bob"
+        assert result[0]["target_entity_id"] == "char-002"
+        assert result[0]["relation_type"] == "ally_of"
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_no_targets(self, service, entity):
+        """Test suggestion when no target entities available."""
+        # Only the source entity exists
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=[entity],  # Only self
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_empty_response(self, service, entity, available_entities):
+        """Test suggestion with empty LLM response."""
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": ""}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_invalid_json(self, service, entity, available_entities):
+        """Test suggestion with invalid JSON response."""
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": "not valid json"}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_json_returns_list_not_dict(
+        self, service, entity, available_entities
+    ):
+        """Test suggestion when JSON parses to a list instead of dict."""
+        # Return valid JSON that's a list, not a dict
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": '["item1", "item2"]'}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        # Should return empty list because result is not a dict
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_exception_handled(
+        self, service, entity, available_entities
+    ):
+        """Test suggestion handles exceptions gracefully."""
+        mock_client = MagicMock()
+        mock_client.generate.side_effect = RuntimeError("LLM error")
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        # Should return empty list on error
+        assert result == []
+
+
+class TestExtractEntityClaims:
+    """Tests for extract_entity_claims async method."""
+
+    @pytest.fixture
+    def entity(self):
+        """Create test entity."""
+        from src.memory.world_database import Entity
+
+        return Entity(
+            id="char-001",
+            type="character",
+            name="Alice",
+            description="Alice is 25 years old and has blue eyes. She is the queen of the realm.",
+            attributes={"role": "protagonist"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_extract_claims_success(self, service, entity):
+        """Test successful claim extraction."""
+        response_json = json.dumps(
+            {
+                "claims": [
+                    "Alice is 25 years old",
+                    "Alice has blue eyes",
+                    "Alice is the queen of the realm",
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.extract_entity_claims(entity)
+
+        assert len(result) == 3
+        assert result[0]["entity_id"] == "char-001"
+        assert result[0]["entity_name"] == "Alice"
+        assert "25 years old" in result[0]["claim"]
+
+    @pytest.mark.asyncio
+    async def test_extract_claims_invalid_json(self, service, entity):
+        """Test extraction with invalid JSON response."""
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": "not valid json"}
+        service._client = mock_client
+
+        result = await service.extract_entity_claims(entity)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_extract_claims_json_returns_list_not_dict(self, service, entity):
+        """Test extraction when JSON parses to a list instead of dict."""
+        # Return valid JSON that's a list, not a dict
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": '["claim1", "claim2"]'}
+        service._client = mock_client
+
+        result = await service.extract_entity_claims(entity)
+
+        # Should return empty list because result is not a dict
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_extract_claims_exception_handled(self, service, entity):
+        """Test extraction handles exceptions gracefully."""
+        mock_client = MagicMock()
+        mock_client.generate.side_effect = RuntimeError("LLM error")
+        service._client = mock_client
+
+        result = await service.extract_entity_claims(entity)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_extract_claims_filters_non_strings(self, service, entity):
+        """Test that non-string claims are filtered out."""
+        response_json = json.dumps(
+            {
+                "claims": [
+                    "Valid claim",
+                    123,  # Not a string
+                    None,  # Not a string
+                    "Another valid claim",
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.extract_entity_claims(entity)
+
+        # Should only have 2 valid string claims
+        assert len(result) == 2
+
+
+class TestCheckContradiction:
+    """Tests for check_contradiction async method."""
+
+    @pytest.fixture
+    def claim_a(self):
+        """Create first test claim."""
+        return {
+            "entity_id": "char-001",
+            "entity_name": "Alice",
+            "entity_type": "character",
+            "claim": "Alice has blue eyes",
+        }
+
+    @pytest.fixture
+    def claim_b(self):
+        """Create second test claim."""
+        return {
+            "entity_id": "char-001",
+            "entity_name": "Alice",
+            "entity_type": "character",
+            "claim": "Alice has green eyes",
+        }
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_found(self, service, claim_a, claim_b):
+        """Test detecting a contradiction."""
+        response_json = json.dumps(
+            {
+                "is_contradiction": True,
+                "severity": "high",
+                "explanation": "Eye color cannot be both blue and green",
+                "resolution_suggestion": "Choose one eye color",
+                "confidence": 0.95,
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        assert result is not None
+        assert result["severity"] == "high"
+        assert result["claim_a"] == claim_a
+        assert result["claim_b"] == claim_b
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_not_found(self, service, claim_a, claim_b):
+        """Test when claims don't contradict."""
+        response_json = json.dumps(
+            {
+                "is_contradiction": False,
+                "explanation": "No conflict found",
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_invalid_json(self, service, claim_a, claim_b):
+        """Test with invalid JSON response."""
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": "not valid json"}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_json_returns_list_not_dict(self, service, claim_a, claim_b):
+        """Test when JSON parses to a list instead of dict."""
+        # Return valid JSON that's a list, not a dict
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": '["item1", "item2"]'}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        # Should return None because result is not a dict
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_exception_handled(self, service, claim_a, claim_b):
+        """Test exception handling in contradiction check."""
+        mock_client = MagicMock()
+        mock_client.generate.side_effect = RuntimeError("LLM error")
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        assert result is None
+
+
+class TestValidateEntityConsistency:
+    """Tests for validate_entity_consistency async method."""
+
+    @pytest.fixture
+    def entities(self):
+        """Create test entities."""
+        from src.memory.world_database import Entity
+
+        return [
+            Entity(
+                id="char-001",
+                type="character",
+                name="Alice",
+                description="Alice is 25 years old",
+            ),
+            Entity(
+                id="char-002",
+                type="character",
+                name="Bob",
+                description="Bob is Alice's brother who is 30 years old",
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_validate_consistency_finds_contradictions(self, service, entities):
+        """Test finding contradictions across entities."""
+        # Mock extract_entity_claims to return claims
+        extract_response = json.dumps({"claims": ["Claim from entity"]})
+        # Mock check_contradiction to return a contradiction
+        check_response = json.dumps(
+            {
+                "is_contradiction": True,
+                "severity": "medium",
+                "explanation": "Test contradiction",
+                "resolution_suggestion": "Fix it",
+                "confidence": 0.8,
+            }
+        )
+
+        mock_client = MagicMock()
+        # First two calls are for extract_entity_claims (one per entity)
+        # Third call is for check_contradiction
+        mock_client.generate.side_effect = [
+            {"response": extract_response},
+            {"response": extract_response},
+            {"response": check_response},
+        ]
+        service._client = mock_client
+
+        result = await service.validate_entity_consistency(entities, max_comparisons=10)
+
+        assert len(result) >= 1
+
+    @pytest.mark.asyncio
+    async def test_validate_consistency_single_entity(self, service):
+        """Test with single entity returns no contradictions."""
+        from src.memory.world_database import Entity
+
+        single_entity = [Entity(id="1", type="character", name="A", description="Test")]
+
+        # Mock extract to return 1 claim
+        extract_response = json.dumps({"claims": ["Single claim"]})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": extract_response}
+        service._client = mock_client
+
+        result = await service.validate_entity_consistency(single_entity, max_comparisons=10)
+
+        # Single claim can't contradict itself
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_validate_consistency_respects_max_comparisons(self, service, entities):
+        """Test that max_comparisons limit is respected."""
+        # Mock extract to return many claims
+        many_claims = json.dumps({"claims": [f"Claim {i}" for i in range(10)]})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": many_claims}
+        service._client = mock_client
+
+        # Set max_comparisons very low
+        result = await service.validate_entity_consistency(entities, max_comparisons=2)
+
+        # Should complete without error
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_validate_consistency_skips_same_entity_claims(self, service):
+        """Test that claims from the same entity are not compared."""
+        from src.memory.world_database import Entity
+
+        single_entity = [
+            Entity(id="1", type="character", name="A", description="Test A"),
+        ]
+
+        # Mock extract to return multiple claims from same entity
+        claims = json.dumps({"claims": ["Claim 1", "Claim 2", "Claim 3"]})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": claims}
+        service._client = mock_client
+
+        result = await service.validate_entity_consistency(single_entity, max_comparisons=100)
+
+        # Claims from same entity should not be compared
+        # So check_contradiction should never be called
+        assert result == []

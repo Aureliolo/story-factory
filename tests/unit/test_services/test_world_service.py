@@ -835,3 +835,91 @@ class TestWorldHealthMethods:
 
         assert entity is not None
         assert entity.type == "character"
+
+    def test_find_entity_by_name_no_entities_for_fuzzy(self, world_service, world_db):
+        """Test fuzzy matching when database has no entities for the type."""
+        # Don't add any entities of the searched type - create different type
+        world_db.add_entity("location", "Somewhere")
+
+        # Search for character type that doesn't exist
+        entity = world_service.find_entity_by_name(
+            world_db, "Nonexistent", entity_type="character", fuzzy_threshold=0.7
+        )
+
+        assert entity is None
+
+    def test_find_entity_by_name_suffix_match(self, world_service, world_db):
+        """Test fuzzy matching with suffix match."""
+        world_db.add_entity("character", "Lord Blackwood")
+
+        # Search by suffix
+        entity = world_service.find_entity_by_name(world_db, "Blackwood", fuzzy_threshold=0.7)
+
+        assert entity is not None
+        assert entity.name == "Lord Blackwood"
+
+    def test_find_entity_by_name_substring_match(self, world_service, world_db):
+        """Test fuzzy matching with substring match."""
+        world_db.add_entity("character", "Great King Arthur of Camelot")
+
+        # Search by substring that's not a prefix/suffix
+        entity = world_service.find_entity_by_name(world_db, "King Arthur", fuzzy_threshold=0.7)
+
+        assert entity is not None
+        assert "Arthur" in entity.name
+
+    def test_get_world_health_metrics_with_circular(self, world_service, world_db):
+        """Test health metrics include circular relationship detection."""
+        # Create circular chain
+        a_id = world_db.add_entity("character", "A")
+        b_id = world_db.add_entity("character", "B")
+        c_id = world_db.add_entity("character", "C")
+
+        world_db.add_relationship(a_id, b_id, "reports_to", validate=False)
+        world_db.add_relationship(b_id, c_id, "reports_to", validate=False)
+        world_db.add_relationship(c_id, a_id, "reports_to", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Should detect the circular relationship
+        assert metrics.circular_count >= 1
+        assert len(metrics.circular_relationships) >= 1
+        # Verify structure of circular info
+        cycle_info = metrics.circular_relationships[0]
+        assert "edges" in cycle_info
+        assert "length" in cycle_info
+
+    def test_get_world_health_metrics_quality_distribution(self, world_service, world_db):
+        """Test health metrics quality distribution covers all buckets."""
+        # Create entities with quality scores in different buckets
+        world_db.add_entity("character", "Low1", attributes={"quality_score": 1.0})
+        world_db.add_entity("character", "Low2", attributes={"quality_score": 3.0})
+        world_db.add_entity("character", "Mid", attributes={"quality_score": 5.0})
+        world_db.add_entity("character", "High1", attributes={"quality_score": 7.0})
+        world_db.add_entity("character", "High2", attributes={"quality_score": 9.0})
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Verify quality distribution
+        assert metrics.quality_distribution["0-2"] >= 1
+        assert metrics.quality_distribution["2-4"] >= 1
+        assert metrics.quality_distribution["4-6"] >= 1
+        assert metrics.quality_distribution["6-8"] >= 1
+        assert metrics.quality_distribution["8-10"] >= 1
+
+    def test_find_entity_by_name_fuzzy_exact_match_after_normalization(
+        self, world_service, world_db
+    ):
+        """Test fuzzy matching hits exact match path after whitespace normalization.
+
+        When searching with trailing/leading whitespace that the DB lookup misses,
+        the fuzzy matching should still find exact matches after strip().
+        """
+        world_db.add_entity("character", "Alice")
+
+        # Search with trailing space - DB exact match will fail,
+        # but fuzzy matching should find it after normalization
+        entity = world_service.find_entity_by_name(world_db, "Alice ", fuzzy_threshold=0.7)
+
+        assert entity is not None
+        assert entity.name == "Alice"

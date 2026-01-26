@@ -1813,3 +1813,33 @@ class TestCircularDetection:
         cycles = db.find_circular_relationships()
 
         assert len(cycles) >= 1
+
+    def test_find_circular_handles_exception(self, db):
+        """Test that exceptions during cycle detection are handled gracefully."""
+        from unittest.mock import patch
+
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        # Mock simple_cycles to raise an exception
+        with patch("networkx.simple_cycles", side_effect=RuntimeError("Test error")):
+            cycles = db.find_circular_relationships()
+
+        # Should return empty list instead of crashing
+        assert cycles == []
+
+    def test_find_circular_skips_degenerate_cycles(self, db):
+        """Test that single-node cycles (degenerate) are skipped."""
+        from unittest.mock import patch
+
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        # Mock simple_cycles to return a degenerate cycle (single node)
+        with patch("networkx.simple_cycles", return_value=[["single-node"]]):
+            cycles = db.find_circular_relationships()
+
+        # Degenerate cycle should be skipped
+        assert cycles == []
