@@ -582,6 +582,37 @@ class TestProgressCallback:
         # Should have completed 1 and cancelled before second
         assert len(results) == 1
 
+    def test_location_cancellation(self, world_quality_service, sample_story_state):
+        """Location generation respects cancel_check."""
+        cancel_after = 1
+        call_count = [0]
+
+        def cancel_check():
+            """Cancel after first location is generated."""
+            return call_count[0] >= cancel_after
+
+        def mock_location(*args, **kwargs):
+            """Return mock location data and track call count."""
+            call_count[0] += 1
+            return (
+                {"name": f"Location{call_count[0]}", "description": "A place"},
+                MagicMock(average=7.5),
+                1,
+            )
+
+        with patch.object(
+            world_quality_service, "generate_location_with_quality", side_effect=mock_location
+        ):
+            results = world_quality_service.generate_locations_with_quality(
+                sample_story_state,
+                existing_names=[],
+                count=3,
+                cancel_check=cancel_check,
+            )
+
+        # Should have completed 1 and cancelled before second
+        assert len(results) == 1
+
     def test_concept_cancellation_and_progress(self, world_quality_service, sample_story_state):
         """Concept generation supports cancel_check and progress_callback."""
         cancel_after = 1
