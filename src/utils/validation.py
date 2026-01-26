@@ -269,13 +269,19 @@ def validate_unique_name(
         try:
             from src.utils.similarity import get_semantic_checker
 
-            checker_kwargs: dict[str, str | float] = {"similarity_threshold": semantic_threshold}
-            if ollama_url:
-                checker_kwargs["ollama_url"] = ollama_url
-            if embedding_model:
-                checker_kwargs["embedding_model"] = embedding_model
+            # All parameters are required - use provided values or raise error
+            checker_url = ollama_url
+            checker_model = embedding_model
+            if not checker_url:
+                raise ValueError("ollama_url is required when check_semantic=True")
+            if not checker_model:
+                raise ValueError("embedding_model is required when check_semantic=True")
 
-            checker = get_semantic_checker(**checker_kwargs)  # type: ignore[arg-type]
+            checker = get_semantic_checker(
+                ollama_url=checker_url,
+                embedding_model=checker_model,
+                similarity_threshold=semantic_threshold,
+            )
             is_duplicate, matching_name, similarity = checker.find_semantic_duplicate(
                 name, existing_names
             )

@@ -56,35 +56,43 @@ class TestCircuitBreaker:
         assert cb.is_open
         assert not cb.allow_request()
 
-    def test_circuit_transitions_to_half_open_after_timeout(self):
+    def test_circuit_transitions_to_half_open_after_timeout(self, monkeypatch):
         """Circuit transitions from OPEN to HALF_OPEN after timeout."""
-        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=0.1)
+        # Use deterministic time control instead of real time.sleep
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=60.0)
 
         # Open the circuit
         cb.record_failure(Exception("test 1"))
         cb.record_failure(Exception("test 2"))
         assert cb.state == CircuitState.OPEN
 
-        # Wait for timeout
-        time.sleep(0.15)
+        # Advance time past timeout
+        current_time["t"] += 61.0
 
         # Should transition to HALF_OPEN (cast breaks type narrowing)
         current_state = cast(CircuitState, cb.state)
         assert current_state == CircuitState.HALF_OPEN
         assert cb.allow_request()
 
-    def test_half_open_closes_on_success_threshold(self):
+    def test_half_open_closes_on_success_threshold(self, monkeypatch):
         """Circuit closes from HALF_OPEN after success threshold."""
+        # Use deterministic time control instead of real time.sleep
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
         cb = CircuitBreaker(
-            name="test", failure_threshold=2, success_threshold=2, timeout_seconds=0.1
+            name="test", failure_threshold=2, success_threshold=2, timeout_seconds=60.0
         )
 
         # Open the circuit
         cb.record_failure(Exception("test 1"))
         cb.record_failure(Exception("test 2"))
 
-        # Wait for timeout to transition to HALF_OPEN
-        time.sleep(0.15)
+        # Advance time past timeout to transition to HALF_OPEN
+        current_time["t"] += 61.0
         assert cb.state == CircuitState.HALF_OPEN
 
         # Record successes
@@ -96,16 +104,20 @@ class TestCircuitBreaker:
         current_state = cast(CircuitState, cb.state)
         assert current_state == CircuitState.CLOSED
 
-    def test_half_open_reopens_on_failure(self):
+    def test_half_open_reopens_on_failure(self, monkeypatch):
         """Circuit reopens from HALF_OPEN on any failure."""
-        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=0.1)
+        # Use deterministic time control instead of real time.sleep
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=60.0)
 
         # Open the circuit
         cb.record_failure(Exception("test 1"))
         cb.record_failure(Exception("test 2"))
 
-        # Wait for timeout to transition to HALF_OPEN
-        time.sleep(0.15)
+        # Advance time past timeout to transition to HALF_OPEN
+        current_time["t"] += 61.0
         assert cb.state == CircuitState.HALF_OPEN
 
         # Failure in HALF_OPEN should immediately reopen (cast breaks type narrowing)
@@ -181,6 +193,61 @@ class TestCircuitBreaker:
         # Get state property triggers _check_timeout, but should not transition
         # because _last_failure_time is None
         assert cb.state == CircuitState.OPEN
+
+    def test_half_open_allows_single_in_flight_probe(self, monkeypatch):
+        """HALF_OPEN state only allows a single in-flight probe request."""
+        # Use deterministic time control
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=60.0)
+
+        # Open the circuit
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        # Advance time past timeout to transition to HALF_OPEN
+        current_time["t"] += 61.0
+        assert cb.state == CircuitState.HALF_OPEN
+
+        # First request should be allowed
+        assert cb.allow_request() is True
+        assert cb._half_open_in_flight is True
+
+        # Second request should be rejected (probe already in flight)
+        assert cb.allow_request() is False
+
+        # After success, probe in flight flag should be cleared
+        cb.record_success()
+        assert cb._half_open_in_flight is False
+
+        # Now another request should be allowed (state is still HALF_OPEN after 1 success)
+        assert cb.allow_request() is True  # type: ignore[unreachable]
+
+    def test_half_open_probe_cleared_on_failure(self, monkeypatch):
+        """HALF_OPEN probe in-flight flag is cleared on failure."""
+        # Use deterministic time control
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=60.0)
+
+        # Open the circuit
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        # Advance time past timeout to transition to HALF_OPEN
+        current_time["t"] += 61.0
+        assert cb.state == CircuitState.HALF_OPEN
+
+        # Start a probe
+        assert cb.allow_request() is True
+        assert cb._half_open_in_flight is True
+
+        # Failure should clear the flag and reopen circuit
+        cb.record_failure(Exception("probe failed"))
+        assert cb._half_open_in_flight is False
+        assert cb.state == CircuitState.OPEN  # type: ignore[unreachable]
 
     def test_thread_safety(self):
         """Circuit breaker operations are thread-safe."""

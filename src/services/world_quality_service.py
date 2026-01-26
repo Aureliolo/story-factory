@@ -14,7 +14,14 @@ from typing import Any, ClassVar
 import ollama
 
 from src.memory.mode_database import ModeDatabase
-from src.memory.story_state import Character, Concept, Faction, Item, Location, StoryState
+from src.memory.story_state import (
+    Character,
+    Concept,
+    Faction,
+    Item,
+    Location,
+    StoryState,
+)
 from src.memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
@@ -868,10 +875,15 @@ Write all text in {brief.language}."""
                 temperature=temperature,
             )
 
-            # Comprehensive uniqueness validation
+            # Comprehensive uniqueness validation (with optional semantic checking)
             if location.name:
                 is_unique, conflicting_name, reason = validate_unique_name(
-                    location.name, existing_names
+                    location.name,
+                    existing_names,
+                    check_semantic=self.settings.semantic_duplicate_enabled,
+                    semantic_threshold=self.settings.semantic_duplicate_threshold,
+                    ollama_url=self.settings.ollama_url,
+                    embedding_model=self.settings.embedding_model,
                 )
                 if not is_unique:
                     logger.warning(
@@ -1909,10 +1921,15 @@ Output ONLY valid JSON (all text in {brief.language}):
                 temperature=temperature,
             )
 
-            # Comprehensive uniqueness validation
+            # Comprehensive uniqueness validation (with optional semantic checking)
             if faction.name:
                 is_unique, conflicting_name, reason = validate_unique_name(
-                    faction.name, existing_names
+                    faction.name,
+                    existing_names,
+                    check_semantic=self.settings.semantic_duplicate_enabled,
+                    semantic_threshold=self.settings.semantic_duplicate_threshold,
+                    ollama_url=self.settings.ollama_url,
+                    embedding_model=self.settings.embedding_model,
                 )
                 if not is_unique:
                     logger.warning(
@@ -2309,10 +2326,15 @@ Write all text in {brief.language}."""
                 temperature=temperature,
             )
 
-            # Comprehensive uniqueness validation
+            # Comprehensive uniqueness validation (with optional semantic checking)
             if item.name:
                 is_unique, conflicting_name, reason = validate_unique_name(
-                    item.name, existing_names
+                    item.name,
+                    existing_names,
+                    check_semantic=self.settings.semantic_duplicate_enabled,
+                    semantic_threshold=self.settings.semantic_duplicate_threshold,
+                    ollama_url=self.settings.ollama_url,
+                    embedding_model=self.settings.embedding_model,
                 )
                 if not is_unique:
                     logger.warning(
@@ -2697,10 +2719,15 @@ Write all text in {brief.language}."""
                 temperature=temperature,
             )
 
-            # Comprehensive uniqueness validation
+            # Comprehensive uniqueness validation (with optional semantic checking)
             if concept.name:
                 is_unique, conflicting_name, reason = validate_unique_name(
-                    concept.name, existing_names
+                    concept.name,
+                    existing_names,
+                    check_semantic=self.settings.semantic_duplicate_enabled,
+                    semantic_threshold=self.settings.semantic_duplicate_threshold,
+                    ollama_url=self.settings.ollama_url,
+                    embedding_model=self.settings.embedding_model,
                 )
                 if not is_unique:
                     logger.warning(

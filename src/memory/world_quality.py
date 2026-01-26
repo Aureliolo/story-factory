@@ -504,11 +504,19 @@ class RefinementConfig(BaseModel):
         Returns:
             Temperature value for this iteration.
         """
-        max_iter = max_iterations or self.max_iterations
+        # Use explicit None check to avoid treating 0 as "unset"
+        if max_iterations is None:
+            max_iter = self.max_iterations
+        else:
+            max_iter = max_iterations
 
         # First iteration uses start temperature
         if iteration <= 1:
             return self.refinement_temp_start
+
+        # Guard against max_iter <= 1 to avoid division by zero
+        if max_iter <= 1:
+            return self.refinement_temp_end
 
         # Last iteration uses end temperature
         if iteration >= max_iter:
@@ -524,8 +532,9 @@ class RefinementConfig(BaseModel):
                 self.refinement_temp_end - self.refinement_temp_start
             )
         elif self.refinement_temp_decay == "exponential":
-            # Exponential decay (faster initial drop)
-            decay_factor = progress**2
+            # Exponential decay (faster initial drop, then gradual)
+            # Using 1 - (1 - progress)^2 gives faster temperature reduction early
+            decay_factor = 1 - (1 - progress) ** 2
             temp = self.refinement_temp_start + decay_factor * (
                 self.refinement_temp_end - self.refinement_temp_start
             )

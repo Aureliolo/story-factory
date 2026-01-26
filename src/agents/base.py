@@ -216,6 +216,11 @@ class BaseAgent:
         if not circuit_breaker.allow_request():
             status = circuit_breaker.get_status()
             time_until_retry = status.get("time_until_half_open", 0)
+            logger.warning(
+                "%s: Circuit breaker open; refusing LLM call for %.0fs",
+                self.name,
+                time_until_retry,
+            )
             raise CircuitOpenError(
                 f"Circuit breaker is open. Too many LLM failures. "
                 f"Will retry in {time_until_retry:.0f}s.",
@@ -378,6 +383,11 @@ class BaseAgent:
         if not circuit_breaker.allow_request():
             status = circuit_breaker.get_status()
             time_until_retry = status.get("time_until_half_open", 0)
+            logger.warning(
+                "%s: Circuit breaker open; refusing LLM call for %.0fs",
+                self.name,
+                time_until_retry,
+            )
             raise CircuitOpenError(
                 f"Circuit breaker is open. Too many LLM failures. "
                 f"Will retry in {time_until_retry:.0f}s.",

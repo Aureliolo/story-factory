@@ -692,6 +692,16 @@ class Settings:
                 f"semantic_duplicate_threshold must be between 0.5 and 1.0, "
                 f"got {self.semantic_duplicate_threshold}"
             )
+        if self.semantic_duplicate_enabled and not self.embedding_model.strip():
+            raise ValueError("embedding_model must be set when semantic_duplicate_enabled is True")
+
+        # Validate temperature decay semantics (start should be >= end for decay)
+        if self.world_quality_refinement_temp_start < self.world_quality_refinement_temp_end:
+            raise ValueError(
+                f"world_quality_refinement_temp_start ({self.world_quality_refinement_temp_start}) "
+                f"must be >= world_quality_refinement_temp_end ({self.world_quality_refinement_temp_end}) "
+                "to preserve decay semantics"
+            )
 
         # Validate judge consistency settings
         if not 2 <= self.judge_multi_call_count <= 5:

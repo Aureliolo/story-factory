@@ -54,16 +54,19 @@ class SemanticDuplicateChecker:
     Caches embeddings to avoid redundant API calls and provides
     thread-safe operations for concurrent usage.
 
+    All parameters are required to avoid accidental use of hardcoded URLs
+    that could hit real services in tests.
+
     Attributes:
-        ollama_url: URL of the Ollama server.
-        embedding_model: Model to use for generating embeddings.
-        similarity_threshold: Cosine similarity threshold for duplicates.
+        ollama_url: URL of the Ollama server (required).
+        embedding_model: Model to use for generating embeddings (required).
+        similarity_threshold: Cosine similarity threshold for duplicates (required).
         timeout: Timeout for Ollama API calls in seconds.
     """
 
-    ollama_url: str = "http://localhost:11434"
-    embedding_model: str = "nomic-embed-text"
-    similarity_threshold: float = 0.85
+    ollama_url: str
+    embedding_model: str
+    similarity_threshold: float
     timeout: float = 30.0
 
     # Embedding cache: maps text to embedding vector
@@ -160,8 +163,10 @@ class SemanticDuplicateChecker:
             existing_names: List of existing names to compare against.
 
         Returns:
-            Tuple of (is_duplicate, matching_name, similarity_score).
-            If no duplicate found, returns (False, None, 0.0).
+            Tuple of (is_duplicate, matching_name, best_similarity).
+            If no duplicate found, returns (False, None, best_similarity)
+            where best_similarity is the highest similarity score found
+            (may be non-zero even when is_duplicate is False).
         """
         if not name or not existing_names:
             return False, None, 0.0
@@ -234,52 +239,58 @@ class SemanticDuplicateChecker:
             }
 
 
-# Global checker instance (lazily initialized)
-_global_checker: SemanticDuplicateChecker | None = None
+# Global checker cache keyed by settings tuple (supports per-call settings)
+_checker_cache: dict[tuple[str, str, float, float], SemanticDuplicateChecker] = {}
 _checker_lock = threading.Lock()
 
 
 def get_semantic_checker(
-    ollama_url: str = "http://localhost:11434",
-    embedding_model: str = "nomic-embed-text",
-    similarity_threshold: float = 0.85,
+    ollama_url: str,
+    embedding_model: str,
+    similarity_threshold: float,
     timeout: float = 30.0,
 ) -> SemanticDuplicateChecker:
-    """Get or create the global semantic duplicate checker.
+    """Get or create a semantic duplicate checker for the given settings.
 
-    The checker is lazily initialized on first access.
+    Checkers are cached by their settings tuple to avoid recreating
+    instances with identical configurations while still supporting
+    different settings when needed.
 
     Args:
-        ollama_url: Ollama server URL (used on creation only).
-        embedding_model: Embedding model to use (used on creation only).
-        similarity_threshold: Similarity threshold (used on creation only).
-        timeout: API timeout in seconds (used on creation only).
+        ollama_url: Ollama server URL (required).
+        embedding_model: Embedding model to use (required).
+        similarity_threshold: Similarity threshold for duplicates (required).
+        timeout: API timeout in seconds.
 
     Returns:
-        The global SemanticDuplicateChecker instance.
+        A SemanticDuplicateChecker instance configured with the given settings.
     """
-    global _global_checker
+    cache_key = (ollama_url, embedding_model, similarity_threshold, timeout)
 
-    if _global_checker is None:
-        with _checker_lock:
-            if _global_checker is None:
-                _global_checker = SemanticDuplicateChecker(
-                    ollama_url=ollama_url,
-                    embedding_model=embedding_model,
-                    similarity_threshold=similarity_threshold,
-                    timeout=timeout,
-                )
-
-    return _global_checker
+    with _checker_lock:
+        if cache_key not in _checker_cache:
+            logger.debug(
+                "Creating new SemanticDuplicateChecker: url=%s, model=%s, threshold=%.2f",
+                ollama_url,
+                embedding_model,
+                similarity_threshold,
+            )
+            _checker_cache[cache_key] = SemanticDuplicateChecker(
+                ollama_url=ollama_url,
+                embedding_model=embedding_model,
+                similarity_threshold=similarity_threshold,
+                timeout=timeout,
+            )
+        return _checker_cache[cache_key]
 
 
 def reset_global_checker() -> None:
-    """Reset the global semantic checker.
+    """Reset all cached semantic checkers.
 
     Useful for testing to ensure a clean state.
     """
-    global _global_checker
     with _checker_lock:
-        if _global_checker is not None:
-            _global_checker.clear_cache()
-        _global_checker = None
+        for checker in _checker_cache.values():
+            checker.clear_cache()
+        _checker_cache.clear()
+    logger.debug("Reset all cached semantic checkers")

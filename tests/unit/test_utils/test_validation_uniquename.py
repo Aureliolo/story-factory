@@ -165,6 +165,10 @@ class TestValidateUniqueName:
 class TestSemanticDuplicateChecking:
     """Tests for semantic duplicate checking in validate_unique_name."""
 
+    # Test constants to avoid hardcoded URLs that could hit real services
+    TEST_OLLAMA_URL = "http://test-ollama:11434"
+    TEST_MODEL = "test-embed-model"
+
     @patch("src.utils.similarity.get_semantic_checker")
     def test_semantic_check_detects_duplicate(self, mock_get_checker) -> None:
         """Test that semantic checking detects similar names."""
@@ -181,6 +185,8 @@ class TestSemanticDuplicateChecking:
             ["Council of Shadows", "The Brotherhood"],
             check_semantic=True,
             semantic_threshold=0.85,
+            ollama_url=self.TEST_OLLAMA_URL,
+            embedding_model=self.TEST_MODEL,
         )
 
         assert is_unique is False
@@ -199,6 +205,8 @@ class TestSemanticDuplicateChecking:
             ["Council of Shadows", "The Brotherhood"],
             check_semantic=True,
             semantic_threshold=0.85,
+            ollama_url=self.TEST_OLLAMA_URL,
+            embedding_model=self.TEST_MODEL,
         )
 
         assert is_unique is True
@@ -250,6 +258,8 @@ class TestSemanticDuplicateChecking:
             "Shadow Council",
             ["Council of Shadows"],
             check_semantic=True,
+            ollama_url=self.TEST_OLLAMA_URL,
+            embedding_model=self.TEST_MODEL,
         )
 
         # String-based checks pass, semantic check skipped on error
@@ -264,8 +274,42 @@ class TestSemanticDuplicateChecking:
             "Shadow Council",
             [],  # Empty list
             check_semantic=True,
+            ollama_url=self.TEST_OLLAMA_URL,
+            embedding_model=self.TEST_MODEL,
         )
 
         # Semantic checker should not be called for empty list
         mock_get_checker.assert_not_called()
         assert is_unique is True
+
+    def test_semantic_check_skipped_when_missing_ollama_url(self) -> None:
+        """Test that semantic check is skipped if ollama_url is missing."""
+        # Should not raise, just skip semantic check gracefully
+        is_unique, conflict, reason = validate_unique_name(
+            "Shadow Council",
+            ["Council of Shadows"],
+            check_semantic=True,
+            ollama_url=None,  # Missing URL
+            embedding_model="test-model",
+        )
+
+        # String-based checks pass, semantic check skipped due to missing URL
+        assert is_unique is True
+        assert conflict is None
+        assert reason is None
+
+    def test_semantic_check_skipped_when_missing_embedding_model(self) -> None:
+        """Test that semantic check is skipped if embedding_model is missing."""
+        # Should not raise, just skip semantic check gracefully
+        is_unique, conflict, reason = validate_unique_name(
+            "Shadow Council",
+            ["Council of Shadows"],
+            check_semantic=True,
+            ollama_url=self.TEST_OLLAMA_URL,
+            embedding_model=None,  # Missing model
+        )
+
+        # String-based checks pass, semantic check skipped due to missing model
+        assert is_unique is True
+        assert conflict is None
+        assert reason is None

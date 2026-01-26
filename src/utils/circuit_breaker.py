@@ -56,6 +56,7 @@ class CircuitBreaker:
     _failure_count: int = field(default=0, init=False)
     _success_count: int = field(default=0, init=False)
     _last_failure_time: float | None = field(default=None, init=False)
+    _half_open_in_flight: bool = field(default=False, init=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False)
 
     def __post_init__(self) -> None:
@@ -105,6 +106,7 @@ class CircuitBreaker:
             )
             self._state = CircuitState.HALF_OPEN
             self._success_count = 0
+            self._half_open_in_flight = False
 
     def allow_request(self) -> bool:
         """Check if a request should be allowed through.
@@ -121,8 +123,17 @@ class CircuitBreaker:
             if state == CircuitState.CLOSED:
                 return True
             elif state == CircuitState.HALF_OPEN:
+                # Only allow a single in-flight probe request in HALF_OPEN state
+                if self._half_open_in_flight:
+                    logger.warning(
+                        "Circuit breaker '%s': half-open probe already in flight, rejecting request",
+                        self.name,
+                    )
+                    return False
+                self._half_open_in_flight = True
                 logger.debug(
-                    "Circuit breaker '%s': allowing test request in HALF_OPEN state", self.name
+                    "Circuit breaker '%s': allowing single test request in HALF_OPEN state",
+                    self.name,
                 )
                 return True
             else:  # OPEN
@@ -142,6 +153,7 @@ class CircuitBreaker:
 
         with self._lock:
             if self._state == CircuitState.HALF_OPEN:
+                self._half_open_in_flight = False
                 self._success_count += 1
                 logger.debug(
                     "Circuit breaker '%s': success in HALF_OPEN (%d/%d)",
@@ -181,6 +193,7 @@ class CircuitBreaker:
             self._last_failure_time = time.time()
 
             if self._state == CircuitState.HALF_OPEN:
+                self._half_open_in_flight = False
                 logger.warning(
                     "Circuit breaker '%s': failure in HALF_OPEN, transitioning HALF_OPEN -> OPEN. "
                     "Error: %s",
@@ -217,6 +230,7 @@ class CircuitBreaker:
             self._failure_count = 0
             self._success_count = 0
             self._last_failure_time = None
+            self._half_open_in_flight = False
 
     def get_status(self) -> dict[str, Any]:
         """Get current circuit breaker status for monitoring.

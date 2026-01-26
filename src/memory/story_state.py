@@ -112,6 +112,20 @@ class Location(BaseModel):
     significance: str = Field(default="", description="Why this place matters to the story")
 
 
+class Relationship(BaseModel):
+    """A relationship between two entities in the story world."""
+
+    source: str = Field(description="Name of the source entity")
+    target: str = Field(description="Name of the target entity")
+    relation_type: str = Field(
+        description="Type of relationship (e.g., knows, loves, hates, allies_with, "
+        "enemies_with, located_in, owns, member_of)"
+    )
+    description: str = Field(
+        description="Description of the relationship with history and dynamics"
+    )
+
+
 class PlotPoint(BaseModel):
     """A key plot point in the story."""
 

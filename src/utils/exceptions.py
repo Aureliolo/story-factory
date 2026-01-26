@@ -29,6 +29,10 @@ Usage:
         logger.error("LLM operation failed")
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class StoryFactoryError(Exception):
     """Base exception for all Story Factory errors.
@@ -91,6 +95,11 @@ class CircuitOpenError(LLMError):
         """
         super().__init__(message)
         self.time_until_retry = time_until_retry
+        logger.debug(
+            "CircuitOpenError initialized: message=%s, time_until_retry=%s",
+            message,
+            time_until_retry,
+        )
 
 
 class ValidationError(StoryFactoryError):

@@ -60,6 +60,11 @@ class TestCosineSimilarity:
 class TestSemanticDuplicateChecker:
     """Tests for the SemanticDuplicateChecker class."""
 
+    # Test constants to avoid hardcoded URLs that could hit real services
+    TEST_OLLAMA_URL = "http://test-ollama:11434"
+    TEST_MODEL = "test-embed-model"
+    TEST_THRESHOLD = 0.85
+
     @pytest.fixture
     def mock_ollama_client(self):
         """Create a mock Ollama client."""
@@ -68,11 +73,19 @@ class TestSemanticDuplicateChecker:
             mock_class.return_value = mock_client
             yield mock_client
 
+    def _create_checker(self, **kwargs: float | str) -> SemanticDuplicateChecker:
+        """Create a checker with test defaults. Override any param via kwargs."""
+        return SemanticDuplicateChecker(
+            ollama_url=str(kwargs.get("ollama_url", self.TEST_OLLAMA_URL)),
+            embedding_model=str(kwargs.get("embedding_model", self.TEST_MODEL)),
+            similarity_threshold=float(kwargs.get("similarity_threshold", self.TEST_THRESHOLD)),
+        )
+
     def test_get_embedding_caches_results(self, mock_ollama_client):
         """Embeddings are cached to avoid redundant API calls."""
         mock_ollama_client.embeddings.return_value = {"embedding": [1.0, 2.0, 3.0]}
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
 
         # First call - should hit API
         emb1 = checker.get_embedding("test text")
@@ -88,7 +101,7 @@ class TestSemanticDuplicateChecker:
         """Text is normalized for caching (lowercase, stripped)."""
         mock_ollama_client.embeddings.return_value = {"embedding": [1.0, 2.0, 3.0]}
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
 
         # First call
         emb1 = checker.get_embedding("Test Text")
@@ -100,7 +113,7 @@ class TestSemanticDuplicateChecker:
 
     def test_get_embedding_returns_empty_for_empty_input(self, mock_ollama_client):
         """Empty input returns empty embedding without API call."""
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
 
         assert checker.get_embedding("") == []
         assert checker.get_embedding("   ") == []
@@ -110,7 +123,7 @@ class TestSemanticDuplicateChecker:
         """API errors return empty embedding without crashing."""
         mock_ollama_client.embeddings.side_effect = ConnectionError("API down")
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         emb = checker.get_embedding("test")
 
         assert emb == []
@@ -119,7 +132,7 @@ class TestSemanticDuplicateChecker:
         """Empty embedding in API response returns empty list."""
         mock_ollama_client.embeddings.return_value = {"embedding": []}
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         emb = checker.get_embedding("test")
 
         assert emb == []
@@ -128,7 +141,7 @@ class TestSemanticDuplicateChecker:
         """Unexpected exceptions are logged and return empty embedding."""
         mock_ollama_client.embeddings.side_effect = RuntimeError("Unexpected error")
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         emb = checker.get_embedding("test")
 
         assert emb == []
@@ -137,7 +150,7 @@ class TestSemanticDuplicateChecker:
         """Client is reinitialized if set to None."""
         mock_ollama_client.embeddings.return_value = {"embedding": [1.0, 2.0, 3.0]}
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         checker._client = None  # Simulate client being cleared
 
         emb = checker.get_embedding("test")
@@ -151,7 +164,7 @@ class TestSemanticDuplicateChecker:
             {"embedding": [0.95, 0.55, 0.35]},  # "Council of Shadows"
         ]
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         similarity = checker.check_similarity("Shadow Council", "Council of Shadows")
 
         assert similarity > 0.9  # Should be high
@@ -164,7 +177,7 @@ class TestSemanticDuplicateChecker:
             ConnectionError("API down"),
         ]
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         similarity = checker.check_similarity("Shadow Council", "Council of Shadows")
 
         assert similarity == 0.0
@@ -177,7 +190,7 @@ class TestSemanticDuplicateChecker:
             {"embedding": [0.95, 0.1, 0.05]},  # Existing name (very similar)
         ]
 
-        checker = SemanticDuplicateChecker(similarity_threshold=0.85)
+        checker = self._create_checker(similarity_threshold=0.85)
         is_dup, match, score = checker.find_semantic_duplicate(
             "Shadow Council", ["Council of Shadows"]
         )
@@ -194,7 +207,7 @@ class TestSemanticDuplicateChecker:
             {"embedding": [0.0, 1.0, 0.0]},  # Existing name (orthogonal = different)
         ]
 
-        checker = SemanticDuplicateChecker(similarity_threshold=0.85)
+        checker = self._create_checker(similarity_threshold=0.85)
         is_dup, match, _score = checker.find_semantic_duplicate(
             "Shadow Council", ["The Happy Bakers"]
         )
@@ -204,7 +217,7 @@ class TestSemanticDuplicateChecker:
 
     def test_find_semantic_duplicate_empty_inputs(self, mock_ollama_client):
         """Empty inputs are handled gracefully."""
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
 
         is_dup, _match, _score = checker.find_semantic_duplicate("", ["test"])
         assert is_dup is False
@@ -216,7 +229,7 @@ class TestSemanticDuplicateChecker:
         """Returns no duplicate if new name embedding fails."""
         mock_ollama_client.embeddings.side_effect = ConnectionError("API down")
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         is_dup, match, score = checker.find_semantic_duplicate("test", ["existing"])
 
         assert is_dup is False
@@ -230,8 +243,9 @@ class TestSemanticDuplicateChecker:
             {"embedding": [0.9, 0.1, 0.0]},  # "valid" existing name
         ]
 
-        checker = SemanticDuplicateChecker(similarity_threshold=0.85)
-        _is_dup, _match, _score = checker.find_semantic_duplicate("test", ["", "   ", "valid"])
+        checker = self._create_checker(similarity_threshold=0.85)
+        # Call without assigning - we only care about the API call count
+        checker.find_semantic_duplicate("test", ["", "   ", "valid"])
 
         # Should skip empty names and only check "valid"
         assert mock_ollama_client.embeddings.call_count == 2
@@ -244,7 +258,7 @@ class TestSemanticDuplicateChecker:
             {"embedding": [0.9, 0.1, 0.0]},  # Second existing - succeeds
         ]
 
-        checker = SemanticDuplicateChecker(similarity_threshold=0.85)
+        checker = self._create_checker(similarity_threshold=0.85)
         is_dup, _match, score = checker.find_semantic_duplicate("test", ["failing", "similar"])
 
         # Should continue to second existing name
@@ -259,7 +273,7 @@ class TestSemanticDuplicateChecker:
             {"embedding": [0.7, 0.5, 0.5]},  # Second existing (higher similarity)
         ]
 
-        checker = SemanticDuplicateChecker(similarity_threshold=0.95)  # High threshold
+        checker = self._create_checker(similarity_threshold=0.95)  # High threshold
         is_dup, match, score = checker.find_semantic_duplicate(
             "test", ["less similar", "more similar"]
         )
@@ -273,7 +287,7 @@ class TestSemanticDuplicateChecker:
         """clear_cache removes cached embeddings."""
         mock_ollama_client.embeddings.return_value = {"embedding": [1.0, 2.0, 3.0]}
 
-        checker = SemanticDuplicateChecker()
+        checker = self._create_checker()
         checker.get_embedding("test")
         assert len(checker._cache) == 1
 
@@ -284,7 +298,7 @@ class TestSemanticDuplicateChecker:
         """get_cache_stats returns correct information."""
         mock_ollama_client.embeddings.return_value = {"embedding": [1.0, 2.0, 3.0]}
 
-        checker = SemanticDuplicateChecker(embedding_model="test-model", similarity_threshold=0.9)
+        checker = self._create_checker(embedding_model="test-model", similarity_threshold=0.9)
         checker.get_embedding("text1")
         checker.get_embedding("text2")
 
@@ -297,6 +311,10 @@ class TestSemanticDuplicateChecker:
 class TestGlobalChecker:
     """Tests for global checker functions."""
 
+    # Test constants to avoid hardcoded URLs that could hit real services
+    TEST_OLLAMA_URL = "http://test-ollama:11434"
+    TEST_MODEL = "test-embed-model"
+
     def setup_method(self):
         """Reset global state before each test."""
         reset_global_checker()
@@ -305,19 +323,53 @@ class TestGlobalChecker:
         """Clean up global state after each test."""
         reset_global_checker()
 
-    def test_get_semantic_checker_creates_singleton(self):
-        """get_semantic_checker returns the same instance."""
+    def test_get_semantic_checker_caches_by_settings(self):
+        """get_semantic_checker returns same instance for same settings."""
         with patch("src.utils.similarity.ollama.Client"):
-            checker1 = get_semantic_checker()
-            checker2 = get_semantic_checker()
+            checker1 = get_semantic_checker(
+                ollama_url=self.TEST_OLLAMA_URL,
+                embedding_model=self.TEST_MODEL,
+                similarity_threshold=0.85,
+            )
+            checker2 = get_semantic_checker(
+                ollama_url=self.TEST_OLLAMA_URL,
+                embedding_model=self.TEST_MODEL,
+                similarity_threshold=0.85,
+            )
             assert checker1 is checker2
 
-    def test_reset_global_checker(self):
-        """reset_global_checker clears the singleton and its cache."""
+    def test_get_semantic_checker_creates_new_for_different_settings(self):
+        """get_semantic_checker creates new instance for different settings."""
         with patch("src.utils.similarity.ollama.Client"):
-            _checker1 = get_semantic_checker(similarity_threshold=0.9)
+            checker1 = get_semantic_checker(
+                ollama_url=self.TEST_OLLAMA_URL,
+                embedding_model=self.TEST_MODEL,
+                similarity_threshold=0.85,
+            )
+            checker2 = get_semantic_checker(
+                ollama_url=self.TEST_OLLAMA_URL,
+                embedding_model=self.TEST_MODEL,
+                similarity_threshold=0.90,  # Different threshold
+            )
+            # Different settings should create different instances
+            assert checker1 is not checker2
+            assert checker1.similarity_threshold == 0.85
+            assert checker2.similarity_threshold == 0.90
+
+    def test_reset_global_checker(self):
+        """reset_global_checker clears all cached checkers."""
+        with patch("src.utils.similarity.ollama.Client"):
+            checker1 = get_semantic_checker(
+                ollama_url=self.TEST_OLLAMA_URL,
+                embedding_model=self.TEST_MODEL,
+                similarity_threshold=0.9,
+            )
             reset_global_checker()
 
-            checker2 = get_semantic_checker(similarity_threshold=0.8)
-            # New instance should have different threshold
-            assert checker2.similarity_threshold == 0.8
+            checker2 = get_semantic_checker(
+                ollama_url=self.TEST_OLLAMA_URL,
+                embedding_model=self.TEST_MODEL,
+                similarity_threshold=0.9,
+            )
+            # After reset, should be a new instance even with same settings
+            assert checker1 is not checker2

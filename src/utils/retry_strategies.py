@@ -59,7 +59,14 @@ class RetryContext:
         Returns:
             True if current attempt is at or beyond simplify_on_attempt.
         """
-        return self.attempt >= self.simplify_on_attempt
+        should = self.attempt >= self.simplify_on_attempt
+        logger.debug(
+            "Retry attempt %d: should_simplify=%s (threshold=%d)",
+            self.attempt,
+            should,
+            self.simplify_on_attempt,
+        )
+        return should
 
     def increment(self) -> RetryContext:
         """Create a new context for the next attempt.
@@ -67,7 +74,7 @@ class RetryContext:
         Returns:
             New RetryContext with incremented attempt number.
         """
-        return RetryContext(
+        next_ctx = RetryContext(
             attempt=self.attempt + 1,
             base_temperature=self.base_temperature,
             temp_increase=self.temp_increase,
@@ -75,6 +82,12 @@ class RetryContext:
             max_attempts=self.max_attempts,
             _original_prompt=self._original_prompt,
         )
+        logger.debug(
+            "Incrementing retry context: attempt %d -> %d",
+            self.attempt,
+            next_ctx.attempt,
+        )
+        return next_ctx
 
     def should_retry(self) -> bool:
         """Check if another retry attempt should be made.
@@ -82,7 +95,14 @@ class RetryContext:
         Returns:
             True if current attempt is less than max_attempts.
         """
-        return self.attempt < self.max_attempts
+        should = self.attempt < self.max_attempts
+        logger.debug(
+            "Retry attempt %d/%d: should_retry=%s",
+            self.attempt,
+            self.max_attempts,
+            should,
+        )
+        return should
 
     def store_original_prompt(self, prompt: str) -> None:
         """Store the original prompt for potential simplification.
@@ -91,6 +111,7 @@ class RetryContext:
             prompt: The original prompt to store.
         """
         self._original_prompt = prompt
+        logger.debug("Stored original prompt (%d chars)", len(prompt))
 
     def get_original_prompt(self) -> str:
         """Get the stored original prompt.
@@ -98,6 +119,7 @@ class RetryContext:
         Returns:
             The original prompt, or empty string if not stored.
         """
+        logger.debug("Retrieved original prompt (%d chars)", len(self._original_prompt))
         return self._original_prompt
 
 
@@ -127,13 +149,14 @@ def simplify_prompt(prompt: str, entity_type: str) -> str:
     for line in lines:
         line_lower = line.lower().strip()
 
-        # Skip sections that add complexity
+        # Skip sections that add complexity (match section headers only)
         if any(
-            marker in line_lower
+            line_lower.startswith(marker)
             for marker in [
                 "=== critical",
                 "strict rules:",
                 "do not",
+                "- do not",
                 "scoring guide",
                 "calibration",
             ]

@@ -806,18 +806,18 @@ class TestDynamicTemperature:
         assert temp == pytest.approx(0.6)
 
     def test_exponential_decay(self):
-        """Test exponential decay drops faster initially."""
+        """Test exponential decay drops faster initially than linear."""
         config = RefinementConfig(
             refinement_temp_start=0.8,
             refinement_temp_end=0.3,
             refinement_temp_decay="exponential",
         )
 
-        # Exponential decay uses progress^2
-        # Iteration 3 of 5: progress = 0.5, decay_factor = 0.25
-        # Expected: 0.8 + 0.25 * (0.3 - 0.8) = 0.8 - 0.125 = 0.675
+        # Exponential decay uses 1 - (1 - progress)^2 for faster initial drop
+        # Iteration 3 of 5: progress = 0.5, decay_factor = 1 - (1-0.5)^2 = 0.75
+        # Expected: 0.8 + 0.75 * (0.3 - 0.8) = 0.8 - 0.375 = 0.425
         temp = config.get_refinement_temperature(iteration=3, max_iterations=5)
-        assert temp == pytest.approx(0.675)
+        assert temp == pytest.approx(0.425)
 
     def test_step_decay_before_midpoint(self):
         """Test step decay stays at start temp before midpoint."""

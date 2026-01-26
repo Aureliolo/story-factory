@@ -12,6 +12,7 @@ from src.agents.base import BaseAgent
 from src.settings import Settings
 from src.utils.circuit_breaker import reset_global_circuit_breaker
 from src.utils.exceptions import CircuitOpenError, LLMGenerationError
+from tests.shared.mock_ollama import TEST_MODEL
 
 
 # Test model for structured output tests
@@ -47,11 +48,12 @@ def create_mock_agent(**overrides: Any) -> MockedBaseAgent:
         A MockedBaseAgent instance ready for testing.
     """
     # Create agent with minimal required args
+    # Use TEST_MODEL from mock_ollama to ensure model is in RECOMMENDED_MODELS
     agent = BaseAgent(
         name=overrides.get("name", "TestAgent"),
         role=overrides.get("role", "Tester"),
         system_prompt=overrides.get("system_prompt", "You are a test agent"),
-        model=overrides.get("model", "test-model:7b"),
+        model=overrides.get("model", TEST_MODEL),
         temperature=overrides.get("temperature", 0.7),
     )
 
