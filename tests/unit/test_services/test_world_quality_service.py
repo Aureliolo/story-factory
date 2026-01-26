@@ -15,6 +15,7 @@ from src.memory.story_state import (
     StoryBrief,
     StoryState,
 )
+from src.memory.world_database import Entity
 from src.memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
@@ -3749,7 +3750,6 @@ class TestSuggestRelationshipsForEntity:
     @pytest.fixture
     def entity(self):
         """Create test entity."""
-        from src.memory.world_database import Entity
 
         return Entity(
             id="char-001",
@@ -3762,7 +3762,6 @@ class TestSuggestRelationshipsForEntity:
     @pytest.fixture
     def available_entities(self):
         """Create available target entities."""
-        from src.memory.world_database import Entity
 
         return [
             Entity(id="char-001", type="character", name="Alice", description="A brave warrior"),
@@ -4245,7 +4244,6 @@ class TestExtractEntityClaims:
     @pytest.fixture
     def entity(self):
         """Create test entity."""
-        from src.memory.world_database import Entity
 
         return Entity(
             id="char-001",
@@ -4334,6 +4332,25 @@ class TestExtractEntityClaims:
 
         # Should only have 2 valid string claims
         assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_extract_claims_handles_non_list_claims(self, service, entity, caplog):
+        """Test that non-list claims value is handled with warning."""
+        import logging
+
+        # LLM returns claims as a string instead of a list
+        response_json = json.dumps({"claims": "This is not a list"})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        with caplog.at_level(logging.WARNING):
+            result = await service.extract_entity_claims(entity)
+
+        # Should return empty list
+        assert result == []
+        # Warning should be logged
+        assert "Expected claims to be a list" in caplog.text
 
 
 class TestCheckContradiction:
@@ -4527,7 +4544,6 @@ class TestValidateEntityConsistency:
     @pytest.fixture
     def entities(self):
         """Create test entities."""
-        from src.memory.world_database import Entity
 
         return [
             Entity(
@@ -4577,7 +4593,6 @@ class TestValidateEntityConsistency:
     @pytest.mark.asyncio
     async def test_validate_consistency_single_entity(self, service):
         """Test with single entity returns no contradictions."""
-        from src.memory.world_database import Entity
 
         single_entity = [Entity(id="1", type="character", name="A", description="Test")]
 
@@ -4610,7 +4625,6 @@ class TestValidateEntityConsistency:
     @pytest.mark.asyncio
     async def test_validate_consistency_skips_same_entity_claims(self, service):
         """Test that claims from the same entity are not compared."""
-        from src.memory.world_database import Entity
 
         single_entity = [
             Entity(id="1", type="character", name="A", description="Test A"),

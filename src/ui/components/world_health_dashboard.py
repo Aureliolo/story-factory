@@ -207,7 +207,7 @@ class WorldHealthDashboard:
                         ui.icon(icon, size="xs").style(f"color: {color};")
                         ui.label(orphan_name).classes("text-sm flex-grow")
 
-                        if self.on_fix_orphan:
+                        if self.on_fix_orphan and orphan_id:
                             ui.button(
                                 icon="link",
                                 on_click=lambda e_id=orphan_id: self.on_fix_orphan(e_id),

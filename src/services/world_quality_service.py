@@ -4079,6 +4079,15 @@ Return JSON:
                 return []
 
             claims_list = result.get("claims", [])
+
+            # Type check: ensure claims_list is actually a list before iterating
+            if not isinstance(claims_list, (list, tuple)):
+                logger.warning(
+                    f"Expected claims to be a list but got {type(claims_list).__name__} "
+                    f"for entity {entity.name} (id={entity.id}). Response: {response_text[:200]}"
+                )
+                return []
+
             return [
                 {
                     "entity_id": entity.id,
