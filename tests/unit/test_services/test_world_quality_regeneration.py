@@ -1,6 +1,6 @@
 """Tests for world quality service entity regeneration methods."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,6 +16,7 @@ def mock_settings():
     """Create mock settings for tests."""
     settings = MagicMock(spec=Settings)
     settings.ollama_url = "http://localhost:11434"
+    settings.ollama_timeout = 120
     settings.world_quality_threshold = 7.0
     settings.world_quality_max_iterations = 3
     settings.world_quality_creator_temp = 0.9
@@ -27,13 +28,24 @@ def mock_settings():
 @pytest.fixture
 def mock_mode_service():
     """Create mock mode service."""
-    return MagicMock(spec=ModelModeService)
+    service = MagicMock(spec=ModelModeService)
+    service.select_model.return_value = "test-model:latest"
+    return service
 
 
 @pytest.fixture
-def world_quality_service(mock_settings, mock_mode_service):
+def mock_ollama_client():
+    """Create a mock Ollama client."""
+    return MagicMock()
+
+
+@pytest.fixture
+def world_quality_service(mock_settings, mock_mode_service, mock_ollama_client):
     """Create WorldQualityService for tests."""
-    return WorldQualityService(mock_settings, mock_mode_service)
+    service = WorldQualityService(mock_settings, mock_mode_service)
+    # Inject the mock client directly
+    service._client = mock_ollama_client
+    return service
 
 
 @pytest.fixture
@@ -94,19 +106,17 @@ class TestRefineEntity:
         mock_response = {
             "response": '{"name": "Improved Character", "description": "A better description", "attributes": {"role": "protagonist", "traits": ["brave", "wise"]}}'
         }
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        result = await world_quality_service.refine_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            result = await world_quality_service.refine_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            assert result is not None
-            assert result["name"] == "Improved Character"
-            assert "description" in result
+        assert result is not None
+        assert result["name"] == "Improved Character"
+        assert "description" in result
 
     @pytest.mark.asyncio
     async def test_refine_entity_handles_empty_response(
@@ -114,17 +124,15 @@ class TestRefineEntity:
     ):
         """Test that refine_entity handles empty LLM response."""
         mock_response = {"response": ""}
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        result = await world_quality_service.refine_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            result = await world_quality_service.refine_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            assert result is None
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_handles_invalid_json_response(
@@ -132,33 +140,30 @@ class TestRefineEntity:
     ):
         """Test that refine_entity handles invalid JSON in response."""
         mock_response = {"response": "This is not valid JSON"}
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        result = await world_quality_service.refine_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            result = await world_quality_service.refine_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            assert result is None
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_handles_exception(
         self, world_quality_service, sample_entity, sample_story_brief, mock_settings
     ):
         """Test that refine_entity handles exceptions gracefully."""
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.side_effect = Exception("LLM error")
+        world_quality_service._client.generate.side_effect = Exception("LLM error")
 
-            result = await world_quality_service.refine_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
+        result = await world_quality_service.refine_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            assert result is None
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_builds_feedback_from_low_scores(
@@ -180,20 +185,18 @@ class TestRefineEntity:
         )
 
         mock_response = {"response": '{"name": "Test", "description": "Better", "attributes": {}}'}
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        await world_quality_service.refine_entity(
+            entity=entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            await world_quality_service.refine_entity(
-                entity=entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            # Check that generate was called with prompt containing feedback
-            call_args = mock_client.generate.call_args
-            prompt = call_args.kwargs.get("prompt") or call_args[1].get("prompt")
-            assert "depth" in prompt.lower()  # Low score mentioned
+        # Check that generate was called with prompt containing feedback
+        call_args = world_quality_service._client.generate.call_args
+        prompt = call_args.kwargs.get("prompt") or call_args[1].get("prompt")
+        assert "depth" in prompt.lower()  # Low score mentioned
 
 
 class TestRegenerateEntity:
@@ -227,18 +230,16 @@ class TestRegenerateEntity:
         mock_response = {
             "response": '{"name": "New Character", "description": "A completely new description", "attributes": {"role": "hero", "traits": ["determined"]}}'
         }
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        result = await world_quality_service.regenerate_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            result = await world_quality_service.regenerate_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            assert result is not None
-            assert result["name"] == "New Character"
+        assert result is not None
+        assert result["name"] == "New Character"
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_with_custom_instructions(
@@ -249,21 +250,19 @@ class TestRegenerateEntity:
             "response": '{"name": "Customized", "description": "Based on guidance", "attributes": {}}'
         }
         custom_guidance = "Make this character more mysterious"
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        await world_quality_service.regenerate_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+            custom_instructions=custom_guidance,
+        )
 
-            await world_quality_service.regenerate_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-                custom_instructions=custom_guidance,
-            )
-
-            # Check that custom instructions were included in prompt
-            call_args = mock_client.generate.call_args
-            prompt = call_args.kwargs.get("prompt") or call_args[1].get("prompt")
-            assert "mysterious" in prompt.lower()
+        # Check that custom instructions were included in prompt
+        call_args = world_quality_service._client.generate.call_args
+        prompt = call_args.kwargs.get("prompt") or call_args[1].get("prompt")
+        assert "mysterious" in prompt.lower()
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_handles_empty_response(
@@ -271,33 +270,30 @@ class TestRegenerateEntity:
     ):
         """Test that regenerate_entity handles empty LLM response."""
         mock_response = {"response": ""}
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        result = await world_quality_service.regenerate_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            result = await world_quality_service.regenerate_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            assert result is None
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_handles_exception(
         self, world_quality_service, sample_entity, sample_story_brief, mock_settings
     ):
         """Test that regenerate_entity handles exceptions gracefully."""
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.side_effect = Exception("LLM error")
+        world_quality_service._client.generate.side_effect = Exception("LLM error")
 
-            result = await world_quality_service.regenerate_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
+        result = await world_quality_service.regenerate_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            assert result is None
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_handles_entity_without_attributes(
@@ -315,18 +311,16 @@ class TestRegenerateEntity:
         mock_response = {
             "response": '{"name": "New Location", "description": "A better place", "attributes": {"atmosphere": "mysterious"}}'
         }
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        result = await world_quality_service.regenerate_entity(
+            entity=entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            result = await world_quality_service.regenerate_entity(
-                entity=entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            assert result is not None
-            assert result["name"] == "New Location"
+        assert result is not None
+        assert result["name"] == "New Location"
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_returns_none_for_list_response(
@@ -334,15 +328,13 @@ class TestRegenerateEntity:
     ):
         """Test that regenerate_entity returns None when response is a list instead of dict."""
         mock_response = {"response": '[{"name": "Item1"}, {"name": "Item2"}]'}
+        world_quality_service._client.generate.return_value = mock_response
 
-        with patch.object(world_quality_service, "client", create=True) as mock_client:
-            mock_client.generate.return_value = mock_response
+        result = await world_quality_service.regenerate_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
 
-            result = await world_quality_service.regenerate_entity(
-                entity=sample_entity,
-                story_brief=sample_story_brief,
-                settings=mock_settings,
-            )
-
-            # Should return None because we expect a dict, not a list
-            assert result is None
+        # Should return None because we expect a dict, not a list
+        assert result is None
