@@ -18,6 +18,7 @@ from src.ui.pages.settings import SettingsPage
 from src.ui.pages.templates import TemplatesPage
 from src.ui.pages.timeline import TimelinePage
 from src.ui.pages.world import WorldPage
+from src.ui.pages.world_timeline import WorldTimelinePage
 from src.ui.pages.write import WritePage
 from src.ui.state import AppState
 
@@ -194,6 +195,17 @@ class StoryFactoryApp:
                 page.build()
 
             self._page_layout("/timeline", content)
+
+        @ui.page("/world-timeline")
+        def world_timeline_page():
+            """Render the World Timeline page."""
+
+            def content():
+                """Build the World Timeline page content."""
+                page = WorldTimelinePage(self.state, self.services)
+                page.build()
+
+            self._page_layout("/world-timeline", content)
 
         @ui.page("/projects")
         def projects_page() -> None:

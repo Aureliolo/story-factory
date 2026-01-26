@@ -11,6 +11,7 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
+from src.memory.cost_models import GenerationMetrics
 from src.settings import ModelInfo, Settings, get_model_info
 from src.utils.error_handling import handle_ollama_errors
 from src.utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
@@ -132,6 +133,18 @@ class BaseAgent:
 
         # Instructor client for structured outputs (lazily initialized)
         self._instructor_client: instructor.Instructor | None = None
+
+        # Store metrics from the last generation for cost tracking
+        self._last_generation_metrics: GenerationMetrics | None = None
+
+    @property
+    def last_generation_metrics(self) -> GenerationMetrics | None:
+        """Get metrics from the last generate() call.
+
+        Returns:
+            GenerationMetrics with token counts and timing, or None if no generation yet.
+        """
+        return self._last_generation_metrics
 
     @property
     def instructor_client(self) -> instructor.Instructor:
@@ -346,8 +359,26 @@ class BaseAgent:
                         duration = time.time() - start_time
 
                         content: str = response["message"]["content"]
+
+                        # Extract token counts from Ollama response for cost tracking
+                        prompt_tokens = response.get("prompt_eval_count")
+                        completion_tokens = response.get("eval_count")
+                        total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+
+                        # Store metrics for callers who need cost tracking
+                        self._last_generation_metrics = GenerationMetrics(
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens,
+                            total_tokens=total_tokens,
+                            time_seconds=duration,
+                            model_id=use_model,
+                            agent_role=self.agent_role,
+                        )
+
                         logger.info(
-                            f"{self.name}: LLM response received ({len(content)} chars, {duration:.2f}s)"
+                            f"{self.name}: LLM response received "
+                            f"({len(content)} chars, {duration:.2f}s, "
+                            f"tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
                         )
 
                         # Validate response isn't just thinking tokens or truncated

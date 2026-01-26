@@ -1,5 +1,30 @@
 """Shared constants used across the application."""
 
+# ========== Entity Type Colors ==========
+# Used for graph visualization and entity cards
+# NOTE: Keep in sync with src/ui/theme.py ENTITY_COLORS if modified
+ENTITY_COLORS: dict[str, str] = {
+    "character": "#4CAF50",  # Green
+    "location": "#2196F3",  # Blue
+    "item": "#FF9800",  # Orange
+    "faction": "#9C27B0",  # Purple
+    "concept": "#607D8B",  # Grey
+    "event": "#FF5722",  # Orange for events
+}
+
+
+def get_entity_color(entity_type: str) -> str:
+    """Get color for an entity type.
+
+    Args:
+        entity_type: Type of entity.
+
+    Returns:
+        Hex color code.
+    """
+    return ENTITY_COLORS.get(entity_type.lower(), ENTITY_COLORS["concept"])
+
+
 # Language name to ISO 639-1 code mapping
 # Used for EPUB metadata and other internationalization needs
 LANGUAGE_CODES: dict[str, str] = {

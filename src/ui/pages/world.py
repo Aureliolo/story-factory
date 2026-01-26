@@ -2182,6 +2182,7 @@ class WorldPage:
                 ui.tab("path", label="Find Path")
                 ui.tab("centrality", label="Most Connected")
                 ui.tab("communities", label="Communities")
+                ui.tab("conflicts", label="Conflict Map")
 
             with ui.tab_panels(tabs, value="path").classes("w-full"):
                 # Path finder
@@ -2208,6 +2209,10 @@ class WorldPage:
                         "Detect Communities",
                         on_click=self._show_communities,
                     )
+
+                # Conflict mapping
+                with ui.tab_panel("conflicts"):
+                    self._build_conflict_map_tab()
 
             # Analysis result display
             self._analysis_result = ui.html(sanitize=False).classes("w-full mt-4")
@@ -2972,6 +2977,33 @@ class WorldPage:
 
         if self._analysis_result:
             self._analysis_result.content = render_communities_result(self.state.world_db)
+
+    def _build_conflict_map_tab(self) -> None:
+        """Build the conflict map tab content."""
+        from src.ui.components.conflict_graph import ConflictGraphComponent
+
+        with ui.column().classes("w-full gap-4"):
+            ui.label(
+                "Visualize relationships colored by conflict category: "
+                "alliances (green), rivalries (red), tensions (yellow), and neutral (blue)."
+            ).classes("text-sm text-gray-600 dark:text-gray-400")
+
+            # Conflict graph component
+            conflict_graph = ConflictGraphComponent(
+                world_db=self.state.world_db,
+                services=self.services,
+                on_node_select=self._on_node_select,
+                height=400,
+            )
+            conflict_graph.build()
+
+            # Link to full world timeline
+            with ui.row().classes("items-center gap-4 mt-2"):
+                ui.button(
+                    "View World Timeline",
+                    on_click=lambda: ui.navigate.to("/world-timeline"),
+                    icon="timeline",
+                ).props("flat")
 
     # ========== Undo/Redo Methods ==========
 
