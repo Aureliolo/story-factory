@@ -12,12 +12,12 @@ from typing import Any, Literal
 import networkx as nx
 from networkx import DiGraph
 
-from src.memory.entities import Entity, EventParticipant, Relationship, WorldEvent
+from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
 
 logger = logging.getLogger(__name__)
 
 # Schema version for migration support
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Valid entity types (whitelist)
 VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
@@ -191,6 +191,31 @@ class WorldDatabase:
             """
             )
 
+            # Entity versions table for tracking changes
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS entity_versions (
+                    id TEXT PRIMARY KEY,
+                    entity_id TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    data_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+                    change_reason TEXT DEFAULT '',
+                    quality_score REAL DEFAULT NULL,
+                    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+                )
+            """
+            )
+
+            # Indexes for entity versions
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entity_versions_entity_id ON entity_versions(entity_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entity_versions_created_at ON entity_versions(created_at)"
+            )
+
             # Run migrations if needed
             if current_version < SCHEMA_VERSION:
                 self._run_migrations(cursor, current_version, SCHEMA_VERSION)
@@ -268,10 +293,30 @@ class WorldDatabase:
         """
         logger.info(f"Migrating database schema from v{from_version} to v{to_version}")
 
-        # Add migration logic here as schema evolves
-        # Example:
-        # if from_version < 2:
-        #     cursor.execute("ALTER TABLE entities ADD COLUMN new_field TEXT")
+        # Migration from v1 to v2: Add entity_versions table
+        if from_version < 2:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS entity_versions (
+                    id TEXT PRIMARY KEY,
+                    entity_id TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    data_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+                    change_reason TEXT DEFAULT '',
+                    quality_score REAL DEFAULT NULL,
+                    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+                )
+            """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entity_versions_entity_id ON entity_versions(entity_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_entity_versions_created_at ON entity_versions(created_at)"
+            )
+            logger.info("Migration v1->v2: Added entity_versions table")
 
         logger.info("Database migration complete")
 
@@ -359,6 +404,10 @@ class WorldDatabase:
             )
             self.conn.commit()
             self._add_entity_to_graph(entity_id, name, entity_type, description, attrs)
+
+            # Save initial version
+            self._save_entity_version_internal(cursor, entity_id, "created")
+            self.conn.commit()
 
         logger.debug(f"Added entity: {name} ({entity_type}) id={entity_id}")
         return entity_id
@@ -506,6 +555,10 @@ class WorldDatabase:
                     else None,
                 )
 
+                # Save version after update
+                self._save_entity_version_internal(cursor, entity_id, "edited")
+                self.conn.commit()
+
         return updated
 
     def delete_entity(self, entity_id: str) -> bool:
@@ -608,6 +661,295 @@ class WorldDatabase:
             attributes=json.loads(row["attributes"]),
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
+
+    # =========================================================================
+    # Entity Versioning Operations
+    # =========================================================================
+
+    def _save_entity_version_internal(
+        self,
+        cursor: sqlite3.Cursor,
+        entity_id: str,
+        change_type: str,
+        change_reason: str = "",
+        quality_score: float | None = None,
+    ) -> str | None:
+        """Internal method to save entity version (called within existing transaction).
+
+        Args:
+            cursor: Database cursor from existing transaction.
+            entity_id: Entity ID to version.
+            change_type: Type of change (created, refined, edited, regenerated).
+            change_reason: Reason for the change.
+            quality_score: Optional quality score at time of change.
+
+        Returns:
+            Version ID if successful, None if entity not found.
+        """
+        # Get current entity state
+        cursor.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+
+        # Get next version number
+        cursor.execute(
+            "SELECT COALESCE(MAX(version_number), 0) + 1 FROM entity_versions WHERE entity_id = ?",
+            (entity_id,),
+        )
+        version_number = cursor.fetchone()[0]
+
+        # Create version snapshot
+        version_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        data_json = json.dumps(
+            {
+                "type": row["type"],
+                "name": row["name"],
+                "description": row["description"],
+                "attributes": json.loads(row["attributes"]),
+            }
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO entity_versions
+            (id, entity_id, version_number, data_json, created_at, change_type, change_reason, quality_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                version_id,
+                entity_id,
+                version_number,
+                data_json,
+                now,
+                change_type,
+                change_reason,
+                quality_score,
+            ),
+        )
+
+        # Apply retention policy
+        self._apply_version_retention(entity_id, cursor)
+
+        logger.debug(f"Saved version {version_number} for entity {entity_id} ({change_type})")
+        return version_id
+
+    def save_entity_version(
+        self,
+        entity_id: str,
+        change_type: str,
+        change_reason: str = "",
+        quality_score: float | None = None,
+    ) -> str | None:
+        """Save current entity state as a new version.
+
+        Args:
+            entity_id: Entity ID to version.
+            change_type: Type of change (created, refined, edited, regenerated).
+            change_reason: Reason for the change.
+            quality_score: Optional quality score at time of change.
+
+        Returns:
+            Version ID if successful, None if entity not found.
+
+        Raises:
+            ValueError: If change_type is invalid.
+        """
+        valid_change_types = {"created", "refined", "edited", "regenerated"}
+        if change_type not in valid_change_types:
+            raise ValueError(
+                f"Invalid change_type '{change_type}'. "
+                f"Must be one of: {', '.join(sorted(valid_change_types))}"
+            )
+
+        logger.debug(
+            "save_entity_version called: entity_id=%s, change_type=%s",
+            entity_id,
+            change_type,
+        )
+
+        with self._lock:
+            cursor = self.conn.cursor()
+            version_id = self._save_entity_version_internal(
+                cursor, entity_id, change_type, change_reason, quality_score
+            )
+            self.conn.commit()
+            return version_id
+
+    def get_entity_versions(self, entity_id: str, limit: int | None = None) -> list[EntityVersion]:
+        """Get version history for an entity.
+
+        Args:
+            entity_id: Entity ID.
+            limit: Maximum number of versions to return.
+
+        Returns:
+            List of versions, newest first.
+        """
+        with self._lock:
+            cursor = self.conn.cursor()
+            if limit:
+                cursor.execute(
+                    """
+                    SELECT * FROM entity_versions
+                    WHERE entity_id = ?
+                    ORDER BY version_number DESC
+                    LIMIT ?
+                    """,
+                    (entity_id, limit),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT * FROM entity_versions
+                    WHERE entity_id = ?
+                    ORDER BY version_number DESC
+                    """,
+                    (entity_id,),
+                )
+            return [self._row_to_entity_version(row) for row in cursor.fetchall()]
+
+    def revert_entity_to_version(self, entity_id: str, version_number: int) -> bool:
+        """Revert an entity to a previous version.
+
+        Restores the entity to the specified version and creates a new
+        'edited' version recording the revert.
+
+        Args:
+            entity_id: Entity ID.
+            version_number: Version number to revert to.
+
+        Returns:
+            True if reverted successfully.
+
+        Raises:
+            ValueError: If version not found.
+        """
+        logger.info(f"Reverting entity {entity_id} to version {version_number}")
+
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            # Get the target version
+            cursor.execute(
+                """
+                SELECT * FROM entity_versions
+                WHERE entity_id = ? AND version_number = ?
+                """,
+                (entity_id, version_number),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError(f"Version {version_number} not found for entity {entity_id}")
+
+            # Parse version data
+            version_data = json.loads(row["data_json"])
+
+            # Update entity with version data
+            cursor.execute(
+                """
+                UPDATE entities
+                SET type = ?,
+                    name = ?,
+                    description = ?,
+                    attributes = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    version_data["type"],
+                    version_data["name"],
+                    version_data["description"],
+                    json.dumps(version_data.get("attributes", {})),
+                    datetime.now().isoformat(),
+                    entity_id,
+                ),
+            )
+
+            if cursor.rowcount == 0:
+                raise ValueError(f"Entity {entity_id} not found")
+
+            self.conn.commit()
+
+            # Update graph
+            self._update_entity_in_graph(
+                entity_id,
+                version_data["name"],
+                version_data["type"],
+                version_data["description"],
+                version_data.get("attributes"),
+            )
+
+            # Save new version recording the revert
+            self._save_entity_version_internal(
+                cursor,
+                entity_id,
+                "edited",
+                f"Reverted to version {version_number}",
+            )
+            self.conn.commit()
+
+            logger.info(f"Entity {entity_id} reverted to version {version_number}")
+            return True
+
+    def _apply_version_retention(self, entity_id: str, cursor: sqlite3.Cursor) -> None:
+        """Apply version retention policy, keeping only last N versions.
+
+        Args:
+            entity_id: Entity ID.
+            cursor: Database cursor.
+        """
+        # Import here to avoid circular import
+        from src.settings import Settings
+
+        try:
+            settings = Settings.load()
+            retention_limit = settings.entity_version_retention
+        except Exception:
+            retention_limit = 10  # Default fallback
+
+        # Count versions
+        cursor.execute(
+            "SELECT COUNT(*) FROM entity_versions WHERE entity_id = ?",
+            (entity_id,),
+        )
+        count = cursor.fetchone()[0]
+
+        if count > retention_limit:
+            # Delete oldest versions beyond limit
+            cursor.execute(
+                """
+                DELETE FROM entity_versions
+                WHERE entity_id = ?
+                AND id NOT IN (
+                    SELECT id FROM entity_versions
+                    WHERE entity_id = ?
+                    ORDER BY version_number DESC
+                    LIMIT ?
+                )
+                """,
+                (entity_id, entity_id, retention_limit),
+            )
+            deleted = cursor.rowcount
+            if deleted > 0:
+                logger.debug(
+                    f"Deleted {deleted} old versions for entity {entity_id} "
+                    f"(retention limit: {retention_limit})"
+                )
+
+    def _row_to_entity_version(self, row: sqlite3.Row) -> EntityVersion:
+        """Convert a database row to an EntityVersion."""
+        return EntityVersion(
+            id=row["id"],
+            entity_id=row["entity_id"],
+            version_number=row["version_number"],
+            data_json=json.loads(row["data_json"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            change_type=row["change_type"],
+            change_reason=row["change_reason"] or "",
+            quality_score=row["quality_score"],
         )
 
     # =========================================================================

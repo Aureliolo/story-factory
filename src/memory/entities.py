@@ -49,3 +49,19 @@ class EventParticipant(BaseModel):
     event_id: str
     entity_id: str
     role: str  # actor, location, affected, witness
+
+
+class EntityVersion(BaseModel):
+    """A versioned snapshot of an entity's state.
+
+    Tracks changes to entities for history viewing and reverting.
+    """
+
+    id: str
+    entity_id: str
+    version_number: int
+    data_json: dict[str, Any]  # Snapshot of entity state
+    created_at: datetime = Field(default_factory=datetime.now)
+    change_type: str  # created, refined, edited, regenerated
+    change_reason: str = ""
+    quality_score: float | None = None

@@ -12,7 +12,7 @@ from nicegui.elements.input import Input
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
-from src.memory.entities import Entity
+from src.memory.entities import Entity, EntityVersion
 from src.memory.world_quality import RefinementConfig
 from src.services import ServiceContainer
 from src.ui.components.build_dialog import show_build_structure_dialog
@@ -2088,6 +2088,9 @@ class WorldPage:
                     if feedback:
                         ui.label(f"Feedback: {feedback}").classes("text-xs text-gray-500 mt-2")
 
+            # Version history panel
+            self._build_version_history_panel(entity.id)
+
     def _add_new_attribute(self) -> None:
         """Add a new attribute to the current entity."""
         if not hasattr(self, "_new_attr_key") or not self._new_attr_key.value:
@@ -2105,6 +2108,219 @@ class WorldPage:
             self._refresh_entity_editor()
         else:
             ui.notify(f"Attribute '{key}' already exists", type="warning")
+
+    def _build_version_history_panel(self, entity_id: str) -> None:
+        """Build the version history panel for an entity.
+
+        Args:
+            entity_id: The entity ID to show version history for.
+        """
+        if not self.state.world_db:
+            return
+
+        versions = self.state.world_db.get_entity_versions(entity_id, limit=10)
+
+        if not versions:
+            return  # No versions yet, skip showing the panel
+
+        with ui.expansion("Version History", icon="history", value=False).classes("w-full mt-2"):
+            ui.label(f"{len(versions)} versions").classes(
+                "text-xs text-gray-500 dark:text-gray-400 mb-2"
+            )
+
+            for version in versions:
+                change_type_icons = {
+                    "created": "add_circle",
+                    "refined": "auto_fix_high",
+                    "edited": "edit",
+                    "regenerated": "refresh",
+                }
+                icon = change_type_icons.get(version.change_type, "history")
+
+                with ui.row().classes(
+                    "w-full items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                ):
+                    ui.icon(icon, size="xs").classes("text-gray-500")
+
+                    with ui.column().classes("flex-grow gap-0"):
+                        with ui.row().classes("items-center gap-2"):
+                            ui.label(f"v{version.version_number}").classes(
+                                "text-sm font-mono font-bold"
+                            )
+                            ui.label(version.change_type).classes(
+                                "text-xs px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-600"
+                            )
+                            if version.quality_score is not None:
+                                ui.label(f"{version.quality_score:.1f}").classes(
+                                    "text-xs text-blue-600 dark:text-blue-400"
+                                )
+
+                        # Format timestamp
+                        time_str = version.created_at.strftime("%Y-%m-%d %H:%M")
+                        ui.label(time_str).classes("text-xs text-gray-500")
+
+                        if version.change_reason:
+                            ui.label(version.change_reason).classes("text-xs text-gray-400 italic")
+
+                    # Action buttons
+                    with ui.row().classes("gap-1"):
+                        ui.button(
+                            icon="visibility",
+                            on_click=lambda v=version: self._show_version_diff(v),
+                        ).props("flat dense size=xs").tooltip("View changes")
+
+                        # Don't show revert for the latest version
+                        if version.version_number < versions[0].version_number:
+                            ui.button(
+                                icon="restore",
+                                on_click=lambda v=version: self._confirm_revert_version(v),
+                            ).props("flat dense size=xs color=warning").tooltip(
+                                "Revert to this version"
+                            )
+
+    def _confirm_revert_version(self, version: EntityVersion) -> None:
+        """Show confirmation dialog for reverting to a version.
+
+        Args:
+            version: The version to revert to.
+        """
+        with ui.dialog() as dialog, ui.card().classes("p-4"):
+            ui.label("Revert Entity?").classes("text-lg font-bold mb-2")
+            ui.label(
+                f"Revert to version {version.version_number} "
+                f"({version.change_type} from {version.created_at.strftime('%Y-%m-%d %H:%M')})?"
+            ).classes("text-sm text-gray-600 dark:text-gray-400 mb-4")
+
+            ui.label(
+                "This will restore the entity's name, type, description, and attributes "
+                "to the state captured in this version."
+            ).classes("text-xs text-gray-500 mb-4")
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Revert",
+                    on_click=lambda: self._revert_to_version(version, dialog),
+                ).props("color=warning")
+
+        dialog.open()
+
+    def _revert_to_version(self, version: EntityVersion, dialog: ui.dialog) -> None:
+        """Execute the revert to a specific version.
+
+        Args:
+            version: The version to revert to.
+            dialog: The dialog to close after completion.
+        """
+        if not self.state.world_db:
+            return
+
+        try:
+            self.state.world_db.revert_entity_to_version(version.entity_id, version.version_number)
+            dialog.close()
+            ui.notify(
+                f"Reverted to version {version.version_number}",
+                type="positive",
+            )
+            # Refresh the editor to show updated data
+            self._refresh_entity_editor()
+            if self._graph:
+                self._graph.refresh()
+        except ValueError as e:
+            logger.error(f"Failed to revert: {e}")
+            ui.notify(f"Revert failed: {e}", type="negative")
+
+    def _show_version_diff(self, version: EntityVersion) -> None:
+        """Show a dialog comparing a version with current entity state.
+
+        Args:
+            version: The version to compare.
+        """
+        if not self.state.world_db:
+            return
+
+        # Get current entity
+        entity = self.services.world.get_entity(self.state.world_db, version.entity_id)
+        if not entity:
+            ui.notify("Entity not found", type="warning")
+            return
+
+        version_data = version.data_json
+        current_data = {
+            "type": entity.type,
+            "name": entity.name,
+            "description": entity.description,
+            "attributes": entity.attributes or {},
+        }
+
+        with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[500px] max-w-[800px]"):
+            with ui.row().classes("w-full items-center justify-between mb-4"):
+                ui.label(f"Version {version.version_number} vs Current").classes(
+                    "text-lg font-bold"
+                )
+                ui.button(icon="close", on_click=dialog.close).props("flat dense")
+
+            # Show diff for each field
+            fields = ["name", "type", "description"]
+
+            for field in fields:
+                old_val = version_data.get(field, "")
+                new_val = current_data.get(field, "")
+
+                if old_val != new_val:
+                    ui.label(field.title()).classes("text-sm font-semibold mt-2")
+                    with ui.row().classes("w-full gap-4"):
+                        with ui.column().classes("flex-1 p-2 bg-red-50 dark:bg-red-900/20 rounded"):
+                            ui.label("Version").classes("text-xs text-gray-500")
+                            ui.label(str(old_val) or "(empty)").classes("text-sm")
+                        with ui.column().classes(
+                            "flex-1 p-2 bg-green-50 dark:bg-green-900/20 rounded"
+                        ):
+                            ui.label("Current").classes("text-xs text-gray-500")
+                            ui.label(str(new_val) or "(empty)").classes("text-sm")
+
+            # Compare attributes - cast to dict for mypy
+            old_attrs_raw = version_data.get("attributes", {})
+            old_attrs = dict(old_attrs_raw) if isinstance(old_attrs_raw, dict) else {}
+            new_attrs_raw = current_data["attributes"]
+            new_attrs = dict(new_attrs_raw) if isinstance(new_attrs_raw, dict) else {}
+            all_attr_keys = set(old_attrs.keys()) | set(new_attrs.keys())
+
+            if old_attrs != new_attrs:
+                ui.label("Attributes").classes("text-sm font-semibold mt-4")
+
+                for key in sorted(all_attr_keys):
+                    attr_old_val: Any = old_attrs.get(key)
+                    attr_new_val: Any = new_attrs.get(key)
+
+                    if attr_old_val != attr_new_val:
+                        ui.label(key.replace("_", " ").title()).classes(
+                            "text-xs text-gray-600 mt-2"
+                        )
+                        with ui.row().classes("w-full gap-4"):
+                            with ui.column().classes(
+                                "flex-1 p-2 bg-red-50 dark:bg-red-900/20 rounded"
+                            ):
+                                old_str = str(attr_old_val)[:200] if attr_old_val else "(not set)"
+                                ui.label(old_str).classes("text-xs")
+                            with ui.column().classes(
+                                "flex-1 p-2 bg-green-50 dark:bg-green-900/20 rounded"
+                            ):
+                                new_str = str(attr_new_val)[:200] if attr_new_val else "(not set)"
+                                ui.label(new_str).classes("text-xs")
+
+            # If no differences
+            if old_attrs == new_attrs and all(
+                version_data.get(f) == current_data.get(f) for f in fields
+            ):
+                ui.label("No differences from current state").classes(
+                    "text-sm text-gray-500 italic mt-4"
+                )
+
+            with ui.row().classes("w-full justify-end mt-4"):
+                ui.button("Close", on_click=dialog.close).props("flat")
+
+        dialog.open()
 
     def _build_relationships_section(self) -> None:
         """Build the relationships management section."""

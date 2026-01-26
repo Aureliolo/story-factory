@@ -1,11 +1,18 @@
 """Tests for BackupService."""
 
+import hashlib
 import json
+import sqlite3
 import zipfile
 
 import pytest
 
-from src.services.backup_service import BackupService, _validate_backup_path
+from src.services.backup_service import (
+    BACKUP_FORMAT_VERSION,
+    BackupService,
+    BackupVerifier,
+    _validate_backup_path,
+)
 
 
 class TestBackupService:
@@ -607,3 +614,366 @@ class TestBackupServiceGetMetadata:
         metadata = service.get_backup_metadata("invalid_json.zip")
 
         assert metadata is None
+
+
+class TestBackupVerifier:
+    """Tests for BackupVerifier class."""
+
+    def test_verify_valid_backup(self, tmp_settings, monkeypatch, tmp_path):
+        """Test verification of a valid backup passes all checks."""
+        stories_dir = tmp_path / "stories"
+        worlds_dir = tmp_path / "worlds"
+        backups_dir = tmp_path / "backups"
+
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
+
+        stories_dir.mkdir(parents=True)
+        worlds_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create test project with actual SQLite database
+        project_id = "test-verify"
+        story_data = {"id": project_id, "project_name": "Test Verify"}
+        story_path = stories_dir / f"{project_id}.json"
+        story_path.write_text(json.dumps(story_data))
+
+        # Create a valid SQLite database
+        world_path = worlds_dir / f"{project_id}.db"
+        conn = sqlite3.connect(str(world_path))
+        conn.execute("CREATE TABLE test (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        # Create backup
+        service = BackupService(tmp_settings)
+        backup_path = service.create_backup(project_id, "Test Verify")
+
+        # Verify backup
+        verifier = BackupVerifier()
+        result = verifier.verify(backup_path)
+
+        assert result.valid is True
+        assert result.manifest_valid is True
+        assert result.files_complete is True
+        assert result.checksums_valid is True
+        assert result.sqlite_integrity_valid is True
+        assert result.json_parseable is True
+        assert result.version_compatible is True
+        assert len(result.errors) == 0
+
+    def test_verify_missing_manifest(self, tmp_path):
+        """Test verification fails without metadata file."""
+        # Create a zip without metadata
+        zip_path = tmp_path / "no_manifest.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.manifest_valid is False
+        assert "Missing backup_metadata.json" in result.errors[0]
+
+    def test_verify_checksum_mismatch(self, tmp_path):
+        """Test verification fails on checksum mismatch."""
+        zip_path = tmp_path / "bad_checksum.zip"
+
+        # Create backup with correct file but wrong checksum
+        content = b'{"id": "test", "project_name": "Test"}'
+        wrong_checksum = "0" * 64  # Definitely wrong
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["test.json"],
+            "checksums": {"test.json": wrong_checksum},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("test.json", content)
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.checksums_valid is False
+        assert any("Checksum mismatch" in e for e in result.errors)
+
+    def test_verify_corrupted_sqlite(self, tmp_path):
+        """Test verification fails on corrupted SQLite database."""
+        zip_path = tmp_path / "corrupted_db.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["test.db"],
+            "checksums": {},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            # Write invalid SQLite data
+            zf.writestr("test.db", b"this is not a valid sqlite database")
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.sqlite_integrity_valid is False
+        assert any("SQLite" in e for e in result.errors)
+
+    def test_verify_invalid_json(self, tmp_path):
+        """Test verification fails on invalid JSON files."""
+        zip_path = tmp_path / "invalid_json.zip"
+
+        # Calculate checksum for invalid JSON
+        invalid_json = b"{ not valid json }"
+        checksum = hashlib.sha256(invalid_json).hexdigest()
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["project.json"],
+            "checksums": {"project.json": checksum},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", invalid_json)
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.json_parseable is False
+        assert any("Invalid JSON" in e for e in result.errors)
+
+    def test_verify_missing_files(self, tmp_path):
+        """Test verification fails when files listed in metadata are missing."""
+        zip_path = tmp_path / "missing_files.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["project.json", "missing.db"],  # missing.db doesn't exist
+            "checksums": {},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+            # Note: missing.db is not added
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.files_complete is False
+        assert any("Missing file" in e for e in result.errors)
+
+    def test_verify_incompatible_version(self, tmp_path):
+        """Test verification fails for future backup format version."""
+        zip_path = tmp_path / "future_version.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION + 10,  # Future version
+            "files": ["project.json"],
+            "checksums": {},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.version_compatible is False
+        assert any("newer than supported" in e for e in result.errors)
+
+    def test_verify_nonexistent_file(self, tmp_path):
+        """Test verification handles nonexistent backup file."""
+        verifier = BackupVerifier()
+        result = verifier.verify(tmp_path / "nonexistent.zip")
+
+        assert result.valid is False
+        assert any("not found" in e for e in result.errors)
+
+    def test_verify_bad_zip_file(self, tmp_path):
+        """Test verification handles corrupted zip file."""
+        bad_zip = tmp_path / "bad.zip"
+        bad_zip.write_text("not a zip file")
+
+        verifier = BackupVerifier()
+        result = verifier.verify(bad_zip)
+
+        assert result.valid is False
+        assert any("Invalid zip file" in e for e in result.errors)
+
+    def test_verify_no_checksums_warns(self, tmp_path):
+        """Test verification warns when no checksums in metadata."""
+        zip_path = tmp_path / "no_checksums.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["project.json"],
+            # No checksums field
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        # Should pass but with warning
+        assert result.valid is True
+        assert any("No checksums" in w for w in result.warnings)
+
+
+class TestBackupServiceWithVerification:
+    """Tests for BackupService with verification enabled."""
+
+    def test_restore_with_verification(self, tmp_settings, monkeypatch, tmp_path):
+        """Test restore runs verification when enabled."""
+        stories_dir = tmp_path / "stories"
+        worlds_dir = tmp_path / "worlds"
+        backups_dir = tmp_path / "backups"
+
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
+
+        stories_dir.mkdir(parents=True)
+        worlds_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+        tmp_settings.backup_verify_on_restore = True
+
+        # Create test project
+        project_id = "test-verify-restore"
+        story_data = {"id": project_id, "project_name": "Test"}
+        story_path = stories_dir / f"{project_id}.json"
+        story_path.write_text(json.dumps(story_data))
+
+        service = BackupService(tmp_settings)
+        backup_path = service.create_backup(project_id, "Test")
+
+        # Restore should succeed with valid backup
+        new_id = service.restore_backup(backup_path.name)
+        assert new_id is not None
+
+    def test_restore_fails_on_invalid_backup(self, tmp_settings, tmp_path):
+        """Test restore fails when verification fails."""
+        backups_dir = tmp_path / "backups"
+        backups_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+        tmp_settings.backup_verify_on_restore = True
+
+        # Create a corrupted backup
+        zip_path = backups_dir / "corrupted.zip"
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["test.json"],
+            "checksums": {"test.json": "wrong_checksum"},
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("test.json", json.dumps({"id": "test"}))
+
+        service = BackupService(tmp_settings)
+
+        with pytest.raises(ValueError, match="Backup verification failed"):
+            service.restore_backup("corrupted.zip")
+
+    def test_restore_skip_verification(self, tmp_settings, monkeypatch, tmp_path):
+        """Test restore with skip_verification bypasses verification."""
+        stories_dir = tmp_path / "stories"
+        worlds_dir = tmp_path / "worlds"
+        backups_dir = tmp_path / "backups"
+
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
+
+        stories_dir.mkdir(parents=True)
+        worlds_dir.mkdir(parents=True)
+        backups_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+        tmp_settings.backup_verify_on_restore = True
+
+        # Create a backup with wrong checksum (would fail verification)
+        zip_path = backups_dir / "bad_checksum.zip"
+        story_content = json.dumps({"id": "test", "project_name": "Test"})
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "backup_format_version": BACKUP_FORMAT_VERSION,
+            "files": ["test.json"],
+            "checksums": {"test.json": "wrong_checksum"},  # Wrong checksum
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("test.json", story_content)
+
+        service = BackupService(tmp_settings)
+
+        # Should succeed when skipping verification
+        new_id = service.restore_backup("bad_checksum.zip", skip_verification=True)
+        assert new_id is not None
+
+    def test_backup_includes_checksums(self, tmp_settings, monkeypatch, tmp_path):
+        """Test that created backups include checksums in metadata."""
+        stories_dir = tmp_path / "stories"
+        worlds_dir = tmp_path / "worlds"
+        backups_dir = tmp_path / "backups"
+
+        monkeypatch.setattr("src.services.backup_service.STORIES_DIR", stories_dir)
+        monkeypatch.setattr("src.services.backup_service.WORLDS_DIR", worlds_dir)
+
+        stories_dir.mkdir(parents=True)
+        worlds_dir.mkdir(parents=True)
+
+        tmp_settings.backup_folder = str(backups_dir)
+
+        # Create test project
+        project_id = "test-checksums"
+        story_data = {"id": project_id, "project_name": "Test Checksums"}
+        story_path = stories_dir / f"{project_id}.json"
+        story_path.write_text(json.dumps(story_data))
+
+        service = BackupService(tmp_settings)
+        backup_path = service.create_backup(project_id, "Test Checksums")
+
+        # Verify metadata includes checksums
+        with zipfile.ZipFile(backup_path, "r") as zf:
+            metadata = json.loads(zf.read("backup_metadata.json"))
+
+            assert "checksums" in metadata
+            assert f"{project_id}.json" in metadata["checksums"]
+            assert "backup_format_version" in metadata
+            assert metadata["backup_format_version"] == BACKUP_FORMAT_VERSION
+
+            # Verify checksum is correct
+            story_content = zf.read(f"{project_id}.json")
+            expected_checksum = hashlib.sha256(story_content).hexdigest()
+            assert metadata["checksums"][f"{project_id}.json"] == expected_checksum

@@ -1372,3 +1372,190 @@ class TestWorldDatabaseGraphEdgeCases:
         graph = db.get_graph()
         assert graph is not None
         assert char_id in graph
+
+
+class TestEntityVersioning:
+    """Tests for entity versioning functionality."""
+
+    def test_save_entity_version_on_create(self, db):
+        """Test that version is saved when entity is created."""
+        entity_id = db.add_entity("character", "Alice", "A brave warrior")
+
+        versions = db.get_entity_versions(entity_id)
+
+        assert len(versions) == 1
+        assert versions[0].change_type == "created"
+        assert versions[0].version_number == 1
+        assert versions[0].data_json["name"] == "Alice"
+
+    def test_save_entity_version_on_update(self, db):
+        """Test that version is saved when entity is updated."""
+        entity_id = db.add_entity("character", "Alice")
+
+        db.update_entity(entity_id, name="Alicia", description="Updated description")
+
+        versions = db.get_entity_versions(entity_id)
+
+        # Should have 2 versions: created + edited
+        assert len(versions) == 2
+        assert versions[0].change_type == "edited"  # Newest first
+        assert versions[0].version_number == 2
+        assert versions[0].data_json["name"] == "Alicia"
+        assert versions[1].change_type == "created"
+        assert versions[1].version_number == 1
+
+    def test_get_entity_versions_ordering(self, db):
+        """Test that versions are returned newest first."""
+        entity_id = db.add_entity("character", "Alice")
+        db.update_entity(entity_id, description="First update")
+        db.update_entity(entity_id, description="Second update")
+
+        versions = db.get_entity_versions(entity_id)
+
+        assert len(versions) == 3
+        # Newest version should be first
+        assert versions[0].version_number > versions[1].version_number
+        assert versions[1].version_number > versions[2].version_number
+
+    def test_get_entity_versions_with_limit(self, db):
+        """Test that limit parameter works."""
+        entity_id = db.add_entity("character", "Alice")
+        for i in range(5):
+            db.update_entity(entity_id, description=f"Update {i}")
+
+        versions = db.get_entity_versions(entity_id, limit=3)
+
+        assert len(versions) == 3
+        # Should return the 3 newest versions
+        assert versions[0].version_number == 6
+
+    def test_revert_entity_to_version(self, db):
+        """Test reverting entity to previous version."""
+        entity_id = db.add_entity("character", "Alice", "Original description")
+        db.update_entity(entity_id, name="Bob", description="Changed description")
+
+        # Revert to version 1
+        result = db.revert_entity_to_version(entity_id, version_number=1)
+
+        assert result is True
+
+        # Entity should have original values
+        entity = db.get_entity(entity_id)
+        assert entity.name == "Alice"
+        assert entity.description == "Original description"
+
+    def test_revert_creates_new_version(self, db):
+        """Test that revert creates a new version entry."""
+        entity_id = db.add_entity("character", "Alice")
+        db.update_entity(entity_id, name="Bob")
+
+        versions_before = db.get_entity_versions(entity_id)
+        db.revert_entity_to_version(entity_id, version_number=1)
+        versions_after = db.get_entity_versions(entity_id)
+
+        # Should have one more version after revert
+        assert len(versions_after) == len(versions_before) + 1
+        # Latest version should be 'edited' with revert reason
+        assert versions_after[0].change_type == "edited"
+        assert "Reverted to version 1" in versions_after[0].change_reason
+
+    def test_version_retention_policy(self, db):
+        """Test that old versions are deleted when limit exceeded."""
+        # Patch settings to use retention limit of 3
+        with patch("src.memory.world_database.Settings") as mock_settings:
+            mock_settings.load.return_value.entity_version_retention = 3
+
+            entity_id = db.add_entity("character", "Alice")
+            for i in range(5):
+                db.update_entity(entity_id, description=f"Update {i}")
+
+            versions = db.get_entity_versions(entity_id)
+
+            # Should only keep 3 versions
+            assert len(versions) == 3
+            # Should be the newest 3
+            assert versions[0].version_number == 6
+            assert versions[-1].version_number == 4
+
+    def test_save_version_invalid_change_type(self, db):
+        """Test that invalid change_type raises ValueError."""
+        entity_id = db.add_entity("character", "Alice")
+
+        with pytest.raises(ValueError, match="Invalid change_type"):
+            db.save_entity_version(entity_id, "invalid_type")
+
+    def test_revert_nonexistent_version(self, db):
+        """Test that reverting to nonexistent version raises ValueError."""
+        entity_id = db.add_entity("character", "Alice")
+
+        with pytest.raises(ValueError, match="Version 999 not found"):
+            db.revert_entity_to_version(entity_id, version_number=999)
+
+    def test_version_with_quality_score(self, db):
+        """Test that quality score is stored correctly."""
+        entity_id = db.add_entity("character", "Alice")
+
+        db.save_entity_version(entity_id, "refined", quality_score=8.5)
+
+        versions = db.get_entity_versions(entity_id)
+        # Get the refined version (newest)
+        refined_version = versions[0]
+        assert refined_version.change_type == "refined"
+        assert refined_version.quality_score == 8.5
+
+    def test_schema_migration_v1_to_v2(self, tmp_path):
+        """Test that migration from v1 to v2 adds entity_versions table."""
+        db_path = tmp_path / "test_migration.db"
+
+        # Create a v1 database directly
+        import sqlite3
+
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS entities (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """
+        )
+        cursor.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)")
+        cursor.execute("INSERT INTO schema_version VALUES (1)")
+        conn.commit()
+        conn.close()
+
+        # Open with WorldDatabase - should trigger migration
+        with WorldDatabase(db_path) as db:
+            # Verify entity_versions table exists by trying to use it
+            entity_id = db.add_entity("character", "Test")
+            versions = db.get_entity_versions(entity_id)
+            assert len(versions) == 1
+
+    def test_get_entity_versions_empty(self, db):
+        """Test get_entity_versions returns empty list for entity with no versions."""
+        # Nonexistent entity
+        versions = db.get_entity_versions("nonexistent-id")
+        assert versions == []
+
+    def test_version_preserves_attributes(self, db):
+        """Test that version snapshot preserves all attributes."""
+        entity_id = db.add_entity(
+            "character",
+            "Alice",
+            "Description",
+            attributes={"age": 25, "skills": ["sword", "magic"], "nested": {"key": "value"}},
+        )
+
+        versions = db.get_entity_versions(entity_id)
+        assert len(versions) == 1
+
+        data = versions[0].data_json
+        assert data["attributes"]["age"] == 25
+        assert data["attributes"]["skills"] == ["sword", "magic"]
+        assert data["attributes"]["nested"]["key"] == "value"
