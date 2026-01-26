@@ -73,19 +73,81 @@ class RefinementHistory(BaseModel):
                 return record.entity_data
         return None
 
-    def should_stop_early(self, patience: int) -> bool:
-        """Check if early stopping criteria is met.
+    def should_stop_early(
+        self,
+        patience: int,
+        min_iterations: int = 2,
+        variance_tolerance: float = 0.3,
+    ) -> bool:
+        """Check if early stopping criteria is met with enhanced checks.
+
+        The enhanced early stopping considers:
+        1. Minimum iterations before early stop can trigger
+        2. Variance tolerance - normal score variance shouldn't trigger early stop
+        3. Consecutive degradations from peak
 
         Args:
-            patience: Number of consecutive degradations to tolerate
+            patience: Number of consecutive degradations to tolerate.
+            min_iterations: Minimum iterations before early stop can trigger.
+            variance_tolerance: Score variance considered normal (won't trigger early stop).
 
         Returns:
-            True if we should stop (consecutive degradations >= patience after peak)
+            True if we should stop (degradation is real and persistent, not just variance).
         """
-        # Only trigger early stopping if:
-        # 1. We have a peak (best_iteration > 0)
-        # 2. Consecutive degradations >= patience
-        return self.best_iteration > 0 and self.consecutive_degradations >= patience
+        # Must have completed minimum iterations
+        if len(self.iterations) < min_iterations:
+            logger.debug(
+                "Early stop check: too few iterations (%d < %d)",
+                len(self.iterations),
+                min_iterations,
+            )
+            return False
+
+        # Must have a peak to degrade from
+        if self.best_iteration == 0:
+            logger.debug("Early stop check: no peak established yet")
+            return False
+
+        # Must have enough consecutive degradations
+        if self.consecutive_degradations < patience:
+            logger.debug(
+                "Early stop check: consecutive degradations (%d) below patience (%d)",
+                self.consecutive_degradations,
+                patience,
+            )
+            return False
+
+        # Check if the degradation is significant (not just variance)
+        if len(self.iterations) >= 2 and variance_tolerance > 0:
+            recent_scores = [r.average_score for r in self.iterations[-patience - 1 :]]
+            if len(recent_scores) >= 2:
+                # Calculate variance of recent scores
+                mean_score = sum(recent_scores) / len(recent_scores)
+                variance = sum((s - mean_score) ** 2 for s in recent_scores) / len(recent_scores)
+                std_dev = variance**0.5
+
+                # If degradation is within variance tolerance, it's likely just noise
+                score_drop = self.peak_score - recent_scores[-1]
+                if score_drop <= variance_tolerance and std_dev <= variance_tolerance:
+                    logger.debug(
+                        "Early stop check: degradation (%.3f) within variance tolerance (%.3f), "
+                        "std_dev=%.3f, continuing",
+                        score_drop,
+                        variance_tolerance,
+                        std_dev,
+                    )
+                    return False
+
+        logger.debug(
+            "Early stop triggered: %d consecutive degradations (patience=%d), "
+            "peak=%.2f at iteration %d, current=%.2f",
+            self.consecutive_degradations,
+            patience,
+            self.peak_score,
+            self.best_iteration,
+            self.iterations[-1].average_score if self.iterations else 0,
+        )
+        return True
 
     def analyze_improvement(self) -> dict[str, Any]:
         """Analyze whether iterations improved quality."""
@@ -407,6 +469,92 @@ class RefinementConfig(BaseModel):
         description="Stop after N consecutive score degradations after peak",
     )
 
+    # Dynamic temperature settings
+    refinement_temp_start: float = Field(
+        default=0.7, ge=0.0, le=2.0, description="Starting refinement temperature"
+    )
+    refinement_temp_end: float = Field(
+        default=0.35, ge=0.0, le=2.0, description="Ending refinement temperature"
+    )
+    refinement_temp_decay: Literal["linear", "exponential", "step"] = Field(
+        default="linear", description="Temperature decay curve type"
+    )
+
+    # Enhanced early stopping settings
+    early_stopping_min_iterations: int = Field(
+        default=2, ge=1, le=10, description="Minimum iterations before early stop can trigger"
+    )
+    early_stopping_variance_tolerance: float = Field(
+        default=0.3, ge=0.0, le=2.0, description="Score variance tolerance for early stopping"
+    )
+
+    def get_refinement_temperature(
+        self, iteration: int, max_iterations: int | None = None
+    ) -> float:
+        """Calculate the refinement temperature for a given iteration.
+
+        Implements temperature decay to reduce variance as refinement progresses:
+        - High temperature early encourages exploration
+        - Low temperature later encourages refinement stability
+
+        Args:
+            iteration: Current iteration number (1-indexed).
+            max_iterations: Total iterations (uses self.max_iterations if None).
+
+        Returns:
+            Temperature value for this iteration.
+        """
+        # Use explicit None check to avoid treating 0 as "unset"
+        if max_iterations is None:
+            max_iter = self.max_iterations
+        else:
+            max_iter = max_iterations
+
+        # First iteration uses start temperature
+        if iteration <= 1:
+            return self.refinement_temp_start
+
+        # Guard against max_iter <= 1 to avoid division by zero
+        if max_iter <= 1:
+            return self.refinement_temp_end
+
+        # Last iteration uses end temperature
+        if iteration >= max_iter:
+            return self.refinement_temp_end
+
+        # Calculate progress (0.0 to 1.0)
+        progress = (iteration - 1) / (max_iter - 1)
+
+        # Apply decay curve
+        if self.refinement_temp_decay == "linear":
+            # Linear interpolation
+            temp = self.refinement_temp_start + progress * (
+                self.refinement_temp_end - self.refinement_temp_start
+            )
+        elif self.refinement_temp_decay == "exponential":
+            # Exponential decay (faster initial drop, then gradual)
+            # Using 1 - (1 - progress)^2 gives faster temperature reduction early
+            decay_factor = 1 - (1 - progress) ** 2
+            temp = self.refinement_temp_start + decay_factor * (
+                self.refinement_temp_end - self.refinement_temp_start
+            )
+        else:
+            # Step function - drop at midpoint (only remaining option)
+            if progress < 0.5:
+                temp = self.refinement_temp_start
+            else:
+                temp = self.refinement_temp_end
+
+        logger.debug(
+            "Dynamic temperature for iteration %d/%d: %.3f (decay=%s, progress=%.2f)",
+            iteration,
+            max_iter,
+            temp,
+            self.refinement_temp_decay,
+            progress,
+        )
+        return temp
+
     @classmethod
     def from_settings(cls, settings: Any) -> RefinementConfig:
         """
@@ -420,6 +568,11 @@ class RefinementConfig(BaseModel):
                 - world_quality_judge_temp
                 - world_quality_refinement_temp
                 - world_quality_early_stopping_patience
+                - world_quality_refinement_temp_start
+                - world_quality_refinement_temp_end
+                - world_quality_refinement_temp_decay
+                - world_quality_early_stopping_min_iterations
+                - world_quality_early_stopping_variance_tolerance
 
         Returns:
             RefinementConfig: Configuration populated from the corresponding settings attributes.
@@ -434,6 +587,11 @@ class RefinementConfig(BaseModel):
             judge_temperature=settings.world_quality_judge_temp,
             refinement_temperature=settings.world_quality_refinement_temp,
             early_stopping_patience=settings.world_quality_early_stopping_patience,
+            refinement_temp_start=settings.world_quality_refinement_temp_start,
+            refinement_temp_end=settings.world_quality_refinement_temp_end,
+            refinement_temp_decay=settings.world_quality_refinement_temp_decay,
+            early_stopping_min_iterations=settings.world_quality_early_stopping_min_iterations,
+            early_stopping_variance_tolerance=settings.world_quality_early_stopping_variance_tolerance,
         )
 
 

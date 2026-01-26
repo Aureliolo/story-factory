@@ -703,3 +703,286 @@ class TestConceptGenerationEarlyStopping:
         # Returns best iteration number (1) and best scores (8.0)
         assert iterations == 1
         assert final_scores.average == 8.0
+
+
+class TestEnhancedEarlyStopping:
+    """Tests for enhanced early stopping with variance tolerance."""
+
+    def test_should_stop_early_with_variance_tolerance(self):
+        """Test that variance tolerance prevents stopping on noisy degradations."""
+        history = RefinementHistory(entity_type="faction", entity_name="Test")
+
+        # Add iterations with small variance in scores
+        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
+        history.add_iteration(2, {"name": "Test"}, {"score": 7.9}, 7.9)  # -0.1
+        history.add_iteration(3, {"name": "Test"}, {"score": 7.8}, 7.8)  # -0.1
+
+        # Without variance tolerance, this would trigger early stop (patience=2)
+        assert history.consecutive_degradations == 2
+
+        # With high variance tolerance, small drops are considered noise
+        should_stop = history.should_stop_early(
+            patience=2,
+            min_iterations=2,  # We're past min_iterations
+            variance_tolerance=0.5,  # High tolerance for noise
+        )
+        # Score drop is 0.2, variance is low, should NOT stop
+        assert should_stop is False
+
+    def test_should_stop_early_respects_min_iterations(self):
+        """Test that should_stop_early respects min_iterations parameter."""
+        history = RefinementHistory(entity_type="faction", entity_name="Test")
+
+        # Add degrading iterations
+        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
+        history.add_iteration(2, {"name": "Test"}, {"score": 7.0}, 7.0)
+        history.add_iteration(3, {"name": "Test"}, {"score": 6.0}, 6.0)
+
+        # With min_iterations=4, should not stop even with 2 degradations
+        should_stop = history.should_stop_early(
+            patience=2,
+            min_iterations=4,
+        )
+        # Only 3 iterations run, min is 4, so should NOT stop
+        assert should_stop is False
+
+    def test_should_stop_early_large_degradation_ignores_variance(self):
+        """Test that large degradations trigger early stop despite variance tolerance."""
+        history = RefinementHistory(entity_type="faction", entity_name="Test")
+
+        # Add iterations with large score drops
+        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
+        history.add_iteration(2, {"name": "Test"}, {"score": 6.5}, 6.5)  # -1.5
+        history.add_iteration(3, {"name": "Test"}, {"score": 5.0}, 5.0)  # -1.5
+
+        assert history.consecutive_degradations == 2
+
+        # Even with variance tolerance, large drops should trigger early stop
+        should_stop = history.should_stop_early(
+            patience=2,
+            min_iterations=2,
+            variance_tolerance=0.5,  # Tolerance is smaller than drops
+        )
+        # Score drop (3.0) exceeds variance tolerance, should stop
+        assert should_stop is True
+
+
+class TestDynamicTemperature:
+    """Tests for dynamic temperature adjustment during refinement."""
+
+    def test_first_iteration_uses_start_temperature(self):
+        """Test that first iteration always uses start temperature."""
+        config = RefinementConfig(
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.3,
+            refinement_temp_decay="linear",
+        )
+
+        temp = config.get_refinement_temperature(iteration=1, max_iterations=5)
+        assert temp == 0.8
+
+    def test_last_iteration_uses_end_temperature(self):
+        """Test that last iteration always uses end temperature."""
+        config = RefinementConfig(
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.3,
+            refinement_temp_decay="linear",
+        )
+
+        temp = config.get_refinement_temperature(iteration=5, max_iterations=5)
+        assert temp == 0.3
+
+    def test_linear_decay_midpoint(self):
+        """Test linear decay gives expected midpoint temperature."""
+        config = RefinementConfig(
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.4,
+            refinement_temp_decay="linear",
+        )
+
+        # Iteration 3 of 5: progress = (3-1)/(5-1) = 0.5
+        # Expected: 0.8 + 0.5 * (0.4 - 0.8) = 0.8 - 0.2 = 0.6
+        temp = config.get_refinement_temperature(iteration=3, max_iterations=5)
+        assert temp == pytest.approx(0.6)
+
+    def test_exponential_decay(self):
+        """Test exponential decay drops faster initially than linear."""
+        config = RefinementConfig(
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.3,
+            refinement_temp_decay="exponential",
+        )
+
+        # Exponential decay uses 1 - (1 - progress)^2 for faster initial drop
+        # Iteration 3 of 5: progress = 0.5, decay_factor = 1 - (1-0.5)^2 = 0.75
+        # Expected: 0.8 + 0.75 * (0.3 - 0.8) = 0.8 - 0.375 = 0.425
+        temp = config.get_refinement_temperature(iteration=3, max_iterations=5)
+        assert temp == pytest.approx(0.425)
+
+    def test_step_decay_before_midpoint(self):
+        """Test step decay stays at start temp before midpoint."""
+        config = RefinementConfig(
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.3,
+            refinement_temp_decay="step",
+        )
+
+        # Iteration 2 of 5: progress = 0.25 < 0.5, use start temp
+        temp = config.get_refinement_temperature(iteration=2, max_iterations=5)
+        assert temp == 0.8
+
+    def test_step_decay_after_midpoint(self):
+        """Test step decay drops to end temp after midpoint."""
+        config = RefinementConfig(
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.3,
+            refinement_temp_decay="step",
+        )
+
+        # Iteration 4 of 5: progress = 0.75 >= 0.5, use end temp
+        temp = config.get_refinement_temperature(iteration=4, max_iterations=5)
+        assert temp == 0.3
+
+    def test_get_refinement_temperature_uses_config_max_iterations(self):
+        """Test that max_iterations defaults to config value."""
+        config = RefinementConfig(
+            max_iterations=3,
+            refinement_temp_start=0.9,
+            refinement_temp_end=0.4,
+            refinement_temp_decay="linear",
+        )
+
+        # Should use config.max_iterations (3) when not specified
+        temp = config.get_refinement_temperature(iteration=2)
+        # progress = (2-1)/(3-1) = 0.5, temp = 0.9 + 0.5*(0.4-0.9) = 0.65
+        assert temp == pytest.approx(0.65)
+
+    def test_get_refinement_temperature_handles_max_iterations_one(self):
+        """Test that max_iterations=1 with iteration>1 returns end temperature.
+
+        This guards against division by zero when max_iterations=1 but
+        an iteration > 1 is somehow passed (defensive coding).
+        """
+        config = RefinementConfig(
+            max_iterations=1,
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.3,
+            refinement_temp_decay="linear",
+        )
+
+        # Unusual case: iteration > 1 with max_iterations=1
+        # The guard prevents division by zero: progress = (iter-1)/(max_iter-1)
+        temp = config.get_refinement_temperature(iteration=2, max_iterations=1)
+        assert temp == 0.3
+
+
+class TestLocationQualityScoresWeakDimensions:
+    """Tests for LocationQualityScores.weak_dimensions edge cases."""
+
+    def test_weak_dimensions_identifies_atmosphere(self):
+        """Test weak_dimensions identifies low atmosphere."""
+        scores = LocationQualityScores(
+            atmosphere=5.0, significance=8.0, story_relevance=8.0, distinctiveness=8.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "atmosphere" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_significance(self):
+        """Test weak_dimensions identifies low significance."""
+        scores = LocationQualityScores(
+            atmosphere=8.0, significance=5.0, story_relevance=8.0, distinctiveness=8.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "significance" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_story_relevance(self):
+        """Test weak_dimensions identifies low story_relevance."""
+        scores = LocationQualityScores(
+            atmosphere=8.0, significance=8.0, story_relevance=5.0, distinctiveness=8.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "story_relevance" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_distinctiveness(self):
+        """Test weak_dimensions identifies low distinctiveness."""
+        scores = LocationQualityScores(
+            atmosphere=8.0, significance=8.0, story_relevance=8.0, distinctiveness=5.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "distinctiveness" in weak
+        assert len(weak) == 1
+
+
+class TestItemQualityScoresWeakDimensions:
+    """Tests for ItemQualityScores.weak_dimensions edge cases."""
+
+    def test_weak_dimensions_identifies_significance(self):
+        """Test weak_dimensions identifies low significance."""
+        scores = ItemQualityScores(
+            significance=5.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "significance" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_uniqueness(self):
+        """Test weak_dimensions identifies low uniqueness."""
+        scores = ItemQualityScores(
+            significance=8.0, uniqueness=5.0, narrative_potential=8.0, integration=8.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "uniqueness" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_narrative_potential(self):
+        """Test weak_dimensions identifies low narrative_potential."""
+        scores = ItemQualityScores(
+            significance=8.0, uniqueness=8.0, narrative_potential=5.0, integration=8.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "narrative_potential" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_integration(self):
+        """Test weak_dimensions identifies low integration."""
+        scores = ItemQualityScores(
+            significance=8.0, uniqueness=8.0, narrative_potential=8.0, integration=5.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "integration" in weak
+        assert len(weak) == 1
+
+
+class TestConceptQualityScoresWeakDimensions:
+    """Tests for ConceptQualityScores.weak_dimensions edge cases."""
+
+    def test_weak_dimensions_identifies_relevance(self):
+        """Test weak_dimensions identifies low relevance."""
+        scores = ConceptQualityScores(relevance=5.0, depth=8.0, manifestation=8.0, resonance=8.0)
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "relevance" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_depth(self):
+        """Test weak_dimensions identifies low depth."""
+        scores = ConceptQualityScores(relevance=8.0, depth=5.0, manifestation=8.0, resonance=8.0)
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "depth" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_manifestation(self):
+        """Test weak_dimensions identifies low manifestation."""
+        scores = ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=5.0, resonance=8.0)
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "manifestation" in weak
+        assert len(weak) == 1
+
+    def test_weak_dimensions_identifies_resonance(self):
+        """Test weak_dimensions identifies low resonance."""
+        scores = ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=5.0)
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "resonance" in weak
+        assert len(weak) == 1

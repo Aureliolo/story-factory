@@ -5,7 +5,8 @@ Exception Hierarchy:
     StoryFactoryError (base for all application errors)
     ├── LLMError (LLM/Ollama related errors)
     │   ├── LLMConnectionError (connection failures)
-    │   └── LLMGenerationError (generation failures after retries)
+    │   ├── LLMGenerationError (generation failures after retries)
+    │   └── CircuitOpenError (circuit breaker blocking requests)
     ├── ValidationError (validation failures)
     │   └── ResponseValidationError (AI response validation)
     ├── ConfigError (configuration parsing/validation failures)
@@ -27,6 +28,10 @@ Usage:
     except LLMError:
         logger.error("LLM operation failed")
 """
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class StoryFactoryError(Exception):
@@ -67,6 +72,34 @@ class LLMGenerationError(LLMError):
     """
 
     pass
+
+
+class CircuitOpenError(LLMError):
+    """Raised when the circuit breaker is open and blocking requests.
+
+    This indicates too many consecutive LLM failures have occurred,
+    and requests are being blocked to prevent cascading failures.
+    The circuit will automatically transition to half-open state
+    after the configured timeout to test if the service has recovered.
+
+    Attributes:
+        time_until_retry: Seconds until the circuit may allow requests.
+    """
+
+    def __init__(self, message: str, time_until_retry: float | None = None):
+        """Initialize CircuitOpenError with timing information.
+
+        Args:
+            message: Human-readable error message.
+            time_until_retry: Seconds until circuit may transition to half-open.
+        """
+        super().__init__(message)
+        self.time_until_retry = time_until_retry
+        logger.debug(
+            "CircuitOpenError initialized: message=%s, time_until_retry=%s",
+            message,
+            time_until_retry,
+        )
 
 
 class ValidationError(StoryFactoryError):

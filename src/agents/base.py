@@ -13,8 +13,9 @@ from pydantic import BaseModel
 
 from src.memory.cost_models import GenerationMetrics
 from src.settings import ModelInfo, Settings, get_model_info
+from src.utils.circuit_breaker import get_circuit_breaker
 from src.utils.error_handling import handle_ollama_errors
-from src.utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
+from src.utils.exceptions import CircuitOpenError, LLMConnectionError, LLMError, LLMGenerationError
 from src.utils.json_parser import clean_llm_text
 from src.utils.logging_config import log_performance
 from src.utils.prompt_registry import PromptRegistry
@@ -53,7 +54,7 @@ def _get_llm_semaphore(settings: Settings) -> threading.Semaphore:
 
 
 # Re-export exceptions for backward compatibility
-__all__ = ["BaseAgent", "LLMConnectionError", "LLMError", "LLMGenerationError"]
+__all__ = ["BaseAgent", "CircuitOpenError", "LLMConnectionError", "LLMError", "LLMGenerationError"]
 
 # Class-level singleton for prompt registry
 _prompt_registry: PromptRegistry | None = None
@@ -200,9 +201,31 @@ class BaseAgent:
             Instance of response_model with validated data.
 
         Raises:
+            CircuitOpenError: If the circuit breaker is open.
             LLMGenerationError: If generation fails after all retries.
         """
         validate_not_empty(prompt, "prompt")
+
+        # Check circuit breaker before proceeding
+        circuit_breaker = get_circuit_breaker(
+            failure_threshold=self.settings.circuit_breaker_failure_threshold,
+            success_threshold=self.settings.circuit_breaker_success_threshold,
+            timeout_seconds=self.settings.circuit_breaker_timeout,
+            enabled=self.settings.circuit_breaker_enabled,
+        )
+        if not circuit_breaker.allow_request():
+            status = circuit_breaker.get_status()
+            time_until_retry = status.get("time_until_half_open", 0)
+            logger.warning(
+                "%s: Circuit breaker open; refusing LLM call for %.0fs",
+                self.name,
+                time_until_retry,
+            )
+            raise CircuitOpenError(
+                f"Circuit breaker is open. Too many LLM failures. "
+                f"Will retry in {time_until_retry:.0f}s.",
+                time_until_retry=time_until_retry,
+            )
 
         # Build messages
         use_model = self.model
@@ -259,10 +282,12 @@ class BaseAgent:
                         f"{self.name}: Structured output received "
                         f"({response_model.__name__}, {duration:.2f}s)"
                     )
+                    circuit_breaker.record_success()
                     return result
 
                 except Exception as e:
                     logger.error(f"{self.name}: Structured generation failed: {e}")
+                    circuit_breaker.record_failure(e)
                     raise LLMGenerationError(
                         f"Structured generation failed for {response_model.__name__}: {e}"
                     ) from e
@@ -329,6 +354,9 @@ class BaseAgent:
 
         Retries on transient connection/timeouts, enforces a minimum cleaned response length, and records token/time metrics for the last generation.
 
+        Uses a semaphore to limit concurrent LLM requests and prevent overloading
+        the Ollama server. Also uses a circuit breaker to protect against cascading failures.
+
         Parameters:
             prompt (str): The prompt to send to the LLM.
             context (str | None): Optional additional context to include in the system messages.
@@ -340,9 +368,31 @@ class BaseAgent:
             str: The raw text content returned by the LLM.
 
         Raises:
+            CircuitOpenError: If the circuit breaker is open.
             LLMGenerationError: If generation fails due to model errors or after exhausting retries for transient errors or consistently too-short responses.
         """
         validate_not_empty(prompt, "prompt")
+
+        # Check circuit breaker before proceeding
+        circuit_breaker = get_circuit_breaker(
+            failure_threshold=self.settings.circuit_breaker_failure_threshold,
+            success_threshold=self.settings.circuit_breaker_success_threshold,
+            timeout_seconds=self.settings.circuit_breaker_timeout,
+            enabled=self.settings.circuit_breaker_enabled,
+        )
+        if not circuit_breaker.allow_request():
+            status = circuit_breaker.get_status()
+            time_until_retry = status.get("time_until_half_open", 0)
+            logger.warning(
+                "%s: Circuit breaker open; refusing LLM call for %.0fs",
+                self.name,
+                time_until_retry,
+            )
+            raise CircuitOpenError(
+                f"Circuit breaker is open. Too many LLM failures. "
+                f"Will retry in {time_until_retry:.0f}s.",
+                time_until_retry=time_until_retry,
+            )
 
         # Add /no_think prefix for Qwen models to disable thinking mode
         # This prevents models from outputting <think>...</think> tags instead of actual content
@@ -431,12 +481,16 @@ class BaseAgent:
                                     f"({len(cleaned_content)} chars < {use_min_length})"
                                 )
                                 logger.error(error_msg)
+                                circuit_breaker.record_failure(LLMGenerationError(error_msg))
                                 raise LLMGenerationError(error_msg)
 
+                        # Success - record it and return
+                        circuit_breaker.record_success()
                         return content
 
                     except ConnectionError as e:
                         last_error = e
+                        circuit_breaker.record_failure(e)
                         logger.warning(
                             f"{self.name}: Connection error on attempt {attempt + 1}: {e}"
                         )
@@ -448,10 +502,12 @@ class BaseAgent:
                     except ollama.ResponseError as e:
                         # Model-specific errors (model not found, etc.) - don't retry
                         logger.error(f"{self.name}: Ollama response error: {e}")
+                        circuit_breaker.record_failure(e)
                         raise LLMGenerationError(f"Model error: {e}") from e
 
                     except TimeoutError as e:
                         last_error = e
+                        circuit_breaker.record_failure(e)
                         logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
                         if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")

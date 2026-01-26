@@ -1,6 +1,6 @@
 """Unit tests for custom exceptions in exceptions.py."""
 
-from src.utils.exceptions import DuplicateNameError, EmptyGenerationError
+from src.utils.exceptions import CircuitOpenError, DuplicateNameError, EmptyGenerationError
 
 
 class TestEmptyGenerationError:
@@ -48,3 +48,22 @@ class TestDuplicateNameError:
         assert error.generated_name == "Shadow Council"
         assert error.existing_name is None
         assert error.reason == "substring"
+
+
+class TestCircuitOpenError:
+    """Tests for CircuitOpenError exception."""
+
+    def test_circuit_open_error_with_retry_time(self) -> None:
+        """Test CircuitOpenError stores time_until_retry."""
+        error = CircuitOpenError(
+            message="Circuit breaker is open",
+            time_until_retry=30.5,
+        )
+        assert str(error) == "Circuit breaker is open"
+        assert error.time_until_retry == 30.5
+
+    def test_circuit_open_error_without_retry_time(self) -> None:
+        """Test CircuitOpenError with default None time_until_retry."""
+        error = CircuitOpenError("Circuit is open")
+        assert str(error) == "Circuit is open"
+        assert error.time_until_retry is None

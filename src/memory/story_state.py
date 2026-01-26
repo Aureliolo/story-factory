@@ -80,6 +80,52 @@ class Faction(BaseModel):
     base_location: str = Field(default="", description="Headquarters or territory location")
 
 
+class Item(BaseModel):
+    """A significant item or object in the story world."""
+
+    name: str = Field(description="Name of the item")
+    type: str = Field(default="item", description="Entity type (always 'item')")
+    description: str = Field(description="Physical description and history of the item")
+    significance: str = Field(default="", description="Why this item matters to the story")
+    properties: list[str] = Field(
+        default_factory=list, description="Special properties or abilities"
+    )
+
+
+class Concept(BaseModel):
+    """A thematic concept or idea in the story world."""
+
+    name: str = Field(description="Name of the concept")
+    type: str = Field(default="concept", description="Entity type (always 'concept')")
+    description: str = Field(description="What this concept means in the story context")
+    manifestations: str = Field(
+        default="", description="How this concept appears through events, characters, or symbols"
+    )
+
+
+class Location(BaseModel):
+    """A location in the story world."""
+
+    name: str = Field(description="Name of the location")
+    type: str = Field(default="location", description="Entity type (always 'location')")
+    description: str = Field(description="Detailed description with sensory details")
+    significance: str = Field(default="", description="Why this place matters to the story")
+
+
+class Relationship(BaseModel):
+    """A relationship between two entities in the story world."""
+
+    source: str = Field(description="Name of the source entity")
+    target: str = Field(description="Name of the target entity")
+    relation_type: str = Field(
+        description="Type of relationship (e.g., knows, loves, hates, allies_with, "
+        "enemies_with, located_in, owns, member_of)"
+    )
+    description: str = Field(
+        description="Description of the relationship with history and dynamics"
+    )
+
+
 class PlotPoint(BaseModel):
     """A key plot point in the story."""
 
