@@ -3787,3 +3787,354 @@ Return a JSON object with:
         except Exception as e:
             logger.exception(f"Failed to regenerate entity {entity.name}: {e}")
             return None
+
+    # ========== RELATIONSHIP SUGGESTIONS ==========
+
+    async def suggest_relationships_for_entity(
+        self,
+        entity: Entity,
+        available_entities: list[Entity],
+        existing_relationships: list[dict[str, str]],
+        story_brief: StoryBrief,
+        num_suggestions: int = 3,
+    ) -> list[dict[str, Any]]:
+        """Suggest meaningful relationships for an entity based on narrative context.
+
+        Uses LLM to propose relationships based on entity descriptions,
+        story context, and existing world structure.
+
+        Args:
+            entity: The entity to suggest relationships for.
+            available_entities: Other entities that could be relationship targets.
+            existing_relationships: List of existing relationships (as dicts with
+                source_name, target_name, relation_type).
+            story_brief: Story brief for context.
+            num_suggestions: Number of suggestions to generate.
+
+        Returns:
+            List of relationship suggestion dicts with keys:
+            - target_entity_name: Name of suggested target
+            - target_entity_id: ID of suggested target
+            - relation_type: Type of relationship
+            - description: Relationship description
+            - confidence: Confidence score (0.0-1.0)
+            - bidirectional: Whether relationship is bidirectional
+        """
+        logger.info(f"Suggesting relationships for entity: {entity.name}")
+
+        # Filter out the entity itself from available entities
+        targets = [e for e in available_entities if e.id != entity.id]
+        if not targets:
+            logger.debug("No available target entities for relationship suggestions")
+            return []
+
+        # Get relationship minimums from settings
+        entity_type = entity.type.lower()
+        entity_role = (entity.attributes or {}).get("role", "default")
+        minimums = self.settings.relationship_minimums.get(entity_type, {})
+        min_rels = minimums.get(entity_role, minimums.get("default", 2))
+
+        # Build prompt
+        entities_context = "\n".join(
+            f"- {e.name} ({e.type}): {e.description[:100]}..."
+            for e in targets[:20]  # Limit to avoid context overflow
+        )
+
+        existing_rels_context = "\n".join(
+            f"- {r.get('relation_type', 'unknown')}: {r.get('source_name')} -> {r.get('target_name')}"
+            for r in existing_relationships[:15]
+        )
+
+        prompt = f"""Suggest meaningful relationships for this entity.
+
+TARGET ENTITY:
+Name: {entity.name}
+Type: {entity.type}
+Description: {entity.description}
+
+AVAILABLE ENTITIES FOR RELATIONSHIPS:
+{entities_context}
+
+{"EXISTING RELATIONSHIPS (avoid duplicates):" + chr(10) + existing_rels_context if existing_relationships else ""}
+
+STORY CONTEXT:
+- Premise: {story_brief.premise[:100] if story_brief else "Unknown"}...
+- Genre: {story_brief.genre if story_brief else "Unknown"}
+- Themes: {story_brief.themes if story_brief else "Unknown"}
+
+Suggest {num_suggestions} new relationships for "{entity.name}".
+Consider: allies, rivals, family, romance, professional ties, hidden connections.
+Minimum recommended relationships for {entity_type}/{entity_role}: {min_rels}
+
+Return JSON:
+{{
+    "suggestions": [
+        {{
+            "target_entity_name": "...",
+            "relation_type": "...",
+            "description": "...",
+            "confidence": 0.85,
+            "bidirectional": true
+        }}
+    ]
+}}"""
+
+        try:
+            model_id = self._get_creator_model(entity_type="relationship")
+            config = RefinementConfig.from_settings(self.settings)
+
+            response = await asyncio.to_thread(
+                self.client.generate,
+                model=model_id,
+                prompt=prompt,
+                options={
+                    "temperature": config.creator_temperature,
+                    "num_predict": 1024,
+                },
+            )
+
+            response_text = str(response.get("response", ""))
+            if not response_text:
+                logger.warning(f"Empty response for relationship suggestions for {entity.name}")
+                return []
+
+            result = extract_json(response_text)
+            if not result or not isinstance(result, dict):
+                logger.warning(f"Failed to parse relationship suggestions for {entity.name}")
+                return []
+
+            suggestions = result.get("suggestions", [])
+
+            # Enrich suggestions with target entity IDs
+            enriched_suggestions = []
+            for suggestion in suggestions:
+                target_name = suggestion.get("target_entity_name", "")
+                # Find matching target entity
+                target_entity = next(
+                    (e for e in targets if e.name.lower() == target_name.lower()),
+                    None,
+                )
+                if target_entity:
+                    enriched_suggestions.append(
+                        {
+                            "source_entity_id": entity.id,
+                            "source_entity_name": entity.name,
+                            "target_entity_id": target_entity.id,
+                            "target_entity_name": target_entity.name,
+                            "relation_type": suggestion.get("relation_type", "related_to"),
+                            "description": suggestion.get("description", ""),
+                            "confidence": suggestion.get("confidence", 0.5),
+                            "bidirectional": suggestion.get("bidirectional", False),
+                        }
+                    )
+
+            logger.info(
+                f"Generated {len(enriched_suggestions)} relationship suggestions for {entity.name}"
+            )
+            return enriched_suggestions
+
+        except Exception as e:
+            logger.exception(f"Failed to suggest relationships for {entity.name}: {e}")
+            return []
+
+    # ========== CONTRADICTION DETECTION ==========
+
+    async def extract_entity_claims(
+        self,
+        entity: Entity,
+    ) -> list[dict[str, str]]:
+        """Extract factual claims from an entity's description and attributes.
+
+        Args:
+            entity: Entity to extract claims from.
+
+        Returns:
+            List of claim dicts with keys: entity_id, entity_name, entity_type, claim, source_text.
+        """
+        logger.debug(f"Extracting claims from entity: {entity.name}")
+
+        prompt = f"""Extract key factual claims from this entity.
+
+ENTITY:
+Name: {entity.name}
+Type: {entity.type}
+Description: {entity.description}
+Attributes: {entity.attributes}
+
+Extract 3-5 factual claims about this entity (things that must be true about them).
+Focus on: identity, relationships, abilities, history, location, appearance.
+
+Return JSON:
+{{
+    "claims": [
+        "Claim 1 (e.g., 'Character X is the king of Y')",
+        "Claim 2 (e.g., 'Character X has blue eyes')",
+        "Claim 3"
+    ]
+}}"""
+
+        try:
+            model_id = self._get_judge_model(entity_type=entity.type.lower())
+
+            response = await asyncio.to_thread(
+                self.client.generate,
+                model=model_id,
+                prompt=prompt,
+                options={
+                    "temperature": 0.1,
+                    "num_predict": 512,
+                },
+            )
+
+            response_text = str(response.get("response", ""))
+            result = extract_json(response_text)
+
+            if not result or not isinstance(result, dict):
+                return []
+
+            claims_list = result.get("claims", [])
+            return [
+                {
+                    "entity_id": entity.id,
+                    "entity_name": entity.name,
+                    "entity_type": entity.type,
+                    "claim": claim,
+                    "source_text": entity.description[:200],
+                }
+                for claim in claims_list
+                if isinstance(claim, str)
+            ]
+
+        except Exception as e:
+            logger.exception(f"Failed to extract claims from {entity.name}: {e}")
+            return []
+
+    async def check_contradiction(
+        self,
+        claim_a: dict[str, str],
+        claim_b: dict[str, str],
+    ) -> dict[str, Any] | None:
+        """Check if two claims contradict each other.
+
+        Args:
+            claim_a: First claim dict.
+            claim_b: Second claim dict.
+
+        Returns:
+            Contradiction dict if found, None otherwise.
+        """
+        prompt = f"""Analyze whether these two claims contradict each other.
+
+CLAIM A:
+Entity: {claim_a.get("entity_name")} ({claim_a.get("entity_type")})
+Claim: {claim_a.get("claim")}
+
+CLAIM B:
+Entity: {claim_b.get("entity_name")} ({claim_b.get("entity_type")})
+Claim: {claim_b.get("claim")}
+
+Analyze for contradictions considering:
+1. Direct logical contradictions
+2. Temporal inconsistencies
+3. Character/attribute conflicts
+4. Location/geography conflicts
+5. Relationship contradictions
+
+Return JSON:
+{{
+    "is_contradiction": true/false,
+    "severity": "low" | "medium" | "high" | "critical",
+    "explanation": "Why these claims do or don't contradict",
+    "resolution_suggestion": "How to resolve if contradictory",
+    "confidence": 0.0-1.0
+}}"""
+
+        try:
+            model_id = self._get_judge_model(entity_type="validator")
+
+            response = await asyncio.to_thread(
+                self.client.generate,
+                model=model_id,
+                prompt=prompt,
+                options={
+                    "temperature": 0.1,
+                    "num_predict": 512,
+                },
+            )
+
+            response_text = str(response.get("response", ""))
+            result = extract_json(response_text)
+
+            if not result or not isinstance(result, dict):
+                return None
+
+            if result.get("is_contradiction", False):
+                return {
+                    "claim_a": claim_a,
+                    "claim_b": claim_b,
+                    "severity": result.get("severity", "medium"),
+                    "explanation": result.get("explanation", ""),
+                    "resolution_suggestion": result.get("resolution_suggestion", ""),
+                    "confidence": result.get("confidence", 0.5),
+                }
+
+            return None
+
+        except Exception as e:
+            logger.exception("Failed to check contradiction: %s", e)
+            return None
+
+    async def validate_entity_consistency(
+        self,
+        entities: list[Entity],
+        max_comparisons: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Validate consistency across entities by detecting contradictions.
+
+        Extracts claims from each entity and cross-references them pairwise
+        to detect contradictions.
+
+        Args:
+            entities: List of entities to validate.
+            max_comparisons: Maximum number of claim pairs to compare (for performance).
+
+        Returns:
+            List of detected contradictions.
+        """
+        logger.info(f"Validating consistency across {len(entities)} entities")
+
+        # Extract claims from all entities
+        all_claims: list[dict[str, str]] = []
+        for entity in entities:
+            claims = await self.extract_entity_claims(entity)
+            all_claims.extend(claims)
+
+        logger.debug(f"Extracted {len(all_claims)} claims from {len(entities)} entities")
+
+        if len(all_claims) < 2:
+            return []
+
+        # Compare claims pairwise (with limit for performance)
+        contradictions: list[dict[str, Any]] = []
+        comparisons_made = 0
+
+        for i, claim_a in enumerate(all_claims):
+            for claim_b in all_claims[i + 1 :]:
+                if comparisons_made >= max_comparisons:
+                    break
+
+                # Skip comparing claims from the same entity
+                if claim_a.get("entity_id") == claim_b.get("entity_id"):
+                    continue
+
+                contradiction = await self.check_contradiction(claim_a, claim_b)
+                if contradiction:
+                    contradictions.append(contradiction)
+
+                comparisons_made += 1
+
+            if comparisons_made >= max_comparisons:
+                break
+
+        logger.info(f"Found {len(contradictions)} contradictions in {comparisons_made} comparisons")
+        return contradictions

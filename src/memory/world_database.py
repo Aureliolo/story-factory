@@ -13,6 +13,7 @@ import networkx as nx
 from networkx import DiGraph
 
 from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
+from src.utils.exceptions import RelationshipValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -980,6 +981,7 @@ class WorldDatabase:
         strength: float = 1.0,
         bidirectional: bool = False,
         attributes: dict[str, Any] | None = None,
+        validate: bool = True,
     ) -> str:
         """Add a relationship between two entities.
 
@@ -991,16 +993,59 @@ class WorldDatabase:
             strength: Relationship strength (0.0-1.0)
             bidirectional: Whether relationship goes both ways
             attributes: Additional attributes
+            validate: Whether to validate source/target entities exist (default True)
 
         Returns:
             Relationship ID
+
+        Raises:
+            RelationshipValidationError: If validation is enabled and:
+                - source_id or target_id does not exist
+                - source_id equals target_id (self-loop)
         """
         logger.debug(
-            "add_relationship called: source=%s, target=%s, type=%s",
+            "add_relationship called: source=%s, target=%s, type=%s, validate=%s",
             source_id,
             target_id,
             relation_type,
+            validate,
         )
+
+        # Validation logic
+        if validate:
+            # Check for self-loop
+            if source_id == target_id:
+                raise RelationshipValidationError(
+                    f"Cannot create self-referential relationship: entity {source_id} cannot "
+                    f"have a relationship with itself",
+                    source_id=source_id,
+                    target_id=target_id,
+                    reason="self_loop",
+                    suggestions=["Choose a different target entity"],
+                )
+
+            # Check source entity exists
+            source_entity = self.get_entity(source_id)
+            if source_entity is None:
+                raise RelationshipValidationError(
+                    f"Source entity with ID '{source_id}' does not exist",
+                    source_id=source_id,
+                    target_id=target_id,
+                    reason="source_not_found",
+                    suggestions=["Verify the source entity ID is correct"],
+                )
+
+            # Check target entity exists
+            target_entity = self.get_entity(target_id)
+            if target_entity is None:
+                raise RelationshipValidationError(
+                    f"Target entity with ID '{target_id}' does not exist",
+                    source_id=source_id,
+                    target_id=target_id,
+                    reason="target_not_found",
+                    suggestions=["Verify the target entity ID is correct"],
+                )
+
         rel_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
         attrs_json = json.dumps(attributes or {})
@@ -1701,6 +1746,131 @@ class WorldDatabase:
             if entity:
                 result.append((entity, degree))
         return result
+
+    def find_orphans(self, entity_type: str | None = None) -> list[Entity]:
+        """Find entities with no relationships (orphans).
+
+        An orphan entity has no incoming or outgoing relationships.
+
+        Args:
+            entity_type: Optional type filter (e.g., "character", "location").
+
+        Returns:
+            List of orphan entities.
+        """
+        logger.debug(f"find_orphans called: entity_type={entity_type}")
+
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            # Query for entities that are not in any relationship
+            if entity_type:
+                cursor.execute(
+                    """
+                    SELECT * FROM entities
+                    WHERE type = ?
+                    AND id NOT IN (
+                        SELECT source_id FROM relationships
+                        UNION
+                        SELECT target_id FROM relationships
+                    )
+                    ORDER BY name
+                    """,
+                    (entity_type,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT * FROM entities
+                    WHERE id NOT IN (
+                        SELECT source_id FROM relationships
+                        UNION
+                        SELECT target_id FROM relationships
+                    )
+                    ORDER BY type, name
+                    """
+                )
+
+            orphans = [self._row_to_entity(row) for row in cursor.fetchall()]
+            logger.debug(f"Found {len(orphans)} orphan entities")
+            return orphans
+
+    def find_circular_relationships(
+        self,
+        relation_types: list[str] | None = None,
+        max_cycle_length: int = 10,
+    ) -> list[list[tuple[str, str, str]]]:
+        """Find circular relationships (cycles) in the entity graph.
+
+        Uses NetworkX's simple_cycles algorithm to detect cycles.
+
+        Args:
+            relation_types: Optional list of relationship types to check.
+                If None, checks all relationships.
+            max_cycle_length: Maximum cycle length to detect (default 10).
+                Longer cycles are ignored for performance.
+
+        Returns:
+            List of cycles. Each cycle is a list of (source_id, relation_type, target_id)
+            tuples representing the edges forming the cycle.
+        """
+        logger.debug(
+            f"find_circular_relationships called: relation_types={relation_types}, "
+            f"max_cycle_length={max_cycle_length}"
+        )
+
+        graph = self.get_graph()
+        if graph.number_of_nodes() == 0:
+            return []
+
+        # If relation_types specified, create a filtered subgraph
+        subgraph: nx.DiGraph
+        if relation_types:
+            # Create subgraph with only edges of specified types
+            edges_to_keep = [
+                (u, v, data)
+                for u, v, data in graph.edges(data=True)
+                if data.get("relation_type") in relation_types
+            ]
+            if not edges_to_keep:
+                logger.debug("No edges match specified relation_types")
+                return []
+
+            subgraph = nx.DiGraph()
+            subgraph.add_edges_from(edges_to_keep)
+        else:
+            subgraph = graph
+
+        # Find simple cycles using NetworkX
+        try:
+            cycles_raw = list(nx.simple_cycles(subgraph, length_bound=max_cycle_length))
+        except Exception as e:
+            logger.warning(f"Error finding cycles: {e}")
+            return []
+
+        # Convert cycles from node lists to edge tuples with relation types
+        cycles: list[list[tuple[str, str, str]]] = []
+        for cycle_nodes in cycles_raw:
+            if len(cycle_nodes) < 2:
+                continue  # Skip degenerate cycles
+
+            cycle_edges: list[tuple[str, str, str]] = []
+            # Iterate through pairs of adjacent nodes in the cycle
+            for i in range(len(cycle_nodes)):
+                source = cycle_nodes[i]
+                target = cycle_nodes[(i + 1) % len(cycle_nodes)]
+
+                # Get edge data
+                if subgraph.has_edge(source, target):
+                    edge_data = subgraph.get_edge_data(source, target)
+                    rel_type = edge_data.get("relation_type", "unknown") if edge_data else "unknown"
+                    cycle_edges.append((source, rel_type, target))
+
+            if cycle_edges:
+                cycles.append(cycle_edges)
+
+        logger.debug(f"Found {len(cycles)} circular relationship chains")
+        return cycles
 
     # =========================================================================
     # Context for Agents

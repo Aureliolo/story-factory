@@ -690,3 +690,148 @@ class TestWorldServiceErrorHandling:
         # Check entity was reverted
         entity = world_db.get_entity(entity_id)
         assert entity.attributes["role"] == "original"
+
+
+class TestWorldHealthMethods:
+    """Tests for world health detection methods in WorldService."""
+
+    def test_find_orphan_entities(self, world_service, world_db):
+        """Test finding orphan entities through WorldService."""
+        # Create orphan entity
+        world_db.add_entity("character", "Lonely Alice")
+
+        # Create connected entities
+        bob_id = world_db.add_entity("character", "Connected Bob")
+        charlie_id = world_db.add_entity("character", "Connected Charlie")
+        world_db.add_relationship(bob_id, charlie_id, "knows", validate=False)
+
+        orphans = world_service.find_orphan_entities(world_db)
+
+        assert len(orphans) == 1
+        assert orphans[0].name == "Lonely Alice"
+
+    def test_find_orphan_entities_with_type_filter(self, world_service, world_db):
+        """Test finding orphan entities with type filter."""
+        world_db.add_entity("character", "Lonely Alice")
+        world_db.add_entity("location", "Empty Town")
+
+        # Only get character orphans
+        orphans = world_service.find_orphan_entities(world_db, entity_type="character")
+
+        assert len(orphans) == 1
+        assert orphans[0].type == "character"
+
+    def test_find_circular_relationships(self, world_service, world_db):
+        """Test finding circular relationships through WorldService."""
+        # Create circular chain: A -> B -> C -> A
+        a_id = world_db.add_entity("character", "A")
+        b_id = world_db.add_entity("character", "B")
+        c_id = world_db.add_entity("character", "C")
+
+        world_db.add_relationship(a_id, b_id, "reports_to", validate=False)
+        world_db.add_relationship(b_id, c_id, "reports_to", validate=False)
+        world_db.add_relationship(c_id, a_id, "reports_to", validate=False)
+
+        cycles = world_service.find_circular_relationships(world_db, relation_types=["reports_to"])
+
+        assert len(cycles) >= 1
+
+    def test_find_circular_relationships_empty(self, world_service, world_db):
+        """Test finding circular relationships when none exist."""
+        # Create linear chain: A -> B -> C
+        a_id = world_db.add_entity("character", "A")
+        b_id = world_db.add_entity("character", "B")
+        c_id = world_db.add_entity("character", "C")
+
+        world_db.add_relationship(a_id, b_id, "knows", validate=False)
+        world_db.add_relationship(b_id, c_id, "knows", validate=False)
+
+        cycles = world_service.find_circular_relationships(world_db)
+
+        assert cycles == []
+
+    def test_get_world_health_metrics(self, world_service, world_db):
+        """Test getting world health metrics."""
+        # Create some entities
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 8.0})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 7.0})
+        world_db.add_entity("location", "Town", attributes={"quality_score": 6.0})
+        world_db.add_entity("character", "Orphan", attributes={"quality_score": 3.0})
+
+        # Add a relationship
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        assert metrics.total_entities == 4
+        assert metrics.entity_counts["character"] == 3
+        assert metrics.entity_counts["location"] == 1
+        assert metrics.total_relationships == 1
+        assert metrics.orphan_count == 2  # Town and Orphan
+        assert metrics.health_score > 0
+
+    def test_get_world_health_metrics_empty(self, world_service, world_db):
+        """Test getting world health metrics for empty database."""
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        assert metrics.total_entities == 0
+        assert metrics.total_relationships == 0
+        assert metrics.orphan_count == 0
+        assert metrics.health_score == 100.0  # No penalties
+
+    def test_get_world_health_metrics_generates_recommendations(self, world_service, world_db):
+        """Test that health metrics include recommendations."""
+        # Create orphan entity
+        world_db.add_entity("character", "Lonely Alice")
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Should have recommendation about orphans
+        assert len(metrics.recommendations) > 0
+
+    def test_find_entity_by_name_exact_match(self, world_service, world_db):
+        """Test finding entity by exact name match."""
+        world_db.add_entity("character", "Alice the Brave")
+
+        entity = world_service.find_entity_by_name(world_db, "Alice the Brave")
+
+        assert entity is not None
+        assert entity.name == "Alice the Brave"
+
+    def test_find_entity_by_name_case_insensitive(self, world_service, world_db):
+        """Test finding entity with case-insensitive match."""
+        world_db.add_entity("character", "Alice")
+
+        entity = world_service.find_entity_by_name(world_db, "alice")
+
+        assert entity is not None
+        assert entity.name == "Alice"
+
+    def test_find_entity_by_name_fuzzy_match(self, world_service, world_db):
+        """Test finding entity with fuzzy name matching."""
+        world_db.add_entity("character", "Sir Roland the Brave")
+
+        # Should find with fuzzy match
+        entity = world_service.find_entity_by_name(world_db, "Sir Roland", fuzzy_threshold=0.7)
+
+        assert entity is not None
+        assert "Roland" in entity.name
+
+    def test_find_entity_by_name_not_found(self, world_service, world_db):
+        """Test finding entity returns None when not found."""
+        world_db.add_entity("character", "Alice")
+
+        entity = world_service.find_entity_by_name(world_db, "Nonexistent Character")
+
+        assert entity is None
+
+    def test_find_entity_by_name_with_type_filter(self, world_service, world_db):
+        """Test finding entity with type filter."""
+        world_db.add_entity("character", "Alice")
+        world_db.add_entity("location", "Alice's House")
+
+        # Should find only character
+        entity = world_service.find_entity_by_name(world_db, "Alice", entity_type="character")
+
+        assert entity is not None
+        assert entity.type == "character"

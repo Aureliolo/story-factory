@@ -24,6 +24,7 @@ from src.utils.validation import (
 )
 
 if TYPE_CHECKING:
+    from src.memory.world_health import WorldHealthMetrics
     from src.services import ServiceContainer
 
 logger = logging.getLogger(__name__)
@@ -1009,6 +1010,104 @@ class WorldService:
         logger.debug(f"Found {len(results)} entities matching '{query}'")
         return results
 
+    def find_entity_by_name(
+        self,
+        world_db: WorldDatabase,
+        name: str,
+        entity_type: str | None = None,
+        fuzzy_threshold: float = 0.8,
+    ) -> Entity | None:
+        """Find an entity by name with fuzzy matching support.
+
+        Attempts exact match first, then case-insensitive, then fuzzy matching
+        if threshold is met.
+
+        Args:
+            world_db: WorldDatabase instance.
+            name: Entity name to find.
+            entity_type: Optional type filter.
+            fuzzy_threshold: Similarity threshold for fuzzy matching (0.0-1.0).
+                Lower values allow more lenient matching. Default 0.8.
+
+        Returns:
+            Entity if found, None otherwise.
+        """
+        logger.debug(
+            f"find_entity_by_name called: name={name}, type={entity_type}, threshold={fuzzy_threshold}"
+        )
+
+        # Exact case-insensitive match (uses world_db's get_entity_by_name)
+        entity = world_db.get_entity_by_name(name, entity_type=entity_type)
+        if entity:
+            logger.debug(f"Found exact match for '{name}': {entity.id}")
+            return entity
+
+        # Fuzzy matching - get all entities of the specified type
+        all_entities = world_db.list_entities(entity_type=entity_type)
+        if not all_entities:
+            logger.debug("No entities found for fuzzy matching")
+            return None
+
+        # Normalize search name
+        search_name = name.lower().strip()
+
+        best_match: Entity | None = None
+        best_score = 0.0
+
+        for entity in all_entities:
+            entity_name = entity.name.lower().strip()
+
+            # Calculate similarity score using sequence matcher
+            score = self._calculate_name_similarity(search_name, entity_name)
+
+            if score > best_score and score >= fuzzy_threshold:
+                best_score = score
+                best_match = entity
+
+        if best_match:
+            logger.debug(
+                f"Found fuzzy match for '{name}': {best_match.name} (score={best_score:.2f})"
+            )
+        else:
+            logger.debug(f"No fuzzy match found for '{name}' above threshold {fuzzy_threshold}")
+
+        return best_match
+
+    def _calculate_name_similarity(self, name1: str, name2: str) -> float:
+        """Calculate similarity score between two names.
+
+        Uses a combination of:
+        - Exact match: 1.0
+        - Prefix/suffix match: 0.9
+        - Substring match: 0.85
+        - Character-based similarity: SequenceMatcher ratio
+
+        Args:
+            name1: First name (already lowercase).
+            name2: Second name (already lowercase).
+
+        Returns:
+            Similarity score between 0.0 and 1.0.
+        """
+        # Exact match
+        if name1 == name2:
+            return 1.0
+
+        # Prefix or suffix match
+        if name1.startswith(name2) or name2.startswith(name1):
+            return 0.9
+        if name1.endswith(name2) or name2.endswith(name1):
+            return 0.9
+
+        # Substring match
+        if name1 in name2 or name2 in name1:
+            return 0.85
+
+        # Character-based similarity using difflib
+        from difflib import SequenceMatcher
+
+        return SequenceMatcher(None, name1, name2).ratio()
+
     # ========== RELATIONSHIP MANAGEMENT ==========
 
     def add_relationship(
@@ -1183,3 +1282,168 @@ class WorldService:
         }
         logger.debug(f"Entity summary: {summary}")
         return summary
+
+    # ========== WORLD HEALTH DETECTION ==========
+
+    def find_orphan_entities(
+        self,
+        world_db: WorldDatabase,
+        entity_type: str | None = None,
+    ) -> list[Entity]:
+        """Find entities with no relationships (orphans).
+
+        Args:
+            world_db: WorldDatabase instance.
+            entity_type: Optional type filter.
+
+        Returns:
+            List of orphan entities.
+        """
+        logger.debug(f"find_orphan_entities called: entity_type={entity_type}")
+        orphans = world_db.find_orphans(entity_type=entity_type)
+        logger.info(f"Found {len(orphans)} orphan entities")
+        return orphans
+
+    def find_circular_relationships(
+        self,
+        world_db: WorldDatabase,
+        relation_types: list[str] | None = None,
+        max_cycle_length: int = 10,
+    ) -> list[list[tuple[str, str, str]]]:
+        """Find circular relationships (cycles) in the world.
+
+        Args:
+            world_db: WorldDatabase instance.
+            relation_types: Optional list of relationship types to check.
+            max_cycle_length: Maximum cycle length to detect.
+
+        Returns:
+            List of cycles. Each cycle is a list of (source_id, relation_type, target_id)
+            tuples.
+        """
+        logger.debug(
+            f"find_circular_relationships called: relation_types={relation_types}, "
+            f"max_length={max_cycle_length}"
+        )
+        cycles = world_db.find_circular_relationships(
+            relation_types=relation_types,
+            max_cycle_length=max_cycle_length,
+        )
+        logger.info(f"Found {len(cycles)} circular relationship chains")
+        return cycles
+
+    def get_world_health_metrics(
+        self,
+        world_db: WorldDatabase,
+        quality_threshold: float = 6.0,
+    ) -> WorldHealthMetrics:
+        """Get comprehensive health metrics for a story world.
+
+        Aggregates entity counts, orphan detection, circular relationships,
+        quality scores, and computes overall health score.
+
+        Args:
+            world_db: WorldDatabase instance.
+            quality_threshold: Minimum quality score for "healthy" entities.
+
+        Returns:
+            WorldHealthMetrics object with all computed metrics.
+        """
+        from src.memory.world_health import WorldHealthMetrics
+
+        logger.info("Computing world health metrics")
+
+        # Entity counts
+        entity_counts = {
+            "character": world_db.count_entities("character"),
+            "location": world_db.count_entities("location"),
+            "faction": world_db.count_entities("faction"),
+            "item": world_db.count_entities("item"),
+            "concept": world_db.count_entities("concept"),
+        }
+        total_entities = sum(entity_counts.values())
+        relationships = world_db.list_relationships()
+        total_relationships = len(relationships)
+
+        # Orphan detection
+        orphans = world_db.find_orphans()
+        orphan_entities = [{"id": e.id, "name": e.name, "type": e.type} for e in orphans]
+
+        # Circular relationship detection
+        circular = world_db.find_circular_relationships(
+            relation_types=self.settings.circular_relationship_types,
+        )
+        circular_relationships = []
+        for cycle in circular:
+            cycle_info = {
+                "edges": [{"source": e[0], "type": e[1], "target": e[2]} for e in cycle],
+                "length": len(cycle),
+            }
+            circular_relationships.append(cycle_info)
+
+        # Quality metrics
+        all_entities = world_db.list_entities()
+        quality_scores = []
+        low_quality_entities = []
+
+        for entity in all_entities:
+            # Get quality score from attributes if available
+            attrs = entity.attributes or {}
+            quality_score = attrs.get("quality_score", 0.0)
+            if isinstance(quality_score, (int, float)):
+                quality_scores.append(float(quality_score))
+                if quality_score < quality_threshold:
+                    low_quality_entities.append(
+                        {
+                            "id": entity.id,
+                            "name": entity.name,
+                            "type": entity.type,
+                            "quality_score": quality_score,
+                        }
+                    )
+
+        average_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
+
+        # Quality distribution (buckets of 2)
+        quality_distribution: dict[str, int] = {"0-2": 0, "2-4": 0, "4-6": 0, "6-8": 0, "8-10": 0}
+        for score in quality_scores:
+            if score < 2:
+                quality_distribution["0-2"] += 1
+            elif score < 4:
+                quality_distribution["2-4"] += 1
+            elif score < 6:
+                quality_distribution["4-6"] += 1
+            elif score < 8:
+                quality_distribution["6-8"] += 1
+            else:
+                quality_distribution["8-10"] += 1
+
+        # Relationship density
+        relationship_density = total_relationships / total_entities if total_entities > 0 else 0.0
+
+        # Build metrics object
+        metrics = WorldHealthMetrics(
+            total_entities=total_entities,
+            entity_counts=entity_counts,
+            total_relationships=total_relationships,
+            orphan_count=len(orphans),
+            orphan_entities=orphan_entities,
+            circular_count=len(circular),
+            circular_relationships=circular_relationships,
+            average_quality=average_quality,
+            quality_distribution=quality_distribution,
+            low_quality_entities=low_quality_entities,
+            relationship_density=relationship_density,
+        )
+
+        # Calculate health score and generate recommendations
+        metrics.calculate_health_score()
+        metrics.generate_recommendations()
+
+        logger.info(
+            f"World health metrics computed: score={metrics.health_score:.1f}, "
+            f"entities={total_entities}, relationships={total_relationships}, "
+            f"orphans={len(orphans)}, circular={len(circular)}"
+        )
+
+        return metrics

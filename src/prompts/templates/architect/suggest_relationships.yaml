@@ -1,0 +1,77 @@
+name: suggest_relationships
+version: "1.0"
+description: "Suggests relationships for a specific entity based on narrative context"
+agent: architect
+task: suggest_relationships
+is_system_prompt: false
+
+template: |
+  Suggest meaningful relationships for this entity based on the story context.
+
+  LANGUAGE: {{ language }} - Write ALL content in {{ language }}.
+
+  PREMISE: {{ premise }}
+
+  TARGET ENTITY:
+  Name: {{ entity_name }}
+  Type: {{ entity_type }}
+  Description: {{ entity_description }}
+  {% if entity_attributes %}
+  Attributes:
+  {% for key, value in entity_attributes.items() %}
+  - {{ key }}: {{ value }}
+  {% endfor %}
+  {% endif %}
+
+  AVAILABLE ENTITIES FOR RELATIONSHIPS:
+  {% for entity in available_entities %}
+  - {{ entity.name }} ({{ entity.type }}): {{ entity.description[:100] }}...
+  {% endfor %}
+
+  {% if existing_relationships %}
+  EXISTING RELATIONSHIPS (avoid duplicates):
+  {% for rel in existing_relationships %}
+  - {{ rel.relation_type }}: {{ rel.source_name }} -> {{ rel.target_name }}
+  {% endfor %}
+  {% endif %}
+
+  RELATIONSHIP GUIDANCE:
+  - Minimum recommended relationships for {{ entity_type }}: {{ minimum_relationships }}
+  - Maximum relationships to suggest: {{ max_suggestions }}
+  - Consider: allies, rivals, family, romance, professional, hidden connections
+
+  Suggest {{ num_suggestions }} new relationships for "{{ entity_name }}".
+  For each suggestion, provide:
+  1. The target entity name (from available entities)
+  2. The relationship type (e.g., "ally_of", "rival_of", "parent_of", "works_for")
+  3. A brief description of the relationship
+  4. Confidence score (0.0-1.0) based on narrative fit
+  5. Whether relationship is bidirectional
+
+  Output JSON:
+  {
+    "suggestions": [
+      {
+        "target_entity_name": "...",
+        "relation_type": "...",
+        "description": "...",
+        "confidence": 0.85,
+        "bidirectional": true
+      }
+    ]
+  }
+
+variables:
+  required:
+    - language
+    - premise
+    - entity_name
+    - entity_type
+    - entity_description
+    - available_entities
+    - num_suggestions
+  optional:
+    - entity_attributes
+    - existing_relationships
+    - minimum_relationships
+    - max_suggestions

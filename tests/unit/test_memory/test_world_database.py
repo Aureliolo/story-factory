@@ -1618,3 +1618,198 @@ class TestEntityVersioning:
             # Should raise exception when trying to add entity (which triggers versioning)
             with pytest.raises(Exception, match="Settings error"):
                 db.add_entity("character", "Alice")
+
+
+class TestRelationshipValidation:
+    """Tests for relationship validation in WorldDatabase."""
+
+    def test_add_relationship_validates_self_loop(self, db):
+        """Test that adding a self-referential relationship raises error."""
+        from src.utils.exceptions import RelationshipValidationError
+
+        entity_id = db.add_entity("character", "Alice")
+
+        with pytest.raises(RelationshipValidationError) as exc_info:
+            db.add_relationship(entity_id, entity_id, "knows", validate=True)
+
+        assert exc_info.value.reason == "self_loop"
+        assert entity_id in str(exc_info.value)
+
+    def test_add_relationship_validates_source_not_found(self, db):
+        """Test that adding relationship with non-existent source raises error."""
+        from src.utils.exceptions import RelationshipValidationError
+
+        target_id = db.add_entity("character", "Bob")
+
+        with pytest.raises(RelationshipValidationError) as exc_info:
+            db.add_relationship("non-existent-id", target_id, "knows", validate=True)
+
+        assert exc_info.value.reason == "source_not_found"
+
+    def test_add_relationship_validates_target_not_found(self, db):
+        """Test that adding relationship with non-existent target raises error."""
+        from src.utils.exceptions import RelationshipValidationError
+
+        source_id = db.add_entity("character", "Alice")
+
+        with pytest.raises(RelationshipValidationError) as exc_info:
+            db.add_relationship(source_id, "non-existent-id", "knows", validate=True)
+
+        assert exc_info.value.reason == "target_not_found"
+
+    def test_add_relationship_skips_validation_when_disabled(self, db):
+        """Test that validation can be skipped with validate=False."""
+        # This should not raise even with non-existent entities
+        rel_id = db.add_relationship("fake-source", "fake-target", "knows", validate=False)
+        assert rel_id is not None
+
+    def test_add_relationship_validates_by_default(self, db):
+        """Test that validation is enabled by default."""
+        from src.utils.exceptions import RelationshipValidationError
+
+        entity_id = db.add_entity("character", "Alice")
+
+        # Default should be validate=True
+        with pytest.raises(RelationshipValidationError):
+            db.add_relationship(entity_id, entity_id, "knows")
+
+
+class TestOrphanDetection:
+    """Tests for orphan entity detection in WorldDatabase."""
+
+    def test_find_orphans_empty_database(self, db):
+        """Test orphan detection on empty database."""
+        orphans = db.find_orphans()
+        assert orphans == []
+
+    def test_find_orphans_single_entity(self, db):
+        """Test that single entity with no relationships is an orphan."""
+        db.add_entity("character", "Lonely Alice")
+
+        orphans = db.find_orphans()
+
+        assert len(orphans) == 1
+        assert orphans[0].name == "Lonely Alice"
+
+    def test_find_orphans_with_relationships(self, db):
+        """Test that entities with relationships are not orphans."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        db.add_entity("character", "Lonely Charlie")
+
+        # Alice and Bob have relationship
+        db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        orphans = db.find_orphans()
+
+        assert len(orphans) == 1
+        assert orphans[0].name == "Lonely Charlie"
+
+    def test_find_orphans_with_type_filter(self, db):
+        """Test orphan detection filtered by entity type."""
+        db.add_entity("character", "Lonely Alice")
+        db.add_entity("location", "Empty Town")
+        db.add_entity("item", "Lost Sword")
+
+        # Filter to only characters
+        orphans = db.find_orphans(entity_type="character")
+
+        assert len(orphans) == 1
+        assert orphans[0].name == "Lonely Alice"
+
+    def test_find_orphans_bidirectional_relationship(self, db):
+        """Test that both source and target of relationship are not orphans."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+
+        # Only one relationship but both entities should be non-orphans
+        db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        orphans = db.find_orphans()
+
+        assert len(orphans) == 0
+
+
+class TestCircularDetection:
+    """Tests for circular relationship detection in WorldDatabase."""
+
+    def test_find_circular_empty_database(self, db):
+        """Test circular detection on empty database."""
+        cycles = db.find_circular_relationships()
+        assert cycles == []
+
+    def test_find_circular_no_cycles(self, db):
+        """Test circular detection when no cycles exist."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        charlie_id = db.add_entity("character", "Charlie")
+
+        # Linear chain: Alice -> Bob -> Charlie
+        db.add_relationship(alice_id, bob_id, "knows", validate=False)
+        db.add_relationship(bob_id, charlie_id, "knows", validate=False)
+
+        cycles = db.find_circular_relationships()
+
+        assert cycles == []
+
+    def test_find_circular_simple_cycle(self, db):
+        """Test detection of simple A->B->C->A cycle."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        charlie_id = db.add_entity("character", "Charlie")
+
+        # Cycle: Alice -> Bob -> Charlie -> Alice
+        db.add_relationship(alice_id, bob_id, "reports_to", validate=False)
+        db.add_relationship(bob_id, charlie_id, "reports_to", validate=False)
+        db.add_relationship(charlie_id, alice_id, "reports_to", validate=False)
+
+        cycles = db.find_circular_relationships(relation_types=["reports_to"])
+
+        assert len(cycles) >= 1
+
+    def test_find_circular_filters_by_relation_type(self, db):
+        """Test that circular detection respects relation type filter."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        charlie_id = db.add_entity("character", "Charlie")
+
+        # Cycle with "knows" type
+        db.add_relationship(alice_id, bob_id, "knows", validate=False)
+        db.add_relationship(bob_id, charlie_id, "knows", validate=False)
+        db.add_relationship(charlie_id, alice_id, "knows", validate=False)
+
+        # Only look for "owns" type - should find nothing
+        cycles = db.find_circular_relationships(relation_types=["owns"])
+
+        assert cycles == []
+
+    def test_find_circular_respects_max_length(self, db):
+        """Test that max_cycle_length limits results."""
+        # Create long chain: A->B->C->D->A (length 4)
+        ids = []
+        for name in ["A", "B", "C", "D"]:
+            ids.append(db.add_entity("character", name))
+
+        for i in range(len(ids)):
+            db.add_relationship(ids[i], ids[(i + 1) % len(ids)], "chain", validate=False)
+
+        # Should find cycle with length up to 10
+        cycles_all = db.find_circular_relationships(max_cycle_length=10)
+        assert len(cycles_all) >= 1
+
+        # Should not find cycle with length limit of 2
+        cycles_short = db.find_circular_relationships(max_cycle_length=2)
+        assert cycles_short == []
+
+    def test_find_circular_two_node_cycle(self, db):
+        """Test detection of two-node cycle (A->B->A)."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+
+        # Two-way relationship creates cycle
+        db.add_relationship(alice_id, bob_id, "knows", validate=False)
+        db.add_relationship(bob_id, alice_id, "knows", validate=False)
+
+        cycles = db.find_circular_relationships()
+
+        assert len(cycles) >= 1

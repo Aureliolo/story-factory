@@ -21,6 +21,7 @@ from src.services.world_quality_service import EntityGenerationProgress
 from src.ui.components.build_dialog import show_build_structure_dialog
 from src.ui.components.entity_card import entity_list_item
 from src.ui.components.graph import GraphComponent
+from src.ui.components.world_health_dashboard import WorldHealthDashboard
 from src.ui.graph_renderer import (
     render_centrality_result,
     render_communities_result,
@@ -161,6 +162,7 @@ class WorldPage:
 
         # Bottom sections
         with ui.column().classes("w-full gap-4 p-4"):
+            self._build_health_section()
             self._build_relationships_section()
             self._build_analysis_section()
 
@@ -2650,6 +2652,59 @@ class WorldPage:
                     ui.table(columns=columns, rows=rows).classes("w-full")
                 else:
                     ui.label("No relationships yet").classes("text-gray-500 dark:text-gray-400")
+
+    def _build_health_section(self) -> None:
+        """Build the world health dashboard section."""
+        if not self.state.world_db:
+            return
+
+        # Get health metrics
+        metrics = self.services.world.get_world_health_metrics(self.state.world_db)
+
+        # Build dashboard in expansion
+        with ui.expansion("World Health", icon="health_and_safety", value=False).classes("w-full"):
+            dashboard = WorldHealthDashboard(
+                metrics=metrics,
+                on_fix_orphan=self._handle_fix_orphan,
+                on_view_circular=self._handle_view_circular,
+                on_improve_quality=self._handle_improve_quality,
+            )
+            dashboard.build()
+
+    async def _handle_fix_orphan(self, entity_id: str) -> None:
+        """Handle fix orphan entity request - select the entity for editing."""
+        if not self.state.world_db:
+            return
+
+        entity = self.state.world_db.get_entity(entity_id)
+        if entity:
+            self.state.select_entity(entity.id)
+            ui.notify(f"Selected '{entity.name}' - add relationships in the editor", type="info")
+
+    async def _handle_view_circular(self, cycle: dict) -> None:
+        """Handle view circular relationship chain request."""
+        edges = cycle.get("edges", [])
+        if not edges:
+            return
+
+        # Build description of the cycle
+        cycle_desc = " -> ".join(f"{e.get('source', '?')}[{e.get('type', '?')}]" for e in edges)
+        cycle_desc += f" -> {edges[0].get('source', '?')}"  # Complete the cycle
+
+        ui.notify(f"Circular chain: {cycle_desc}", type="warning", timeout=10000)
+
+    async def _handle_improve_quality(self, entity_id: str) -> None:
+        """Handle improve entity quality request."""
+        if not self.state.world_db:
+            return
+
+        entity = self.state.world_db.get_entity(entity_id)
+        if entity:
+            self.state.select_entity(entity.id)
+            ui.notify(
+                f"Selected '{entity.name}' - use 'Refine Entity' to improve quality",
+                type="info",
+            )
 
     def _build_analysis_section(self) -> None:
         """
