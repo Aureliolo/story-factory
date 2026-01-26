@@ -1,5 +1,6 @@
 """Prompt building utilities to reduce duplication across agents."""
 
+from src.memory.content_guidelines import ContentProfile, format_profile_for_prompt
 from src.memory.story_state import Character, StoryBrief, StoryState
 
 
@@ -181,6 +182,22 @@ class PromptBuilder:
             Self for method chaining
         """
         self.sections.append(text)
+        return self
+
+    def add_content_guidelines(self, profile: ContentProfile) -> PromptBuilder:
+        """Add content guidelines from a ContentProfile.
+
+        Formats the content profile into prompt guidance for content
+        appropriateness enforcement.
+
+        Args:
+            profile: Content profile with guidelines
+
+        Returns:
+            Self for method chaining
+        """
+        guidance = format_profile_for_prompt(profile)
+        self.sections.append(guidance)
         return self
 
     def build(self) -> str:

@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 
 from nicegui import run, ui
 
+from src.memory.templates import WorldTemplate
 from src.services import ServiceContainer
 from src.services.world_service import WorldBuildOptions
 from src.ui.state import AppState
@@ -83,8 +84,12 @@ async def show_build_structure_dialog(
         else:
             dialog.close()
 
-    async def do_build() -> None:
-        """Execute the build with progress updates."""
+    async def do_build(world_template: WorldTemplate | None = None) -> None:
+        """Execute the build with progress updates.
+
+        Args:
+            world_template: Optional world template to use for generation.
+        """
         nonlocal is_building
         if not state.project or not state.world_db:
             dialog.close()
@@ -105,9 +110,15 @@ async def show_build_structure_dialog(
 
             # Use the appropriate build options based on rebuild flag
             if rebuild:
-                build_options = WorldBuildOptions.full_rebuild(cancellation_event=cancel_event)
+                build_options = WorldBuildOptions.full_rebuild(
+                    cancellation_event=cancel_event,
+                    world_template=world_template,
+                )
             else:
-                build_options = WorldBuildOptions.full(cancellation_event=cancel_event)
+                build_options = WorldBuildOptions.full(
+                    cancellation_event=cancel_event,
+                    world_template=world_template,
+                )
 
             # Use the unified world build method with cancellation support
             counts = await run.io_bound(
@@ -228,6 +239,42 @@ async def show_build_structure_dialog(
                 ui.label("Outline chapter structure and plot points").classes("text-sm")
                 ui.label("Establish story rules and timeline").classes("text-sm")
 
+        # World Template selector
+        ui.separator().classes("my-2")
+        ui.label("World Template").classes("font-medium mb-2")
+
+        # Get available templates
+        world_templates = services.world_template.list_templates()
+        template_options = {t.id: f"{t.name} - {t.description[:50]}..." for t in world_templates}
+        template_options[""] = "None (use story brief only)"
+
+        selected_template: WorldTemplate | None = None
+        if state.project.world_template_id:
+            selected_template = services.world_template.get_template(
+                state.project.world_template_id
+            )
+
+        def on_template_change(e) -> None:
+            """Handle template selection change."""
+            nonlocal selected_template
+            if e.value:
+                selected_template = services.world_template.get_template(e.value)
+                if selected_template:
+                    logger.debug(f"Selected world template: {selected_template.id}")
+            else:
+                selected_template = None
+                logger.debug("Cleared world template selection")
+
+        template_select = (
+            ui.select(
+                options=template_options,
+                value=state.project.world_template_id or "",
+                on_change=on_template_change,
+            )
+            .props("outlined dense")
+            .classes("w-full mb-4")
+        )
+
         # Generation settings section
         ui.separator().classes("my-2")
         ui.label("Generation Settings").classes("font-medium mb-2")
@@ -346,6 +393,7 @@ async def show_build_structure_dialog(
         # Function to save settings before building
         async def save_settings_and_build() -> None:
             """Save the generation settings to the project and start the build."""
+            nonlocal selected_template
             # Update project with dialog values
             project.target_chapters = int(chapter_input.value) if chapter_input.value else None
             project.target_characters_min = (
@@ -366,6 +414,8 @@ async def show_build_structure_dialog(
             project.target_concepts_max = (
                 int(concept_max_input.value) if concept_max_input.value else None
             )
+            # Save world template selection
+            project.world_template_id = template_select.value if template_select.value else None
             services.project.save_project(project)
             logger.info(
                 f"Updated generation settings: chapters={project.target_chapters}, "
@@ -373,10 +423,11 @@ async def show_build_structure_dialog(
                 f"locs={project.target_locations_min}-{project.target_locations_max}, "
                 f"facs={project.target_factions_min}-{project.target_factions_max}, "
                 f"items={project.target_items_min}-{project.target_items_max}, "
-                f"concepts={project.target_concepts_min}-{project.target_concepts_max}"
+                f"concepts={project.target_concepts_min}-{project.target_concepts_max}, "
+                f"world_template={project.world_template_id}"
             )
             # Now start the build
-            await do_build()
+            await do_build(selected_template)
 
         ready_text = "Ready to rebuild..." if rebuild else "Ready to build..."
         progress_label = ui.label(ready_text).classes(

@@ -10,6 +10,7 @@ from src.settings import Settings
 
 from .backup_service import BackupService
 from .comparison_service import ComparisonService
+from .content_guidelines_service import ContentGuidelinesService
 from .export_service import ExportService
 from .import_service import ImportService
 from .model_mode_service import ModelModeService
@@ -21,6 +22,7 @@ from .suggestion_service import SuggestionService
 from .template_service import TemplateService
 from .world_quality_service import WorldQualityService
 from .world_service import WorldBuildOptions, WorldBuildProgress, WorldService
+from .world_template_service import WorldTemplateService
 
 
 @dataclass
@@ -50,6 +52,8 @@ class ServiceContainer:
     backup: BackupService
     import_svc: ImportService
     comparison: ComparisonService
+    world_template: WorldTemplateService
+    content_guidelines: ContentGuidelinesService
 
     def __init__(self, settings: Settings | None = None):
         """Initialize all services with shared settings.
@@ -72,11 +76,14 @@ class ServiceContainer:
         self.backup = BackupService(self.settings)
         self.import_svc = ImportService(self.settings, self.mode)
         self.comparison = ComparisonService(self.settings)
+        self.world_template = WorldTemplateService(self.settings)
+        self.content_guidelines = ContentGuidelinesService(self.settings)
 
 
 __all__ = [
     "BackupService",
     "ComparisonService",
+    "ContentGuidelinesService",
     "ExportService",
     "ImportService",
     "ModelModeService",
@@ -91,4 +98,5 @@ __all__ = [
     "WorldBuildProgress",
     "WorldQualityService",
     "WorldService",
+    "WorldTemplateService",
 ]

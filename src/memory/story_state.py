@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.memory.content_guidelines import ContentProfile
 from src.memory.templates import TargetLength
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ class Character(BaseModel):
     goals: list[str] = Field(default_factory=list)
     relationships: dict[str, str] = Field(default_factory=dict)  # character_name -> relationship
     arc_notes: str = ""  # How the character should develop
+    arc_type: str | None = None  # Reference to arc template ID (e.g., "hero_journey")
     arc_progress: dict[int, str] = Field(default_factory=dict)  # chapter_number -> arc state
 
     @field_validator("arc_progress", mode="before")
@@ -451,6 +453,12 @@ class StoryState(BaseModel):
 
     # Status
     status: str = "interview"  # interview, outlining, writing, editing, complete
+
+    # World template reference
+    world_template_id: str | None = None  # ID of world template used (e.g., "high_fantasy")
+
+    # Content guidelines profile
+    content_profile: ContentProfile | None = None  # Content appropriateness settings
 
     # Project-specific generation settings (None = use global settings defaults)
     target_chapters: int | None = None  # Override chapter count for this project

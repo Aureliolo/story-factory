@@ -336,6 +336,10 @@ class Settings:
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
     world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 
+    # Content guidelines checking settings
+    content_check_enabled: bool = True  # Enable content guideline checking for generated content
+    content_check_use_llm: bool = False  # Use LLM for more accurate checking (slower)
+
     # Judge consistency settings (for more reliable quality judgments)
     judge_consistency_enabled: bool = False  # Opt-in: enable judge consistency features
     judge_multi_call_enabled: bool = False  # Make multiple judge calls and average (expensive)

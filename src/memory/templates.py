@@ -1,12 +1,57 @@
 """Template models for story structures and presets."""
 
+import logging
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+logger = logging.getLogger(__name__)
+
 # Shared type for target length across templates and story briefs
 type TargetLength = Literal["short_story", "novella", "novel"]
+
+
+class EntityHints(BaseModel):
+    """Hints for entity generation in a world template."""
+
+    character_roles: list[str] = Field(
+        default_factory=list, description="Suggested character roles for this genre"
+    )
+    location_types: list[str] = Field(
+        default_factory=list, description="Types of locations typical for this genre"
+    )
+    faction_types: list[str] = Field(
+        default_factory=list, description="Types of factions/organizations in this genre"
+    )
+    item_types: list[str] = Field(
+        default_factory=list, description="Types of significant items in this genre"
+    )
+    concept_types: list[str] = Field(
+        default_factory=list, description="Key concepts/themes for this genre"
+    )
+
+
+class WorldTemplate(BaseModel):
+    """Template for a genre-specific world preset."""
+
+    id: str = Field(description="Unique identifier for this template")
+    name: str = Field(description="Display name of the template")
+    description: str = Field(description="Brief description of the world style")
+    is_builtin: bool = Field(default=True, description="Whether this is a built-in template")
+    genre: str = Field(description="Primary genre this template supports")
+    entity_hints: EntityHints = Field(
+        default_factory=EntityHints, description="Hints for generating entities"
+    )
+    relationship_patterns: list[str] = Field(
+        default_factory=list, description="Common relationship types in this genre"
+    )
+    naming_style: str = Field(default="", description="Naming conventions for this genre")
+    recommended_counts: dict[str, tuple[int, int]] = Field(
+        default_factory=dict, description="Recommended entity counts by type (min, max)"
+    )
+    atmosphere: str = Field(default="", description="Overall atmosphere and mood")
+    tags: list[str] = Field(default_factory=list, description="Tags for filtering")
 
 
 class CharacterTemplate(BaseModel):
@@ -18,6 +63,7 @@ class CharacterTemplate(BaseModel):
     personality_traits: list[str] = Field(default_factory=list)
     goals: list[str] = Field(default_factory=list)
     arc_notes: str = ""
+    arc_type: str | None = None  # Reference to arc template ID (e.g., "hero_journey")
 
 
 class PlotPointTemplate(BaseModel):
