@@ -857,6 +857,24 @@ class TestDynamicTemperature:
         # progress = (2-1)/(3-1) = 0.5, temp = 0.9 + 0.5*(0.4-0.9) = 0.65
         assert temp == pytest.approx(0.65)
 
+    def test_get_refinement_temperature_handles_max_iterations_one(self):
+        """Test that max_iterations=1 with iteration>1 returns end temperature.
+
+        This guards against division by zero when max_iterations=1 but
+        an iteration > 1 is somehow passed (defensive coding).
+        """
+        config = RefinementConfig(
+            max_iterations=1,
+            refinement_temp_start=0.8,
+            refinement_temp_end=0.3,
+            refinement_temp_decay="linear",
+        )
+
+        # Unusual case: iteration > 1 with max_iterations=1
+        # The guard prevents division by zero: progress = (iter-1)/(max_iter-1)
+        temp = config.get_refinement_temperature(iteration=2, max_iterations=1)
+        assert temp == 0.3
+
 
 class TestLocationQualityScoresWeakDimensions:
     """Tests for LocationQualityScores.weak_dimensions edge cases."""

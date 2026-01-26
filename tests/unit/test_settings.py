@@ -1904,6 +1904,22 @@ class TestWP1WP2SettingsValidation:
         with pytest.raises(ValueError, match="semantic_duplicate_threshold must be between"):
             settings.validate()
 
+    def test_validate_raises_on_empty_embedding_model_when_semantic_enabled(self):
+        """Should raise ValueError when semantic_duplicate_enabled but embedding_model is empty."""
+        settings = Settings()
+        settings.semantic_duplicate_enabled = True
+        settings.embedding_model = ""  # Empty model
+        with pytest.raises(ValueError, match="embedding_model must be set"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_temp_decay_order(self):
+        """Should raise ValueError when temp_start < temp_end (invalid decay)."""
+        settings = Settings()
+        settings.world_quality_refinement_temp_start = 0.3  # Less than end
+        settings.world_quality_refinement_temp_end = 0.7
+        with pytest.raises(ValueError, match="must be >= world_quality_refinement_temp_end"):
+            settings.validate()
+
     def test_valid_new_settings_pass_validation(self):
         """Valid new settings should pass validation."""
         settings = Settings(
