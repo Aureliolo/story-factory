@@ -14,7 +14,7 @@ from typing import Any, ClassVar
 import ollama
 
 from src.memory.mode_database import ModeDatabase
-from src.memory.story_state import Character, Faction, StoryState
+from src.memory.story_state import Character, Concept, Faction, Item, Location, StoryState
 from src.memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
@@ -308,11 +308,13 @@ class WorldQualityService:
                 else:
                     # Refinement based on feedback
                     if character and scores:
+                        # Use dynamic temperature that decreases over iterations
+                        dynamic_temp = config.get_refinement_temperature(iteration + 1)
                         character = self._refine_character(
                             character,
                             scores,
                             story_state,
-                            config.refinement_temperature,
+                            dynamic_temp,
                         )
 
                 if character is None:
@@ -359,8 +361,12 @@ class WorldQualityService:
                     )
                     return character, scores, iteration + 1
 
-                # Check for early stopping after tracking iteration
-                if history.should_stop_early(config.early_stopping_patience):
+                # Check for early stopping after tracking iteration (enhanced with variance tolerance)
+                if history.should_stop_early(
+                    config.early_stopping_patience,
+                    min_iterations=config.early_stopping_min_iterations,
+                    variance_tolerance=config.early_stopping_variance_tolerance,
+                ):
                     logger.info(
                         f"Early stopping: Character '{character.name}' quality degraded "
                         f"for {history.consecutive_degradations} consecutive iterations "
@@ -680,11 +686,13 @@ Write all text in {brief.language if brief else "English"}."""
                     )
                 else:
                     if location and scores:
+                        # Use dynamic temperature that decreases over iterations
+                        dynamic_temp = config.get_refinement_temperature(iteration + 1)
                         location = self._refine_location(
                             location,
                             scores,
                             story_state,
-                            config.refinement_temperature,
+                            dynamic_temp,
                         )
 
                 if not location.get("name"):
@@ -730,8 +738,12 @@ Write all text in {brief.language if brief else "English"}."""
                     )
                     return location, scores, iteration + 1
 
-                # Check for early stopping after tracking iteration
-                if history.should_stop_early(config.early_stopping_patience):
+                # Check for early stopping after tracking iteration (enhanced with variance tolerance)
+                if history.should_stop_early(
+                    config.early_stopping_patience,
+                    min_iterations=config.early_stopping_min_iterations,
+                    variance_tolerance=config.early_stopping_variance_tolerance,
+                ):
                     logger.info(
                         f"Early stopping: Location '{location.get('name')}' quality degraded "
                         f"for {history.consecutive_degradations} consecutive iterations "
@@ -815,10 +827,13 @@ Write all text in {brief.language if brief else "English"}."""
         existing_names: list[str],
         temperature: float,
     ) -> dict[str, Any]:
-        """Create a new location using the creator model."""
+        """Create a new location using the creator model with structured generation."""
         brief = story_state.brief
         if not brief:
             return {}
+
+        # Format existing names with explicit warnings
+        existing_names_formatted = self._format_existing_names_warning(existing_names, "location")
 
         prompt = f"""Create a compelling location for a {brief.genre} story.
 
@@ -826,8 +841,14 @@ STORY PREMISE: {brief.premise}
 SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 
-EXISTING LOCATIONS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
-(Create a NEW location with a different name that complements these existing ones)
+=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{existing_names_formatted}
+
+STRICT RULES:
+- DO NOT use any name from the list above
+- DO NOT use case variations (e.g., "Forest" vs "FOREST")
+- DO NOT use similar names (e.g., "Dark Woods" vs "The Dark Wood")
+- Create something COMPLETELY DIFFERENT
 
 Create a location with:
 1. Rich atmosphere - sensory details, mood
@@ -835,49 +856,35 @@ Create a location with:
 3. Strong story relevance - connections to themes/characters
 4. Distinctiveness - memorable unique qualities
 
-Output ONLY valid JSON (all text in {brief.language}):
-{{
-    "name": "Location Name",
-    "type": "location",
-    "description": "Detailed description with sensory details (2-3 sentences)",
-    "significance": "Why this place matters to the story"
-}}"""
+Write all text in {brief.language}."""
 
         try:
             model = self._get_creator_model(entity_type="location")
-            response = self.client.generate(
+            location = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_location_create,
-                },
+                response_model=Location,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                # Validate name is not a duplicate
-                name = data.get("name", "")
-                if name and name in existing_names:
-                    logger.warning(f"Location name '{name}' is duplicate, clearing to force retry")
+            # Comprehensive uniqueness validation
+            if location.name:
+                is_unique, conflicting_name, reason = validate_unique_name(
+                    location.name, existing_names
+                )
+                if not is_unique:
+                    logger.warning(
+                        f"Location name '{location.name}' conflicts with '{conflicting_name}' "
+                        f"(reason: {reason}), clearing to force retry"
+                    )
                     return {}  # Return empty to trigger retry
-                return data
-            else:
-                logger.error(f"Location creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid location JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(f"Location creation LLM error: {e}")
-            raise WorldGenerationError(f"LLM error during location creation: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(f"Location creation JSON parsing error: {e}")
-            raise WorldGenerationError(f"Invalid location response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+
+            # Convert to dict for compatibility with existing code
+            return location.model_dump()
         except Exception as e:
-            logger.exception(f"Unexpected error in location creation: {e}")
-            raise WorldGenerationError(f"Unexpected location creation error: {e}") from e
+            logger.exception("Location creation failed for story %s: %s", story_state.id, e)
+            raise WorldGenerationError(f"Location creation failed: {e}") from e
 
     def _judge_location_quality(
         self,
@@ -935,78 +942,66 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
         story_state: StoryState,
         temperature: float,
     ) -> dict[str, Any]:
-        """Refine a location based on quality feedback."""
+        """Refine a location based on quality feedback using structured generation."""
         brief = story_state.brief
-        weak = scores.weak_dimensions(self.get_config().quality_threshold)
 
-        prompt = f"""Improve this location based on quality feedback.
+        # Build specific improvement instructions from feedback
+        improvement_focus = []
+        if scores.atmosphere < 8:
+            improvement_focus.append("Add richer sensory details and mood")
+        if scores.significance < 8:
+            improvement_focus.append("Deepen the plot or symbolic meaning")
+        if scores.story_relevance < 8:
+            improvement_focus.append("Strengthen connections to themes and characters")
+        if scores.distinctiveness < 8:
+            improvement_focus.append("Make more memorable with unique qualities")
+
+        prompt = f"""TASK: Improve this location to score HIGHER on the weak dimensions.
 
 ORIGINAL LOCATION:
 Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
 
-QUALITY SCORES (0-10):
-- Atmosphere: {scores.atmosphere}
-- Significance: {scores.significance}
-- Story Relevance: {scores.story_relevance}
-- Distinctiveness: {scores.distinctiveness}
+CURRENT SCORES (need 9+ in all areas):
+- Atmosphere: {scores.atmosphere}/10
+- Significance: {scores.significance}/10
+- Story Relevance: {scores.story_relevance}/10
+- Distinctiveness: {scores.distinctiveness}/10
 
-FEEDBACK: {scores.feedback}
-WEAK AREAS: {", ".join(weak) if weak else "None"}
+JUDGE'S FEEDBACK: {scores.feedback}
 
-Keep the name, enhance the weak areas.
+SPECIFIC IMPROVEMENTS NEEDED:
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
-Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
-{{
-    "name": "{location.get("name", "Unknown")}",
-    "type": "location",
-    "description": "Improved description",
-    "significance": "Improved significance"
-}}"""
+REQUIREMENTS:
+1. Keep the exact name: "{location.get("name", "Unknown")}"
+2. Make SUBSTANTIAL improvements to weak areas
+3. Add concrete sensory details, not vague generalities
+4. Output in {brief.language if brief else "English"}
+
+Return ONLY the improved location."""
 
         try:
             model = self._get_creator_model(entity_type="location")
-            response = self.client.generate(
+            refined = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_location_refine,
-                },
+                response_model=Location,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                return data
-            else:
-                logger.error(f"Location refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid location refinement JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(
-                "Location refinement LLM error for '%s': %s",
-                location.get("name") or "Unknown",
-                e,
-            )
-            raise WorldGenerationError(f"LLM error during location refinement: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(
-                "Location refinement JSON parsing error for '%s': %s",
-                location.get("name") or "Unknown",
-                e,
-            )
-            raise WorldGenerationError(f"Invalid location refinement response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+            # Ensure name is preserved from original location
+            result = refined.model_dump()
+            result["name"] = location.get("name", "Unknown")
+            result["type"] = "location"
+            return result
         except Exception as e:
             logger.exception(
-                "Unexpected error in location refinement for '%s': %s",
-                location.get("name") or "Unknown",
-                e,
+                "Location refinement failed for '%s': %s", location.get("name") or "Unknown", e
             )
-            raise WorldGenerationError(f"Unexpected location refinement error: {e}") from e
+            raise WorldGenerationError(f"Location refinement failed: {e}") from e
 
     # ========== RELATIONSHIP GENERATION WITH QUALITY ==========
 
@@ -1056,11 +1051,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     )
                 else:
                     if relationship and scores:
+                        # Use dynamic temperature that decreases over iterations
+                        dynamic_temp = config.get_refinement_temperature(iteration + 1)
                         relationship = self._refine_relationship(
                             relationship,
                             scores,
                             story_state,
-                            config.refinement_temperature,
+                            dynamic_temp,
                         )
 
                 if not relationship.get("source") or not relationship.get("target"):
@@ -1123,8 +1120,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     )
                     return relationship, scores, iteration + 1
 
-                # Check for early stopping after tracking iteration
-                if history.should_stop_early(config.early_stopping_patience):
+                # Check for early stopping after tracking iteration (enhanced with variance tolerance)
+                if history.should_stop_early(
+                    config.early_stopping_patience,
+                    min_iterations=config.early_stopping_min_iterations,
+                    variance_tolerance=config.early_stopping_variance_tolerance,
+                ):
                     logger.info(
                         f"Early stopping: Relationship '{source} -> {target}' quality degraded "
                         f"for {history.consecutive_degradations} consecutive iterations "
@@ -1517,11 +1518,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     )
                 else:
                     if faction and scores:
+                        # Use dynamic temperature that decreases over iterations
+                        dynamic_temp = config.get_refinement_temperature(iteration + 1)
                         faction = self._refine_faction(
                             faction,
                             scores,
                             story_state,
-                            config.refinement_temperature,
+                            dynamic_temp,
                         )
 
                 if not faction.get("name"):
@@ -1566,8 +1569,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     )
                     return faction, scores, iteration + 1
 
-                # Check for early stopping after tracking iteration
-                if history.should_stop_early(config.early_stopping_patience):
+                # Check for early stopping after tracking iteration (enhanced with variance tolerance)
+                if history.should_stop_early(
+                    config.early_stopping_patience,
+                    min_iterations=config.early_stopping_min_iterations,
+                    variance_tolerance=config.early_stopping_variance_tolerance,
+                ):
                     logger.info(
                         f"Early stopping: Faction '{faction.get('name')}' quality degraded "
                         f"for {history.consecutive_degradations} consecutive iterations "
@@ -1772,6 +1779,41 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         logger.debug("Formatted %d existing faction names for prompt", len(formatted))
         return "\n".join(formatted)
+
+    def _format_existing_names_warning(self, existing_names: list[str], entity_type: str) -> str:
+        """
+        Format existing names with explicit DO NOT examples for consistent duplicate prevention.
+
+        Parameters:
+            existing_names (list[str]): Existing entity names to avoid.
+            entity_type (str): Type of entity (concept, item, location, faction) for context.
+
+        Returns:
+            str: Formatted warning string with examples of what NOT to use.
+        """
+        if not existing_names:
+            logger.debug("Formatting existing %s names: none provided", entity_type)
+            return f"EXISTING {entity_type.upper()}S: None yet - you are creating the first {entity_type}."
+
+        formatted_names = "\n".join(f"  - {name}" for name in existing_names)
+
+        # Generate example DO NOT variations from the first name
+        example_name = existing_names[0] if existing_names else "Example"
+        do_not_examples = [
+            f'"{example_name}" (exact match)',
+            f'"{example_name.upper()}" (case variation)',
+            f'"The {example_name}" (prefix variation)',
+        ]
+
+        logger.debug("Formatted %d existing %s names for prompt", len(existing_names), entity_type)
+
+        return f"""EXISTING {entity_type.upper()}S (DO NOT DUPLICATE OR CREATE SIMILAR NAMES):
+{formatted_names}
+
+DO NOT USE names like:
+{chr(10).join(f"  - {ex}" for ex in do_not_examples)}
+
+Create a COMPLETELY DIFFERENT {entity_type} name."""
 
     def _create_faction(
         self,
@@ -2086,11 +2128,13 @@ Return ONLY the improved faction."""
                     )
                 else:
                     if item and scores:
+                        # Use dynamic temperature that decreases over iterations
+                        dynamic_temp = config.get_refinement_temperature(iteration + 1)
                         item = self._refine_item(
                             item,
                             scores,
                             story_state,
-                            config.refinement_temperature,
+                            dynamic_temp,
                         )
 
                 if not item.get("name"):
@@ -2134,8 +2178,12 @@ Return ONLY the improved faction."""
                     )
                     return item, scores, iteration + 1
 
-                # Check for early stopping after tracking iteration
-                if history.should_stop_early(config.early_stopping_patience):
+                # Check for early stopping after tracking iteration (enhanced with variance tolerance)
+                if history.should_stop_early(
+                    config.early_stopping_patience,
+                    min_iterations=config.early_stopping_min_iterations,
+                    variance_tolerance=config.early_stopping_variance_tolerance,
+                ):
                     logger.info(
                         f"Early stopping: Item '{item.get('name')}' quality degraded "
                         f"for {history.consecutive_degradations} consecutive iterations "
@@ -2219,10 +2267,13 @@ Return ONLY the improved faction."""
         existing_names: list[str],
         temperature: float,
     ) -> dict[str, Any]:
-        """Create a new item using the creator model."""
+        """Create a new item using the creator model with structured generation."""
         brief = story_state.brief
         if not brief:
             return {}
+
+        # Format existing names with explicit warnings
+        existing_names_formatted = self._format_existing_names_warning(existing_names, "item")
 
         prompt = f"""Create a significant item/object for a {brief.genre} story.
 
@@ -2231,8 +2282,14 @@ SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
-EXISTING ITEMS IN THIS WORLD: {", ".join(existing_names) if existing_names else "None yet"}
-(Create a NEW item with a different name that complements these existing ones)
+=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{existing_names_formatted}
+
+STRICT RULES:
+- DO NOT use any name from the list above
+- DO NOT use case variations (e.g., "Sword" vs "SWORD")
+- DO NOT use similar names (e.g., "The Blade" vs "Blade of Destiny")
+- Create something COMPLETELY DIFFERENT
 
 Create an item with:
 1. Significance - meaningful role in the plot or character development
@@ -2240,52 +2297,35 @@ Create an item with:
 3. Narrative potential - opportunities for scenes and conflict
 4. Integration - fits naturally into the world
 
-Output ONLY valid JSON (all text in {brief.language}):
-{{
-    "name": "Item Name",
-    "type": "item",
-    "description": "Physical description and history (2-3 sentences)",
-    "significance": "Why this item matters to the story",
-    "properties": ["special property 1", "special property 2"]
-}}"""
+Write all text in {brief.language}."""
 
         try:
             model = self._get_creator_model(entity_type="item")
-            response = self.client.generate(
+            item = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_item_create,
-                },
+                response_model=Item,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                # Validate name is not a duplicate
-                name = data.get("name", "")
-                if name and name in existing_names:
-                    logger.warning(f"Item name '{name}' is duplicate, clearing to force retry")
+            # Comprehensive uniqueness validation
+            if item.name:
+                is_unique, conflicting_name, reason = validate_unique_name(
+                    item.name, existing_names
+                )
+                if not is_unique:
+                    logger.warning(
+                        f"Item name '{item.name}' conflicts with '{conflicting_name}' "
+                        f"(reason: {reason}), clearing to force retry"
+                    )
                     return {}  # Return empty to trigger retry
-                return data
-            else:
-                logger.error(f"Item creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid item JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error("Item creation LLM error for story %s: %s", story_state.id, e)
-            raise WorldGenerationError(f"LLM error during item creation: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error("Item creation JSON parsing error for story %s: %s", story_state.id, e)
-            raise WorldGenerationError(f"Invalid item response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+
+            # Convert to dict for compatibility with existing code
+            return item.model_dump()
         except Exception as e:
-            logger.exception(
-                "Unexpected error in item creation for story %s: %s", story_state.id, e
-            )
-            raise WorldGenerationError(f"Unexpected item creation error: {e}") from e
+            logger.exception("Item creation failed for story %s: %s", story_state.id, e)
+            raise WorldGenerationError(f"Item creation failed: {e}") from e
 
     def _judge_item_quality(
         self,
@@ -2371,11 +2411,21 @@ Output ONLY valid JSON:
         story_state: StoryState,
         temperature: float,
     ) -> dict[str, Any]:
-        """Refine an item based on quality feedback."""
+        """Refine an item based on quality feedback using structured generation."""
         brief = story_state.brief
-        weak = scores.weak_dimensions(self.get_config().quality_threshold)
 
-        prompt = f"""Improve this item based on quality feedback.
+        # Build specific improvement instructions from feedback
+        improvement_focus = []
+        if scores.significance < 8:
+            improvement_focus.append("Increase story importance and plot relevance")
+        if scores.uniqueness < 8:
+            improvement_focus.append("Make more distinctive with unique qualities")
+        if scores.narrative_potential < 8:
+            improvement_focus.append("Add more opportunities for scenes and conflict")
+        if scores.integration < 8:
+            improvement_focus.append("Improve how naturally it fits into the world")
+
+        prompt = f"""TASK: Improve this item to score HIGHER on the weak dimensions.
 
 ORIGINAL ITEM:
 Name: {item.get("name", "Unknown")}
@@ -2383,62 +2433,45 @@ Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {self._format_properties(item.get("properties", []))}
 
-QUALITY SCORES (0-10):
-- Significance: {scores.significance}
-- Uniqueness: {scores.uniqueness}
-- Narrative Potential: {scores.narrative_potential}
-- Integration: {scores.integration}
+CURRENT SCORES (need 9+ in all areas):
+- Significance: {scores.significance}/10
+- Uniqueness: {scores.uniqueness}/10
+- Narrative Potential: {scores.narrative_potential}/10
+- Integration: {scores.integration}/10
 
-FEEDBACK: {scores.feedback}
-WEAK AREAS: {", ".join(weak) if weak else "None"}
+JUDGE'S FEEDBACK: {scores.feedback}
 
-Keep the name, enhance the weak areas.
+SPECIFIC IMPROVEMENTS NEEDED:
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
-Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
-{{
-    "name": "{item.get("name", "Unknown")}",
-    "type": "item",
-    "description": "Improved description",
-    "significance": "Improved significance",
-    "properties": ["improved properties"]
-}}"""
+REQUIREMENTS:
+1. Keep the exact name: "{item.get("name", "Unknown")}"
+2. Make SUBSTANTIAL improvements to weak areas
+3. Add concrete details, not vague generalities
+4. Output in {brief.language if brief else "English"}
+
+Return ONLY the improved item."""
 
         try:
             model = self._get_creator_model(entity_type="item")
-            response = self.client.generate(
+            refined = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_item_refine,
-                },
+                response_model=Item,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                return data
-            else:
-                logger.error(f"Item refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid item refinement JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error("Item refinement LLM error for '%s': %s", item.get("name") or "Unknown", e)
-            raise WorldGenerationError(f"LLM error during item refinement: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(
-                "Item refinement JSON parsing error for '%s': %s", item.get("name") or "Unknown", e
-            )
-            raise WorldGenerationError(f"Invalid item refinement response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+            # Ensure name is preserved from original item
+            result = refined.model_dump()
+            result["name"] = item.get("name", "Unknown")
+            result["type"] = "item"
+            return result
         except Exception as e:
             logger.exception(
-                "Unexpected error in item refinement for '%s': %s",
-                item.get("name") or "Unknown",
-                e,
+                "Item refinement failed for '%s': %s", item.get("name") or "Unknown", e
             )
-            raise WorldGenerationError(f"Unexpected item refinement error: {e}") from e
+            raise WorldGenerationError(f"Item refinement failed: {e}") from e
 
     # ========== CONCEPT GENERATION WITH QUALITY ==========
 
@@ -2482,11 +2515,13 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     )
                 else:
                     if concept and scores:
+                        # Use dynamic temperature that decreases over iterations
+                        dynamic_temp = config.get_refinement_temperature(iteration + 1)
                         concept = self._refine_concept(
                             concept,
                             scores,
                             story_state,
-                            config.refinement_temperature,
+                            dynamic_temp,
                         )
 
                 if not concept.get("name"):
@@ -2532,8 +2567,12 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
                     )
                     return concept, scores, iteration + 1
 
-                # Check for early stopping after tracking iteration
-                if history.should_stop_early(config.early_stopping_patience):
+                # Check for early stopping after tracking iteration (enhanced with variance tolerance)
+                if history.should_stop_early(
+                    config.early_stopping_patience,
+                    min_iterations=config.early_stopping_min_iterations,
+                    variance_tolerance=config.early_stopping_variance_tolerance,
+                ):
                     logger.info(
                         f"Early stopping: Concept '{concept.get('name')}' quality degraded "
                         f"for {history.consecutive_degradations} consecutive iterations "
@@ -2617,20 +2656,28 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
         existing_names: list[str],
         temperature: float,
     ) -> dict[str, Any]:
-        """Create a new concept using the creator model."""
+        """Create a new concept using the creator model with structured generation."""
         brief = story_state.brief
         if not brief:
             return {}
 
-        existing_str = ", ".join(existing_names) if existing_names else "None yet"
+        # Format existing names with explicit warnings
+        existing_names_formatted = self._format_existing_names_warning(existing_names, "concept")
+
         prompt = f"""Create a thematic concept/idea for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
-EXISTING CONCEPTS IN THIS STORY: {existing_str}
-(Create a NEW concept with a different name that complements these existing ones)
+=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{existing_names_formatted}
+
+STRICT RULES:
+- DO NOT use any name from the list above
+- DO NOT use case variations (e.g., "Hope" vs "HOPE")
+- DO NOT use similar names (e.g., "Redemption" vs "The Redemption")
+- Create something COMPLETELY DIFFERENT
 
 Create a concept that:
 1. Is relevant to the story's themes
@@ -2638,51 +2685,35 @@ Create a concept that:
 3. Can manifest in concrete ways in the story
 4. Resonates emotionally with readers
 
-Output ONLY valid JSON (all text in {brief.language}):
-{{
-    "name": "Concept Name",
-    "type": "concept",
-    "description": "What this concept means in the context of the story (2-3 sentences)",
-    "manifestations": "How this concept appears in the story - through events, characters, or symbols"
-}}"""
+Write all text in {brief.language}."""
 
         try:
             model = self._get_creator_model(entity_type="concept")
-            response = self.client.generate(
+            concept = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_concept_create,
-                },
+                response_model=Concept,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                # Validate name is not a duplicate
-                name = data.get("name", "")
-                if name and name in existing_names:
-                    logger.warning(f"Concept name '{name}' is duplicate, clearing to force retry")
+            # Comprehensive uniqueness validation
+            if concept.name:
+                is_unique, conflicting_name, reason = validate_unique_name(
+                    concept.name, existing_names
+                )
+                if not is_unique:
+                    logger.warning(
+                        f"Concept name '{concept.name}' conflicts with '{conflicting_name}' "
+                        f"(reason: {reason}), clearing to force retry"
+                    )
                     return {}  # Return empty to trigger retry
-                return data
-            else:
-                logger.error(f"Concept creation returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid concept JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error("Concept creation LLM error for story %s: %s", story_state.id, e)
-            raise WorldGenerationError(f"LLM error during concept creation: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error("Concept creation JSON parsing error for story %s: %s", story_state.id, e)
-            raise WorldGenerationError(f"Invalid concept response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+
+            # Convert to dict for compatibility with existing code
+            return concept.model_dump()
         except Exception as e:
-            logger.exception(
-                "Unexpected error in concept creation for story %s: %s", story_state.id, e
-            )
-            raise WorldGenerationError(f"Unexpected concept creation error: {e}") from e
+            logger.exception("Concept creation failed for story %s: %s", story_state.id, e)
+            raise WorldGenerationError(f"Concept creation failed: {e}") from e
 
     def _judge_concept_quality(
         self,
@@ -2764,76 +2795,66 @@ Output ONLY valid JSON:
         story_state: StoryState,
         temperature: float,
     ) -> dict[str, Any]:
-        """Refine a concept based on quality feedback."""
+        """Refine a concept based on quality feedback using structured generation."""
         brief = story_state.brief
-        weak = scores.weak_dimensions(self.get_config().quality_threshold)
 
-        prompt = f"""Improve this concept based on quality feedback.
+        # Build specific improvement instructions from feedback
+        improvement_focus = []
+        if scores.relevance < 8:
+            improvement_focus.append("Strengthen alignment with story themes")
+        if scores.depth < 8:
+            improvement_focus.append("Add more philosophical richness and complexity")
+        if scores.manifestation < 8:
+            improvement_focus.append("Provide clearer ways the concept appears in the story")
+        if scores.resonance < 8:
+            improvement_focus.append("Increase emotional impact potential")
+
+        prompt = f"""TASK: Improve this concept to score HIGHER on the weak dimensions.
 
 ORIGINAL CONCEPT:
 Name: {concept.get("name", "Unknown")}
 Description: {concept.get("description", "")}
 Manifestations: {concept.get("manifestations", "")}
 
-QUALITY SCORES (0-10):
-- Relevance: {scores.relevance}
-- Depth: {scores.depth}
-- Manifestation: {scores.manifestation}
-- Resonance: {scores.resonance}
+CURRENT SCORES (need 9+ in all areas):
+- Relevance: {scores.relevance}/10
+- Depth: {scores.depth}/10
+- Manifestation: {scores.manifestation}/10
+- Resonance: {scores.resonance}/10
 
-FEEDBACK: {scores.feedback}
-WEAK AREAS: {", ".join(weak) if weak else "None"}
+JUDGE'S FEEDBACK: {scores.feedback}
 
-Keep the name, enhance the weak areas.
+SPECIFIC IMPROVEMENTS NEEDED:
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
-Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
-{{
-    "name": "{concept.get("name", "Unknown")}",
-    "type": "concept",
-    "description": "Improved description",
-    "manifestations": "Improved manifestations"
-}}"""
+REQUIREMENTS:
+1. Keep the exact name: "{concept.get("name", "Unknown")}"
+2. Make SUBSTANTIAL improvements to weak areas
+3. Add concrete details, not vague generalities
+4. Output in {brief.language if brief else "English"}
+
+Return ONLY the improved concept."""
 
         try:
             model = self._get_creator_model(entity_type="concept")
-            response = self.client.generate(
+            refined = generate_structured(
+                settings=self.settings,
                 model=model,
                 prompt=prompt,
-                format="json",
-                options={
-                    "temperature": temperature,
-                    "num_predict": self.settings.llm_tokens_concept_refine,
-                },
+                response_model=Concept,
+                temperature=temperature,
             )
 
-            data = extract_json(response["response"], strict=False)
-            if data and isinstance(data, dict):
-                return data
-            else:
-                logger.error(f"Concept refinement returned invalid JSON structure: {data}")
-                raise WorldGenerationError(f"Invalid concept refinement JSON structure: {data}")
-        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
-            logger.error(
-                "Concept refinement LLM error for '%s': %s", concept.get("name") or "Unknown", e
-            )
-            raise WorldGenerationError(f"LLM error during concept refinement: {e}") from e
-        except (ValueError, KeyError, TypeError) as e:
-            logger.error(
-                "Concept refinement JSON parsing error for '%s': %s",
-                concept.get("name") or "Unknown",
-                e,
-            )
-            raise WorldGenerationError(f"Invalid concept refinement response format: {e}") from e
-        except WorldGenerationError:
-            # Re-raise domain exceptions as-is
-            raise
+            # Ensure name is preserved from original concept
+            result = refined.model_dump()
+            result["name"] = concept.get("name", "Unknown")
+            result["type"] = "concept"
+            return result
         except Exception as e:
             logger.exception(
-                "Unexpected error in concept refinement for '%s': %s",
-                concept.get("name") or "Unknown",
-                e,
+                "Concept refinement failed for '%s': %s", concept.get("name") or "Unknown", e
             )
-            raise WorldGenerationError(f"Unexpected concept refinement error: {e}") from e
+            raise WorldGenerationError(f"Concept refinement failed: {e}") from e
 
     # ========== BATCH OPERATIONS ==========
 

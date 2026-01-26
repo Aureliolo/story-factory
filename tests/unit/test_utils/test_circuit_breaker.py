@@ -1,0 +1,212 @@
+"""Tests for the circuit breaker module."""
+
+import threading
+import time
+from typing import cast
+
+from src.utils.circuit_breaker import (
+    CircuitBreaker,
+    CircuitState,
+    get_circuit_breaker,
+    reset_global_circuit_breaker,
+)
+
+
+class TestCircuitBreaker:
+    """Tests for the CircuitBreaker class."""
+
+    def test_initial_state_is_closed(self):
+        """Circuit breaker starts in CLOSED state."""
+        cb = CircuitBreaker(name="test")
+        assert cb.state == CircuitState.CLOSED
+        assert cb.is_closed
+        assert not cb.is_open
+
+    def test_allow_request_when_closed(self):
+        """Requests are allowed when circuit is closed."""
+        cb = CircuitBreaker(name="test")
+        assert cb.allow_request()
+
+    def test_allow_request_when_disabled(self):
+        """Requests are always allowed when circuit breaker is disabled."""
+        cb = CircuitBreaker(name="test", enabled=False)
+        # Even after failures, requests should be allowed
+        for _ in range(10):
+            cb.record_failure(Exception("test"))
+        assert cb.allow_request()
+
+    def test_record_success_resets_failure_count(self):
+        """Recording success resets the failure count in closed state."""
+        cb = CircuitBreaker(name="test", failure_threshold=5)
+        cb.record_failure(Exception("test"))
+        cb.record_failure(Exception("test"))
+        assert cb._failure_count == 2
+
+        cb.record_success()
+        assert cb._failure_count == 0
+
+    def test_circuit_opens_after_failure_threshold(self):
+        """Circuit opens after reaching failure threshold."""
+        cb = CircuitBreaker(name="test", failure_threshold=3)
+
+        for i in range(3):
+            cb.record_failure(Exception(f"test {i}"))
+
+        assert cb.state == CircuitState.OPEN
+        assert cb.is_open
+        assert not cb.allow_request()
+
+    def test_circuit_transitions_to_half_open_after_timeout(self):
+        """Circuit transitions from OPEN to HALF_OPEN after timeout."""
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=0.1)
+
+        # Open the circuit
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+        assert cb.state == CircuitState.OPEN
+
+        # Wait for timeout
+        time.sleep(0.15)
+
+        # Should transition to HALF_OPEN (cast breaks type narrowing)
+        current_state = cast(CircuitState, cb.state)
+        assert current_state == CircuitState.HALF_OPEN
+        assert cb.allow_request()
+
+    def test_half_open_closes_on_success_threshold(self):
+        """Circuit closes from HALF_OPEN after success threshold."""
+        cb = CircuitBreaker(
+            name="test", failure_threshold=2, success_threshold=2, timeout_seconds=0.1
+        )
+
+        # Open the circuit
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        # Wait for timeout to transition to HALF_OPEN
+        time.sleep(0.15)
+        assert cb.state == CircuitState.HALF_OPEN
+
+        # Record successes
+        cb.record_success()
+        assert cb.state == CircuitState.HALF_OPEN  # Still half-open after 1 success
+
+        cb.record_success()
+        # Cast breaks type narrowing from earlier state checks
+        current_state = cast(CircuitState, cb.state)
+        assert current_state == CircuitState.CLOSED
+
+    def test_half_open_reopens_on_failure(self):
+        """Circuit reopens from HALF_OPEN on any failure."""
+        cb = CircuitBreaker(name="test", failure_threshold=2, timeout_seconds=0.1)
+
+        # Open the circuit
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        # Wait for timeout to transition to HALF_OPEN
+        time.sleep(0.15)
+        assert cb.state == CircuitState.HALF_OPEN
+
+        # Failure in HALF_OPEN should immediately reopen (cast breaks type narrowing)
+        cb.record_failure(Exception("test in half-open"))
+        current_state = cast(CircuitState, cb.state)
+        assert current_state == CircuitState.OPEN
+
+    def test_reset(self):
+        """Reset returns circuit to closed state."""
+        cb = CircuitBreaker(name="test", failure_threshold=2)
+
+        # Open the circuit
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+        assert cb.state == CircuitState.OPEN
+
+        # Reset (cast breaks type narrowing)
+        cb.reset()
+        current_state = cast(CircuitState, cb.state)
+        assert current_state == CircuitState.CLOSED
+        assert cb._failure_count == 0
+        assert cb._success_count == 0
+
+    def test_get_status(self):
+        """get_status returns correct information."""
+        cb = CircuitBreaker(name="test", failure_threshold=5)
+
+        cb.record_failure(Exception("test"))
+        cb.record_failure(Exception("test"))
+
+        status = cb.get_status()
+        assert status["name"] == "test"
+        assert status["enabled"] is True
+        assert status["state"] == "closed"
+        assert status["failure_count"] == 2
+        assert status["failure_threshold"] == 5
+
+    def test_thread_safety(self):
+        """Circuit breaker operations are thread-safe."""
+        cb = CircuitBreaker(name="test", failure_threshold=100)
+        errors = []
+
+        def record_failures():
+            try:
+                for _ in range(50):
+                    cb.record_failure(Exception("test"))
+            except Exception as e:
+                errors.append(e)
+
+        def record_successes():
+            try:
+                for _ in range(50):
+                    cb.record_success()
+            except Exception as e:
+                errors.append(e)
+
+        threads = [
+            threading.Thread(target=record_failures),
+            threading.Thread(target=record_failures),
+            threading.Thread(target=record_successes),
+            threading.Thread(target=record_successes),
+        ]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Thread errors: {errors}"
+
+
+class TestGlobalCircuitBreaker:
+    """Tests for the global circuit breaker functions."""
+
+    def setup_method(self):
+        """Reset global state before each test."""
+        reset_global_circuit_breaker()
+
+    def teardown_method(self):
+        """Clean up global state after each test."""
+        reset_global_circuit_breaker()
+
+    def test_get_circuit_breaker_creates_singleton(self):
+        """get_circuit_breaker returns the same instance."""
+        cb1 = get_circuit_breaker()
+        cb2 = get_circuit_breaker()
+        assert cb1 is cb2
+
+    def test_get_circuit_breaker_uses_parameters_on_creation(self):
+        """Parameters are used when creating the circuit breaker."""
+        cb = get_circuit_breaker(failure_threshold=10, timeout_seconds=120.0)
+        assert cb.failure_threshold == 10
+        assert cb.timeout_seconds == 120.0
+
+    def test_reset_global_circuit_breaker(self):
+        """reset_global_circuit_breaker clears the singleton."""
+        cb1 = get_circuit_breaker(failure_threshold=5)
+        cb1.record_failure(Exception("test"))
+
+        reset_global_circuit_breaker()
+
+        cb2 = get_circuit_breaker(failure_threshold=10)
+        assert cb2._failure_count == 0
+        assert cb2.failure_threshold == 10

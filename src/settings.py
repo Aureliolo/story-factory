@@ -336,6 +336,30 @@ class Settings:
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
     world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 
+    # Dynamic temperature settings for refinement (#167, #177)
+    world_quality_refinement_temp_start: float = 0.7  # Starting temperature for refinement
+    world_quality_refinement_temp_end: float = 0.35  # Ending temperature after decay
+    world_quality_refinement_temp_decay: str = "linear"  # Decay curve: linear, exponential, step
+
+    # Enhanced early stopping settings (#167)
+    world_quality_early_stopping_min_iterations: int = 2  # Min iterations before early stop
+    world_quality_early_stopping_variance_tolerance: float = 0.3  # Score variance tolerance
+
+    # Circuit breaker settings (#175)
+    circuit_breaker_enabled: bool = True  # Enable circuit breaker for LLM calls
+    circuit_breaker_failure_threshold: int = 5  # Failures before opening circuit
+    circuit_breaker_success_threshold: int = 2  # Successes to close from half-open
+    circuit_breaker_timeout: float = 60.0  # Seconds before half-open
+
+    # Retry strategy settings (#168)
+    retry_temp_increase: float = 0.15  # Temperature increase on retry attempt 2+
+    retry_simplify_on_attempt: int = 3  # Attempt number to start simplifying prompts
+
+    # Semantic duplicate detection settings (#176)
+    semantic_duplicate_enabled: bool = False  # Opt-in: use embedding-based similarity
+    semantic_duplicate_threshold: float = 0.85  # Cosine similarity threshold for duplicates
+    embedding_model: str = "nomic-embed-text"  # Model for generating embeddings
+
     # Content guidelines checking settings
     content_check_enabled: bool = True  # Enable content guideline checking for generated content
     content_check_use_llm: bool = False  # Use LLM for more accurate checking (slower)
@@ -608,9 +632,66 @@ class Settings:
             ("world_quality_creator_temp", self.world_quality_creator_temp),
             ("world_quality_judge_temp", self.world_quality_judge_temp),
             ("world_quality_refinement_temp", self.world_quality_refinement_temp),
+            ("world_quality_refinement_temp_start", self.world_quality_refinement_temp_start),
+            ("world_quality_refinement_temp_end", self.world_quality_refinement_temp_end),
         ]:
             if not 0.0 <= temp_value <= 2.0:
                 raise ValueError(f"{temp_name} must be between 0.0 and 2.0, got {temp_value}")
+
+        # Validate dynamic temperature decay curve
+        valid_decay_curves = ["linear", "exponential", "step"]
+        if self.world_quality_refinement_temp_decay not in valid_decay_curves:
+            raise ValueError(
+                f"world_quality_refinement_temp_decay must be one of {valid_decay_curves}, "
+                f"got {self.world_quality_refinement_temp_decay}"
+            )
+
+        # Validate enhanced early stopping settings
+        if not 1 <= self.world_quality_early_stopping_min_iterations <= 10:
+            raise ValueError(
+                f"world_quality_early_stopping_min_iterations must be between 1 and 10, "
+                f"got {self.world_quality_early_stopping_min_iterations}"
+            )
+        if not 0.0 <= self.world_quality_early_stopping_variance_tolerance <= 2.0:
+            raise ValueError(
+                f"world_quality_early_stopping_variance_tolerance must be between 0.0 and 2.0, "
+                f"got {self.world_quality_early_stopping_variance_tolerance}"
+            )
+
+        # Validate circuit breaker settings
+        if not 1 <= self.circuit_breaker_failure_threshold <= 20:
+            raise ValueError(
+                f"circuit_breaker_failure_threshold must be between 1 and 20, "
+                f"got {self.circuit_breaker_failure_threshold}"
+            )
+        if not 1 <= self.circuit_breaker_success_threshold <= 10:
+            raise ValueError(
+                f"circuit_breaker_success_threshold must be between 1 and 10, "
+                f"got {self.circuit_breaker_success_threshold}"
+            )
+        if not 10.0 <= self.circuit_breaker_timeout <= 600.0:
+            raise ValueError(
+                f"circuit_breaker_timeout must be between 10.0 and 600.0 seconds, "
+                f"got {self.circuit_breaker_timeout}"
+            )
+
+        # Validate retry strategy settings
+        if not 0.0 <= self.retry_temp_increase <= 1.0:
+            raise ValueError(
+                f"retry_temp_increase must be between 0.0 and 1.0, got {self.retry_temp_increase}"
+            )
+        if not 2 <= self.retry_simplify_on_attempt <= 10:
+            raise ValueError(
+                f"retry_simplify_on_attempt must be between 2 and 10, "
+                f"got {self.retry_simplify_on_attempt}"
+            )
+
+        # Validate semantic duplicate settings
+        if not 0.5 <= self.semantic_duplicate_threshold <= 1.0:
+            raise ValueError(
+                f"semantic_duplicate_threshold must be between 0.5 and 1.0, "
+                f"got {self.semantic_duplicate_threshold}"
+            )
 
         # Validate judge consistency settings
         if not 2 <= self.judge_multi_call_count <= 5:

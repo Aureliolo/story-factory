@@ -190,13 +190,18 @@ def validate_unique_name(
     existing_names: list[str],
     check_substring: bool = True,
     min_substring_length: int = 4,
+    check_semantic: bool = False,
+    semantic_threshold: float = 0.85,
+    ollama_url: str | None = None,
+    embedding_model: str | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """
     Determine whether a candidate name conflicts with any names in an existing list.
 
     Performs these checks (in order): exact match (case-sensitive), case-insensitive match,
-    match after removing common leading articles (e.g., "the", "a", "an"), and optionally
-    substring containment when both normalized names meet the minimum length.
+    match after removing common leading articles (e.g., "the", "a", "an"), optionally
+    substring containment when both normalized names meet the minimum length, and optionally
+    semantic similarity using embeddings.
     Empty or whitespace-only candidate names are treated as unique; empty existing entries are ignored.
 
     Parameters:
@@ -204,12 +209,17 @@ def validate_unique_name(
         existing_names: Sequence of existing names to check against.
         check_substring: If true, check for substring containment in both directions.
         min_substring_length: Minimum normalized length required to perform substring checks.
+        check_semantic: If true, perform semantic similarity check using embeddings.
+        semantic_threshold: Cosine similarity threshold for semantic duplicates (0.5-1.0).
+        ollama_url: Ollama server URL for semantic checking (uses default if None).
+        embedding_model: Embedding model for semantic checking (uses default if None).
 
     Returns:
         A tuple (is_unique, conflicting_name, reason):
         - is_unique: `True` if no conflict was found, `False` otherwise.
         - conflicting_name: The existing name that conflicts with `name`, or `None` if unique.
-        - reason: One of `"exact"`, `"case_insensitive"`, `"prefix_match"`, or `"substring"`, or `None` if unique.
+        - reason: One of `"exact"`, `"case_insensitive"`, `"prefix_match"`, `"substring"`,
+          or `"semantic"`, or `None` if unique.
     """
     if not name or not name.strip():
         logger.debug("Empty name provided, skipping validation")
@@ -253,6 +263,30 @@ def validate_unique_name(
                     if normalized_existing in normalized_new:
                         logger.debug("Name conflict: contains substring '%s'", existing)
                         return False, existing, "substring"
+
+    # Semantic similarity check (opt-in, more expensive)
+    if check_semantic and existing_names:
+        try:
+            from src.utils.similarity import get_semantic_checker
+
+            checker_kwargs: dict[str, str | float] = {"similarity_threshold": semantic_threshold}
+            if ollama_url:
+                checker_kwargs["ollama_url"] = ollama_url
+            if embedding_model:
+                checker_kwargs["embedding_model"] = embedding_model
+
+            checker = get_semantic_checker(**checker_kwargs)  # type: ignore[arg-type]
+            is_duplicate, matching_name, similarity = checker.find_semantic_duplicate(
+                name, existing_names
+            )
+            if is_duplicate and matching_name:
+                logger.debug(
+                    "Name conflict: semantic similarity with '%s' (%.3f)", matching_name, similarity
+                )
+                return False, matching_name, "semantic"
+        except Exception as e:
+            logger.warning("Semantic duplicate check failed, skipping: %s", e)
+            # Continue without semantic check - don't block on embedding failures
 
     logger.debug("Name '%s' is unique", name)
     return True, None, None
