@@ -1116,11 +1116,8 @@ class TestCreateLocation:
         self, mock_generate_structured, service, story_state
     ):
         """Test location creation raises error when result cannot be converted."""
-        from pydantic import ValidationError
-
-        mock_generate_structured.side_effect = ValidationError.from_exception_data(
-            "Location", [{"type": "model_type", "loc": (), "input": ["a", "list"]}]
-        )
+        # Simulate a validation error (e.g., LLM returned invalid structure)
+        mock_generate_structured.side_effect = ValueError("Invalid location data")
 
         with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
