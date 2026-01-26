@@ -350,19 +350,20 @@ class TestUserTemplateGenreLookup:
     """Tests for finding user templates by genre."""
 
     def test_find_user_template_by_genre(self, temp_templates_file):
-        """Test finding a user template by genre."""
+        """Test finding a user template by genre (unique genre not in builtins)."""
+        # Use a unique genre that doesn't exist in builtin templates
         user_template = {
-            "id": "custom_scifi",
-            "name": "Custom Sci-Fi",
-            "description": "A custom science fiction template",
+            "id": "custom_steampunk",
+            "name": "Custom Steampunk",
+            "description": "A custom steampunk template",
             "is_builtin": False,
-            "genre": "science_fiction",
+            "genre": "steampunk_adventure",  # Unique genre not in builtins
             "entity_hints": {},
             "relationship_patterns": [],
-            "naming_style": "futuristic",
+            "naming_style": "victorian",
             "recommended_counts": {},
-            "atmosphere": "technological",
-            "tags": ["scifi", "space"],
+            "atmosphere": "industrial",
+            "tags": [],  # No tags to ensure we hit the genre match
         }
         temp_templates_file.parent.mkdir(parents=True, exist_ok=True)
         temp_templates_file.write_text(json.dumps([user_template]))
@@ -372,9 +373,10 @@ class TestUserTemplateGenreLookup:
             temp_templates_file,
         ):
             service = WorldTemplateService()
-            template = service.get_template_for_genre("science_fiction")
+            template = service.get_template_for_genre("steampunk_adventure")
             # Should find the user template by exact genre match
             assert template is not None
+            assert template.id == "custom_steampunk"
 
     def test_find_user_template_by_tag(self, temp_templates_file):
         """Test finding a user template by tag."""
