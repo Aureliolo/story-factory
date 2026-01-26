@@ -1254,3 +1254,165 @@ class TestBackupServiceWithVerification:
 
         assert result.version_compatible is True  # Still compatible on error
         assert any("Unable to read backup format version" in w for w in result.warnings)
+
+    def test_verify_metadata_not_dict_in_manifest(self, tmp_path):
+        """Test manifest check fails when metadata is not a dict (array)."""
+        zip_path = tmp_path / "array_metadata.zip"
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            # Write an array instead of an object
+            zf.writestr("backup_metadata.json", json.dumps(["not", "a", "dict"]))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.manifest_valid is False
+        assert any("Metadata must be a JSON object" in e for e in result.errors)
+
+    def test_verify_metadata_not_dict_in_file_completeness(self, tmp_path):
+        """Test file completeness fails when metadata is not a dict."""
+        from src.services.backup_service import BackupVerificationResult
+
+        zip_path = tmp_path / "test.zip"
+
+        # Create valid metadata initially
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(["an", "array"]))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = BackupVerificationResult(valid=True)
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            verifier._check_file_completeness(zf, result)
+
+        assert result.files_complete is False
+        assert any("Metadata must be a JSON object" in e for e in result.errors)
+
+    def test_verify_missing_files_list_in_metadata(self, tmp_path):
+        """Test file completeness fails when 'files' is missing from metadata."""
+        zip_path = tmp_path / "no_files_list.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            # No 'files' field at all
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.files_complete is False
+        assert any("Missing 'files' list in metadata" in e for e in result.errors)
+
+    def test_verify_files_field_not_list(self, tmp_path):
+        """Test file completeness fails when 'files' is not a list."""
+        zip_path = tmp_path / "files_not_list.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "files": "project.json",  # String instead of list
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.files_complete is False
+        assert any("Invalid 'files' field in metadata - must be a list" in e for e in result.errors)
+
+    def test_verify_metadata_not_dict_in_checksums(self, tmp_path):
+        """Test checksums check fails when metadata is not a dict."""
+        from src.services.backup_service import BackupVerificationResult
+
+        zip_path = tmp_path / "test.zip"
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(["an", "array"]))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = BackupVerificationResult(valid=True)
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            verifier._check_checksums(zf, result)
+
+        assert result.checksums_valid is False
+        assert any("Metadata must be a JSON object for checksum" in e for e in result.errors)
+
+    def test_verify_checksums_field_not_dict(self, tmp_path):
+        """Test checksums check fails when 'checksums' is not a dict."""
+        zip_path = tmp_path / "checksums_not_dict.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "files": ["project.json"],
+            "checksums": ["checksum1", "checksum2"],  # Array instead of dict
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.checksums_valid is False
+        assert any(
+            "Invalid 'checksums' field in metadata - must be a dict" in e for e in result.errors
+        )
+
+    def test_verify_metadata_not_dict_in_version_check(self, tmp_path):
+        """Test version check fails when metadata is not a dict."""
+        from src.services.backup_service import BackupVerificationResult
+
+        zip_path = tmp_path / "test.zip"
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(["an", "array"]))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = BackupVerificationResult(valid=True)
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            verifier._check_version_compatibility(zf, result)
+
+        assert result.version_compatible is False
+        assert any("Metadata must be a JSON object for version check" in e for e in result.errors)
+
+    def test_verify_backup_format_version_invalid_type(self, tmp_path):
+        """Test version check fails when backup_format_version cannot be coerced to int."""
+        zip_path = tmp_path / "invalid_version_type.zip"
+
+        metadata = {
+            "project_id": "test",
+            "project_name": "Test",
+            "files": ["project.json"],
+            "backup_format_version": "not_a_number",  # Can't convert to int
+        }
+
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("backup_metadata.json", json.dumps(metadata))
+            zf.writestr("project.json", json.dumps({"id": "test"}))
+
+        verifier = BackupVerifier()
+        result = verifier.verify(zip_path)
+
+        assert result.valid is False
+        assert result.version_compatible is False
+        assert any("Invalid backup_format_version type" in e for e in result.errors)

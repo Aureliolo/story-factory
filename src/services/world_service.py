@@ -882,12 +882,15 @@ class WorldService:
             True if updated, False if not found.
         """
         logger.info(f"Updating entity {entity_id}" + (f" -> {name}" if name else ""))
-        result = world_db.update_entity(
-            entity_id=entity_id,
-            name=name,
-            description=description,
-            attributes=attributes,
-        )
+        # Only pass non-None values to avoid overwriting with None
+        update_kwargs: dict[str, Any] = {}
+        if name is not None:
+            update_kwargs["name"] = name
+        if description is not None:
+            update_kwargs["description"] = description
+        if attributes is not None:
+            update_kwargs["attributes"] = attributes
+        result = world_db.update_entity(entity_id=entity_id, **update_kwargs)
         if result:
             logger.debug(f"Entity {entity_id} updated successfully")
         else:
