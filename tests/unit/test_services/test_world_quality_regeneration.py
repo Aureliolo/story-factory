@@ -22,6 +22,13 @@ def mock_settings():
     settings.world_quality_creator_temp = 0.9
     settings.world_quality_judge_temp = 0.1
     settings.world_quality_refinement_temp = 0.7
+    # RefinementConfig.from_settings() required attributes
+    settings.world_quality_early_stopping_patience = 2
+    settings.world_quality_refinement_temp_start = 0.9
+    settings.world_quality_refinement_temp_end = 0.3
+    settings.world_quality_refinement_temp_decay = "linear"
+    settings.world_quality_early_stopping_min_iterations = 2
+    settings.world_quality_early_stopping_variance_tolerance = 0.5
     return settings
 
 
@@ -29,7 +36,7 @@ def mock_settings():
 def mock_mode_service():
     """Create mock mode service."""
     service = MagicMock(spec=ModelModeService)
-    service.select_model.return_value = "test-model:latest"
+    service.get_model_for_agent.return_value = "test-model:latest"
     return service
 
 
