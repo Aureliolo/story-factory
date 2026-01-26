@@ -252,6 +252,33 @@ class TestSettingsValidation:
         with pytest.raises(ValueError, match="subprocess_timeout must be between"):
             settings.validate()
 
+    def test_validate_raises_on_non_bool_content_check_enabled(self):
+        """Should raise ValueError for non-boolean content_check_enabled."""
+        settings = Settings()
+        settings.content_check_enabled = "true"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="content_check_enabled must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_non_bool_content_check_use_llm(self):
+        """Should raise ValueError for non-boolean content_check_use_llm."""
+        settings = Settings()
+        settings.content_check_use_llm = 1  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="content_check_use_llm must be a boolean"):
+            settings.validate()
+
+    def test_validate_warns_on_use_llm_without_check_enabled(self, caplog):
+        """Should log warning when use_llm is enabled but check is disabled."""
+        import logging
+
+        settings = Settings()
+        settings.content_check_enabled = False
+        settings.content_check_use_llm = True
+
+        with caplog.at_level(logging.WARNING):
+            settings.validate()
+
+        assert "LLM checking will have no effect" in caplog.text
+
 
 class TestSettingsSaveLoad:
     """Tests for Settings save and load methods."""

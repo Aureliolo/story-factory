@@ -1,6 +1,6 @@
 name: create_characters
-version: "1.0"
-description: "Designs main characters for a story"
+version: "1.1"
+description: "Designs main characters for a story with optional arc templates"
 agent: architect
 task: create_characters
 is_system_prompt: false
@@ -18,6 +18,22 @@ template: |
   {% if content_preferences %}Include: {{ content_preferences | join(", ") }}{% endif %}
   {% if content_avoid %}Avoid: {{ content_avoid | join(", ") }}{% endif %}
 
+  {% if protagonist_arc_template %}
+  === PROTAGONIST ARC GUIDANCE ===
+  {{ protagonist_arc_template }}
+
+  Design the protagonist to follow this arc pattern. Their traits, goals, and arc_notes
+  should align with the arc stages described above.
+  {% endif %}
+
+  {% if antagonist_arc_template %}
+  === ANTAGONIST ARC GUIDANCE ===
+  {{ antagonist_arc_template }}
+
+  Design the antagonist to follow this arc pattern. Their traits, goals, and arc_notes
+  should align with the arc stages described above.
+  {% endif %}
+
   Create EXACTLY {{ min_chars }} to {{ max_chars }} main characters. You MUST output at least {{ min_chars }} characters.
 
   {{ naming_hint }}
@@ -27,6 +43,9 @@ template: |
   {{ character_schema }}
 
   Make them complex, with flaws and desires that create conflict.
+  {% if protagonist_arc_template or antagonist_arc_template %}
+  Ensure character arcs align with the arc guidance provided above.
+  {% endif %}
   Remember: output at least {{ min_chars }} characters.
 
 variables:
@@ -43,3 +62,5 @@ variables:
   optional:
     - content_preferences
     - content_avoid
+    - protagonist_arc_template
+    - antagonist_arc_template

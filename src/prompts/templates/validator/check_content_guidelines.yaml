@@ -1,0 +1,63 @@
+name: check_content_guidelines
+version: "1.0"
+description: "Checks content against content guidelines profile"
+agent: validator
+task: check_content_guidelines
+is_system_prompt: false
+
+template: |
+  Analyze the following content and check if it violates any content guidelines.
+
+  === CONTENT GUIDELINES ===
+  Profile: {{ profile_name }}
+
+  Violence Level: {{ violence_level }}
+  Language Level: {{ language_level }}
+  Themes Level: {{ themes_level }}
+  Romance Level: {{ romance_level }}
+
+  {% if custom_avoid %}
+  MUST AVOID these topics/elements:
+  {% for item in custom_avoid %}
+  - {{ item }}
+  {% endfor %}
+  {% endif %}
+
+  === CONTENT TO CHECK ===
+  {{ content }}
+
+  === INSTRUCTIONS ===
+  Analyze the content above and identify any violations of the content guidelines.
+
+  For each violation found, provide:
+  1. Category (violence, language, themes, romance, or custom)
+  2. Severity (warning or violation)
+  3. Brief description
+  4. Relevant excerpt from the content
+
+  Output a JSON object with:
+  {
+    "passed": true/false,
+    "violations": [
+      {
+        "category": "...",
+        "severity": "...",
+        "description": "...",
+        "excerpt": "..."
+      }
+    ]
+  }
+
+  If the content is appropriate for the guidelines, return:
+  {"passed": true, "violations": []}
+
+variables:
+  required:
+    - profile_name
+    - violence_level
+    - language_level
+    - themes_level
+    - romance_level
+    - content
+  optional:
+    - custom_avoid

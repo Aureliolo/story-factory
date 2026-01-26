@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.memory.entities import Entity, Relationship
 from src.memory.story_state import StoryState
+from src.memory.templates import WorldTemplate
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
 from src.utils.exceptions import GenerationCancelledError
@@ -52,6 +53,7 @@ class WorldBuildOptions:
         generate_concepts: Whether to generate concept entities.
         generate_relationships: Whether to generate relationships between entities.
         cancellation_event: Optional threading.Event to signal cancellation.
+        world_template: Optional world template for genre-specific hints.
     """
 
     clear_existing: bool = False
@@ -62,13 +64,18 @@ class WorldBuildOptions:
     generate_concepts: bool = True
     generate_relationships: bool = True
     cancellation_event: threading.Event | None = field(default=None, repr=False)
+    world_template: WorldTemplate | None = field(default=None, repr=False)
 
     def is_cancelled(self) -> bool:
         """Check if cancellation has been requested."""
         return self.cancellation_event is not None and self.cancellation_event.is_set()
 
     @classmethod
-    def full(cls, cancellation_event: threading.Event | None = None) -> WorldBuildOptions:
+    def full(
+        cls,
+        cancellation_event: threading.Event | None = None,
+        world_template: WorldTemplate | None = None,
+    ) -> WorldBuildOptions:
         """Create options for full world build (everything, keeping existing data)."""
         return cls(
             clear_existing=False,
@@ -79,10 +86,15 @@ class WorldBuildOptions:
             generate_concepts=True,
             generate_relationships=True,
             cancellation_event=cancellation_event,
+            world_template=world_template,
         )
 
     @classmethod
-    def full_rebuild(cls, cancellation_event: threading.Event | None = None) -> WorldBuildOptions:
+    def full_rebuild(
+        cls,
+        cancellation_event: threading.Event | None = None,
+        world_template: WorldTemplate | None = None,
+    ) -> WorldBuildOptions:
         """Create options for full world rebuild (everything, clearing existing first)."""
         return cls(
             clear_existing=True,
@@ -93,6 +105,7 @@ class WorldBuildOptions:
             generate_concepts=True,
             generate_relationships=True,
             cancellation_event=cancellation_event,
+            world_template=world_template,
         )
 
 
@@ -181,6 +194,11 @@ class WorldService:
                 )
 
         logger.info(f"Starting world build for project {state.id} with options: {options}")
+
+        # Persist world template ID to state if provided
+        if options.world_template:
+            state.world_template_id = options.world_template.id
+            logger.debug(f"Set world_template_id on state: {options.world_template.id}")
 
         def check_cancelled() -> None:
             """Raise if cancellation requested."""

@@ -192,6 +192,130 @@ class TestArchitectCreateCharacters:
         # Should have retried 3 times
         assert architect.generate_structured.call_count == 3
 
+    def test_create_characters_with_arc_templates(self, architect, sample_story_state):
+        """Test that arc templates are applied to characters."""
+        mock_characters = CharacterList(
+            characters=[
+                Character(
+                    name="Hero",
+                    role="protagonist",
+                    description="A brave adventurer",
+                    personality_traits=["brave", "determined"],
+                    goals=["Save the world"],
+                    arc_notes="Classic hero journey",
+                ),
+                Character(
+                    name="Villain",
+                    role="antagonist",
+                    description="A cunning mastermind",
+                    personality_traits=["intelligent", "ruthless"],
+                    goals=["Domination"],
+                    arc_notes="Hidden depths",
+                ),
+                Character(
+                    name="Ally1",
+                    role="supporting",
+                    description="Helpful friend",
+                    personality_traits=["loyal"],
+                    goals=["Help hero"],
+                ),
+                Character(
+                    name="Ally2",
+                    role="supporting",
+                    description="Another friend",
+                    personality_traits=["wise"],
+                    goals=["Guide hero"],
+                ),
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_characters)
+
+        characters = architect.create_characters(
+            sample_story_state,
+            protagonist_arc_id="hero_journey",
+            antagonist_arc_id="mastermind",
+        )
+
+        # Check arc types are assigned correctly
+        protagonist = next(c for c in characters if c.role == "protagonist")
+        antagonist = next(c for c in characters if c.role == "antagonist")
+        supporting = [c for c in characters if c.role == "supporting"]
+
+        assert protagonist.arc_type == "hero_journey"
+        assert antagonist.arc_type == "mastermind"
+        # Supporting characters should not have arc_type set
+        for char in supporting:
+            assert char.arc_type is None
+
+        # Verify prompt included arc guidance
+        call_args = architect.generate_structured.call_args[0][0]
+        assert "PROTAGONIST ARC GUIDANCE" in call_args
+        assert "ANTAGONIST ARC GUIDANCE" in call_args
+        assert "Hero's Journey" in call_args
+        assert "Mastermind" in call_args
+
+    def test_create_characters_with_invalid_arc_id(self, architect, sample_story_state):
+        """Test that invalid arc template IDs are handled gracefully."""
+        mock_characters = CharacterList(
+            characters=[
+                Character(
+                    name="Hero",
+                    role="protagonist",
+                    description="A brave adventurer",
+                    personality_traits=["brave"],
+                    goals=["Save the world"],
+                ),
+                Character(
+                    name="Ally1",
+                    role="supporting",
+                    description="Helpful friend",
+                    personality_traits=["loyal"],
+                    goals=["Help hero"],
+                ),
+                Character(
+                    name="Ally2",
+                    role="supporting",
+                    description="Another friend",
+                    personality_traits=["wise"],
+                    goals=["Guide hero"],
+                ),
+                Character(
+                    name="Ally3",
+                    role="supporting",
+                    description="Third friend",
+                    personality_traits=["brave"],
+                    goals=["Support hero"],
+                ),
+                Character(
+                    name="Villain",
+                    role="antagonist",
+                    description="The enemy",
+                    personality_traits=["cunning"],
+                    goals=["Defeat hero"],
+                ),
+            ]
+        )
+        architect.generate_structured = MagicMock(return_value=mock_characters)
+
+        # Should not raise even with invalid arc IDs
+        characters = architect.create_characters(
+            sample_story_state,
+            protagonist_arc_id="nonexistent_arc",
+            antagonist_arc_id="also_nonexistent",
+        )
+
+        # Characters should NOT have arc_type set when template doesn't exist
+        assert len(characters) == 5
+        protagonist = next(c for c in characters if c.role == "protagonist")
+        antagonist = next(c for c in characters if c.role == "antagonist")
+        assert protagonist.arc_type is None, "arc_type should be None for invalid template"
+        assert antagonist.arc_type is None, "arc_type should be None for invalid template"
+
+        # Prompt should not include arc guidance since templates don't exist
+        call_args = architect.generate_structured.call_args[0][0]
+        assert "PROTAGONIST ARC GUIDANCE" not in call_args
+        assert "ANTAGONIST ARC GUIDANCE" not in call_args
+
 
 class TestArchitectCreatePlotOutline:
     """Tests for create_plot_outline method."""

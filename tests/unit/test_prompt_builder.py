@@ -243,3 +243,22 @@ class TestPromptBuilder:
         """Should use default agent name in error message."""
         with pytest.raises(ValueError, match="Story brief must be created before using Agent"):
             PromptBuilder.ensure_brief(None)
+
+    def test_add_content_guidelines(self):
+        """Should add content guidelines section."""
+        from src.memory.content_guidelines import ContentProfile, ViolenceLevel
+
+        profile = ContentProfile(
+            name="test_profile",
+            violence=ViolenceLevel.MINIMAL,
+            custom_avoid=["gore", "trauma"],
+        )
+
+        builder = PromptBuilder()
+        result = builder.add_content_guidelines(profile).build()
+
+        assert "CONTENT GUIDELINES" in result
+        assert "test_profile" in result
+        assert "Violence: minimal" in result
+        assert "MUST AVOID" in result
+        assert "gore" in result

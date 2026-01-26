@@ -336,6 +336,10 @@ class Settings:
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
     world_quality_early_stopping_patience: int = 2  # Stop after N consecutive score degradations
 
+    # Content guidelines checking settings
+    content_check_enabled: bool = True  # Enable content guideline checking for generated content
+    content_check_use_llm: bool = False  # Use LLM for more accurate checking (slower)
+
     # Judge consistency settings (for more reliable quality judgments)
     judge_consistency_enabled: bool = False  # Opt-in: enable judge consistency features
     judge_multi_call_enabled: bool = False  # Make multiple judge calls and average (expensive)
@@ -890,6 +894,21 @@ class Settings:
             raise ValueError(
                 f"import_character_token_multiplier must be between 1 and 20, "
                 f"got {self.import_character_token_multiplier}"
+            )
+
+        # Validate content check settings
+        if not isinstance(self.content_check_enabled, bool):
+            raise ValueError(
+                f"content_check_enabled must be a boolean, got {type(self.content_check_enabled)}"
+            )
+        if not isinstance(self.content_check_use_llm, bool):
+            raise ValueError(
+                f"content_check_use_llm must be a boolean, got {type(self.content_check_use_llm)}"
+            )
+        if self.content_check_use_llm and not self.content_check_enabled:
+            logger.warning(
+                "content_check_use_llm is enabled but content_check_enabled is False. "
+                "LLM checking will have no effect."
             )
 
     # Class-level cache for settings (speeds up repeated load() calls)

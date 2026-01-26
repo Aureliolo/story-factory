@@ -11,6 +11,7 @@ from src.settings import Settings
 from .backup_service import BackupService
 from .comparison_service import ComparisonService
 from .conflict_analysis_service import ConflictAnalysisService
+from .content_guidelines_service import ContentGuidelinesService
 from .export_service import ExportService
 from .import_service import ImportService
 from .model_mode_service import ModelModeService
@@ -23,6 +24,7 @@ from .template_service import TemplateService
 from .timeline_service import TimelineService
 from .world_quality_service import WorldQualityService
 from .world_service import WorldBuildOptions, WorldBuildProgress, WorldService
+from .world_template_service import WorldTemplateService
 
 
 @dataclass
@@ -54,6 +56,8 @@ class ServiceContainer:
     comparison: ComparisonService
     timeline: TimelineService
     conflict_analysis: ConflictAnalysisService
+    world_template: WorldTemplateService
+    content_guidelines: ContentGuidelinesService
 
     def __init__(self, settings: Settings | None = None):
         """
@@ -82,12 +86,15 @@ class ServiceContainer:
         self.comparison = ComparisonService(self.settings)
         self.timeline = TimelineService(self.settings)
         self.conflict_analysis = ConflictAnalysisService(self.settings)
+        self.world_template = WorldTemplateService(self.settings)
+        self.content_guidelines = ContentGuidelinesService(self.settings)
 
 
 __all__ = [
     "BackupService",
     "ComparisonService",
     "ConflictAnalysisService",
+    "ContentGuidelinesService",
     "ExportService",
     "ImportService",
     "ModelModeService",
@@ -103,4 +110,5 @@ __all__ = [
     "WorldBuildProgress",
     "WorldQualityService",
     "WorldService",
+    "WorldTemplateService",
 ]

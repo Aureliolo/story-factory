@@ -6,6 +6,11 @@ import re
 import uuid
 from typing import Any
 
+from src.memory.arc_templates import (
+    CharacterArcTemplate,
+    format_arc_guidance,
+    get_arc_template,
+)
 from src.memory.story_state import (
     Chapter,
     ChapterList,
@@ -98,6 +103,31 @@ class ArchitectAgent(BaseAgent):
             settings=settings,
         )
 
+    def _get_arc_guidance(
+        self, arc_id: str | None, role_name: str
+    ) -> tuple[str | None, CharacterArcTemplate | None]:
+        """Get arc guidance text and template for a character role.
+
+        Args:
+            arc_id: The arc template ID to look up (e.g., "hero_journey").
+            role_name: The role name for logging (e.g., "protagonist", "antagonist").
+
+        Returns:
+            Tuple of (guidance_text, arc_template). Both are None if arc_id is None
+            or template not found.
+        """
+        if not arc_id:
+            return None, None
+
+        arc_template = get_arc_template(arc_id)
+        if arc_template:
+            guidance = format_arc_guidance(arc_template)
+            logger.info(f"Using {role_name} arc template: {arc_id}")
+            return guidance, arc_template
+        else:
+            logger.warning(f"{role_name.capitalize()} arc template not found: {arc_id}")
+            return None, None
+
     def create_world(self, story_state: StoryState) -> str:
         """Create the world-building document."""
         validate_not_none(story_state, "story_state")
@@ -131,13 +161,35 @@ class ArchitectAgent(BaseAgent):
         logger.debug(f"World creation complete ({len(response)} chars)")
         return response
 
-    def create_characters(self, story_state: StoryState) -> list[Character]:
-        """Design the main characters."""
+    def create_characters(
+        self,
+        story_state: StoryState,
+        protagonist_arc_id: str | None = None,
+        antagonist_arc_id: str | None = None,
+    ) -> list[Character]:
+        """Design the main characters.
+
+        Args:
+            story_state: Current story state with brief.
+            protagonist_arc_id: Optional arc template ID for protagonist (e.g., "hero_journey").
+            antagonist_arc_id: Optional arc template ID for antagonist (e.g., "mirror").
+
+        Returns:
+            List of Character objects.
+        """
         validate_not_none(story_state, "story_state")
         validate_type(story_state, "story_state", StoryState)
 
         logger.info("Creating characters for story")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
+
+        # Get arc templates if specified (using helper to reduce duplication)
+        protagonist_arc_guidance, protagonist_arc_template = self._get_arc_guidance(
+            protagonist_arc_id, "protagonist"
+        )
+        antagonist_arc_guidance, antagonist_arc_template = self._get_arc_guidance(
+            antagonist_arc_id, "antagonist"
+        )
 
         # Build prompt using PromptBuilder
         builder = PromptBuilder()
@@ -145,6 +197,23 @@ class ArchitectAgent(BaseAgent):
         builder.add_language_requirement(brief.language)
         builder.add_text(f"PREMISE: {brief.premise}")
         builder.add_brief_requirements(brief)
+
+        # Add arc template guidance if available
+        if protagonist_arc_guidance:
+            builder.add_text("\n=== PROTAGONIST ARC GUIDANCE ===")
+            builder.add_text(protagonist_arc_guidance)
+            builder.add_text(
+                "\nDesign the protagonist to follow this arc pattern. Their traits, goals, "
+                "and arc_notes should align with the arc stages described above."
+            )
+
+        if antagonist_arc_guidance:
+            builder.add_text("\n=== ANTAGONIST ARC GUIDANCE ===")
+            builder.add_text(antagonist_arc_guidance)
+            builder.add_text(
+                "\nDesign the antagonist to follow this arc pattern. Their traits, goals, "
+                "and arc_notes should align with the arc stages described above."
+            )
 
         # Use project-specific settings if available, otherwise fall back to global settings
         min_chars = (
@@ -176,8 +245,13 @@ class ArchitectAgent(BaseAgent):
             f"(all text values in {brief.language}):"
         )
         builder.add_json_output_format(self.CHARACTER_SCHEMA)
+
+        arc_reminder = ""
+        if protagonist_arc_guidance or antagonist_arc_guidance:
+            arc_reminder = " Ensure character arcs align with the arc guidance provided above."
+
         builder.add_text(
-            "Make them complex, with flaws and desires that create conflict. "
+            f"Make them complex, with flaws and desires that create conflict.{arc_reminder} "
             f"Remember: output at least {min_chars} characters."
         )
 
@@ -188,6 +262,13 @@ class ArchitectAgent(BaseAgent):
         for attempt in range(1, max_attempts + 1):
             result = self.generate_structured(prompt, CharacterList)
             if len(result.characters) >= min_chars:
+                # Set arc_type on characters only if a valid template was found
+                for char in result.characters:
+                    if char.role == "protagonist" and protagonist_arc_template:
+                        char.arc_type = protagonist_arc_id
+                    elif char.role == "antagonist" and antagonist_arc_template:
+                        char.arc_type = antagonist_arc_id
+
                 logger.info(
                     f"Created {len(result.characters)} characters: "
                     f"{[c.name for c in result.characters]}"
