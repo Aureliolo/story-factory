@@ -3828,11 +3828,29 @@ Return a JSON object with:
             logger.debug("No available target entities for relationship suggestions")
             return []
 
-        # Get relationship minimums from settings
+        # Get relationship minimums from settings - log warning if not configured
         entity_type = entity.type.lower()
         entity_role = (entity.attributes or {}).get("role", "default")
         minimums = self.settings.relationship_minimums.get(entity_type, {})
-        min_rels = minimums.get(entity_role, minimums.get("default", 2))
+
+        if entity_type not in self.settings.relationship_minimums:
+            logger.warning(
+                f"No relationship_minimums configured for entity type '{entity_type}', "
+                f"using fallback. Consider adding to settings.relationship_minimums."
+            )
+
+        if entity_role in minimums:
+            min_rels = minimums[entity_role]
+        elif "default" in minimums:
+            min_rels = minimums["default"]
+            logger.debug(f"Role '{entity_role}' not in minimums for '{entity_type}', using default")
+        else:
+            # No configuration found - log warning and use sensible default
+            min_rels = 2
+            logger.warning(
+                f"No relationship minimum configured for {entity_type}/{entity_role}, "
+                f"using fallback value of 2"
+            )
 
         # Enforce max_relationships_per_entity by limiting suggestions
         max_rels = self.settings.max_relationships_per_entity

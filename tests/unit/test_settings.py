@@ -423,6 +423,18 @@ class TestSettingsValidation:
         ):
             settings.validate()
 
+    def test_validate_raises_on_minimum_exceeds_max_relationships(self):
+        """Should raise ValueError when minimum exceeds max_relationships_per_entity."""
+        settings = Settings()
+        settings.max_relationships_per_entity = 5
+        settings.relationship_minimums = {"character": {"protagonist": 10}}  # Exceeds max of 5
+        with pytest.raises(
+            ValueError,
+            match=r"relationship_minimums\[character\]\[protagonist\] \(10\) exceeds "
+            r"max_relationships_per_entity \(5\)",
+        ):
+            settings.validate()
+
 
 class TestSettingsSaveLoad:
     """Tests for Settings save and load methods."""

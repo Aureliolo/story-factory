@@ -2686,9 +2686,15 @@ class WorldPage:
         if not self.state.world_db:
             return
 
-        entity = self.state.world_db.get_entity(entity_id)
+        # Use service call instead of direct state access
+        entity = self.services.world.get_entity(self.state.world_db, entity_id)
         if entity:
             self.state.select_entity(entity.id)
+            # Refresh UI to show selection
+            self._refresh_entity_list()
+            self._refresh_entity_editor()
+            if self._graph:
+                self._graph.refresh()
             ui.notify(
                 f"Selected '{entity.name}' - add relationships in the editor, then click Refresh",
                 type="info",
@@ -2711,9 +2717,15 @@ class WorldPage:
         if not self.state.world_db:
             return
 
-        entity = self.state.world_db.get_entity(entity_id)
+        # Use service call instead of direct state access
+        entity = self.services.world.get_entity(self.state.world_db, entity_id)
         if entity:
             self.state.select_entity(entity.id)
+            # Refresh UI to show selection
+            self._refresh_entity_list()
+            self._refresh_entity_editor()
+            if self._graph:
+                self._graph.refresh()
             ui.notify(
                 f"Selected '{entity.name}' - use 'Refine Entity' to improve quality, then click Refresh",
                 type="info",

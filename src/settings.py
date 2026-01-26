@@ -1108,6 +1108,12 @@ class Settings:
                         f"relationship_minimums[{entity_type}][{role}] must be a non-negative "
                         f"integer, got {min_count}"
                     )
+                # Ensure max_relationships_per_entity >= minimum count
+                if min_count > self.max_relationships_per_entity:
+                    raise ValueError(
+                        f"relationship_minimums[{entity_type}][{role}] ({min_count}) exceeds "
+                        f"max_relationships_per_entity ({self.max_relationships_per_entity})"
+                    )
 
     # Class-level cache for settings (speeds up repeated load() calls)
     _cached_instance: ClassVar[Settings | None] = None
