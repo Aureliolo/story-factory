@@ -12,7 +12,7 @@ from src.memory.mode_models import (
     VramStrategy,
 )
 from src.services import ServiceContainer
-from src.settings import AGENT_ROLES
+from src.settings import AGENT_ROLES, REFINEMENT_TEMP_DECAY_CURVES
 from src.ui.state import AppState
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,9 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
                     self._build_data_integrity_section()
 
+                with ui.element("div").style("flex: 1 1 400px; min-width: 400px;"):
+                    self._build_advanced_llm_section()
+
             # Save button
             ui.button(
                 "Save Settings",
@@ -102,6 +105,35 @@ class SettingsPage:
             ui.icon("help_outline", size="xs").classes(
                 "text-gray-400 dark:text-gray-500 cursor-help"
             ).tooltip(tooltip)
+
+    def _build_number_input(
+        self,
+        value: int | float,
+        min_val: int | float,
+        max_val: int | float,
+        step: int | float,
+        tooltip_text: str,
+        width: str = "w-20",
+    ) -> ui.number:
+        """Build a standardized number input with common styling.
+
+        Args:
+            value: Initial value for the input.
+            min_val: Minimum allowed value.
+            max_val: Maximum allowed value.
+            step: Step increment for the input.
+            tooltip_text: Tooltip text to display on hover.
+            width: Tailwind CSS width class (default: "w-20").
+
+        Returns:
+            Configured ui.number element.
+        """
+        return (
+            ui.number(value=value, min=min_val, max=max_val, step=step)
+            .props("outlined dense")
+            .classes(width)
+            .tooltip(tooltip_text)
+        )
 
     def _build_connection_section(self) -> None:
         """Build Ollama connection settings."""
@@ -763,6 +795,209 @@ class SettingsPage:
                             ui.icon(icon, size="xs").classes("text-green-500")
                             ui.label(label).classes("text-xs")
 
+    def _build_advanced_llm_section(self) -> None:
+        """Build advanced LLM settings section (WP1/WP2 settings)."""
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Advanced LLM Settings",
+                "tune",
+                "Configure circuit breaker, retry strategies, duplicate detection, "
+                "dynamic temperature, and early stopping behavior.",
+            )
+
+            with ui.expansion("Circuit Breaker", icon="security").classes("w-full"):
+                with ui.column().classes("w-full gap-3 p-2"):
+                    with ui.row().classes("w-full items-center gap-3"):
+                        with ui.column().classes("flex-grow"):
+                            ui.label("Enabled").classes("text-sm font-medium")
+                            ui.label("Protect against cascading LLM failures").classes(
+                                "text-xs text-gray-500"
+                            )
+                        self._circuit_breaker_enabled_switch = ui.switch(
+                            value=self.settings.circuit_breaker_enabled,
+                        ).tooltip(
+                            "When enabled, temporarily stops requests after repeated failures"
+                        )
+
+                    # Settings visible when enabled
+                    with (
+                        ui.element("div")
+                        .classes("w-full")
+                        .bind_visibility_from(self._circuit_breaker_enabled_switch, "value")
+                    ):
+                        with ui.row().classes("items-center gap-4 flex-wrap"):
+                            with ui.column().classes("gap-1"):
+                                ui.label("Failure Threshold").classes("text-xs text-gray-500")
+                                self._circuit_breaker_failure_threshold_input = (
+                                    self._build_number_input(
+                                        value=self.settings.circuit_breaker_failure_threshold,
+                                        min_val=1,
+                                        max_val=20,
+                                        step=1,
+                                        tooltip_text="Failures before opening circuit (1-20)",
+                                    )
+                                )
+
+                            with ui.column().classes("gap-1"):
+                                ui.label("Success Threshold").classes("text-xs text-gray-500")
+                                self._circuit_breaker_success_threshold_input = (
+                                    self._build_number_input(
+                                        value=self.settings.circuit_breaker_success_threshold,
+                                        min_val=1,
+                                        max_val=10,
+                                        step=1,
+                                        tooltip_text="Successes to close from half-open (1-10)",
+                                    )
+                                )
+
+                            with ui.column().classes("gap-1"):
+                                ui.label("Timeout (s)").classes("text-xs text-gray-500")
+                                self._circuit_breaker_timeout_input = self._build_number_input(
+                                    value=self.settings.circuit_breaker_timeout,
+                                    min_val=10,
+                                    max_val=600,
+                                    step=10,
+                                    tooltip_text="Seconds before half-open (10-600)",
+                                )
+
+            with ui.expansion("Retry Strategy", icon="replay").classes("w-full"):
+                with ui.column().classes("w-full gap-3 p-2"):
+                    with ui.row().classes("items-center gap-4 flex-wrap"):
+                        with ui.column().classes("gap-1"):
+                            ui.label("Temp Increase").classes("text-xs text-gray-500")
+                            self._retry_temp_increase_input = self._build_number_input(
+                                value=self.settings.retry_temp_increase,
+                                min_val=0.0,
+                                max_val=1.0,
+                                step=0.05,
+                                tooltip_text="Temperature increase on retry attempt 2+ (0.0-1.0)",
+                            )
+
+                        with ui.column().classes("gap-1"):
+                            ui.label("Simplify on Attempt").classes("text-xs text-gray-500")
+                            self._retry_simplify_on_attempt_input = self._build_number_input(
+                                value=self.settings.retry_simplify_on_attempt,
+                                min_val=2,
+                                max_val=10,
+                                step=1,
+                                tooltip_text="Attempt number to start simplifying prompts (2-10)",
+                            )
+
+            with ui.expansion("Duplicate Detection", icon="content_copy").classes("w-full"):
+                with ui.column().classes("w-full gap-3 p-2"):
+                    with ui.row().classes("w-full items-center gap-3"):
+                        with ui.column().classes("flex-grow"):
+                            ui.label("Semantic Duplicate Detection").classes("text-sm font-medium")
+                            ui.label("Use embeddings to detect similar content").classes(
+                                "text-xs text-gray-500"
+                            )
+                        self._semantic_duplicate_enabled_switch = ui.switch(
+                            value=self.settings.semantic_duplicate_enabled,
+                        ).tooltip("Opt-in: detect duplicates using embedding similarity")
+
+                    # Settings visible when enabled
+                    with (
+                        ui.element("div")
+                        .classes("w-full")
+                        .bind_visibility_from(self._semantic_duplicate_enabled_switch, "value")
+                    ):
+                        with ui.row().classes("items-center gap-4 flex-wrap"):
+                            with ui.column().classes("gap-1"):
+                                ui.label("Similarity Threshold").classes("text-xs text-gray-500")
+                                self._semantic_duplicate_threshold_input = self._build_number_input(
+                                    value=self.settings.semantic_duplicate_threshold,
+                                    min_val=0.5,
+                                    max_val=1.0,
+                                    step=0.05,
+                                    tooltip_text="Cosine similarity threshold (0.5-1.0)",
+                                )
+
+                            with ui.column().classes("gap-1 flex-grow"):
+                                ui.label("Embedding Model").classes("text-xs text-gray-500")
+                                # Get installed models for embedding selection
+                                installed_models = self.services.model.list_installed()
+                                embedding_options = {m: m for m in installed_models}
+                                # Add current value if not in list
+                                if self.settings.embedding_model not in embedding_options:
+                                    embedding_options[self.settings.embedding_model] = (
+                                        self.settings.embedding_model
+                                    )
+                                self._embedding_model_select = (
+                                    ui.select(
+                                        options=embedding_options,
+                                        value=self.settings.embedding_model,
+                                    )
+                                    .props("outlined dense")
+                                    .classes("w-full")
+                                    .tooltip("Model for generating embeddings")
+                                )
+
+            with ui.expansion("Refinement Temperature", icon="thermostat").classes("w-full"):
+                with ui.column().classes("w-full gap-3 p-2"):
+                    ui.label(
+                        "Dynamic temperature decay during quality refinement iterations"
+                    ).classes("text-xs text-gray-500 mb-2")
+
+                    with ui.row().classes("items-center gap-4 flex-wrap"):
+                        with ui.column().classes("gap-1"):
+                            ui.label("Start Temp").classes("text-xs text-gray-500")
+                            self._refinement_temp_start_input = self._build_number_input(
+                                value=self.settings.world_quality_refinement_temp_start,
+                                min_val=0.0,
+                                max_val=2.0,
+                                step=0.05,
+                                tooltip_text="Starting temperature (0.0-2.0)",
+                            )
+
+                        with ui.column().classes("gap-1"):
+                            ui.label("End Temp").classes("text-xs text-gray-500")
+                            self._refinement_temp_end_input = self._build_number_input(
+                                value=self.settings.world_quality_refinement_temp_end,
+                                min_val=0.0,
+                                max_val=2.0,
+                                step=0.05,
+                                tooltip_text="Ending temperature (0.0-2.0)",
+                            )
+
+                        with ui.column().classes("gap-1"):
+                            ui.label("Decay Curve").classes("text-xs text-gray-500")
+                            self._refinement_temp_decay_select = (
+                                ui.select(
+                                    options=REFINEMENT_TEMP_DECAY_CURVES,
+                                    value=self.settings.world_quality_refinement_temp_decay,
+                                )
+                                .props("outlined dense")
+                                .classes("w-32")
+                                .tooltip("How temperature decreases over iterations")
+                            )
+
+            with ui.expansion("Early Stopping", icon="stop_circle").classes("w-full"):
+                with ui.column().classes("w-full gap-3 p-2"):
+                    ui.label("Stop refinement early when quality improvements plateau").classes(
+                        "text-xs text-gray-500 mb-2"
+                    )
+
+                    with ui.row().classes("items-center gap-4 flex-wrap"):
+                        with ui.column().classes("gap-1"):
+                            ui.label("Min Iterations").classes("text-xs text-gray-500")
+                            self._early_stopping_min_iterations_input = self._build_number_input(
+                                value=self.settings.world_quality_early_stopping_min_iterations,
+                                min_val=1,
+                                max_val=10,
+                                step=1,
+                                tooltip_text="Minimum iterations before early stop (1-10)",
+                            )
+
+                        with ui.column().classes("gap-1"):
+                            ui.label("Variance Tolerance").classes("text-xs text-gray-500")
+                            self._early_stopping_variance_tolerance_input = self._build_number_input(
+                                value=self.settings.world_quality_early_stopping_variance_tolerance,
+                                min_val=0.0,
+                                max_val=2.0,
+                                step=0.05,
+                                tooltip_text="Score variance tolerance for plateau detection (0.0-2.0)",
+                            )
+
     async def _test_connection(self) -> None:
         """Test Ollama connection."""
         # Update URL first
@@ -876,6 +1111,49 @@ class SettingsPage:
             if hasattr(self, "_backup_verify_on_restore_switch"):
                 self.settings.backup_verify_on_restore = self._backup_verify_on_restore_switch.value
 
+            # Advanced LLM settings (WP1/WP2) - use mapping to reduce repetition
+            advanced_llm_settings_map = [
+                ("_circuit_breaker_enabled_switch", "circuit_breaker_enabled", None),
+                (
+                    "_circuit_breaker_failure_threshold_input",
+                    "circuit_breaker_failure_threshold",
+                    int,
+                ),
+                (
+                    "_circuit_breaker_success_threshold_input",
+                    "circuit_breaker_success_threshold",
+                    int,
+                ),
+                ("_circuit_breaker_timeout_input", "circuit_breaker_timeout", float),
+                ("_retry_temp_increase_input", "retry_temp_increase", float),
+                ("_retry_simplify_on_attempt_input", "retry_simplify_on_attempt", int),
+                ("_semantic_duplicate_enabled_switch", "semantic_duplicate_enabled", None),
+                ("_semantic_duplicate_threshold_input", "semantic_duplicate_threshold", float),
+                ("_embedding_model_select", "embedding_model", None),
+                ("_refinement_temp_start_input", "world_quality_refinement_temp_start", float),
+                ("_refinement_temp_end_input", "world_quality_refinement_temp_end", float),
+                ("_refinement_temp_decay_select", "world_quality_refinement_temp_decay", None),
+                (
+                    "_early_stopping_min_iterations_input",
+                    "world_quality_early_stopping_min_iterations",
+                    int,
+                ),
+                (
+                    "_early_stopping_variance_tolerance_input",
+                    "world_quality_early_stopping_variance_tolerance",
+                    float,
+                ),
+            ]
+
+            for ui_attr, setting_attr, type_conv in advanced_llm_settings_map:
+                if hasattr(self, ui_attr):
+                    ui_element = getattr(self, ui_attr)
+                    value = ui_element.value
+                    if type_conv:
+                        value = type_conv(value)
+                    setattr(self.settings, setting_attr, value)
+                    logger.debug(f"Updated {setting_attr} to {value}")
+
             # Validate and save first - only record undo if successful
             self.settings.validate()
             self.settings.save()
@@ -915,8 +1193,9 @@ class SettingsPage:
                 - World generation counts: `world_gen_*_min` and `world_gen_*_max` for `characters`, `locations`, `factions`, `items`, `concepts`, and `relationships`
                 - Quality refinement: `world_quality_threshold`, `world_quality_max_iterations`, `world_quality_early_stopping_patience`
                 - Data integrity: `entity_version_retention`, `backup_verify_on_restore`
+                - Advanced LLM (WP1/WP2): `circuit_breaker_enabled`, `circuit_breaker_failure_threshold`, `circuit_breaker_success_threshold`, `circuit_breaker_timeout`, `retry_temp_increase`, `retry_simplify_on_attempt`, `semantic_duplicate_enabled`, `semantic_duplicate_threshold`, `embedding_model`, `world_quality_refinement_temp_start`, `world_quality_refinement_temp_end`, `world_quality_refinement_temp_decay`, `world_quality_early_stopping_min_iterations`, `world_quality_early_stopping_variance_tolerance`
         """
-        return {
+        snapshot = {
             "ollama_url": self.settings.ollama_url,
             "default_model": self.settings.default_model,
             "use_per_agent_models": self.settings.use_per_agent_models,
@@ -960,6 +1239,28 @@ class SettingsPage:
             "backup_verify_on_restore": self.settings.backup_verify_on_restore,
         }
 
+        # Advanced LLM settings (WP1/WP2) - add using key iteration
+        advanced_llm_keys = [
+            "circuit_breaker_enabled",
+            "circuit_breaker_failure_threshold",
+            "circuit_breaker_success_threshold",
+            "circuit_breaker_timeout",
+            "retry_temp_increase",
+            "retry_simplify_on_attempt",
+            "semantic_duplicate_enabled",
+            "semantic_duplicate_threshold",
+            "embedding_model",
+            "world_quality_refinement_temp_start",
+            "world_quality_refinement_temp_end",
+            "world_quality_refinement_temp_decay",
+            "world_quality_early_stopping_min_iterations",
+            "world_quality_early_stopping_variance_tolerance",
+        ]
+        for key in advanced_llm_keys:
+            snapshot[key] = getattr(self.settings, key)
+
+        return snapshot
+
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
         """
         Restore the SettingsPage state from a snapshot and persist the restored values.
@@ -987,6 +1288,12 @@ class SettingsPage:
                   `relationships`
                 - Quality refinement: `world_quality_threshold`, `world_quality_max_iterations`,
                   `world_quality_early_stopping_patience`
+                - Advanced LLM (WP1/WP2): `circuit_breaker_enabled`, `circuit_breaker_failure_threshold`,
+                  `circuit_breaker_success_threshold`, `circuit_breaker_timeout`, `retry_temp_increase`,
+                  `retry_simplify_on_attempt`, `semantic_duplicate_enabled`, `semantic_duplicate_threshold`,
+                  `embedding_model`, `world_quality_refinement_temp_start`, `world_quality_refinement_temp_end`,
+                  `world_quality_refinement_temp_decay`, `world_quality_early_stopping_min_iterations`,
+                  `world_quality_early_stopping_variance_tolerance`
 
         Behavior:
             Applies values from `snapshot` to the persistent settings, saves the settings, updates UI controls
@@ -1046,6 +1353,27 @@ class SettingsPage:
             self.settings.entity_version_retention = snapshot["entity_version_retention"]
         if "backup_verify_on_restore" in snapshot:
             self.settings.backup_verify_on_restore = snapshot["backup_verify_on_restore"]
+
+        # Advanced LLM settings (with backward compatibility for old snapshots)
+        advanced_llm_keys = [
+            "circuit_breaker_enabled",
+            "circuit_breaker_failure_threshold",
+            "circuit_breaker_success_threshold",
+            "circuit_breaker_timeout",
+            "retry_temp_increase",
+            "retry_simplify_on_attempt",
+            "semantic_duplicate_enabled",
+            "semantic_duplicate_threshold",
+            "embedding_model",
+            "world_quality_refinement_temp_start",
+            "world_quality_refinement_temp_end",
+            "world_quality_refinement_temp_decay",
+            "world_quality_early_stopping_min_iterations",
+            "world_quality_early_stopping_variance_tolerance",
+        ]
+        for key in advanced_llm_keys:
+            if key in snapshot:
+                setattr(self.settings, key, snapshot[key])
 
         # Save changes
         self.settings.save()
@@ -1139,6 +1467,31 @@ class SettingsPage:
             and self._backup_verify_on_restore_switch
         ):
             self._backup_verify_on_restore_switch.value = self.settings.backup_verify_on_restore
+
+        # Advanced LLM settings (WP1/WP2) - use mapping to reduce repetition
+        advanced_llm_ui_map = [
+            ("_circuit_breaker_enabled_switch", "circuit_breaker_enabled"),
+            ("_circuit_breaker_failure_threshold_input", "circuit_breaker_failure_threshold"),
+            ("_circuit_breaker_success_threshold_input", "circuit_breaker_success_threshold"),
+            ("_circuit_breaker_timeout_input", "circuit_breaker_timeout"),
+            ("_retry_temp_increase_input", "retry_temp_increase"),
+            ("_retry_simplify_on_attempt_input", "retry_simplify_on_attempt"),
+            ("_semantic_duplicate_enabled_switch", "semantic_duplicate_enabled"),
+            ("_semantic_duplicate_threshold_input", "semantic_duplicate_threshold"),
+            ("_embedding_model_select", "embedding_model"),
+            ("_refinement_temp_start_input", "world_quality_refinement_temp_start"),
+            ("_refinement_temp_end_input", "world_quality_refinement_temp_end"),
+            ("_refinement_temp_decay_select", "world_quality_refinement_temp_decay"),
+            ("_early_stopping_min_iterations_input", "world_quality_early_stopping_min_iterations"),
+            (
+                "_early_stopping_variance_tolerance_input",
+                "world_quality_early_stopping_variance_tolerance",
+            ),
+        ]
+
+        for ui_attr, setting_attr in advanced_llm_ui_map:
+            if hasattr(self, ui_attr) and getattr(self, ui_attr):
+                getattr(self, ui_attr).value = getattr(self.settings, setting_attr)
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""

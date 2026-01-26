@@ -50,6 +50,14 @@ class AgentRoleInfo(TypedDict):
     description: str
 
 
+# Temperature decay curve options for world quality refinement
+REFINEMENT_TEMP_DECAY_CURVES: dict[str, str] = {
+    "linear": "Linear",
+    "exponential": "Exponential",
+    "step": "Step",
+}
+
+
 # Agent role definitions
 AGENT_ROLES: dict[str, AgentRoleInfo] = {
     "interviewer": {
@@ -655,10 +663,10 @@ class Settings:
                 raise ValueError(f"{temp_name} must be between 0.0 and 2.0, got {temp_value}")
 
         # Validate dynamic temperature decay curve
-        valid_decay_curves = ["linear", "exponential", "step"]
-        if self.world_quality_refinement_temp_decay not in valid_decay_curves:
+        if self.world_quality_refinement_temp_decay not in REFINEMENT_TEMP_DECAY_CURVES:
             raise ValueError(
-                f"world_quality_refinement_temp_decay must be one of {valid_decay_curves}, "
+                f"world_quality_refinement_temp_decay must be one of "
+                f"{list(REFINEMENT_TEMP_DECAY_CURVES.keys())}, "
                 f"got {self.world_quality_refinement_temp_decay}"
             )
 
