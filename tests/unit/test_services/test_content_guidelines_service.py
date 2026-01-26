@@ -350,3 +350,20 @@ class TestMultipleViolations:
             profile = get_preset_profile(profile_name)
             result = service.check_content(content, profile)
             assert result.passed is True, f"Clean content should pass {profile_name}"
+
+
+class TestGetExcerpt:
+    """Tests for _get_excerpt helper method."""
+
+    def test_get_excerpt_term_not_found(self, service):
+        """Test _get_excerpt returns empty string when term is not found."""
+        content = "This is some sample content."
+        result = service._get_excerpt(content, "nonexistent_term_xyz")
+        assert result == ""
+
+    def test_get_excerpt_term_found(self, service):
+        """Test _get_excerpt returns excerpt when term is found."""
+        content = "The quick brown fox jumps over the lazy dog."
+        result = service._get_excerpt(content, "fox")
+        assert "fox" in result
+        assert len(result) > 0

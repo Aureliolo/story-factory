@@ -310,3 +310,96 @@ class TestBuiltinTemplates:
         assert len(template.entity_hints.character_roles) == 0
         assert len(template.entity_hints.location_types) == 0
         assert len(template.recommended_counts) == 0
+
+
+class TestListWorldTemplates:
+    """Tests for list_world_templates function from builtin_world_templates."""
+
+    def test_list_world_templates_returns_all(self):
+        """Test that list_world_templates returns all built-in templates."""
+        from src.memory.builtin_world_templates import (
+            BUILTIN_WORLD_TEMPLATES,
+            list_world_templates,
+        )
+
+        templates = list_world_templates()
+        assert len(templates) == len(BUILTIN_WORLD_TEMPLATES)
+        for template in templates:
+            assert template.id in BUILTIN_WORLD_TEMPLATES
+
+
+class TestUserTemplateErrorHandling:
+    """Tests for error handling when loading user templates."""
+
+    def test_init_with_corrupt_templates_file(self, tmp_path):
+        """Test that corrupt user templates file is handled gracefully."""
+        corrupt_file = tmp_path / "user_world_templates.json"
+        corrupt_file.write_text("{ invalid json }")
+
+        with patch(
+            "src.services.world_template_service.USER_TEMPLATES_FILE",
+            corrupt_file,
+        ):
+            service = WorldTemplateService()
+            # Service should initialize without error, just with no user templates
+            templates = service.list_templates(include_builtin=False)
+            assert len(templates) == 0
+
+
+class TestUserTemplateGenreLookup:
+    """Tests for finding user templates by genre."""
+
+    def test_find_user_template_by_genre(self, temp_templates_file):
+        """Test finding a user template by genre."""
+        user_template = {
+            "id": "custom_scifi",
+            "name": "Custom Sci-Fi",
+            "description": "A custom science fiction template",
+            "is_builtin": False,
+            "genre": "science_fiction",
+            "entity_hints": {},
+            "relationship_patterns": [],
+            "naming_style": "futuristic",
+            "recommended_counts": {},
+            "atmosphere": "technological",
+            "tags": ["scifi", "space"],
+        }
+        temp_templates_file.parent.mkdir(parents=True, exist_ok=True)
+        temp_templates_file.write_text(json.dumps([user_template]))
+
+        with patch(
+            "src.services.world_template_service.USER_TEMPLATES_FILE",
+            temp_templates_file,
+        ):
+            service = WorldTemplateService()
+            template = service.get_template_for_genre("science_fiction")
+            # Should find the user template by exact genre match
+            assert template is not None
+
+    def test_find_user_template_by_tag(self, temp_templates_file):
+        """Test finding a user template by tag."""
+        user_template = {
+            "id": "custom_horror",
+            "name": "Custom Horror",
+            "description": "A custom horror template",
+            "is_builtin": False,
+            "genre": "custom_genre",
+            "entity_hints": {},
+            "relationship_patterns": [],
+            "naming_style": "dark",
+            "recommended_counts": {},
+            "atmosphere": "spooky",
+            "tags": ["horror", "dark"],
+        }
+        temp_templates_file.parent.mkdir(parents=True, exist_ok=True)
+        temp_templates_file.write_text(json.dumps([user_template]))
+
+        with patch(
+            "src.services.world_template_service.USER_TEMPLATES_FILE",
+            temp_templates_file,
+        ):
+            service = WorldTemplateService()
+            template = service.get_template_for_genre("horror")
+            # Should find the user template by tag match
+            assert template is not None
+            assert template.id == "custom_horror"
