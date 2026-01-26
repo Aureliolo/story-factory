@@ -58,10 +58,10 @@ class ServiceContainer:
     def __init__(self, settings: Settings | None = None):
         """
         Create and wire service instances that share a Settings object.
-        
+
         Parameters:
             settings (Settings | None): Application settings to share across services. If omitted, settings are loaded via Settings.load().
-        
+
         Notes:
             Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`).
         """

@@ -82,7 +82,7 @@ class TestConflictAnalysisService:
     def settings(self):
         """
         Provide a default Settings instance for tests.
-        
+
         Returns:
             settings (Settings): A new Settings instance with default test configuration.
         """
@@ -97,7 +97,7 @@ class TestConflictAnalysisService:
     def mock_world_db(self):
         """
         Create a MagicMock that mimics a WorldDatabase with no entities or relationships.
-        
+
         Returns:
             mock_db (MagicMock): A mock WorldDatabase whose `list_entities` and `list_relationships` methods return empty lists.
         """

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def _ensure_vis_timeline_loaded() -> None:
     """
     Inject the vis-timeline JavaScript and stylesheet into the current page.
-    
+
     Adds the vis-timeline script and CSS to the document body so the timeline component can be initialized. Calling this function multiple times is safe because NiceGUI deduplicates injected resources.
     """
     # vis-timeline version tracked for Dependabot
@@ -57,7 +57,7 @@ class WorldTimelineComponent:
     ):
         """
         Initialize the timeline component with optional world data, services, selection callback, and visual height.
-        
+
         Parameters:
             world_db (WorldDatabase | None): WorldDatabase to visualize; if None the component will render a placeholder until set.
             services (ServiceContainer | None): Service container providing the timeline service used to fetch timeline items.
@@ -84,7 +84,7 @@ class WorldTimelineComponent:
     def build(self) -> None:
         """
         Build the timeline UI and initialize its interactive components.
-        
+
         Ensures the vis-timeline assets are loaded, registers the item selection callback if provided, creates the control row (filters, zoom controls, refresh) and the timeline container, and performs the initial render of timeline content.
         """
         # Ensure vis-timeline library is loaded
@@ -96,7 +96,7 @@ class WorldTimelineComponent:
             def handle_item_select(e: Any) -> None:
                 """
                 Handle a UI selection event by invoking the configured on_item_select callback with the selected item ID.
-                
+
                 Parameters:
                     e (Any): Event object whose `args` mapping may contain the key `"item_id"`. If `"item_id"` is present and `self.on_item_select` is set, the callback is called with that ID. Otherwise no action is taken.
                 """
@@ -180,7 +180,7 @@ class WorldTimelineComponent:
     def set_world_db(self, world_db: WorldDatabase | None) -> None:
         """
         Set the world database used by the component and re-render the timeline.
-        
+
         Parameters:
             world_db (WorldDatabase | None): WorldDatabase to visualize, or None to clear the current database.
         """
@@ -346,10 +346,10 @@ class WorldTimelineComponent:
     def _items_to_visjs(self, items: list[TimelineItem]) -> list[dict]:
         """
         Convert TimelineItem objects into vis-timeline item dictionaries suitable for rendering.
-        
+
         Parameters:
             items (list[TimelineItem]): Timeline items to convert; items without a valid start are skipped.
-        
+
         Returns:
             list[dict]: vis-timeline item dictionaries containing keys such as 'id', 'content', 'group', 'title', 'style', 'start', optional 'end' (for ranges), and 'type' ('point' or 'range').
         """
@@ -426,7 +426,7 @@ class WorldTimelineComponent:
     def _toggle_filter(self, entity_type: str, enabled: bool) -> None:
         """
         Update the active entity-type filter and re-render the timeline.
-        
+
         Parameters:
             entity_type (str): The entity type to enable or disable (e.g., "character", "faction").
             enabled (bool): True to include the entity type in the filters, False to exclude it.
@@ -440,7 +440,7 @@ class WorldTimelineComponent:
     def _toggle_events(self, enabled: bool) -> None:
         """
         Toggle inclusion of event items in the active timeline filters.
-        
+
         Parameters:
             enabled: True to include events in the timeline, False to exclude them.
         """

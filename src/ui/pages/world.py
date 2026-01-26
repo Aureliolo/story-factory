@@ -2178,7 +2178,7 @@ class WorldPage:
     def _build_analysis_section(self) -> None:
         """
         Constructs the Analysis Tools UI section with tabs for graph analyses.
-        
+
         Creates tabs for finding paths, showing most-connected nodes (centrality), detecting communities, and rendering a conflict map; wires tab controls to their respective handlers and initializes the _analysis_result HTML container for rendering analysis output.
         """
         with ui.expansion("Analysis Tools", icon="analytics", value=False).classes("w-full"):
@@ -2977,7 +2977,7 @@ class WorldPage:
     def _show_communities(self) -> None:
         """
         Render and display community-detection analysis in the analysis result pane.
-        
+
         If no world database is available this does nothing. If an analysis result container exists, its content is replaced with the rendered community detection output for the current world.
         """
         if not self.state.world_db:
@@ -2989,7 +2989,7 @@ class WorldPage:
     def _build_conflict_map_tab(self) -> None:
         """
         Constructs the Conflict Map tab UI showing relationships colored by conflict category and a link to the World Timeline.
-        
+
         Renders a descriptive label, instantiates and builds a ConflictGraphComponent bound to the current world database and services (with node selection callback), and adds a button that navigates to the full World Timeline.
         """
         from src.ui.components.conflict_graph import ConflictGraphComponent

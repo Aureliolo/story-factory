@@ -51,7 +51,7 @@ class GenerationMetrics(BaseModel):
     def tokens_per_second(self) -> float | None:
         """
         Compute generation throughput as completion tokens divided by elapsed time.
-        
+
         Returns:
             float | None: Tokens per second if `time_seconds` > 0 and `completion_tokens` is set, `None` otherwise.
         """
@@ -84,7 +84,7 @@ class EntityTypeCostBreakdown(BaseModel):
     def avg_tokens_per_entity(self) -> float:
         """
         Compute the average number of tokens used per entity.
-        
+
         Returns:
             Average tokens per entity as a float; 0.0 if `count` is zero.
         """
@@ -96,7 +96,7 @@ class EntityTypeCostBreakdown(BaseModel):
     def avg_time_per_entity(self) -> float:
         """
         Return the average time spent per entity.
-        
+
         Returns:
             float: Average time per entity in seconds; 0.0 if `count` is zero.
         """
@@ -125,7 +125,7 @@ class ModelCostBreakdown(BaseModel):
     def tokens_per_second(self) -> float | None:
         """
         Compute the average tokens processed per second.
-        
+
         Returns:
             float | None: Average tokens per second, or `None` if `total_time_seconds` is zero.
         """
@@ -137,7 +137,7 @@ class ModelCostBreakdown(BaseModel):
     def avg_tokens_per_call(self) -> float:
         """
         Compute the average number of tokens used per generation call.
-        
+
         Returns:
             The average number of tokens per call as a float; `0.0` if `call_count` is zero.
         """
@@ -184,7 +184,7 @@ class GenerationRunCosts(BaseModel):
     def duration_seconds(self) -> float | None:
         """
         Return the run duration in seconds based on started_at and completed_at.
-        
+
         Returns:
             float | None: Number of seconds between `started_at` and `completed_at`, or `None` if either timestamp is missing.
         """
@@ -208,7 +208,7 @@ class GenerationRunCosts(BaseModel):
     def avg_tokens_per_call(self) -> float:
         """
         Compute the average number of tokens used per generation call.
-        
+
         Returns:
             float: Average tokens per call; 0.0 if `total_calls` is 0.
         """
@@ -248,7 +248,7 @@ class CostSummary(BaseModel):
     def avg_tokens_per_run(self) -> float:
         """
         Compute the average number of tokens per run.
-        
+
         Returns:
             The average tokens per run as a float; `0.0` if `total_runs` is 0.
         """
@@ -260,7 +260,7 @@ class CostSummary(BaseModel):
     def overall_efficiency(self) -> float:
         """
         Compute the fraction of iterations that were not wasted across all runs.
-        
+
         @returns float: A value between 0.0 and 1.0 representing (total_iterations - total_wasted_iterations) / total_iterations; returns 1.0 if total_iterations is zero.
         """
         if self.total_iterations > 0:
@@ -289,7 +289,7 @@ class CostSummary(BaseModel):
     def format_total_tokens(self) -> str:
         """
         Format total_tokens into a human-readable string using K/M suffixes when appropriate.
-        
+
         Returns:
             A string representing total_tokens; no suffix for values less than 1000, `'K'` for thousands with one decimal place (e.g., `1.2K`) for values from 1,000 to 999,999, and `'M'` for millions with one decimal place (e.g., `3.5M`) for values 1,000,000 and above.
         """

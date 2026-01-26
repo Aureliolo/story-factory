@@ -101,10 +101,10 @@ QUALITY_COLORS = {
 def get_entity_icon(entity_type: str) -> str:
     """
     Return the Material Design icon name for the given entity type.
-    
+
     Parameters:
         entity_type (str): Entity type name (case-insensitive).
-    
+
     Returns:
         str: Material Design icon name for the entity type, or "help_outline" if no mapping exists.
     """

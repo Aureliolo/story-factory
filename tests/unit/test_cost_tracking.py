@@ -301,10 +301,10 @@ class TestModeDatabaseCostTracking:
     def db(self, tmp_path):
         """
         Create a ModeDatabase instance pointing at a temporary test database file.
-        
+
         Parameters:
             tmp_path (pathlib.Path): Temporary directory path provided by pytest.
-        
+
         Returns:
             ModeDatabase: A ModeDatabase configured to use a test SQLite file under the provided temporary path.
         """

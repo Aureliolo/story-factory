@@ -94,7 +94,7 @@ class BaseAgent:
     ):
         """
         Create a BaseAgent with identity, prompts, model selection, and LLM client setup.
-        
+
         Parameters:
             name (str): Display name for the agent.
             role (str): Human-readable role description for the agent.
@@ -103,7 +103,7 @@ class BaseAgent:
             model (str | None): Explicit model to use; when None the agent's model is resolved from settings for `agent_role`.
             temperature (float | None): Explicit sampling temperature; when None the temperature is resolved from settings for `agent_role`.
             settings (Settings | None): Application settings to use; when None the default Settings are loaded.
-        
+
         Notes:
             - Initializes an Ollama client using the configured URL and timeout.
             - Lazily initializes the instructor client placeholder and the storage for last generation metrics.
@@ -146,7 +146,7 @@ class BaseAgent:
     def last_generation_metrics(self) -> GenerationMetrics | None:
         """
         Expose metrics from the most recent generation call.
-        
+
         Returns:
             GenerationMetrics containing token counts, duration, model_id, and agent_role, or `None` if no generation has occurred.
         """
@@ -156,9 +156,9 @@ class BaseAgent:
     def instructor_client(self) -> instructor.Instructor:
         """
         Lazily create and return an Instructor client configured to use Ollama's OpenAI-compatible JSON API.
-        
+
         The client is cached on the instance after first creation and reused for subsequent calls.
-        
+
         Returns:
             instructor.Instructor: An Instructor client targeting Ollama's OpenAI-compatible endpoint with JSON mode.
         """
@@ -311,19 +311,19 @@ class BaseAgent:
     ) -> str:
         """
         Generate a plain-text response from the agent using the configured LLM.
-        
+
         Retries on transient connection/timeouts, enforces a minimum cleaned response length, and records token/time metrics for the last generation.
-        
+
         Parameters:
             prompt (str): The prompt to send to the LLM.
             context (str | None): Optional additional context to include in the system messages.
             temperature (float | None): Optional temperature override for this call.
             model (str | None): Optional model identifier override for this call.
             min_response_length (int | None): Minimum cleaned response length to accept. Defaults to MIN_RESPONSE_LENGTH; set to 1 for very short expected outputs.
-        
+
         Returns:
             str: The raw text content returned by the LLM.
-        
+
         Raises:
             LLMGenerationError: If generation fails due to model errors or after exhausting retries for transient errors or consistently too-short responses.
         """

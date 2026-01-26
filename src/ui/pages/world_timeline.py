@@ -30,7 +30,7 @@ class WorldTimelinePage:
     def __init__(self, state: AppState, services: ServiceContainer):
         """
         Initialize a WorldTimelinePage with application state and services.
-        
+
         Parameters:
             state (AppState): Application state used to access project and world data.
             services (ServiceContainer): Service container providing application services (navigation, notifications, etc.).
@@ -44,7 +44,7 @@ class WorldTimelinePage:
     def build(self) -> None:
         """
         Constructs and mounts the World Timeline page UI.
-        
+
         Renders the info, timeline, and help sections when a project with world data is available. If no project is selected, displays the no-project message instead; if a project exists but world data is missing, displays the no-world message.
         """
         if not self.state.has_project:
@@ -75,7 +75,7 @@ class WorldTimelinePage:
     def _build_no_world_message(self) -> None:
         """
         Display a full-width centered message indicating that no world data exists and prompt the user to build the world.
-        
+
         Renders a panel with an icon, heading, explanatory text, and a "Go to World Builder" button that navigates to "/world".
         """
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-6 py-16"):
@@ -96,7 +96,7 @@ class WorldTimelinePage:
     def _build_info_section(self) -> None:
         """
         Builds the information/header card for the timeline page displaying counts of characters, factions, locations, and events, colored legend dots, and a "World Builder" navigation button.
-        
+
         Does nothing if the world database is not available.
         """
         if not self.state.world_db:
@@ -206,7 +206,7 @@ class WorldTimelinePage:
     def _handle_item_select(self, item_id: str) -> None:
         """
         Handle a timeline item selection and notify the user about the selected entity or event.
-        
+
         Parameters:
             item_id (str): Identifier of the selected timeline item. Expected formats are
                 "entity-<id>" for entities and "event-<id>" for events; the function notifies

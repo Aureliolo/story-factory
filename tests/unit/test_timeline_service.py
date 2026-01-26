@@ -240,7 +240,7 @@ class TestTimelineService:
     def settings(self):
         """
         Create a default Settings instance used by tests.
-        
+
         Returns:
             Settings: a new Settings object with default test configuration.
         """
@@ -255,7 +255,7 @@ class TestTimelineService:
     def mock_world_db(self):
         """
         Create a MagicMock that mimics a WorldDatabase with no entities or events.
-        
+
         Returns:
             mock_db (MagicMock): Mocked WorldDatabase where `list_entities()` and `list_events()` return empty lists.
         """

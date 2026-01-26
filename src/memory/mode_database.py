@@ -2133,7 +2133,7 @@ class ModeDatabase:
     ) -> None:
         """
         Update accumulated metrics for an existing generation run and optionally mark it completed.
-        
+
         Parameters:
             run_id (str): Identifier of the generation run to update.
             total_tokens (int | None): Cumulative tokens used for the run.
@@ -2144,7 +2144,7 @@ class ModeDatabase:
             total_iterations (int | None): Total refinement iterations performed.
             wasted_iterations (int | None): Refinement iterations considered wasted.
             completed (bool): If True, sets the run's completion timestamp to now.
-        
+
         Raises:
             sqlite3.Error: If the database update fails.
         """
@@ -2199,10 +2199,10 @@ class ModeDatabase:
     def complete_generation_run(self, run_id: str) -> None:
         """
         Mark a generation run as completed by setting its completed_at timestamp to the current time.
-        
+
         Parameters:
             run_id (str): Identifier of the generation run to mark completed.
-        
+
         Raises:
             sqlite3.Error: If a database error occurs while updating the run.
         """
@@ -2226,7 +2226,7 @@ class ModeDatabase:
     def get_generation_run(self, run_id: str) -> dict[str, Any] | None:
         """
         Retrieve a generation run record by run_id.
-        
+
         Returns:
             dict: Run record with JSON fields `by_entity_type` and `by_model` deserialized into dictionaries, or `None` if no matching run is found.
         """
@@ -2261,12 +2261,12 @@ class ModeDatabase:
     ) -> list[dict[str, Any]]:
         """
         Retrieve recent generation runs, optionally filtered by project or run type.
-        
+
         Parameters:
             project_id (str | None): If provided, only runs for this project are returned.
             run_type (str | None): If provided, only runs of this type are returned.
             limit (int): Maximum number of runs to return; results are ordered by `started_at` descending.
-        
+
         Returns:
             list[dict[str, Any]]: A list of run records. Each record includes parsed `by_entity_type` and `by_model` dicts (deserialized from stored JSON) and other columns from the `generation_runs` table.
         """
@@ -2310,11 +2310,11 @@ class ModeDatabase:
     ) -> dict[str, Any]:
         """
         Summarizes generation-run cost and usage metrics for a recent time window.
-        
+
         Parameters:
             project_id (str | None): Optional project identifier to filter results.
             days (int): Number of days to include (must be greater than or equal to 0).
-        
+
         Returns:
             dict: Summary containing:
                 - total_runs (int): Number of runs in the window.
@@ -2328,7 +2328,7 @@ class ModeDatabase:
                 - by_run_type (list[dict]): Breakdown per run_type with keys
                     "run_type", "count", "tokens", and "time_seconds".
                 - efficiency_ratio (float): Ratio of useful iterations to total iterations (0.0–1.0).
-        
+
         Raises:
             ValueError: If `days` is negative.
         """
@@ -2417,11 +2417,11 @@ class ModeDatabase:
     ) -> list[dict[str, Any]]:
         """
         Produce a per-model cost and usage breakdown for generation activity within a recent time window.
-        
+
         Parameters:
             project_id (str | None): Optional project identifier to filter results; include all projects if None.
             days (int): Lookback window in days; must be zero or a positive integer.
-        
+
         Returns:
             list[dict[str, Any]]: A list of mappings, one per model, with keys:
                 - model_id (str): Model identifier.
@@ -2430,7 +2430,7 @@ class ModeDatabase:
                 - total_time_seconds (float): Sum of generation time in seconds (0.0 if not recorded).
                 - avg_tokens_per_second (float | None): Average tokens per second for the model, or None if unavailable.
                 - avg_quality (float | None): Average prose quality score for the model, or None if unavailable.
-        
+
         Raises:
             ValueError: If `days` is negative.
         """
@@ -2486,11 +2486,11 @@ class ModeDatabase:
     ) -> list[dict[str, Any]]:
         """
         Produce cost breakdowns aggregated by world entity type over the past `days`.
-        
+
         Parameters:
             project_id (str | None): Optional project identifier to filter results.
             days (int): Number of days to include in the window; must be zero or positive.
-        
+
         Returns:
             list[dict[str, Any]]: Each dictionary contains:
                 - entity_type: The world entity type.
@@ -2499,7 +2499,7 @@ class ModeDatabase:
                 - avg_iterations: Average iterations_used for the entity type.
                 - wasted_iterations: Sum of iterations considered wasted (where threshold_met is false).
                 - avg_quality: Average of average_score for the entity type.
-        
+
         Raises:
             ValueError: If `days` is negative.
         """

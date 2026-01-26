@@ -37,7 +37,7 @@ class StoryTimestamp(BaseModel):
     def sort_key(self) -> tuple[int, int, int, int]:
         """
         Provide a tuple key used to order StoryTimestamp values chronologically, with calendar dates before relative orders and unknown times last.
-        
+
         Returns:
             tuple[int, int, int, int]: A sortable key:
               - (0, year, month_or_0, day_or_0) when a calendar year is present.
@@ -58,7 +58,7 @@ class StoryTimestamp(BaseModel):
     def display_text(self) -> str:
         """
         Produce a human-readable label for the timestamp.
-        
+
         Returns:
             A string containing `raw_text` if present; otherwise a comma-separated date like
             "Year <year>, Month <month>, Day <day>" for available calendar fields, or
@@ -87,7 +87,7 @@ class StoryTimestamp(BaseModel):
     def has_date(self) -> bool:
         """
         Determine whether the timestamp contains any calendar or relative-order information.
-        
+
         Returns:
             True if `year`, `month`, `day`, or `relative_order` is set, False otherwise.
         """
@@ -157,7 +157,7 @@ class TimelineItem(BaseModel):
     def is_range(self) -> bool:
         """
         Determine whether the timeline item represents a range (has an end timestamp).
-        
+
         Returns:
             True if the item has an `end` timestamp (range), False otherwise.
         """
@@ -167,12 +167,12 @@ class TimelineItem(BaseModel):
 def parse_timestamp(text: str) -> StoryTimestamp:
     """
     Parse a free-form timestamp string into a StoryTimestamp model.
-    
+
     Preserves the original input in `raw_text`. Extracts calendar fields (`year`, `month`, `day`) when present; if no year is found, attempts to derive `relative_order` from phrases like "chapter N", "event/part/phase/act N", or from a standalone day value. If no structured information can be determined, the result contains only `raw_text`.
-    
+
     Parameters:
         text (str): The timestamp string to parse.
-    
+
     Returns:
         StoryTimestamp: Parsed timestamp with `raw_text` preserved and any discovered `year`, `month`, `day`, or `relative_order` populated.
     """
@@ -246,16 +246,16 @@ def parse_timestamp(text: str) -> StoryTimestamp:
 def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifecycle | None:
     """
     Build an EntityLifecycle from an attributes dictionary's "lifecycle" entry.
-    
+
     If present, the "lifecycle" value must be a mapping that may contain any of
     "birth", "death", "first_appearance", and "last_appearance". Each field may be
     either a dict of StoryTimestamp fields or a string that will be parsed by
     parse_timestamp.
-    
+
     Parameters:
         attributes (dict[str, Any]): Entity attributes; may include a "lifecycle"
             mapping describing timestamp data.
-    
+
     Returns:
         EntityLifecycle constructed from the "lifecycle" data, or `None` if the
         "lifecycle" entry is missing or not a mapping.

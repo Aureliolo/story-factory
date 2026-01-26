@@ -55,12 +55,12 @@ class ConflictAnalysisService:
     def analyze_conflicts(self, world_db: WorldDatabase) -> ConflictMetrics:
         """
         Analyze relationships in the provided world database and produce aggregated conflict metrics.
-        
+
         Computes counts per conflict category, overall conflict density, top tension pairs and strongest alliances, isolated entities, most-connected entities, and detected faction clusters.
-        
+
         Parameters:
             world_db (WorldDatabase): Source of entities and relationships to analyze.
-        
+
         Returns:
             ConflictMetrics: Aggregated results including highest tension pairs, strongest alliances, isolated entities, most-connected entities, faction clusters, counts per category, total relationships, and conflict density.
         """
@@ -155,12 +155,12 @@ class ConflictAnalysisService:
     ) -> list[TensionPair]:
         """
         Identify the top entity pairs by combined relationship strength and return them as scored TensionPair records.
-        
+
         Parameters:
             relationships (list[Relationship]): Relationships to group and evaluate; pairs are treated as unordered.
             entity_lookup (dict[str, Entity]): Mapping from entity ID to Entity used to resolve names; pairs with missing entities are ignored.
             limit (int): Maximum number of pairs to return.
-        
+
         Returns:
             list[TensionPair]: TensionPair objects sorted by score descending (highest first), limited to `limit`. Scores are normalized to the range 0.0–1.0 and include the relationship types involved.
         """
@@ -209,13 +209,13 @@ class ConflictAnalysisService:
     ) -> list[str]:
         """
         Find entity IDs of characters or factions that have no alliance connections.
-        
+
         Only entities with type "character" or "faction" are considered; any entity not appearing as a source or target in the provided alliance relationships is returned.
-        
+
         Parameters:
             entities (list[Entity]): All entities to consider.
             alliance_rels (list[Relationship]): Relationships classified as alliances.
-        
+
         Returns:
             list[str]: IDs of entities of type "character" or "faction" that are not part of any alliance.
         """
@@ -242,12 +242,12 @@ class ConflictAnalysisService:
     ) -> list[tuple[str, int]]:
         """
         Identify entities ranked by their number of relationships (counts include both source and target appearances).
-        
+
         Parameters:
             entities (list[Entity]): All entities (provided for context; ranking is derived from relationships).
             relationships (list[Relationship]): Relationships used to count connections.
             limit (int): Maximum number of entries to return.
-        
+
         Returns:
             list[tuple[str, int]]: Tuples of (entity_id, connection_count) sorted by connection_count descending, up to `limit` items.
         """
@@ -269,12 +269,12 @@ class ConflictAnalysisService:
     ) -> list[FactionCluster]:
         """
         Identify clusters of entities connected by alliance relationships and compute each cluster's average internal alliance strength.
-        
+
         Parameters:
             entities (list[Entity]): All entities in the world (used for context; cluster membership is derived from alliances).
             alliance_rels (list[Relationship]): Relationships classified as alliances that determine cluster connections.
             entity_lookup (dict[str, Entity]): Mapping from entity ID to Entity used to resolve entity names.
-        
+
         Returns:
             list[FactionCluster]: FactionCluster objects for each cluster with at least two members. Each cluster includes its member IDs, resolved names, and the average strength of alliance relationships internal to that cluster.
         """
@@ -287,10 +287,10 @@ class ConflictAnalysisService:
         def find(x: str) -> str:
             """
             Find the root representative for `x` in a union-find `parent` mapping, adding `x` if absent and compressing the path.
-            
+
             Parameters:
                 x (str): Element identifier to locate in the union-find structure. The function relies on a module-level or enclosing-scope `parent` dict mapping elements to their parent.
-            
+
             Returns:
                 root (str): The representative element (root) for `x`.
             """
@@ -303,9 +303,9 @@ class ConflictAnalysisService:
         def union(x: str, y: str) -> None:
             """
             Merge the disjoint-set containing x with the disjoint-set containing y.
-            
+
             After this call, x and y will belong to the same set; the representative (root) of x's set is attached to the representative of y's set.
-            
+
             Parameters:
                 x (str): Identifier of an element in the disjoint-set.
                 y (str): Identifier of another element in the disjoint-set.
@@ -367,12 +367,12 @@ class ConflictAnalysisService:
     ) -> ConflictGraphData:
         """
         Builds graph-ready nodes and edges for conflict visualization, and includes computed conflict metrics.
-        
+
         Parameters:
             world_db (WorldDatabase): Source of entities and relationships to include.
             categories (list[ConflictCategory] | None): Optional set of conflict categories to include; if provided, only relationships whose classified category is in this list are added as edges.
             entity_types (list[str] | None): Optional list of entity types to include as nodes; if provided, only entities whose `type` is in this list are included and edges are restricted to those entities.
-        
+
         Returns:
             ConflictGraphData: Object containing `nodes` (ConflictGraphNode list), `edges` (ConflictGraphEdge list), and `metrics` (ConflictMetrics) used for visualization.
         """
@@ -461,7 +461,7 @@ class ConflictAnalysisService:
     def get_category_summary(self, world_db: WorldDatabase) -> dict[str, int]:
         """
         Summarizes relationships by conflict category.
-        
+
         Returns:
             A dictionary mapping conflict category names to their counts.
         """
@@ -490,13 +490,13 @@ class ConflictAnalysisService:
     ) -> list[dict]:
         """
         Suggest potential missing conflict relationships between factions.
-        
+
         Identifies pairs of faction entities that have no existing relationship and suggests possible conflict or alliance types when both factions declare goals.
-        
+
         Parameters:
             world_db (WorldDatabase): Source of entities and relationships to analyze.
             limit (int): Maximum number of suggestions to return.
-        
+
         Returns:
             list[dict]: Suggestions where each dict contains:
                 - entity_a_id, entity_a_name, entity_b_id, entity_b_name: the involved factions
