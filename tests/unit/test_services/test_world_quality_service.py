@@ -6,7 +6,15 @@ from unittest.mock import MagicMock, patch
 import ollama
 import pytest
 
-from src.memory.story_state import Character, Faction, StoryBrief, StoryState
+from src.memory.story_state import (
+    Character,
+    Concept,
+    Faction,
+    Item,
+    Location,
+    StoryBrief,
+    StoryState,
+)
 from src.memory.world_quality import (
     CharacterQualityScores,
     ConceptQualityScores,
@@ -1037,18 +1045,16 @@ class TestGenerateCharacterWithQuality:
 class TestCreateLocation:
     """Tests for _create_location method."""
 
-    def test_create_location_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_location_success(self, mock_generate_structured, service, story_state):
         """Test successful location creation."""
-        location_json = json.dumps(
-            {
-                "name": "Thornwood Manor",
-                "type": "location",
-                "description": "A crumbling Victorian mansion shrouded in mist",
-                "significance": "Central setting where the mystery unfolds",
-            }
+        mock_location = Location(
+            name="Thornwood Manor",
+            type="location",
+            description="A crumbling Victorian mansion shrouded in mist",
+            significance="Central setting where the mystery unfolds",
         )
-        mock_ollama_client.generate.return_value = {"response": location_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_location
 
         location = service._create_location(story_state, existing_names=[], temperature=0.9)
 
@@ -1056,20 +1062,18 @@ class TestCreateLocation:
         assert location["type"] == "location"
         assert "Victorian" in location["description"]
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_create_location_duplicate_name_returns_empty(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
         """Test location creation returns empty dict when name is duplicate."""
-        location_json = json.dumps(
-            {
-                "name": "Thornwood Manor",
-                "type": "location",
-                "description": "A crumbling Victorian mansion",
-                "significance": "Central setting",
-            }
+        mock_location = Location(
+            name="Thornwood Manor",
+            type="location",
+            description="A crumbling Victorian mansion",
+            significance="Central setting",
         )
-        mock_ollama_client.generate.return_value = {"response": location_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_location
 
         # Pass existing name - should return empty to force retry
         result = service._create_location(
@@ -1085,32 +1089,40 @@ class TestCreateLocation:
         result = service._create_location(state, existing_names=[], temperature=0.9)
         assert result == {}
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_create_location_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
-        """Test location creation raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+        """Test location creation raises error on validation failure."""
+        from pydantic import ValidationError
 
-        with pytest.raises(WorldGenerationError, match="Invalid location"):
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Location", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
+
+        with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_location_ollama_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_location_ollama_error(self, mock_generate_structured, service, story_state):
         """Test location creation handles Ollama errors."""
-        mock_ollama_client.generate.side_effect = ollama.ResponseError("Error")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = ollama.ResponseError("Error")
 
-        with pytest.raises(WorldGenerationError, match="LLM error"):
+        with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_create_location_non_dict_json_raises_error(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
-        """Test location creation raises error when JSON is not a dict."""
-        mock_ollama_client.generate.return_value = {"response": '["a", "list"]'}
-        service._client = mock_ollama_client
+        """Test location creation raises error when result cannot be converted."""
+        from pydantic import ValidationError
 
-        with pytest.raises(WorldGenerationError, match="Invalid location JSON"):
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Location", [{"type": "model_type", "loc": (), "input": ["a", "list"]}]
+        )
+
+        with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
 
 
@@ -1155,18 +1167,16 @@ class TestJudgeLocationQuality:
 class TestRefineLocation:
     """Tests for _refine_location method."""
 
-    def test_refine_location_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_location_success(self, mock_generate_structured, service, story_state):
         """Test successful location refinement."""
-        refined_json = json.dumps(
-            {
-                "name": "Dark Forest",
-                "type": "location",
-                "description": "A deeply atmospheric ancient forest",
-                "significance": "Central to the story's themes",
-            }
+        mock_location = Location(
+            name="Dark Forest",
+            type="location",
+            description="A deeply atmospheric ancient forest",
+            significance="Central to the story's themes",
         )
-        mock_ollama_client.generate.return_value = {"response": refined_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_location
 
         original = {"name": "Dark Forest", "description": "A forest", "significance": "Unknown"}
         scores = LocationQualityScores(
@@ -1178,32 +1188,36 @@ class TestRefineLocation:
         assert refined["name"] == "Dark Forest"
         assert "atmospheric" in refined["description"]
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_refine_location_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
-        """Test refinement raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+        """Test refinement raises error on validation failure."""
+        from pydantic import ValidationError
+
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Location", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
             atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Invalid location refinement"):
+        with pytest.raises(WorldGenerationError, match="Location refinement failed"):
             service._refine_location(original, scores, story_state, temperature=0.7)
 
-    def test_refine_location_ollama_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_location_ollama_error(self, mock_generate_structured, service, story_state):
         """Test refinement handles Ollama errors."""
-        mock_ollama_client.generate.side_effect = ConnectionError("Connection refused")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = ConnectionError("Connection refused")
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
             atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="LLM error"):
+        with pytest.raises(WorldGenerationError, match="Location refinement failed"):
             service._refine_location(original, scores, story_state, temperature=0.7)
 
 
@@ -1810,40 +1824,36 @@ class TestGenerateFactionWithQuality:
 class TestCreateItem:
     """Tests for _create_item method."""
 
-    def test_create_item_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_item_success(self, mock_generate_structured, service, story_state):
         """Test successful item creation."""
-        item_json = json.dumps(
-            {
-                "name": "The Crimson Amulet",
-                "type": "item",
-                "description": "An ancient amulet that glows with inner light",
-                "significance": "Key to unlocking the mansion's secrets",
-                "properties": ["glows in darkness", "warm to touch"],
-            }
+        mock_item = Item(
+            name="The Crimson Amulet",
+            type="item",
+            description="An ancient amulet that glows with inner light",
+            significance="Key to unlocking the mansion's secrets",
+            properties=["glows in darkness", "warm to touch"],
         )
-        mock_ollama_client.generate.return_value = {"response": item_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_item
 
         item = service._create_item(story_state, existing_names=[], temperature=0.9)
 
         assert item["name"] == "The Crimson Amulet"
         assert len(item["properties"]) == 2
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_create_item_duplicate_name_returns_empty(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
         """Test item creation returns empty dict when name is duplicate."""
-        item_json = json.dumps(
-            {
-                "name": "The Crimson Amulet",
-                "type": "item",
-                "description": "An ancient amulet",
-                "significance": "Key item",
-                "properties": ["glows"],
-            }
+        mock_item = Item(
+            name="The Crimson Amulet",
+            type="item",
+            description="An ancient amulet",
+            significance="Key item",
+            properties=["glows"],
         )
-        mock_ollama_client.generate.return_value = {"response": item_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_item
 
         # Pass existing name - should return empty to force retry
         result = service._create_item(
@@ -1859,12 +1869,18 @@ class TestCreateItem:
         result = service._create_item(state, existing_names=[], temperature=0.9)
         assert result == {}
 
-    def test_create_item_invalid_json_raises_error(self, service, story_state, mock_ollama_client):
-        """Test item creation raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_item_invalid_json_raises_error(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test item creation raises error on validation failure."""
+        from pydantic import ValidationError
 
-        with pytest.raises(WorldGenerationError, match="Invalid item"):
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Item", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
+
+        with pytest.raises(WorldGenerationError, match="Item creation failed"):
             service._create_item(story_state, existing_names=[], temperature=0.9)
 
 
@@ -1919,19 +1935,17 @@ class TestJudgeItemQuality:
 class TestRefineItem:
     """Tests for _refine_item method."""
 
-    def test_refine_item_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_item_success(self, mock_generate_structured, service, story_state):
         """Test successful item refinement."""
-        refined_json = json.dumps(
-            {
-                "name": "Magic Sword",
-                "type": "item",
-                "description": "A legendary blade with a storied past",
-                "significance": "Central to the hero's journey",
-                "properties": ["cuts through anything", "glows in battle"],
-            }
+        mock_item = Item(
+            name="Magic Sword",
+            type="item",
+            description="A legendary blade with a storied past",
+            significance="Central to the hero's journey",
+            properties=["cuts through anything", "glows in battle"],
         )
-        mock_ollama_client.generate.return_value = {"response": refined_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_item
 
         original = {
             "name": "Magic Sword",
@@ -1948,17 +1962,23 @@ class TestRefineItem:
         assert refined["name"] == "Magic Sword"
         assert "legendary" in refined["description"]
 
-    def test_refine_item_invalid_json_raises_error(self, service, story_state, mock_ollama_client):
-        """Test refinement raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_item_invalid_json_raises_error(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test refinement raises error on validation failure."""
+        from pydantic import ValidationError
+
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Item", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
             significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Invalid item refinement"):
+        with pytest.raises(WorldGenerationError, match="Item refinement failed"):
             service._refine_item(original, scores, story_state, temperature=0.7)
 
 
@@ -2003,38 +2023,34 @@ class TestGenerateItemWithQuality:
 class TestCreateConcept:
     """Tests for _create_concept method."""
 
-    def test_create_concept_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_concept_success(self, mock_generate_structured, service, story_state):
         """Test successful concept creation."""
-        concept_json = json.dumps(
-            {
-                "name": "The Price of Truth",
-                "type": "concept",
-                "description": "Truth always comes with consequences that challenge the seeker",
-                "manifestations": "Characters face moral dilemmas when uncovering secrets",
-            }
+        mock_concept = Concept(
+            name="The Price of Truth",
+            type="concept",
+            description="Truth always comes with consequences that challenge the seeker",
+            manifestations="Characters face moral dilemmas when uncovering secrets",
         )
-        mock_ollama_client.generate.return_value = {"response": concept_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_concept
 
         concept = service._create_concept(story_state, existing_names=[], temperature=0.9)
 
         assert concept["name"] == "The Price of Truth"
         assert concept["type"] == "concept"
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_create_concept_duplicate_name_returns_empty(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
         """Test concept creation returns empty dict when name is duplicate."""
-        concept_json = json.dumps(
-            {
-                "name": "The Price of Truth",
-                "type": "concept",
-                "description": "Truth always comes with consequences",
-                "manifestations": "Moral dilemmas",
-            }
+        mock_concept = Concept(
+            name="The Price of Truth",
+            type="concept",
+            description="Truth always comes with consequences",
+            manifestations="Moral dilemmas",
         )
-        mock_ollama_client.generate.return_value = {"response": concept_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_concept
 
         # Pass existing name - should return empty to force retry
         result = service._create_concept(
@@ -2050,14 +2066,18 @@ class TestCreateConcept:
         result = service._create_concept(state, existing_names=[], temperature=0.9)
         assert result == {}
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_create_concept_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
-        """Test concept creation raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+        """Test concept creation raises error on validation failure."""
+        from pydantic import ValidationError
 
-        with pytest.raises(WorldGenerationError, match="Invalid concept"):
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Concept", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
+
+        with pytest.raises(WorldGenerationError, match="Concept creation failed"):
             service._create_concept(story_state, existing_names=[], temperature=0.9)
 
 
@@ -2111,18 +2131,16 @@ class TestJudgeConceptQuality:
 class TestRefineConcept:
     """Tests for _refine_concept method."""
 
-    def test_refine_concept_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_concept_success(self, mock_generate_structured, service, story_state):
         """Test successful concept refinement."""
-        refined_json = json.dumps(
-            {
-                "name": "Redemption",
-                "type": "concept",
-                "description": "A profound journey through moral complexity",
-                "manifestations": "Evident in every character's transformation",
-            }
+        mock_concept = Concept(
+            name="Redemption",
+            type="concept",
+            description="A profound journey through moral complexity",
+            manifestations="Evident in every character's transformation",
         )
-        mock_ollama_client.generate.return_value = {"response": refined_json}
-        service._client = mock_ollama_client
+        mock_generate_structured.return_value = mock_concept
 
         original = {
             "name": "Redemption",
@@ -2136,17 +2154,21 @@ class TestRefineConcept:
         assert refined["name"] == "Redemption"
         assert "profound" in refined["description"]
 
+    @patch("src.services.world_quality_service.generate_structured")
     def test_refine_concept_invalid_json_raises_error(
-        self, service, story_state, mock_ollama_client
+        self, mock_generate_structured, service, story_state
     ):
-        """Test refinement raises error on invalid JSON."""
-        mock_ollama_client.generate.return_value = {"response": "not json"}
-        service._client = mock_ollama_client
+        """Test refinement raises error on validation failure."""
+        from pydantic import ValidationError
+
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Concept", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
         scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
 
-        with pytest.raises(WorldGenerationError, match="Invalid concept refinement"):
+        with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
 
 
@@ -2758,23 +2780,26 @@ class TestExceptionHandlingPaths:
 
     # ========== Location Creation Exception Paths ==========
 
-    def test_create_location_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test location creation handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_location_json_parsing_error(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test location creation handles validation errors."""
+        from pydantic import ValidationError
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = ValueError("JSON parse error")
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Location", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
-            with pytest.raises(WorldGenerationError, match="Invalid location response format"):
-                service._create_location(story_state, existing_names=[], temperature=0.9)
+        with pytest.raises(WorldGenerationError, match="Location creation failed"):
+            service._create_location(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_location_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_location_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test location creation handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected error")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected error")
 
-        with pytest.raises(WorldGenerationError, match="Unexpected location creation error"):
+        with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
 
     # ========== Location Judge Exception Paths ==========
@@ -2793,33 +2818,36 @@ class TestExceptionHandlingPaths:
 
     # ========== Location Refinement Exception Paths ==========
 
-    def test_refine_location_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test location refinement handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_location_json_parsing_error(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test location refinement handles validation errors."""
+        from pydantic import ValidationError
+
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Location", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
             atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
         )
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = KeyError("missing")
+        with pytest.raises(WorldGenerationError, match="Location refinement failed"):
+            service._refine_location(original, scores, story_state, temperature=0.7)
 
-            with pytest.raises(WorldGenerationError, match="Invalid location refinement"):
-                service._refine_location(original, scores, story_state, temperature=0.7)
-
-    def test_refine_location_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_location_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test location refinement handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
         original = {"name": "Test", "description": "Test", "significance": "Test"}
         scores = LocationQualityScores(
             atmosphere=6.0, significance=6.0, story_relevance=6.0, distinctiveness=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Unexpected location refinement error"):
+        with pytest.raises(WorldGenerationError, match="Location refinement failed"):
             service._refine_location(original, scores, story_state, temperature=0.7)
 
     # ========== Relationship Creation Exception Paths ==========
@@ -2978,31 +3006,32 @@ class TestExceptionHandlingPaths:
 
     # ========== Item Creation Exception Paths ==========
 
-    def test_create_item_llm_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_item_llm_error(self, mock_generate_structured, service, story_state):
         """Test item creation handles LLM errors."""
-        mock_ollama_client.generate.side_effect = ollama.ResponseError("Model error")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = ollama.ResponseError("Model error")
 
-        with pytest.raises(WorldGenerationError, match="LLM error during item creation"):
+        with pytest.raises(WorldGenerationError, match="Item creation failed"):
             service._create_item(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_item_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test item creation handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_item_json_parsing_error(self, mock_generate_structured, service, story_state):
+        """Test item creation handles validation errors."""
+        from pydantic import ValidationError
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = KeyError("missing key")
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Item", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
-            with pytest.raises(WorldGenerationError, match="Invalid item response format"):
-                service._create_item(story_state, existing_names=[], temperature=0.9)
+        with pytest.raises(WorldGenerationError, match="Item creation failed"):
+            service._create_item(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_item_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_item_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test item creation handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
-        with pytest.raises(WorldGenerationError, match="Unexpected item creation error"):
+        with pytest.raises(WorldGenerationError, match="Item creation failed"):
             service._create_item(story_state, existing_names=[], temperature=0.9)
 
     # ========== Item Judge Exception Paths ==========
@@ -3019,75 +3048,79 @@ class TestExceptionHandlingPaths:
 
     # ========== Item Refinement Exception Paths ==========
 
-    def test_refine_item_llm_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_item_llm_error(self, mock_generate_structured, service, story_state):
         """Test item refinement handles LLM errors."""
-        mock_ollama_client.generate.side_effect = TimeoutError("Timeout")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = TimeoutError("Timeout")
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
             significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="LLM error during item refinement"):
+        with pytest.raises(WorldGenerationError, match="Item refinement failed"):
             service._refine_item(original, scores, story_state, temperature=0.7)
 
-    def test_refine_item_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test item refinement handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_item_json_parsing_error(self, mock_generate_structured, service, story_state):
+        """Test item refinement handles validation errors."""
+        from pydantic import ValidationError
+
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Item", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
             significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
         )
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = ValueError("parse error")
+        with pytest.raises(WorldGenerationError, match="Item refinement failed"):
+            service._refine_item(original, scores, story_state, temperature=0.7)
 
-            with pytest.raises(WorldGenerationError, match="Invalid item refinement"):
-                service._refine_item(original, scores, story_state, temperature=0.7)
-
-    def test_refine_item_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_item_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test item refinement handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
         original = {"name": "Test", "description": "Test", "significance": "X", "properties": []}
         scores = ItemQualityScores(
             significance=6.0, uniqueness=6.0, narrative_potential=6.0, integration=6.0
         )
 
-        with pytest.raises(WorldGenerationError, match="Unexpected item refinement error"):
+        with pytest.raises(WorldGenerationError, match="Item refinement failed"):
             service._refine_item(original, scores, story_state, temperature=0.7)
 
     # ========== Concept Creation Exception Paths ==========
 
-    def test_create_concept_llm_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_concept_llm_error(self, mock_generate_structured, service, story_state):
         """Test concept creation handles LLM errors."""
-        mock_ollama_client.generate.side_effect = ConnectionError("Connection refused")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = ConnectionError("Connection refused")
 
-        with pytest.raises(WorldGenerationError, match="LLM error during concept creation"):
+        with pytest.raises(WorldGenerationError, match="Concept creation failed"):
             service._create_concept(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_concept_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test concept creation handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_concept_json_parsing_error(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test concept creation handles validation errors."""
+        from pydantic import ValidationError
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = TypeError("type error")
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Concept", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
-            with pytest.raises(WorldGenerationError, match="Invalid concept response format"):
-                service._create_concept(story_state, existing_names=[], temperature=0.9)
+        with pytest.raises(WorldGenerationError, match="Concept creation failed"):
+            service._create_concept(story_state, existing_names=[], temperature=0.9)
 
-    def test_create_concept_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_create_concept_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test concept creation handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
-        with pytest.raises(WorldGenerationError, match="Unexpected concept creation error"):
+        with pytest.raises(WorldGenerationError, match="Concept creation failed"):
             service._create_concept(story_state, existing_names=[], temperature=0.9)
 
     # ========== Concept Judge Exception Paths ==========
@@ -3104,40 +3137,43 @@ class TestExceptionHandlingPaths:
 
     # ========== Concept Refinement Exception Paths ==========
 
-    def test_refine_concept_llm_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_concept_llm_error(self, mock_generate_structured, service, story_state):
         """Test concept refinement handles LLM errors."""
-        mock_ollama_client.generate.side_effect = ollama.ResponseError("LLM error")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = ollama.ResponseError("LLM error")
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
         scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
 
-        with pytest.raises(WorldGenerationError, match="LLM error during concept refinement"):
+        with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
 
-    def test_refine_concept_json_parsing_error(self, service, story_state, mock_ollama_client):
-        """Test concept refinement handles JSON parsing errors."""
-        mock_ollama_client.generate.return_value = {"response": "{}"}
-        service._client = mock_ollama_client
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_concept_json_parsing_error(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test concept refinement handles validation errors."""
+        from pydantic import ValidationError
+
+        mock_generate_structured.side_effect = ValidationError.from_exception_data(
+            "Concept", [{"type": "missing", "loc": ("name",), "input": {}}]
+        )
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
         scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
-            mock_extract.side_effect = KeyError("missing")
+        with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
+            service._refine_concept(original, scores, story_state, temperature=0.7)
 
-            with pytest.raises(WorldGenerationError, match="Invalid concept refinement"):
-                service._refine_concept(original, scores, story_state, temperature=0.7)
-
-    def test_refine_concept_unexpected_error(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service.generate_structured")
+    def test_refine_concept_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test concept refinement handles unexpected errors."""
-        mock_ollama_client.generate.side_effect = AttributeError("Unexpected")
-        service._client = mock_ollama_client
+        mock_generate_structured.side_effect = AttributeError("Unexpected")
 
         original = {"name": "Test", "description": "Test", "manifestations": "X"}
         scores = ConceptQualityScores(relevance=6.0, depth=6.0, manifestation=6.0, resonance=6.0)
 
-        with pytest.raises(WorldGenerationError, match="Unexpected concept refinement error"):
+        with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
 
 
