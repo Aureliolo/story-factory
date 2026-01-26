@@ -951,6 +951,16 @@ class TestWorldHealthMethods:
         entity = world_service.find_entity_by_name(world_db, "Alicia", fuzzy_threshold=-0.5)
         assert entity is not None
 
+    def test_calculate_name_similarity_exact_match(self, world_service):
+        """Test _calculate_name_similarity returns 1.0 for exact match."""
+        # Direct test of the private method to ensure coverage
+        score = world_service._calculate_name_similarity("alice", "alice")
+        assert score == 1.0
+
+        # Test with empty strings (edge case)
+        score = world_service._calculate_name_similarity("", "")
+        assert score == 1.0
+
     def test_get_world_health_metrics_orphan_detection_disabled(self, world_db):
         """Test health metrics skips orphan detection when setting disabled."""
         # Create settings with orphan detection disabled

@@ -4019,6 +4019,89 @@ class TestSuggestRelationshipsForEntity:
         # Warning should be logged
         assert "Could not resolve target entity" in caplog.text
 
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_logs_warning_for_unconfigured_entity_type(
+        self, service, entity, available_entities, caplog
+    ):
+        """Test that warning is logged when entity type not in relationship_minimums."""
+        import logging
+
+        # Clear the existing minimums to trigger the warning
+        service.settings.relationship_minimums = {}
+
+        response_json = json.dumps({"suggestions": []})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        with caplog.at_level(logging.WARNING):
+            await service.suggest_relationships_for_entity(
+                entity=entity,
+                available_entities=available_entities,
+                existing_relationships=[],
+                story_brief=None,
+                num_suggestions=3,
+            )
+
+        # Warning should be logged for unconfigured entity type
+        assert "No relationship_minimums configured for entity type" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_uses_default_role_when_specific_role_missing(
+        self, service, entity, available_entities, caplog
+    ):
+        """Test that 'default' role is used when specific role not in minimums."""
+        import logging
+
+        # Set up minimums with only 'default' for character type
+        service.settings.relationship_minimums = {"character": {"default": 3}}
+
+        response_json = json.dumps({"suggestions": []})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        with caplog.at_level(logging.DEBUG):
+            await service.suggest_relationships_for_entity(
+                entity=entity,
+                available_entities=available_entities,
+                existing_relationships=[],
+                story_brief=None,
+                num_suggestions=3,
+            )
+
+        # Debug message should show default was used
+        assert "using default" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_uses_fallback_when_no_config(
+        self, service, entity, available_entities, caplog
+    ):
+        """Test that fallback value of 2 is used when no config at all."""
+        import logging
+
+        # Set up minimums with entity type but no matching role or default
+        service.settings.relationship_minimums = {"character": {"protagonist": 5}}
+        # Entity has role="protagonist" but we'll override to something else
+        entity.attributes["role"] = "sidekick"  # Not configured
+
+        response_json = json.dumps({"suggestions": []})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        with caplog.at_level(logging.WARNING):
+            await service.suggest_relationships_for_entity(
+                entity=entity,
+                available_entities=available_entities,
+                existing_relationships=[],
+                story_brief=None,
+                num_suggestions=3,
+            )
+
+        # Warning should be logged about using fallback
+        assert "using fallback value of 2" in caplog.text
+
 
 class TestExtractEntityClaims:
     """Tests for extract_entity_claims async method."""
