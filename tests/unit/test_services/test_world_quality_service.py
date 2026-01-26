@@ -4106,6 +4106,138 @@ class TestSuggestRelationshipsForEntity:
         # Warning should be logged about using fallback
         assert "using fallback value of 2" in caplog.text
 
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_uses_specific_role_minimums(
+        self, service, entity, available_entities
+    ):
+        """Test that specific role minimum is used when configured."""
+        # Set up minimums with specific role for protagonist
+        service.settings.relationship_minimums = {"character": {"protagonist": 5, "default": 2}}
+        # Entity has role="protagonist" which matches
+        entity.attributes["role"] = "protagonist"
+
+        response_json = json.dumps({"suggestions": []})
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        # Should use protagonist minimum (5) not default (2)
+        await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        # Verify prompt was sent - no warning about missing role
+        assert mock_client.generate.called
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_coerces_invalid_confidence_to_default(
+        self, service, entity, available_entities
+    ):
+        """Test that invalid confidence values are coerced to 0.5."""
+        # LLM returns invalid confidence that can't be parsed as float
+        response_json = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "target_entity_id": "char-002",
+                        "target_entity_name": "Bob",
+                        "relation_type": "ally_of",
+                        "confidence": "not_a_number",  # Invalid
+                        "bidirectional": True,
+                    }
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        # Should have result with confidence coerced to 0.5
+        assert len(result) == 1
+        assert result[0]["confidence"] == 0.5
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_coerces_string_bidirectional(
+        self, service, entity, available_entities
+    ):
+        """Test that string bidirectional values are coerced to boolean."""
+        # LLM returns bidirectional as string "true"
+        response_json = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "target_entity_id": "char-002",
+                        "target_entity_name": "Bob",
+                        "relation_type": "ally_of",
+                        "confidence": 0.9,
+                        "bidirectional": "true",  # String instead of bool
+                    }
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        # Should have result with bidirectional coerced to True
+        assert len(result) == 1
+        assert result[0]["bidirectional"] is True
+
+    @pytest.mark.asyncio
+    async def test_suggest_relationships_coerces_unexpected_bidirectional_type(
+        self, service, entity, available_entities
+    ):
+        """Test that unexpected bidirectional types default to False."""
+        # LLM returns bidirectional as a list (unexpected type)
+        response_json = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "target_entity_id": "char-002",
+                        "target_entity_name": "Bob",
+                        "relation_type": "ally_of",
+                        "confidence": 0.9,
+                        "bidirectional": ["unexpected", "list"],  # Unexpected type
+                    }
+                ]
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.suggest_relationships_for_entity(
+            entity=entity,
+            available_entities=available_entities,
+            existing_relationships=[],
+            story_brief=None,
+            num_suggestions=3,
+        )
+
+        # Should have result with bidirectional defaulting to False
+        assert len(result) == 1
+        assert result[0]["bidirectional"] is False
+
 
 class TestExtractEntityClaims:
     """Tests for extract_entity_claims async method."""
@@ -4301,6 +4433,92 @@ class TestCheckContradiction:
         result = await service.check_contradiction(claim_a, claim_b)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_coerces_string_is_contradiction(
+        self, service, claim_a, claim_b
+    ):
+        """Test that string is_contradiction values are coerced to boolean."""
+        # LLM returns is_contradiction as string "true"
+        response_json = json.dumps(
+            {
+                "is_contradiction": "true",  # String instead of bool
+                "severity": "medium",
+                "explanation": "Eye color conflict",
+                "resolution_suggestion": "Pick one",
+                "confidence": 0.8,
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        assert result is not None
+        assert result["severity"] == "medium"
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_string_false_not_truthy(self, service, claim_a, claim_b):
+        """Test that string 'false' is correctly treated as False."""
+        # LLM returns is_contradiction as string "false" which would be truthy in Python
+        response_json = json.dumps(
+            {
+                "is_contradiction": "false",  # String "false" should be False
+                "explanation": "No conflict",
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        # Should return None because "false" should be coerced to False
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_coerces_unexpected_type_to_false(
+        self, service, claim_a, claim_b
+    ):
+        """Test that unexpected is_contradiction types default to False."""
+        # LLM returns is_contradiction as a list (unexpected type)
+        response_json = json.dumps(
+            {
+                "is_contradiction": ["unexpected"],  # Unexpected type
+                "explanation": "Something",
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        # Should return None because unexpected type defaults to False
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_check_contradiction_coerces_invalid_confidence(self, service, claim_a, claim_b):
+        """Test that invalid confidence values are coerced to 0.5."""
+        # LLM returns invalid confidence that can't be parsed as float
+        response_json = json.dumps(
+            {
+                "is_contradiction": True,
+                "severity": "high",
+                "explanation": "Conflict",
+                "resolution_suggestion": "Fix it",
+                "confidence": "not_a_number",  # Invalid
+            }
+        )
+        mock_client = MagicMock()
+        mock_client.generate.return_value = {"response": response_json}
+        service._client = mock_client
+
+        result = await service.check_contradiction(claim_a, claim_b)
+
+        assert result is not None
+        assert result["confidence"] == 0.5  # Should be coerced to default
 
 
 class TestValidateEntityConsistency:
