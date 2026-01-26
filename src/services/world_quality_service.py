@@ -10,6 +10,8 @@ import asyncio
 import logging
 import random
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, ClassVar
 
 import ollama
@@ -45,6 +47,24 @@ from src.utils.validation import validate_not_empty, validate_unique_name
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class EntityGenerationProgress:
+    """Progress information for entity generation operations."""
+
+    current: int  # Current entity (1-indexed)
+    total: int  # Total entities requested
+    entity_type: str  # character, location, faction, etc.
+    entity_name: str | None = None  # Name if known (after generation completes)
+    phase: str = "generating"  # generating, refining, complete
+    elapsed_seconds: float = 0.0
+    estimated_remaining_seconds: float | None = None
+
+    @property
+    def progress_fraction(self) -> float:
+        """Progress as 0.0-1.0."""
+        return (self.current - 1) / max(self.total, 1)
+
+
 class WorldQualityService:
     """Service for quality-controlled world entity generation.
 
@@ -76,6 +96,32 @@ class WorldQualityService:
         "concept": "validator",  # Concept coherence checking
         "relationship": "validator",  # Relationship validity checking
     }
+
+    @staticmethod
+    def _calculate_eta(
+        completed_times: list[float],
+        remaining_count: int,
+    ) -> float | None:
+        """Calculate ETA using exponential moving average.
+
+        Uses EMA with alpha=0.3 to weight recent entity generation times more heavily,
+        providing more accurate estimates as we learn the actual generation speed.
+
+        Args:
+            completed_times: List of completion times for previous entities (in seconds).
+            remaining_count: Number of entities remaining to generate.
+
+        Returns:
+            Estimated remaining time in seconds, or None if no data available.
+        """
+        if not completed_times or remaining_count <= 0:
+            return None
+        # EMA with alpha=0.3 to weight recent times more heavily
+        alpha = 0.3
+        avg = completed_times[0]
+        for t in completed_times[1:]:
+            avg = alpha * t + (1 - alpha) * avg
+        return avg * remaining_count
 
     @staticmethod
     def _format_properties(properties: list[Any] | Any | None) -> str:
@@ -2894,6 +2940,8 @@ Return ONLY the improved concept."""
         existing_names: list[str],
         count: int = 2,
         existing_locations: list[str] | None = None,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], FactionQualityScores]]:
         """Generate multiple factions with quality refinement.
 
@@ -2902,6 +2950,8 @@ Return ONLY the improved concept."""
             existing_names: Names to avoid.
             count: Number of factions to generate.
             existing_locations: Names of existing locations for spatial grounding.
+            cancel_check: Optional callable that returns True to cancel generation.
+            progress_callback: Optional callback to receive progress updates.
 
         Returns:
             List of (faction_dict, QualityScores) tuples.
@@ -2909,25 +2959,62 @@ Return ONLY the improved concept."""
         Raises:
             WorldGenerationError: If no factions could be generated.
         """
-        results = []
+        results: list[tuple[dict[str, Any], FactionQualityScores]] = []
         names = existing_names.copy()
-        errors = []
+        errors: list[str] = []
+        batch_start_time = time.time()
+        completed_times: list[float] = []
 
         for i in range(count):
+            # Check cancellation before starting entity
+            if cancel_check and cancel_check():
+                logger.info(f"Faction generation cancelled after {len(results)}/{count}")
+                break
+
+            # Report progress before generation
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="faction",
+                        phase="generating",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=self._calculate_eta(completed_times, count - i),
+                    )
+                )
+
+            entity_start = time.time()
             try:
                 logger.info(f"Generating faction {i + 1}/{count} with quality refinement")
-                start_time = time.time()
                 faction, scores, iterations = self.generate_faction_with_quality(
                     story_state, names, existing_locations
                 )
-                elapsed = time.time() - start_time
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
                 results.append((faction, scores))
                 faction_name = faction.get("name", "Unknown")
                 names.append(faction_name)
                 logger.info(
                     f"Faction '{faction_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
+                    f"quality: {scores.average:.1f}, generation_time: {entity_elapsed:.2f}s"
                 )
+
+                # Report completion with entity name
+                if progress_callback:
+                    progress_callback(
+                        EntityGenerationProgress(
+                            current=i + 1,
+                            total=count,
+                            entity_type="faction",
+                            entity_name=faction_name,
+                            phase="complete",
+                            elapsed_seconds=time.time() - batch_start_time,
+                            estimated_remaining_seconds=self._calculate_eta(
+                                completed_times, count - i - 1
+                            ),
+                        )
+                    )
                 # Analytics already recorded via _log_refinement_analytics in generate_faction_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
@@ -2951,6 +3038,8 @@ Return ONLY the improved concept."""
         story_state: StoryState,
         existing_names: list[str],
         count: int = 3,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ItemQualityScores]]:
         """Generate multiple items with quality refinement.
 
@@ -2958,6 +3047,8 @@ Return ONLY the improved concept."""
             story_state: Current story state.
             existing_names: Names to avoid.
             count: Number of items to generate.
+            cancel_check: Optional callable that returns True to cancel generation.
+            progress_callback: Optional callback to receive progress updates.
 
         Returns:
             List of (item_dict, QualityScores) tuples.
@@ -2965,23 +3056,60 @@ Return ONLY the improved concept."""
         Raises:
             WorldGenerationError: If no items could be generated.
         """
-        results = []
+        results: list[tuple[dict[str, Any], ItemQualityScores]] = []
         names = existing_names.copy()
-        errors = []
+        errors: list[str] = []
+        batch_start_time = time.time()
+        completed_times: list[float] = []
 
         for i in range(count):
+            # Check cancellation before starting entity
+            if cancel_check and cancel_check():
+                logger.info(f"Item generation cancelled after {len(results)}/{count}")
+                break
+
+            # Report progress before generation
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="item",
+                        phase="generating",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=self._calculate_eta(completed_times, count - i),
+                    )
+                )
+
+            entity_start = time.time()
             try:
                 logger.info(f"Generating item {i + 1}/{count} with quality refinement")
-                start_time = time.time()
                 item, scores, iterations = self.generate_item_with_quality(story_state, names)
-                elapsed = time.time() - start_time
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
                 results.append((item, scores))
                 item_name = item.get("name", "Unknown")
                 names.append(item_name)
                 logger.info(
                     f"Item '{item_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
+                    f"quality: {scores.average:.1f}, generation_time: {entity_elapsed:.2f}s"
                 )
+
+                # Report completion with entity name
+                if progress_callback:
+                    progress_callback(
+                        EntityGenerationProgress(
+                            current=i + 1,
+                            total=count,
+                            entity_type="item",
+                            entity_name=item_name,
+                            phase="complete",
+                            elapsed_seconds=time.time() - batch_start_time,
+                            estimated_remaining_seconds=self._calculate_eta(
+                                completed_times, count - i - 1
+                            ),
+                        )
+                    )
                 # Analytics already recorded via _log_refinement_analytics in generate_item_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
@@ -3002,6 +3130,8 @@ Return ONLY the improved concept."""
         story_state: StoryState,
         existing_names: list[str],
         count: int = 2,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], ConceptQualityScores]]:
         """Generate multiple concepts with quality refinement.
 
@@ -3009,6 +3139,8 @@ Return ONLY the improved concept."""
             story_state: Current story state.
             existing_names: Names to avoid.
             count: Number of concepts to generate.
+            cancel_check: Optional callable that returns True to cancel generation.
+            progress_callback: Optional callback to receive progress updates.
 
         Returns:
             List of (concept_dict, QualityScores) tuples.
@@ -3016,23 +3148,60 @@ Return ONLY the improved concept."""
         Raises:
             WorldGenerationError: If no concepts could be generated.
         """
-        results = []
+        results: list[tuple[dict[str, Any], ConceptQualityScores]] = []
         names = existing_names.copy()
-        errors = []
+        errors: list[str] = []
+        batch_start_time = time.time()
+        completed_times: list[float] = []
 
         for i in range(count):
+            # Check cancellation before starting entity
+            if cancel_check and cancel_check():
+                logger.info(f"Concept generation cancelled after {len(results)}/{count}")
+                break
+
+            # Report progress before generation
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="concept",
+                        phase="generating",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=self._calculate_eta(completed_times, count - i),
+                    )
+                )
+
+            entity_start = time.time()
             try:
                 logger.info(f"Generating concept {i + 1}/{count} with quality refinement")
-                start_time = time.time()
                 concept, scores, iterations = self.generate_concept_with_quality(story_state, names)
-                elapsed = time.time() - start_time
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
                 results.append((concept, scores))
                 concept_name = concept.get("name", "Unknown")
                 names.append(concept_name)
                 logger.info(
                     f"Concept '{concept_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
+                    f"quality: {scores.average:.1f}, generation_time: {entity_elapsed:.2f}s"
                 )
+
+                # Report completion with entity name
+                if progress_callback:
+                    progress_callback(
+                        EntityGenerationProgress(
+                            current=i + 1,
+                            total=count,
+                            entity_type="concept",
+                            entity_name=concept_name,
+                            phase="complete",
+                            elapsed_seconds=time.time() - batch_start_time,
+                            estimated_remaining_seconds=self._calculate_eta(
+                                completed_times, count - i - 1
+                            ),
+                        )
+                    )
                 # Analytics already recorded via _log_refinement_analytics in generate_concept_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
@@ -3057,6 +3226,8 @@ Return ONLY the improved concept."""
         existing_names: list[str],
         count: int = 2,
         custom_instructions: str | None = None,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[Character, CharacterQualityScores]]:
         """Generate multiple characters with quality refinement.
 
@@ -3065,6 +3236,8 @@ Return ONLY the improved concept."""
             existing_names: Names to avoid.
             count: Number of characters to generate.
             custom_instructions: Optional custom instructions to refine generation.
+            cancel_check: Optional callable that returns True to cancel generation.
+            progress_callback: Optional callback to receive progress updates.
 
         Returns:
             List of (Character, QualityScores) tuples.
@@ -3072,24 +3245,61 @@ Return ONLY the improved concept."""
         Raises:
             WorldGenerationError: If no characters could be generated.
         """
-        results = []
+        results: list[tuple[Character, CharacterQualityScores]] = []
         names = existing_names.copy()
-        errors = []
+        errors: list[str] = []
+        batch_start_time = time.time()
+        completed_times: list[float] = []
 
         for i in range(count):
+            # Check cancellation before starting entity
+            if cancel_check and cancel_check():
+                logger.info(f"Character generation cancelled after {len(results)}/{count}")
+                break
+
+            # Report progress before generation
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="character",
+                        phase="generating",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=self._calculate_eta(completed_times, count - i),
+                    )
+                )
+
+            entity_start = time.time()
             try:
                 logger.info(f"Generating character {i + 1}/{count} with quality refinement")
-                start_time = time.time()
                 char, scores, iterations = self.generate_character_with_quality(
                     story_state, names, custom_instructions
                 )
-                elapsed = time.time() - start_time
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
                 results.append((char, scores))
                 names.append(char.name)
                 logger.info(
                     f"Character '{char.name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
+                    f"quality: {scores.average:.1f}, generation_time: {entity_elapsed:.2f}s"
                 )
+
+                # Report completion with entity name
+                if progress_callback:
+                    progress_callback(
+                        EntityGenerationProgress(
+                            current=i + 1,
+                            total=count,
+                            entity_type="character",
+                            entity_name=char.name,
+                            phase="complete",
+                            elapsed_seconds=time.time() - batch_start_time,
+                            estimated_remaining_seconds=self._calculate_eta(
+                                completed_times, count - i - 1
+                            ),
+                        )
+                    )
                 # Analytics already recorded via _log_refinement_analytics in generate_character_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
@@ -3113,6 +3323,8 @@ Return ONLY the improved concept."""
         story_state: StoryState,
         existing_names: list[str],
         count: int = 3,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], LocationQualityScores]]:
         """Generate multiple locations with quality refinement.
 
@@ -3120,6 +3332,8 @@ Return ONLY the improved concept."""
             story_state: Current story state.
             existing_names: Names to avoid.
             count: Number of locations to generate.
+            cancel_check: Optional callable that returns True to cancel generation.
+            progress_callback: Optional callback to receive progress updates.
 
         Returns:
             List of (location_dict, QualityScores) tuples.
@@ -3127,23 +3341,60 @@ Return ONLY the improved concept."""
         Raises:
             WorldGenerationError: If no locations could be generated.
         """
-        results = []
+        results: list[tuple[dict[str, Any], LocationQualityScores]] = []
         names = existing_names.copy()
-        errors = []
+        errors: list[str] = []
+        batch_start_time = time.time()
+        completed_times: list[float] = []
 
         for i in range(count):
+            # Check cancellation before starting entity
+            if cancel_check and cancel_check():
+                logger.info(f"Location generation cancelled after {len(results)}/{count}")
+                break
+
+            # Report progress before generation
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="location",
+                        phase="generating",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=self._calculate_eta(completed_times, count - i),
+                    )
+                )
+
+            entity_start = time.time()
             try:
                 logger.info(f"Generating location {i + 1}/{count} with quality refinement")
-                start_time = time.time()
                 loc, scores, iterations = self.generate_location_with_quality(story_state, names)
-                elapsed = time.time() - start_time
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
                 results.append((loc, scores))
                 loc_name = loc.get("name", "Unknown")
                 names.append(loc_name)
                 logger.info(
                     f"Location '{loc_name}' complete after {iterations} iteration(s), "
-                    f"quality: {scores.average:.1f}, generation_time: {elapsed:.2f}s"
+                    f"quality: {scores.average:.1f}, generation_time: {entity_elapsed:.2f}s"
                 )
+
+                # Report completion with entity name
+                if progress_callback:
+                    progress_callback(
+                        EntityGenerationProgress(
+                            current=i + 1,
+                            total=count,
+                            entity_type="location",
+                            entity_name=loc_name,
+                            phase="complete",
+                            elapsed_seconds=time.time() - batch_start_time,
+                            estimated_remaining_seconds=self._calculate_eta(
+                                completed_times, count - i - 1
+                            ),
+                        )
+                    )
                 # Analytics already recorded via _log_refinement_analytics in generate_location_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
@@ -3168,6 +3419,8 @@ Return ONLY the improved concept."""
         entity_names: list[str],
         existing_rels: list[tuple[str, str]],
         count: int = 5,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
         """Generate multiple relationships with quality refinement.
 
@@ -3176,6 +3429,8 @@ Return ONLY the improved concept."""
             entity_names: Entity names available for relationships.
             existing_rels: Existing relationships to avoid.
             count: Number of relationships to generate.
+            cancel_check: Optional callable that returns True to cancel generation.
+            progress_callback: Optional callback to receive progress updates.
 
         Returns:
             List of (relationship_dict, QualityScores) tuples.
@@ -3183,26 +3438,63 @@ Return ONLY the improved concept."""
         Raises:
             WorldGenerationError: If no relationships could be generated.
         """
-        results = []
+        results: list[tuple[dict[str, Any], RelationshipQualityScores]] = []
         rels = existing_rels.copy()
-        errors = []
+        errors: list[str] = []
+        batch_start_time = time.time()
+        completed_times: list[float] = []
 
         for i in range(count):
+            # Check cancellation before starting entity
+            if cancel_check and cancel_check():
+                logger.info(f"Relationship generation cancelled after {len(results)}/{count}")
+                break
+
+            # Report progress before generation
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="relationship",
+                        phase="generating",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=self._calculate_eta(completed_times, count - i),
+                    )
+                )
+
+            entity_start = time.time()
             try:
                 logger.info(f"Generating relationship {i + 1}/{count} with quality refinement")
-                start_time = time.time()
                 rel, scores, iterations = self.generate_relationship_with_quality(
                     story_state, entity_names, rels
                 )
-                elapsed = time.time() - start_time
+                entity_elapsed = time.time() - entity_start
+                completed_times.append(entity_elapsed)
                 results.append((rel, scores))
                 rels.append((rel.get("source", ""), rel.get("target", "")))
                 rel_name = f"{rel.get('source', '')} -> {rel.get('target', '')}"
                 logger.info(
                     f"Relationship '{rel_name}' complete "
                     f"after {iterations} iteration(s), quality: {scores.average:.1f}, "
-                    f"generation_time: {elapsed:.2f}s"
+                    f"generation_time: {entity_elapsed:.2f}s"
                 )
+
+                # Report completion with entity name
+                if progress_callback:
+                    progress_callback(
+                        EntityGenerationProgress(
+                            current=i + 1,
+                            total=count,
+                            entity_type="relationship",
+                            entity_name=rel_name,
+                            phase="complete",
+                            elapsed_seconds=time.time() - batch_start_time,
+                            estimated_remaining_seconds=self._calculate_eta(
+                                completed_times, count - i - 1
+                            ),
+                        )
+                    )
                 # Analytics already recorded via _log_refinement_analytics in generate_relationship_with_quality
             except WorldGenerationError as e:
                 errors.append(str(e))
@@ -3292,16 +3584,33 @@ SUMMARY:"""
         Returns:
             Dict mapping entity names to mini descriptions.
         """
+        # Filter entities that have descriptions
+        entities_with_desc = [e for e in entities if e.get("description")]
+        total_count = len(entities_with_desc)
+
+        logger.info(f"Starting mini description generation for {total_count} entities")
+        start_time = time.time()
+
         results = {}
-        for entity in entities:
+        for i, entity in enumerate(entities_with_desc):
             name = entity.get("name", "Unknown")
             entity_type = entity.get("type", "entity")
             description = entity.get("description", "")
 
-            if description:
-                mini_desc = self.generate_mini_description(name, entity_type, description)
-                results[name] = mini_desc
-                logger.debug(f"Generated mini description for {name}: {mini_desc}")
+            logger.debug(
+                f"Generating mini description {i + 1}/{total_count}: {entity_type} '{name}'"
+            )
+
+            mini_desc = self.generate_mini_description(name, entity_type, description)
+            results[name] = mini_desc
+            logger.debug(f"Generated mini description for {name}: {mini_desc[:50]}...")
+
+        elapsed = time.time() - start_time
+        avg_time = elapsed / max(len(results), 1)
+        logger.info(
+            f"Completed mini description generation: {len(results)} descriptions "
+            f"in {elapsed:.2f}s ({avg_time:.2f}s avg)"
+        )
 
         return results
 

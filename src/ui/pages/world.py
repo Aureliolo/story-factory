@@ -2,6 +2,8 @@
 
 import logging
 import random
+import threading
+from collections.abc import Callable
 from typing import Any
 
 from nicegui import ui
@@ -15,6 +17,7 @@ from nicegui.elements.textarea import Textarea
 from src.memory.entities import Entity, EntityVersion
 from src.memory.world_quality import RefinementConfig
 from src.services import ServiceContainer
+from src.services.world_quality_service import EntityGenerationProgress
 from src.ui.components.build_dialog import show_build_structure_dialog
 from src.ui.components.entity_card import entity_list_item
 from src.ui.components.graph import GraphComponent
@@ -83,6 +86,42 @@ class WorldPage:
         self._analysis_result: Html | None = None
         self._undo_btn: Button | None = None
         self._redo_btn: Button | None = None
+        # Generation progress dialog state
+        self._generation_cancel_event: threading.Event | None = None
+        self._generation_dialog: ui.dialog | None = None
+
+    def _notify_partial_failure(
+        self,
+        results_count: int,
+        requested_count: int,
+        entity_type: str,
+        should_cancel: Callable[[], bool],
+    ) -> None:
+        """Notify user of partial generation failure with cancel awareness.
+
+        Args:
+            results_count: Number of entities successfully generated.
+            requested_count: Number of entities originally requested.
+            entity_type: Type of entity (e.g., "characters", "locations").
+            should_cancel: Callable that returns True if generation was cancelled.
+        """
+        if results_count >= requested_count:
+            return
+        failed_count = requested_count - results_count
+        if should_cancel():
+            ui.notify(
+                f"Generation cancelled. Generated {results_count} of {requested_count} {entity_type}.",
+                type="info",
+                timeout=5000,
+            )
+        else:
+            ui.notify(
+                f"ERROR: {failed_count} of {requested_count} {entity_type} FAILED to generate! "
+                "Check logs for details.",
+                type="negative",
+                timeout=10000,
+                close_button=True,
+            )
 
     def build(self) -> None:
         """Build the world page UI."""
@@ -583,13 +622,82 @@ class WorldPage:
         all_existing_names = self._get_all_entity_names()
         logger.info(f"Found {len(all_existing_names)} existing entities to avoid duplicates")
 
-        # Use notification that can be dismissed
+        # Create cancellation infrastructure for quality generation
+        self._generation_cancel_event = threading.Event()
+
+        def should_cancel() -> bool:
+            """Check if generation should be cancelled."""
+            return (
+                self._generation_cancel_event is not None and self._generation_cancel_event.is_set()
+            )
+
+        # Create progress dialog for quality generation, or simple notification for non-quality
         quality_msg = " with quality refinement" if use_quality else ""
-        notification = ui.notification(
-            message=f"Generating {count} {entity_type}{quality_msg}...",
-            spinner=True,
-            timeout=None,
-        )
+
+        if use_quality:
+            # Create progress dialog with cancel button
+            self._generation_dialog = ui.dialog().props("persistent")
+            progress_label: ui.label | None = None
+            progress_bar: ui.linear_progress | None = None
+            eta_label: ui.label | None = None
+            cancel_btn: ui.button | None = None
+
+            with self._generation_dialog, ui.card().classes("w-96 p-4"):
+                ui.label(f"Generating {entity_type.title()}").classes("text-lg font-bold")
+                progress_label = ui.label(f"Starting generation of {count} {entity_type}...")
+                progress_bar = ui.linear_progress(value=0).classes("w-full my-2")
+                eta_label = ui.label("Calculating...").classes("text-sm text-gray-500")
+
+                def do_cancel() -> None:
+                    """Handle cancel button click."""
+                    logger.info(f"User requested cancellation of {entity_type} generation")
+                    if self._generation_cancel_event:
+                        self._generation_cancel_event.set()
+                    if cancel_btn:
+                        cancel_btn.disable()
+                    if progress_label:
+                        progress_label.text = "Cancelling after current entity..."
+
+                cancel_btn = ui.button("Cancel", on_click=do_cancel).props("flat color=negative")
+
+            self._generation_dialog.open()
+
+            def update_progress(progress: EntityGenerationProgress) -> None:
+                """Update dialog with generation progress."""
+                if progress_label:
+                    if progress.entity_name:
+                        progress_label.text = f"Generated: {progress.entity_name}"
+                    else:
+                        progress_label.text = (
+                            f"Generating {progress.entity_type} "
+                            f"{progress.current}/{progress.total}..."
+                        )
+
+                if progress_bar:
+                    progress_bar.value = progress.progress_fraction
+
+                if eta_label:
+                    if progress.estimated_remaining_seconds is not None:
+                        total_secs = int(progress.estimated_remaining_seconds)
+                        if total_secs >= 3600:
+                            hours, remainder = divmod(total_secs, 3600)
+                            mins, secs = divmod(remainder, 60)
+                            eta_label.text = f"~{hours}:{mins:02d}:{secs:02d} remaining"
+                        else:
+                            mins, secs = divmod(total_secs, 60)
+                            eta_label.text = f"~{mins}:{secs:02d} remaining"
+                    elif progress.current > 1:
+                        eta_label.text = "Calculating..."
+
+            notification = None  # No notification when using dialog
+        else:
+            # Use simple notification for non-quality generation
+            notification = ui.notification(
+                message=f"Generating {count} {entity_type}{quality_msg}...",
+                spinner=True,
+                timeout=None,
+            )
+            update_progress = None  # type: ignore[assignment]
 
         try:
             from nicegui import run
@@ -607,26 +715,22 @@ class WorldPage:
                         all_existing_names,
                         count,
                         custom_instructions,
+                        should_cancel,
+                        update_progress,
                     )
                     logger.info(f"Generated {len(results)} characters with quality refinement")
 
-                    # Check for partial failure and notify user LOUDLY
-                    if len(results) < count:
-                        failed_count = count - len(results)
-                        ui.notify(
-                            f"ERROR: {failed_count} of {count} characters FAILED to generate! "
-                            "Check logs for details.",
-                            type="negative",
-                            timeout=10000,
-                            close_button=True,
-                        )
+                    # Check for partial failure and notify user
+                    self._notify_partial_failure(len(results), count, "characters", should_cancel)
                     if len(results) == 0:
-                        notification.dismiss()
+                        if self._generation_dialog:
+                            self._generation_dialog.close()
                         ui.notify("Failed to generate any characters", type="negative")
                         return
 
                     # Generate mini descriptions for hover tooltips
-                    notification.message = "Generating hover summaries..."
+                    if progress_label:
+                        progress_label.text = "Generating hover summaries..."
                     entity_data = [
                         {"name": c.name, "type": "character", "description": c.description}
                         for c, _ in results
@@ -635,7 +739,8 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
 
                     # Define callback to add selected characters
                     def add_selected_characters(selected: list[tuple[Any, Any]]) -> None:
@@ -708,7 +813,8 @@ class WorldPage:
                             },
                         )
                     logger.info(f"Added {len(new_chars)} characters to world database")
-                    notification.dismiss()
+                    if notification:
+                        notification.dismiss()
                     ui.notify(f"Added {len(new_chars)} new characters!", type="positive")
 
             elif entity_type == "locations":
@@ -720,26 +826,24 @@ class WorldPage:
                         self.state.project,
                         all_existing_names,
                         count,
+                        should_cancel,
+                        update_progress,
                     )
                     logger.info(f"Generated {len(loc_results)} locations with quality refinement")
 
-                    # Check for partial failure and notify user LOUDLY
-                    if len(loc_results) < count:
-                        failed_count = count - len(loc_results)
-                        ui.notify(
-                            f"ERROR: {failed_count} of {count} locations FAILED to generate! "
-                            "Check logs for details.",
-                            type="negative",
-                            timeout=10000,
-                            close_button=True,
-                        )
+                    # Check for partial failure and notify user
+                    self._notify_partial_failure(
+                        len(loc_results), count, "locations", should_cancel
+                    )
                     if len(loc_results) == 0:
-                        notification.dismiss()
+                        if self._generation_dialog:
+                            self._generation_dialog.close()
                         ui.notify("Failed to generate any locations", type="negative")
                         return
 
                     # Generate mini descriptions for hover tooltips
-                    notification.message = "Generating hover summaries..."
+                    if progress_label:
+                        progress_label.text = "Generating hover summaries..."
                     entity_data = [
                         {
                             "name": loc.get("name", ""),
@@ -753,7 +857,8 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
 
                     # Define callback to add selected locations
                     def add_selected_locations(selected: list[tuple[Any, Any]]) -> None:
@@ -824,7 +929,8 @@ class WorldPage:
                         else:
                             logger.warning(f"Skipping invalid location: {loc}")
                     logger.info(f"Added {added_count} locations to world database")
-                    notification.dismiss()
+                    if notification:
+                        notification.dismiss()
                     ui.notify(f"Added {added_count} new locations!", type="positive")
 
             elif entity_type == "factions":
@@ -844,28 +950,26 @@ class WorldPage:
                         all_existing_names,
                         count,
                         existing_locations,
+                        should_cancel,
+                        update_progress,
                     )
                     logger.info(
                         f"Generated {len(faction_results)} factions with quality refinement"
                     )
 
-                    # Check for partial failure and notify user LOUDLY
-                    if len(faction_results) < count:
-                        failed_count = count - len(faction_results)
-                        ui.notify(
-                            f"ERROR: {failed_count} of {count} factions FAILED to generate! "
-                            "Check logs for details.",
-                            type="negative",
-                            timeout=10000,
-                            close_button=True,
-                        )
+                    # Check for partial failure and notify user
+                    self._notify_partial_failure(
+                        len(faction_results), count, "factions", should_cancel
+                    )
                     if len(faction_results) == 0:
-                        notification.dismiss()
+                        if self._generation_dialog:
+                            self._generation_dialog.close()
                         ui.notify("Failed to generate any factions", type="negative")
                         return
 
                     # Generate mini descriptions for hover tooltips
-                    notification.message = "Generating hover summaries..."
+                    if progress_label:
+                        progress_label.text = "Generating hover summaries..."
                     entity_data = [
                         {
                             "name": faction.get("name", ""),
@@ -879,7 +983,8 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
 
                     # Define callback to add selected factions
                     def add_selected_factions(selected: list[tuple[Any, Any]]) -> None:
@@ -954,7 +1059,8 @@ class WorldPage:
                     )
                     return  # Early return - callback handles the rest
                 else:
-                    notification.dismiss()
+                    if notification:
+                        notification.dismiss()
                     ui.notify("Enable Quality Refinement to generate factions", type="warning")
                     return
 
@@ -967,26 +1073,22 @@ class WorldPage:
                         self.state.project,
                         all_existing_names,
                         count,
+                        should_cancel,
+                        update_progress,
                     )
                     logger.info(f"Generated {len(item_results)} items with quality refinement")
 
-                    # Check for partial failure and notify user LOUDLY
-                    if len(item_results) < count:
-                        failed_count = count - len(item_results)
-                        ui.notify(
-                            f"ERROR: {failed_count} of {count} items FAILED to generate! "
-                            "Check logs for details.",
-                            type="negative",
-                            timeout=10000,
-                            close_button=True,
-                        )
+                    # Check for partial failure and notify user
+                    self._notify_partial_failure(len(item_results), count, "items", should_cancel)
                     if len(item_results) == 0:
-                        notification.dismiss()
+                        if self._generation_dialog:
+                            self._generation_dialog.close()
                         ui.notify("Failed to generate any items", type="negative")
                         return
 
                     # Generate mini descriptions for hover tooltips
-                    notification.message = "Generating hover summaries..."
+                    if progress_label:
+                        progress_label.text = "Generating hover summaries..."
                     entity_data = [
                         {
                             "name": item.get("name", ""),
@@ -1000,7 +1102,8 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
 
                     # Define callback to add selected items
                     def add_selected_items(selected: list[tuple[Any, Any]]) -> None:
@@ -1049,7 +1152,8 @@ class WorldPage:
                     self._show_entity_preview_dialog("item", item_results, add_selected_items)
                     return  # Early return - callback handles the rest
                 else:
-                    notification.dismiss()
+                    if notification:
+                        notification.dismiss()
                     ui.notify("Enable Quality Refinement to generate items", type="warning")
                     return
 
@@ -1062,28 +1166,26 @@ class WorldPage:
                         self.state.project,
                         all_existing_names,
                         count,
+                        should_cancel,
+                        update_progress,
                     )
                     logger.info(
                         f"Generated {len(concept_results)} concepts with quality refinement"
                     )
 
-                    # Check for partial failure and notify user LOUDLY
-                    if len(concept_results) < count:
-                        failed_count = count - len(concept_results)
-                        ui.notify(
-                            f"ERROR: {failed_count} of {count} concepts FAILED to generate! "
-                            "Check logs for details.",
-                            type="negative",
-                            timeout=10000,
-                            close_button=True,
-                        )
+                    # Check for partial failure and notify user
+                    self._notify_partial_failure(
+                        len(concept_results), count, "concepts", should_cancel
+                    )
                     if len(concept_results) == 0:
-                        notification.dismiss()
+                        if self._generation_dialog:
+                            self._generation_dialog.close()
                         ui.notify("Failed to generate any concepts", type="negative")
                         return
 
                     # Generate mini descriptions for hover tooltips
-                    notification.message = "Generating hover summaries..."
+                    if progress_label:
+                        progress_label.text = "Generating hover summaries..."
                     entity_data = [
                         {
                             "name": concept.get("name", ""),
@@ -1097,7 +1199,8 @@ class WorldPage:
                         self.services.world_quality.generate_mini_descriptions_batch,
                         entity_data,
                     )
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
 
                     # Define callback to add selected concepts
                     def add_selected_concepts(selected: list[tuple[Any, Any]]) -> None:
@@ -1147,7 +1250,8 @@ class WorldPage:
                     )
                     return  # Early return - callback handles the rest
                 else:
-                    notification.dismiss()
+                    if notification:
+                        notification.dismiss()
                     ui.notify("Enable Quality Refinement to generate concepts", type="warning")
                     return
 
@@ -1168,7 +1272,10 @@ class WorldPage:
 
                 if len(entity_names) < 2:
                     logger.warning("Cannot generate relationships: need at least 2 entities")
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
+                    elif notification:
+                        notification.dismiss()
                     ui.notify("Need at least 2 entities to create relationships", type="warning")
                     return
 
@@ -1181,26 +1288,24 @@ class WorldPage:
                         entity_names,
                         existing_rels,
                         count,
+                        should_cancel,
+                        update_progress,
                     )
                     logger.info(
                         f"Generated {len(rel_results)} relationships with quality refinement"
                     )
 
-                    # Check for partial failure and notify user LOUDLY
-                    if len(rel_results) < count:
-                        failed_count = count - len(rel_results)
-                        ui.notify(
-                            f"ERROR: {failed_count} of {count} relationships FAILED to generate! "
-                            "Check logs for details.",
-                            type="negative",
-                            timeout=10000,
-                            close_button=True,
-                        )
+                    # Check for partial failure and notify user
+                    self._notify_partial_failure(
+                        len(rel_results), count, "relationships", should_cancel
+                    )
                     if len(rel_results) == 0:
-                        notification.dismiss()
+                        if self._generation_dialog:
+                            self._generation_dialog.close()
                         ui.notify("Failed to generate any relationships", type="negative")
                         return
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
 
                     # Define callback to add selected relationships
                     def add_selected_relationships(selected: list[tuple[Any, Any]]) -> None:
@@ -1297,7 +1402,8 @@ class WorldPage:
                         else:
                             logger.warning(f"Skipping invalid relationship: {rel}")
                     logger.info(f"Added {added} relationships to world database")
-                    notification.dismiss()
+                    if notification:
+                        notification.dismiss()
                     ui.notify(f"Added {added} new relationships!", type="positive")
 
             # Invalidate graph cache to ensure fresh tooltips
@@ -1318,11 +1424,17 @@ class WorldPage:
             logger.info(f"Generation of {entity_type} completed successfully")
 
         except WorldGenerationError as e:
-            notification.dismiss()
+            if self._generation_dialog:
+                self._generation_dialog.close()
+            elif notification:
+                notification.dismiss()
             logger.error(f"World generation failed for {entity_type}: {e}")
             ui.notify(f"Generation failed: {e}", type="negative", close_button=True, timeout=10)
         except Exception as e:
-            notification.dismiss()
+            if self._generation_dialog:
+                self._generation_dialog.close()
+            elif notification:
+                notification.dismiss()
             logger.exception(f"Unexpected error generating {entity_type}: {e}")
             ui.notify(f"Error: {e}", type="negative")
 
@@ -1580,11 +1692,78 @@ class WorldPage:
         ]
 
         total_count = len(entity_names) * count_per_entity
-        notification = ui.notification(
-            message=f"Generating relationships for {len(entity_names)} entities...",
-            spinner=True,
-            timeout=None,
-        )
+
+        # Create cancellation infrastructure for quality generation
+        self._generation_cancel_event = threading.Event()
+
+        def should_cancel() -> bool:
+            """Check if generation should be cancelled."""
+            return (
+                self._generation_cancel_event is not None and self._generation_cancel_event.is_set()
+            )
+
+        if use_quality:
+            # Create progress dialog with cancel button
+            self._generation_dialog = ui.dialog().props("persistent")
+            progress_label: ui.label | None = None
+            progress_bar: ui.linear_progress | None = None
+            eta_label: ui.label | None = None
+            cancel_btn: ui.button | None = None
+
+            with self._generation_dialog, ui.card().classes("w-96 p-4"):
+                ui.label("Generating Relationships").classes("text-lg font-bold")
+                progress_label = ui.label(f"Starting generation of {total_count} relationships...")
+                progress_bar = ui.linear_progress(value=0).classes("w-full my-2")
+                eta_label = ui.label("Calculating...").classes("text-sm text-gray-500")
+
+                def do_cancel() -> None:
+                    """Handle cancel button click."""
+                    logger.info("User requested cancellation of relationship generation")
+                    if self._generation_cancel_event:
+                        self._generation_cancel_event.set()
+                    if cancel_btn:
+                        cancel_btn.disable()
+                    if progress_label:
+                        progress_label.text = "Cancelling after current relationship..."
+
+                cancel_btn = ui.button("Cancel", on_click=do_cancel).props("flat color=negative")
+
+            self._generation_dialog.open()
+
+            def update_progress(progress: EntityGenerationProgress) -> None:
+                """Update dialog with generation progress."""
+                if progress_label:
+                    if progress.entity_name:
+                        progress_label.text = f"Generated: {progress.entity_name}"
+                    else:
+                        progress_label.text = (
+                            f"Generating relationship {progress.current}/{progress.total}..."
+                        )
+
+                if progress_bar:
+                    progress_bar.value = progress.progress_fraction
+
+                if eta_label:
+                    if progress.estimated_remaining_seconds is not None:
+                        total_secs = int(progress.estimated_remaining_seconds)
+                        if total_secs >= 3600:
+                            hours, remainder = divmod(total_secs, 3600)
+                            mins, secs = divmod(remainder, 60)
+                            eta_label.text = f"~{hours}:{mins:02d}:{secs:02d} remaining"
+                        else:
+                            mins, secs = divmod(total_secs, 60)
+                            eta_label.text = f"~{mins}:{secs:02d} remaining"
+                    elif progress.current > 1:
+                        eta_label.text = "Calculating..."
+
+            notification = None  # No notification when using dialog
+        else:
+            notification = ui.notification(
+                message=f"Generating relationships for {len(entity_names)} entities...",
+                spinner=True,
+                timeout=None,
+            )
+            update_progress = None  # type: ignore[assignment]
 
         try:
             from nicegui import run
@@ -1597,25 +1776,27 @@ class WorldPage:
                     all_entity_names,
                     existing_rels,
                     total_count,
+                    should_cancel,
+                    update_progress,
                 )
 
-                # Check for partial failure
-                if len(results) < total_count:
-                    failed_count = total_count - len(results)
-                    ui.notify(
-                        f"ERROR: {failed_count} of {total_count} relationships FAILED to generate! "
-                        "Check logs for details.",
-                        type="negative",
-                        timeout=10000,
-                        close_button=True,
-                    )
+                # Check for partial failure and notify user
+                self._notify_partial_failure(
+                    len(results), total_count, "relationships", should_cancel
+                )
 
                 if len(results) == 0:
-                    notification.dismiss()
+                    if self._generation_dialog:
+                        self._generation_dialog.close()
+                    elif notification:
+                        notification.dismiss()
                     ui.notify("Failed to generate any relationships", type="negative")
                     return
 
-                notification.dismiss()
+                if self._generation_dialog:
+                    self._generation_dialog.close()
+                elif notification:
+                    notification.dismiss()
 
                 # Show preview dialog
                 def add_selected_relationships(selected: list[tuple[Any, Any]]) -> None:
@@ -1670,14 +1851,18 @@ class WorldPage:
                 )
             else:
                 # Non-quality generation - simpler approach
-                notification.dismiss()
+                if notification:
+                    notification.dismiss()
                 ui.notify(
                     "Relationship generation requires quality refinement to be enabled",
                     type="warning",
                 )
 
         except Exception as e:
-            notification.dismiss()
+            if self._generation_dialog:
+                self._generation_dialog.close()
+            elif notification:
+                notification.dismiss()
             logger.exception(f"Error generating relationships: {e}")
             ui.notify(f"Error: {e}", type="negative")
 
