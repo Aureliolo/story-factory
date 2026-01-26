@@ -15,6 +15,7 @@ from src.services.content_guidelines_service import (
     ContentGuidelinesService,
     ContentViolation,
 )
+from src.utils.exceptions import StoryFactoryError
 
 
 @pytest.fixture
@@ -156,13 +157,14 @@ class TestViolenceChecking:
         assert result.passed is False
         assert any(v.category == "violence" for v in result.violations)
 
-    def test_action_violence_warning_minimal(self, service):
-        """Test that action violence creates warning for MINIMAL level."""
+    def test_action_violence_fails_minimal(self, service):
+        """Test that action violence fails MINIMAL level (violation, not warning)."""
         profile = ContentProfile(violence=ViolenceLevel.MINIMAL)
         content = "The hero punched the villain and won the fight."
         result = service.check_content(content, profile)
-        # Should be a warning, not a hard violation for action words
-        assert any(v.category == "violence" for v in result.warnings)
+        # Should be a violation for MINIMAL profile (not just a warning)
+        assert result.passed is False
+        assert any(v.category == "violence" for v in result.violations)
 
     def test_graphic_violence_passes_graphic(self, service):
         """Test that graphic violence passes GRAPHIC level."""
@@ -291,10 +293,11 @@ class TestExcerptExtraction:
         result = service.check_content(content, profile)
 
         violations_with_excerpts = [v for v in result.violations if v.excerpt]
-        if violations_with_excerpts:
-            excerpt = violations_with_excerpts[0].excerpt
-            # Excerpt should be much shorter than full content
-            assert len(excerpt) < len(content)
+        # Ensure we found at least one violation with an excerpt
+        assert len(violations_with_excerpts) > 0, "Expected violation with excerpt for 'damn'"
+        excerpt = violations_with_excerpts[0].excerpt
+        # Excerpt should be much shorter than full content
+        assert len(excerpt) < len(content)
 
 
 class TestProfileSummary:
@@ -367,3 +370,21 @@ class TestGetExcerpt:
         result = service._get_excerpt(content, "fox")
         assert "fox" in result
         assert len(result) > 0
+
+
+class TestUseLLMFailFast:
+    """Tests for use_llm parameter behavior."""
+
+    def test_use_llm_raises_error(self, service, all_ages_profile):
+        """Test that use_llm=True raises StoryFactoryError (not implemented)."""
+        content = "Clean content here."
+        with pytest.raises(
+            StoryFactoryError, match="LLM-based content checking is not implemented"
+        ):
+            service.check_content(content, all_ages_profile, use_llm=True)
+
+    def test_use_llm_false_works(self, service, all_ages_profile):
+        """Test that use_llm=False works normally."""
+        content = "Clean content here."
+        result = service.check_content(content, all_ages_profile, use_llm=False)
+        assert result.passed is True

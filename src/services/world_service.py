@@ -195,6 +195,11 @@ class WorldService:
 
         logger.info(f"Starting world build for project {state.id} with options: {options}")
 
+        # Persist world template ID to state if provided
+        if options.world_template:
+            state.world_template_id = options.world_template.id
+            logger.debug(f"Set world_template_id on state: {options.world_template.id}")
+
         def check_cancelled() -> None:
             """Raise if cancellation requested."""
             if options.is_cancelled():

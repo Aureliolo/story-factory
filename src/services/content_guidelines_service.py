@@ -12,6 +12,7 @@ from src.memory.content_guidelines import (
     ViolenceLevel,
 )
 from src.settings import Settings
+from src.utils.exceptions import StoryFactoryError
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,13 @@ class ContentGuidelinesService:
         """
         logger.info(f"Checking content ({len(content)} chars) against profile '{profile.name}'")
 
+        # Fail fast if use_llm is requested but not implemented
+        if use_llm:
+            raise StoryFactoryError(
+                "LLM-based content checking is not implemented yet. "
+                "Set use_llm=False or content_check_use_llm=False in settings."
+            )
+
         result = ContentCheckResult(passed=True)
 
         # Run heuristic checks
@@ -176,14 +184,14 @@ class ContentGuidelinesService:
                 )
             )
 
-        # Check for moderate violence (only violation for MINIMAL)
+        # Check for moderate violence (violation for MINIMAL profile)
         if profile.violence == ViolenceLevel.MINIMAL:
             moderate_matches = self.VIOLENCE_MODERATE.findall(content)
             if moderate_matches:
                 result.add_violation(
                     ContentViolation(
                         category="violence",
-                        severity="warning",
+                        severity="violation",
                         description=f"Action violence detected: {', '.join(set(moderate_matches[:5]))}",
                         excerpt=self._get_excerpt(content, moderate_matches[0]),
                     )

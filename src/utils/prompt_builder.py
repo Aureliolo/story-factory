@@ -1,7 +1,11 @@
 """Prompt building utilities to reduce duplication across agents."""
 
+import logging
+
 from src.memory.content_guidelines import ContentProfile, format_profile_for_prompt
 from src.memory.story_state import Character, StoryBrief, StoryState
+
+logger = logging.getLogger(__name__)
 
 
 class PromptBuilder:
@@ -196,6 +200,7 @@ class PromptBuilder:
         Returns:
             Self for method chaining
         """
+        logger.debug(f"Adding content guidelines for profile: {profile.name}")
         guidance = format_profile_for_prompt(profile)
         self.sections.append(guidance)
         return self
@@ -206,7 +211,9 @@ class PromptBuilder:
         Returns:
             Complete prompt string with sections separated by double newlines
         """
-        return "\n\n".join(self.sections)
+        result = "\n\n".join(self.sections)
+        logger.debug(f"Built prompt with {len(self.sections)} sections ({len(result)} chars)")
+        return result
 
     @staticmethod
     def ensure_brief(story_state: StoryState | None, agent_name: str = "Agent") -> StoryBrief:

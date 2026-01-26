@@ -253,6 +253,13 @@ async def show_build_structure_dialog(
             selected_template = services.world_template.get_template(
                 state.project.world_template_id
             )
+            # Validate that the saved template ID still exists
+            if not selected_template:
+                logger.warning(
+                    f"Previously selected world template not found: "
+                    f"{state.project.world_template_id}. Clearing selection."
+                )
+                state.project.world_template_id = None
 
         def on_template_change(e) -> None:
             """Handle template selection change."""

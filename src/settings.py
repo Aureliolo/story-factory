@@ -896,6 +896,21 @@ class Settings:
                 f"got {self.import_character_token_multiplier}"
             )
 
+        # Validate content check settings
+        if not isinstance(self.content_check_enabled, bool):
+            raise ValueError(
+                f"content_check_enabled must be a boolean, got {type(self.content_check_enabled)}"
+            )
+        if not isinstance(self.content_check_use_llm, bool):
+            raise ValueError(
+                f"content_check_use_llm must be a boolean, got {type(self.content_check_use_llm)}"
+            )
+        if self.content_check_use_llm and not self.content_check_enabled:
+            logger.warning(
+                "content_check_use_llm is enabled but content_check_enabled is False. "
+                "LLM checking will have no effect."
+            )
+
     # Class-level cache for settings (speeds up repeated load() calls)
     _cached_instance: ClassVar[Settings | None] = None
 

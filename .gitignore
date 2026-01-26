@@ -46,6 +46,9 @@ output/stories/*
 !output/worlds/
 output/worlds/*
 !output/worlds/.gitkeep
+!output/data/
+output/data/*
+!output/data/.gitkeep
 src/settings.json
 
 # Windows artifacts (from bash commands using /dev/null)

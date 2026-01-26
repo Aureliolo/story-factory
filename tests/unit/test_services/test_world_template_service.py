@@ -8,6 +8,7 @@ import pytest
 from src.memory.builtin_world_templates import BUILTIN_WORLD_TEMPLATES
 from src.memory.templates import WorldTemplate
 from src.services.world_template_service import WorldTemplateService
+from src.utils.exceptions import StoryFactoryError
 
 
 @pytest.fixture
@@ -141,7 +142,7 @@ class TestSaveTemplate:
             is_builtin=False,
             genre="fantasy",
         )
-        with pytest.raises(ValueError, match="Cannot overwrite built-in template"):
+        with pytest.raises(StoryFactoryError, match="Cannot overwrite built-in template"):
             service.save_template(template)
 
 

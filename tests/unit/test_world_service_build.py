@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.memory.story_state import Chapter, Character, StoryBrief, StoryState
+from src.memory.templates import WorldTemplate
 from src.memory.world_database import WorldDatabase
 from src.services.world_service import (
     WorldBuildOptions,
@@ -699,6 +700,41 @@ class TestBuildWorld:
         assert counts["items"] == 0
         assert counts["concepts"] == 0
         assert counts["relationships"] == 0
+
+    def test_sets_world_template_id_on_state(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that world_template_id is set on state when template is provided."""
+        # Create a world template
+        template = WorldTemplate(
+            id="test_fantasy",
+            name="Test Fantasy",
+            description="A test world template",
+            is_builtin=False,
+            genre="fantasy",
+        )
+
+        # Setup mocks
+        mock_services.story.generate_locations.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.story.generate_relationships.return_value = []
+
+        options = WorldBuildOptions(world_template=template)
+
+        # Initially world_template_id should be None
+        assert sample_story_state.world_template_id is None
+
+        world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            options,
+        )
+
+        # After build, world_template_id should be set
+        assert sample_story_state.world_template_id == "test_fantasy"
 
 
 class TestWorldBuildCancellation:

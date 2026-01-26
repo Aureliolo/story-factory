@@ -197,40 +197,52 @@ def format_profile_for_prompt(profile: ContentProfile) -> str:
 
 def _get_violence_description(level: ViolenceLevel) -> str:
     """Get human-readable description for violence level."""
+    logger.debug(f"Getting violence description for level: {level.value}")
     descriptions = {
         ViolenceLevel.MINIMAL: "No graphic violence. Conflicts should be resolved without detailed harm.",
         ViolenceLevel.MODERATE: "Action violence is acceptable. Don't dwell on injuries or suffering.",
         ViolenceLevel.GRAPHIC: "Violence can be detailed when appropriate to the story.",
     }
-    return descriptions[level]
+    description = descriptions[level]
+    logger.debug(f"Violence description: {description[:50]}...")
+    return description
 
 
 def _get_language_description(level: LanguageLevel) -> str:
     """Get human-readable description for language level."""
+    logger.debug(f"Getting language description for level: {level.value}")
     descriptions = {
         LanguageLevel.CLEAN: "No profanity or crude language. Keep dialogue family-friendly.",
         LanguageLevel.MILD: "Mild profanity acceptable (damn, hell). No slurs or crude terms.",
         LanguageLevel.UNRESTRICTED: "Realistic language including strong profanity when appropriate.",
     }
-    return descriptions[level]
+    description = descriptions[level]
+    logger.debug(f"Language description: {description[:50]}...")
+    return description
 
 
 def _get_themes_description(level: ThemeLevel) -> str:
     """Get human-readable description for themes level."""
+    logger.debug(f"Getting themes description for level: {level.value}")
     descriptions = {
         ThemeLevel.LIGHT: "Light themes only. Avoid darkness, trauma, or moral complexity.",
         ThemeLevel.MATURE: "Complex themes acceptable (loss, betrayal, moral ambiguity).",
         ThemeLevel.DARK: "Dark themes can be explored in depth (trauma, death, existential threats).",
     }
-    return descriptions[level]
+    description = descriptions[level]
+    logger.debug(f"Themes description: {description[:50]}...")
+    return description
 
 
 def _get_romance_description(level: RomanceLevel) -> str:
     """Get human-readable description for romance level."""
+    logger.debug(f"Getting romance description for level: {level.value}")
     descriptions = {
         RomanceLevel.NONE: "No romantic content. Focus on other relationship types.",
         RomanceLevel.SWEET: "Chaste romance only. Affection shown through words and gestures.",
         RomanceLevel.SENSUAL: "Romantic tension and implied intimacy. Fade to black.",
         RomanceLevel.EXPLICIT: "Detailed romantic scenes may be included.",
     }
-    return descriptions[level]
+    description = descriptions[level]
+    logger.debug(f"Romance description: {description[:50]}...")
+    return description

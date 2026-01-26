@@ -2,16 +2,16 @@
 
 import json
 import logging
-from pathlib import Path
 
 from src.memory.builtin_world_templates import BUILTIN_WORLD_TEMPLATES, get_world_template
 from src.memory.templates import WorldTemplate
-from src.settings import Settings
+from src.settings import STORIES_DIR, Settings
+from src.utils.exceptions import StoryFactoryError
 
 logger = logging.getLogger(__name__)
 
-# Path for user-created templates
-USER_TEMPLATES_FILE = Path(__file__).parent.parent / "data" / "user_world_templates.json"
+# Path for user-created templates (in output/data/ for user data persistence)
+USER_TEMPLATES_FILE = STORIES_DIR.parent / "data" / "user_world_templates.json"
 
 
 class WorldTemplateService:
@@ -99,10 +99,10 @@ class WorldTemplateService:
             template: The template to save.
 
         Raises:
-            ValueError: If trying to overwrite a built-in template.
+            StoryFactoryError: If trying to overwrite a built-in template.
         """
         if template.id in BUILTIN_WORLD_TEMPLATES:
-            raise ValueError(f"Cannot overwrite built-in template: {template.id}")
+            raise StoryFactoryError(f"Cannot overwrite built-in template: {template.id}")
 
         template.is_builtin = False
         self._user_templates[template.id] = template
@@ -198,21 +198,23 @@ class WorldTemplateService:
         """
         genre_lower = genre.lower()
 
-        # Check built-in templates
+        # Check user templates first (allows user to override genre defaults)
+        for template in self._user_templates.values():
+            if template.genre.lower() == genre_lower:
+                logger.debug(f"Found user template {template.id} for genre {genre}")
+                return template
+            if any(tag.lower() == genre_lower for tag in template.tags):
+                logger.debug(f"Found user template {template.id} for genre {genre} via tags")
+                return template
+
+        # Fall back to built-in templates
         for template in BUILTIN_WORLD_TEMPLATES.values():
             if template.genre.lower() == genre_lower:
-                logger.debug(f"Found template {template.id} for genre {genre}")
+                logger.debug(f"Found builtin template {template.id} for genre {genre}")
                 return template
             # Check tags as well
             if any(tag.lower() == genre_lower for tag in template.tags):
-                logger.debug(f"Found template {template.id} for genre {genre} via tags")
-                return template
-
-        # Check user templates
-        for template in self._user_templates.values():
-            if template.genre.lower() == genre_lower:
-                return template
-            if any(tag.lower() == genre_lower for tag in template.tags):
+                logger.debug(f"Found builtin template {template.id} for genre {genre} via tags")
                 return template
 
         logger.debug(f"No template found for genre: {genre}")

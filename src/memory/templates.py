@@ -38,7 +38,7 @@ class WorldTemplate(BaseModel):
     id: str = Field(description="Unique identifier for this template")
     name: str = Field(description="Display name of the template")
     description: str = Field(description="Brief description of the world style")
-    is_builtin: bool = Field(default=True, description="Whether this is a built-in template")
+    is_builtin: bool = Field(default=False, description="Whether this is a built-in template")
     genre: str = Field(description="Primary genre this template supports")
     entity_hints: EntityHints = Field(
         default_factory=EntityHints, description="Hints for generating entities"

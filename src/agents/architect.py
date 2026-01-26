@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from src.memory.arc_templates import (
+    CharacterArcTemplate,
     format_arc_guidance,
     get_arc_template,
 )
@@ -102,6 +103,31 @@ class ArchitectAgent(BaseAgent):
             settings=settings,
         )
 
+    def _get_arc_guidance(
+        self, arc_id: str | None, role_name: str
+    ) -> tuple[str | None, CharacterArcTemplate | None]:
+        """Get arc guidance text and template for a character role.
+
+        Args:
+            arc_id: The arc template ID to look up (e.g., "hero_journey").
+            role_name: The role name for logging (e.g., "protagonist", "antagonist").
+
+        Returns:
+            Tuple of (guidance_text, arc_template). Both are None if arc_id is None
+            or template not found.
+        """
+        if not arc_id:
+            return None, None
+
+        arc_template = get_arc_template(arc_id)
+        if arc_template:
+            guidance = format_arc_guidance(arc_template)
+            logger.info(f"Using {role_name} arc template: {arc_id}")
+            return guidance, arc_template
+        else:
+            logger.warning(f"{role_name.capitalize()} arc template not found: {arc_id}")
+            return None, None
+
     def create_world(self, story_state: StoryState) -> str:
         """Create the world-building document."""
         validate_not_none(story_state, "story_state")
@@ -157,25 +183,13 @@ class ArchitectAgent(BaseAgent):
         logger.info("Creating characters for story")
         brief = PromptBuilder.ensure_brief(story_state, self.name)
 
-        # Get arc templates if specified
-        protagonist_arc_guidance = None
-        antagonist_arc_guidance = None
-
-        if protagonist_arc_id:
-            arc_template = get_arc_template(protagonist_arc_id)
-            if arc_template:
-                protagonist_arc_guidance = format_arc_guidance(arc_template)
-                logger.info(f"Using protagonist arc template: {protagonist_arc_id}")
-            else:
-                logger.warning(f"Protagonist arc template not found: {protagonist_arc_id}")
-
-        if antagonist_arc_id:
-            arc_template = get_arc_template(antagonist_arc_id)
-            if arc_template:
-                antagonist_arc_guidance = format_arc_guidance(arc_template)
-                logger.info(f"Using antagonist arc template: {antagonist_arc_id}")
-            else:
-                logger.warning(f"Antagonist arc template not found: {antagonist_arc_id}")
+        # Get arc templates if specified (using helper to reduce duplication)
+        protagonist_arc_guidance, protagonist_arc_template = self._get_arc_guidance(
+            protagonist_arc_id, "protagonist"
+        )
+        antagonist_arc_guidance, antagonist_arc_template = self._get_arc_guidance(
+            antagonist_arc_id, "antagonist"
+        )
 
         # Build prompt using PromptBuilder
         builder = PromptBuilder()
@@ -248,11 +262,11 @@ class ArchitectAgent(BaseAgent):
         for attempt in range(1, max_attempts + 1):
             result = self.generate_structured(prompt, CharacterList)
             if len(result.characters) >= min_chars:
-                # Set arc_type on characters based on their role
+                # Set arc_type on characters only if a valid template was found
                 for char in result.characters:
-                    if char.role == "protagonist" and protagonist_arc_id:
+                    if char.role == "protagonist" and protagonist_arc_template:
                         char.arc_type = protagonist_arc_id
-                    elif char.role == "antagonist" and antagonist_arc_id:
+                    elif char.role == "antagonist" and antagonist_arc_template:
                         char.arc_type = antagonist_arc_id
 
                 logger.info(

@@ -286,6 +286,13 @@ class TestArchitectCreateCharacters:
                     personality_traits=["brave"],
                     goals=["Support hero"],
                 ),
+                Character(
+                    name="Villain",
+                    role="antagonist",
+                    description="The enemy",
+                    personality_traits=["cunning"],
+                    goals=["Defeat hero"],
+                ),
             ]
         )
         architect.generate_structured = MagicMock(return_value=mock_characters)
@@ -297,10 +304,12 @@ class TestArchitectCreateCharacters:
             antagonist_arc_id="also_nonexistent",
         )
 
-        # Characters should be created with arc_type set to the ID (even if template doesn't exist)
-        assert len(characters) == 4
+        # Characters should NOT have arc_type set when template doesn't exist
+        assert len(characters) == 5
         protagonist = next(c for c in characters if c.role == "protagonist")
-        assert protagonist.arc_type == "nonexistent_arc"
+        antagonist = next(c for c in characters if c.role == "antagonist")
+        assert protagonist.arc_type is None, "arc_type should be None for invalid template"
+        assert antagonist.arc_type is None, "arc_type should be None for invalid template"
 
         # Prompt should not include arc guidance since templates don't exist
         call_args = architect.generate_structured.call_args[0][0]
