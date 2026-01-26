@@ -306,6 +306,10 @@ class Settings:
 
     # Backup settings
     backup_folder: str = str(BACKUPS_DIR)  # Folder to store project backups
+    backup_verify_on_restore: bool = True  # Verify backup integrity before restore
+
+    # Data integrity settings
+    entity_version_retention: int = 10  # Keep last N versions per entity
 
     # Generation mode settings
     current_mode: str = "balanced"  # ID of active generation mode
@@ -596,6 +600,18 @@ class Settings:
         if not 0.0 <= self.learning_confidence_threshold <= 1.0:
             raise ValueError(
                 f"learning_confidence_threshold must be between 0.0 and 1.0, got {self.learning_confidence_threshold}"
+            )
+
+        # Validate data integrity settings
+        if not 1 <= self.entity_version_retention <= 100:
+            raise ValueError(
+                f"entity_version_retention must be between 1 and 100, "
+                f"got {self.entity_version_retention}"
+            )
+        if not isinstance(self.backup_verify_on_restore, bool):
+            raise ValueError(
+                f"backup_verify_on_restore must be a boolean, "
+                f"got {type(self.backup_verify_on_restore).__name__}"
             )
 
         # Validate timeout settings

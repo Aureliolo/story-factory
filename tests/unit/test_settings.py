@@ -238,6 +238,27 @@ class TestSettingsValidation:
         with pytest.raises(ValueError, match="learning_confidence_threshold must be between"):
             settings.validate()
 
+    def test_validate_raises_on_invalid_entity_version_retention_too_low(self):
+        """Should raise ValueError for entity_version_retention below 1."""
+        settings = Settings()
+        settings.entity_version_retention = 0  # Too low
+        with pytest.raises(ValueError, match="entity_version_retention must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_entity_version_retention_too_high(self):
+        """Should raise ValueError for entity_version_retention above 100."""
+        settings = Settings()
+        settings.entity_version_retention = 101  # Too high
+        with pytest.raises(ValueError, match="entity_version_retention must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_backup_verify_on_restore_type(self):
+        """Should raise ValueError for backup_verify_on_restore that's not a boolean."""
+        settings = Settings()
+        settings.backup_verify_on_restore = "true"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="backup_verify_on_restore must be a boolean"):
+            settings.validate()
+
     def test_validate_raises_on_invalid_ollama_timeout(self):
         """Should raise ValueError for ollama_timeout out of range."""
         settings = Settings()

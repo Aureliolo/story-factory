@@ -882,12 +882,15 @@ class WorldService:
             True if updated, False if not found.
         """
         logger.info(f"Updating entity {entity_id}" + (f" -> {name}" if name else ""))
-        result = world_db.update_entity(
-            entity_id=entity_id,
-            name=name,
-            description=description,
-            attributes=attributes,
-        )
+        # Only pass non-None values to avoid overwriting with None
+        update_kwargs: dict[str, Any] = {}
+        if name is not None:
+            update_kwargs["name"] = name
+        if description is not None:
+            update_kwargs["description"] = description
+        if attributes is not None:
+            update_kwargs["attributes"] = attributes
+        result = world_db.update_entity(entity_id=entity_id, **update_kwargs)
         if result:
             logger.debug(f"Entity {entity_id} updated successfully")
         else:
@@ -923,6 +926,46 @@ class WorldService:
             Entity or None if not found.
         """
         return world_db.get_entity(entity_id)
+
+    def get_entity_versions(
+        self, world_db: WorldDatabase, entity_id: str, limit: int | None = None
+    ) -> list:
+        """Get version history for an entity.
+
+        Args:
+            world_db: WorldDatabase instance.
+            entity_id: Entity ID.
+            limit: Maximum number of versions to return.
+
+        Returns:
+            List of EntityVersion objects, newest first.
+        """
+        logger.debug(f"get_entity_versions called: entity_id={entity_id}, limit={limit}")
+        versions = world_db.get_entity_versions(entity_id, limit=limit)
+        logger.debug(f"Found {len(versions)} versions for entity {entity_id}")
+        return versions
+
+    def revert_entity_to_version(
+        self, world_db: WorldDatabase, entity_id: str, version_number: int
+    ) -> bool:
+        """Revert an entity to a previous version.
+
+        Args:
+            world_db: WorldDatabase instance.
+            entity_id: Entity ID.
+            version_number: Version number to revert to.
+
+        Returns:
+            True if reverted successfully.
+
+        Raises:
+            ValueError: If version not found or entity not found.
+        """
+        logger.info(f"Reverting entity {entity_id} to version {version_number}")
+        result = world_db.revert_entity_to_version(entity_id, version_number)
+        if result:
+            logger.info(f"Entity {entity_id} reverted to version {version_number}")
+        return result
 
     def list_entities(
         self,

@@ -70,7 +70,7 @@ class SettingsPage:
                 with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
                     self._build_learning_section()
 
-            # Bottom row: Creativity, Model Selection, Story Structure, World Generation
+            # Bottom row: Creativity, Model Selection, Story Structure, World Generation, Data Integrity
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch mt-4"):
                 with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
                     self._build_temperature_section()
@@ -83,6 +83,9 @@ class SettingsPage:
 
                 with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
                     self._build_world_gen_section()
+
+                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
+                    self._build_data_integrity_section()
 
             # Save button
             ui.button(
@@ -701,6 +704,65 @@ class SettingsPage:
                         "Individual projects can override these in 'Generation Settings'"
                     ).classes("text-xs text-gray-500 dark:text-gray-400")
 
+    def _build_data_integrity_section(self) -> None:
+        """Build data integrity settings section."""
+        with ui.card().classes("w-full h-full"):
+            self._section_header(
+                "Data Integrity",
+                "verified_user",
+                "Configure entity versioning and backup verification settings.",
+            )
+
+            with ui.column().classes("w-full gap-4"):
+                # Entity version retention
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Version History Limit").classes("text-sm font-medium")
+                        ui.label("Versions kept per entity").classes("text-xs text-gray-500")
+
+                    self._entity_version_retention_input = (
+                        ui.number(
+                            value=self.settings.entity_version_retention,
+                            min=1,
+                            max=100,
+                            step=1,
+                        )
+                        .props("outlined dense")
+                        .classes("w-20")
+                        .tooltip("Number of version history entries to keep per entity (1-100)")
+                    )
+
+                ui.separator().classes("my-2")
+
+                # Backup verification toggle
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Verify Backups on Restore").classes("text-sm font-medium")
+                        ui.label("Check integrity before restoring").classes(
+                            "text-xs text-gray-500"
+                        )
+
+                    self._backup_verify_on_restore_switch = ui.switch(
+                        value=self.settings.backup_verify_on_restore,
+                    ).tooltip(
+                        "When enabled, backups are verified for integrity "
+                        "(checksums, file completeness, SQLite validity) before restoration"
+                    )
+
+                # Info about what verification checks
+                with ui.expansion("Verification Checks", icon="info").classes("w-full"):
+                    checks = [
+                        ("check_circle", "File completeness"),
+                        ("fingerprint", "SHA-256 checksums"),
+                        ("storage", "SQLite integrity"),
+                        ("code", "JSON validity"),
+                        ("update", "Version compatibility"),
+                    ]
+                    for icon, label in checks:
+                        with ui.row().classes("items-center gap-2"):
+                            ui.icon(icon, size="xs").classes("text-green-500")
+                            ui.label(label).classes("text-xs")
+
     async def _test_connection(self) -> None:
         """Test Ollama connection."""
         # Update URL first
@@ -806,6 +868,14 @@ class SettingsPage:
                 for key, input_widget in self._chapter_inputs.items():
                     setattr(self.settings, f"chapters_{key}", int(input_widget.value))
 
+            # Data integrity settings
+            if hasattr(self, "_entity_version_retention_input"):
+                self.settings.entity_version_retention = int(
+                    self._entity_version_retention_input.value
+                )
+            if hasattr(self, "_backup_verify_on_restore_switch"):
+                self.settings.backup_verify_on_restore = self._backup_verify_on_restore_switch.value
+
             # Validate and save first - only record undo if successful
             self.settings.validate()
             self.settings.save()
@@ -843,6 +913,8 @@ class SettingsPage:
                 - Mode and VRAM: `use_mode_system`, `current_mode`, `vram_strategy`
                 - Adaptive learning: `learning_autonomy`, `learning_triggers`, `learning_periodic_interval`, `learning_min_samples`, `learning_confidence_threshold`
                 - World generation counts: `world_gen_*_min` and `world_gen_*_max` for `characters`, `locations`, `factions`, `items`, `concepts`, and `relationships`
+                - Quality refinement: `world_quality_threshold`, `world_quality_max_iterations`, `world_quality_early_stopping_patience`
+                - Data integrity: `entity_version_retention`, `backup_verify_on_restore`
         """
         return {
             "ollama_url": self.settings.ollama_url,
@@ -883,6 +955,9 @@ class SettingsPage:
             "world_quality_threshold": self.settings.world_quality_threshold,
             "world_quality_max_iterations": self.settings.world_quality_max_iterations,
             "world_quality_early_stopping_patience": self.settings.world_quality_early_stopping_patience,
+            # Data integrity
+            "entity_version_retention": self.settings.entity_version_retention,
+            "backup_verify_on_restore": self.settings.backup_verify_on_restore,
         }
 
     def _restore_settings_snapshot(self, snapshot: dict[str, Any]) -> None:
@@ -903,12 +978,15 @@ class SettingsPage:
                 - Learning: `learning_autonomy`, `learning_triggers`,
                   `learning_periodic_interval`, `learning_min_samples`,
                   `learning_confidence_threshold`
+                - Data integrity: `entity_version_retention`, `backup_verify_on_restore`
 
                 Optional keys:
                 - `full_text_preview_chars`, `vram_strategy`
                 - World generation: `world_gen_*_min` / `world_gen_*_max` pairs for
                   `characters`, `locations`, `factions`, `items`, `concepts`,
                   `relationships`
+                - Quality refinement: `world_quality_threshold`, `world_quality_max_iterations`,
+                  `world_quality_early_stopping_patience`
 
         Behavior:
             Applies values from `snapshot` to the persistent settings, saves the settings, updates UI controls
@@ -962,6 +1040,12 @@ class SettingsPage:
             self.settings.world_quality_early_stopping_patience = snapshot[
                 "world_quality_early_stopping_patience"
             ]
+
+        # Data integrity (with backward compatibility for old snapshots)
+        if "entity_version_retention" in snapshot:
+            self.settings.entity_version_retention = snapshot["entity_version_retention"]
+        if "backup_verify_on_restore" in snapshot:
+            self.settings.backup_verify_on_restore = snapshot["backup_verify_on_restore"]
 
         # Save changes
         self.settings.save()
@@ -1043,6 +1127,18 @@ class SettingsPage:
             self._quality_max_iterations_input.value = self.settings.world_quality_max_iterations
         if hasattr(self, "_quality_patience_input") and self._quality_patience_input:
             self._quality_patience_input.value = self.settings.world_quality_early_stopping_patience
+
+        # Data integrity settings
+        if (
+            hasattr(self, "_entity_version_retention_input")
+            and self._entity_version_retention_input
+        ):
+            self._entity_version_retention_input.value = self.settings.entity_version_retention
+        if (
+            hasattr(self, "_backup_verify_on_restore_switch")
+            and self._backup_verify_on_restore_switch
+        ):
+            self._backup_verify_on_restore_switch.value = self.settings.backup_verify_on_restore
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""

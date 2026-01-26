@@ -637,3 +637,56 @@ class TestWorldServiceErrorHandling:
 
         with pytest.raises(ValueError, match="Simulated extraction error"):
             world_service.extract_from_chapter("Some chapter content", world_db, 1)
+
+    def test_get_entity_versions(self, world_service, world_db):
+        """Test getting entity versions through WorldService."""
+        # Create an entity (which creates version 1)
+        entity_id = world_service.add_entity(
+            world_db,
+            "character",
+            "Version Test Character",
+            description="A test character",
+            attributes={"role": "test"},
+        )
+
+        # Update it to create version 2
+        world_service.update_entity(
+            world_db,
+            entity_id,
+            attributes={"role": "updated role"},
+        )
+
+        # Get versions via WorldService
+        versions = world_service.get_entity_versions(world_db, entity_id, limit=10)
+
+        assert len(versions) == 2
+        # Versions returned newest first
+        assert versions[0].version_number == 2
+        assert versions[1].version_number == 1
+
+    def test_revert_entity_to_version(self, world_service, world_db):
+        """Test reverting entity to previous version through WorldService."""
+        # Create an entity (which creates version 1)
+        entity_id = world_service.add_entity(
+            world_db,
+            "character",
+            "Revert Test Character",
+            description="A test character",
+            attributes={"role": "original"},
+        )
+
+        # Update it to create version 2
+        world_service.update_entity(
+            world_db,
+            entity_id,
+            attributes={"role": "changed"},
+        )
+
+        # Revert to version 1 via WorldService
+        result = world_service.revert_entity_to_version(world_db, entity_id, 1)
+
+        assert result is True
+
+        # Check entity was reverted
+        entity = world_db.get_entity(entity_id)
+        assert entity.attributes["role"] == "original"
