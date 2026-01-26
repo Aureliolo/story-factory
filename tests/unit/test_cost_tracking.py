@@ -97,6 +97,15 @@ class TestEntityTypeCostBreakdown:
         )
         assert breakdown.avg_time_per_entity == 10.0
 
+    def test_avg_time_per_entity_zero_count(self):
+        """Test average time when count is zero."""
+        breakdown = EntityTypeCostBreakdown(
+            entity_type="character",
+            count=0,
+            total_time_seconds=0.0,
+        )
+        assert breakdown.avg_time_per_entity == 0.0
+
 
 class TestModelCostBreakdown:
     """Tests for ModelCostBreakdown model."""
@@ -127,6 +136,15 @@ class TestModelCostBreakdown:
             call_count=10,
         )
         assert breakdown.avg_tokens_per_call == 100.0
+
+    def test_avg_tokens_per_call_zero_count(self):
+        """Test average tokens per call when count is zero."""
+        breakdown = ModelCostBreakdown(
+            model_id="test-model",
+            total_tokens=0,
+            call_count=0,
+        )
+        assert breakdown.avg_tokens_per_call == 0.0
 
 
 class TestGenerationRunCosts:
@@ -198,6 +216,17 @@ class TestGenerationRunCosts:
         )
         assert costs.avg_tokens_per_call == 100.0
 
+    def test_avg_tokens_per_call_zero_calls(self):
+        """Test average tokens per call when no calls."""
+        costs = GenerationRunCosts(
+            run_id="test-run",
+            project_id="test-project",
+            run_type="story_generation",
+            total_tokens=0,
+            total_calls=0,
+        )
+        assert costs.avg_tokens_per_call == 0.0
+
 
 class TestCostSummary:
     """Tests for CostSummary model."""
@@ -210,6 +239,14 @@ class TestCostSummary:
         )
         assert summary.avg_tokens_per_run == 1000.0
 
+    def test_avg_tokens_per_run_zero_runs(self):
+        """Test average tokens per run when no runs."""
+        summary = CostSummary(
+            total_runs=0,
+            total_tokens=0,
+        )
+        assert summary.avg_tokens_per_run == 0.0
+
     def test_overall_efficiency(self):
         """Test overall efficiency calculation."""
         summary = CostSummary(
@@ -217,6 +254,14 @@ class TestCostSummary:
             total_wasted_iterations=20,
         )
         assert summary.overall_efficiency == 0.8
+
+    def test_overall_efficiency_zero_iterations(self):
+        """Test overall efficiency when no iterations."""
+        summary = CostSummary(
+            total_iterations=0,
+            total_wasted_iterations=0,
+        )
+        assert summary.overall_efficiency == 1.0
 
     def test_format_total_time_seconds(self):
         """Test time formatting for seconds."""

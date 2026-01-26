@@ -35,6 +35,7 @@ ALLOWED_LARGE_FILES: dict[str, str] = {
     "src/services/world_service.py": "World building service with entity extraction and generation - should be split by operation type",
     "src/ui/pages/models.py": "Model management with download queue, batch operations, and tag configuration - should be split into components",
     "src/services/story_service.py": "Story workflow orchestration with project completion hooks and learning integration - should be split by concern",
+    "src/ui/pages/analytics.py": "Analytics dashboard with model comparisons, session history, and cost tracking visualizations - should be split into components",
     "src/services/model_mode_service.py": "Mode management with generation scoring, adaptive learning, and recommendation system - should be split by concern",
     "src/ui/pages/settings.py": "Application settings page with multiple sections (connection, models, temperatures, world gen, quality) and undo/redo - should be split into components",
 }

@@ -56,6 +56,18 @@ class TestStoryTimestamp:
         ts = StoryTimestamp(relative_order=5)
         assert "5" in ts.display_text
 
+    def test_display_text_with_day(self):
+        """Test display_text formats date with day."""
+        ts = StoryTimestamp(year=1042, month=3, day=15)
+        assert "1042" in ts.display_text
+        assert "3" in ts.display_text
+        assert "15" in ts.display_text
+
+    def test_display_text_unknown_time(self):
+        """Test display_text returns 'Unknown time' when no date info."""
+        ts = StoryTimestamp()
+        assert ts.display_text == "Unknown time"
+
     def test_has_date_true(self):
         """Test has_date returns True when date info exists."""
         assert StoryTimestamp(year=1042).has_date is True
@@ -64,6 +76,36 @@ class TestStoryTimestamp:
     def test_has_date_false(self):
         """Test has_date returns False when no date info."""
         assert StoryTimestamp().has_date is False
+
+
+class TestTimelineItem:
+    """Tests for TimelineItem model."""
+
+    def test_is_range_with_end(self):
+        """Test is_range returns True when end is present."""
+        item = TimelineItem(
+            id="test-1",
+            entity_id="e1",
+            label="Test",
+            item_type="character",
+            start=StoryTimestamp(year=1000),
+            end=StoryTimestamp(year=1050),
+            color="#000",
+        )
+        assert item.is_range is True
+
+    def test_is_range_without_end(self):
+        """Test is_range returns False when end is None."""
+        item = TimelineItem(
+            id="test-1",
+            entity_id="e1",
+            label="Test",
+            item_type="event",
+            start=StoryTimestamp(year=1000),
+            end=None,
+            color="#000",
+        )
+        assert item.is_range is False
 
 
 class TestParseTimestamp:
@@ -103,6 +145,12 @@ class TestParseTimestamp:
         ts = parse_timestamp("Event 3")
         assert ts.relative_order == 3
 
+    def test_parse_standalone_day_as_relative(self):
+        """Test parsing standalone day as relative order."""
+        ts = parse_timestamp("Day 15")
+        assert ts.relative_order == 15
+        assert ts.day is None  # Day is cleared when used as relative
+
     def test_parse_preserves_raw_text(self):
         """Test that raw_text is preserved."""
         ts = parse_timestamp("Before the great war")
@@ -139,6 +187,36 @@ class TestExtractLifecycleFromAttributes:
         assert lifecycle is not None
         assert lifecycle.birth is not None
         assert lifecycle.birth.year == 1000
+
+    def test_extract_with_first_last_appearance_dict(self):
+        """Test extracting first/last appearance from dict format."""
+        attributes = {
+            "lifecycle": {
+                "first_appearance": {"year": 1000, "raw_text": "Year 1000"},
+                "last_appearance": {"year": 1080, "raw_text": "Year 1080"},
+            }
+        }
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.first_appearance is not None
+        assert lifecycle.first_appearance.year == 1000
+        assert lifecycle.last_appearance is not None
+        assert lifecycle.last_appearance.year == 1080
+
+    def test_extract_with_first_last_appearance_string(self):
+        """Test extracting first/last appearance from string format."""
+        attributes = {
+            "lifecycle": {
+                "first_appearance": "Chapter 1",
+                "last_appearance": "Chapter 10",
+            }
+        }
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.first_appearance is not None
+        assert lifecycle.first_appearance.relative_order == 1
+        assert lifecycle.last_appearance is not None
+        assert lifecycle.last_appearance.relative_order == 10
 
     def test_extract_no_lifecycle(self):
         """Test when no lifecycle data exists."""
