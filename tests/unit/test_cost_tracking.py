@@ -448,3 +448,182 @@ class TestModeDatabaseCostTracking:
         assert summary["total_runs"] == 0
         assert summary["total_tokens"] == 0
         assert summary["efficiency_ratio"] == 1.0
+
+    def test_get_cost_summary_negative_days_raises(self, db):
+        """Test that negative days raises ValueError."""
+        import pytest
+
+        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+            db.get_cost_summary(days=-1)
+
+    def test_update_generation_run_with_completed(self, db):
+        """Test updating a run with completed=True sets timestamp."""
+        db.start_generation_run("run-1", "project-1", "story_generation")
+        db.update_generation_run("run-1", total_tokens=500, completed=True)
+
+        run = db.get_generation_run("run-1")
+        assert run["completed_at"] is not None
+        assert run["total_tokens"] == 500
+
+    def test_update_generation_run_no_updates(self, db):
+        """Test update with no parameters does nothing."""
+        db.start_generation_run("run-1", "project-1", "story_generation")
+        # Call with no updates - should return early
+        db.update_generation_run("run-1")
+
+        run = db.get_generation_run("run-1")
+        assert run["total_tokens"] == 0
+
+    def test_start_generation_run_error(self, db, tmp_path):
+        """Test error handling when start_generation_run fails."""
+        import sqlite3
+        from unittest.mock import patch
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_connect.side_effect = sqlite3.Error("Database error")
+            with pytest.raises(sqlite3.Error):
+                db.start_generation_run("run-fail", "project-1", "story_generation")
+
+    def test_update_generation_run_error(self, db):
+        """Test error handling when update_generation_run fails."""
+        import sqlite3
+        from unittest.mock import patch
+
+        db.start_generation_run("run-1", "project-1", "story_generation")
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_connect.side_effect = sqlite3.Error("Database error")
+            with pytest.raises(sqlite3.Error):
+                db.update_generation_run("run-1", total_tokens=100)
+
+    def test_complete_generation_run_error(self, db):
+        """Test error handling when complete_generation_run fails."""
+        import sqlite3
+        from unittest.mock import patch
+
+        db.start_generation_run("run-1", "project-1", "story_generation")
+
+        with patch("sqlite3.connect") as mock_connect:
+            mock_connect.side_effect = sqlite3.Error("Database error")
+            with pytest.raises(sqlite3.Error):
+                db.complete_generation_run("run-1")
+
+    def test_get_generation_runs_with_json_fields(self, db):
+        """Test get_generation_runs parses JSON fields correctly."""
+        db.start_generation_run("run-1", "project-1", "world_build")
+        db.update_generation_run(
+            "run-1",
+            by_entity_type={"character": {"count": 5}},
+            by_model={"model-1": {"tokens": 100}},
+        )
+
+        runs = db.get_generation_runs()
+        assert len(runs) == 1
+        assert runs[0]["by_entity_type"] == {"character": {"count": 5}}
+        assert runs[0]["by_model"] == {"model-1": {"tokens": 100}}
+
+    def test_get_model_cost_breakdown(self, db):
+        """Test get_model_cost_breakdown returns model statistics."""
+        # This method queries generation_scores table
+        # First, need to add some scores with all required NOT NULL fields
+        with __import__("sqlite3").connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO generation_scores
+                (project_id, agent_role, model_id, mode_name, tokens_generated, time_seconds, tokens_per_second, prose_quality, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                ("proj-1", "writer", "test-model", "creative", 1000, 10.0, 100.0, 0.8),
+            )
+            conn.commit()
+
+        breakdown = db.get_model_cost_breakdown()
+        assert len(breakdown) == 1
+        assert breakdown[0]["model_id"] == "test-model"
+        assert breakdown[0]["total_tokens"] == 1000
+        assert breakdown[0]["avg_quality"] == 0.8
+
+    def test_get_model_cost_breakdown_negative_days_raises(self, db):
+        """Test that negative days raises ValueError."""
+        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+            db.get_model_cost_breakdown(days=-1)
+
+    def test_get_model_cost_breakdown_with_project_filter(self, db):
+        """Test get_model_cost_breakdown with project filter."""
+        import sqlite3 as sql
+
+        with sql.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO generation_scores
+                (project_id, agent_role, model_id, mode_name, tokens_generated, time_seconds, tokens_per_second, prose_quality, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                ("proj-1", "writer", "model-a", "creative", 500, 5.0, 100.0, 0.7),
+            )
+            conn.execute(
+                """
+                INSERT INTO generation_scores
+                (project_id, agent_role, model_id, mode_name, tokens_generated, time_seconds, tokens_per_second, prose_quality, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                ("proj-2", "editor", "model-b", "precise", 300, 3.0, 100.0, 0.9),
+            )
+            conn.commit()
+
+        breakdown = db.get_model_cost_breakdown(project_id="proj-1")
+        assert len(breakdown) == 1
+        assert breakdown[0]["model_id"] == "model-a"
+
+    def test_get_entity_type_cost_breakdown(self, db):
+        """Test get_entity_type_cost_breakdown returns entity statistics."""
+        import sqlite3 as sql
+
+        with sql.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO world_entity_scores
+                (project_id, entity_type, entity_name, model_id, generation_time_seconds, iterations_used, threshold_met, average_score, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                ("proj-1", "character", "Test Hero", "test-model", 15.0, 3, 1, 0.85),
+            )
+            conn.commit()
+
+        breakdown = db.get_entity_type_cost_breakdown()
+        assert len(breakdown) == 1
+        assert breakdown[0]["entity_type"] == "character"
+        assert breakdown[0]["count"] == 1
+        assert breakdown[0]["avg_iterations"] == 3.0
+
+    def test_get_entity_type_cost_breakdown_negative_days_raises(self, db):
+        """Test that negative days raises ValueError."""
+        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+            db.get_entity_type_cost_breakdown(days=-1)
+
+    def test_get_entity_type_cost_breakdown_with_project_filter(self, db):
+        """Test get_entity_type_cost_breakdown with project filter."""
+        import sqlite3 as sql
+
+        with sql.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO world_entity_scores
+                (project_id, entity_type, entity_name, model_id, generation_time_seconds, iterations_used, threshold_met, average_score, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                ("proj-1", "character", "Hero One", "model-a", 10.0, 2, 1, 0.8),
+            )
+            conn.execute(
+                """
+                INSERT INTO world_entity_scores
+                (project_id, entity_type, entity_name, model_id, generation_time_seconds, iterations_used, threshold_met, average_score, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                ("proj-2", "location", "Tavern", "model-b", 8.0, 1, 0, 0.6),
+            )
+            conn.commit()
+
+        breakdown = db.get_entity_type_cost_breakdown(project_id="proj-1")
+        assert len(breakdown) == 1
+        assert breakdown[0]["entity_type"] == "character"

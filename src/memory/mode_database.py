@@ -2327,7 +2327,7 @@ class ModeDatabase:
                 - avg_time_per_run (float): Average run time in seconds.
                 - by_run_type (list[dict]): Breakdown per run_type with keys
                     "run_type", "count", "tokens", and "time_seconds".
-                - efficiency_ratio (float): Ratio of useful iterations to total iterations (0.0–1.0).
+                - efficiency_ratio (float): Ratio of useful iterations to total iterations (0.0-1.0).
 
         Raises:
             ValueError: If `days` is negative.

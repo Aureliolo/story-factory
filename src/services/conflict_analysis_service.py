@@ -162,7 +162,7 @@ class ConflictAnalysisService:
             limit (int): Maximum number of pairs to return.
 
         Returns:
-            list[TensionPair]: TensionPair objects sorted by score descending (highest first), limited to `limit`. Scores are normalized to the range 0.0–1.0 and include the relationship types involved.
+            list[TensionPair]: TensionPair objects sorted by score descending (highest first), limited to `limit`. Scores are normalized to the range 0.0-1.0 and include the relationship types involved.
         """
         # Group relationships by entity pair
         pair_rels: dict[tuple[str, str], list[Relationship]] = {}

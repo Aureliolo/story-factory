@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def _ensure_vis_network_loaded() -> None:
     """Add vis-network library script to current page."""
-    # vis-network version tracked in /package.json for Dependabot
+    # vis-network version hardcoded here (not tracked by Dependabot); update if needed
     ui.add_body_html(
         '<script src="https://unpkg.com/vis-network@10.0.2/standalone/umd/vis-network.min.js"></script>'
     )
@@ -364,7 +364,7 @@ class ConflictGraphComponent:
         Parameters:
             metrics (ConflictMetrics | None): Metrics object containing the fields
                 `alliance_count`, `rivalry_count`, `tension_count`, `neutral_count`,
-                `conflict_density` (0.0–1.0), `highest_tension_pairs` (iterable of
+                `conflict_density` (0.0-1.0), `highest_tension_pairs` (iterable of
                 objects with `entity_a_name` and `entity_b_name`), and
                 `faction_clusters` (iterable of clusters with `entity_ids`). Pass
                 None to clear the panel and display the empty-state message.
