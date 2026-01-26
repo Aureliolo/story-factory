@@ -158,6 +158,23 @@ class TestRefineEntity:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_refine_entity_returns_none_for_list_response(
+        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+    ):
+        """Test that refine_entity returns None when response is a list instead of dict."""
+        mock_response = {"response": '[{"name": "Item1"}, {"name": "Item2"}]'}
+        world_quality_service._client.generate.return_value = mock_response
+
+        result = await world_quality_service.refine_entity(
+            entity=sample_entity,
+            story_brief=sample_story_brief,
+            settings=mock_settings,
+        )
+
+        # Should return None because we expect a dict, not a list
+        assert result is None
+
+    @pytest.mark.asyncio
     async def test_refine_entity_handles_exception(
         self, world_quality_service, sample_entity, sample_story_brief, mock_settings
     ):
