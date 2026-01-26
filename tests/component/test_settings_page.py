@@ -235,10 +235,13 @@ class TestSettingsPage:
 
         page = page_ref[0]
 
-        # Change some values
+        # Capture original values for test isolation
         original_failure_threshold = test_services.settings.circuit_breaker_failure_threshold
+        original_retry_temp = test_services.settings.retry_temp_increase
+        original_min_iterations = test_services.settings.world_quality_early_stopping_min_iterations
         new_failure_threshold = 10
 
+        # Change some values
         page._circuit_breaker_failure_threshold_input.value = new_failure_threshold
         page._retry_temp_increase_input.value = 0.25
         page._early_stopping_min_iterations_input.value = 3
@@ -251,8 +254,10 @@ class TestSettingsPage:
         assert test_services.settings.retry_temp_increase == 0.25
         assert test_services.settings.world_quality_early_stopping_min_iterations == 3
 
-        # Restore original value for test isolation
+        # Restore original values for test isolation
         test_services.settings.circuit_breaker_failure_threshold = original_failure_threshold
+        test_services.settings.retry_temp_increase = original_retry_temp
+        test_services.settings.world_quality_early_stopping_min_iterations = original_min_iterations
 
     async def test_settings_snapshot_includes_advanced_llm_settings(
         self, user: User, test_app_state, test_services
