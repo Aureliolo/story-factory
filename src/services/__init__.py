@@ -10,6 +10,7 @@ from src.settings import Settings
 
 from .backup_service import BackupService
 from .comparison_service import ComparisonService
+from .conflict_analysis_service import ConflictAnalysisService
 from .content_guidelines_service import ContentGuidelinesService
 from .export_service import ExportService
 from .import_service import ImportService
@@ -20,6 +21,7 @@ from .scoring_service import ScoringService
 from .story_service import StoryService
 from .suggestion_service import SuggestionService
 from .template_service import TemplateService
+from .timeline_service import TimelineService
 from .world_quality_service import WorldQualityService
 from .world_service import WorldBuildOptions, WorldBuildProgress, WorldService
 from .world_template_service import WorldTemplateService
@@ -52,14 +54,20 @@ class ServiceContainer:
     backup: BackupService
     import_svc: ImportService
     comparison: ComparisonService
+    timeline: TimelineService
+    conflict_analysis: ConflictAnalysisService
     world_template: WorldTemplateService
     content_guidelines: ContentGuidelinesService
 
     def __init__(self, settings: Settings | None = None):
-        """Initialize all services with shared settings.
+        """
+        Create and wire service instances that share a Settings object.
 
-        Args:
-            settings: Application settings. If None, loads from src/settings.json.
+        Parameters:
+            settings (Settings | None): Application settings to share across services. If omitted, settings are loaded via Settings.load().
+
+        Notes:
+            Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`).
         """
         self.settings = settings or Settings.load()
         self.project = ProjectService(self.settings)
@@ -76,6 +84,8 @@ class ServiceContainer:
         self.backup = BackupService(self.settings)
         self.import_svc = ImportService(self.settings, self.mode)
         self.comparison = ComparisonService(self.settings)
+        self.timeline = TimelineService(self.settings)
+        self.conflict_analysis = ConflictAnalysisService(self.settings)
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)
 
@@ -83,6 +93,7 @@ class ServiceContainer:
 __all__ = [
     "BackupService",
     "ComparisonService",
+    "ConflictAnalysisService",
     "ContentGuidelinesService",
     "ExportService",
     "ImportService",
@@ -94,6 +105,7 @@ __all__ = [
     "StoryService",
     "SuggestionService",
     "TemplateService",
+    "TimelineService",
     "WorldBuildOptions",
     "WorldBuildProgress",
     "WorldQualityService",

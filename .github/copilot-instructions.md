@@ -20,6 +20,8 @@ This is a Python-based multi-agent system for generating stories using local AI 
 
 **Run tests in background.** When working on multi-step tasks, always run tests in background to avoid blocking on long test runs.
 
+**Settings must have UI.** Any new settings added to `src/settings.py` MUST be exposed in the Settings page UI (`src/ui/pages/settings.py`). Users should be able to configure all settings through the web interface, not just by editing JSON files.
+
 ## Code Standards
 
 ### Python Best Practices

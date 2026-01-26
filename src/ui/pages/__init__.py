@@ -6,6 +6,7 @@ from .models import ModelsPage
 from .projects import ProjectsPage
 from .settings import SettingsPage
 from .world import WorldPage
+from .world_timeline import WorldTimelinePage
 from .write import WritePage
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "ProjectsPage",
     "SettingsPage",
     "WorldPage",
+    "WorldTimelinePage",
     "WritePage",
 ]
