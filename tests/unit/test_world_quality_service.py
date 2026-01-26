@@ -130,7 +130,8 @@ class TestCalculateEta:
         # Both results should be non-None floats
         assert result_faster_recent is not None
         assert result_slower_recent is not None
-        # Slower recent times should give higher ETA
+        # With EMA alpha=0.3, the first value dominates (70% weight on old average)
+        # So starting slow [30, 10] gives higher ETA than starting fast [10, 30]
         assert result_slower_recent < result_faster_recent
 
 
@@ -309,7 +310,7 @@ class TestCancellationSupport:
         assert result_names == ["Character_1", "Character_2", "Character_3"]
 
     def test_cancel_check_only_called_between_entities(
-        self, world_quality_service, sample_story_state, caplog
+        self, world_quality_service, sample_story_state
     ):
         """Cancel is checked before each entity, not during LLM call."""
         cancel_check_times = []
