@@ -25,7 +25,7 @@ template: |
 
   AVAILABLE ENTITIES FOR RELATIONSHIPS:
   {% for entity in available_entities %}
-  - {{ entity.name }} ({{ entity.type }}): {{ entity.description[:100] }}...
+  - [{{ entity.id }}] {{ entity.name }} ({{ entity.type }}): {{ entity.description[:100] }}...
   {% endfor %}
 
   {% if existing_relationships %}
@@ -42,17 +42,20 @@ template: |
 
   Suggest {{ num_suggestions }} new relationships for "{{ entity_name }}".
   For each suggestion, provide:
-  1. The target entity name (from available entities)
-  2. The relationship type (e.g., "ally_of", "rival_of", "parent_of", "works_for")
-  3. A brief description of the relationship
-  4. Confidence score (0.0-1.0) based on narrative fit
-  5. Whether relationship is bidirectional
+  1. The target entity ID (the bracketed ID from the available entities list)
+  2. The target entity name (for readability)
+  3. The relationship type (e.g., "ally_of", "rival_of", "parent_of", "works_for")
+  4. A brief description of the relationship
+  5. Confidence score (0.0-1.0) based on narrative fit
+  6. Whether relationship is bidirectional
 
-  Output JSON:
+  IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no explanations, no additional text before or after the JSON.
+
   {
     "suggestions": [
       {
-        "target_entity_name": "...",
+        "target_entity_id": "uuid-from-brackets",
+        "target_entity_name": "Entity Name",
         "relation_type": "...",
         "description": "...",
         "confidence": 0.85,

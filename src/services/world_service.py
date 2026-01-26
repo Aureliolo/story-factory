@@ -8,6 +8,7 @@ import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
 from src.memory.entities import Entity, Relationship
@@ -1104,8 +1105,6 @@ class WorldService:
             return 0.85
 
         # Character-based similarity using difflib
-        from difflib import SequenceMatcher
-
         return SequenceMatcher(None, name1, name2).ratio()
 
     # ========== RELATIONSHIP MANAGEMENT ==========
@@ -1139,6 +1138,7 @@ class WorldService:
             relation_type=relation_type,
             description=description,
             bidirectional=bidirectional,
+            validate=self.settings.relationship_validation_enabled,
         )
         logger.debug(f"Created relationship {rel_id}")
         return rel_id
@@ -1365,32 +1365,65 @@ class WorldService:
         relationships = world_db.list_relationships()
         total_relationships = len(relationships)
 
-        # Orphan detection
-        orphans = world_db.find_orphans()
-        orphan_entities = [{"id": e.id, "name": e.name, "type": e.type} for e in orphans]
+        # Orphan detection (respects settings toggle)
+        orphan_entities: list[dict] = []
+        if self.settings.orphan_detection_enabled:
+            orphans = world_db.find_orphans()
+            orphan_entities = [{"id": e.id, "name": e.name, "type": e.type} for e in orphans]
+            logger.debug(f"Orphan detection enabled: found {len(orphan_entities)} orphans")
+        else:
+            logger.debug("Orphan detection disabled by settings")
 
-        # Circular relationship detection
-        circular = world_db.find_circular_relationships(
-            relation_types=self.settings.circular_relationship_types,
-        )
-        circular_relationships = []
-        for cycle in circular:
-            cycle_info = {
-                "edges": [{"source": e[0], "type": e[1], "target": e[2]} for e in cycle],
-                "length": len(cycle),
-            }
-            circular_relationships.append(cycle_info)
-
-        # Quality metrics
+        # Quality metrics (moved before circular detection to enable name lookups)
         all_entities = world_db.list_entities()
+        entity_name_lookup = {e.id: e.name for e in all_entities}
+
+        # Circular relationship detection (respects settings toggle)
+        circular_relationships: list[dict] = []
+        if self.settings.circular_detection_enabled:
+            circular = world_db.find_circular_relationships(
+                relation_types=self.settings.circular_relationship_types,
+            )
+            for cycle in circular:
+                # Include entity names for human-readable display
+                edges_with_names = []
+                for e in cycle:
+                    source_id, relation_type, target_id = e[0], e[1], e[2]
+                    edges_with_names.append(
+                        {
+                            "source": source_id,
+                            "source_name": entity_name_lookup.get(source_id, source_id),
+                            "type": relation_type,
+                            "target": target_id,
+                            "target_name": entity_name_lookup.get(target_id, target_id),
+                        }
+                    )
+                cycle_info = {
+                    "edges": edges_with_names,
+                    "length": len(cycle),
+                }
+                circular_relationships.append(cycle_info)
+            logger.debug(f"Circular detection enabled: found {len(circular_relationships)} cycles")
+        else:
+            logger.debug("Circular detection disabled by settings")
         quality_scores = []
         low_quality_entities = []
 
         for entity in all_entities:
             # Get quality score from attributes if available
+            # Quality scores are stored as a dict with 'average' key (e.g., quality_scores.average)
+            # Also support legacy 'quality_score' key for backwards compatibility
             attrs = entity.attributes or {}
-            quality_score = attrs.get("quality_score", 0.0)
-            if isinstance(quality_score, (int, float)):
+            quality_score = 0.0
+
+            # Try new format: quality_scores dict with average
+            if "quality_scores" in attrs and isinstance(attrs["quality_scores"], dict):
+                quality_score = attrs["quality_scores"].get("average", 0.0)
+            # Fallback to legacy format: direct quality_score
+            elif "quality_score" in attrs:
+                quality_score = attrs.get("quality_score", 0.0)
+
+            if isinstance(quality_score, (int, float)) and quality_score > 0:
                 quality_scores.append(float(quality_score))
                 if quality_score < quality_threshold:
                     low_quality_entities.append(
@@ -1426,9 +1459,9 @@ class WorldService:
             total_entities=total_entities,
             entity_counts=entity_counts,
             total_relationships=total_relationships,
-            orphan_count=len(orphans),
+            orphan_count=len(orphan_entities),
             orphan_entities=orphan_entities,
-            circular_count=len(circular),
+            circular_count=len(circular_relationships),
             circular_relationships=circular_relationships,
             average_quality=average_quality,
             quality_distribution=quality_distribution,
@@ -1443,7 +1476,7 @@ class WorldService:
         logger.info(
             f"World health metrics computed: score={metrics.health_score:.1f}, "
             f"entities={total_entities}, relationships={total_relationships}, "
-            f"orphans={len(orphans)}, circular={len(circular)}"
+            f"orphans={len(orphan_entities)}, circular={len(circular_relationships)}"
         )
 
         return metrics

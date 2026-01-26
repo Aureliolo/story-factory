@@ -1081,15 +1081,43 @@ class SettingsPage:
                         .tooltip("Maximum relationships to suggest per entity (1-50)")
                     )
 
-                # Circular relationship types info
-                with ui.expansion("Circular Check Types", icon="info").classes("w-full"):
-                    types = self.settings.circular_relationship_types
-                    for rel_type in types:
-                        with ui.row().classes("items-center gap-2"):
-                            ui.icon("subdirectory_arrow_right", size="xs").classes(
-                                "text-orange-500"
-                            )
-                            ui.label(rel_type).classes("text-xs")
+                # Circular relationship types (editable)
+                with ui.row().classes("w-full items-center gap-3"):
+                    with ui.column().classes("flex-grow"):
+                        ui.label("Circular Check Types").classes("text-sm font-medium")
+                        ui.label("Comma-separated relationship types").classes(
+                            "text-xs text-gray-500"
+                        )
+
+                    self._circular_types_input = (
+                        ui.input(
+                            value=", ".join(self.settings.circular_relationship_types),
+                        )
+                        .props("outlined dense")
+                        .classes("w-64")
+                        .tooltip(
+                            "Relationship types to check for cycles (e.g., owns, reports_to, parent_of)"
+                        )
+                    )
+
+                ui.separator().classes("my-2")
+
+                # Relationship minimums info (read-only display)
+                with ui.expansion("Relationship Minimums", icon="info", value=False).classes(
+                    "w-full"
+                ):
+                    ui.label("Minimum relationships per entity type/role:").classes(
+                        "text-xs text-gray-500 mb-2"
+                    )
+                    for entity_type, roles in self.settings.relationship_minimums.items():
+                        with ui.row().classes("items-center gap-2 mb-1"):
+                            ui.icon("folder", size="xs").classes("text-blue-500")
+                            ui.label(f"{entity_type}:").classes("text-xs font-medium w-20")
+                            roles_str = ", ".join(f"{r}={c}" for r, c in roles.items())
+                            ui.label(roles_str).classes("text-xs text-gray-600")
+                    ui.label("Edit settings.json directly to customize minimums").classes(
+                        "text-xs text-gray-400 italic mt-2"
+                    )
 
     async def _test_connection(self) -> None:
         """Test Ollama connection."""
@@ -1262,6 +1290,11 @@ class SettingsPage:
                 self.settings.max_relationships_per_entity = int(
                     self._max_relationships_input.value
                 )
+            if hasattr(self, "_circular_types_input"):
+                # Parse comma-separated types, strip whitespace, filter empty
+                types_str = self._circular_types_input.value or ""
+                types_list = [t.strip() for t in types_str.split(",") if t.strip()]
+                self.settings.circular_relationship_types = types_list
 
             # Validate and save first - only record undo if successful
             self.settings.validate()
@@ -1352,6 +1385,7 @@ class SettingsPage:
             "circular_detection_enabled": self.settings.circular_detection_enabled,
             "fuzzy_match_threshold": self.settings.fuzzy_match_threshold,
             "max_relationships_per_entity": self.settings.max_relationships_per_entity,
+            "circular_relationship_types": self.settings.circular_relationship_types.copy(),
         }
 
         # Advanced LLM settings (WP1/WP2) - add using key iteration
@@ -1503,6 +1537,8 @@ class SettingsPage:
             self.settings.fuzzy_match_threshold = snapshot["fuzzy_match_threshold"]
         if "max_relationships_per_entity" in snapshot:
             self.settings.max_relationships_per_entity = snapshot["max_relationships_per_entity"]
+        if "circular_relationship_types" in snapshot:
+            self.settings.circular_relationship_types = snapshot["circular_relationship_types"]
 
         # Save changes
         self.settings.save()
@@ -1638,6 +1674,8 @@ class SettingsPage:
             self._fuzzy_threshold_input.value = self.settings.fuzzy_match_threshold
         if hasattr(self, "_max_relationships_input") and self._max_relationships_input:
             self._max_relationships_input.value = self.settings.max_relationships_per_entity
+        if hasattr(self, "_circular_types_input"):
+            self._circular_types_input.value = ", ".join(self.settings.circular_relationship_types)
 
     def _do_undo(self) -> None:
         """Handle undo for settings changes."""

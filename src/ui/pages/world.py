@@ -2658,18 +2658,28 @@ class WorldPage:
         if not self.state.world_db:
             return
 
-        # Get health metrics
-        metrics = self.services.world.get_world_health_metrics(self.state.world_db)
-
-        # Build dashboard in expansion
+        # Build dashboard in expansion with refreshable container
         with ui.expansion("World Health", icon="health_and_safety", value=False).classes("w-full"):
+            self._health_container = ui.column().classes("w-full")
+            self._refresh_health_dashboard()
+
+    def _refresh_health_dashboard(self) -> None:
+        """Refresh the health dashboard content."""
+        if not self.state.world_db or not hasattr(self, "_health_container"):
+            return
+
+        self._health_container.clear()
+        with self._health_container:
+            metrics = self.services.world.get_world_health_metrics(self.state.world_db)
             dashboard = WorldHealthDashboard(
                 metrics=metrics,
                 on_fix_orphan=self._handle_fix_orphan,
                 on_view_circular=self._handle_view_circular,
                 on_improve_quality=self._handle_improve_quality,
+                on_refresh=self._refresh_health_dashboard,
             )
             dashboard.build()
+        ui.notify("Health metrics refreshed", type="positive")
 
     async def _handle_fix_orphan(self, entity_id: str) -> None:
         """Handle fix orphan entity request - select the entity for editing."""
@@ -2679,7 +2689,10 @@ class WorldPage:
         entity = self.state.world_db.get_entity(entity_id)
         if entity:
             self.state.select_entity(entity.id)
-            ui.notify(f"Selected '{entity.name}' - add relationships in the editor", type="info")
+            ui.notify(
+                f"Selected '{entity.name}' - add relationships in the editor, then click Refresh",
+                type="info",
+            )
 
     async def _handle_view_circular(self, cycle: dict) -> None:
         """Handle view circular relationship chain request."""
@@ -2702,7 +2715,7 @@ class WorldPage:
         if entity:
             self.state.select_entity(entity.id)
             ui.notify(
-                f"Selected '{entity.name}' - use 'Refine Entity' to improve quality",
+                f"Selected '{entity.name}' - use 'Refine Entity' to improve quality, then click Refresh",
                 type="info",
             )
 

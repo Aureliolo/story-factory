@@ -1011,46 +1011,46 @@ class WorldDatabase:
             validate,
         )
 
-        # Validation logic
-        if validate:
-            # Check for self-loop
-            if source_id == target_id:
-                raise RelationshipValidationError(
-                    f"Cannot create self-referential relationship: entity {source_id} cannot "
-                    f"have a relationship with itself",
-                    source_id=source_id,
-                    target_id=target_id,
-                    reason="self_loop",
-                    suggestions=["Choose a different target entity"],
-                )
-
-            # Check source entity exists
-            source_entity = self.get_entity(source_id)
-            if source_entity is None:
-                raise RelationshipValidationError(
-                    f"Source entity with ID '{source_id}' does not exist",
-                    source_id=source_id,
-                    target_id=target_id,
-                    reason="source_not_found",
-                    suggestions=["Verify the source entity ID is correct"],
-                )
-
-            # Check target entity exists
-            target_entity = self.get_entity(target_id)
-            if target_entity is None:
-                raise RelationshipValidationError(
-                    f"Target entity with ID '{target_id}' does not exist",
-                    source_id=source_id,
-                    target_id=target_id,
-                    reason="target_not_found",
-                    suggestions=["Verify the target entity ID is correct"],
-                )
-
         rel_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
         attrs_json = json.dumps(attributes or {})
 
+        # Use lock for entire operation (validation + insert) to prevent TOCTOU race condition
         with self._lock:
+            # Validation logic - must be inside lock to prevent entity deletion between check and insert
+            if validate:
+                # Check for self-loop (no lock needed for this check)
+                if source_id == target_id:
+                    raise RelationshipValidationError(
+                        f"Cannot create self-referential relationship: entity {source_id} cannot "
+                        f"have a relationship with itself",
+                        source_id=source_id,
+                        target_id=target_id,
+                        reason="self_loop",
+                        suggestions=["Choose a different target entity"],
+                    )
+
+                # Check source entity exists (RLock allows reentrant acquisition)
+                source_entity = self.get_entity(source_id)
+                if source_entity is None:
+                    raise RelationshipValidationError(
+                        f"Source entity with ID '{source_id}' does not exist",
+                        source_id=source_id,
+                        target_id=target_id,
+                        reason="source_not_found",
+                        suggestions=["Verify the source entity ID is correct"],
+                    )
+
+                # Check target entity exists
+                target_entity = self.get_entity(target_id)
+                if target_entity is None:
+                    raise RelationshipValidationError(
+                        f"Target entity with ID '{target_id}' does not exist",
+                        source_id=source_id,
+                        target_id=target_id,
+                        reason="target_not_found",
+                        suggestions=["Verify the target entity ID is correct"],
+                    )
             cursor = self.conn.cursor()
             cursor.execute(
                 """

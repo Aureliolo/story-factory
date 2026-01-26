@@ -1074,6 +1074,41 @@ class Settings:
                 f"got {self.max_relationships_per_entity}"
             )
 
+        # Validate circular_relationship_types
+        if not isinstance(self.circular_relationship_types, list):
+            raise ValueError(
+                f"circular_relationship_types must be a list, "
+                f"got {type(self.circular_relationship_types)}"
+            )
+        if not all(isinstance(t, str) for t in self.circular_relationship_types):
+            raise ValueError("circular_relationship_types must contain only strings")
+
+        # Validate relationship_minimums structure
+        if not isinstance(self.relationship_minimums, dict):
+            raise ValueError(
+                f"relationship_minimums must be a dict, got {type(self.relationship_minimums)}"
+            )
+        for entity_type, roles in self.relationship_minimums.items():
+            if not isinstance(entity_type, str):
+                raise ValueError(
+                    f"relationship_minimums keys must be strings, got {type(entity_type)}"
+                )
+            if not isinstance(roles, dict):
+                raise ValueError(
+                    f"relationship_minimums[{entity_type}] must be a dict, got {type(roles)}"
+                )
+            for role, min_count in roles.items():
+                if not isinstance(role, str):
+                    raise ValueError(
+                        f"relationship_minimums[{entity_type}] keys must be strings, "
+                        f"got {type(role)}"
+                    )
+                if not isinstance(min_count, int) or min_count < 0:
+                    raise ValueError(
+                        f"relationship_minimums[{entity_type}][{role}] must be a non-negative "
+                        f"integer, got {min_count}"
+                    )
+
     # Class-level cache for settings (speeds up repeated load() calls)
     _cached_instance: ClassVar[Settings | None] = None
 

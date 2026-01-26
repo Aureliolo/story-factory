@@ -3795,7 +3795,7 @@ Return a JSON object with:
         entity: Entity,
         available_entities: list[Entity],
         existing_relationships: list[dict[str, str]],
-        story_brief: StoryBrief,
+        story_brief: StoryBrief | None,
         num_suggestions: int = 3,
     ) -> list[dict[str, Any]]:
         """Suggest meaningful relationships for an entity based on narrative context.
@@ -3808,7 +3808,7 @@ Return a JSON object with:
             available_entities: Other entities that could be relationship targets.
             existing_relationships: List of existing relationships (as dicts with
                 source_name, target_name, relation_type).
-            story_brief: Story brief for context.
+            story_brief: Story brief for context (optional).
             num_suggestions: Number of suggestions to generate.
 
         Returns:
@@ -3834,9 +3834,24 @@ Return a JSON object with:
         minimums = self.settings.relationship_minimums.get(entity_type, {})
         min_rels = minimums.get(entity_role, minimums.get("default", 2))
 
-        # Build prompt
+        # Enforce max_relationships_per_entity by limiting suggestions
+        max_rels = self.settings.max_relationships_per_entity
+        current_rel_count = len(
+            [
+                r
+                for r in existing_relationships
+                if r.get("source_name") == entity.name or r.get("target_name") == entity.name
+            ]
+        )
+        effective_suggestions = min(num_suggestions, max(0, max_rels - current_rel_count))
+
+        if effective_suggestions <= 0:
+            logger.debug(f"Entity {entity.name} already at max relationships ({max_rels})")
+            return []
+
+        # Build prompt with entity IDs for stable reference
         entities_context = "\n".join(
-            f"- {e.name} ({e.type}): {e.description[:100]}..."
+            f"- [{e.id}] {e.name} ({e.type}): {e.description[:100]}..."
             for e in targets[:20]  # Limit to avoid context overflow
         )
 
@@ -3852,25 +3867,28 @@ Name: {entity.name}
 Type: {entity.type}
 Description: {entity.description}
 
-AVAILABLE ENTITIES FOR RELATIONSHIPS:
+AVAILABLE ENTITIES FOR RELATIONSHIPS (use the bracketed ID when specifying targets):
 {entities_context}
 
 {"EXISTING RELATIONSHIPS (avoid duplicates):" + chr(10) + existing_rels_context if existing_relationships else ""}
 
 STORY CONTEXT:
-- Premise: {story_brief.premise[:100] if story_brief else "Unknown"}...
+- Premise: {story_brief.premise[:100] if story_brief and story_brief.premise else "Unknown"}...
 - Genre: {story_brief.genre if story_brief else "Unknown"}
 - Themes: {story_brief.themes if story_brief else "Unknown"}
 
-Suggest {num_suggestions} new relationships for "{entity.name}".
+Suggest {effective_suggestions} new relationships for "{entity.name}".
 Consider: allies, rivals, family, romance, professional ties, hidden connections.
 Minimum recommended relationships for {entity_type}/{entity_role}: {min_rels}
+Maximum relationships per entity: {max_rels} (current: {current_rel_count})
 
-Return JSON:
+IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no explanations, no additional text.
+
 {{
     "suggestions": [
         {{
-            "target_entity_name": "...",
+            "target_entity_id": "uuid-from-brackets",
+            "target_entity_name": "Entity Name",
             "relation_type": "...",
             "description": "...",
             "confidence": 0.85,
@@ -3905,15 +3923,44 @@ Return JSON:
 
             suggestions = result.get("suggestions", [])
 
-            # Enrich suggestions with target entity IDs
+            # Enrich suggestions with target entity IDs using ID-first, then fuzzy matching
             enriched_suggestions = []
+            fuzzy_threshold = self.settings.fuzzy_match_threshold
             for suggestion in suggestions:
+                target_id = suggestion.get("target_entity_id", "")
                 target_name = suggestion.get("target_entity_name", "")
-                # Find matching target entity
-                target_entity = next(
-                    (e for e in targets if e.name.lower() == target_name.lower()),
-                    None,
-                )
+
+                # First try: resolve by ID if provided
+                target_entity = None
+                if target_id:
+                    target_entity = next((e for e in targets if e.id == target_id), None)
+
+                # Second try: exact case-insensitive name match
+                if not target_entity and target_name:
+                    target_entity = next(
+                        (e for e in targets if e.name.lower() == target_name.lower()),
+                        None,
+                    )
+
+                # Third try: fuzzy name matching
+                if not target_entity and target_name:
+                    from difflib import SequenceMatcher
+
+                    best_match = None
+                    best_score = 0.0
+                    search_name = target_name.lower().strip()
+                    for e in targets:
+                        entity_name = e.name.lower().strip()
+                        score = SequenceMatcher(None, search_name, entity_name).ratio()
+                        if score > best_score and score >= fuzzy_threshold:
+                            best_score = score
+                            best_match = e
+                    if best_match:
+                        logger.debug(
+                            f"Fuzzy matched '{target_name}' -> '{best_match.name}' (score={best_score:.2f})"
+                        )
+                        target_entity = best_match
+
                 if target_entity:
                     enriched_suggestions.append(
                         {
@@ -3926,6 +3973,10 @@ Return JSON:
                             "confidence": suggestion.get("confidence", 0.5),
                             "bidirectional": suggestion.get("bidirectional", False),
                         }
+                    )
+                else:
+                    logger.warning(
+                        f"Could not resolve target entity: id={target_id}, name={target_name}"
                     )
 
             logger.info(

@@ -64,6 +64,7 @@ class WorldHealthDashboard:
         on_fix_orphan: Callable[[str], Any] | None = None,
         on_view_circular: Callable[[dict], Any] | None = None,
         on_improve_quality: Callable[[str], Any] | None = None,
+        on_refresh: Callable[[], Any] | None = None,
     ):
         """Initialize world health dashboard.
 
@@ -72,11 +73,13 @@ class WorldHealthDashboard:
             on_fix_orphan: Callback when user wants to fix an orphan entity.
             on_view_circular: Callback to view a single circular relationship chain.
             on_improve_quality: Callback to improve a low-quality entity.
+            on_refresh: Callback to refresh metrics after changes.
         """
         self.metrics = metrics
         self.on_fix_orphan = on_fix_orphan
         self.on_view_circular = on_view_circular
         self.on_improve_quality = on_improve_quality
+        self.on_refresh = on_refresh
 
     def build(self) -> None:
         """Build the dashboard UI."""
@@ -86,6 +89,11 @@ class WorldHealthDashboard:
                 ui.icon("health_and_safety").classes("text-blue-500")
                 ui.label("World Health").classes("text-lg font-semibold")
                 ui.space()
+                if self.on_refresh:
+                    ui.button(
+                        icon="refresh",
+                        on_click=self.on_refresh,
+                    ).props("flat round size=sm").tooltip("Refresh health metrics")
                 self._build_health_score()
 
             # Main content
@@ -232,8 +240,27 @@ class WorldHealthDashboard:
                     edges = cycle.get("edges", [])
                     length = cycle.get("length", len(edges))
 
+                    # Build readable cycle description using entity names
+                    if edges:
+                        # Extract unique entity names in cycle order
+                        cycle_names: list[str] = []
+                        for edge in edges:
+                            source_name = edge.get("source_name", edge.get("source", "?"))
+                            if not cycle_names or cycle_names[-1] != source_name:
+                                cycle_names.append(source_name)
+                        # Add first name again to show it's a cycle
+                        if cycle_names:
+                            cycle_names.append(cycle_names[0])
+                        cycle_display = " → ".join(cycle_names[:5])  # Limit to avoid overflow
+                        if len(cycle_names) > 5:
+                            cycle_display += " → ..."
+                    else:
+                        cycle_display = f"Cycle of {length} entities"
+
                     with ui.row().classes("items-center gap-2 w-full"):
-                        ui.label(f"Cycle of {length} entities").classes("text-sm flex-grow")
+                        ui.label(cycle_display).classes("text-sm flex-grow").tooltip(
+                            f"Circular chain involving {length} entities"
+                        )
 
                         if self.on_view_circular:
                             ui.button(
