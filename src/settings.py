@@ -608,6 +608,11 @@ class Settings:
                 f"entity_version_retention must be between 1 and 100, "
                 f"got {self.entity_version_retention}"
             )
+        if not isinstance(self.backup_verify_on_restore, bool):
+            raise ValueError(
+                f"backup_verify_on_restore must be a boolean, "
+                f"got {type(self.backup_verify_on_restore).__name__}"
+            )
 
         # Validate timeout settings
         if not 10 <= self.ollama_timeout <= 600:

@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Generator
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1460,11 +1460,14 @@ class TestEntityVersioning:
         assert "Reverted to version 1" in versions_after[0].change_reason
 
     def test_version_retention_policy(self, db):
-        """Test that old versions are deleted when limit exceeded."""
-        # Patch settings to use retention limit of 3
-        with patch("src.settings.Settings") as mock_settings:
-            mock_instance = mock_settings.load.return_value
+        """Test that old versions are deleted when limit exceeded, but version 1 is always preserved."""
+        from src.settings import Settings
+
+        # Patch Settings.load to use retention limit of 3
+        with patch.object(Settings, "load") as mock_load:
+            mock_instance = MagicMock()
             mock_instance.entity_version_retention = 3
+            mock_load.return_value = mock_instance
 
             entity_id = db.add_entity("character", "Alice")
             for i in range(5):
@@ -1472,11 +1475,14 @@ class TestEntityVersioning:
 
             versions = db.get_entity_versions(entity_id)
 
-            # Should only keep 3 versions
-            assert len(versions) == 3
-            # Should be the newest 3
-            assert versions[0].version_number == 6
-            assert versions[-1].version_number == 4
+            # Should keep newest 3 + version 1 (always preserved) = 4 versions
+            assert len(versions) == 4
+            # Check we have the newest 3 plus version 1
+            version_numbers = [v.version_number for v in versions]
+            assert 6 in version_numbers  # newest
+            assert 5 in version_numbers
+            assert 4 in version_numbers
+            assert 1 in version_numbers  # always preserved
 
     def test_save_version_invalid_change_type(self, db):
         """Test that invalid change_type raises ValueError."""
@@ -1484,6 +1490,24 @@ class TestEntityVersioning:
 
         with pytest.raises(ValueError, match="Invalid change_type"):
             db.save_entity_version(entity_id, "invalid_type")
+
+    def test_get_entity_versions_with_zero_limit(self, db):
+        """Test that get_entity_versions with limit=0 returns empty list."""
+        entity_id = db.add_entity("character", "Alice")
+        db.update_entity(entity_id, description="Updated")
+
+        # limit=0 should return empty list
+        versions = db.get_entity_versions(entity_id, limit=0)
+        assert versions == []
+
+    def test_get_entity_versions_with_negative_limit(self, db):
+        """Test that get_entity_versions with negative limit returns empty list."""
+        entity_id = db.add_entity("character", "Alice")
+        db.update_entity(entity_id, description="Updated")
+
+        # negative limit should return empty list
+        versions = db.get_entity_versions(entity_id, limit=-5)
+        assert versions == []
 
     def test_revert_nonexistent_version(self, db):
         """Test that reverting to nonexistent version raises ValueError."""
@@ -1585,16 +1609,12 @@ class TestEntityVersioning:
         with pytest.raises(ValueError, match=r"Entity .* not found"):
             db.revert_entity_to_version(entity_id, 1)
 
-    def test_version_retention_with_settings_fallback(self, db):
-        """Test version retention uses default when settings fail to load."""
-        # This tests the fallback path when Settings.load() fails
-        with patch("src.settings.Settings.load", side_effect=Exception("Settings error")):
-            entity_id = db.add_entity("character", "Alice")
+    def test_version_retention_fails_fast_on_settings_error(self, db):
+        """Test version retention fails fast when settings cannot be loaded."""
+        from src.settings import Settings
 
-            # Should use default retention of 10
-            for i in range(15):
-                db.update_entity(entity_id, description=f"Update {i}")
-
-            versions = db.get_entity_versions(entity_id)
-            # Should keep 10 versions (default fallback)
-            assert len(versions) == 10
+        # This tests that Settings.load() errors propagate (fail-fast behavior)
+        with patch.object(Settings, "load", side_effect=Exception("Settings error")):
+            # Should raise exception when trying to add entity (which triggers versioning)
+            with pytest.raises(Exception, match="Settings error"):
+                db.add_entity("character", "Alice")

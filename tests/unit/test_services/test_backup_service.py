@@ -489,6 +489,7 @@ class TestBackupService:
         zip_path = backups_dir / "missing_project_name.zip"
         metadata = {
             "project_id": "test-123",
+            "files": ["test-123.json"],  # Add files list for verification
             # project_name is missing
         }
         with zipfile.ZipFile(zip_path, "w") as zf:
@@ -497,8 +498,9 @@ class TestBackupService:
 
         service = BackupService(tmp_settings)
 
+        # Use skip_verification=True to test the project_name check specifically
         with pytest.raises(ValueError, match="missing project_name"):
-            service.restore_backup("missing_project_name.zip")
+            service.restore_backup("missing_project_name.zip", skip_verification=True)
 
     def test_restore_backup_no_story_state_file(self, tmp_settings, tmp_path):
         """Test restoring backup without story state file raises ValueError (line 253)."""
@@ -511,6 +513,7 @@ class TestBackupService:
         metadata = {
             "project_id": "test-123",
             "project_name": "Test Project",
+            "files": [],  # Add empty files list for verification
         }
         with zipfile.ZipFile(zip_path, "w") as zf:
             zf.writestr("backup_metadata.json", json.dumps(metadata))
@@ -518,8 +521,9 @@ class TestBackupService:
 
         service = BackupService(tmp_settings)
 
+        # Use skip_verification=True to test the story state file check specifically
         with pytest.raises(ValueError, match="no story state file found"):
-            service.restore_backup("no_story.zip")
+            service.restore_backup("no_story.zip", skip_verification=True)
 
     def test_get_backup_path(self, tmp_settings, tmp_path):
         """Test get_backup_path returns correct path (lines 340-341)."""
@@ -1249,4 +1253,4 @@ class TestBackupServiceWithVerification:
         verifier._check_version_compatibility(mock_zf, result)
 
         assert result.version_compatible is True  # Still compatible on error
-        assert any("No backup format version" in w for w in result.warnings)
+        assert any("Unable to read backup format version" in w for w in result.warnings)

@@ -252,6 +252,13 @@ class TestSettingsValidation:
         with pytest.raises(ValueError, match="entity_version_retention must be between"):
             settings.validate()
 
+    def test_validate_raises_on_invalid_backup_verify_on_restore_type(self):
+        """Should raise ValueError for backup_verify_on_restore that's not a boolean."""
+        settings = Settings()
+        settings.backup_verify_on_restore = "true"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="backup_verify_on_restore must be a boolean"):
+            settings.validate()
+
     def test_validate_raises_on_invalid_ollama_timeout(self):
         """Should raise ValueError for ollama_timeout out of range."""
         settings = Settings()

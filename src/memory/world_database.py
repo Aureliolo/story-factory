@@ -215,6 +215,10 @@ class WorldDatabase:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_entity_versions_created_at ON entity_versions(created_at)"
             )
+            cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_versions_entity_version "
+                "ON entity_versions(entity_id, version_number)"
+            )
 
             # Run migrations if needed
             if current_version < SCHEMA_VERSION:
@@ -316,6 +320,10 @@ class WorldDatabase:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_entity_versions_created_at ON entity_versions(created_at)"
             )
+            cursor.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_versions_entity_version "
+                "ON entity_versions(entity_id, version_number)"
+            )
             logger.info("Migration v1->v2: Added entity_versions table")
 
         logger.info("Database migration complete")
@@ -402,12 +410,11 @@ class WorldDatabase:
                 """,
                 (entity_id, entity_type, name, description, attrs_json, now, now),
             )
-            self.conn.commit()
-            self._add_entity_to_graph(entity_id, name, entity_type, description, attrs)
-
-            # Save initial version
+            # Save initial version in the same transaction as entity insert
             self._save_entity_version_internal(cursor, entity_id, "created")
             self.conn.commit()
+            # Update graph after commit
+            self._add_entity_to_graph(entity_id, name, entity_type, description, attrs)
 
         logger.debug(f"Added entity: {name} ({entity_type}) id={entity_id}")
         return entity_id
@@ -540,10 +547,14 @@ class WorldDatabase:
                 f"UPDATE entities SET {set_clause} WHERE id = ?",
                 values,
             )
-            self.conn.commit()
             updated = cursor.rowcount > 0
 
-            # Update graph incrementally
+            if updated:
+                # Save version in the same transaction as the entity update
+                self._save_entity_version_internal(cursor, entity_id, "edited")
+            self.conn.commit()
+
+            # Update graph incrementally after commit
             if updated:
                 self._update_entity_in_graph(
                     entity_id,
@@ -554,10 +565,6 @@ class WorldDatabase:
                     if "attributes" in update_fields
                     else None,
                 )
-
-                # Save version after update
-                self._save_entity_version_internal(cursor, entity_id, "edited")
-                self.conn.commit()
 
         return updated
 
@@ -783,14 +790,19 @@ class WorldDatabase:
 
         Args:
             entity_id: Entity ID.
-            limit: Maximum number of versions to return.
+            limit: Maximum number of versions to return. Must be positive if provided.
 
         Returns:
-            List of versions, newest first.
+            List of versions, newest first. Empty list if limit <= 0.
         """
+        # Guard against invalid limit values
+        if limit is not None and limit <= 0:
+            logger.debug(f"get_entity_versions called with limit={limit}, returning empty list")
+            return []
+
         with self._lock:
             cursor = self.conn.cursor()
-            if limit:
+            if limit is not None:
                 cursor.execute(
                     """
                     SELECT * FROM entity_versions
@@ -871,18 +883,7 @@ class WorldDatabase:
             if cursor.rowcount == 0:
                 raise ValueError(f"Entity {entity_id} not found")
 
-            self.conn.commit()
-
-            # Update graph
-            self._update_entity_in_graph(
-                entity_id,
-                version_data["name"],
-                version_data["type"],
-                version_data["description"],
-                version_data.get("attributes"),
-            )
-
-            # Save new version recording the revert
+            # Save new version recording the revert in the same transaction
             self._save_entity_version_internal(
                 cursor,
                 entity_id,
@@ -891,41 +892,55 @@ class WorldDatabase:
             )
             self.conn.commit()
 
+            # Update graph after commit
+            self._update_entity_in_graph(
+                entity_id,
+                version_data["name"],
+                version_data["type"],
+                version_data["description"],
+                version_data.get("attributes"),
+            )
+
             logger.info(f"Entity {entity_id} reverted to version {version_number}")
             return True
 
     def _apply_version_retention(self, entity_id: str, cursor: sqlite3.Cursor) -> None:
-        """Apply version retention policy, keeping only last N versions.
+        """Apply version retention policy, keeping only last N versions plus initial.
+
+        Always preserves version 1 (initial creation snapshot) for audit trail.
 
         Args:
             entity_id: Entity ID.
             cursor: Database cursor.
+
+        Raises:
+            Exception: If Settings.load() fails (fail-fast on misconfiguration).
         """
         # Import here to avoid circular import
         from src.settings import Settings
 
-        try:
-            settings = Settings.load()
-            retention_limit = settings.entity_version_retention
-        except Exception:
-            retention_limit = 10  # Default fallback
+        # Fail fast if settings can't be loaded - don't silently use defaults
+        settings = Settings.load()
+        retention_limit = settings.entity_version_retention
 
-        # Count versions
+        # Count versions (excluding version 1 which is always preserved)
         cursor.execute(
-            "SELECT COUNT(*) FROM entity_versions WHERE entity_id = ?",
+            "SELECT COUNT(*) FROM entity_versions WHERE entity_id = ? AND version_number != 1",
             (entity_id,),
         )
         count = cursor.fetchone()[0]
 
         if count > retention_limit:
-            # Delete oldest versions beyond limit
+            # Delete oldest versions beyond limit, but always preserve version 1
             cursor.execute(
                 """
                 DELETE FROM entity_versions
                 WHERE entity_id = ?
+                AND version_number != 1
                 AND id NOT IN (
                     SELECT id FROM entity_versions
                     WHERE entity_id = ?
+                    AND version_number != 1
                     ORDER BY version_number DESC
                     LIMIT ?
                 )
@@ -936,7 +951,7 @@ class WorldDatabase:
             if deleted > 0:
                 logger.debug(
                     f"Deleted {deleted} old versions for entity {entity_id} "
-                    f"(retention limit: {retention_limit})"
+                    f"(retention limit: {retention_limit}, version 1 preserved)"
                 )
 
     def _row_to_entity_version(self, row: sqlite3.Row) -> EntityVersion:

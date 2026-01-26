@@ -913,6 +913,8 @@ class SettingsPage:
                 - Mode and VRAM: `use_mode_system`, `current_mode`, `vram_strategy`
                 - Adaptive learning: `learning_autonomy`, `learning_triggers`, `learning_periodic_interval`, `learning_min_samples`, `learning_confidence_threshold`
                 - World generation counts: `world_gen_*_min` and `world_gen_*_max` for `characters`, `locations`, `factions`, `items`, `concepts`, and `relationships`
+                - Quality refinement: `world_quality_threshold`, `world_quality_max_iterations`, `world_quality_early_stopping_patience`
+                - Data integrity: `entity_version_retention`, `backup_verify_on_restore`
         """
         return {
             "ollama_url": self.settings.ollama_url,
@@ -976,12 +978,15 @@ class SettingsPage:
                 - Learning: `learning_autonomy`, `learning_triggers`,
                   `learning_periodic_interval`, `learning_min_samples`,
                   `learning_confidence_threshold`
+                - Data integrity: `entity_version_retention`, `backup_verify_on_restore`
 
                 Optional keys:
                 - `full_text_preview_chars`, `vram_strategy`
                 - World generation: `world_gen_*_min` / `world_gen_*_max` pairs for
                   `characters`, `locations`, `factions`, `items`, `concepts`,
                   `relationships`
+                - Quality refinement: `world_quality_threshold`, `world_quality_max_iterations`,
+                  `world_quality_early_stopping_patience`
 
         Behavior:
             Applies values from `snapshot` to the persistent settings, saves the settings, updates UI controls

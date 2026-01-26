@@ -2118,7 +2118,11 @@ class WorldPage:
         if not self.state.world_db:
             return
 
-        versions = self.state.world_db.get_entity_versions(entity_id, limit=10)
+        # Use configured retention limit instead of hardcoded value
+        retention_limit = self.services.settings.entity_version_retention
+        versions = self.services.world.get_entity_versions(
+            self.state.world_db, entity_id, limit=retention_limit
+        )
 
         if not versions:
             return  # No versions yet, skip showing the panel
@@ -2216,13 +2220,16 @@ class WorldPage:
             return
 
         try:
-            self.state.world_db.revert_entity_to_version(version.entity_id, version.version_number)
+            self.services.world.revert_entity_to_version(
+                self.state.world_db, version.entity_id, version.version_number
+            )
             dialog.close()
             ui.notify(
                 f"Reverted to version {version.version_number}",
                 type="positive",
             )
-            # Refresh the editor to show updated data
+            # Refresh list, editor, and graph to show updated data
+            self._refresh_entity_list()
             self._refresh_entity_editor()
             if self._graph:
                 self._graph.refresh()
@@ -2301,12 +2308,16 @@ class WorldPage:
                             with ui.column().classes(
                                 "flex-1 p-2 bg-red-50 dark:bg-red-900/20 rounded"
                             ):
-                                old_str = str(attr_old_val)[:200] if attr_old_val else "(not set)"
+                                old_str = (
+                                    "(not set)" if attr_old_val is None else str(attr_old_val)[:200]
+                                )
                                 ui.label(old_str).classes("text-xs")
                             with ui.column().classes(
                                 "flex-1 p-2 bg-green-50 dark:bg-green-900/20 rounded"
                             ):
-                                new_str = str(attr_new_val)[:200] if attr_new_val else "(not set)"
+                                new_str = (
+                                    "(not set)" if attr_new_val is None else str(attr_new_val)[:200]
+                                )
                                 ui.label(new_str).classes("text-xs")
 
             # If no differences

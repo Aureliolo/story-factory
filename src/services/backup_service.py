@@ -109,7 +109,7 @@ class BackupVerifier:
         return result
 
     def _check_manifest(self, zf: zipfile.ZipFile, result: BackupVerificationResult) -> None:
-        """Check if manifest (metadata) exists and is valid."""
+        """Check if manifest (metadata) exists, is valid JSON, and is a dict."""
         if "backup_metadata.json" not in zf.namelist():
             result.manifest_valid = False
             result.errors.append("Missing backup_metadata.json")
@@ -117,7 +117,11 @@ class BackupVerifier:
 
         try:
             metadata_content = zf.read("backup_metadata.json")
-            json.loads(metadata_content)
+            metadata = json.loads(metadata_content)
+            if not isinstance(metadata, dict):
+                result.manifest_valid = False
+                result.errors.append("Metadata must be a JSON object (dict)")
+                return
             logger.debug("Manifest check passed")
         except json.JSONDecodeError as e:
             result.manifest_valid = False
@@ -130,7 +134,22 @@ class BackupVerifier:
         try:
             metadata_content = zf.read("backup_metadata.json")
             metadata = json.loads(metadata_content)
-            files_list = metadata.get("files", [])
+
+            # Validate metadata structure
+            if not isinstance(metadata, dict):
+                result.files_complete = False
+                result.errors.append("Metadata must be a JSON object")
+                return
+
+            files_list = metadata.get("files")
+            if files_list is None:
+                result.files_complete = False
+                result.errors.append("Missing 'files' list in metadata")
+                return
+            if not isinstance(files_list, list):
+                result.files_complete = False
+                result.errors.append("Invalid 'files' field in metadata - must be a list")
+                return
 
             for filename in files_list:
                 file_result = FileCheckResult(
@@ -147,7 +166,7 @@ class BackupVerifier:
                 f"File completeness check: {len(files_list)} files, "
                 f"complete={result.files_complete}"
             )
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             result.files_complete = False
             result.errors.append(f"Error checking file completeness: {e}")
 
@@ -156,10 +175,26 @@ class BackupVerifier:
         try:
             metadata_content = zf.read("backup_metadata.json")
             metadata = json.loads(metadata_content)
-            checksums = metadata.get("checksums", {})
+
+            # Validate metadata structure
+            if not isinstance(metadata, dict):
+                result.checksums_valid = False
+                result.errors.append("Metadata must be a JSON object for checksum verification")
+                return
+
+            checksums = metadata.get("checksums")
+            if checksums is None:
+                # No checksums in metadata - skip check but warn
+                result.warnings.append("No checksums in backup metadata")
+                logger.debug("No checksums in metadata, skipping checksum verification")
+                return
+            if not isinstance(checksums, dict):
+                result.checksums_valid = False
+                result.errors.append("Invalid 'checksums' field in metadata - must be a dict")
+                return
 
             if not checksums:
-                # No checksums in metadata - skip check but warn
+                # Empty checksums dict - skip check but warn
                 result.warnings.append("No checksums in backup metadata")
                 logger.debug("No checksums in metadata, skipping checksum verification")
                 return
@@ -196,7 +231,7 @@ class BackupVerifier:
             logger.debug(
                 f"Checksum verification: {len(checksums)} files, valid={result.checksums_valid}"
             )
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             result.warnings.append(f"Error checking checksums: {e}")
 
     def _check_sqlite_integrity(
@@ -261,7 +296,26 @@ class BackupVerifier:
         try:
             metadata_content = zf.read("backup_metadata.json")
             metadata = json.loads(metadata_content)
-            backup_version = metadata.get("backup_format_version", 1)
+
+            # Validate metadata structure
+            if not isinstance(metadata, dict):
+                result.version_compatible = False
+                result.errors.append("Metadata must be a JSON object for version check")
+                return
+
+            backup_version = metadata.get("backup_format_version", BACKUP_FORMAT_VERSION)
+
+            # Validate and coerce backup_version to int
+            if not isinstance(backup_version, int):
+                try:
+                    backup_version = int(backup_version)
+                except (TypeError, ValueError):
+                    result.version_compatible = False
+                    result.errors.append(
+                        f"Invalid backup_format_version type in metadata: "
+                        f"expected int, got {type(backup_version).__name__}"
+                    )
+                    return
 
             if backup_version > BACKUP_FORMAT_VERSION:
                 result.version_compatible = False
@@ -271,9 +325,9 @@ class BackupVerifier:
                 )
             else:
                 logger.debug(f"Backup format version {backup_version} is compatible")
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             # No version info - assume compatible (older backup)
-            result.warnings.append("No backup format version in metadata")
+            result.warnings.append(f"Unable to read backup format version: {e}")
 
 
 def _validate_backup_path(path: Path, base_dir: Path) -> Path:

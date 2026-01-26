@@ -924,6 +924,46 @@ class WorldService:
         """
         return world_db.get_entity(entity_id)
 
+    def get_entity_versions(
+        self, world_db: WorldDatabase, entity_id: str, limit: int | None = None
+    ) -> list:
+        """Get version history for an entity.
+
+        Args:
+            world_db: WorldDatabase instance.
+            entity_id: Entity ID.
+            limit: Maximum number of versions to return.
+
+        Returns:
+            List of EntityVersion objects, newest first.
+        """
+        logger.debug(f"get_entity_versions called: entity_id={entity_id}, limit={limit}")
+        versions = world_db.get_entity_versions(entity_id, limit=limit)
+        logger.debug(f"Found {len(versions)} versions for entity {entity_id}")
+        return versions
+
+    def revert_entity_to_version(
+        self, world_db: WorldDatabase, entity_id: str, version_number: int
+    ) -> bool:
+        """Revert an entity to a previous version.
+
+        Args:
+            world_db: WorldDatabase instance.
+            entity_id: Entity ID.
+            version_number: Version number to revert to.
+
+        Returns:
+            True if reverted successfully.
+
+        Raises:
+            ValueError: If version not found or entity not found.
+        """
+        logger.info(f"Reverting entity {entity_id} to version {version_number}")
+        result = world_db.revert_entity_to_version(entity_id, version_number)
+        if result:
+            logger.info(f"Entity {entity_id} reverted to version {version_number}")
+        return result
+
     def list_entities(
         self,
         world_db: WorldDatabase,
