@@ -201,12 +201,30 @@ def entity_list_item(
     color = get_entity_color(entity.type)
     icon = get_entity_icon(entity.type)
 
+    # Check for role-based styling (protagonist, antagonist, mentor)
+    role = (entity.attributes.get("role") or "").lower() if entity.attributes else ""
+    is_protagonist = "protagonist" in role or "main" in role
+    is_antagonist = "antagonist" in role
+    is_mentor = "mentor" in role
+
+    # Determine border style based on role
+    border_style = ""
+    if is_protagonist:
+        border_style = "border: 2px solid #FFD700; box-shadow: 0 0 6px #FFD70080;"
+    elif is_antagonist:
+        border_style = "border: 2px solid #F44336;"
+    elif is_mentor:
+        border_style = "border: 2px solid #2196F3;"
+
     item_classes = "w-full items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
     if selected:
         item_classes += " bg-blue-50 dark:bg-blue-900"
 
     with (
-        ui.row().classes(item_classes).on("click", lambda: on_select(entity) if on_select else None)
+        ui.row()
+        .classes(item_classes)
+        .style(border_style)
+        .on("click", lambda: on_select(entity) if on_select else None)
     ):
         ui.icon(icon, size="sm").style(f"color: {color};")
         ui.label(entity.name).classes("flex-grow truncate")

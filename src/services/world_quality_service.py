@@ -3301,3 +3301,178 @@ SUMMARY:"""
                 logger.debug(f"Generated mini description for {name}: {mini_desc}")
 
         return results
+
+    async def refine_entity(
+        self,
+        entity: Any,
+        story_brief: Any,
+        settings: Settings,
+    ) -> dict[str, Any] | None:
+        """Refine an existing entity to improve its quality.
+
+        Uses the quality service's refinement loop with the existing entity as a base.
+
+        Args:
+            entity: Entity to refine (must have id, name, type, description, attributes).
+            story_brief: Story brief for context.
+            settings: Application settings.
+
+        Returns:
+            Dictionary with refined entity data (name, description, attributes), or None on failure.
+        """
+        if not entity or not story_brief:
+            logger.warning("refine_entity called with missing entity or story_brief")
+            return None
+
+        entity_type = entity.type.lower()
+        logger.info(f"Refining {entity_type}: {entity.name}")
+
+        try:
+            # Get quality scores to identify weak areas
+            current_scores = entity.attributes.get("quality_scores") if entity.attributes else None
+            feedback = ""
+            if current_scores:
+                # Build feedback from low scores
+                weak_areas = []
+                for key, value in current_scores.items():
+                    if key not in ("average", "feedback") and isinstance(value, (int, float)):
+                        if value < 7:
+                            weak_areas.append(f"{key.replace('_', ' ')} ({value:.1f})")
+                if weak_areas:
+                    feedback = f"Focus on improving: {', '.join(weak_areas)}"
+
+            # Build refinement prompt
+            refinement_prompt = f"""Refine this {entity_type} for a story. Keep the core identity but improve quality.
+
+Current {entity_type}:
+- Name: {entity.name}
+- Description: {entity.description}
+- Attributes: {entity.attributes}
+
+{f"Feedback: {feedback}" if feedback else "Improve overall quality and depth."}
+
+Story context:
+- Title: {story_brief.title if hasattr(story_brief, "title") else "Unknown"}
+- Genre: {story_brief.genre if hasattr(story_brief, "genre") else "Unknown"}
+- Themes: {story_brief.themes if hasattr(story_brief, "themes") else "Unknown"}
+
+Return a JSON object with:
+- name: string (can refine slightly but keep recognizable)
+- description: string (improved, more detailed)
+- attributes: object (enhanced attributes for this {entity_type} type)"""
+
+            # Use creator model for refinement
+            model_id = self._get_creator_model(entity_type)
+            config = RefinementConfig.from_settings(settings)
+
+            response = self.client.generate(
+                model=model_id,
+                prompt=refinement_prompt,
+                options={
+                    "temperature": config.refinement_temperature,
+                    "num_predict": 2048,
+                },
+            )
+
+            response_text = str(response.get("response", ""))
+            if not response_text:
+                logger.warning(f"Empty response when refining {entity.name}")
+                return None
+
+            # Parse response
+            result = extract_json(response_text)
+            if not result or not isinstance(result, dict):
+                logger.warning(f"Failed to parse refinement response for {entity.name}")
+                return None
+
+            logger.info(f"Successfully refined {entity_type}: {entity.name}")
+            return result
+
+        except Exception as e:
+            logger.exception(f"Failed to refine entity {entity.name}: {e}")
+            return None
+
+    async def regenerate_entity(
+        self,
+        entity: Any,
+        story_brief: Any,
+        settings: Settings,
+        custom_instructions: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Fully regenerate an entity with AI.
+
+        Creates a new version of the entity while preserving its role in the story.
+
+        Args:
+            entity: Entity to regenerate (must have id, name, type, description, attributes).
+            story_brief: Story brief for context.
+            settings: Application settings.
+            custom_instructions: Optional user guidance for regeneration.
+
+        Returns:
+            Dictionary with regenerated entity data (name, description, attributes), or None on failure.
+        """
+        if not entity or not story_brief:
+            logger.warning("regenerate_entity called with missing entity or story_brief")
+            return None
+
+        entity_type = entity.type.lower()
+        logger.info(f"Regenerating {entity_type}: {entity.name}")
+
+        try:
+            # Build regeneration prompt
+            instruction_text = custom_instructions or "Create a fresh, high-quality version."
+
+            regeneration_prompt = f"""Create a new version of this {entity_type} for a story.
+
+Original {entity_type} (for reference):
+- Name: {entity.name}
+- Type: {entity.type}
+- Description: {entity.description}
+- Role: {entity.attributes.get("role", "unknown") if entity.attributes else "unknown"}
+
+Instructions: {instruction_text}
+
+Story context:
+- Title: {story_brief.title if hasattr(story_brief, "title") else "Unknown"}
+- Genre: {story_brief.genre if hasattr(story_brief, "genre") else "Unknown"}
+- Themes: {story_brief.themes if hasattr(story_brief, "themes") else "Unknown"}
+- Setting: {story_brief.setting if hasattr(story_brief, "setting") else "Unknown"}
+
+Return a JSON object with:
+- name: string (new name, can be similar or different)
+- description: string (detailed, engaging description)
+- attributes: object (full attributes for this {entity_type} type including role, traits, etc.)"""
+
+            # Use creator model
+            model_id = self._get_creator_model(entity_type)
+            config = RefinementConfig.from_settings(settings)
+
+            response = self.client.generate(
+                model=model_id,
+                prompt=regeneration_prompt,
+                options={
+                    "temperature": config.creator_temperature,
+                    "num_predict": 2048,
+                },
+            )
+
+            response_text = str(response.get("response", ""))
+            if not response_text:
+                logger.warning(f"Empty response when regenerating {entity.name}")
+                return None
+
+            # Parse response
+            result = extract_json(response_text)
+            if not result or not isinstance(result, dict):
+                logger.warning(f"Failed to parse regeneration response for {entity.name}")
+                return None
+
+            logger.info(
+                f"Successfully regenerated {entity_type}: {entity.name} -> {result.get('name', 'unknown')}"
+            )
+            return result
+
+        except Exception as e:
+            logger.exception(f"Failed to regenerate entity {entity.name}: {e}")
+            return None

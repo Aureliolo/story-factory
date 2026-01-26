@@ -61,6 +61,8 @@ class WorldPage:
         self._graph: GraphComponent | None = None
         self._entity_list: Column | None = None
         self._editor_container: Column | None = None
+        self._search_input: Input | None = None
+        self._sort_direction_btn: Button | None = None
         self._entity_name_input: Input | None = None
         self._entity_type_select: Select | None = None
         self._entity_desc_input: Textarea | None = None
@@ -1876,11 +1878,64 @@ class WorldPage:
         with ui.card().classes("w-full h-full"):
             ui.label("Entity Browser").classes("text-lg font-semibold")
 
-            # Search
-            ui.input(
-                placeholder="Search entities...",
-                on_change=self._on_search,
-            ).classes("w-full").props("outlined dense")
+            # Search with Ctrl+F hint
+            self._search_input = (
+                ui.input(
+                    placeholder="Search entities... (Ctrl+F)",
+                    value=self.state.entity_search_query,
+                    on_change=self._on_search,
+                )
+                .classes("w-full")
+                .props("outlined dense clearable")
+            )
+
+            # Search scope checkboxes
+            with ui.row().classes("w-full gap-4 text-xs items-center"):
+                ui.checkbox(
+                    "Names",
+                    value=self.state.entity_search_names,
+                    on_change=lambda e: self._update_search_scope("names", e.value),
+                ).props("dense")
+                ui.checkbox(
+                    "Descriptions",
+                    value=self.state.entity_search_descriptions,
+                    on_change=lambda e: self._update_search_scope("descriptions", e.value),
+                ).props("dense")
+
+            # Filter and sort row
+            with ui.row().classes("w-full gap-2 items-center mt-1"):
+                # Quality filter
+                ui.select(
+                    label="Quality",
+                    options={"all": "All", "high": "8+", "medium": "6-8", "low": "<6"},
+                    value=self.state.entity_quality_filter,
+                    on_change=self._on_quality_filter_change,
+                ).classes("w-20").props("dense outlined")
+
+                # Sort dropdown
+                ui.select(
+                    label="Sort",
+                    options={
+                        "name": "Name",
+                        "type": "Type",
+                        "quality": "Quality",
+                        "relationships": "Relationships",
+                    },
+                    value=self.state.entity_sort_by,
+                    on_change=self._on_sort_change,
+                ).classes("w-28").props("dense outlined")
+
+                # Sort direction toggle
+                self._sort_direction_btn = (
+                    ui.button(
+                        icon="arrow_upward"
+                        if not self.state.entity_sort_descending
+                        else "arrow_downward",
+                        on_click=self._toggle_sort_direction,
+                    )
+                    .props("flat dense")
+                    .tooltip("Toggle sort direction")
+                )
 
             # Entity list with flexible height to match editor
             self._entity_list = (
@@ -1888,7 +1943,7 @@ class WorldPage:
                 .classes(
                     "w-full gap-1 overflow-auto flex-grow p-2 bg-gray-50 dark:bg-gray-800 rounded-lg"
                 )
-                .style("max-height: calc(100vh - 450px); min-height: 200px")
+                .style("max-height: calc(100vh - 520px); min-height: 200px")
             )
             self._refresh_entity_list()
 
@@ -1918,6 +1973,9 @@ class WorldPage:
                     .tooltip("Redo (Ctrl+Y)")
                 )
                 self._update_undo_redo_buttons()
+
+            # Register Ctrl+F keyboard shortcut
+            self._register_keyboard_shortcuts()
 
     def _build_graph_section(self) -> None:
         """Build the graph visualization section."""
@@ -1986,6 +2044,12 @@ class WorldPage:
                     on_click=self._save_entity,
                     icon="save",
                 ).props("color=primary")
+
+                ui.button(
+                    "Regenerate",
+                    on_click=self._show_regenerate_dialog,
+                    icon="refresh",
+                ).props("outline color=secondary").tooltip("Regenerate this entity with AI")
 
                 ui.button(
                     "Delete",
@@ -2244,12 +2308,26 @@ class WorldPage:
         if self.state.entity_filter_types:
             entities = [e for e in entities if e.type in self.state.entity_filter_types]
 
-        # Filter by search
+        # Filter by search (with scope)
         if self.state.entity_search_query:
             query = self.state.entity_search_query.lower()
-            entities = [
-                e for e in entities if query in e.name.lower() or query in e.description.lower()
-            ]
+            filtered = []
+            for e in entities:
+                match = False
+                if self.state.entity_search_names and query in e.name.lower():
+                    match = True
+                if self.state.entity_search_descriptions and query in e.description.lower():
+                    match = True
+                if match:
+                    filtered.append(e)
+            entities = filtered
+
+        # Filter by quality
+        if self.state.entity_quality_filter != "all":
+            entities = self._filter_by_quality(entities)
+
+        # Sort entities
+        entities = self._sort_entities(entities)
 
         # Clear selection if selected entity is filtered out
         if self.state.selected_entity_id:
@@ -2291,6 +2369,61 @@ class WorldPage:
                         selected=entity.id == self.state.selected_entity_id,
                     )
 
+    def _filter_by_quality(self, entities: list[Entity]) -> list[Entity]:
+        """Filter entities by quality score.
+
+        Args:
+            entities: List of entities to filter.
+
+        Returns:
+            Filtered list based on quality filter setting.
+        """
+        result = []
+        for entity in entities:
+            scores = entity.attributes.get("quality_scores") if entity.attributes else None
+            avg = scores.get("average", 0) if scores else 0
+
+            if self.state.entity_quality_filter == "high" and avg >= 8:
+                result.append(entity)
+            elif self.state.entity_quality_filter == "medium" and 6 <= avg < 8:
+                result.append(entity)
+            elif self.state.entity_quality_filter == "low" and avg < 6:
+                result.append(entity)
+        return result
+
+    def _sort_entities(self, entities: list[Entity]) -> list[Entity]:
+        """Sort entities by current sort setting.
+
+        Args:
+            entities: List of entities to sort.
+
+        Returns:
+            Sorted list based on sort setting.
+        """
+        sort_key = self.state.entity_sort_by
+        descending = self.state.entity_sort_descending
+
+        if sort_key == "name":
+            return sorted(entities, key=lambda e: e.name.lower(), reverse=descending)
+        elif sort_key == "type":
+            return sorted(entities, key=lambda e: e.type, reverse=descending)
+        elif sort_key == "quality":
+            return sorted(
+                entities,
+                key=lambda e: (e.attributes.get("quality_scores") or {}).get("average", 0),
+                reverse=descending,
+            )
+        elif sort_key == "relationships":
+
+            def count_rels(entity: Entity) -> int:
+                if self.state.world_db:
+                    return len(self.state.world_db.get_relationships(entity.id))
+                return 0
+
+            return sorted(entities, key=count_rels, reverse=descending)
+        else:
+            return sorted(entities, key=lambda e: e.name.lower(), reverse=descending)
+
     # ========== Event Handlers ==========
 
     def _toggle_type_filter(self, entity_type: str, enabled: bool) -> None:
@@ -2312,6 +2445,62 @@ class WorldPage:
         # Highlight matching nodes in the graph
         if self._graph:
             self._graph.highlight_search(e.value)
+
+    def _update_search_scope(self, scope: str, enabled: bool) -> None:
+        """Update search scope settings.
+
+        Args:
+            scope: 'names' or 'descriptions'.
+            enabled: Whether this scope is enabled.
+        """
+        if scope == "names":
+            self.state.entity_search_names = enabled
+        elif scope == "descriptions":
+            self.state.entity_search_descriptions = enabled
+        logger.debug(f"Search scope updated: {scope}={enabled}")
+        self._refresh_entity_list()
+
+    def _on_quality_filter_change(self, e: Any) -> None:
+        """Handle quality filter dropdown change."""
+        self.state.entity_quality_filter = e.value
+        logger.debug(f"Quality filter changed to: {e.value}")
+        self._refresh_entity_list()
+
+    def _on_sort_change(self, e: Any) -> None:
+        """Handle sort dropdown change."""
+        self.state.entity_sort_by = e.value
+        logger.debug(f"Sort changed to: {e.value}")
+        self._refresh_entity_list()
+
+    def _toggle_sort_direction(self) -> None:
+        """Toggle sort direction between ascending and descending."""
+        self.state.entity_sort_descending = not self.state.entity_sort_descending
+        logger.debug(
+            f"Sort direction: {'descending' if self.state.entity_sort_descending else 'ascending'}"
+        )
+
+        # Update button icon
+        if self._sort_direction_btn:
+            icon = "arrow_downward" if self.state.entity_sort_descending else "arrow_upward"
+            self._sort_direction_btn.props(f"icon={icon}")
+
+        self._refresh_entity_list()
+
+    def _register_keyboard_shortcuts(self) -> None:
+        """Register keyboard shortcuts for the world page."""
+        ui.keyboard(on_key=self._handle_keyboard)
+
+    async def _handle_keyboard(self, e: Any) -> None:
+        """Handle keyboard events.
+
+        Args:
+            e: Keyboard event with key and modifiers.
+        """
+        # Ctrl+F focuses the search input
+        if e.modifiers.ctrl and e.key.lower() == "f":
+            if self._search_input:
+                await self._search_input.run_method("focus")
+                await self._search_input.run_method("select")
 
     def _on_node_select(self, entity_id: str) -> None:
         """Handle graph node selection."""
@@ -2785,6 +2974,231 @@ class WorldPage:
         except Exception as e:
             logger.exception(f"Failed to save entity {self.state.selected_entity_id}")
             ui.notify(f"Error: {e}", type="negative")
+
+    async def _show_regenerate_dialog(self) -> None:
+        """Show dialog for regenerating the selected entity."""
+        if not self.state.selected_entity_id or not self.state.world_db:
+            ui.notify("No entity selected", type="warning")
+            return
+
+        entity = self.services.world.get_entity(self.state.world_db, self.state.selected_entity_id)
+        if not entity:
+            ui.notify("Entity not found", type="negative")
+            return
+
+        # Get relationship count
+        relationships = self.state.world_db.get_relationships(entity.id)
+        rel_count = len(relationships)
+
+        with ui.dialog() as dialog, ui.card().classes("w-96 p-4"):
+            ui.label(f"Regenerate: {entity.name}").classes("text-lg font-semibold")
+
+            # Mode selection
+            mode_ref = {"value": "refine"}
+            with ui.column().classes("w-full gap-2 mt-4"):
+                ui.label("Regeneration Mode").classes("text-sm font-medium")
+                mode_radio = ui.radio(
+                    options={
+                        "refine": "Refine existing (improve weak areas)",
+                        "full": "Full regenerate (create new version)",
+                        "guided": "Regenerate with guidance",
+                    },
+                    value="refine",
+                    on_change=lambda e: mode_ref.update({"value": e.value}),
+                ).classes("w-full")
+
+            # Guidance input (visible only for guided mode)
+            guidance_container = ui.column().classes("w-full mt-2")
+            guidance_input_ref: dict = {"input": None}
+
+            def update_guidance_visibility() -> None:
+                """Update guidance input visibility based on mode."""
+                guidance_container.clear()
+                if mode_ref["value"] == "guided":
+                    with guidance_container:
+                        guidance_input_ref["input"] = (
+                            ui.textarea(
+                                label="Guidance",
+                                placeholder="Describe how you want this entity to change...",
+                            )
+                            .classes("w-full")
+                            .props("rows=3")
+                        )
+
+            mode_radio.on("update:model-value", lambda _: update_guidance_visibility())
+            update_guidance_visibility()
+
+            # Relationship warning
+            if rel_count > 0:
+                with ui.row().classes(
+                    "w-full items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900 rounded mt-4"
+                ):
+                    ui.icon("warning", color="amber")
+                    ui.label(f"{rel_count} relationship(s) will be preserved.").classes("text-sm")
+
+            # Quality info if available
+            quality_scores = entity.attributes.get("quality_scores") if entity.attributes else None
+            if quality_scores and isinstance(quality_scores, dict):
+                avg = quality_scores.get("average", 0)
+                with ui.row().classes("w-full items-center gap-2 mt-2"):
+                    ui.label(f"Current quality: {avg:.1f}/10").classes(
+                        "text-sm text-gray-500 dark:text-gray-400"
+                    )
+
+            # Actions
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Cancel", on_click=dialog.close).props("flat")
+
+                async def do_regenerate() -> None:
+                    """Execute regeneration."""
+                    guidance = None
+                    if guidance_input_ref.get("input"):
+                        guidance = guidance_input_ref["input"].value
+                    dialog.close()
+                    await self._execute_regenerate(entity, mode_ref["value"], guidance)
+
+                ui.button("Regenerate", on_click=do_regenerate).props("color=primary")
+
+        dialog.open()
+
+    async def _execute_regenerate(self, entity: Entity, mode: str, guidance: str | None) -> None:
+        """Execute entity regeneration.
+
+        Args:
+            entity: Entity to regenerate.
+            mode: Regeneration mode (refine, full, guided).
+            guidance: Optional guidance text for guided mode.
+        """
+        logger.info(f"Regenerating entity {entity.id} ({entity.name}) mode={mode}")
+
+        if not self.state.world_db or not self.state.project:
+            ui.notify("No project loaded", type="negative")
+            return
+
+        # Show progress indicator
+        progress_dialog = None
+        try:
+            with ui.dialog() as progress_dialog, ui.card().classes("w-64 items-center p-4"):
+                ui.label("Regenerating...").classes("text-center")
+                ui.spinner(size="lg")
+            progress_dialog.open()
+
+            # Perform regeneration based on mode
+            result = None
+            if mode == "refine":
+                result = await self._refine_entity(entity)
+            elif mode == "guided" and guidance:
+                result = await self._regenerate_with_guidance(entity, guidance)
+            else:
+                result = await self._regenerate_full(entity)
+
+            if result:
+                # Update entity in database (relationships preserved since ID unchanged)
+                new_name = result.get("name", entity.name)
+                new_description = result.get("description", entity.description)
+                new_attributes = {**(entity.attributes or {}), **result.get("attributes", {})}
+
+                self.services.world.update_entity(
+                    self.state.world_db,
+                    entity.id,
+                    name=new_name,
+                    description=new_description,
+                    attributes=new_attributes,
+                )
+
+                # Invalidate graph cache for fresh tooltips
+                self.state.world_db.invalidate_graph_cache()
+
+                # Refresh UI
+                self._refresh_entity_list()
+                self._refresh_entity_editor()
+                if self._graph:
+                    self._graph.refresh()
+
+                ui.notify(f"Regenerated {new_name}", type="positive")
+            else:
+                ui.notify("Regeneration failed - no result returned", type="negative")
+
+        except Exception as e:
+            logger.exception(f"Regeneration failed: {e}")
+            ui.notify(f"Error: {e}", type="negative")
+        finally:
+            if progress_dialog:
+                progress_dialog.close()
+
+    async def _refine_entity(self, entity: Entity) -> dict | None:
+        """Refine entity using quality service.
+
+        Args:
+            entity: Entity to refine.
+
+        Returns:
+            Dictionary with refined entity data, or None on failure.
+        """
+        if not self.state.project:
+            return None
+
+        try:
+            # Use WorldQualityService to refine the entity
+            refined = await self.services.world_quality.refine_entity(
+                entity=entity,
+                story_brief=self.state.project.brief,
+                settings=self.services.settings,
+            )
+            return refined
+        except Exception as e:
+            logger.exception(f"Failed to refine entity: {e}")
+            return None
+
+    async def _regenerate_full(self, entity: Entity) -> dict | None:
+        """Fully regenerate entity.
+
+        Args:
+            entity: Entity to regenerate.
+
+        Returns:
+            Dictionary with new entity data, or None on failure.
+        """
+        if not self.state.project:
+            return None
+
+        try:
+            # Use WorldQualityService to regenerate based on entity type
+            regenerated = await self.services.world_quality.regenerate_entity(
+                entity=entity,
+                story_brief=self.state.project.brief,
+                settings=self.services.settings,
+            )
+            return regenerated
+        except Exception as e:
+            logger.exception(f"Failed to regenerate entity: {e}")
+            return None
+
+    async def _regenerate_with_guidance(self, entity: Entity, guidance: str) -> dict | None:
+        """Regenerate with user guidance.
+
+        Args:
+            entity: Entity to regenerate.
+            guidance: User-provided guidance text.
+
+        Returns:
+            Dictionary with regenerated entity data, or None on failure.
+        """
+        if not self.state.project:
+            return None
+
+        try:
+            # Use WorldQualityService with custom instructions
+            regenerated = await self.services.world_quality.regenerate_entity(
+                entity=entity,
+                story_brief=self.state.project.brief,
+                settings=self.services.settings,
+                custom_instructions=guidance,
+            )
+            return regenerated
+        except Exception as e:
+            logger.exception(f"Failed to regenerate entity with guidance: {e}")
+            return None
 
     def _confirm_delete_entity(self) -> None:
         """Show confirmation dialog before deleting entity."""
