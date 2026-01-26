@@ -289,6 +289,48 @@ class TestTimelineService:
         assert items[0].end is not None
         assert items[0].end.year == 1080
 
+    def test_get_timeline_items_with_first_last_appearance(self, timeline_service, mock_world_db):
+        """Test getting timeline items with first/last appearance instead of birth/death."""
+        entity = Entity(
+            id="test-entity-1",
+            type="character",
+            name="Mystery Character",
+            description="A character",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "first_appearance": {"year": 1000},
+                    "last_appearance": {"year": 1080},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        items = timeline_service.get_timeline_items(mock_world_db)
+
+        assert len(items) == 1
+        assert items[0].start.year == 1000
+        assert items[0].end.year == 1080
+
+    def test_get_timeline_items_no_lifecycle(self, timeline_service, mock_world_db):
+        """Test getting timeline items with no lifecycle data."""
+        entity = Entity(
+            id="test-entity-1",
+            type="character",
+            name="New Character",
+            description="A character",
+            created_at=datetime.now(),
+            attributes={},  # No lifecycle
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        items = timeline_service.get_timeline_items(mock_world_db)
+
+        assert len(items) == 1
+        assert items[0].start is not None
+        assert items[0].start.relative_order is not None
+        assert "Added:" in items[0].start.raw_text
+
     def test_get_timeline_items_with_events(self, timeline_service, mock_world_db):
         """Test getting timeline items with events."""
         event = WorldEvent(
@@ -305,6 +347,38 @@ class TestTimelineService:
         assert items[0].event_id == "test-event-1"
         assert items[0].start.year == 1050
         assert items[0].end is None  # Events are points
+
+    def test_get_timeline_items_event_with_chapter_number(self, timeline_service, mock_world_db):
+        """Test getting timeline items with event having chapter number."""
+        event = WorldEvent(
+            id="test-event-1",
+            description="A chapter event",
+            chapter_number=5,
+            created_at=datetime.now(),
+        )
+        mock_world_db.list_events.return_value = [event]
+
+        items = timeline_service.get_timeline_items(mock_world_db)
+
+        assert len(items) == 1
+        assert items[0].start.relative_order == 5
+        assert "Chapter 5" in items[0].start.raw_text
+
+    def test_get_timeline_items_event_no_timestamp(self, timeline_service, mock_world_db):
+        """Test getting timeline items with event having no timestamp."""
+        event = WorldEvent(
+            id="test-event-1",
+            description="An undated event",
+            chapter_number=None,
+            created_at=datetime.now(),
+        )
+        mock_world_db.list_events.return_value = [event]
+
+        items = timeline_service.get_timeline_items(mock_world_db)
+
+        assert len(items) == 1
+        assert items[0].start.relative_order is not None
+        assert "Added:" in items[0].start.raw_text
 
     def test_get_timeline_items_filters_by_type(self, timeline_service, mock_world_db):
         """Test filtering timeline items by entity type."""
@@ -418,6 +492,54 @@ class TestTimelineService:
         assert len(data["items"]) == 1
         assert data["items"][0]["start"] == "1000-01-01"
 
+    def test_get_timeline_data_for_visjs_relative_order(self, timeline_service, mock_world_db):
+        """Test generating vis.js formatted data with relative order."""
+        entity = Entity(
+            id="test-1",
+            type="character",
+            name="Test",
+            description="",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "first_appearance": {"relative_order": 1},
+                    "last_appearance": {"relative_order": 10},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        data = timeline_service.get_timeline_data_for_visjs(mock_world_db)
+
+        assert len(data["items"]) == 1
+        assert data["items"][0]["start"] == 1000  # relative_order * 1000
+        assert data["items"][0]["end"] == 10000
+        assert data["items"][0]["type"] == "range"
+
+    def test_get_timeline_data_for_visjs_relative_order_point(
+        self, timeline_service, mock_world_db
+    ):
+        """Test vis.js data with relative order as point (no end)."""
+        entity = Entity(
+            id="test-1",
+            type="character",
+            name="Test",
+            description="",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "first_appearance": {"relative_order": 1},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        data = timeline_service.get_timeline_data_for_visjs(mock_world_db)
+
+        assert len(data["items"]) == 1
+        assert data["items"][0]["start"] == 1000
+        assert data["items"][0]["type"] == "point"
+
     def test_update_entity_lifecycle(self, timeline_service, mock_world_db):
         """Test updating entity lifecycle."""
         entity = Entity(
@@ -441,6 +563,52 @@ class TestTimelineService:
         assert result is True
         mock_world_db.update_entity.assert_called_once()
 
+    def test_update_entity_lifecycle_with_appearances(self, timeline_service, mock_world_db):
+        """Test updating entity lifecycle with first/last appearance."""
+        entity = Entity(
+            id="test-1",
+            type="character",
+            name="Test",
+            description="",
+            created_at=datetime.now(),
+            attributes={},
+        )
+        mock_world_db.get_entity.return_value = entity
+        mock_world_db.update_entity.return_value = True
+
+        lifecycle = EntityLifecycle(
+            first_appearance=StoryTimestamp(year=1000),
+            last_appearance=StoryTimestamp(year=1080),
+        )
+
+        result = timeline_service.update_entity_lifecycle(mock_world_db, "test-1", lifecycle)
+
+        assert result is True
+        mock_world_db.update_entity.assert_called_once()
+        # Verify the attributes passed include first/last appearance
+        call_args = mock_world_db.update_entity.call_args
+        assert "first_appearance" in call_args.kwargs["attributes"]["lifecycle"]
+        assert "last_appearance" in call_args.kwargs["attributes"]["lifecycle"]
+
+    def test_update_entity_lifecycle_update_fails(self, timeline_service, mock_world_db):
+        """Test updating lifecycle when database update fails."""
+        entity = Entity(
+            id="test-1",
+            type="character",
+            name="Test",
+            description="",
+            created_at=datetime.now(),
+            attributes={},
+        )
+        mock_world_db.get_entity.return_value = entity
+        mock_world_db.update_entity.return_value = False
+
+        lifecycle = EntityLifecycle(birth=StoryTimestamp(year=1000))
+
+        result = timeline_service.update_entity_lifecycle(mock_world_db, "test-1", lifecycle)
+
+        assert result is False
+
     def test_update_entity_lifecycle_not_found(self, timeline_service, mock_world_db):
         """Test updating lifecycle for non-existent entity."""
         mock_world_db.get_entity.return_value = None
@@ -450,3 +618,61 @@ class TestTimelineService:
         result = timeline_service.update_entity_lifecycle(mock_world_db, "nonexistent", lifecycle)
 
         assert result is False
+
+    def test_get_timeline_data_for_visjs_year_range(self, timeline_service, mock_world_db):
+        """Test vis.js data with year-based start and end dates (range)."""
+        entity = Entity(
+            id="test-1",
+            type="character",
+            name="Test",
+            description="",
+            created_at=datetime.now(),
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 1000},
+                    "death": {"year": 1080},
+                }
+            },
+        )
+        mock_world_db.list_entities.return_value = [entity]
+
+        data = timeline_service.get_timeline_data_for_visjs(mock_world_db)
+
+        assert len(data["items"]) == 1
+        assert data["items"][0]["start"] == "1000-01-01"
+        assert data["items"][0]["end"] == "1080-12-31"
+        assert data["items"][0]["type"] == "range"
+
+    def test_get_timeline_data_for_visjs_skips_no_temporal(self, timeline_service, mock_world_db):
+        """Test vis.js data skips items with no temporal data."""
+        from unittest.mock import patch
+
+        # Create items - one with temporal data, one without
+        item_with_data = TimelineItem(
+            id="item-1",
+            entity_id="e1",
+            label="Has Data",
+            item_type="character",
+            start=StoryTimestamp(year=1000),
+            color="#000",
+            group="character",
+        )
+        item_without_data = TimelineItem(
+            id="item-2",
+            entity_id="e2",
+            label="No Data",
+            item_type="character",
+            start=StoryTimestamp(),  # No year, no relative_order
+            color="#000",
+            group="character",
+        )
+
+        # Mock get_timeline_items to return our test items
+        with patch.object(
+            timeline_service, "get_timeline_items", return_value=[item_with_data, item_without_data]
+        ):
+            data = timeline_service.get_timeline_data_for_visjs(mock_world_db)
+
+        # Should only have one item (the one with temporal data)
+        assert len(data["items"]) == 1
+        assert data["items"][0]["id"] == "item-1"

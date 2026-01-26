@@ -467,6 +467,109 @@ class TestConflictAnalysisService:
         assert suggestion["entity_a_name"] in ["Good Guys", "Bad Guys"]
         assert suggestion["entity_b_name"] in ["Good Guys", "Bad Guys"]
 
+    def test_suggest_missing_conflicts_skips_existing_relationships(
+        self, conflict_service, mock_world_db
+    ):
+        """Test suggesting conflicts skips factions with existing relationships."""
+        entities = [
+            Entity(
+                id="f1",
+                type="faction",
+                name="Faction A",
+                description="",
+                created_at=datetime.now(),
+                attributes={"goals": ["Goal 1"]},
+            ),
+            Entity(
+                id="f2",
+                type="faction",
+                name="Faction B",
+                description="",
+                created_at=datetime.now(),
+                attributes={"goals": ["Goal 2"]},
+            ),
+        ]
+        # Already have a relationship
+        relationships = [
+            Relationship(
+                id="r1",
+                source_id="f1",
+                target_id="f2",
+                relation_type="ally_of",
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_world_db.list_entities.return_value = entities
+        mock_world_db.list_relationships.return_value = relationships
+
+        suggestions = conflict_service.suggest_missing_conflicts(mock_world_db)
+
+        # Should not suggest since relationship already exists
+        assert len(suggestions) == 0
+
+    def test_suggest_missing_conflicts_respects_limit(self, conflict_service, mock_world_db):
+        """Test suggestion limit is respected."""
+        # Create many factions with goals
+        entities = [
+            Entity(
+                id=f"f{i}",
+                type="faction",
+                name=f"Faction {i}",
+                description="",
+                created_at=datetime.now(),
+                attributes={"goals": [f"Goal {i}"]},
+            )
+            for i in range(10)
+        ]
+        mock_world_db.list_entities.return_value = entities
+        mock_world_db.list_relationships.return_value = []
+
+        suggestions = conflict_service.suggest_missing_conflicts(mock_world_db, limit=2)
+
+        assert len(suggestions) == 2
+
+    def test_tension_pairs_skip_missing_entities(self, conflict_service, mock_world_db):
+        """Test that tension pairs skip relationships with missing entities."""
+        entities = [
+            Entity(
+                id="e1", type="character", name="Alice", description="", created_at=datetime.now()
+            ),
+            # Note: e2 exists but e3 doesn't
+            Entity(
+                id="e2", type="character", name="Bob", description="", created_at=datetime.now()
+            ),
+        ]
+        relationships = [
+            # Valid relationship
+            Relationship(
+                id="r1",
+                source_id="e1",
+                target_id="e2",
+                relation_type="hates",
+                strength=0.9,
+                created_at=datetime.now(),
+            ),
+            # Relationship with missing entity
+            Relationship(
+                id="r2",
+                source_id="e1",
+                target_id="e3",  # e3 doesn't exist
+                relation_type="hates",
+                strength=0.9,
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_world_db.list_entities.return_value = entities
+        mock_world_db.list_relationships.return_value = relationships
+
+        metrics = conflict_service.analyze_conflicts(mock_world_db)
+
+        # Should only have one tension pair (e1-e2), e1-e3 should be skipped
+        assert len(metrics.highest_tension_pairs) == 1
+        pair = metrics.highest_tension_pairs[0]
+        assert pair.entity_a_name in ["Alice", "Bob"]
+        assert pair.entity_b_name in ["Alice", "Bob"]
+
 
 class TestConflictMetrics:
     """Tests for ConflictMetrics model."""
