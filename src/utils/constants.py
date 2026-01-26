@@ -1,5 +1,9 @@
 """Shared constants used across the application."""
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ========== Entity Type Colors ==========
 # Used for graph visualization and entity cards
 # NOTE: Keep in sync with src/ui/theme.py ENTITY_COLORS if modified
@@ -23,7 +27,16 @@ def get_entity_color(entity_type: str) -> str:
     Returns:
         str: Hex color code for the given entity type; returns the color for "concept" if the type is not found.
     """
-    return ENTITY_COLORS.get(entity_type.lower(), ENTITY_COLORS["concept"])
+    key = entity_type.lower()
+    color = ENTITY_COLORS.get(key)
+    if color is None:
+        logger.warning(
+            f"Unknown entity type '{entity_type}' - defaulting to concept color. "
+            f"Valid types: {list(ENTITY_COLORS.keys())}"
+        )
+        return ENTITY_COLORS["concept"]
+    logger.debug(f"get_entity_color: '{entity_type}' -> {color}")
+    return color
 
 
 # Language name to ISO 639-1 code mapping

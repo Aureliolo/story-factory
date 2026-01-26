@@ -359,6 +359,105 @@ class ConflictAnalysisService:
         clusters.sort(key=lambda c: len(c.entity_ids), reverse=True)
         return clusters
 
+    def _compute_metrics_from_filtered(
+        self,
+        entities: list[Entity],
+        relationships: list[Relationship],
+    ) -> ConflictMetrics:
+        """
+        Compute conflict metrics from a pre-filtered set of entities and relationships.
+
+        This method is used by get_conflict_graph_data to ensure that displayed metrics
+        match the filtered graph, rather than using metrics from the entire database.
+
+        Parameters:
+            entities (list[Entity]): Filtered list of entities.
+            relationships (list[Relationship]): Filtered list of relationships.
+
+        Returns:
+            ConflictMetrics: Aggregated metrics for the filtered data.
+        """
+        logger.debug(
+            f"Computing metrics from filtered data: {len(entities)} entities, "
+            f"{len(relationships)} relationships"
+        )
+
+        # Build entity lookup
+        entity_lookup = {e.id: e for e in entities}
+
+        # Classify all relationships
+        classified: dict[str, list[Relationship]] = {
+            ConflictCategory.ALLIANCE.value: [],
+            ConflictCategory.RIVALRY.value: [],
+            ConflictCategory.TENSION.value: [],
+            ConflictCategory.NEUTRAL.value: [],
+        }
+
+        for rel in relationships:
+            category = classify_relationship(rel.relation_type)
+            classified[category.value].append(rel)
+
+        # Calculate counts
+        alliance_count = len(classified[ConflictCategory.ALLIANCE.value])
+        rivalry_count = len(classified[ConflictCategory.RIVALRY.value])
+        tension_count = len(classified[ConflictCategory.TENSION.value])
+        neutral_count = len(classified[ConflictCategory.NEUTRAL.value])
+        total = len(relationships)
+
+        # Calculate conflict density
+        conflict_density = 0.0
+        if total > 0:
+            conflict_density = (rivalry_count + tension_count) / total
+
+        # Find highest tension pairs
+        highest_tension = self._find_tension_pairs(
+            classified[ConflictCategory.RIVALRY.value] + classified[ConflictCategory.TENSION.value],
+            entity_lookup,
+            limit=5,
+        )
+
+        # Find strongest alliances
+        strongest_alliances = self._find_tension_pairs(
+            classified[ConflictCategory.ALLIANCE.value],
+            entity_lookup,
+            limit=5,
+        )
+
+        # Find isolated entities (no alliance connections)
+        isolated = self._find_isolated_entities(
+            entities,
+            classified[ConflictCategory.ALLIANCE.value],
+        )
+
+        # Find most connected entities
+        most_connected = self._find_most_connected(entities, relationships, limit=5)
+
+        # Detect faction clusters (based on alliance relationships)
+        faction_clusters = self._detect_faction_clusters(
+            entities,
+            classified[ConflictCategory.ALLIANCE.value],
+            entity_lookup,
+        )
+
+        metrics = ConflictMetrics(
+            highest_tension_pairs=highest_tension,
+            strongest_alliances=strongest_alliances,
+            isolated_entities=isolated,
+            most_connected_entities=most_connected,
+            faction_clusters=faction_clusters,
+            total_relationships=total,
+            alliance_count=alliance_count,
+            rivalry_count=rivalry_count,
+            tension_count=tension_count,
+            neutral_count=neutral_count,
+            conflict_density=conflict_density,
+        )
+
+        logger.debug(
+            f"Filtered metrics computed: {total} relationships, density={conflict_density:.2f}"
+        )
+        return metrics
+
     def get_conflict_graph_data(
         self,
         world_db: WorldDatabase,
@@ -413,6 +512,7 @@ class ConflictAnalysisService:
 
         # Build edges (filter by category if specified)
         edges: list[ConflictGraphEdge] = []
+        filtered_relationships: list[Relationship] = []
         for rel in relationships:
             # Only include edges where both endpoints are in our entity set
             if rel.source_id not in entity_ids or rel.target_id not in entity_ids:
@@ -421,7 +521,8 @@ class ConflictAnalysisService:
             category = classify_relationship(rel.relation_type)
 
             # Filter by category if specified
-            if categories and category not in categories:
+            # None means no filter (include all), empty list means include none
+            if categories is not None and category not in categories:
                 continue
 
             color = get_conflict_color(category)
@@ -445,9 +546,11 @@ class ConflictAnalysisService:
                 dashes=dashes,
             )
             edges.append(edge)
+            filtered_relationships.append(rel)
 
-        # Get metrics
-        metrics = self.analyze_conflicts(world_db)
+        # Compute metrics from the filtered data (not the full database)
+        # This ensures metrics match the displayed graph
+        metrics = self._compute_metrics_from_filtered(entities, filtered_relationships)
 
         graph_data = ConflictGraphData(
             nodes=nodes,

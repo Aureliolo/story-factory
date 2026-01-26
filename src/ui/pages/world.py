@@ -2992,6 +2992,7 @@ class WorldPage:
 
         Renders a descriptive label, instantiates and builds a ConflictGraphComponent bound to the current world database and services (with node selection callback), and adds a button that navigates to the full World Timeline.
         """
+        logger.debug("Building conflict map tab")
         from src.ui.components.conflict_graph import ConflictGraphComponent
 
         with ui.column().classes("w-full gap-4"):

@@ -197,11 +197,12 @@ class GenerationRunCosts(BaseModel):
         """Calculate efficiency as (useful iterations) / (total iterations).
 
         Returns:
-            Ratio from 0-1 where 1 is perfect efficiency (no wasted work).
+            Ratio clamped to 0.0-1.0 where 1 is perfect efficiency (no wasted work).
         """
         if self.total_iterations > 0:
-            useful = self.total_iterations - self.wasted_iterations
-            return useful / self.total_iterations
+            useful = max(0, self.total_iterations - self.wasted_iterations)
+            ratio = useful / self.total_iterations
+            return max(0.0, min(1.0, ratio))
         return 1.0
 
     @property
@@ -261,11 +262,12 @@ class CostSummary(BaseModel):
         """
         Compute the fraction of iterations that were not wasted across all runs.
 
-        @returns float: A value between 0.0 and 1.0 representing (total_iterations - total_wasted_iterations) / total_iterations; returns 1.0 if total_iterations is zero.
+        @returns float: A value clamped to 0.0-1.0 representing (total_iterations - total_wasted_iterations) / total_iterations; returns 1.0 if total_iterations is zero.
         """
         if self.total_iterations > 0:
-            useful = self.total_iterations - self.total_wasted_iterations
-            return useful / self.total_iterations
+            useful = max(0, self.total_iterations - self.total_wasted_iterations)
+            ratio = useful / self.total_iterations
+            return max(0.0, min(1.0, ratio))
         return 1.0
 
     def format_total_time(self) -> str:

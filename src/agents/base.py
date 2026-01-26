@@ -221,6 +221,9 @@ class BaseAgent:
         # Use low temperature for structured output to ensure schema adherence
         use_temp = temperature if temperature is not None else 0.1
 
+        # Clear previous metrics before new generation
+        self._last_generation_metrics = None
+
         # Acquire semaphore to limit concurrent requests
         with _get_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} structured generation"):
@@ -239,6 +242,18 @@ class BaseAgent:
                         temperature=use_temp,
                     )
                     duration = time.time() - start_time
+
+                    # Store metrics for structured generation
+                    # Note: Instructor uses OpenAI-compatible API which doesn't expose
+                    # token counts in the same way as native Ollama, so we track what we can
+                    self._last_generation_metrics = GenerationMetrics(
+                        prompt_tokens=None,  # Not available from instructor
+                        completion_tokens=None,  # Not available from instructor
+                        total_tokens=0,
+                        time_seconds=duration,
+                        model_id=use_model,
+                        agent_role=self.agent_role,
+                    )
 
                     logger.info(
                         f"{self.name}: Structured output received "

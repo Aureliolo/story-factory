@@ -166,6 +166,7 @@ class StoryFactoryApp:
         @ui.page("/")
         def write_page() -> None:
             """Render the Write page."""
+            logger.debug("Rendering Write page at /")
 
             def content() -> None:
                 """Build the Write page content."""
@@ -177,6 +178,7 @@ class StoryFactoryApp:
         @ui.page("/world")
         def world_page() -> None:
             """Render the World page."""
+            logger.debug("Rendering World page at /world")
 
             def content() -> None:
                 """Build the World page content."""
@@ -188,6 +190,7 @@ class StoryFactoryApp:
         @ui.page("/timeline")
         def timeline_page():
             """Render the Timeline page."""
+            logger.debug("Rendering Timeline page at /timeline")
 
             def content():
                 """Build the Timeline page content."""
@@ -199,6 +202,7 @@ class StoryFactoryApp:
         @ui.page("/world-timeline")
         def world_timeline_page():
             """Render the World Timeline page."""
+            logger.debug("Rendering World Timeline page at /world-timeline")
 
             def content():
                 """
@@ -212,6 +216,7 @@ class StoryFactoryApp:
         @ui.page("/projects")
         def projects_page() -> None:
             """Render the Projects page."""
+            logger.debug("Rendering Projects page at /projects")
 
             def content() -> None:
                 """Build the Projects page content."""
@@ -223,6 +228,7 @@ class StoryFactoryApp:
         @ui.page("/settings")
         def settings_page() -> None:
             """Render the Settings page."""
+            logger.debug("Rendering Settings page at /settings")
 
             def content() -> None:
                 """Build the Settings page content."""
@@ -234,6 +240,7 @@ class StoryFactoryApp:
         @ui.page("/models")
         def models_page() -> None:
             """Render the Models page."""
+            logger.debug("Rendering Models page at /models")
 
             def content() -> None:
                 """Build the Models page content."""
@@ -245,6 +252,7 @@ class StoryFactoryApp:
         @ui.page("/analytics")
         def analytics_page() -> None:
             """Render the Analytics page."""
+            logger.debug("Rendering Analytics page at /analytics")
 
             def content() -> None:
                 """Build the Analytics page content."""
@@ -256,6 +264,7 @@ class StoryFactoryApp:
         @ui.page("/templates")
         def templates_page():
             """Render the Templates page."""
+            logger.debug("Rendering Templates page at /templates")
 
             def content():
                 """Build the Templates page content."""
@@ -267,6 +276,7 @@ class StoryFactoryApp:
         @ui.page("/compare")
         def compare_page() -> None:
             """Build the model comparison page."""
+            logger.debug("Rendering Comparison page at /compare")
 
             def content() -> None:
                 """Create comparison page content."""

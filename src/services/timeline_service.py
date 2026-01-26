@@ -58,7 +58,10 @@ class TimelineService:
 
         Parameters:
             world_db (WorldDatabase): Source database to read entities and events from.
-            entity_types (list[str] | None): If provided, include only entities whose type is in this list.
+            entity_types (list[str] | None): Filter for entity types:
+                - None: Include all entity types (no filter)
+                - []: Include no entities (empty filter matches nothing)
+                - ["character", "location"]: Include only these types
             include_events (bool): If True, include world events as timeline items.
 
         Returns:
@@ -74,7 +77,8 @@ class TimelineService:
         # Get entities
         entities = world_db.list_entities()
         for entity in entities:
-            if entity_types and entity.type not in entity_types:
+            # None means no filter (include all), [] means empty filter (include none)
+            if entity_types is not None and entity.type not in entity_types:
                 continue
 
             item = self._entity_to_timeline_item(entity)

@@ -82,6 +82,7 @@ class ConflictGraphComponent:
 
         This creates the category and entity filter controls, the graph display container, and the metrics panel; registers a node-selection handler if an on_node_select callback was provided; stores references to the graph and metrics containers on the instance; and performs the initial graph render.
         """
+        logger.debug("Building ConflictGraphComponent")
         _ensure_vis_network_loaded()
 
         # Register event handler for node selection
@@ -201,9 +202,15 @@ class ConflictGraphComponent:
             return
 
         # Get conflict graph data from service
+        # Pass filters directly - None means no filter (include all), [] means include none
+        # Empty list is a valid filter that includes nothing
+        logger.debug(
+            f"Fetching conflict graph data: categories={len(self._filter_categories)}, "
+            f"entity_types={self._entity_types}"
+        )
         self._graph_data = self.services.conflict_analysis.get_conflict_graph_data(
             self.world_db,
-            categories=self._filter_categories if self._filter_categories else None,
+            categories=self._filter_categories,
             entity_types=self._entity_types if self._entity_types else None,
         )
 
@@ -351,6 +358,10 @@ class ConflictGraphComponent:
         """
 
         ui.run_javascript(js)
+        logger.debug(
+            f"Conflict graph rendered: {len(self._graph_data.nodes)} nodes, "
+            f"{len(self._graph_data.edges)} edges"
+        )
 
         # Update metrics panel
         self._update_metrics(self._graph_data.metrics)
@@ -453,6 +464,7 @@ class ConflictGraphComponent:
             category (ConflictCategory): The conflict category to enable or disable.
             enabled (bool): If True, add the category to active filters; if False, remove it.
         """
+        logger.debug(f"Toggle category {category.value}: enabled={enabled}")
         if enabled and category not in self._filter_categories:
             self._filter_categories.append(category)
         elif not enabled and category in self._filter_categories:
@@ -468,6 +480,7 @@ class ConflictGraphComponent:
             enabled (bool): True to include this entity type in the filters, False to exclude it.
 
         """
+        logger.debug(f"Toggle entity type {entity_type}: enabled={enabled}")
         if enabled and entity_type not in self._entity_types:
             self._entity_types.append(entity_type)
         elif not enabled and entity_type in self._entity_types:

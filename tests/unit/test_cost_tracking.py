@@ -450,10 +450,10 @@ class TestModeDatabaseCostTracking:
         assert summary["efficiency_ratio"] == 1.0
 
     def test_get_cost_summary_negative_days_raises(self, db):
-        """Test that negative days raises ValueError."""
-        import pytest
+        """Test that negative days raises ValidationError."""
+        from src.utils.exceptions import ValidationError
 
-        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+        with pytest.raises(ValidationError, match="days must be a non-negative integer"):
             db.get_cost_summary(days=-1)
 
     def test_update_generation_run_with_completed(self, db):
@@ -544,8 +544,10 @@ class TestModeDatabaseCostTracking:
         assert breakdown[0]["avg_quality"] == 0.8
 
     def test_get_model_cost_breakdown_negative_days_raises(self, db):
-        """Test that negative days raises ValueError."""
-        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+        """Test that negative days raises ValidationError."""
+        from src.utils.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="days must be a non-negative integer"):
             db.get_model_cost_breakdown(days=-1)
 
     def test_get_model_cost_breakdown_with_project_filter(self, db):
@@ -597,8 +599,10 @@ class TestModeDatabaseCostTracking:
         assert breakdown[0]["avg_iterations"] == 3.0
 
     def test_get_entity_type_cost_breakdown_negative_days_raises(self, db):
-        """Test that negative days raises ValueError."""
-        with pytest.raises(ValueError, match="days must be a non-negative integer"):
+        """Test that negative days raises ValidationError."""
+        from src.utils.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="days must be a non-negative integer"):
             db.get_entity_type_cost_breakdown(days=-1)
 
     def test_get_entity_type_cost_breakdown_with_project_filter(self, db):

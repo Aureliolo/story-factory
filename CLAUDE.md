@@ -24,6 +24,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **No skipping coverage.** Never exclude files from coverage requirements to make tests pass. Write proper tests to achieve 100% coverage. Acceptable exclusions are: (1) `# pragma: no cover` on pure UI widget creation code (code that only creates GUI widgets with no business logic), and (2) standalone utility scripts in `scripts/` that are not part of the main application. If coverage is failing for core application code, write tests for the uncovered code.
 
+**Settings must have UI.** Any new settings added to `src/settings.py` MUST be exposed in the Settings page UI (`src/ui/pages/settings.py`). Users should be able to configure all settings through the web interface, not just by editing JSON files.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.

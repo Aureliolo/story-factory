@@ -622,6 +622,87 @@ class TestConflictAnalysisService:
         assert "e2" in cluster.entity_ids or "e3" in cluster.entity_ids
         assert "e1" not in cluster.entity_ids
 
+    def test_get_conflict_graph_data_metrics_match_filtered_data(
+        self, conflict_service, mock_world_db
+    ):
+        """Test that graph metrics match the filtered data, not the full database."""
+        entities = [
+            Entity(id="e1", type="character", name="A", description="", created_at=datetime.now()),
+            Entity(id="e2", type="character", name="B", description="", created_at=datetime.now()),
+            Entity(id="e3", type="faction", name="C", description="", created_at=datetime.now()),
+        ]
+        relationships = [
+            # Character-Character alliance
+            Relationship(
+                id="r1",
+                source_id="e1",
+                target_id="e2",
+                relation_type="loves",
+                created_at=datetime.now(),
+            ),
+            # Character-Faction alliance (will be filtered out if we only show characters)
+            Relationship(
+                id="r2",
+                source_id="e1",
+                target_id="e3",
+                relation_type="member_of",
+                created_at=datetime.now(),
+            ),
+            # Character-Character rivalry
+            Relationship(
+                id="r3",
+                source_id="e2",
+                target_id="e1",
+                relation_type="hates",
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_world_db.list_entities.return_value = entities
+        mock_world_db.list_relationships.return_value = relationships
+
+        # Filter to only show characters
+        data = conflict_service.get_conflict_graph_data(mock_world_db, entity_types=["character"])
+
+        # Should have 2 nodes (characters only)
+        assert len(data.nodes) == 2
+
+        # Should have 2 edges (only character-character relationships)
+        assert len(data.edges) == 2
+
+        # Metrics should reflect the filtered data, not the full database
+        # Full database has 3 relationships, but filtered has 2
+        assert data.metrics.total_relationships == 2
+        assert data.metrics.alliance_count == 1  # Only loves (member_of is filtered out)
+        assert data.metrics.rivalry_count == 1  # hates
+
+    def test_get_conflict_graph_data_with_empty_category_filter(
+        self, conflict_service, mock_world_db
+    ):
+        """Test filtering with empty category list returns no edges."""
+        entities = [
+            Entity(id="e1", type="character", name="A", description="", created_at=datetime.now()),
+            Entity(id="e2", type="character", name="B", description="", created_at=datetime.now()),
+        ]
+        relationships = [
+            Relationship(
+                id="r1",
+                source_id="e1",
+                target_id="e2",
+                relation_type="loves",
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_world_db.list_entities.return_value = entities
+        mock_world_db.list_relationships.return_value = relationships
+
+        # Empty category list means include no edges
+        data = conflict_service.get_conflict_graph_data(mock_world_db, categories=[])
+
+        # Should have nodes but no edges since all categories are filtered out
+        assert len(data.nodes) == 2
+        assert len(data.edges) == 0
+        assert data.metrics.total_relationships == 0
+
 
 class TestConflictMetrics:
     """Tests for ConflictMetrics model."""

@@ -87,6 +87,7 @@ class WorldTimelineComponent:
 
         Ensures the vis-timeline assets are loaded, registers the item selection callback if provided, creates the control row (filters, zoom controls, refresh) and the timeline container, and performs the initial render of timeline content.
         """
+        logger.debug("Building WorldTimelineComponent")
         # Ensure vis-timeline library is loaded
         _ensure_vis_timeline_loaded()
 
@@ -216,9 +217,14 @@ class WorldTimelineComponent:
         # Get timeline data from service
         # Filter entity types (exclude 'event' since it's handled separately)
         entity_types = [t for t in self._filter_types if t != "event"]
+        # Pass entity_types directly - None means no filter, [] means include none
+        logger.debug(
+            f"Fetching timeline items: entity_types={entity_types}, "
+            f"include_events={self._include_events}"
+        )
         items = self.services.timeline.get_timeline_items(
             self.world_db,
-            entity_types=entity_types if entity_types else None,
+            entity_types=entity_types,
             include_events=self._include_events,
         )
 
@@ -342,6 +348,7 @@ class WorldTimelineComponent:
         """
 
         ui.run_javascript(js)
+        logger.debug(f"Timeline rendered with {len(items)} items")
 
     def _items_to_visjs(self, items: list[TimelineItem]) -> list[dict]:
         """
@@ -431,6 +438,7 @@ class WorldTimelineComponent:
             entity_type (str): The entity type to enable or disable (e.g., "character", "faction").
             enabled (bool): True to include the entity type in the filters, False to exclude it.
         """
+        logger.debug(f"Toggle filter {entity_type}: enabled={enabled}")
         if enabled and entity_type not in self._filter_types:
             self._filter_types.append(entity_type)
         elif not enabled and entity_type in self._filter_types:
@@ -444,6 +452,7 @@ class WorldTimelineComponent:
         Parameters:
             enabled: True to include events in the timeline, False to exclude them.
         """
+        logger.debug(f"Toggle events: enabled={enabled}")
         self._include_events = enabled
         if enabled and "event" not in self._filter_types:
             self._filter_types.append("event")

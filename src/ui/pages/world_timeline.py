@@ -47,14 +47,18 @@ class WorldTimelinePage:
 
         Renders the info, timeline, and help sections when a project with world data is available. If no project is selected, displays the no-project message instead; if a project exists but world data is missing, displays the no-world message.
         """
+        logger.debug("Building WorldTimelinePage")
         if not self.state.has_project:
+            logger.debug("No project selected, showing no-project message")
             self._build_no_project_message()
             return
 
         if not self.state.world_db:
+            logger.debug("No world data available, showing no-world message")
             self._build_no_world_message()
             return
 
+        logger.debug("Rendering world timeline with project data")
         # Main content
         with ui.column().classes("w-full h-full gap-4 p-4"):
             self._build_info_section()

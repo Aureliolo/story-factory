@@ -88,8 +88,17 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
     """
     # Normalize to lowercase for matching
     normalized = relation_type.lower().replace("-", "_").replace(" ", "_")
-    category = RELATION_CONFLICT_MAPPING.get(normalized, ConflictCategory.NEUTRAL)
-    logger.debug(f"Classified relationship '{relation_type}' as {category.value}")
+    category = RELATION_CONFLICT_MAPPING.get(normalized)
+
+    if category is None:
+        logger.warning(
+            f"Unknown relationship type '{relation_type}' (normalized: '{normalized}') - "
+            f"defaulting to NEUTRAL. Consider adding to RELATION_CONFLICT_MAPPING."
+        )
+        category = ConflictCategory.NEUTRAL
+    else:
+        logger.debug(f"Classified relationship '{relation_type}' as {category.value}")
+
     return category
 
 
@@ -102,8 +111,20 @@ def get_conflict_color(category: ConflictCategory | str) -> str:
         Hex color string (e.g., "#4CAF50") for the given category; defaults to the neutral color if not found.
     """
     if isinstance(category, ConflictCategory):
-        return CONFLICT_COLORS.get(category.value, CONFLICT_COLORS["neutral"])
-    return CONFLICT_COLORS.get(category.lower(), CONFLICT_COLORS["neutral"])
+        key = category.value
+    else:
+        key = category.lower()
+
+    color = CONFLICT_COLORS.get(key)
+    if color is None:
+        logger.warning(
+            f"Unknown conflict category '{category}' (key: '{key}') - "
+            f"defaulting to neutral color. Valid categories: {list(CONFLICT_COLORS.keys())}"
+        )
+        return CONFLICT_COLORS["neutral"]
+
+    logger.debug(f"Resolved color for '{category}': {color}")
+    return color
 
 
 class TensionPair(BaseModel):

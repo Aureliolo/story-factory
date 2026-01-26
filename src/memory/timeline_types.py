@@ -263,7 +263,14 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     logger.debug(f"Extracting lifecycle from attributes: {list(attributes.keys())}")
 
     lifecycle_data = attributes.get("lifecycle")
-    if lifecycle_data is None or not isinstance(lifecycle_data, dict):
+    if lifecycle_data is None:
+        return None
+
+    if not isinstance(lifecycle_data, dict):
+        logger.warning(
+            f"Malformed lifecycle data: expected dict, got {type(lifecycle_data).__name__} "
+            f"(value: {lifecycle_data!r}). Ignoring lifecycle for this entity."
+        )
         return None
 
     result = EntityLifecycle()

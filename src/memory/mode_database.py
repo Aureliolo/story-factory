@@ -21,6 +21,7 @@ from src.memory.mode_models import (
     TuningRecommendation,
 )
 from src.settings import Settings
+from src.utils.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -1705,7 +1706,7 @@ class ModeDatabase:
         # Validate days to prevent SQL injection
         validated_days = int(days)
         if validated_days < 0:
-            raise ValueError("days must be a non-negative integer")
+            raise ValidationError("days must be a non-negative integer")
 
         where_clauses = ["DATE(timestamp) >= DATE('now', ?)"]
         params: list[Any] = [f"-{validated_days} days"]
@@ -1850,7 +1851,7 @@ class ModeDatabase:
         # Validate days to prevent SQL injection
         validated_days = int(days)
         if validated_days < 0:
-            raise ValueError("days must be a non-negative integer")
+            raise ValidationError("days must be a non-negative integer")
 
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -1910,7 +1911,7 @@ class ModeDatabase:
         )
         validated_days = int(days)
         if validated_days < 0:
-            raise ValueError("days must be a non-negative integer")
+            raise ValidationError("days must be a non-negative integer")
 
         where_clauses = ["DATE(timestamp) >= DATE('now', ?)"]
         params: list[Any] = [f"-{validated_days} days"]
@@ -2230,6 +2231,7 @@ class ModeDatabase:
         Returns:
             dict: Run record with JSON fields `by_entity_type` and `by_model` deserialized into dictionaries, or `None` if no matching run is found.
         """
+        logger.debug(f"get_generation_run: run_id={run_id}")
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
@@ -2250,7 +2252,9 @@ class ModeDatabase:
                 else:
                     result["by_model"] = {}
                     result.pop("by_model_json", None)
+                logger.debug(f"get_generation_run: found run_id={run_id}")
                 return result
+            logger.debug(f"get_generation_run: run_id={run_id} not found")
             return None
 
     def get_generation_runs(
@@ -2270,6 +2274,9 @@ class ModeDatabase:
         Returns:
             list[dict[str, Any]]: A list of run records. Each record includes parsed `by_entity_type` and `by_model` dicts (deserialized from stored JSON) and other columns from the `generation_runs` table.
         """
+        logger.debug(
+            f"get_generation_runs: project_id={project_id}, run_type={run_type}, limit={limit}"
+        )
         query = "SELECT * FROM generation_runs WHERE 1=1"
         params: list[Any] = []
 
@@ -2301,6 +2308,7 @@ class ModeDatabase:
                     record["by_model"] = {}
                     record.pop("by_model_json", None)
                 results.append(record)
+            logger.debug(f"get_generation_runs: returning {len(results)} runs")
             return results
 
     def get_cost_summary(
@@ -2332,9 +2340,10 @@ class ModeDatabase:
         Raises:
             ValueError: If `days` is negative.
         """
+        logger.debug(f"get_cost_summary: project_id={project_id}, days={days}")
         validated_days = int(days)
         if validated_days < 0:
-            raise ValueError("days must be a non-negative integer")
+            raise ValidationError("days must be a non-negative integer")
 
         where_clauses = ["DATE(started_at) >= DATE('now', ?)"]
         params: list[Any] = [f"-{validated_days} days"]
@@ -2408,6 +2417,7 @@ class ModeDatabase:
             else:
                 summary["efficiency_ratio"] = 1.0
 
+            logger.debug(f"get_cost_summary: total_runs={summary['total_runs']}")
             return summary
 
     def get_model_cost_breakdown(
@@ -2432,11 +2442,12 @@ class ModeDatabase:
                 - avg_quality (float | None): Average prose quality score for the model, or None if unavailable.
 
         Raises:
-            ValueError: If `days` is negative.
+            ValidationError: If `days` is negative.
         """
+        logger.debug(f"get_model_cost_breakdown: project_id={project_id}, days={days}")
         validated_days = int(days)
         if validated_days < 0:
-            raise ValueError("days must be a non-negative integer")
+            raise ValidationError("days must be a non-negative integer")
 
         where_clauses = [
             "DATE(timestamp) >= DATE('now', ?)",
@@ -2467,7 +2478,7 @@ class ModeDatabase:
                 """,
                 params,
             )
-            return [
+            results = [
                 {
                     "model_id": r[0],
                     "call_count": r[1],
@@ -2478,6 +2489,8 @@ class ModeDatabase:
                 }
                 for r in cursor.fetchall()
             ]
+            logger.debug(f"get_model_cost_breakdown: returning {len(results)} models")
+            return results
 
     def get_entity_type_cost_breakdown(
         self,
@@ -2501,11 +2514,12 @@ class ModeDatabase:
                 - avg_quality: Average of average_score for the entity type.
 
         Raises:
-            ValueError: If `days` is negative.
+            ValidationError: If `days` is negative.
         """
+        logger.debug(f"get_entity_type_cost_breakdown: project_id={project_id}, days={days}")
         validated_days = int(days)
         if validated_days < 0:
-            raise ValueError("days must be a non-negative integer")
+            raise ValidationError("days must be a non-negative integer")
 
         where_clauses = ["DATE(timestamp) >= DATE('now', ?)"]
         params: list[Any] = [f"-{validated_days} days"]
@@ -2533,7 +2547,7 @@ class ModeDatabase:
                 """,
                 params,
             )
-            return [
+            results = [
                 {
                     "entity_type": r[0],
                     "count": r[1],
@@ -2544,3 +2558,5 @@ class ModeDatabase:
                 }
                 for r in cursor.fetchall()
             ]
+            logger.debug(f"get_entity_type_cost_breakdown: returning {len(results)} entity types")
+            return results
