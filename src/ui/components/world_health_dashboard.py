@@ -83,6 +83,10 @@ class WorldHealthDashboard:
 
     def build(self) -> None:
         """Build the dashboard UI."""
+        logger.debug(
+            f"Rendering World Health dashboard (score={self.metrics.health_score:.1f}, "
+            f"entities={self.metrics.total_entities}, has_refresh={self.on_refresh is not None})"
+        )
         with ui.card().classes("w-full"):
             # Header
             with ui.row().classes("w-full items-center gap-2 mb-4"):

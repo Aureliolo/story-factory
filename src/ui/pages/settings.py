@@ -1674,7 +1674,7 @@ class SettingsPage:
             self._fuzzy_threshold_input.value = self.settings.fuzzy_match_threshold
         if hasattr(self, "_max_relationships_input") and self._max_relationships_input:
             self._max_relationships_input.value = self.settings.max_relationships_per_entity
-        if hasattr(self, "_circular_types_input"):
+        if hasattr(self, "_circular_types_input") and self._circular_types_input:
             self._circular_types_input.value = ", ".join(self.settings.circular_relationship_types)
 
     def _do_undo(self) -> None:

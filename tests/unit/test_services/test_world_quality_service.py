@@ -31,7 +31,7 @@ from src.utils.exceptions import WorldGenerationError
 
 @pytest.fixture
 def settings():
-    """Create settings with test values."""
+    """Create settings with test values including world-health defaults."""
     return Settings(
         ollama_url="http://localhost:11434",
         ollama_timeout=60,
@@ -61,6 +61,10 @@ def settings():
         llm_tokens_relationship_refine=400,
         llm_tokens_mini_description=100,
         mini_description_words_max=15,
+        # World-health settings
+        relationship_minimums={"character": {"default": 2}, "location": {"default": 1}},
+        fuzzy_match_threshold=0.8,
+        max_relationships_per_entity=10,
     )
 
 

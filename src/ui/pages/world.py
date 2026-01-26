@@ -2655,40 +2655,56 @@ class WorldPage:
 
     def _build_health_section(self) -> None:
         """Build the world health dashboard section."""
+        logger.debug("Building health dashboard section")
         if not self.state.world_db:
             return
 
         # Build dashboard in expansion with refreshable container
         with ui.expansion("World Health", icon="health_and_safety", value=False).classes("w-full"):
             self._health_container = ui.column().classes("w-full")
-            self._refresh_health_dashboard()
+            # Initial build without notification toast
+            self._refresh_health_dashboard(notify=False)
 
-    def _refresh_health_dashboard(self) -> None:
-        """Refresh the health dashboard content."""
+    def _refresh_health_dashboard(self, notify: bool = True) -> None:
+        """Refresh the health dashboard content.
+
+        Args:
+            notify: Whether to show a notification toast. Default True for user-initiated
+                refreshes, False for initial page build.
+        """
+        logger.debug(f"Refreshing health dashboard (notify={notify})")
         if not self.state.world_db or not hasattr(self, "_health_container"):
             return
 
         self._health_container.clear()
         with self._health_container:
             metrics = self.services.world.get_world_health_metrics(self.state.world_db)
+            logger.debug(
+                f"Health metrics retrieved: score={metrics.health_score:.1f}, "
+                f"entities={metrics.total_entities}, orphans={metrics.orphan_count}"
+            )
             dashboard = WorldHealthDashboard(
                 metrics=metrics,
                 on_fix_orphan=self._handle_fix_orphan,
                 on_view_circular=self._handle_view_circular,
                 on_improve_quality=self._handle_improve_quality,
-                on_refresh=self._refresh_health_dashboard,
+                # User-initiated refresh from dashboard button should show toast
+                on_refresh=lambda: self._refresh_health_dashboard(notify=True),
             )
             dashboard.build()
-        ui.notify("Health metrics refreshed", type="positive")
+        if notify:
+            ui.notify("Health metrics refreshed", type="positive")
 
     async def _handle_fix_orphan(self, entity_id: str) -> None:
         """Handle fix orphan entity request - select the entity for editing."""
+        logger.debug(f"_handle_fix_orphan called for entity_id={entity_id}")
         if not self.state.world_db:
             return
 
         # Use service call instead of direct state access
         entity = self.services.world.get_entity(self.state.world_db, entity_id)
         if entity:
+            logger.info(f"Selecting orphan entity '{entity.name}' (id={entity_id}) for editing")
             self.state.select_entity(entity.id)
             # Refresh UI to show selection
             self._refresh_entity_list()
@@ -2699,27 +2715,40 @@ class WorldPage:
                 f"Selected '{entity.name}' - add relationships in the editor, then click Refresh",
                 type="info",
             )
+        else:
+            logger.warning(f"Could not find entity with id={entity_id} for orphan fix")
 
     async def _handle_view_circular(self, cycle: dict) -> None:
         """Handle view circular relationship chain request."""
+        logger.debug(f"_handle_view_circular called with cycle keys={list(cycle.keys())}")
         edges = cycle.get("edges", [])
         if not edges:
             return
 
-        # Build description of the cycle
-        cycle_desc = " -> ".join(f"{e.get('source', '?')}[{e.get('type', '?')}]" for e in edges)
-        cycle_desc += f" -> {edges[0].get('source', '?')}"  # Complete the cycle
+        # Build description of the cycle with source and target names for clarity
+        hop_descriptions = []
+        for edge in edges:
+            source = edge.get("source_name", edge.get("source", "?"))
+            target = edge.get("target_name", edge.get("target", "?"))
+            rel_type = edge.get("type", "?")
+            hop_descriptions.append(f"{source} -[{rel_type}]-> {target}")
+        cycle_desc = " ; ".join(hop_descriptions)
 
+        logger.info(f"Displaying circular chain: {cycle_desc}")
         ui.notify(f"Circular chain: {cycle_desc}", type="warning", timeout=10000)
 
     async def _handle_improve_quality(self, entity_id: str) -> None:
         """Handle improve entity quality request."""
+        logger.debug(f"_handle_improve_quality called for entity_id={entity_id}")
         if not self.state.world_db:
             return
 
         # Use service call instead of direct state access
         entity = self.services.world.get_entity(self.state.world_db, entity_id)
         if entity:
+            logger.info(
+                f"Selecting low-quality entity '{entity.name}' (id={entity_id}) for improvement"
+            )
             self.state.select_entity(entity.id)
             # Refresh UI to show selection
             self._refresh_entity_list()
@@ -2730,6 +2759,8 @@ class WorldPage:
                 f"Selected '{entity.name}' - use 'Refine Entity' to improve quality, then click Refresh",
                 type="info",
             )
+        else:
+            logger.warning(f"Could not find entity with id={entity_id} for quality improvement")
 
     def _build_analysis_section(self) -> None:
         """

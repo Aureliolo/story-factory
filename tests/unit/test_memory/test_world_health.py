@@ -259,6 +259,33 @@ class TestWorldHealthMetrics:
         assert len(recs) > 0
         assert any("orphan" in r.lower() or "relationship" in r.lower() for r in recs)
 
+    def test_generate_recommendations_single_orphan_with_name(self):
+        """Test recommendation for single orphan entity includes entity name."""
+        metrics = WorldHealthMetrics(
+            orphan_count=1,
+            orphan_entities=[{"id": "1", "name": "LonelyHero", "type": "character"}],
+        )
+
+        recs = metrics.generate_recommendations()
+
+        assert len(recs) > 0
+        assert any("LonelyHero" in r for r in recs)
+        assert any("1 entity" in r for r in recs)
+
+    def test_generate_recommendations_single_orphan_empty_list_fallback(self):
+        """Test recommendation fallback when orphan_count=1 but orphan_entities is empty."""
+        # Edge case: orphan_count says 1 but the list is empty
+        metrics = WorldHealthMetrics(
+            orphan_count=1,
+            orphan_entities=[],  # Empty but count says 1
+        )
+
+        recs = metrics.generate_recommendations()
+
+        assert len(recs) > 0
+        # Should use fallback message without crashing
+        assert any("1 entity" in r and "relationship" in r.lower() for r in recs)
+
     def test_generate_recommendations_circular(self):
         """Test recommendation generation for circular relationships."""
         metrics = WorldHealthMetrics(

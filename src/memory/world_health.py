@@ -201,10 +201,16 @@ class WorldHealthMetrics(BaseModel):
 
         # Orphan recommendations
         if self.orphan_count > 0:
-            if self.orphan_count == 1:
+            if self.orphan_count == 1 and self.orphan_entities:
+                # Guard access to orphan_entities[0] in case list is unexpectedly empty
+                orphan_name = self.orphan_entities[0].get("name", "Unknown")
                 recommendations.append(
-                    f"1 entity has no relationships. Consider adding connections for: "
-                    f"{self.orphan_entities[0].get('name', 'Unknown')}"
+                    f"1 entity has no relationships. Consider adding connections for: {orphan_name}"
+                )
+            elif self.orphan_count == 1:
+                # Fallback if orphan_entities is empty but count says 1
+                recommendations.append(
+                    "1 entity has no relationships. Consider adding connections."
                 )
             else:
                 recommendations.append(
@@ -254,4 +260,8 @@ class WorldHealthMetrics(BaseModel):
                 )
 
         self.recommendations = recommendations
+        logger.debug(
+            f"Generated {len(recommendations)} recommendations: "
+            f"{recommendations if recommendations else 'none (healthy world)'}"
+        )
         return recommendations

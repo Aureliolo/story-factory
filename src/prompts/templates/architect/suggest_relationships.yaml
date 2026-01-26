@@ -36,8 +36,12 @@ template: |
   {% endif %}
 
   RELATIONSHIP GUIDANCE:
+  {% if minimum_relationships is defined and minimum_relationships is not none %}
   - Minimum recommended relationships for {{ entity_type }}: {{ minimum_relationships }}
+  {% endif %}
+  {% if max_suggestions is defined and max_suggestions is not none %}
   - Maximum relationships to suggest: {{ max_suggestions }}
+  {% endif %}
   - Consider: allies, rivals, family, romance, professional, hidden connections
 
   Suggest {{ num_suggestions }} new relationships for "{{ entity_name }}".

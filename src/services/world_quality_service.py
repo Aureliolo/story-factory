@@ -3980,6 +3980,23 @@ IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no 
                         target_entity = best_match
 
                 if target_entity:
+                    # Coerce confidence to float with fallback and clamping
+                    raw_confidence = suggestion.get("confidence", 0.5)
+                    try:
+                        confidence = float(raw_confidence)
+                    except (TypeError, ValueError):
+                        confidence = 0.5
+                    confidence = max(0.0, min(1.0, confidence))
+
+                    # Coerce bidirectional to boolean
+                    raw_bidirectional = suggestion.get("bidirectional", False)
+                    if isinstance(raw_bidirectional, str):
+                        bidirectional = raw_bidirectional.strip().lower() in ("true", "1", "yes")
+                    elif isinstance(raw_bidirectional, (int, bool)):
+                        bidirectional = bool(raw_bidirectional)
+                    else:
+                        bidirectional = False
+
                     enriched_suggestions.append(
                         {
                             "source_entity_id": entity.id,
@@ -3988,8 +4005,8 @@ IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no 
                             "target_entity_name": target_entity.name,
                             "relation_type": suggestion.get("relation_type", "related_to"),
                             "description": suggestion.get("description", ""),
-                            "confidence": suggestion.get("confidence", 0.5),
-                            "bidirectional": suggestion.get("bidirectional", False),
+                            "confidence": confidence,
+                            "bidirectional": bidirectional,
                         }
                     )
                 else:
@@ -4137,14 +4154,30 @@ Return JSON:
             if not result or not isinstance(result, dict):
                 return None
 
-            if result.get("is_contradiction", False):
+            # Properly coerce is_contradiction to boolean (string "false" is truthy!)
+            raw_is_contradiction = result.get("is_contradiction", False)
+            if isinstance(raw_is_contradiction, str):
+                is_contradiction = raw_is_contradiction.strip().lower() in ("true", "1", "yes")
+            elif isinstance(raw_is_contradiction, (int, bool)):
+                is_contradiction = bool(raw_is_contradiction)
+            else:
+                is_contradiction = False
+
+            if is_contradiction:
+                # Coerce confidence to float with fallback and clamping
+                try:
+                    confidence = float(result.get("confidence", 0.5))
+                except (TypeError, ValueError):
+                    confidence = 0.5
+                confidence = max(0.0, min(1.0, confidence))
+
                 return {
                     "claim_a": claim_a,
                     "claim_b": claim_b,
                     "severity": result.get("severity", "medium"),
                     "explanation": result.get("explanation", ""),
                     "resolution_suggestion": result.get("resolution_suggestion", ""),
-                    "confidence": result.get("confidence", 0.5),
+                    "confidence": confidence,
                 }
 
             return None

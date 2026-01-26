@@ -25,6 +25,8 @@ template: |
   4. Location/geography conflicts
   5. Relationship contradictions (X loves Y, X hates Y)
 
+  IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no explanations, no additional text before or after the JSON.
+
   Output JSON:
   {
     "is_contradiction": true/false,
