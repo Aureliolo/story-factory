@@ -570,6 +570,48 @@ class TestConflictAnalysisService:
         assert pair.entity_a_name in ["Alice", "Bob"]
         assert pair.entity_b_name in ["Alice", "Bob"]
 
+    def test_faction_clusters_skip_single_entity(self, conflict_service, mock_world_db):
+        """Test that faction clustering skips single-entity clusters (self-alliances)."""
+        entities = [
+            Entity(
+                id="e1", type="character", name="Solo", description="", created_at=datetime.now()
+            ),
+            Entity(
+                id="e2", type="character", name="Alice", description="", created_at=datetime.now()
+            ),
+            Entity(
+                id="e3", type="character", name="Bob", description="", created_at=datetime.now()
+            ),
+        ]
+        relationships = [
+            # Self-alliance (creates single-entity cluster)
+            Relationship(
+                id="r1",
+                source_id="e1",
+                target_id="e1",  # Self-relationship
+                relation_type="ally_of",
+                created_at=datetime.now(),
+            ),
+            # Valid alliance between e2-e3 (creates two-entity cluster)
+            Relationship(
+                id="r2",
+                source_id="e2",
+                target_id="e3",
+                relation_type="ally_of",
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_world_db.list_entities.return_value = entities
+        mock_world_db.list_relationships.return_value = relationships
+
+        metrics = conflict_service.analyze_conflicts(mock_world_db)
+
+        # Should only have one faction (e2-e3), single-entity cluster is skipped
+        assert len(metrics.faction_clusters) == 1
+        cluster = metrics.faction_clusters[0]
+        assert "e2" in cluster.entity_ids or "e3" in cluster.entity_ids
+        assert "e1" not in cluster.entity_ids
+
 
 class TestConflictMetrics:
     """Tests for ConflictMetrics model."""
