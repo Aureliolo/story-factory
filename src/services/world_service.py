@@ -1033,14 +1033,25 @@ class WorldService:
         Returns:
             Entity if found, None otherwise.
         """
+        # Normalize and validate input early
+        normalized_name = name.strip().lower() if name else ""
+        if not normalized_name:
+            logger.debug("find_entity_by_name called with empty/whitespace name, returning None")
+            return None
+
+        # Clamp fuzzy_threshold to valid range
+        fuzzy_threshold = max(0.0, min(1.0, fuzzy_threshold))
+
         logger.debug(
-            f"find_entity_by_name called: name={name}, type={entity_type}, threshold={fuzzy_threshold}"
+            f"find_entity_by_name called: name='{normalized_name}', "
+            f"type={entity_type}, threshold={fuzzy_threshold}"
         )
 
         # Exact case-insensitive match (uses world_db's get_entity_by_name)
-        entity = world_db.get_entity_by_name(name, entity_type=entity_type)
+        # Pass normalized name for consistent lookup
+        entity = world_db.get_entity_by_name(normalized_name, entity_type=entity_type)
         if entity:
-            logger.debug(f"Found exact match for '{name}': {entity.id}")
+            logger.debug(f"Found exact match for '{normalized_name}': {entity.id}")
             return entity
 
         # Fuzzy matching - get all entities of the specified type
@@ -1049,9 +1060,6 @@ class WorldService:
             logger.debug("No entities found for fuzzy matching")
             return None
 
-        # Normalize search name
-        search_name = name.lower().strip()
-
         best_match: Entity | None = None
         best_score = 0.0
 
@@ -1059,7 +1067,7 @@ class WorldService:
             entity_name = entity.name.lower().strip()
 
             # Calculate similarity score using sequence matcher
-            score = self._calculate_name_similarity(search_name, entity_name)
+            score = self._calculate_name_similarity(normalized_name, entity_name)
 
             if score > best_score and score >= fuzzy_threshold:
                 best_score = score
@@ -1067,10 +1075,13 @@ class WorldService:
 
         if best_match:
             logger.debug(
-                f"Found fuzzy match for '{name}': {best_match.name} (score={best_score:.2f})"
+                f"Found fuzzy match for '{normalized_name}': {best_match.name} "
+                f"(score={best_score:.2f})"
             )
         else:
-            logger.debug(f"No fuzzy match found for '{name}' above threshold {fuzzy_threshold}")
+            logger.debug(
+                f"No fuzzy match found for '{normalized_name}' above threshold {fuzzy_threshold}"
+            )
 
         return best_match
 

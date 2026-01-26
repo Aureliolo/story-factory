@@ -924,6 +924,33 @@ class TestWorldHealthMethods:
         assert entity is not None
         assert entity.name == "Alice"
 
+    def test_find_entity_by_name_empty_name_returns_none(self, world_service, world_db):
+        """Test that empty or whitespace-only name returns None."""
+        world_db.add_entity("character", "Alice")
+
+        # Empty string
+        assert world_service.find_entity_by_name(world_db, "") is None
+
+        # Whitespace only
+        assert world_service.find_entity_by_name(world_db, "   ") is None
+
+        # None-like empty after strip
+        assert world_service.find_entity_by_name(world_db, "  \t\n  ") is None
+
+    def test_find_entity_by_name_clamps_fuzzy_threshold(self, world_service, world_db):
+        """Test that fuzzy_threshold is clamped to 0.0-1.0 range."""
+        world_db.add_entity("character", "Alice")
+        world_db.add_entity("character", "Alicia")  # Similar name
+
+        # Threshold above 1.0 should be clamped to 1.0 (exact match only)
+        entity = world_service.find_entity_by_name(world_db, "Alice", fuzzy_threshold=1.5)
+        assert entity is not None
+        assert entity.name == "Alice"
+
+        # Threshold below 0.0 should be clamped to 0.0 (very lenient)
+        entity = world_service.find_entity_by_name(world_db, "Alicia", fuzzy_threshold=-0.5)
+        assert entity is not None
+
     def test_get_world_health_metrics_orphan_detection_disabled(self, world_db):
         """Test health metrics skips orphan detection when setting disabled."""
         # Create settings with orphan detection disabled
