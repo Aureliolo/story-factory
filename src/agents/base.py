@@ -11,6 +11,7 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
+from src.memory.cost_models import GenerationMetrics
 from src.settings import ModelInfo, Settings, get_model_info
 from src.utils.error_handling import handle_ollama_errors
 from src.utils.exceptions import LLMConnectionError, LLMError, LLMGenerationError
@@ -91,16 +92,21 @@ class BaseAgent:
         temperature: float | None = None,
         settings: Settings | None = None,
     ):
-        """Initialize a base agent.
+        """
+        Create a BaseAgent with identity, prompts, model selection, and LLM client setup.
 
-        Args:
-            name: Display name of the agent.
-            role: Agent's role description.
-            system_prompt: System prompt to guide the agent's behavior.
-            agent_role: Role identifier for auto model selection. Defaults to lowercased role.
-            model: Override model to use. If None, uses settings-based model for agent_role.
-            temperature: Override temperature. If None, uses settings-based temperature.
-            settings: Application settings. If None, loads default settings.
+        Parameters:
+            name (str): Display name for the agent.
+            role (str): Human-readable role description for the agent.
+            system_prompt (str): System prompt that guides the agent's behavior.
+            agent_role (str | None): Identifier used for agent-specific defaults (model/temperature). If omitted, a normalized form of `role` is used.
+            model (str | None): Explicit model to use; when None the agent's model is resolved from settings for `agent_role`.
+            temperature (float | None): Explicit sampling temperature; when None the temperature is resolved from settings for `agent_role`.
+            settings (Settings | None): Application settings to use; when None the default Settings are loaded.
+
+        Notes:
+            - Initializes an Ollama client using the configured URL and timeout.
+            - Lazily initializes the instructor client placeholder and the storage for last generation metrics.
         """
         validate_not_empty(name, "name")
         validate_not_empty(role, "role")
@@ -133,11 +139,28 @@ class BaseAgent:
         # Instructor client for structured outputs (lazily initialized)
         self._instructor_client: instructor.Instructor | None = None
 
+        # Store metrics from the last generation for cost tracking
+        self._last_generation_metrics: GenerationMetrics | None = None
+
+    @property
+    def last_generation_metrics(self) -> GenerationMetrics | None:
+        """
+        Expose metrics from the most recent generation call.
+
+        Returns:
+            GenerationMetrics containing token counts, duration, model_id, and agent_role, or `None` if no generation has occurred.
+        """
+        return self._last_generation_metrics
+
     @property
     def instructor_client(self) -> instructor.Instructor:
-        """Get or create instructor client for structured outputs.
+        """
+        Lazily create and return an Instructor client configured to use Ollama's OpenAI-compatible JSON API.
 
-        Uses Ollama's OpenAI-compatible endpoint with JSON mode.
+        The client is cached on the instance after first creation and reused for subsequent calls.
+
+        Returns:
+            instructor.Instructor: An Instructor client targeting Ollama's OpenAI-compatible endpoint with JSON mode.
         """
         if self._instructor_client is None:
             # Create OpenAI client pointing to Ollama's OpenAI-compatible endpoint
@@ -198,6 +221,9 @@ class BaseAgent:
         # Use low temperature for structured output to ensure schema adherence
         use_temp = temperature if temperature is not None else 0.1
 
+        # Clear previous metrics before new generation
+        self._last_generation_metrics = None
+
         # Acquire semaphore to limit concurrent requests
         with _get_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} structured generation"):
@@ -216,6 +242,18 @@ class BaseAgent:
                         temperature=use_temp,
                     )
                     duration = time.time() - start_time
+
+                    # Store metrics for structured generation
+                    # Note: Instructor uses OpenAI-compatible API which doesn't expose
+                    # token counts in the same way as native Ollama, so we track what we can
+                    self._last_generation_metrics = GenerationMetrics(
+                        prompt_tokens=None,  # Not available from instructor
+                        completion_tokens=None,  # Not available from instructor
+                        total_tokens=0,
+                        time_seconds=duration,
+                        model_id=use_model,
+                        agent_role=self.agent_role,
+                    )
 
                     logger.info(
                         f"{self.name}: Structured output received "
@@ -286,18 +324,23 @@ class BaseAgent:
         model: str | None = None,
         min_response_length: int | None = None,
     ) -> str:
-        """Generate a response from the agent with retry logic, rate limiting, and performance tracking.
+        """
+        Generate a plain-text response from the agent using the configured LLM.
 
-        Args:
-            prompt: The prompt to send to the LLM.
-            context: Optional context to include.
-            temperature: Optional temperature override.
-            model: Optional model override.
-            min_response_length: Minimum response length to accept. Defaults to MIN_RESPONSE_LENGTH.
-                                 Set to 1 for agents that expect very short responses (e.g., Validator).
+        Retries on transient connection/timeouts, enforces a minimum cleaned response length, and records token/time metrics for the last generation.
 
-        Uses a semaphore to limit concurrent LLM requests and prevent overloading
-        the Ollama server.
+        Parameters:
+            prompt (str): The prompt to send to the LLM.
+            context (str | None): Optional additional context to include in the system messages.
+            temperature (float | None): Optional temperature override for this call.
+            model (str | None): Optional model identifier override for this call.
+            min_response_length (int | None): Minimum cleaned response length to accept. Defaults to MIN_RESPONSE_LENGTH; set to 1 for very short expected outputs.
+
+        Returns:
+            str: The raw text content returned by the LLM.
+
+        Raises:
+            LLMGenerationError: If generation fails due to model errors or after exhausting retries for transient errors or consistently too-short responses.
         """
         validate_not_empty(prompt, "prompt")
 
@@ -346,8 +389,26 @@ class BaseAgent:
                         duration = time.time() - start_time
 
                         content: str = response["message"]["content"]
+
+                        # Extract token counts from Ollama response for cost tracking
+                        prompt_tokens = response.get("prompt_eval_count")
+                        completion_tokens = response.get("eval_count")
+                        total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+
+                        # Store metrics for callers who need cost tracking
+                        self._last_generation_metrics = GenerationMetrics(
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens,
+                            total_tokens=total_tokens,
+                            time_seconds=duration,
+                            model_id=use_model,
+                            agent_role=self.agent_role,
+                        )
+
                         logger.info(
-                            f"{self.name}: LLM response received ({len(content)} chars, {duration:.2f}s)"
+                            f"{self.name}: LLM response received "
+                            f"({len(content)} chars, {duration:.2f}s, "
+                            f"tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
                         )
 
                         # Validate response isn't just thinking tokens or truncated

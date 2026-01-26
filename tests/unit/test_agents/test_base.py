@@ -722,3 +722,13 @@ class TestBaseAgentPromptTemplate:
         result = agent.get_system_prompt_from_template()
 
         assert result is None
+
+
+class TestBaseAgentGenerationMetrics:
+    """Tests for generation metrics tracking."""
+
+    def test_last_generation_metrics_initially_none(self):
+        """Test last_generation_metrics is None before any generation."""
+        agent = create_mock_agent()
+
+        assert agent.last_generation_metrics is None

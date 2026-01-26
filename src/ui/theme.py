@@ -3,15 +3,10 @@
 Centralized colors, styles, and visual constants.
 """
 
-# ========== Entity Type Colors ==========
-# Used for graph visualization and entity cards
-ENTITY_COLORS = {
-    "character": "#4CAF50",  # Green
-    "location": "#2196F3",  # Blue
-    "item": "#FF9800",  # Orange
-    "faction": "#9C27B0",  # Purple
-    "concept": "#607D8B",  # Grey
-}
+from src.utils.constants import ENTITY_COLORS, get_entity_color
+
+# Re-export for backwards compatibility
+__all__ = ["ENTITY_COLORS", "get_entity_color"]
 
 # ========== Entity Type Icons ==========
 # Material Design icon names
@@ -46,6 +41,15 @@ STATUS_COLORS = {
     "editing": "#9C27B0",  # Purple - refining
     "complete": "#607D8B",  # Grey - done
     "error": "#F44336",  # Red - problem
+}
+
+# ========== Conflict Category Colors ==========
+# Used for conflict mapping visualization
+CONFLICT_COLORS = {
+    "alliance": "#4CAF50",  # Green - positive relationships
+    "rivalry": "#F44336",  # Red - active opposition
+    "tension": "#FFC107",  # Yellow/Amber - potential conflict
+    "neutral": "#2196F3",  # Blue - informational
 }
 
 # ========== Primary Colors (Light Mode) ==========
@@ -94,26 +98,15 @@ QUALITY_COLORS = {
 }
 
 
-def get_entity_color(entity_type: str) -> str:
-    """Get color for an entity type.
-
-    Args:
-        entity_type: Type of entity.
-
-    Returns:
-        Hex color code.
-    """
-    return ENTITY_COLORS.get(entity_type.lower(), ENTITY_COLORS["concept"])
-
-
 def get_entity_icon(entity_type: str) -> str:
-    """Get icon for an entity type.
+    """
+    Return the Material Design icon name for the given entity type.
 
-    Args:
-        entity_type: Type of entity.
+    Parameters:
+        entity_type (str): Entity type name (case-insensitive).
 
     Returns:
-        Material icon name.
+        str: Material Design icon name for the entity type, or "help_outline" if no mapping exists.
     """
     return ENTITY_ICONS.get(entity_type.lower(), "help_outline")
 
