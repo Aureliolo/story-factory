@@ -17,6 +17,7 @@ Future planned split (from Issue #198):
 - _io.py: Export/import, context for agents
 """
 
+from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
 from src.memory.world_database._database import (
     ENTITY_UPDATE_FIELDS,
     MAX_ATTRIBUTES_DEPTH,
@@ -35,7 +36,12 @@ __all__ = [
     "MAX_ATTRIBUTES_SIZE_BYTES",
     "SCHEMA_VERSION",
     "VALID_ENTITY_TYPES",
+    "Entity",
+    "EntityVersion",
+    "EventParticipant",
+    "Relationship",
     "WorldDatabase",
+    "WorldEvent",
     "_check_nesting_depth",
     "_flatten_deep_attributes",
     "_validate_and_normalize_attributes",
