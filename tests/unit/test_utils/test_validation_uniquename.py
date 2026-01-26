@@ -165,7 +165,7 @@ class TestValidateUniqueName:
 class TestSemanticDuplicateChecking:
     """Tests for semantic duplicate checking in validate_unique_name."""
 
-    @patch("src.utils.validation.get_semantic_checker")
+    @patch("src.utils.similarity.get_semantic_checker")
     def test_semantic_check_detects_duplicate(self, mock_get_checker) -> None:
         """Test that semantic checking detects similar names."""
         mock_checker = MagicMock()
@@ -187,7 +187,7 @@ class TestSemanticDuplicateChecking:
         assert conflict == "Council of Shadows"
         assert reason == "semantic"
 
-    @patch("src.utils.validation.get_semantic_checker")
+    @patch("src.utils.similarity.get_semantic_checker")
     def test_semantic_check_allows_different_names(self, mock_get_checker) -> None:
         """Test that semantic checking allows clearly different names."""
         mock_checker = MagicMock()
@@ -205,7 +205,7 @@ class TestSemanticDuplicateChecking:
         assert conflict is None
         assert reason is None
 
-    @patch("src.utils.validation.get_semantic_checker")
+    @patch("src.utils.similarity.get_semantic_checker")
     def test_semantic_check_disabled_by_default(self, mock_get_checker) -> None:
         """Test that semantic checking is disabled by default."""
         is_unique, _conflict, _reason = validate_unique_name(
@@ -219,7 +219,7 @@ class TestSemanticDuplicateChecking:
         # Name should be considered unique (no string match)
         assert is_unique is True
 
-    @patch("src.utils.validation.get_semantic_checker")
+    @patch("src.utils.similarity.get_semantic_checker")
     def test_semantic_check_with_custom_url_and_model(self, mock_get_checker) -> None:
         """Test that custom ollama_url and embedding_model are passed."""
         mock_checker = MagicMock()
@@ -240,7 +240,7 @@ class TestSemanticDuplicateChecking:
         assert call_kwargs.get("ollama_url") == "http://custom:11434"
         assert call_kwargs.get("embedding_model") == "custom-model"
 
-    @patch("src.utils.validation.get_semantic_checker")
+    @patch("src.utils.similarity.get_semantic_checker")
     def test_semantic_check_handles_exception_gracefully(self, mock_get_checker) -> None:
         """Test that semantic check failures don't block validation."""
         mock_get_checker.side_effect = ConnectionError("Ollama not running")
@@ -257,7 +257,7 @@ class TestSemanticDuplicateChecking:
         assert conflict is None
         assert reason is None
 
-    @patch("src.utils.validation.get_semantic_checker")
+    @patch("src.utils.similarity.get_semantic_checker")
     def test_semantic_check_skipped_for_empty_existing_names(self, mock_get_checker) -> None:
         """Test that semantic check is skipped if existing_names is empty."""
         is_unique, _conflict, _reason = validate_unique_name(
