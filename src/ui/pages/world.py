@@ -2308,19 +2308,15 @@ class WorldPage:
         if self.state.entity_filter_types:
             entities = [e for e in entities if e.type in self.state.entity_filter_types]
 
-        # Filter by search (with scope)
+        # Filter by search (with scope) - concise list comprehension
         if self.state.entity_search_query:
             query = self.state.entity_search_query.lower()
-            filtered = []
-            for e in entities:
-                match = False
-                if self.state.entity_search_names and query in e.name.lower():
-                    match = True
-                if self.state.entity_search_descriptions and query in e.description.lower():
-                    match = True
-                if match:
-                    filtered.append(e)
-            entities = filtered
+            entities = [
+                e
+                for e in entities
+                if (self.state.entity_search_names and query in e.name.lower())
+                or (self.state.entity_search_descriptions and query in e.description.lower())
+            ]
 
         # Filter by quality
         if self.state.entity_quality_filter != "all":
@@ -2378,6 +2374,9 @@ class WorldPage:
         Returns:
             Filtered list based on quality filter setting.
         """
+        logger.debug(
+            "Filtering %d entities by quality: %s", len(entities), self.state.entity_quality_filter
+        )
         result = []
         for entity in entities:
             scores = entity.attributes.get("quality_scores") if entity.attributes else None
@@ -2389,6 +2388,7 @@ class WorldPage:
                 result.append(entity)
             elif self.state.entity_quality_filter == "low" and avg < 6:
                 result.append(entity)
+        logger.debug("Quality filter returned %d entities", len(result))
         return result
 
     def _sort_entities(self, entities: list[Entity]) -> list[Entity]:
@@ -2402,6 +2402,7 @@ class WorldPage:
         """
         sort_key = self.state.entity_sort_by
         descending = self.state.entity_sort_descending
+        logger.debug("Sorting %d entities by %s (desc=%s)", len(entities), sort_key, descending)
 
         if sort_key == "name":
             return sorted(entities, key=lambda e: e.name.lower(), reverse=descending)
@@ -2416,8 +2417,11 @@ class WorldPage:
         elif sort_key == "relationships":
 
             def count_rels(entity: Entity) -> int:
+                """Count relationships for sorting."""
                 if self.state.world_db:
-                    return len(self.state.world_db.get_relationships(entity.id))
+                    count = len(self.state.world_db.get_relationships(entity.id))
+                    logger.debug("Entity %s has %d relationships", entity.id, count)
+                    return count
                 return 0
 
             return sorted(entities, key=count_rels, reverse=descending)
@@ -2496,11 +2500,22 @@ class WorldPage:
         Args:
             e: Keyboard event with key and modifiers.
         """
-        # Ctrl+F focuses the search input
-        if e.modifiers.ctrl and e.key.lower() == "f":
+        # Ctrl+F or Cmd+F focuses the search input (cross-platform)
+        ctrl_pressed = getattr(e.modifiers, "ctrl", False)
+        meta_pressed = getattr(e.modifiers, "meta", False)
+        if (ctrl_pressed or meta_pressed) and e.key.lower() == "f":
             if self._search_input:
                 await self._search_input.run_method("focus")
                 await self._search_input.run_method("select")
+            return
+
+        # Esc clears the search
+        if e.key == "Escape" and self._search_input:
+            self._search_input.value = ""
+            self.state.entity_search_query = ""
+            self._refresh_entity_list()
+            if self._graph:
+                self._graph.highlight_search("")
 
     def _on_node_select(self, entity_id: str) -> None:
         """Handle graph node selection."""
@@ -3087,8 +3102,18 @@ class WorldPage:
             result = None
             if mode == "refine":
                 result = await self._refine_entity(entity)
-            elif mode == "guided" and guidance:
-                result = await self._regenerate_with_guidance(entity, guidance)
+            elif mode == "guided":
+                if guidance and guidance.strip():
+                    result = await self._regenerate_with_guidance(entity, guidance)
+                else:
+                    logger.warning(
+                        "Guided regeneration requested for entity %s without guidance; aborting.",
+                        entity.id,
+                    )
+                    if progress_dialog:
+                        progress_dialog.close()
+                    ui.notify("Guidance text is required for guided regeneration.", type="warning")
+                    return
             else:
                 result = await self._regenerate_full(entity)
 
@@ -3143,7 +3168,6 @@ class WorldPage:
             refined = await self.services.world_quality.refine_entity(
                 entity=entity,
                 story_brief=self.state.project.brief,
-                settings=self.services.settings,
             )
             return refined
         except Exception as e:
@@ -3167,7 +3191,6 @@ class WorldPage:
             regenerated = await self.services.world_quality.regenerate_entity(
                 entity=entity,
                 story_brief=self.state.project.brief,
-                settings=self.services.settings,
             )
             return regenerated
         except Exception as e:
@@ -3192,7 +3215,6 @@ class WorldPage:
             regenerated = await self.services.world_quality.regenerate_entity(
                 entity=entity,
                 story_brief=self.state.project.brief,
-                settings=self.services.settings,
                 custom_instructions=guidance,
             )
             return regenerated

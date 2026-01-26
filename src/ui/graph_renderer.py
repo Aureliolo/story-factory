@@ -8,7 +8,7 @@ from typing import Any
 
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
-from src.ui.theme import ENTITY_COLORS, RELATION_COLORS
+from src.ui.theme import ENTITY_COLORS, RELATION_COLORS, get_role_graph_style
 
 logger = logging.getLogger(__name__)
 
@@ -107,37 +107,15 @@ def render_graph_html(
             "title": _build_tooltip(data, max_words),
         }
 
-        # Check for role-based styling (protagonist, antagonist, mentor)
+        # Apply role-based styling using centralized helper
         attributes = data.get("attributes", {})
-        role = (attributes.get("role") or "").lower()
-        is_protagonist = "protagonist" in role or "main" in role
-        is_antagonist = "antagonist" in role
-        is_mentor = "mentor" in role
-
-        # Apply role-based styling using icon border (takes precedence over default, but not selection)
-        # For icon shape, we use a surrounding box to show the border effect
-        if is_protagonist:
-            node["borderWidth"] = 3
-            node["shapeProperties"] = {"borderDashes": False}
-            node["color"] = {
-                "background": "#FFD70040",  # Light gold background
-                "border": "#FFD700",  # Gold border for protagonist
-            }
-            node["icon"]["color"] = base_color  # Keep icon color
-        elif is_antagonist:
-            node["borderWidth"] = 2
-            node["color"] = {
-                "background": "#F4433640",  # Light red background
-                "border": "#F44336",  # Red border for antagonist
-            }
-            node["icon"]["color"] = base_color
-        elif is_mentor:
-            node["borderWidth"] = 2
-            node["color"] = {
-                "background": "#2196F340",  # Light blue background
-                "border": "#2196F3",  # Blue border for mentor
-            }
-            node["icon"]["color"] = base_color
+        role_style = get_role_graph_style(attributes, base_color)
+        if role_style:
+            node["borderWidth"] = role_style["borderWidth"]
+            node["color"] = role_style["color"]
+            node["icon"]["color"] = role_style["icon_color"]
+            if "shapeProperties" in role_style:
+                node["shapeProperties"] = role_style["shapeProperties"]
 
         # Highlight selected node (overrides role-based styling)
         if node_id == selected_entity_id:

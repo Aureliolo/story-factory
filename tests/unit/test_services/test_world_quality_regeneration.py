@@ -87,27 +87,25 @@ class TestRefineEntity:
 
     @pytest.mark.asyncio
     async def test_refine_entity_returns_none_when_entity_is_none(
-        self, world_quality_service, sample_story_brief, mock_settings
+        self, world_quality_service, sample_story_brief
     ):
         """Test that refine_entity returns None when entity is None."""
         result = await world_quality_service.refine_entity(
-            entity=None, story_brief=sample_story_brief, settings=mock_settings
+            entity=None, story_brief=sample_story_brief
         )
         assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_returns_none_when_story_brief_is_none(
-        self, world_quality_service, sample_entity, mock_settings
+        self, world_quality_service, sample_entity
     ):
         """Test that refine_entity returns None when story_brief is None."""
-        result = await world_quality_service.refine_entity(
-            entity=sample_entity, story_brief=None, settings=mock_settings
-        )
+        result = await world_quality_service.refine_entity(entity=sample_entity, story_brief=None)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_success(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test successful entity refinement."""
         mock_response = {
@@ -118,7 +116,6 @@ class TestRefineEntity:
         result = await world_quality_service.refine_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is not None
@@ -127,7 +124,7 @@ class TestRefineEntity:
 
     @pytest.mark.asyncio
     async def test_refine_entity_handles_empty_response(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test that refine_entity handles empty LLM response."""
         mock_response = {"response": ""}
@@ -136,14 +133,13 @@ class TestRefineEntity:
         result = await world_quality_service.refine_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_handles_invalid_json_response(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test that refine_entity handles invalid JSON in response."""
         mock_response = {"response": "This is not valid JSON"}
@@ -152,14 +148,13 @@ class TestRefineEntity:
         result = await world_quality_service.refine_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_returns_none_for_list_response(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test that refine_entity returns None when response is a list instead of dict."""
         mock_response = {"response": '[{"name": "Item1"}, {"name": "Item2"}]'}
@@ -168,7 +163,6 @@ class TestRefineEntity:
         result = await world_quality_service.refine_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         # Should return None because we expect a dict, not a list
@@ -176,7 +170,7 @@ class TestRefineEntity:
 
     @pytest.mark.asyncio
     async def test_refine_entity_handles_exception(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test that refine_entity handles exceptions gracefully."""
         world_quality_service._client.generate.side_effect = Exception("LLM error")
@@ -184,14 +178,13 @@ class TestRefineEntity:
         result = await world_quality_service.refine_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is None
 
     @pytest.mark.asyncio
     async def test_refine_entity_builds_feedback_from_low_scores(
-        self, world_quality_service, sample_story_brief, mock_settings
+        self, world_quality_service, sample_story_brief
     ):
         """Test that refine_entity builds feedback from low quality scores."""
         entity = Entity(
@@ -214,7 +207,6 @@ class TestRefineEntity:
         await world_quality_service.refine_entity(
             entity=entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         # Check that generate was called with prompt containing feedback
@@ -228,27 +220,27 @@ class TestRegenerateEntity:
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_returns_none_when_entity_is_none(
-        self, world_quality_service, sample_story_brief, mock_settings
+        self, world_quality_service, sample_story_brief
     ):
         """Test that regenerate_entity returns None when entity is None."""
         result = await world_quality_service.regenerate_entity(
-            entity=None, story_brief=sample_story_brief, settings=mock_settings
+            entity=None, story_brief=sample_story_brief
         )
         assert result is None
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_returns_none_when_story_brief_is_none(
-        self, world_quality_service, sample_entity, mock_settings
+        self, world_quality_service, sample_entity
     ):
         """Test that regenerate_entity returns None when story_brief is None."""
         result = await world_quality_service.regenerate_entity(
-            entity=sample_entity, story_brief=None, settings=mock_settings
+            entity=sample_entity, story_brief=None
         )
         assert result is None
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_success(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test successful entity regeneration."""
         mock_response = {
@@ -259,7 +251,6 @@ class TestRegenerateEntity:
         result = await world_quality_service.regenerate_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is not None
@@ -267,7 +258,7 @@ class TestRegenerateEntity:
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_with_custom_instructions(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test regeneration with custom instructions."""
         mock_response = {
@@ -279,7 +270,6 @@ class TestRegenerateEntity:
         await world_quality_service.regenerate_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
             custom_instructions=custom_guidance,
         )
 
@@ -290,7 +280,7 @@ class TestRegenerateEntity:
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_handles_empty_response(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test that regenerate_entity handles empty LLM response."""
         mock_response = {"response": ""}
@@ -299,14 +289,13 @@ class TestRegenerateEntity:
         result = await world_quality_service.regenerate_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is None
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_handles_exception(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test that regenerate_entity handles exceptions gracefully."""
         world_quality_service._client.generate.side_effect = Exception("LLM error")
@@ -314,14 +303,13 @@ class TestRegenerateEntity:
         result = await world_quality_service.regenerate_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is None
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_handles_entity_without_attributes(
-        self, world_quality_service, sample_story_brief, mock_settings
+        self, world_quality_service, sample_story_brief
     ):
         """Test regeneration of entity with no attributes."""
         entity = Entity(
@@ -340,7 +328,6 @@ class TestRegenerateEntity:
         result = await world_quality_service.regenerate_entity(
             entity=entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         assert result is not None
@@ -348,7 +335,7 @@ class TestRegenerateEntity:
 
     @pytest.mark.asyncio
     async def test_regenerate_entity_returns_none_for_list_response(
-        self, world_quality_service, sample_entity, sample_story_brief, mock_settings
+        self, world_quality_service, sample_entity, sample_story_brief
     ):
         """Test that regenerate_entity returns None when response is a list instead of dict."""
         mock_response = {"response": '[{"name": "Item1"}, {"name": "Item2"}]'}
@@ -357,7 +344,6 @@ class TestRegenerateEntity:
         result = await world_quality_service.regenerate_entity(
             entity=sample_entity,
             story_brief=sample_story_brief,
-            settings=mock_settings,
         )
 
         # Should return None because we expect a dict, not a list

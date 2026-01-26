@@ -6,6 +6,7 @@ Implements a generate-judge-refine loop using:
 - Refinement: Incorporates feedback to improve entities
 """
 
+import asyncio
 import logging
 import random
 import time
@@ -13,6 +14,7 @@ from typing import Any, ClassVar
 
 import ollama
 
+from src.memory.entities import Entity
 from src.memory.mode_database import ModeDatabase
 from src.memory.story_state import (
     Character,
@@ -20,6 +22,7 @@ from src.memory.story_state import (
     Faction,
     Item,
     Location,
+    StoryBrief,
     StoryState,
 )
 from src.memory.world_quality import (
@@ -3304,18 +3307,16 @@ SUMMARY:"""
 
     async def refine_entity(
         self,
-        entity: Any,
-        story_brief: Any,
-        settings: Settings,
+        entity: Entity | None,
+        story_brief: StoryBrief | None,
     ) -> dict[str, Any] | None:
         """Refine an existing entity to improve its quality.
 
         Uses the quality service's refinement loop with the existing entity as a base.
 
         Args:
-            entity: Entity to refine (must have id, name, type, description, attributes).
+            entity: Entity to refine.
             story_brief: Story brief for context.
-            settings: Application settings.
 
         Returns:
             Dictionary with refined entity data (name, description, attributes), or None on failure.
@@ -3329,7 +3330,7 @@ SUMMARY:"""
 
         try:
             # Get quality scores to identify weak areas
-            current_scores = entity.attributes.get("quality_scores") if entity.attributes else None
+            current_scores = (entity.attributes or {}).get("quality_scores")
             feedback = ""
             if current_scores:
                 # Build feedback from low scores
@@ -3348,13 +3349,14 @@ Current {entity_type}:
 - Name: {entity.name}
 - Description: {entity.description}
 - Attributes: {entity.attributes}
+- Role: {(entity.attributes or {}).get("role", "unknown")}
 
 {f"Feedback: {feedback}" if feedback else "Improve overall quality and depth."}
 
 Story context:
-- Title: {story_brief.title if hasattr(story_brief, "title") else "Unknown"}
-- Genre: {story_brief.genre if hasattr(story_brief, "genre") else "Unknown"}
-- Themes: {story_brief.themes if hasattr(story_brief, "themes") else "Unknown"}
+- Title: {getattr(story_brief, "title", "Unknown")}
+- Genre: {getattr(story_brief, "genre", "Unknown")}
+- Themes: {getattr(story_brief, "themes", "Unknown")}
 
 Return a JSON object with:
 - name: string (can refine slightly but keep recognizable)
@@ -3363,9 +3365,10 @@ Return a JSON object with:
 
             # Use creator model for refinement
             model_id = self._get_creator_model(entity_type)
-            config = RefinementConfig.from_settings(settings)
+            config = RefinementConfig.from_settings(self.settings)
 
-            response = self.client.generate(
+            response = await asyncio.to_thread(
+                self.client.generate,
                 model=model_id,
                 prompt=refinement_prompt,
                 options={
@@ -3394,9 +3397,8 @@ Return a JSON object with:
 
     async def regenerate_entity(
         self,
-        entity: Any,
-        story_brief: Any,
-        settings: Settings,
+        entity: Entity | None,
+        story_brief: StoryBrief | None,
         custom_instructions: str | None = None,
     ) -> dict[str, Any] | None:
         """Fully regenerate an entity with AI.
@@ -3404,9 +3406,8 @@ Return a JSON object with:
         Creates a new version of the entity while preserving its role in the story.
 
         Args:
-            entity: Entity to regenerate (must have id, name, type, description, attributes).
+            entity: Entity to regenerate.
             story_brief: Story brief for context.
-            settings: Application settings.
             custom_instructions: Optional user guidance for regeneration.
 
         Returns:
@@ -3429,15 +3430,15 @@ Original {entity_type} (for reference):
 - Name: {entity.name}
 - Type: {entity.type}
 - Description: {entity.description}
-- Role: {entity.attributes.get("role", "unknown") if entity.attributes else "unknown"}
+- Role: {(entity.attributes or {}).get("role", "unknown")}
 
 Instructions: {instruction_text}
 
 Story context:
-- Title: {story_brief.title if hasattr(story_brief, "title") else "Unknown"}
-- Genre: {story_brief.genre if hasattr(story_brief, "genre") else "Unknown"}
-- Themes: {story_brief.themes if hasattr(story_brief, "themes") else "Unknown"}
-- Setting: {story_brief.setting if hasattr(story_brief, "setting") else "Unknown"}
+- Title: {getattr(story_brief, "title", "Unknown")}
+- Genre: {getattr(story_brief, "genre", "Unknown")}
+- Themes: {getattr(story_brief, "themes", "Unknown")}
+- Setting: {getattr(story_brief, "setting", "Unknown")}
 
 Return a JSON object with:
 - name: string (new name, can be similar or different)
@@ -3446,9 +3447,10 @@ Return a JSON object with:
 
             # Use creator model
             model_id = self._get_creator_model(entity_type)
-            config = RefinementConfig.from_settings(settings)
+            config = RefinementConfig.from_settings(self.settings)
 
-            response = self.client.generate(
+            response = await asyncio.to_thread(
+                self.client.generate,
                 model=model_id,
                 prompt=regeneration_prompt,
                 options={
