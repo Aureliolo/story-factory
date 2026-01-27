@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-import src.agents.architect as architect_module
+import src.agents.architect._structure as architect_structure_module
 from src.agents.architect import ArchitectAgent
 from src.memory.story_state import StoryBrief
 from src.settings import Settings
@@ -157,7 +157,7 @@ class TestArchitectParseVariationResponse:
             """Return None to simulate JSON extraction failure."""
             return None
 
-        monkeypatch.setattr(architect_module, "extract_json_list", mock_extract_json_list)
+        monkeypatch.setattr(architect_structure_module, "extract_json_list", mock_extract_json_list)
 
         response = """
         World description: A magical realm.
@@ -191,7 +191,7 @@ class TestArchitectParseVariationResponse:
                 return []  # Empty characters
             return None  # Simulate parse failure for plot points
 
-        monkeypatch.setattr(architect_module, "extract_json_list", mock_extract_json_list)
+        monkeypatch.setattr(architect_structure_module, "extract_json_list", mock_extract_json_list)
 
         response = """
         World description: A magical realm.
@@ -235,7 +235,7 @@ class TestArchitectParseVariationResponse:
                 return []  # Empty for characters and plot points
             return None  # Simulate parse failure for chapters
 
-        monkeypatch.setattr(architect_module, "extract_json_list", mock_extract_json_list)
+        monkeypatch.setattr(architect_structure_module, "extract_json_list", mock_extract_json_list)
 
         response = """
         World description: A magical realm.
