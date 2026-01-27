@@ -15,7 +15,7 @@ from src.memory.world_quality import (
     RefinementHistory,
     RelationshipQualityScores,
 )
-from src.services.world_quality_service import WorldQualityService
+from src.services.world_quality import WorldQualityService
 from src.settings import Settings
 
 

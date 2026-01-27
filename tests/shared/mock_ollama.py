@@ -363,9 +363,18 @@ def setup_ollama_mocks(monkeypatch):
             if model_id == TEST_MODEL:
                 try:
                     # Dynamic lookup to respect test patches
-                    get_installed = getattr(
-                        settings_module, "get_installed_models_with_sizes", None
-                    )
+                    # Check _utils module first (where the function is defined and
+                    # where get_model_for_agent accesses it via _utils.xxx),
+                    # then fall back to the package-level export
+                    import sys
+
+                    _utils_mod = sys.modules.get("src.settings._utils")
+                    if _utils_mod is not None:
+                        get_installed = getattr(_utils_mod, "get_installed_models_with_sizes", None)
+                    else:
+                        get_installed = getattr(
+                            settings_module, "get_installed_models_with_sizes", None
+                        )
                     if get_installed is None:
                         return ALL_ROLE_TAGS
 

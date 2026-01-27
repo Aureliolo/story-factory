@@ -558,7 +558,7 @@ class TestModelServiceGetRecommendedModel:
 
             # Mock installed models with sizes
             with patch(
-                "src.settings.get_installed_models_with_sizes",
+                "src.settings._utils.get_installed_models_with_sizes",
                 return_value={
                     "large-model:30b": 18.0,
                     "medium-model:12b": 10.0,
@@ -583,7 +583,7 @@ class TestModelServiceGetRecommendedModel:
 
             # Mock installed models
             with patch(
-                "src.settings.get_installed_models_with_sizes",
+                "src.settings._utils.get_installed_models_with_sizes",
                 return_value={
                     "large-model:30b": 18.0,  # Won't fit (18*1.2 = 21.6GB)
                     "medium-model:12b": 10.0,  # Fits (10*1.2 = 12GB)
@@ -607,7 +607,7 @@ class TestModelServiceGetRecommendedModel:
             mock_vram.return_value = 8
 
             with patch(
-                "src.settings.get_installed_models_with_sizes",
+                "src.settings._utils.get_installed_models_with_sizes",
                 return_value={
                     "medium-model:12b": 10.0,  # Won't fit (10*1.2 = 12GB)
                     "small-model:8b": 5.0,  # Fits (5*1.2 = 6GB)
@@ -629,7 +629,7 @@ class TestModelServiceGetRecommendedModel:
             mock_vram.return_value = 24
 
             with patch(
-                "src.settings.get_installed_models_with_sizes",
+                "src.settings._utils.get_installed_models_with_sizes",
                 return_value={"test-model:8b": 5.0},
             ):
                 # Tag the model for writer role

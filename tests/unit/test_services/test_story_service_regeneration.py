@@ -67,7 +67,7 @@ def sample_story_with_content():
 class TestRegenerateChapterWithFeedback:
     """Tests for regenerate_chapter_with_feedback method."""
 
-    @patch("src.services.story_service.StoryOrchestrator")
+    @patch("src.services.orchestrator.StoryOrchestrator")
     def test_regenerate_saves_version_before_regenerating(
         self, mock_orchestrator_class, story_service, sample_story_with_content
     ):
@@ -110,7 +110,7 @@ class TestRegenerateChapterWithFeedback:
         second_version = chapter.versions[1]
         assert second_version.feedback == feedback  # Feedback associated with the result
 
-    @patch("src.services.story_service.StoryOrchestrator")
+    @patch("src.services.orchestrator.StoryOrchestrator")
     def test_regenerate_calls_orchestrator_with_feedback(
         self, mock_orchestrator_class, story_service, sample_story_with_content
     ):
@@ -177,7 +177,7 @@ class TestRegenerateChapterWithFeedback:
         with pytest.raises(ValueError):
             list(story_service.regenerate_chapter_with_feedback(sample_story_with_content, 1, ""))
 
-    @patch("src.services.story_service.StoryOrchestrator")
+    @patch("src.services.orchestrator.StoryOrchestrator")
     def test_regenerate_rollback_on_cancellation(
         self, mock_orchestrator_class, story_service, sample_story_with_content
     ):

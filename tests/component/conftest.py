@@ -52,7 +52,6 @@ def test_services(test_settings, tmp_path):
         patch("src.services.project_service.WORLDS_DIR", worlds_dir),
         patch("src.services.backup_service.STORIES_DIR", stories_dir),
         patch("src.services.backup_service.WORLDS_DIR", worlds_dir),
-        patch("src.services.export_service.STORIES_DIR", stories_dir),
     ):
         yield ServiceContainer(test_settings)
 

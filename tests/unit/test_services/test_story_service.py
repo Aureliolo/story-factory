@@ -103,7 +103,7 @@ class TestStoryServiceOrchestratorCache:
 
     def test_creates_new_orchestrator(self, story_service, sample_story_state):
         """Test creates new orchestrator for new story."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             MockOrchestrator.return_value = mock_orch
 
@@ -114,7 +114,7 @@ class TestStoryServiceOrchestratorCache:
 
     def test_reuses_existing_orchestrator(self, story_service, sample_story_state):
         """Test reuses existing orchestrator for same story."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             MockOrchestrator.return_value = mock_orch
 
@@ -126,7 +126,7 @@ class TestStoryServiceOrchestratorCache:
 
     def test_evicts_oldest_orchestrator_when_full(self, story_service, sample_brief, settings):
         """Test LRU eviction when cache is full."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             MockOrchestrator.return_value = MagicMock()
 
             cache_size = settings.orchestrator_cache_size
@@ -180,7 +180,7 @@ class TestStoryServiceInterview:
 
     def test_start_interview(self, story_service, sample_story_state):
         """Test starts interview and returns questions."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.start_interview.return_value = "What story would you like to write?"
             MockOrchestrator.return_value = mock_orch
@@ -193,7 +193,7 @@ class TestStoryServiceInterview:
 
     def test_process_interview(self, story_service, sample_story_state):
         """Test processes interview response."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.process_interview_response.return_value = ("Tell me more!", False)
             mock_orch.story_state = sample_story_state
@@ -211,7 +211,7 @@ class TestStoryServiceInterview:
 
     def test_finalize_interview(self, story_service, sample_story_state, sample_brief):
         """Test finalizes interview and returns brief."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.finalize_interview.return_value = sample_brief
             mock_orch.story_state = sample_story_state
@@ -234,7 +234,7 @@ class TestStoryServiceInterview:
             content_rating="mature",
         )
 
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.process_interview_response.return_value = ("Noted!", True)
             mock_orch.story_state = sample_story_state
@@ -259,7 +259,7 @@ class TestStoryServiceStructure:
 
     def test_build_structure(self, story_service, sample_story_state, world_db):
         """Test builds story structure."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.story_state = sample_story_state
             MockOrchestrator.return_value = mock_orch
@@ -348,7 +348,7 @@ class TestStoryServiceStructure:
 
     def test_get_outline(self, story_service, sample_story_state):
         """Test gets story outline summary."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.get_outline_summary.return_value = "Story outline here..."
             MockOrchestrator.return_value = mock_orch
@@ -363,7 +363,7 @@ class TestStoryServiceWriting:
 
     def test_get_full_story(self, story_service, sample_story_with_chapters):
         """Test gets full story text."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.get_full_story.return_value = "The full story content..."
             MockOrchestrator.return_value = mock_orch
@@ -388,7 +388,7 @@ class TestStoryServiceWriting:
 
     def test_get_statistics(self, story_service, sample_story_state):
         """Test gets story statistics."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.get_statistics.return_value = {
                 "total_words": 5000,
@@ -477,7 +477,7 @@ class TestStoryServiceTitleGeneration:
 
     def test_generate_title_suggestions(self, story_service, sample_story_state):
         """Test generates title suggestions."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.generate_title_suggestions.return_value = [
                 "The Dark Mystery",
@@ -497,7 +497,7 @@ class TestStoryServiceCleanup:
 
     def test_cleanup_orchestrator(self, story_service, sample_story_state):
         """Test cleans up orchestrator for story."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             MockOrchestrator.return_value = MagicMock()
 
             # Create orchestrator
@@ -520,7 +520,7 @@ class TestStoryServiceGenerators:
 
     def test_write_chapter_generator(self, story_service, sample_story_with_chapters):
         """Test write_chapter yields events."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             # Mock the generator
@@ -547,7 +547,7 @@ class TestStoryServiceGenerators:
 
     def test_write_all_chapters_generator(self, story_service, sample_story_with_chapters):
         """Test write_all_chapters yields events."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_write_all():
@@ -571,7 +571,7 @@ class TestStoryServiceGenerators:
         """Test write_short_story yields events."""
         sample_story_state.chapters = [Chapter(number=1, title="Story", outline="The whole story")]
 
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_write_short():
@@ -595,7 +595,7 @@ class TestStoryServiceGenerators:
         """Test continue_chapter yields events."""
         sample_story_with_chapters.chapters[0].content = "Chapter content so far..."
 
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_continue(chapter_num, direction=None):
@@ -624,7 +624,7 @@ class TestStoryServiceGenerators:
 
     def test_edit_passage_generator(self, story_service, sample_story_with_chapters):
         """Test edit_passage yields events."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_edit(text, focus=None):
@@ -654,7 +654,7 @@ class TestStoryServiceGenerators:
 
     def test_get_edit_suggestions_generator(self, story_service, sample_story_with_chapters):
         """Test get_edit_suggestions yields events."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_suggestions(text):
@@ -681,7 +681,7 @@ class TestStoryServiceGenerators:
 
     def test_review_full_story_generator(self, story_service, sample_story_with_chapters):
         """Test review_full_story yields events."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_review():
@@ -713,7 +713,7 @@ class TestStoryServiceExceptionHandling:
 
     def test_start_interview_raises_on_orchestrator_error(self, story_service, sample_story_state):
         """Test start_interview propagates exceptions from orchestrator."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.start_interview.side_effect = RuntimeError("LLM connection failed")
             MockOrchestrator.return_value = mock_orch
@@ -725,7 +725,7 @@ class TestStoryServiceExceptionHandling:
         self, story_service, sample_story_state
     ):
         """Test process_interview logs completion when is_complete is True."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.process_interview_response.return_value = (
                 "Great! Here's your brief.",
@@ -745,7 +745,7 @@ class TestStoryServiceExceptionHandling:
         self, story_service, sample_story_state
     ):
         """Test process_interview propagates exceptions from orchestrator."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.process_interview_response.side_effect = ValueError("Invalid input")
             MockOrchestrator.return_value = mock_orch
@@ -757,7 +757,7 @@ class TestStoryServiceExceptionHandling:
         self, story_service, sample_story_state
     ):
         """Test finalize_interview propagates exceptions from orchestrator."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.finalize_interview.side_effect = RuntimeError("Failed to generate brief")
             MockOrchestrator.return_value = mock_orch
@@ -769,7 +769,7 @@ class TestStoryServiceExceptionHandling:
         self, story_service, sample_story_state, world_db
     ):
         """Test build_structure propagates exceptions from orchestrator."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.build_story_structure.side_effect = RuntimeError(
                 "Structure generation failed"
@@ -786,7 +786,7 @@ class TestStoryServiceOutlineVariations:
 
     def test_generate_outline_variations(self, story_service, sample_story_state):
         """Test generates outline variations from architect."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_architect = MagicMock()
 
@@ -969,7 +969,7 @@ class TestStoryServiceCancellation:
 
     def test_write_chapter_cancellation(self, story_service, sample_story_with_chapters):
         """Test write_chapter raises GenerationCancelled when cancelled."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             # Mock generator that yields one event before cancellation check
@@ -1010,7 +1010,7 @@ class TestStoryServiceCancellation:
 
     def test_write_all_chapters_cancellation(self, story_service, sample_story_with_chapters):
         """Test write_all_chapters raises GenerationCancelled when cancelled."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_write_all():
@@ -1055,7 +1055,7 @@ class TestStoryServiceRegenerateChapter:
         sample_story_with_chapters.chapters[0].content = "Original chapter content here."
         sample_story_with_chapters.chapters[0].word_count = 4
 
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_write_chapter(chapter_num, feedback=None):
@@ -1113,7 +1113,7 @@ class TestStoryServiceRegenerateChapter:
         sample_story_with_chapters.chapters[0].content = original_content
         sample_story_with_chapters.chapters[0].word_count = 3
 
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
 
             def mock_write_chapter(chapter_num, feedback=None):
@@ -1160,7 +1160,7 @@ class TestStoryServiceWorldGeneration:
 
     def test_generate_more_characters(self, story_service, sample_story_state):
         """Test generating additional characters."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             new_chars = [
                 Character(name="Sidekick", role="supporting", description="A helpful friend"),
@@ -1179,7 +1179,7 @@ class TestStoryServiceWorldGeneration:
 
     def test_generate_locations(self, story_service, sample_story_state):
         """Test generating locations."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             locations = [
                 {"name": "Dark Alley", "description": "A shadowy backstreet"},
@@ -1198,7 +1198,7 @@ class TestStoryServiceWorldGeneration:
 
     def test_generate_relationships(self, story_service, sample_story_state):
         """Test generating relationships between entities."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             relationships = [
                 {"source": "Jack", "target": "Vera", "type": "romantic_interest"},
@@ -1223,7 +1223,7 @@ class TestStoryServiceWorldGeneration:
 
     def test_rebuild_world(self, story_service, sample_story_state):
         """Test rebuilding the entire world."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
+        with patch("src.services.orchestrator.StoryOrchestrator") as MockOrchestrator:
             mock_orch = MagicMock()
             mock_orch.story_state = sample_story_state
             MockOrchestrator.return_value = mock_orch

@@ -22,7 +22,7 @@ from .story_service import StoryService
 from .suggestion_service import SuggestionService
 from .template_service import TemplateService
 from .timeline_service import TimelineService
-from .world_quality_service import WorldQualityService
+from .world_quality import WorldQualityService
 from .world_service import WorldBuildOptions, WorldBuildProgress, WorldService
 from .world_template_service import WorldTemplateService
 

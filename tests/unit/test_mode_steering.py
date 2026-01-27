@@ -144,7 +144,7 @@ class TestModelModeServiceTierScore:
             service (ModelModeService): Instance initialized with a default Settings object and ModeDatabase patched to prevent real database access.
         """
         settings = Settings()
-        with patch("src.services.model_mode_service.ModeDatabase"):
+        with patch("src.services.model_mode_service._base.ModeDatabase"):
             return ModelModeService(settings)
 
     def test_tier_score_largest_prefers_large(self, service: ModelModeService):
@@ -187,7 +187,7 @@ class TestModelModeServiceModelSelection:
             service (ModelModeService): Instance initialized with a default Settings object and ModeDatabase patched to prevent real database access.
         """
         settings = Settings()
-        with patch("src.services.model_mode_service.ModeDatabase"):
+        with patch("src.services.model_mode_service._base.ModeDatabase"):
             return ModelModeService(settings)
 
     @patch("src.settings.get_installed_models_with_sizes")
@@ -731,7 +731,7 @@ class TestGetModelForAgentValidation:
         """Create a ModelModeService with real database."""
         db_path = tmp_path / "test.db"
         settings = Settings()
-        with patch("src.services.model_mode_service.ModeDatabase") as mock_db_class:
+        with patch("src.services.model_mode_service._base.ModeDatabase") as mock_db_class:
             mock_db = MagicMock()
             mock_db_class.return_value = mock_db
             return ModelModeService(settings, db_path=db_path)

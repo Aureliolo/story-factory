@@ -14,7 +14,7 @@ def use_temp_stories_dir(tmp_path, monkeypatch):
     """Use temp directory for ALL orchestrator tests to avoid polluting output/stories."""
     stories_dir = tmp_path / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
+    monkeypatch.setattr("src.settings.STORIES_DIR", stories_dir)
 
 
 class TestProgressTracking:

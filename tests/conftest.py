@@ -137,7 +137,7 @@ def orchestrator_temp_dir(tmp_path: Path, monkeypatch):
     """
     stories_dir = tmp_path / "stories"
     stories_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr("src.services.orchestrator.STORIES_DIR", stories_dir)
+    monkeypatch.setattr("src.settings.STORIES_DIR", stories_dir)
     return stories_dir
 
 

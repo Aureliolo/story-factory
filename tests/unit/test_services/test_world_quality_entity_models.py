@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.memory.story_state import StoryBrief, StoryState
-from src.services.world_quality_service import WorldQualityService
+from src.services.world_quality import WorldQualityService
 from src.settings import Settings
 
 

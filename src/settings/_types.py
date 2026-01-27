@@ -1,0 +1,83 @@
+"""Type definitions and role configurations for Story Factory settings."""
+
+from dataclasses import dataclass
+from typing import TypedDict
+
+
+class ModelInfo(TypedDict):
+    """Type definition for model information."""
+
+    name: str
+    size_gb: float
+    vram_required: int
+    quality: int | float
+    speed: int
+    uncensored: bool
+    description: str
+    # Tags for role suitability - list of agent roles this model is good for
+    tags: list[str]
+
+
+class AgentRoleInfo(TypedDict):
+    """Type definition for agent role information."""
+
+    name: str
+    description: str
+
+
+# Temperature decay curve options for world quality refinement
+REFINEMENT_TEMP_DECAY_CURVES: dict[str, str] = {
+    "linear": "Linear",
+    "exponential": "Exponential",
+    "step": "Step",
+}
+
+
+# Agent role definitions
+AGENT_ROLES: dict[str, AgentRoleInfo] = {
+    "interviewer": {
+        "name": "Interviewer",
+        "description": "Gathers story requirements",
+    },
+    "architect": {
+        "name": "Architect",
+        "description": "Designs story structure",
+    },
+    "writer": {
+        "name": "Writer",
+        "description": "Writes prose",
+    },
+    "editor": {
+        "name": "Editor",
+        "description": "Polishes prose",
+    },
+    "continuity": {
+        "name": "Continuity Checker",
+        "description": "Checks for plot holes",
+    },
+    "validator": {
+        "name": "Validator",
+        "description": "Validates AI responses",
+    },
+    "suggestion": {
+        "name": "Suggestion Assistant",
+        "description": "Generates writing prompts and suggestions",
+    },
+}
+
+
+@dataclass
+class AgentSettings:
+    """Settings for a single agent."""
+
+    model: str = "auto"  # "auto" means auto-select based on role
+    temperature: float = 0.8
+
+
+__all__ = [
+    "AGENT_ROLES",
+    "REFINEMENT_TEMP_DECAY_CURVES",
+    "AgentRoleInfo",
+    "AgentSettings",
+    "ModelInfo",
+]

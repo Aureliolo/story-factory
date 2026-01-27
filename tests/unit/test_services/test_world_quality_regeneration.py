@@ -7,7 +7,7 @@ import pytest
 from src.memory.entities import Entity
 from src.memory.story_state import StoryBrief
 from src.services.model_mode_service import ModelModeService
-from src.services.world_quality_service import WorldQualityService
+from src.services.world_quality import WorldQualityService
 from src.settings import Settings
 
 

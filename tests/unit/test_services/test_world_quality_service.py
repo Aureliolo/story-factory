@@ -25,7 +25,7 @@ from src.memory.world_quality import (
     RefinementConfig,
     RelationshipQualityScores,
 )
-from src.services.world_quality_service import WorldQualityService
+from src.services.world_quality import WorldQualityService
 from src.settings import Settings
 from src.utils.exceptions import WorldGenerationError
 
@@ -490,7 +490,7 @@ class TestWorldQualityServiceInit:
         # Create service without the fixture's analytics_db mock
         svc = WorldQualityService(settings, mock_mode_service)
         assert svc._analytics_db is None
-        with patch("src.services.world_quality_service.ModeDatabase") as mock_db_class:
+        with patch("src.services.world_quality._base.ModeDatabase") as mock_db_class:
             mock_db = MagicMock()
             mock_db_class.return_value = mock_db
             db = svc.analytics_db
@@ -607,7 +607,7 @@ class TestRecordEntityQuality:
 class TestCreateCharacter:
     """Tests for _create_character method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_success(self, mock_generate_structured, service, story_state):
         """Test successful character creation."""
         mock_character = Character(
@@ -628,7 +628,7 @@ class TestCreateCharacter:
         assert character.role == "protagonist"
         assert "observant" in character.personality_traits
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_with_existing_names(
         self, mock_generate_structured, service, story_state
     ):
@@ -662,7 +662,7 @@ class TestCreateCharacter:
         result = service._create_character(state, existing_names=[], temperature=0.9)
         assert result is None
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_validation_error_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -676,7 +676,7 @@ class TestCreateCharacter:
         with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_ollama_error(self, mock_generate_structured, service, story_state):
         """Test character creation handles Ollama errors."""
         mock_generate_structured.side_effect = ollama.ResponseError("Model not found")
@@ -684,7 +684,7 @@ class TestCreateCharacter:
         with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_connection_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -694,7 +694,7 @@ class TestCreateCharacter:
         with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_timeout_error(self, mock_generate_structured, service, story_state):
         """Test character creation handles timeout errors."""
         mock_generate_structured.side_effect = TimeoutError("Request timed out")
@@ -702,7 +702,7 @@ class TestCreateCharacter:
         with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_unexpected_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -716,7 +716,7 @@ class TestCreateCharacter:
 class TestJudgeCharacterQuality:
     """Tests for _judge_character_quality method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_judge_character_quality_success(self, mock_generate_structured, service, story_state):
         """Test successful character quality judgment."""
         mock_generate_structured.return_value = CharacterQualityScores(
@@ -744,7 +744,7 @@ class TestJudgeCharacterQuality:
         assert scores.feedback == "Strong character with good depth"
         assert scores.average == pytest.approx(7.8, rel=0.01)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_judge_character_quality_validation_error_raises(
         self, mock_generate_structured, service, story_state
     ):
@@ -756,7 +756,7 @@ class TestJudgeCharacterQuality:
         with pytest.raises(WorldGenerationError, match="judgment failed"):
             service._judge_character_quality(character, story_state, temperature=0.1)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_judge_character_quality_no_brief_uses_default_genre(
         self, mock_generate_structured, service
     ):
@@ -781,7 +781,7 @@ class TestJudgeCharacterQuality:
         call_args = mock_generate_structured.call_args
         assert "fiction" in call_args.kwargs["prompt"]
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_judge_character_quality_exception_reraises(
         self, mock_generate_structured, service, story_state
     ):
@@ -797,7 +797,7 @@ class TestJudgeCharacterQuality:
 class TestRefineCharacter:
     """Tests for _refine_character method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_character_success(self, mock_generate_structured, service, story_state):
         """Test successful character refinement."""
         mock_generate_structured.return_value = Character(
@@ -833,7 +833,7 @@ class TestRefineCharacter:
         assert "deeper psychology" in refined.description
         assert len(refined.personality_traits) > 1
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_character_includes_weak_dimensions_in_prompt(
         self, mock_generate_structured, service, story_state
     ):
@@ -865,7 +865,7 @@ class TestRefineCharacter:
         assert "flaws" in prompt.lower()
         assert "arc_potential" in prompt.lower()
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_character_error_raises(self, mock_generate_structured, service, story_state):
         """Test refinement raises error on failure."""
         mock_generate_structured.side_effect = Exception("Generation failed")
@@ -878,7 +878,7 @@ class TestRefineCharacter:
         with pytest.raises(WorldGenerationError, match="refinement failed"):
             service._refine_character(original_char, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_character_with_no_brief_uses_english(self, mock_generate_structured, service):
         """Test refinement uses English when brief is missing."""
         mock_generate_structured.return_value = Character(
@@ -1050,7 +1050,7 @@ class TestGenerateCharacterWithQuality:
 class TestCreateLocation:
     """Tests for _create_location method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_location_success(self, mock_generate_structured, service, story_state):
         """Test successful location creation."""
         mock_location = Location(
@@ -1067,7 +1067,7 @@ class TestCreateLocation:
         assert location["type"] == "location"
         assert "Victorian" in location["description"]
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_location_duplicate_name_returns_empty(
         self, mock_generate_structured, service, story_state
     ):
@@ -1094,7 +1094,7 @@ class TestCreateLocation:
         result = service._create_location(state, existing_names=[], temperature=0.9)
         assert result == {}
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_location_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -1108,7 +1108,7 @@ class TestCreateLocation:
         with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_location_ollama_error(self, mock_generate_structured, service, story_state):
         """Test location creation handles Ollama errors."""
         mock_generate_structured.side_effect = ollama.ResponseError("Error")
@@ -1116,7 +1116,7 @@ class TestCreateLocation:
         with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_location_non_dict_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -1131,7 +1131,7 @@ class TestCreateLocation:
 class TestJudgeLocationQuality:
     """Tests for _judge_location_quality method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_judge_location_quality_success(self, mock_generate_structured, service, story_state):
         """Test successful location quality judgment."""
         mock_generate_structured.return_value = LocationQualityScores(
@@ -1153,7 +1153,7 @@ class TestJudgeLocationQuality:
         assert scores.atmosphere == 8.0
         assert scores.average == 8.0
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_judge_location_quality_error_raises(
         self, mock_generate_structured, service, story_state
     ):
@@ -1169,7 +1169,7 @@ class TestJudgeLocationQuality:
 class TestRefineLocation:
     """Tests for _refine_location method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_location_success(self, mock_generate_structured, service, story_state):
         """Test successful location refinement."""
         mock_location = Location(
@@ -1190,7 +1190,7 @@ class TestRefineLocation:
         assert refined["name"] == "Dark Forest"
         assert "atmospheric" in refined["description"]
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_location_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -1209,7 +1209,7 @@ class TestRefineLocation:
         with pytest.raises(WorldGenerationError, match="Location refinement failed"):
             service._refine_location(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_location_ollama_error(self, mock_generate_structured, service, story_state):
         """Test refinement handles Ollama errors."""
         mock_generate_structured.side_effect = ConnectionError("Connection refused")
@@ -1597,7 +1597,7 @@ class TestGenerateRelationshipWithQuality:
 class TestCreateFaction:
     """Tests for _create_faction method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_faction_success(self, mock_generate_structured, service, story_state):
         """Test successful faction creation."""
         mock_faction = Faction(
@@ -1616,7 +1616,7 @@ class TestCreateFaction:
         assert faction["leader"] == "The Grand Master"
         assert len(faction["goals"]) == 2
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_faction_with_existing_locations(
         self, mock_generate_structured, service, story_state
     ):
@@ -1642,7 +1642,7 @@ class TestCreateFaction:
         assert faction["name"] == "The Shadow Council"
         assert faction["base_location"] == "The Dark Castle"
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_faction_duplicate_name_returns_empty(
         self, mock_generate_structured, service, story_state
     ):
@@ -1671,7 +1671,7 @@ class TestCreateFaction:
         result = service._create_faction(state, existing_names=[], temperature=0.9)
         assert result == {}
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_faction_error_raises(self, mock_generate_structured, service, story_state):
         """Test faction creation raises error on generation failure."""
         mock_generate_structured.side_effect = Exception("Generation failed")
@@ -1679,7 +1679,7 @@ class TestCreateFaction:
         with pytest.raises(WorldGenerationError, match="Faction creation failed"):
             service._create_faction(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_faction_ollama_error(self, mock_generate_structured, service, story_state):
         """Test faction creation handles Ollama errors."""
         mock_generate_structured.side_effect = TimeoutError("Timeout")
@@ -1740,7 +1740,7 @@ class TestJudgeFactionQuality:
 class TestRefineFaction:
     """Tests for _refine_faction method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_faction_success(self, mock_generate_structured, service, story_state):
         """Test successful faction refinement."""
         mock_faction = Faction(
@@ -1770,7 +1770,7 @@ class TestRefineFaction:
         assert refined["name"] == "Test Guild"
         assert "influential" in refined["description"]
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_faction_error_raises(self, mock_generate_structured, service, story_state):
         """Test refinement raises error on generation failure."""
         mock_generate_structured.side_effect = Exception("Generation failed")
@@ -1826,7 +1826,7 @@ class TestGenerateFactionWithQuality:
 class TestCreateItem:
     """Tests for _create_item method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_item_success(self, mock_generate_structured, service, story_state):
         """Test successful item creation."""
         mock_item = Item(
@@ -1843,7 +1843,7 @@ class TestCreateItem:
         assert item["name"] == "The Crimson Amulet"
         assert len(item["properties"]) == 2
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_item_duplicate_name_returns_empty(
         self, mock_generate_structured, service, story_state
     ):
@@ -1871,7 +1871,7 @@ class TestCreateItem:
         result = service._create_item(state, existing_names=[], temperature=0.9)
         assert result == {}
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_item_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -1937,7 +1937,7 @@ class TestJudgeItemQuality:
 class TestRefineItem:
     """Tests for _refine_item method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_item_success(self, mock_generate_structured, service, story_state):
         """Test successful item refinement."""
         mock_item = Item(
@@ -1964,7 +1964,7 @@ class TestRefineItem:
         assert refined["name"] == "Magic Sword"
         assert "legendary" in refined["description"]
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_item_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2025,7 +2025,7 @@ class TestGenerateItemWithQuality:
 class TestCreateConcept:
     """Tests for _create_concept method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_concept_success(self, mock_generate_structured, service, story_state):
         """Test successful concept creation."""
         mock_concept = Concept(
@@ -2041,7 +2041,7 @@ class TestCreateConcept:
         assert concept["name"] == "The Price of Truth"
         assert concept["type"] == "concept"
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_concept_duplicate_name_returns_empty(
         self, mock_generate_structured, service, story_state
     ):
@@ -2068,7 +2068,7 @@ class TestCreateConcept:
         result = service._create_concept(state, existing_names=[], temperature=0.9)
         assert result == {}
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_concept_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2133,7 +2133,7 @@ class TestJudgeConceptQuality:
 class TestRefineConcept:
     """Tests for _refine_concept method."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_concept_success(self, mock_generate_structured, service, story_state):
         """Test successful concept refinement."""
         mock_concept = Concept(
@@ -2156,7 +2156,7 @@ class TestRefineConcept:
         assert refined["name"] == "Redemption"
         assert "profound" in refined["description"]
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_concept_invalid_json_raises_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2726,7 +2726,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Character Creation Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_value_error(self, mock_generate_structured, service, story_state):
         """Test character creation handles ValueError from generate_structured."""
         mock_generate_structured.side_effect = ValueError("Cannot convert to float")
@@ -2734,7 +2734,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_key_error(self, mock_generate_structured, service, story_state):
         """Test character creation handles KeyError from generate_structured."""
         mock_generate_structured.side_effect = KeyError("missing key")
@@ -2742,7 +2742,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Character creation failed"):
             service._create_character(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_type_error(self, mock_generate_structured, service, story_state):
         """Test character creation handles TypeError from generate_structured."""
         mock_generate_structured.side_effect = TypeError("wrong type")
@@ -2752,7 +2752,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Character Refinement Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_character_value_error(self, mock_generate_structured, service, story_state):
         """Test character refinement handles ValueError from generate_structured."""
         mock_generate_structured.side_effect = ValueError("Cannot parse")
@@ -2765,7 +2765,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Character refinement failed"):
             service._refine_character(original_char, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_character_unexpected_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2782,7 +2782,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Location Creation Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_location_json_parsing_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2796,7 +2796,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Location creation failed"):
             service._create_location(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_location_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test location creation handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected error")
@@ -2806,7 +2806,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Location Judge Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_judge_location_quality_unexpected_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2820,7 +2820,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Location Refinement Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_location_json_parsing_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -2839,7 +2839,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Location refinement failed"):
             service._refine_location(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_location_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test location refinement handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected")
@@ -2859,7 +2859,7 @@ class TestExceptionHandlingPaths:
         mock_ollama_client.generate.return_value = {"response": "{}"}
         service._client = mock_ollama_client
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
+        with patch("src.services.world_quality._relationship.extract_json") as mock_extract:
             mock_extract.side_effect = TypeError("type error")
 
             with pytest.raises(WorldGenerationError, match="Invalid relationship response format"):
@@ -2916,7 +2916,7 @@ class TestExceptionHandlingPaths:
             tension=6.0, dynamics=6.0, story_potential=6.0, authenticity=6.0
         )
 
-        with patch("src.services.world_quality_service.extract_json") as mock_extract:
+        with patch("src.services.world_quality._relationship.extract_json") as mock_extract:
             mock_extract.side_effect = ValueError("parse error")
 
             with pytest.raises(WorldGenerationError, match="Invalid relationship refinement"):
@@ -2937,7 +2937,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Faction Creation Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_faction_generation_error(self, mock_generate_structured, service, story_state):
         """Test faction creation handles generation errors."""
         mock_generate_structured.side_effect = ValueError("validation error")
@@ -2945,7 +2945,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Faction creation failed"):
             service._create_faction(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_faction_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test faction creation handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected")
@@ -2967,7 +2967,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Faction Refinement Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_faction_llm_error(self, mock_generate_structured, service, story_state):
         """Test faction refinement handles LLM errors."""
         mock_generate_structured.side_effect = ConnectionError("Connection lost")
@@ -2980,7 +2980,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
             service._refine_faction(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_faction_generation_error(self, mock_generate_structured, service, story_state):
         """Test faction refinement handles generation errors."""
         mock_generate_structured.side_effect = ValueError("validation error")
@@ -2993,7 +2993,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Faction refinement failed"):
             service._refine_faction(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_faction_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test faction refinement handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected")
@@ -3008,7 +3008,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Item Creation Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_item_llm_error(self, mock_generate_structured, service, story_state):
         """Test item creation handles LLM errors."""
         mock_generate_structured.side_effect = ollama.ResponseError("Model error")
@@ -3016,7 +3016,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Item creation failed"):
             service._create_item(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_item_json_parsing_error(self, mock_generate_structured, service, story_state):
         """Test item creation handles validation errors."""
         from pydantic import ValidationError
@@ -3028,7 +3028,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Item creation failed"):
             service._create_item(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_item_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test item creation handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected")
@@ -3050,7 +3050,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Item Refinement Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_item_llm_error(self, mock_generate_structured, service, story_state):
         """Test item refinement handles LLM errors."""
         mock_generate_structured.side_effect = TimeoutError("Timeout")
@@ -3063,7 +3063,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Item refinement failed"):
             service._refine_item(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_item_json_parsing_error(self, mock_generate_structured, service, story_state):
         """Test item refinement handles validation errors."""
         from pydantic import ValidationError
@@ -3080,7 +3080,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Item refinement failed"):
             service._refine_item(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_item_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test item refinement handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected")
@@ -3095,7 +3095,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Concept Creation Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_concept_llm_error(self, mock_generate_structured, service, story_state):
         """Test concept creation handles LLM errors."""
         mock_generate_structured.side_effect = ConnectionError("Connection refused")
@@ -3103,7 +3103,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Concept creation failed"):
             service._create_concept(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_concept_json_parsing_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -3117,7 +3117,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Concept creation failed"):
             service._create_concept(story_state, existing_names=[], temperature=0.9)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_concept_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test concept creation handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected")
@@ -3139,7 +3139,7 @@ class TestExceptionHandlingPaths:
 
     # ========== Concept Refinement Exception Paths ==========
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_concept_llm_error(self, mock_generate_structured, service, story_state):
         """Test concept refinement handles LLM errors."""
         mock_generate_structured.side_effect = ollama.ResponseError("LLM error")
@@ -3150,7 +3150,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_concept_json_parsing_error(
         self, mock_generate_structured, service, story_state
     ):
@@ -3167,7 +3167,7 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Concept refinement failed"):
             service._refine_concept(original, scores, story_state, temperature=0.7)
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_refine_concept_unexpected_error(self, mock_generate_structured, service, story_state):
         """Test concept refinement handles unexpected errors."""
         mock_generate_structured.side_effect = AttributeError("Unexpected")
@@ -3622,7 +3622,7 @@ class TestBatchOperationsPartialFailure:
 class TestCustomInstructions:
     """Tests for custom_instructions parameter coverage."""
 
-    @patch("src.services.world_quality_service.generate_structured")
+    @patch("src.services.llm_client.generate_structured")
     def test_create_character_prompt_with_custom_instructions(
         self, mock_generate_structured, service, story_state
     ):
