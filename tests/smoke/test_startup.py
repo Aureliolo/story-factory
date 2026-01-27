@@ -97,7 +97,7 @@ class TestSettingsInitialization:
             )
         )
 
-        with patch("src.settings.SETTINGS_FILE", config_file):
+        with patch("src.settings._settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
             assert settings.default_model == "nonexistent-model:latest"
             assert settings.agent_models.get("writer") == "also-nonexistent:7b"
