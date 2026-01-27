@@ -379,24 +379,9 @@ class WorldDatabase:
     def search_entities(self, query: str, entity_type: str | None = None) -> list[Entity]:
         return _entities.search_entities(self, query, entity_type)
 
-    def _row_to_entity(self, row: sqlite3.Row) -> Entity:
-        return _entities.row_to_entity(row)
-
     # =========================================================================
     # Entity Versioning Operations (delegated to _versions)
     # =========================================================================
-
-    def _save_entity_version_internal(
-        self,
-        cursor: sqlite3.Cursor,
-        entity_id: str,
-        change_type: str,
-        change_reason: str = "",
-        quality_score: float | None = None,
-    ) -> str | None:
-        return _versions.save_entity_version_internal(
-            cursor, self, entity_id, change_type, change_reason, quality_score
-        )
 
     def save_entity_version(
         self,
@@ -414,12 +399,6 @@ class WorldDatabase:
 
     def revert_entity_to_version(self, entity_id: str, version_number: int) -> bool:
         return _versions.revert_entity_to_version(self, entity_id, version_number)
-
-    def _apply_version_retention(self, entity_id: str, cursor: sqlite3.Cursor) -> None:
-        return _versions.apply_version_retention(entity_id, cursor)
-
-    def _row_to_entity_version(self, row: sqlite3.Row) -> EntityVersion:
-        return _versions.row_to_entity_version(row)
 
     # =========================================================================
     # Relationship CRUD Operations (delegated to _relationships)
@@ -473,9 +452,6 @@ class WorldDatabase:
     def list_relationships(self) -> list[Relationship]:
         return _relationships.list_relationships(self)
 
-    def _row_to_relationship(self, row: sqlite3.Row) -> Relationship:
-        return _relationships.row_to_relationship(row)
-
     # =========================================================================
     # Event Management (delegated to _events)
     # =========================================================================
@@ -504,9 +480,6 @@ class WorldDatabase:
     def list_events(self, limit: int | None = None) -> list[WorldEvent]:
         return _events.list_events(self, limit)
 
-    def _row_to_event(self, row: sqlite3.Row) -> WorldEvent:
-        return _events.row_to_event(row)
-
     # =========================================================================
     # NetworkX Graph Operations (delegated to _graph)
     # =========================================================================
@@ -517,19 +490,6 @@ class WorldDatabase:
     def invalidate_graph_cache(self) -> None:
         _graph.invalidate_graph_cache(self)
 
-    def _add_entity_to_graph(
-        self,
-        entity_id: str,
-        name: str,
-        entity_type: str,
-        description: str,
-        attributes: dict[str, Any],
-    ) -> None:
-        _graph.add_entity_to_graph(self, entity_id, name, entity_type, description, attributes)
-
-    def _remove_entity_from_graph(self, entity_id: str) -> None:
-        _graph.remove_entity_from_graph(self, entity_id)
-
     def _update_entity_in_graph(
         self,
         entity_id: str,
@@ -539,28 +499,6 @@ class WorldDatabase:
         attributes: dict[str, Any] | None = None,
     ) -> None:
         _graph.update_entity_in_graph(self, entity_id, name, entity_type, description, attributes)
-
-    def _add_relationship_to_graph(
-        self,
-        rel_id: str,
-        source_id: str,
-        target_id: str,
-        relation_type: str,
-        description: str,
-        strength: float,
-        bidirectional: bool,
-    ) -> None:
-        _graph.add_relationship_to_graph(
-            self, rel_id, source_id, target_id, relation_type, description, strength, bidirectional
-        )
-
-    def _remove_relationship_from_graph(
-        self, source_id: str, target_id: str, bidirectional: bool = False
-    ) -> None:
-        _graph.remove_relationship_from_graph(self, source_id, target_id, bidirectional)
-
-    def _rebuild_graph(self) -> None:
-        _graph.rebuild_graph(self)
 
     def get_graph(self) -> DiGraph[Any]:
         return _graph.get_graph(self)

@@ -94,14 +94,6 @@ class ModelModeService:
         """
         return _modes.set_mode(self, mode_id)
 
-    def _sync_vram_strategy_to_settings(self, mode: GenerationMode) -> None:
-        """Sync the mode's VRAM strategy to settings.
-
-        Args:
-            mode: The mode whose VRAM strategy should be synced.
-        """
-        _modes.sync_vram_strategy_to_settings(self, mode)
-
     def list_modes(self) -> list[GenerationMode]:
         """Get all available generation modes.
 
@@ -196,14 +188,6 @@ class ModelModeService:
             model_id: Identifier of the model to prepare.
         """
         _vram.prepare_model(self, model_id)
-
-    def _unload_all_except(self, keep_model: str) -> None:
-        """Unload all models except the specified one.
-
-        Args:
-            keep_model: The model ID to keep loaded.
-        """
-        _vram.unload_all_except(self, keep_model)
 
     # === Score Recording ===
 

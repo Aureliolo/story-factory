@@ -157,6 +157,26 @@ class TestGetModelInfo:
         assert info["speed"] == 5
         assert info["vram_required"] == 8
 
+    def test_estimates_quality_speed_from_installed_size(self, monkeypatch):
+        """Should estimate quality/speed from installed model file size when size_gb > 0."""
+        # Patch in the correct module where get_model_info actually calls the function
+        monkeypatch.setattr(
+            "src.settings._utils.get_installed_models_with_sizes",
+            lambda timeout=None: {"custom-unknown-model:7b": 7.5},
+        )
+        info = get_model_info("custom-unknown-model:7b")
+        assert info["name"] == "custom-unknown-model:7b"
+        # quality = min(10, int(7.5 / 4) + 4) = min(10, 1 + 4) = 5
+        assert info["quality"] == 5
+        # speed = max(1, 10 - int(7.5 / 5)) = max(1, 10 - 1) = 9
+        assert info["speed"] == 9
+        # vram_required = int(7.5 * 1.2) = 9
+        assert info["vram_required"] == 9
+        # size_gb should be the actual installed size, not the default
+        assert info["size_gb"] == 7.5
+        # Unknown models have no tags
+        assert info["tags"] == []
+
 
 class TestAgentRoles:
     """Tests for agent role definitions."""
