@@ -24,10 +24,7 @@ SOURCE_DIRS = [
 ]
 
 # Files that are explicitly allowed to exceed the limit (with justification)
-ALLOWED_LARGE_FILES: dict[str, str] = {
-    "src/ui/pages/world/_generation.py": "World generation UI with entity type dialogs, batch generation, and progress tracking - tightly coupled UI logic",
-    "src/ui/pages/world/_editor.py": "Entity editor with dynamic form fields, relationship management, and inline editing - cohesive editor component",
-}
+ALLOWED_LARGE_FILES: dict[str, str] = {}
 
 
 def _count_lines(file_path: Path) -> int:

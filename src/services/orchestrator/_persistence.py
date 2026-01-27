@@ -1,128 +1,450 @@
-"""Persistence mixin for StoryOrchestrator."""
+"""Output and persistence helpers for StoryOrchestrator."""
 
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import src.settings as _settings
 from src.memory.story_state import StoryState
-from src.services.orchestrator._base import StoryOrchestratorBase
+from src.utils.constants import get_language_code
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from src.services.orchestrator import StoryOrchestrator
+
+logger = logging.getLogger("src.services.orchestrator")
 
 
-class PersistenceMixin(StoryOrchestratorBase):
-    """Mixin providing persistence functionality."""
+def get_full_story(orc: StoryOrchestrator) -> str:
+    """Get the complete story text."""
+    if not orc.story_state:
+        raise ValueError("No story state available.")
 
-    def autosave(self) -> str | None:
-        """Auto-save current state with timestamp update.
+    parts = []
+    for chapter in orc.story_state.chapters:
+        if chapter.content:
+            parts.append(f"# Chapter {chapter.number}: {chapter.title}\n\n{chapter.content}")
+    return "\n\n---\n\n".join(parts)
 
-        Returns:
-            The path where saved, or None if no story to save.
-        """
-        if not self.story_state:
-            return None
 
-        try:
-            self.story_state.last_saved = datetime.now()
-            self.story_state.updated_at = datetime.now()
-            path = self.save_story()
-            logger.debug(f"Autosaved story to {path}")
-            return path
-        except Exception as e:
-            logger.warning(f"Autosave failed: {e}")
-            return None
+def export_to_markdown(orc: StoryOrchestrator) -> str:
+    """Export the story as markdown."""
+    if not orc.story_state:
+        raise ValueError("No story state available.")
 
-    def save_story(self, filepath: str | None = None) -> str:
-        """Save the current story state to a JSON file.
+    brief = orc.story_state.brief
+    md_parts = []
 
-        Args:
-            filepath: Optional custom path. Defaults to output/stories/<story_id>.json
+    if brief:
+        md_parts.extend(
+            [
+                f"# {brief.premise[:50]}...\n",
+                f"*Genre: {brief.genre} | Tone: {brief.tone}*\n",
+                f"*Setting: {brief.setting_place}, {brief.setting_time}*\n",
+                "---\n",
+            ]
+        )
+    else:
+        md_parts.append("# Untitled Story\n\n---\n")
 
-        Returns:
-            The path where the story was saved.
-        """
-        if not self.story_state:
-            raise ValueError("No story to save")
+    for chapter in orc.story_state.chapters:
+        if chapter.content:
+            md_parts.append(f"\n## Chapter {chapter.number}: {chapter.title}\n\n")
+            md_parts.append(chapter.content)
 
-        # Update timestamps
-        self.story_state.updated_at = datetime.now()
-        if not self.story_state.last_saved:
-            self.story_state.last_saved = datetime.now()
+    return "\n".join(md_parts)
 
-        # Default save location
-        output_path: Path
-        if not filepath:
-            output_dir = _settings.STORIES_DIR
-            output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / f"{self.story_state.id}.json"
-        else:
-            output_path = Path(filepath)
 
-        # Convert to dict for JSON serialization
-        story_data = self.story_state.model_dump(mode="json")
+def export_to_text(orc: StoryOrchestrator) -> str:
+    """Export the story as plain text."""
+    if not orc.story_state:
+        raise ValueError("No story state available.")
 
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(story_data, f, indent=2, default=str)
+    brief = orc.story_state.brief
+    text_parts = []
 
-        logger.info(f"Story saved to {output_path}")
-        return str(output_path)
+    if brief:
+        text_parts.extend(
+            [
+                brief.premise[:80],
+                f"Genre: {brief.genre} | Tone: {brief.tone}",
+                f"Setting: {brief.setting_place}, {brief.setting_time}",
+                "=" * 60,
+                "",
+            ]
+        )
+    else:
+        text_parts.extend(["Untitled Story", "=" * 60, ""])
 
-    def load_story(self, filepath: str) -> StoryState:
-        """Load a story state from a JSON file.
+    for chapter in orc.story_state.chapters:
+        if chapter.content:
+            text_parts.append(f"CHAPTER {chapter.number}: {chapter.title.upper()}")
+            text_parts.append("")
+            text_parts.append(chapter.content)
+            text_parts.append("")
+            text_parts.append("-" * 40)
+            text_parts.append("")
 
-        Args:
-            filepath: Path to the story JSON file.
+    return "\n".join(text_parts)
 
-        Returns:
-            The loaded StoryState.
-        """
-        path = Path(filepath)
 
-        if not path.exists():
-            raise FileNotFoundError(f"Story file not found: {path}")
+def export_to_epub(orc: StoryOrchestrator) -> bytes:
+    """
+    Builds an EPUB e-book from the current StoryState and returns the file bytes.
 
-        with open(path, encoding="utf-8") as f:
-            story_data = json.load(f)
+    Uses the story's project name or brief to populate metadata (title, description, genre) and language (from brief.language or "en"), and includes each chapter that has content as an EPUB chapter in order. The generated bytes represent a complete .epub file suitable for saving or streaming.
 
-        self.story_state = StoryState.model_validate(story_data)
-        # Set correlation ID for event tracking
-        self._correlation_id = self.story_state.id[:8]
-        logger.info(f"Story loaded from {path}")
-        return self.story_state
+    Returns:
+        bytes: The EPUB file contents.
 
-    @staticmethod
-    def list_saved_stories() -> list[dict[str, str | None]]:
-        """List all saved stories in the output directory.
+    Raises:
+        ValueError: If there is no story state to export.
+    """
+    if not orc.story_state:
+        raise ValueError("No story state available.")
 
-        Returns:
-            List of dicts with story metadata (id, path, created_at, status, etc.)
-        """
+    from ebooklib import epub
+
+    book = epub.EpubBook()
+
+    # Set metadata
+    brief = orc.story_state.brief
+    title = orc.story_state.project_name or (brief.premise[:50] if brief else "Untitled Story")
+    lang_code = get_language_code(brief.language) if brief else "en"
+    book.set_identifier(orc.story_state.id)
+    book.set_title(title)
+    book.set_language(lang_code)
+
+    if brief:
+        book.add_metadata("DC", "description", brief.premise)
+        book.add_metadata("DC", "subject", brief.genre)
+
+    # Create chapters
+    chapters = []
+    for ch in orc.story_state.chapters:
+        if ch.content:
+            epub_chapter = epub.EpubHtml(
+                title=f"Chapter {ch.number}: {ch.title}",
+                file_name=f"chapter_{ch.number}.xhtml",
+                lang=lang_code,
+            )
+            # Convert content to HTML (simple paragraph wrapping)
+            html_content = "<br/><br/>".join(
+                f"<p>{para}</p>" for para in ch.content.split("\n\n") if para.strip()
+            )
+            epub_chapter.content = f"<h1>Chapter {ch.number}: {ch.title}</h1>{html_content}"
+            book.add_item(epub_chapter)
+            chapters.append(epub_chapter)
+
+    # Add navigation
+    book.toc = tuple(chapters)
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+
+    # Define spine
+    book.spine = ["nav", *chapters]
+
+    # Write to bytes
+    from io import BytesIO
+
+    output = BytesIO()
+    epub.write_epub(output, book)
+    return output.getvalue()
+
+
+def export_to_pdf(orc: StoryOrchestrator) -> bytes:
+    """Export the story as PDF format."""
+    if not orc.story_state:
+        raise ValueError("No story state available.")
+
+    from io import BytesIO
+
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=inch,
+        leftMargin=inch,
+        topMargin=inch,
+        bottomMargin=inch,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "CustomTitle",
+        parent=styles["Heading1"],
+        fontSize=24,
+        spaceAfter=30,
+    )
+    chapter_style = ParagraphStyle(
+        "ChapterTitle",
+        parent=styles["Heading2"],
+        fontSize=18,
+        spaceAfter=20,
+        spaceBefore=30,
+    )
+    body_style = ParagraphStyle(
+        "Body",
+        parent=styles["Normal"],
+        fontSize=11,
+        leading=16,
+        spaceAfter=12,
+    )
+
+    story_elements: list[Flowable] = []
+
+    # Title page
+    brief = orc.story_state.brief
+    title = orc.story_state.project_name or (brief.premise[:50] if brief else "Untitled Story")
+    story_elements.append(Paragraph(title, title_style))
+
+    if brief:
+        story_elements.append(Paragraph(f"<i>{brief.genre} | {brief.tone}</i>", styles["Normal"]))
+        story_elements.append(Spacer(1, 0.5 * inch))
+
+    story_elements.append(PageBreak())
+
+    # Chapters
+    for ch in orc.story_state.chapters:
+        if ch.content:
+            story_elements.append(Paragraph(f"Chapter {ch.number}: {ch.title}", chapter_style))
+
+            # Split content into paragraphs
+            for para in ch.content.split("\n\n"):
+                if para.strip():
+                    # Escape special characters for reportlab
+                    safe_para = para.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    story_elements.append(Paragraph(safe_para, body_style))
+
+            story_elements.append(PageBreak())
+
+    doc.build(story_elements)
+    return buffer.getvalue()
+
+
+def export_to_mobi(orc: StoryOrchestrator) -> bytes:
+    """Export the story as MOBI format (Kindle).
+
+    Note: Amazon discontinued MOBI support in March 2025. EPUB is now the
+    recommended format for Kindle devices.
+    """
+    raise RuntimeError(
+        "MOBI format is no longer supported.\n\n"
+        "Amazon discontinued MOBI in March 2025. Use EPUB instead:\n"
+        "• Send EPUB to your Kindle via 'Send to Kindle' email (yourname@kindle.com)\n"
+        "• Use the Kindle app on your phone/tablet - it supports EPUB directly\n"
+        "• Use Calibre to convert EPUB to AZW3 if needed"
+    )
+
+
+def export_story_to_file(
+    orc: StoryOrchestrator, format: str = "markdown", filepath: str | None = None
+) -> str:
+    """Export the story to a file.
+
+    Args:
+        orc: The StoryOrchestrator instance.
+        format: Export format ('markdown', 'text', 'json', 'epub', 'pdf')
+        filepath: Optional custom path. Defaults to output/stories/<story_id>.<ext>
+
+    Returns:
+        The path where the story was exported.
+    """
+    if not orc.story_state:
+        raise ValueError("No story to export")
+
+    # Determine file extension and content
+    content: str | bytes
+    if format == "markdown":
+        ext = ".md"
+        content = orc.export_to_markdown()
+    elif format == "text":
+        ext = ".txt"
+        content = orc.export_to_text()
+    elif format == "json":
+        # JSON export is handled by save_story
+        return orc.save_story(filepath)
+    elif format == "epub":
+        ext = ".epub"
+        content = orc.export_to_epub()
+    elif format == "pdf":
+        ext = ".pdf"
+        content = orc.export_to_pdf()
+    else:
+        raise ValueError(f"Unsupported export format: {format}")
+
+    # Default export location
+    output_path: Path
+    if not filepath:
         output_dir = _settings.STORIES_DIR
-        stories: list[dict[str, str | None]] = []
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"{orc.story_state.id}{ext}"
+    else:
+        output_path = Path(filepath)
 
-        if not output_dir.exists():
-            return stories
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        for filepath in output_dir.glob("*.json"):
-            try:
-                with open(filepath, encoding="utf-8") as f:
-                    data = json.load(f)
-                stories.append(
-                    {
-                        "id": data.get("id"),
-                        "path": str(filepath),
-                        "created_at": data.get("created_at"),
-                        "status": data.get("status"),
-                        "premise": (
-                            data.get("brief", {}).get("premise", "")[:100]
-                            if data.get("brief")
-                            else ""
-                        ),
-                    }
-                )
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.warning(f"Could not read story file {filepath}: {e}")
+    # Use isinstance for proper type narrowing that mypy understands
+    if isinstance(content, bytes):
+        with open(output_path, "wb") as f:
+            f.write(content)
+    else:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(content)
 
-        return sorted(stories, key=lambda x: x.get("created_at") or "", reverse=True)
+    logger.info(f"Story exported to {output_path} ({format} format)")
+    return str(output_path)
+
+
+def get_statistics(orc: StoryOrchestrator) -> dict[str, int | float]:
+    """Get story statistics including reading time estimate."""
+    if not orc.story_state:
+        raise ValueError("No story state available.")
+
+    total_words = sum(ch.word_count for ch in orc.story_state.chapters)
+    completed_chapters = sum(1 for ch in orc.story_state.chapters if ch.status == "final")
+    completed_plot_points = sum(1 for p in orc.story_state.plot_points if p.completed)
+
+    # Average reading speed: 200-250 words per minute
+    reading_time_min = total_words / 225
+
+    return {
+        "total_words": total_words,
+        "total_chapters": len(orc.story_state.chapters),
+        "completed_chapters": completed_chapters,
+        "characters": len(orc.story_state.characters),
+        "established_facts": len(orc.story_state.established_facts),
+        "plot_points_total": len(orc.story_state.plot_points),
+        "plot_points_completed": completed_plot_points,
+        "reading_time_minutes": round(reading_time_min, 1),
+    }
+
+
+def autosave(orc: StoryOrchestrator) -> str | None:
+    """Auto-save current state with timestamp update.
+
+    Returns:
+        The path where saved, or None if no story to save.
+    """
+    if not orc.story_state:
+        return None
+
+    try:
+        orc.story_state.last_saved = datetime.now()
+        orc.story_state.updated_at = datetime.now()
+        path = orc.save_story()
+        logger.debug(f"Autosaved story to {path}")
+        return path
+    except Exception as e:
+        logger.warning(f"Autosave failed: {e}")
+        return None
+
+
+def save_story(orc: StoryOrchestrator, filepath: str | None = None) -> str:
+    """Save the current story state to a JSON file.
+
+    Args:
+        orc: The StoryOrchestrator instance.
+        filepath: Optional custom path. Defaults to output/stories/<story_id>.json
+
+    Returns:
+        The path where the story was saved.
+    """
+    if not orc.story_state:
+        raise ValueError("No story to save")
+
+    # Update timestamps
+    orc.story_state.updated_at = datetime.now()
+    if not orc.story_state.last_saved:
+        orc.story_state.last_saved = datetime.now()
+
+    # Default save location
+    output_path: Path
+    if not filepath:
+        output_dir = _settings.STORIES_DIR
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"{orc.story_state.id}.json"
+    else:
+        output_path = Path(filepath)
+
+    # Convert to dict for JSON serialization
+    story_data = orc.story_state.model_dump(mode="json")
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(story_data, f, indent=2, default=str)
+
+    logger.info(f"Story saved to {output_path}")
+    return str(output_path)
+
+
+def load_story(orc: StoryOrchestrator, filepath: str) -> StoryState:
+    """Load a story state from a JSON file.
+
+    Args:
+        orc: The StoryOrchestrator instance.
+        filepath: Path to the story JSON file.
+
+    Returns:
+        The loaded StoryState.
+    """
+    path = Path(filepath)
+
+    if not path.exists():
+        raise FileNotFoundError(f"Story file not found: {path}")
+
+    with open(path, encoding="utf-8") as f:
+        story_data = json.load(f)
+
+    orc.story_state = StoryState.model_validate(story_data)
+    # Set correlation ID for event tracking
+    orc._correlation_id = orc.story_state.id[:8]
+    logger.info(f"Story loaded from {path}")
+    return orc.story_state
+
+
+def list_saved_stories() -> list[dict[str, str | None]]:
+    """List all saved stories in the output directory.
+
+    Returns:
+        List of dicts with story metadata (id, path, created_at, status, etc.)
+    """
+    output_dir = _settings.STORIES_DIR
+    stories: list[dict[str, str | None]] = []
+
+    if not output_dir.exists():
+        return stories
+
+    for filepath in output_dir.glob("*.json"):
+        try:
+            with open(filepath, encoding="utf-8") as f:
+                data = json.load(f)
+            stories.append(
+                {
+                    "id": data.get("id"),
+                    "path": str(filepath),
+                    "created_at": data.get("created_at"),
+                    "status": data.get("status"),
+                    "premise": (
+                        data.get("brief", {}).get("premise", "")[:100] if data.get("brief") else ""
+                    ),
+                }
+            )
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"Could not read story file {filepath}: {e}")
+
+    return sorted(stories, key=lambda x: x.get("created_at") or "", reverse=True)
+
+
+def reset_state(orc: StoryOrchestrator) -> None:
+    """Reset the orchestrator state for a new story."""
+    orc.story_state = None
+    orc.events.clear()
+    # Reset agent conversation histories
+    orc.interviewer.conversation_history = []
+    logger.info("Orchestrator state reset")

@@ -1,204 +1,209 @@
-"""Architecture/structure phase mixin for StoryOrchestrator."""
+"""Architecture phase helpers for StoryOrchestrator."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.agents import ResponseValidationError
 from src.memory.story_state import Character, StoryState
-from src.services.orchestrator._base import StoryOrchestratorBase
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from src.services.orchestrator import StoryOrchestrator
+
+logger = logging.getLogger("src.services.orchestrator")
 
 
-class StructureMixin(StoryOrchestratorBase):
-    """Mixin providing architecture/structure phase functionality."""
+def build_story_structure(orc: StoryOrchestrator) -> StoryState:
+    """Have the architect build the story structure."""
+    if not orc.story_state:
+        raise ValueError("No story state. Call create_new_story() first.")
 
-    def build_story_structure(self) -> StoryState:
-        """Have the architect build the story structure."""
-        if not self.story_state:
-            raise ValueError("No story state. Call create_new_story() first.")
+    logger.info("Building story structure...")
+    orc._set_phase("architect")
+    orc._emit("agent_start", "Architect", "Building world...")
 
-        logger.info("Building story structure...")
-        self._set_phase("architect")
-        self._emit("agent_start", "Architect", "Building world...")
+    logger.info(f"Calling architect with model: {orc.architect.model}")
+    orc.story_state = orc.architect.build_story_structure(orc.story_state)
 
-        logger.info(f"Calling architect with model: {self.architect.model}")
-        self.story_state = self.architect.build_story_structure(self.story_state)
+    # Validate key outputs for language correctness
+    try:
+        if orc.story_state.world_description:
+            orc._validate_response(orc.story_state.world_description, "World description")
+        if orc.story_state.plot_summary:
+            orc._validate_response(orc.story_state.plot_summary, "Plot summary")
+    except ResponseValidationError as e:
+        logger.warning(f"Validation warning during structure build: {e}")
+        # Don't block on validation errors, just log them
 
-        # Validate key outputs for language correctness
-        try:
-            if self.story_state.world_description:
-                self._validate_response(self.story_state.world_description, "World description")
-            if self.story_state.plot_summary:
-                self._validate_response(self.story_state.plot_summary, "Plot summary")
-        except ResponseValidationError as e:
-            logger.warning(f"Validation warning during structure build: {e}")
-            # Don't block on validation errors, just log them
+    # Set total chapters for progress tracking
+    orc._total_chapters = len(orc.story_state.chapters)
 
-        # Set total chapters for progress tracking
-        self._total_chapters = len(self.story_state.chapters)
+    logger.info(
+        f"Structure built: {len(orc.story_state.chapters)} chapters, {len(orc.story_state.characters)} characters"
+    )
+    orc._emit("agent_complete", "Architect", "Story structure complete!")
+    return orc.story_state
 
-        logger.info(
-            f"Structure built: {len(self.story_state.chapters)} chapters, {len(self.story_state.characters)} characters"
+
+def generate_more_characters(orc: StoryOrchestrator, count: int = 2) -> list[Character]:
+    """Generate additional characters for the story.
+
+    Args:
+        count: Number of characters to generate.
+
+    Returns:
+        List of new Character objects.
+    """
+    if not orc.story_state:
+        raise ValueError("No story state. Create a story first.")
+
+    logger.info(f"Generating {count} more characters...")
+    orc._emit("agent_start", "Architect", f"Generating {count} new characters...")
+
+    existing_names = [c.name for c in orc.story_state.characters]
+    new_characters = orc.architect.generate_more_characters(orc.story_state, existing_names, count)
+
+    # Add to story state
+    orc.story_state.characters.extend(new_characters)
+
+    orc._emit(
+        "agent_complete",
+        "Architect",
+        f"Generated {len(new_characters)} new characters!",
+    )
+    return new_characters
+
+
+def generate_locations(orc: StoryOrchestrator, count: int = 3) -> list[dict[str, Any]]:
+    """Generate locations for the story world.
+
+    Args:
+        count: Number of locations to generate.
+
+    Returns:
+        List of location dictionaries.
+    """
+    if not orc.story_state:
+        raise ValueError("No story state. Create a story first.")
+
+    logger.info(f"Generating {count} locations...")
+    orc._emit("agent_start", "Architect", f"Generating {count} new locations...")
+
+    # Get existing location names from world_description heuristic
+    existing_locations: list[str] = []
+    # Locations will be added to world database by the caller
+
+    locations = orc.architect.generate_locations(orc.story_state, existing_locations, count)
+
+    orc._emit(
+        "agent_complete",
+        "Architect",
+        f"Generated {len(locations)} new locations!",
+    )
+    return locations
+
+
+def generate_relationships(
+    orc: StoryOrchestrator,
+    entity_names: list[str],
+    existing_rels: list[tuple[str, str]],
+    count: int = 5,
+) -> list[dict[str, Any]]:
+    """Generate relationships between entities.
+
+    Args:
+        entity_names: Names of all entities that can have relationships.
+        existing_rels: List of (source, target) tuples to avoid duplicates.
+        count: Number of relationships to generate.
+
+    Returns:
+        List of relationship dictionaries.
+    """
+    if not orc.story_state:
+        raise ValueError("No story state. Create a story first.")
+
+    logger.info(f"Generating {count} relationships...")
+    orc._emit("agent_start", "Architect", f"Generating {count} new relationships...")
+
+    relationships = orc.architect.generate_relationships(
+        orc.story_state, entity_names, existing_rels, count
+    )
+
+    orc._emit(
+        "agent_complete",
+        "Architect",
+        f"Generated {len(relationships)} new relationships!",
+    )
+    return relationships
+
+
+def rebuild_world(orc: StoryOrchestrator) -> StoryState:
+    """Rebuild the entire world from scratch.
+
+    This regenerates world description, characters, plot, and chapters.
+    Use with caution if chapters have already been written.
+
+    Returns:
+        Updated StoryState.
+    """
+    if not orc.story_state:
+        raise ValueError("No story state. Create a story first.")
+
+    logger.info("Rebuilding entire world...")
+    orc._emit("agent_start", "Architect", "Rebuilding world from scratch...")
+
+    # Clear existing content but keep the brief
+    orc.story_state.world_description = ""
+    orc.story_state.world_rules = []
+    orc.story_state.characters = []
+    orc.story_state.plot_summary = ""
+    orc.story_state.plot_points = []
+    orc.story_state.chapters = []
+
+    # Rebuild everything
+    orc.story_state = orc.architect.build_story_structure(orc.story_state)
+
+    orc._emit("agent_complete", "Architect", "World rebuilt successfully!")
+    return orc.story_state
+
+
+def get_outline_summary(orc: StoryOrchestrator) -> str:
+    """Get a human-readable summary of the story outline."""
+    if not orc.story_state:
+        raise ValueError("No story state available.")
+
+    state = orc.story_state
+    summary_parts = [
+        "=" * 50,
+        "STORY OUTLINE",
+        "=" * 50,
+    ]
+
+    # Handle projects created before brief feature was added
+    if state.brief:
+        summary_parts.extend(
+            [
+                f"\nPREMISE: {state.brief.premise}",
+                f"GENRE: {state.brief.genre}",
+                f"TONE: {state.brief.tone}",
+                f"CONTENT RATING: {state.brief.content_rating}",
+            ]
         )
-        self._emit("agent_complete", "Architect", "Story structure complete!")
-        return self.story_state
+    else:
+        summary_parts.append("\n(No brief available)")
 
-    def generate_more_characters(self, count: int = 2) -> list[Character]:
-        """Generate additional characters for the story.
+    if state.world_description:
+        summary_parts.append(f"\nWORLD:\n{state.world_description[:500]}...")
 
-        Args:
-            count: Number of characters to generate.
+    summary_parts.append("\nCHARACTERS:")
 
-        Returns:
-            List of new Character objects.
-        """
-        if not self.story_state:
-            raise ValueError("No story state. Create a story first.")
+    for char in state.characters:
+        summary_parts.append(f"  - {char.name} ({char.role}): {char.description}")
 
-        logger.info(f"Generating {count} more characters...")
-        self._emit("agent_start", "Architect", f"Generating {count} new characters...")
+    summary_parts.append(f"\nPLOT SUMMARY:\n{state.plot_summary}")
 
-        existing_names = [c.name for c in self.story_state.characters]
-        new_characters = self.architect.generate_more_characters(
-            self.story_state, existing_names, count
-        )
+    summary_parts.append(f"\nCHAPTER OUTLINE ({len(state.chapters)} chapters):")
+    for ch in state.chapters:
+        summary_parts.append(f"  {ch.number}. {ch.title}")
+        summary_parts.append(f"     {ch.outline[:100]}...")
 
-        # Add to story state
-        self.story_state.characters.extend(new_characters)
-
-        self._emit(
-            "agent_complete",
-            "Architect",
-            f"Generated {len(new_characters)} new characters!",
-        )
-        return new_characters
-
-    def generate_locations(self, count: int = 3) -> list[dict[str, Any]]:
-        """Generate locations for the story world.
-
-        Args:
-            count: Number of locations to generate.
-
-        Returns:
-            List of location dictionaries.
-        """
-        if not self.story_state:
-            raise ValueError("No story state. Create a story first.")
-
-        logger.info(f"Generating {count} locations...")
-        self._emit("agent_start", "Architect", f"Generating {count} new locations...")
-
-        # Get existing location names from world_description heuristic
-        existing_locations: list[str] = []
-        # Locations will be added to world database by the caller
-
-        locations = self.architect.generate_locations(self.story_state, existing_locations, count)
-
-        self._emit(
-            "agent_complete",
-            "Architect",
-            f"Generated {len(locations)} new locations!",
-        )
-        return locations
-
-    def generate_relationships(
-        self, entity_names: list[str], existing_rels: list[tuple[str, str]], count: int = 5
-    ) -> list[dict[str, Any]]:
-        """Generate relationships between entities.
-
-        Args:
-            entity_names: Names of all entities that can have relationships.
-            existing_rels: List of (source, target) tuples to avoid duplicates.
-            count: Number of relationships to generate.
-
-        Returns:
-            List of relationship dictionaries.
-        """
-        if not self.story_state:
-            raise ValueError("No story state. Create a story first.")
-
-        logger.info(f"Generating {count} relationships...")
-        self._emit("agent_start", "Architect", f"Generating {count} new relationships...")
-
-        relationships = self.architect.generate_relationships(
-            self.story_state, entity_names, existing_rels, count
-        )
-
-        self._emit(
-            "agent_complete",
-            "Architect",
-            f"Generated {len(relationships)} new relationships!",
-        )
-        return relationships
-
-    def rebuild_world(self) -> StoryState:
-        """Rebuild the entire world from scratch.
-
-        This regenerates world description, characters, plot, and chapters.
-        Use with caution if chapters have already been written.
-
-        Returns:
-            Updated StoryState.
-        """
-        if not self.story_state:
-            raise ValueError("No story state. Create a story first.")
-
-        logger.info("Rebuilding entire world...")
-        self._emit("agent_start", "Architect", "Rebuilding world from scratch...")
-
-        # Clear existing content but keep the brief
-        self.story_state.world_description = ""
-        self.story_state.world_rules = []
-        self.story_state.characters = []
-        self.story_state.plot_summary = ""
-        self.story_state.plot_points = []
-        self.story_state.chapters = []
-
-        # Rebuild everything
-        self.story_state = self.architect.build_story_structure(self.story_state)
-
-        self._emit("agent_complete", "Architect", "World rebuilt successfully!")
-        return self.story_state
-
-    def get_outline_summary(self) -> str:
-        """Get a human-readable summary of the story outline."""
-        if not self.story_state:
-            raise ValueError("No story state available.")
-
-        state = self.story_state
-        summary_parts = [
-            "=" * 50,
-            "STORY OUTLINE",
-            "=" * 50,
-        ]
-
-        # Handle projects created before brief feature was added
-        if state.brief:
-            summary_parts.extend(
-                [
-                    f"\nPREMISE: {state.brief.premise}",
-                    f"GENRE: {state.brief.genre}",
-                    f"TONE: {state.brief.tone}",
-                    f"CONTENT RATING: {state.brief.content_rating}",
-                ]
-            )
-        else:
-            summary_parts.append("\n(No brief available)")
-
-        if state.world_description:
-            summary_parts.append(f"\nWORLD:\n{state.world_description[:500]}...")
-
-        summary_parts.append("\nCHARACTERS:")
-
-        for char in state.characters:
-            summary_parts.append(f"  - {char.name} ({char.role}): {char.description}")
-
-        summary_parts.append(f"\nPLOT SUMMARY:\n{state.plot_summary}")
-
-        summary_parts.append(f"\nCHAPTER OUTLINE ({len(state.chapters)} chapters):")
-        for ch in state.chapters:
-            summary_parts.append(f"  {ch.number}. {ch.title}")
-            summary_parts.append(f"     {ch.outline[:100]}...")
-
-        return "\n".join(summary_parts)
+    return "\n".join(summary_parts)

@@ -6,13 +6,13 @@ from typing import Any, ClassVar
 
 import src.settings._utils as _utils
 from src.memory.mode_models import LearningTrigger
+from src.settings import _validation as _validation_mod
 from src.settings._model_registry import RECOMMENDED_MODELS
 from src.settings._paths import BACKUPS_DIR, SETTINGS_FILE, logger
-from src.settings._validation import ValidationMixin
 
 
 @dataclass
-class Settings(ValidationMixin):
+class Settings:
     """Application settings, stored as JSON."""
 
     # General
@@ -295,6 +295,10 @@ class Settings(ValidationMixin):
 
     # Token multipliers for extraction
     import_character_token_multiplier: int = 4  # Multiply base tokens for character extraction
+
+    def validate(self) -> None:
+        """Validate all settings fields. Delegates to _validation module."""
+        _validation_mod.validate(self)
 
     def save(self) -> None:
         """Save settings to JSON file."""

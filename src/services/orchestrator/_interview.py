@@ -1,61 +1,63 @@
-"""Interview phase mixin for StoryOrchestrator."""
+"""Interview phase helpers for StoryOrchestrator."""
 
 import logging
+from typing import TYPE_CHECKING
 
 from src.memory.story_state import StoryBrief
-from src.services.orchestrator._base import StoryOrchestratorBase
 from src.utils.message_analyzer import analyze_message, format_inference_context
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from src.services.orchestrator import StoryOrchestrator
+
+logger = logging.getLogger("src.services.orchestrator")
 
 
-class InterviewMixin(StoryOrchestratorBase):
-    """Mixin providing interview phase functionality."""
+def start_interview(orc: StoryOrchestrator) -> str:
+    """Start the interview process."""
+    orc._set_phase("interview")
+    orc._emit("agent_start", "Interviewer", "Starting interview...")
+    questions = orc.interviewer.get_initial_questions()
+    orc._emit("agent_complete", "Interviewer", "Initial questions ready")
+    return questions
 
-    def start_interview(self) -> str:
-        """Start the interview process."""
-        self._set_phase("interview")
-        self._emit("agent_start", "Interviewer", "Starting interview...")
-        questions = self.interviewer.get_initial_questions()
-        self._emit("agent_complete", "Interviewer", "Initial questions ready")
-        return questions
 
-    def process_interview_response(self, user_response: str) -> tuple[str, bool]:
-        """Process user response and return next questions or indicate completion.
+def process_interview_response(orc: StoryOrchestrator, user_response: str) -> tuple[str, bool]:
+    """Process user response and return next questions or indicate completion.
 
-        Returns: (response_text, is_complete)
-        """
-        if not self.story_state:
-            raise ValueError("No story state. Call create_new_story() first.")
+    Returns: (response_text, is_complete)
+    """
+    if not orc.story_state:
+        raise ValueError("No story state. Call create_new_story() first.")
 
-        self._emit("agent_start", "Interviewer", "Processing your response...")
+    orc._emit("agent_start", "Interviewer", "Processing your response...")
 
-        # Analyze the user message to infer language and content rating
-        analysis = analyze_message(user_response)
-        context = format_inference_context(analysis)
+    # Analyze the user message to infer language and content rating
+    analysis = analyze_message(user_response)
+    context = format_inference_context(analysis)
 
-        response = self.interviewer.process_response(user_response, context=context)
+    response = orc.interviewer.process_response(user_response, context=context)
 
-        # Check if a brief was generated
-        brief = self.interviewer.extract_brief(response)
-        if brief:
-            self.story_state.brief = brief
-            self.story_state.status = "outlining"
-            self._emit("agent_complete", "Interviewer", "Story brief created!")
-            return response, True
+    # Check if a brief was generated
+    brief = orc.interviewer.extract_brief(response)
+    if brief:
+        orc.story_state.brief = brief
+        orc.story_state.status = "outlining"
+        orc._emit("agent_complete", "Interviewer", "Story brief created!")
+        return response, True
 
-        self._emit("agent_complete", "Interviewer", "Follow-up questions ready")
-        return response, False
+    orc._emit("agent_complete", "Interviewer", "Follow-up questions ready")
+    return response, False
 
-    def finalize_interview(self) -> StoryBrief:
-        """Force finalize the interview with current information."""
-        if not self.story_state:
-            raise ValueError("No story state. Call create_new_story() first.")
 
-        history = "\n".join(
-            f"{h['role']}: {h['content']}" for h in self.interviewer.conversation_history
-        )
-        brief = self.interviewer.finalize_brief(history)
-        self.story_state.brief = brief
-        self.story_state.status = "outlining"
-        return brief
+def finalize_interview(orc: StoryOrchestrator) -> StoryBrief:
+    """Force finalize the interview with current information."""
+    if not orc.story_state:
+        raise ValueError("No story state. Call create_new_story() first.")
+
+    history = "\n".join(
+        f"{h['role']}: {h['content']}" for h in orc.interviewer.conversation_history
+    )
+    brief = orc.interviewer.finalize_brief(history)
+    orc.story_state.brief = brief
+    orc.story_state.status = "outlining"
+    return brief

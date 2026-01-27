@@ -7,7 +7,7 @@ All functionality is now in focused modules:
 - _paths.py: Path constants for settings and output directories
 - _types.py: TypedDicts and role configurations
 - _model_registry.py: Recommended models registry
-- _validation.py: Settings validation mixin
+- _validation.py: Settings validation functions
 - _settings.py: Main Settings dataclass
 - _utils.py: Utility functions for Ollama model management
 """
