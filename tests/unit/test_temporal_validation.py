@@ -406,3 +406,716 @@ class TestEntityLifecycleProperties:
             destruction_year=300,
         )
         assert lifecycle.end_year == 300
+
+
+class TestValidateLocation:
+    """Tests for location temporal validation."""
+
+    def test_validate_location_without_destruction(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test location without destruction year passes validation."""
+        location = Entity(
+            id="loc-1",
+            type="location",
+            name="Ancient Castle",
+            description="A castle",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 100,
+                }
+            },
+        )
+
+        result = validation_service.validate_entity(
+            entity=location,
+            calendar=None,
+            all_entities=[location],
+            relationships=[],
+        )
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+    def test_validate_location_event_after_destruction(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test error when event occurs at location after its destruction."""
+        location = Entity(
+            id="loc-1",
+            type="location",
+            name="Fallen Kingdom",
+            description="A destroyed kingdom",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 100,
+                    "destruction_year": 500,  # Destroyed in year 500
+                }
+            },
+        )
+
+        event = Entity(
+            id="event-1",
+            type="event",
+            name="Battle After the Fall",
+            description="A battle",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 600},  # Occurs in year 600 (after destruction)
+                }
+            },
+        )
+
+        # Event occurred at the destroyed location
+        relationships = [("event-1", "loc-1", "occurred_at")]
+
+        result = validation_service.validate_entity(
+            entity=location,
+            calendar=None,
+            all_entities=[location, event],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is False
+        assert result.error_count == 1
+        assert result.errors[0].error_type == TemporalErrorType.POST_DESTRUCTION
+
+    def test_validate_location_event_before_destruction(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test no error when event occurs at location before its destruction."""
+        location = Entity(
+            id="loc-1",
+            type="location",
+            name="Fallen Kingdom",
+            description="A destroyed kingdom",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 100,
+                    "destruction_year": 500,
+                }
+            },
+        )
+
+        event = Entity(
+            id="event-1",
+            type="event",
+            name="Battle Before the Fall",
+            description="A battle",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 400},  # Occurs in year 400 (before destruction)
+                }
+            },
+        )
+
+        relationships = [("event-1", "loc-1", "occurred_at")]
+
+        result = validation_service.validate_entity(
+            entity=location,
+            calendar=None,
+            all_entities=[location, event],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+    def test_validate_location_character_located_after_destruction(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test error when character located at destroyed location."""
+        location = Entity(
+            id="loc-1",
+            type="location",
+            name="Ruined City",
+            description="A ruined city",
+            attributes={
+                "lifecycle": {
+                    "destruction_year": 300,
+                }
+            },
+        )
+
+        character = Entity(
+            id="char-1",
+            type="character",
+            name="Late Arrival",
+            description="A character",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 400},  # Born after destruction
+                }
+            },
+        )
+
+        relationships = [("char-1", "loc-1", "located_in")]
+
+        result = validation_service.validate_entity(
+            entity=location,
+            calendar=None,
+            all_entities=[location, character],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is False
+        assert result.error_count == 1
+
+
+class TestValidateItem:
+    """Tests for item temporal validation."""
+
+    def test_validate_item_without_lifecycle(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test item without lifecycle passes validation."""
+        item = Entity(
+            id="item-1",
+            type="item",
+            name="Ancient Sword",
+            description="A sword",
+            attributes={},
+        )
+
+        result = validation_service.validate_entity(
+            entity=item,
+            calendar=None,
+            all_entities=[item],
+            relationships=[],
+        )
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+    def test_validate_item_created_before_creator_born(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test error when item created before its creator was born."""
+        item = Entity(
+            id="item-1",
+            type="item",
+            name="Magic Wand",
+            description="A wand",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},  # Created in year 100
+                }
+            },
+        )
+
+        creator = Entity(
+            id="char-1",
+            type="character",
+            name="Wizard",
+            description="A wizard",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 200},  # Born in year 200 (after item creation!)
+                }
+            },
+        )
+
+        # Creator relationship
+        relationships = [("char-1", "item-1", "created")]
+
+        result = validation_service.validate_entity(
+            entity=item,
+            calendar=None,
+            all_entities=[item, creator],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is False
+        assert result.error_count == 1
+        assert result.errors[0].error_type == TemporalErrorType.PREDATES_DEPENDENCY
+        assert "creator" in result.errors[0].message.lower()
+
+    def test_validate_item_created_after_creator_born(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test no error when item created after its creator was born."""
+        item = Entity(
+            id="item-1",
+            type="item",
+            name="Magic Wand",
+            description="A wand",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 300},  # Created in year 300
+                }
+            },
+        )
+
+        creator = Entity(
+            id="char-1",
+            type="character",
+            name="Wizard",
+            description="A wizard",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 200},  # Born in year 200
+                }
+            },
+        )
+
+        relationships = [("char-1", "item-1", "crafted")]
+
+        result = validation_service.validate_entity(
+            entity=item,
+            calendar=None,
+            all_entities=[item, creator],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+    def test_validate_item_forged_relationship(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test item with 'forged' relationship type."""
+        item = Entity(
+            id="item-1",
+            type="item",
+            name="Legendary Blade",
+            description="A blade",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 50},  # Forged in year 50
+                }
+            },
+        )
+
+        smith = Entity(
+            id="char-1",
+            type="character",
+            name="Master Smith",
+            description="A smith",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},  # Born year 100 (after item forged!)
+                }
+            },
+        )
+
+        relationships = [("char-1", "item-1", "forged")]
+
+        result = validation_service.validate_entity(
+            entity=item,
+            calendar=None,
+            all_entities=[item, smith],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is False
+        assert result.error_count == 1
+
+    def test_validate_item_without_creation_year(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test item with lifecycle but no creation year."""
+        item = Entity(
+            id="item-1",
+            type="item",
+            name="Ancient Artifact",
+            description="An artifact",
+            attributes={
+                "lifecycle": {
+                    "temporal_notes": "From before recorded history",
+                }
+            },
+        )
+
+        result = validation_service.validate_entity(
+            entity=item,
+            calendar=None,
+            all_entities=[item],
+            relationships=[],
+        )
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+
+class TestValidateWorld:
+    """Tests for validate_world method."""
+
+    def test_validate_world_empty(self, validation_service: TemporalValidationService) -> None:
+        """Test validating an empty world."""
+        mock_world_db = MagicMock()
+        mock_world_db.list_entities.return_value = []
+        mock_world_db.list_relationships.return_value = []
+
+        result = validation_service.validate_world(mock_world_db)
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+        assert result.warning_count == 0
+
+    def test_validate_world_with_valid_entities(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test validating a world with consistent entities."""
+        faction = Entity(
+            id="faction-1",
+            type="faction",
+            name="The Order",
+            description="A faction",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 100,
+                }
+            },
+        )
+
+        character = Entity(
+            id="char-1",
+            type="character",
+            name="Knight",
+            description="A knight",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 200},  # Born after faction founded
+                }
+            },
+        )
+
+        mock_rel = MagicMock()
+        mock_rel.source_id = "char-1"
+        mock_rel.target_id = "faction-1"
+        mock_rel.relation_type = "member_of"
+
+        mock_world_db = MagicMock()
+        mock_world_db.list_entities.return_value = [faction, character]
+        mock_world_db.list_relationships.return_value = [mock_rel]
+
+        result = validation_service.validate_world(mock_world_db)
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+    def test_validate_world_with_errors(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test validating a world with temporal errors."""
+        faction = Entity(
+            id="faction-1",
+            type="faction",
+            name="The Order",
+            description="A faction",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 500,  # Founded late
+                }
+            },
+        )
+
+        character = Entity(
+            id="char-1",
+            type="character",
+            name="Knight",
+            description="A knight",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},  # Born before faction founded
+                }
+            },
+        )
+
+        mock_rel = MagicMock()
+        mock_rel.source_id = "char-1"
+        mock_rel.target_id = "faction-1"
+        mock_rel.relation_type = "member_of"
+
+        mock_world_db = MagicMock()
+        mock_world_db.list_entities.return_value = [faction, character]
+        mock_world_db.list_relationships.return_value = [mock_rel]
+
+        result = validation_service.validate_world(mock_world_db)
+
+        assert result.is_valid is False
+        assert result.error_count >= 1
+
+
+class TestDeathDateValidation:
+    """Tests for death date validation against calendar."""
+
+    def test_validate_death_date_invalid(
+        self, validation_service: TemporalValidationService, sample_calendar: WorldCalendar
+    ) -> None:
+        """Test warning for invalid death date against calendar."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Test Character",
+            description="A character",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},
+                    "death": {"year": 0},  # Before era start
+                }
+            },
+        )
+
+        result = validation_service.validate_entity(
+            entity=entity,
+            calendar=sample_calendar,
+            all_entities=[entity],
+            relationships=[],
+        )
+
+        # Should have warnings for invalid dates
+        assert result.warning_count >= 1
+        death_warnings = [w for w in result.warnings if "death" in w.message.lower()]
+        assert len(death_warnings) >= 1
+
+    def test_validate_death_date_invalid_month(
+        self, validation_service: TemporalValidationService, sample_calendar: WorldCalendar
+    ) -> None:
+        """Test warning for invalid death month against calendar."""
+        # Sample calendar only has 2 months, so month 10 is invalid
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Test Character",
+            description="A character",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},
+                    "death": {"year": 200, "month": 10},  # Invalid for 2-month calendar
+                }
+            },
+        )
+
+        result = validation_service.validate_entity(
+            entity=entity,
+            calendar=sample_calendar,
+            all_entities=[entity],
+            relationships=[],
+        )
+
+        assert result.warning_count >= 1
+
+    def test_validate_death_date_invalid_day(
+        self, validation_service: TemporalValidationService, sample_calendar: WorldCalendar
+    ) -> None:
+        """Test warning for invalid death day against calendar."""
+        # Month 2 (Midyear) has 30 days, so day 31 is invalid
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Test Character",
+            description="A character",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},
+                    "death": {
+                        "year": 200,
+                        "month": 2,
+                        "day": 31,
+                    },  # Day 31 invalid for 30-day month
+                }
+            },
+        )
+
+        result = validation_service.validate_entity(
+            entity=entity,
+            calendar=sample_calendar,
+            all_entities=[entity],
+            relationships=[],
+        )
+
+        assert result.warning_count >= 1
+
+
+class TestFactionValidationEdgeCases:
+    """Tests for faction validation edge cases."""
+
+    def test_validate_faction_without_founding_year(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test faction without founding year skips validation."""
+        faction = Entity(
+            id="faction-1",
+            type="faction",
+            name="Ancient Order",
+            description="A faction",
+            attributes={
+                "lifecycle": {
+                    "temporal_notes": "Founded in ancient times",
+                }
+            },
+        )
+
+        result = validation_service.validate_entity(
+            entity=faction,
+            calendar=None,
+            all_entities=[faction],
+            relationships=[],
+        )
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+    def test_validate_faction_with_child_of_relationship(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test faction with child_of relationship."""
+        child = Entity(
+            id="faction-child",
+            type="faction",
+            name="Child Faction",
+            description="An offshoot",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 200,
+                }
+            },
+        )
+
+        parent = Entity(
+            id="faction-parent",
+            type="faction",
+            name="Parent Faction",
+            description="The parent",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 400,  # Founded after child!
+                }
+            },
+        )
+
+        relationships = [("faction-child", "faction-parent", "child_of")]
+
+        result = validation_service.validate_entity(
+            entity=child,
+            calendar=None,
+            all_entities=[child, parent],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is False
+        assert result.error_count == 1
+        assert result.errors[0].error_type == TemporalErrorType.FOUNDING_ORDER
+
+    def test_validate_faction_with_offshoot_of_relationship(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test faction with offshoot_of relationship."""
+        offshoot = Entity(
+            id="faction-offshoot",
+            type="faction",
+            name="Offshoot Faction",
+            description="An offshoot",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 100,
+                }
+            },
+        )
+
+        parent = Entity(
+            id="faction-parent",
+            type="faction",
+            name="Parent Faction",
+            description="The parent",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 300,  # Founded after offshoot!
+                }
+            },
+        )
+
+        relationships = [("faction-offshoot", "faction-parent", "offshoot_of")]
+
+        result = validation_service.validate_entity(
+            entity=offshoot,
+            calendar=None,
+            all_entities=[offshoot, parent],
+            relationships=relationships,
+        )
+
+        assert result.is_valid is False
+        assert result.error_count == 1
+
+
+class TestCharacterValidationEdgeCases:
+    """Tests for character validation edge cases."""
+
+    def test_validate_character_without_birth_year(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test character without birth year skips checks."""
+        character = Entity(
+            id="char-1",
+            type="character",
+            name="Ageless Being",
+            description="A character",
+            attributes={
+                "lifecycle": {
+                    "temporal_notes": "Age unknown",
+                }
+            },
+        )
+
+        faction = Entity(
+            id="faction-1",
+            type="faction",
+            name="The Order",
+            description="A faction",
+            attributes={
+                "lifecycle": {
+                    "founding_year": 500,
+                }
+            },
+        )
+
+        relationships = [("char-1", "faction-1", "member_of")]
+
+        result = validation_service.validate_entity(
+            entity=character,
+            calendar=None,
+            all_entities=[character, faction],
+            relationships=relationships,
+        )
+
+        # Should pass because character has no birth year to validate
+        assert result.is_valid is True
+        assert result.error_count == 0
+
+    def test_validate_character_faction_without_founding_year(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test character-faction when faction has no founding year."""
+        character = Entity(
+            id="char-1",
+            type="character",
+            name="Knight",
+            description="A knight",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},
+                }
+            },
+        )
+
+        faction = Entity(
+            id="faction-1",
+            type="faction",
+            name="Ancient Order",
+            description="A faction",
+            attributes={},  # No lifecycle
+        )
+
+        relationships = [("char-1", "faction-1", "member_of")]
+
+        result = validation_service.validate_entity(
+            entity=character,
+            calendar=None,
+            all_entities=[character, faction],
+            relationships=relationships,
+        )
+
+        # Should pass because faction has no founding year to compare
+        assert result.is_valid is True
+        assert result.error_count == 0
