@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from src.memory.story_state import Chapter, StoryBrief, StoryState
-from src.services.export_service import ExportService, _validate_export_path
+from src.services.export_service import ExportService, validate_export_path
 from src.settings import STORIES_DIR, Settings
 
 
@@ -341,7 +341,7 @@ class TestExportServiceEdgeCases:
 
 
 class TestValidateExportPath:
-    """Tests for _validate_export_path function (path traversal prevention)."""
+    """Tests for validate_export_path function (path traversal prevention)."""
 
     def test_valid_path_within_base(self, tmp_path):
         """Test that valid paths within base directory are accepted."""
@@ -349,7 +349,7 @@ class TestValidateExportPath:
         base_dir.mkdir()
         valid_path = base_dir / "stories" / "story.md"
 
-        result = _validate_export_path(valid_path, base_dir)
+        result = validate_export_path(valid_path, base_dir)
         assert result == valid_path.resolve()
 
     def test_valid_path_in_temp_directory(self):
@@ -357,7 +357,7 @@ class TestValidateExportPath:
         temp_dir = Path(tempfile.gettempdir())
         temp_path = temp_dir / "test_export.md"
 
-        result = _validate_export_path(temp_path, STORIES_DIR.parent)
+        result = validate_export_path(temp_path, STORIES_DIR.parent)
         assert result == temp_path.resolve()
 
     def test_rejects_path_traversal_unix(self):
@@ -367,7 +367,7 @@ class TestValidateExportPath:
         malicious_path = base_dir / ".." / ".." / "etc" / "passwd"
 
         with pytest.raises(ValueError, match="outside"):
-            _validate_export_path(malicious_path, base_dir)
+            validate_export_path(malicious_path, base_dir)
 
     def test_rejects_path_traversal_windows(self):
         """Test that Windows-style path traversal is rejected."""
@@ -376,7 +376,7 @@ class TestValidateExportPath:
         malicious_path = base_dir / ".." / ".." / ".." / "windows" / "system32" / "file"
 
         with pytest.raises(ValueError, match="outside"):
-            _validate_export_path(malicious_path, base_dir)
+            validate_export_path(malicious_path, base_dir)
 
     def test_rejects_absolute_path_outside_base(self):
         """Test that absolute paths outside base are rejected."""
@@ -385,7 +385,7 @@ class TestValidateExportPath:
         outside_path = Path("/some/other/path/file.txt")
 
         with pytest.raises(ValueError, match="outside"):
-            _validate_export_path(outside_path, base_dir)
+            validate_export_path(outside_path, base_dir)
 
     def test_returns_resolved_path(self, tmp_path):
         """Test that the function returns resolved absolute paths."""
@@ -393,7 +393,7 @@ class TestValidateExportPath:
         base_dir.mkdir()
         relative_path = base_dir / "." / "sub" / ".." / "story.md"
 
-        result = _validate_export_path(relative_path, base_dir)
+        result = validate_export_path(relative_path, base_dir)
         assert result.is_absolute()
         assert ".." not in str(result)
 
@@ -403,7 +403,7 @@ class TestValidateExportPath:
         valid_path = STORIES_DIR / "test_story.md"
 
         # Should not raise if path is within default base_dir
-        result = _validate_export_path(valid_path)
+        result = validate_export_path(valid_path)
         assert result.is_absolute()
 
     def test_invalid_path_raises_value_error(self):
@@ -413,7 +413,7 @@ class TestValidateExportPath:
         # Mock Path.resolve() to raise OSError
         with patch("pathlib.Path.resolve", side_effect=OSError("Invalid path")):
             with pytest.raises(ValueError, match="Invalid export path"):
-                _validate_export_path(Path("some/path.txt"))
+                validate_export_path(Path("some/path.txt"))
 
 
 class TestExportServiceHTML:
@@ -624,10 +624,11 @@ class TestExportServiceFileExtension:
         service = ExportService(Settings())
         assert service.get_file_extension("docx") == ".docx"
 
-    def test_get_extension_unknown_defaults_to_txt(self):
-        """Test unknown format defaults to .txt extension."""
+    def test_get_extension_unknown_raises_error(self):
+        """Test unknown format raises ValueError."""
         service = ExportService(Settings())
-        assert service.get_file_extension("unknown") == ".txt"
+        with pytest.raises(ValueError, match="Unknown export format 'unknown'"):
+            service.get_file_extension("unknown")
 
 
 class TestExportServiceAdditionalEdgeCases:
@@ -696,6 +697,36 @@ class TestExportServiceAdditionalEdgeCases:
 
         with pytest.raises(RuntimeError, match="Simulated error"):
             service.save_to_file(state, "markdown", filepath)
+
+
+class TestExportServiceUnsupportedFonts:
+    """Test export with unsupported font families."""
+
+    def test_docx_unsupported_font_raises_error(self):
+        """Test that to_docx raises ValueError for unsupported font_family."""
+        from src.services.export_service import ExportOptions
+
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("test-docx-font")
+        options = ExportOptions(font_family="Comic Sans MS, cursive")
+
+        with pytest.raises(ValueError, match="Unsupported font_family"):
+            service.to_docx(state, options=options)
+
+    def test_pdf_unsupported_font_raises_error(self):
+        """Test that to_pdf raises ValueError for unsupported font_family."""
+        from src.services.export_service import ExportOptions
+
+        settings = Settings()
+        service = ExportService(settings)
+
+        state = _create_test_state("test-pdf-font")
+        options = ExportOptions(font_family="Comic Sans MS, cursive")
+
+        with pytest.raises(ValueError, match="Unsupported font_family"):
+            service.to_pdf(state, options=options)
 
 
 def _create_test_state(state_id: str) -> StoryState:

@@ -362,18 +362,43 @@ def setup_ollama_mocks(monkeypatch):
             """
             if model_id == TEST_MODEL:
                 try:
-                    # Dynamic lookup to respect test patches
-                    get_installed = getattr(
-                        settings_module, "get_installed_models_with_sizes", None
-                    )
-                    if get_installed is None:
+                    # Dynamic lookup to respect test patches.
+                    # Tests may patch either src.settings.get_installed_models_with_sizes
+                    # or src.settings._settings.get_installed_models_with_sizes, so we
+                    # check BOTH locations and if either shows non-default models,
+                    # defer to original tag lookup.
+                    import sys
+
+                    installed_results = []
+
+                    # Check __init__.py namespace (patched by most tests)
+                    fn_init = getattr(settings_module, "get_installed_models_with_sizes", None)
+                    if fn_init is not None:
+                        try:
+                            installed_results.append(fn_init())
+                        except Exception:
+                            pass
+
+                    # Check _settings submodule namespace (patched by settings tests)
+                    _settings_mod = sys.modules.get("src.settings._settings")
+                    if _settings_mod:
+                        fn_sub = getattr(_settings_mod, "get_installed_models_with_sizes", None)
+                        if fn_sub is not None and fn_sub is not fn_init:
+                            try:
+                                installed_results.append(fn_sub())
+                            except Exception:
+                                pass
+
+                    if not installed_results:
                         return ALL_ROLE_TAGS
 
-                    installed = get_installed()
-                    # Only apply all tags if TEST_MODEL is the ONLY installed model
-                    # or if no models are installed (fallback behavior)
-                    if not installed or (len(installed) == 1 and TEST_MODEL in installed):
-                        return ALL_ROLE_TAGS
+                    # If ANY source shows non-default models, don't apply all tags
+                    for installed in installed_results:
+                        if installed and not (len(installed) == 1 and TEST_MODEL in installed):
+                            return original_get_model_tags(self, model_id)
+
+                    # All sources show default (only TEST_MODEL or empty)
+                    return ALL_ROLE_TAGS
                 except Exception:
                     # If we can't check, apply all tags as a safe default
                     return ALL_ROLE_TAGS

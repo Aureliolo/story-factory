@@ -580,7 +580,7 @@ class TestModelModeServiceAdditional:
         service.save_custom_mode(custom)
         service.set_mode("no_validator")
 
-        with patch("src.services.model_mode_service.get_available_vram", return_value=16):
+        with patch("src.settings.get_available_vram", return_value=16):
             model = service.get_model_for_agent("validator")
 
         assert model == "fallback-model:8b"
@@ -627,7 +627,7 @@ class TestModelModeServiceAdditional:
 
         # Mock: model-x NOT in installed models, so it must use get_model_info
         # Available VRAM is 4GB, model requires 10GB from get_model_info
-        with patch("src.services.model_mode_service.get_available_vram", return_value=4):
+        with patch("src.settings.get_available_vram", return_value=4):
             with patch("src.settings.get_installed_models_with_sizes", return_value={}):
                 with patch(
                     "src.settings.get_model_info",
@@ -660,7 +660,7 @@ class TestModelModeServiceAdditional:
         # Mock low VRAM scenario - less than required
         # get_installed_models_with_sizes returns size 10GB, which needs ~12GB VRAM (20% overhead)
         # But only 4GB available, so should unload other models
-        with patch("src.services.model_mode_service.get_available_vram", return_value=4):
+        with patch("src.settings.get_available_vram", return_value=4):
             with patch(
                 "src.settings.get_installed_models_with_sizes", return_value={"model-c": 10.0}
             ):
@@ -736,7 +736,7 @@ class TestModelModeServiceAdditional:
         from unittest.mock import patch
 
         with patch(
-            "src.services.model_mode_service.generate_structured"
+            "src.services.model_mode_service._scoring.generate_structured"
         ) as mock_generate_structured:
             mock_generate_structured.return_value = QualityScores(
                 prose_quality=8.5, instruction_following=9.0
@@ -758,7 +758,7 @@ class TestModelModeServiceAdditional:
         from unittest.mock import patch
 
         with patch(
-            "src.services.model_mode_service.generate_structured"
+            "src.services.model_mode_service._scoring.generate_structured"
         ) as mock_generate_structured:
             # Simulate validation/parsing failure
             mock_generate_structured.side_effect = ValueError("Validation failed")
@@ -779,7 +779,7 @@ class TestModelModeServiceAdditional:
         from unittest.mock import patch
 
         with patch(
-            "src.services.model_mode_service.generate_structured"
+            "src.services.model_mode_service._scoring.generate_structured"
         ) as mock_generate_structured:
             mock_generate_structured.side_effect = ConnectionError("LLM unavailable")
 
@@ -933,7 +933,7 @@ class TestModelModeServiceAdditional:
         from unittest.mock import patch
 
         with patch(
-            "src.services.model_mode_service.generate_structured"
+            "src.services.model_mode_service._scoring.generate_structured"
         ) as mock_generate_structured:
             # Simulate JSON decode error from instructor/pydantic
             mock_generate_structured.side_effect = json.JSONDecodeError("test error", "doc", 0)
@@ -1159,6 +1159,20 @@ class TestModelModeServiceAdditional:
         # Should have generated recommendations (lines 590-629)
         assert isinstance(recommendations, list)
 
+    def test_score_continuity_missing_severity_raises(self, service: ModelModeService) -> None:
+        """Test that calculate_consistency_score raises ValueError when issue is missing severity."""
+        issues = [{"description": "Some issue without severity field"}]
+
+        with pytest.raises(ValueError, match="missing required 'severity' field"):
+            service.calculate_consistency_score(issues)
+
+    def test_score_continuity_unknown_severity_raises(self, service: ModelModeService) -> None:
+        """Test that calculate_consistency_score raises ValueError for unknown severity."""
+        issues = [{"severity": "catastrophic"}]
+
+        with pytest.raises(ValueError, match="Unknown severity 'catastrophic'"):
+            service.calculate_consistency_score(issues)
+
     def test_judge_quality_with_direct_json_decode_error(self, service: ModelModeService) -> None:
         """Test judge_quality catches json.JSONDecodeError directly."""
         from unittest.mock import patch
@@ -1166,7 +1180,7 @@ class TestModelModeServiceAdditional:
         from pydantic import ValidationError
 
         with patch(
-            "src.services.model_mode_service.generate_structured"
+            "src.services.model_mode_service._scoring.generate_structured"
         ) as mock_generate_structured:
             # Simulate a Pydantic validation error from instructor
             mock_generate_structured.side_effect = ValidationError.from_exception_data(

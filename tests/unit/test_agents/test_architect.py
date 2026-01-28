@@ -560,12 +560,8 @@ class TestArchitectCreateChapterOutline:
         # Should use project-specific count, not novella default
         assert len(chapters) == 5
 
-    def test_unknown_target_length_falls_back_to_novella(
-        self, architect, sample_story_state, caplog
-    ):
-        """Test unknown target_length logs warning and uses novella chapter count."""
-        import logging
-
+    def test_unknown_target_length_raises_error(self, architect, sample_story_state):
+        """Test unknown target_length raises ValueError instead of silently falling back."""
         # Set an unknown target_length
         sample_story_state.brief.target_length = "epic_saga"
         sample_story_state.target_chapters = None  # Force length-based lookup
@@ -575,24 +571,35 @@ class TestArchitectCreateChapterOutline:
             Character(name="Hero", role="protagonist", description="Main")
         ]
 
-        num_chapters = architect.settings.chapters_novella
-        mock_result = ChapterList(
-            chapters=[
-                Chapter(number=i + 1, title=f"Chapter {i + 1}", outline=f"Outline {i + 1}")
-                for i in range(num_chapters)
+        with pytest.raises(ValueError, match="Unknown target_length 'epic_saga'"):
+            architect.create_chapter_outline(sample_story_state)
+
+
+class TestArchitectCharacterTrimming:
+    """Tests for character trimming when LLM returns too many."""
+
+    def test_trims_characters_to_max_chars(self, architect, sample_story_state):
+        """Test that characters are trimmed to max_chars when LLM returns too many."""
+        # Set a low max so we can easily exceed it
+        sample_story_state.target_characters_min = 2
+        sample_story_state.target_characters_max = 3
+
+        # Return 6 characters, which exceeds max of 3
+        mock_characters = CharacterList(
+            characters=[
+                Character(name=f"Char{i}", role="supporting", description=f"Character {i}")
+                for i in range(6)
             ]
         )
-        architect.generate_structured = MagicMock(return_value=mock_result)
+        architect.generate_structured = MagicMock(return_value=mock_characters)
 
-        with caplog.at_level(logging.WARNING):
-            chapters = architect.create_chapter_outline(sample_story_state)
+        characters = architect.create_characters(sample_story_state)
 
-        # Should use novella chapter count
-        assert len(chapters) == num_chapters
-        # Should log a warning about unknown target_length
-        assert any(
-            "Unknown target_length 'epic_saga'" in record.message for record in caplog.records
-        )
+        # Should be trimmed to max_chars=3
+        assert len(characters) == 3
+        assert characters[0].name == "Char0"
+        assert characters[1].name == "Char1"
+        assert characters[2].name == "Char2"
 
 
 class TestArchitectProjectSpecificCharacterCount:

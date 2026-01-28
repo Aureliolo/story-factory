@@ -24,21 +24,8 @@ SOURCE_DIRS = [
 ]
 
 # Files that are explicitly allowed to exceed the limit (with justification)
-# TODO: These files should be refactored into smaller modules
-ALLOWED_LARGE_FILES: dict[str, str] = {
-    "src/ui/pages/world.py": "Complex graph visualization with entity CRUD, analysis, and import features - should be split into components",
-    "src/services/world_quality_service.py": "Quality scoring and entity generation with multiple entity types - should be split by entity type",
-    "src/services/orchestrator.py": "Main story generation workflow coordinating all agents - should be split into sub-workflows",
-    "src/ui/pages/write.py": "Main writing interface with interview, structure, and editing - should be split into components",
-    "src/memory/world_database.py": "SQLite + NetworkX world database with CRUD, queries, and migrations - should be split by concern",
-    "src/memory/mode_database.py": "Mode presets and custom mode management - should be split into presets and storage",
-    "src/services/world_service.py": "World building service with entity extraction and generation - should be split by operation type",
-    "src/ui/pages/models.py": "Model management with download queue, batch operations, and tag configuration - should be split into components",
-    "src/services/story_service.py": "Story workflow orchestration with project completion hooks and learning integration - should be split by concern",
-    "src/ui/pages/analytics.py": "Analytics dashboard with model comparisons, session history, and cost tracking visualizations - should be split into components",
-    "src/services/model_mode_service.py": "Mode management with generation scoring, adaptive learning, and recommendation system - should be split by concern",
-    "src/ui/pages/settings.py": "Application settings page with multiple sections (connection, models, temperatures, world gen, quality) and undo/redo - should be split into components",
-}
+# All previously large files have been refactored into packages
+ALLOWED_LARGE_FILES: dict[str, str] = {}
 
 
 def _count_lines(file_path: Path) -> int:

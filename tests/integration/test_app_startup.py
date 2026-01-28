@@ -47,7 +47,7 @@ class TestFullStartupSequence:
             )
         )
 
-        with patch("src.settings.SETTINGS_FILE", config_file):
+        with patch("src.settings._settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
             assert settings.ollama_url == "http://custom:11434"
 
@@ -76,7 +76,7 @@ class TestFullStartupSequence:
             )
         )
 
-        with patch("src.settings.SETTINGS_FILE", config_file):
+        with patch("src.settings._settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
             services = ServiceContainer(settings)
             StoryFactoryApp(services)  # Verify it constructs without error
@@ -130,7 +130,7 @@ class TestSettingsValidation:
         config_file = tmp_path / "settings.json"
         config_file.write_text(json.dumps({"ollama_url": "not-a-valid-url"}))
 
-        with patch("src.settings.SETTINGS_FILE", config_file):
+        with patch("src.settings._settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
             # Entire settings is replaced with defaults when validation fails
             assert settings.ollama_url == "http://localhost:11434"
@@ -142,7 +142,7 @@ class TestSettingsValidation:
         config_file = tmp_path / "settings.json"
         config_file.write_text(json.dumps({}))
 
-        with patch("src.settings.SETTINGS_FILE", config_file):
+        with patch("src.settings._settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
             assert settings.ollama_url == "http://localhost:11434"
             assert settings.context_size == 32768
@@ -163,6 +163,6 @@ class TestSettingsValidation:
             )
         )
 
-        with patch("src.settings.SETTINGS_FILE", config_file):
+        with patch("src.settings._settings.SETTINGS_FILE", config_file):
             settings = Settings.load()
             assert not hasattr(settings, "unknown_field")

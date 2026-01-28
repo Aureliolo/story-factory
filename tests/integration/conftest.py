@@ -107,7 +107,7 @@ def services(tmp_path, mock_ollama_for_agents):
         patch("src.services.project_service.WORLDS_DIR", worlds_dir),
         patch("src.services.backup_service.STORIES_DIR", stories_dir),
         patch("src.services.backup_service.WORLDS_DIR", worlds_dir),
-        patch("src.services.export_service.STORIES_DIR", stories_dir),
+        patch("src.services.export_service._types.STORIES_DIR", stories_dir),
     ):
         settings = Settings()
         yield ServiceContainer(settings)

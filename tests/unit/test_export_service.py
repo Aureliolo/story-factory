@@ -202,16 +202,16 @@ class TestExportServiceReraise:
         self, export_service, sample_state, tmp_path, monkeypatch
     ):
         """Test save_to_file re-raises ValueError from path validation."""
-        # Line 829-830: ValueError re-raise from _validate_export_path
-        # We need to trigger a ValueError from _validate_export_path inside the try block
+        # Line 829-830: ValueError re-raise from validate_export_path
+        # We need to trigger a ValueError from validate_export_path inside the try block
 
-        # Mock _validate_export_path to raise ValueError
+        # Mock validate_export_path to raise ValueError
         def mock_validate_raises(path):
             """Simulate path validation failure by raising ValueError."""
             raise ValueError("Path outside allowed directory")
 
         monkeypatch.setattr(
-            "src.services.export_service._validate_export_path", mock_validate_raises
+            "src.services.export_service.validate_export_path", mock_validate_raises
         )
 
         filepath = tmp_path / "test.md"

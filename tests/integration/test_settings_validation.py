@@ -26,7 +26,7 @@ class TestModelSelectionFallback:
             config_file = tmp_path / "settings.json"
             config_file.write_text(json.dumps({"default_model": "uninstalled-model:latest"}))
 
-            with patch("src.settings.SETTINGS_FILE", config_file):
+            with patch("src.settings._settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
 
@@ -62,7 +62,7 @@ class TestModelSelectionFallback:
                 )
             )
 
-            with patch("src.settings.SETTINGS_FILE", config_file):
+            with patch("src.settings._settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
 
@@ -100,7 +100,7 @@ class TestModelSelectionFallback:
                 )
             )
 
-            with patch("src.settings.SETTINGS_FILE", config_file):
+            with patch("src.settings._settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
 
@@ -133,7 +133,7 @@ class TestSettingsPageConstruction:
             config_file = tmp_path / "settings.json"
             config_file.write_text(json.dumps({"default_model": "model-a:latest"}))
 
-            with patch("src.settings.SETTINGS_FILE", config_file):
+            with patch("src.settings._settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
                 AppState()  # Verify it constructs
@@ -171,7 +171,7 @@ class TestSettingsPageConstruction:
                 )
             )
 
-            with patch("src.settings.SETTINGS_FILE", config_file):
+            with patch("src.settings._settings.SETTINGS_FILE", config_file):
                 settings = Settings.load()
                 services = ServiceContainer(settings)
                 AppState()  # Verify it constructs
