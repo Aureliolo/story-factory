@@ -20,6 +20,16 @@ template: |
   {{ custom_instructions }}
   {% endif %}
 
+  {% if calendar_context %}
+  === WORLD TIMELINE ===
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% if calendar_context.historical_eras %}Historical Eras: {{ calendar_context.historical_eras }}{% endif %}
+
+  Include the location's founding year and any destruction year if applicable.
+  Reference the era abbreviation when giving dates.
+  {% endif %}
+
   Create a location with:
   1. Vivid sensory details - sights, sounds, smells
   2. Atmosphere that serves the story tone
@@ -49,3 +59,4 @@ variables:
   optional:
     - existing_names
     - custom_instructions
+    - calendar_context

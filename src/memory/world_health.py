@@ -126,6 +126,24 @@ class WorldHealthMetrics(BaseModel):
         default_factory=list, description="List of detected contradictions"
     )
 
+    # Temporal consistency metrics
+    temporal_error_count: int = Field(
+        default=0, description="Number of temporal consistency errors"
+    )
+    temporal_warning_count: int = Field(
+        default=0, description="Number of temporal consistency warnings"
+    )
+    average_temporal_consistency: float = Field(
+        default=10.0,
+        ge=0.0,
+        le=10.0,
+        description="Average temporal consistency score across entities",
+    )
+    temporal_issues: list[dict] = Field(
+        default_factory=list,
+        description="List of temporal consistency issues with entity_id, message, severity",
+    )
+
     # Computed metrics
     relationship_density: float = Field(
         default=0.0,
@@ -153,6 +171,8 @@ class WorldHealthMetrics(BaseModel):
         - Circular penalty: -5 per circular chain (max -25)
         - Low quality penalty: -3 per low quality entity (max -30)
         - Contradiction penalty: -5 per contradiction (max -25)
+        - Temporal error penalty: -3 per error (max -15)
+        - Temporal warning penalty: -1 per warning (max -5)
         - Density bonus: +10 if density >= 1.5, +5 if >= 1.0
 
         Returns:
@@ -176,6 +196,12 @@ class WorldHealthMetrics(BaseModel):
         contradiction_penalty = min(self.contradiction_count * 5, 25)
         score -= contradiction_penalty
 
+        # Temporal consistency penalty
+        temporal_error_penalty = min(self.temporal_error_count * 3, 15)
+        temporal_warning_penalty = min(self.temporal_warning_count, 5)
+        score -= temporal_error_penalty
+        score -= temporal_warning_penalty
+
         # Density bonus
         if self.relationship_density >= 1.5:
             score += 10
@@ -187,7 +213,8 @@ class WorldHealthMetrics(BaseModel):
         logger.debug(
             f"Calculated health score: {self.health_score:.1f} "
             f"(orphan_penalty={orphan_penalty}, circular_penalty={circular_penalty}, "
-            f"low_quality_penalty={low_quality_penalty}, contradiction_penalty={contradiction_penalty})"
+            f"low_quality_penalty={low_quality_penalty}, contradiction_penalty={contradiction_penalty}, "
+            f"temporal_penalty={temporal_error_penalty + temporal_warning_penalty})"
         )
         return self.health_score
 
@@ -237,6 +264,18 @@ class WorldHealthMetrics(BaseModel):
             recommendations.append(
                 f"{self.contradiction_count} potential contradiction(s) detected. "
                 f"Review entity descriptions for consistency."
+            )
+
+        # Temporal consistency recommendations
+        if self.temporal_error_count > 0:
+            recommendations.append(
+                f"{self.temporal_error_count} temporal consistency error(s) detected. "
+                f"Review entity timelines for conflicts (e.g., characters born before factions founded)."
+            )
+        elif self.temporal_warning_count > 0:
+            recommendations.append(
+                f"{self.temporal_warning_count} temporal warning(s) detected. "
+                f"Consider reviewing entity dates for accuracy."
             )
 
         # Density recommendations

@@ -555,6 +555,38 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
 
             ui.separator().classes("my-2")
 
+            # Calendar and Temporal Validation subsection
+            with ui.row().classes("items-center gap-2 mb-2"):
+                ui.icon("calendar_month", size="xs").classes("text-gray-500")
+                ui.label("Calendar & Temporal").classes("text-sm font-medium")
+
+            # Generate calendar on world build
+            with ui.row().classes("w-full items-center gap-3"):
+                with ui.column().classes("flex-grow"):
+                    ui.label("Auto-Generate Calendar").classes("text-sm font-medium")
+                    ui.label("Create calendar during world build").classes("text-xs text-gray-500")
+
+                page._generate_calendar_switch = ui.switch(
+                    value=page.settings.generate_calendar_on_world_build,
+                ).tooltip(
+                    "Automatically generate a fictional calendar system when building world structure"
+                )
+
+            # Temporal consistency validation
+            with ui.row().classes("w-full items-center gap-3"):
+                with ui.column().classes("flex-grow"):
+                    ui.label("Temporal Validation").classes("text-sm font-medium")
+                    ui.label("Validate timeline consistency").classes("text-xs text-gray-500")
+
+                page._temporal_validation_switch = ui.switch(
+                    value=page.settings.validate_temporal_consistency,
+                ).tooltip(
+                    "Validate that entity timelines are consistent "
+                    "(e.g., characters born before factions they join)"
+                )
+
+            ui.separator().classes("my-2")
+
             # Relationship minimums info (read-only display)
             with ui.expansion("Relationship Minimums", icon="info", value=False).classes("w-full"):
                 ui.label("Minimum relationships per entity type/role:").classes(

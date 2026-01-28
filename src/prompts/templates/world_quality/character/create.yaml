@@ -31,6 +31,16 @@ template: |
   {{ custom_instructions }}
   {% endif %}
 
+  {% if calendar_context %}
+  === WORLD TIMELINE ===
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% if calendar_context.historical_eras %}Historical Eras: {{ calendar_context.historical_eras }}{% endif %}
+
+  When specifying the character's birth year, death year (if applicable), or key life events,
+  use years that fit within this timeline. Reference the era abbreviation when giving dates.
+  {% endif %}
+
   Create a character with:
   1. Deep psychological complexity - internal contradictions, layers
   2. Clear goals - what they want vs what they need
@@ -54,3 +64,4 @@ variables:
     - existing_names
     - custom_instructions
     - arc_template_guidance
+    - calendar_context

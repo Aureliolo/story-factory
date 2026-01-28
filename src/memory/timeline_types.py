@@ -30,6 +30,10 @@ class StoryTimestamp(BaseModel):
         description="Relative ordering for non-calendar timelines (lower = earlier)",
     )
     raw_text: str = Field(default="", description="Original timestamp string for display")
+    era_name: str | None = Field(default=None, description="Name of the era this date is in")
+    calendar_id: str | None = Field(
+        default=None, description="ID of the WorldCalendar this timestamp uses"
+    )
 
     model_config = ConfigDict(use_enum_values=True)
 
@@ -71,6 +75,8 @@ class StoryTimestamp(BaseModel):
         parts = []
         if self.year is not None:
             parts.append(f"Year {self.year}")
+            if self.era_name:
+                parts[-1] = f"Year {self.year} {self.era_name}"
         if self.month is not None:
             parts.append(f"Month {self.month}")
         if self.day is not None:
@@ -82,6 +88,27 @@ class StoryTimestamp(BaseModel):
             return f"Event #{self.relative_order}"
         else:
             return "Unknown time"
+
+    def format_display(self, calendar: Any = None) -> str:
+        """Format timestamp using a WorldCalendar for custom display.
+
+        Args:
+            calendar: Optional WorldCalendar instance for custom formatting.
+
+        Returns:
+            Formatted date string using calendar conventions if available.
+        """
+        if calendar is not None and self.year is not None:
+            # Use calendar's formatting
+            result: str = calendar.format_date(
+                year=self.year,
+                month=self.month,
+                day=self.day,
+                era_name=self.era_name,
+            )
+            return result
+        # Fall back to display_text
+        return self.display_text
 
     @property
     def has_date(self) -> bool:
@@ -118,8 +145,59 @@ class EntityLifecycle(BaseModel):
         default=None,
         description="Last mention in the story",
     )
+    temporal_notes: str = Field(
+        default="",
+        description="Additional temporal context or notes about the entity's timeline",
+    )
+    founding_year: int | None = Field(
+        default=None,
+        description="Year of founding/establishment (for factions/locations)",
+    )
+    destruction_year: int | None = Field(
+        default=None,
+        description="Year of destruction/dissolution (for factions/locations)",
+    )
 
     model_config = ConfigDict(use_enum_values=True)
+
+    @property
+    def lifespan(self) -> int | None:
+        """Calculate lifespan in years if birth/death or founding/destruction known.
+
+        Returns:
+            Lifespan in years, or None if cannot be calculated.
+        """
+        # For characters: use birth/death
+        if self.birth and self.birth.year is not None:
+            if self.death and self.death.year is not None:
+                return self.death.year - self.birth.year
+        # For factions/locations: use founding/destruction
+        if self.founding_year is not None:
+            if self.destruction_year is not None:
+                return self.destruction_year - self.founding_year
+        return None
+
+    @property
+    def start_year(self) -> int | None:
+        """Get the earliest year associated with this entity.
+
+        Returns:
+            Birth year, founding year, or None.
+        """
+        if self.birth and self.birth.year is not None:
+            return self.birth.year
+        return self.founding_year
+
+    @property
+    def end_year(self) -> int | None:
+        """Get the latest year associated with this entity.
+
+        Returns:
+            Death year, destruction year, or None if still active.
+        """
+        if self.death and self.death.year is not None:
+            return self.death.year
+        return self.destruction_year
 
 
 class TimelineItem(BaseModel):
@@ -299,5 +377,24 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
         elif isinstance(last_data, str):
             result.last_appearance = parse_timestamp(last_data)
 
-    logger.debug(f"Extracted lifecycle: birth={result.birth}, death={result.death}")
+    # Extract additional temporal fields
+    if notes := lifecycle_data.get("temporal_notes"):
+        result.temporal_notes = str(notes)
+
+    if founding := lifecycle_data.get("founding_year"):
+        if isinstance(founding, int):
+            result.founding_year = founding
+        elif isinstance(founding, str) and founding.isdigit():
+            result.founding_year = int(founding)
+
+    if destruction := lifecycle_data.get("destruction_year"):
+        if isinstance(destruction, int):
+            result.destruction_year = destruction
+        elif isinstance(destruction, str) and destruction.isdigit():
+            result.destruction_year = int(destruction)
+
+    logger.debug(
+        f"Extracted lifecycle: birth={result.birth}, death={result.death}, "
+        f"founding={result.founding_year}, destruction={result.destruction_year}"
+    )
     return result

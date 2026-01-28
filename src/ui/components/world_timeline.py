@@ -13,6 +13,7 @@ from nicegui import ui
 from nicegui.elements.html import Html
 
 from src.memory.timeline_types import TimelineItem
+from src.memory.world_calendar import WorldCalendar
 from src.ui.theme import ENTITY_COLORS
 
 if TYPE_CHECKING:
@@ -68,6 +69,7 @@ class WorldTimelineComponent:
         self.services = services
         self.on_item_select = on_item_select
         self.height = height
+        self._calendar: WorldCalendar | None = None
 
         self._container: Html | None = None
         self._filter_types: list[str] = [
@@ -188,6 +190,15 @@ class WorldTimelineComponent:
         self.world_db = world_db
         self._render_timeline()
 
+    def set_calendar(self, calendar: WorldCalendar | None) -> None:
+        """Set the calendar for custom date formatting.
+
+        Args:
+            calendar: WorldCalendar to use for date formatting, or None to use default.
+        """
+        self._calendar = calendar
+        self._render_timeline()
+
     def refresh(self) -> None:
         """Refresh the timeline visualization."""
         self._render_timeline()
@@ -274,6 +285,42 @@ class WorldTimelineComponent:
             }}
             .dark #{container_id} .vis-labelset .vis-label {{
                 color: #e5e7eb;
+            }}
+            /* Dark mode fixes for timeline panels and grid */
+            .dark #{container_id} .vis-panel.vis-center {{
+                background: #1f2937;
+                border-color: #374151;
+            }}
+            .dark #{container_id} .vis-panel.vis-left {{
+                background: #1f2937;
+                border-color: #374151;
+            }}
+            .dark #{container_id} .vis-panel.vis-right {{
+                background: #1f2937;
+                border-color: #374151;
+            }}
+            .dark #{container_id} .vis-panel.vis-top {{
+                background: #111827;
+                border-color: #374151;
+            }}
+            .dark #{container_id} .vis-panel.vis-bottom {{
+                background: #111827;
+                border-color: #374151;
+            }}
+            .dark #{container_id} .vis-time-axis {{
+                background: #111827;
+            }}
+            .dark #{container_id} .vis-grid.vis-minor {{
+                border-color: #374151;
+            }}
+            .dark #{container_id} .vis-grid.vis-major {{
+                border-color: #374151;
+            }}
+            .dark #{container_id} .vis-item .vis-item-content {{
+                color: #111827;
+            }}
+            .dark #{container_id} .vis-item.vis-background {{
+                background-color: rgba(55, 65, 81, 0.3);
             }}
         </style>
         <div id="{container_id}" style="height: {self.height - 20}px;"></div>
@@ -364,11 +411,21 @@ class WorldTimelineComponent:
         base_year = 1000  # Base year for relative ordering
 
         for item in items:
+            # Format dates using calendar if available
+            title = item.description or item.label
+            if self._calendar and item.start.year is not None:
+                formatted_start = item.start.format_display(self._calendar)
+                if item.end and item.end.year is not None:
+                    formatted_end = item.end.format_display(self._calendar)
+                    title = f"{title}<br>({formatted_start} - {formatted_end})"
+                else:
+                    title = f"{title}<br>({formatted_start})"
+
             vis_item: dict[str, Any] = {
                 "id": item.id,
                 "content": item.label,
                 "group": item.group or item.item_type,
-                "title": item.description or item.label,
+                "title": title,
                 "style": f"background-color: {item.color}; border-color: {item.color};",
             }
 

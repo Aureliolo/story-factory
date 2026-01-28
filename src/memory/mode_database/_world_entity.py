@@ -32,6 +32,8 @@ def record_world_entity_score(
     best_iteration: int = 0,
     quality_threshold: float | None = None,
     max_iterations: int | None = None,
+    temporal_consistency_score: float | None = None,
+    temporal_validation_errors: list[dict] | None = None,
 ) -> int:
     """Record a world entity quality score with refinement effectiveness metrics.
 
@@ -55,6 +57,8 @@ def record_world_entity_score(
         best_iteration: Iteration number that produced the best score.
         quality_threshold: The quality threshold used for this entity.
         max_iterations: Maximum iterations configured for this entity.
+        temporal_consistency_score: Score for temporal consistency validation (0-10).
+        temporal_validation_errors: List of temporal validation error dicts.
 
     Returns:
         The ID of the inserted record.
@@ -72,6 +76,9 @@ def record_world_entity_score(
 
     # Convert score progression to JSON
     score_progression_json = json.dumps(score_progression) if score_progression else None
+    temporal_errors_json = (
+        json.dumps(temporal_validation_errors) if temporal_validation_errors else None
+    )
 
     try:
         with db._lock:
@@ -84,8 +91,9 @@ def record_world_entity_score(
                         iterations_used, generation_time_seconds, feedback,
                         early_stop_triggered, threshold_met, peak_score, final_score,
                         score_progression_json, consecutive_degradations, best_iteration,
-                        quality_threshold, max_iterations
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        quality_threshold, max_iterations,
+                        temporal_consistency_score, temporal_validation_errors
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         project_id,
@@ -110,6 +118,8 @@ def record_world_entity_score(
                         best_iteration,
                         quality_threshold,
                         max_iterations,
+                        temporal_consistency_score,
+                        temporal_errors_json,
                     ),
                 )
                 conn.commit()

@@ -16,17 +16,24 @@ template: |
   Goals: {{ character_goals | join(", ") }}
   Arc Notes: {{ character_arc_notes }}
 
+  {% if calendar_context %}
+  WORLD TIMELINE:
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% endif %}
+
   Rate each dimension 0-10:
   - depth: Psychological complexity, internal contradictions, layers
   - goals: Clarity, story relevance, want vs need tension
   - flaws: Meaningful vulnerabilities that drive conflict
   - uniqueness: Distinctiveness from genre archetypes
   - arc_potential: Room for transformation and growth
+  - temporal_consistency: Timeline accuracy, era-appropriate details, valid dates
 
   Provide specific, actionable feedback for improvement in the feedback field.
 
   OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-  {"depth": <number>, "goals": <number>, "flaws": <number>, "uniqueness": <number>, "arc_potential": <number>, "feedback": "<string>"}
+  {"depth": <number>, "goals": <number>, "flaws": <number>, "uniqueness": <number>, "arc_potential": <number>, "temporal_consistency": <number>, "feedback": "<string>"}
 
   DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment.
 
@@ -39,4 +46,5 @@ variables:
     - character_traits
     - character_goals
     - character_arc_notes
-  optional: []
+  optional:
+    - calendar_context

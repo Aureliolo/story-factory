@@ -17,7 +17,7 @@ from . import _entities, _events, _graph, _io, _relationships, _versions
 logger = logging.getLogger(__name__)
 
 # Schema version for migration support
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Valid entity types (whitelist)
 VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
@@ -323,6 +323,38 @@ class WorldDatabase:
                 "ON entity_versions(entity_id, version_number)"
             )
             logger.info("Migration v1->v2: Added entity_versions table")
+
+        # Migration from v2 to v3: Add world_settings and historical_eras tables
+        if from_version < 3:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS world_settings (
+                    id TEXT PRIMARY KEY,
+                    calendar_json TEXT,
+                    timeline_start_year INTEGER,
+                    timeline_end_year INTEGER,
+                    validate_temporal_consistency INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS historical_eras (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    start_year INTEGER NOT NULL,
+                    end_year INTEGER,
+                    description TEXT DEFAULT '',
+                    display_order INTEGER DEFAULT 0
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_historical_eras_start ON historical_eras(start_year)"
+            )
+            logger.info("Migration v2->v3: Added world_settings and historical_eras tables")
 
         logger.info("Database migration complete")
 

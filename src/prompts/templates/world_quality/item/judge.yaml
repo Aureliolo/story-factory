@@ -15,16 +15,23 @@ template: |
   Powers: {{ item_powers }}
   Significance: {{ item_significance }}
 
+  {% if calendar_context %}
+  WORLD TIMELINE:
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% endif %}
+
   Rate each dimension 0-10:
   - intrigue: Interest factor and mystery
   - plot_utility: Usefulness for story and conflict
   - uniqueness: Distinctiveness from common tropes
   - world_fit: How well it fits the setting
+  - temporal_consistency: Timeline accuracy, era-appropriate crafting/technology
 
   Provide specific, actionable feedback for improvement.
 
   OUTPUT FORMAT - Return ONLY a flat JSON object:
-  {"intrigue": <number>, "plot_utility": <number>, "uniqueness": <number>, "world_fit": <number>, "feedback": "<string>"}
+  {"intrigue": <number>, "plot_utility": <number>, "uniqueness": <number>, "world_fit": <number>, "temporal_consistency": <number>, "feedback": "<string>"}
 
 variables:
   required:
@@ -34,4 +41,5 @@ variables:
     - item_history
     - item_powers
     - item_significance
-  optional: []
+  optional:
+    - calendar_context
