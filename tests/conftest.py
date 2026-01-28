@@ -84,6 +84,49 @@ def isolate_mode_database(tmp_path, monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def isolate_project_directories(tmp_path, monkeypatch):
+    """Redirect STORIES_DIR and WORLDS_DIR to temp directory.
+
+    The ProjectService creates directories at STORIES_DIR and WORLDS_DIR during __init__.
+    Without this fixture, tests that create ServiceContainer without explicit patches
+    would create directories in the real output/ folder.
+
+    This autouse fixture patches at ALL import locations to ensure complete isolation.
+    Note: Directories are NOT created here - ProjectService._ensure_directories() creates
+    them with exist_ok=True, and tests that need dirs before service init create their own.
+    """
+    import src.services.backup_service as backup_service_module
+    import src.services.project_service as project_service_module
+    import src.settings as settings_module
+
+    # Also need to patch export service types if it exists
+    try:
+        import src.services.export_service._types as export_types_module
+
+        has_export_types = True
+    except ImportError:
+        has_export_types = False
+
+    stories_dir = tmp_path / "stories"
+    worlds_dir = tmp_path / "worlds"
+    # Don't create directories here - let tests or ProjectService create them
+    # This avoids conflicts with tests that create their own temp directories
+
+    # Patch at all import locations
+    monkeypatch.setattr(settings_module, "STORIES_DIR", stories_dir)
+    monkeypatch.setattr(settings_module, "WORLDS_DIR", worlds_dir)
+    monkeypatch.setattr(project_service_module, "STORIES_DIR", stories_dir)
+    monkeypatch.setattr(project_service_module, "WORLDS_DIR", worlds_dir)
+    monkeypatch.setattr(backup_service_module, "STORIES_DIR", stories_dir)
+    monkeypatch.setattr(backup_service_module, "WORLDS_DIR", worlds_dir)
+
+    if has_export_types:
+        monkeypatch.setattr(export_types_module, "STORIES_DIR", stories_dir)
+
+    yield
+
+
 @pytest.fixture(scope="session")
 def cached_settings() -> Settings:
     """Create default settings once per test session for performance.

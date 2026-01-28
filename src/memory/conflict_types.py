@@ -29,6 +29,7 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     # Alliance - positive, cooperative relationships
     "loves": ConflictCategory.ALLIANCE,
     "ally_of": ConflictCategory.ALLIANCE,
+    "allies_with": ConflictCategory.ALLIANCE,
     "protects": ConflictCategory.ALLIANCE,
     "member_of": ConflictCategory.ALLIANCE,
     "serves": ConflictCategory.ALLIANCE,
