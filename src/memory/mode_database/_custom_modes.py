@@ -41,36 +41,37 @@ def save_custom_mode(
         sqlite3.Error: If database operation fails.
     """
     try:
-        with sqlite3.connect(db.db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO custom_modes (
-                    id, name, description, agent_models_json,
-                    agent_temperatures_json, size_preference, vram_strategy,
-                    is_experimental, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-                ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name,
-                    description = excluded.description,
-                    agent_models_json = excluded.agent_models_json,
-                    agent_temperatures_json = excluded.agent_temperatures_json,
-                    size_preference = excluded.size_preference,
-                    vram_strategy = excluded.vram_strategy,
-                    is_experimental = excluded.is_experimental,
-                    updated_at = datetime('now')
-                """,
-                (
-                    mode_id,
-                    name,
-                    description,
-                    json.dumps(agent_models),
-                    json.dumps(agent_temperatures),
-                    size_preference,
-                    vram_strategy,
-                    1 if is_experimental else 0,
-                ),
-            )
-            conn.commit()
+        with db._lock:
+            with sqlite3.connect(db.db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO custom_modes (
+                        id, name, description, agent_models_json,
+                        agent_temperatures_json, size_preference, vram_strategy,
+                        is_experimental, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name,
+                        description = excluded.description,
+                        agent_models_json = excluded.agent_models_json,
+                        agent_temperatures_json = excluded.agent_temperatures_json,
+                        size_preference = excluded.size_preference,
+                        vram_strategy = excluded.vram_strategy,
+                        is_experimental = excluded.is_experimental,
+                        updated_at = datetime('now')
+                    """,
+                    (
+                        mode_id,
+                        name,
+                        description,
+                        json.dumps(agent_models),
+                        json.dumps(agent_temperatures),
+                        size_preference,
+                        vram_strategy,
+                        1 if is_experimental else 0,
+                    ),
+                )
+                conn.commit()
     except sqlite3.Error as e:
         logger.error(
             "Failed to save custom mode mode_id=%s name=%s: %s",
@@ -84,41 +85,58 @@ def save_custom_mode(
 
 def get_custom_mode(db, mode_id: str) -> dict[str, Any] | None:
     """Get a custom mode by ID."""
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            "SELECT * FROM custom_modes WHERE id = ?",
-            (mode_id,),
-        )
-        row = cursor.fetchone()
-        if row:
-            result = dict(row)
-            result["agent_models"] = json.loads(result.pop("agent_models_json"))
-            result["agent_temperatures"] = json.loads(result.pop("agent_temperatures_json"))
-            return result
-        return None
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM custom_modes WHERE id = ?",
+                (mode_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                result = dict(row)
+                try:
+                    result["agent_models"] = json.loads(result.pop("agent_models_json"))
+                    result["agent_temperatures"] = json.loads(result.pop("agent_temperatures_json"))
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Corrupt JSON in custom mode id=%s, skipping record",
+                        mode_id,
+                    )
+                    return None
+                return result
+            return None
 
 
 def list_custom_modes(db) -> list[dict[str, Any]]:
     """List all custom modes."""
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute("SELECT * FROM custom_modes ORDER BY name")
-        results = []
-        for row in cursor.fetchall():
-            result = dict(row)
-            result["agent_models"] = json.loads(result.pop("agent_models_json"))
-            result["agent_temperatures"] = json.loads(result.pop("agent_temperatures_json"))
-            results.append(result)
-        return results
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM custom_modes ORDER BY name")
+            results = []
+            for row in cursor.fetchall():
+                result = dict(row)
+                try:
+                    result["agent_models"] = json.loads(result.pop("agent_models_json"))
+                    result["agent_temperatures"] = json.loads(result.pop("agent_temperatures_json"))
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Corrupt JSON in custom mode id=%s, skipping record",
+                        result.get("id", "unknown"),
+                    )
+                    continue
+                results.append(result)
+            return results
 
 
 def delete_custom_mode(db, mode_id: str) -> bool:
     """Delete a custom mode."""
-    with sqlite3.connect(db.db_path) as conn:
-        cursor = conn.execute(
-            "DELETE FROM custom_modes WHERE id = ?",
-            (mode_id,),
-        )
-        conn.commit()
-        return cursor.rowcount > 0
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute(
+                "DELETE FROM custom_modes WHERE id = ?",
+                (mode_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0

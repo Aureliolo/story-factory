@@ -53,88 +53,95 @@ def get_refinement_effectiveness_summary(
 
     where_sql = " AND ".join(where_clauses)
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row  # Access columns by name for robustness
-        # Overall statistics
-        cursor = conn.execute(
-            f"""
-            SELECT
-                COUNT(*) as total_entities,
-                SUM(threshold_met) as threshold_met_count,
-                SUM(early_stop_triggered) as early_stop_count,
-                AVG(iterations_used) as avg_iterations,
-                AVG(CASE WHEN peak_score IS NOT NULL AND final_score IS NOT NULL
-                    THEN peak_score - final_score ELSE 0 END) as avg_score_loss,
-                SUM(CASE WHEN best_iteration = iterations_used THEN 1 ELSE 0 END)
-                    as best_is_final_count
-            FROM world_entity_scores
-            WHERE {where_sql}
-            """,
-            params,
-        )
-        row = cursor.fetchone()
-
-        total = row["total_entities"] or 0
-        summary: dict[str, Any] = {
-            "total_entities": total,
-            "threshold_met_rate": (
-                round((row["threshold_met_count"] or 0) / total * 100, 1) if total > 0 else 0.0
-            ),
-            "early_stop_rate": (
-                round((row["early_stop_count"] or 0) / total * 100, 1) if total > 0 else 0.0
-            ),
-            "avg_iterations": (round(row["avg_iterations"], 2) if row["avg_iterations"] else None),
-            "avg_score_loss": round(row["avg_score_loss"], 3) if row["avg_score_loss"] else 0.0,
-            "best_is_final_rate": (
-                round((row["best_is_final_count"] or 0) / total * 100, 1) if total > 0 else 0.0
-            ),
-            "by_entity_type": [],
-        }
-
-        # Breakdown by entity type
-        cursor = conn.execute(
-            f"""
-            SELECT
-                entity_type,
-                COUNT(*) as count,
-                SUM(threshold_met) as threshold_met,
-                SUM(early_stop_triggered) as early_stopped,
-                AVG(iterations_used) as avg_iterations,
-                AVG(CASE WHEN peak_score IS NOT NULL AND final_score IS NOT NULL
-                    THEN peak_score - final_score ELSE 0 END) as avg_score_loss
-            FROM world_entity_scores
-            WHERE {where_sql}
-            GROUP BY entity_type
-            ORDER BY count DESC
-            """,
-            params,
-        )
-        for r in cursor.fetchall():
-            count = r["count"] or 0
-            summary["by_entity_type"].append(
-                {
-                    "entity_type": r["entity_type"],
-                    "count": count,
-                    "threshold_met_rate": (
-                        round((r["threshold_met"] or 0) / count * 100, 1) if count > 0 else 0.0
-                    ),
-                    "early_stop_rate": (
-                        round((r["early_stopped"] or 0) / count * 100, 1) if count > 0 else 0.0
-                    ),
-                    "avg_iterations": round(r["avg_iterations"], 2)
-                    if r["avg_iterations"]
-                    else None,
-                    "avg_score_loss": round(r["avg_score_loss"], 3) if r["avg_score_loss"] else 0.0,
-                }
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row  # Access columns by name for robustness
+            # Overall statistics
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    COUNT(*) as total_entities,
+                    SUM(threshold_met) as threshold_met_count,
+                    SUM(early_stop_triggered) as early_stop_count,
+                    AVG(iterations_used) as avg_iterations,
+                    AVG(CASE WHEN peak_score IS NOT NULL AND final_score IS NOT NULL
+                        THEN peak_score - final_score ELSE 0 END) as avg_score_loss,
+                    SUM(CASE WHEN best_iteration = iterations_used THEN 1 ELSE 0 END)
+                        as best_is_final_count
+                FROM world_entity_scores
+                WHERE {where_sql}
+                """,
+                params,
             )
+            row = cursor.fetchone()
 
-        logger.debug(
-            "Refinement effectiveness summary: total=%d, threshold_met=%.1f%%, early_stop=%.1f%%",
-            summary["total_entities"],
-            summary["threshold_met_rate"],
-            summary["early_stop_rate"],
-        )
-        return summary
+            total = row["total_entities"] or 0
+            summary: dict[str, Any] = {
+                "total_entities": total,
+                "threshold_met_rate": (
+                    round((row["threshold_met_count"] or 0) / total * 100, 1) if total > 0 else 0.0
+                ),
+                "early_stop_rate": (
+                    round((row["early_stop_count"] or 0) / total * 100, 1) if total > 0 else 0.0
+                ),
+                "avg_iterations": (
+                    round(row["avg_iterations"], 2) if row["avg_iterations"] else None
+                ),
+                "avg_score_loss": round(row["avg_score_loss"], 3)
+                if row["avg_score_loss"]
+                else None,
+                "best_is_final_rate": (
+                    round((row["best_is_final_count"] or 0) / total * 100, 1) if total > 0 else 0.0
+                ),
+                "by_entity_type": [],
+            }
+
+            # Breakdown by entity type
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    entity_type,
+                    COUNT(*) as count,
+                    SUM(threshold_met) as threshold_met,
+                    SUM(early_stop_triggered) as early_stopped,
+                    AVG(iterations_used) as avg_iterations,
+                    AVG(CASE WHEN peak_score IS NOT NULL AND final_score IS NOT NULL
+                        THEN peak_score - final_score ELSE 0 END) as avg_score_loss
+                FROM world_entity_scores
+                WHERE {where_sql}
+                GROUP BY entity_type
+                ORDER BY count DESC
+                """,
+                params,
+            )
+            for r in cursor.fetchall():
+                count = r["count"] or 0
+                summary["by_entity_type"].append(
+                    {
+                        "entity_type": r["entity_type"],
+                        "count": count,
+                        "threshold_met_rate": (
+                            round((r["threshold_met"] or 0) / count * 100, 1) if count > 0 else 0.0
+                        ),
+                        "early_stop_rate": (
+                            round((r["early_stopped"] or 0) / count * 100, 1) if count > 0 else 0.0
+                        ),
+                        "avg_iterations": round(r["avg_iterations"], 2)
+                        if r["avg_iterations"]
+                        else None,
+                        "avg_score_loss": round(r["avg_score_loss"], 3)
+                        if r["avg_score_loss"]
+                        else None,
+                    }
+                )
+
+            logger.debug(
+                "Refinement effectiveness summary: total=%d, threshold_met=%.1f%%, early_stop=%.1f%%",
+                summary["total_entities"],
+                summary["threshold_met_rate"],
+                summary["early_stop_rate"],
+            )
+            return summary
 
 
 def get_refinement_progression_data(
@@ -159,6 +166,9 @@ def get_refinement_progression_data(
             - threshold_met, early_stop_triggered, consecutive_degradations, quality_threshold
             - score_progression (list[float])
     """
+    if limit < 0:
+        raise ValidationError("limit must be a non-negative integer")
+
     logger.debug(
         "Getting refinement progression data: entity_type=%s, limit=%d",
         entity_type,
@@ -182,18 +192,22 @@ def get_refinement_progression_data(
     query += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(query, params)
-        results = []
-        for row in cursor.fetchall():
-            record = dict(row)
-            # Parse JSON progression
-            if record.get("score_progression_json"):
-                record["score_progression"] = json.loads(record["score_progression_json"])
-                del record["score_progression_json"]
-            else:
-                record["score_progression"] = []
-            results.append(record)
-        logger.debug("Retrieved %d refinement progression records", len(results))
-        return results
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            results = []
+            for row in cursor.fetchall():
+                record = dict(row)
+                raw_json = record.pop("score_progression_json")
+                try:
+                    record["score_progression"] = json.loads(raw_json)
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning(
+                        "Malformed score_progression_json for entity %s, using empty list",
+                        record.get("entity_name"),
+                    )
+                    record["score_progression"] = []
+                results.append(record)
+            logger.debug("Retrieved %d refinement progression records", len(results))
+            return results

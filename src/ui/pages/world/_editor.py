@@ -98,7 +98,7 @@ def build_type_specific_fields(page, entity: Entity) -> None:
     attrs = entity.attributes or {}
 
     # Store dynamic attribute inputs for saving
-    page._dynamic_attr_inputs: dict[str, Any] = {}
+    page._dynamic_attr_inputs: dict[str, Any] = {}  # type: ignore[misc]
 
     with ui.expansion("Attributes", icon="list", value=True).classes("w-full"):
         # Skip quality_scores - handled separately below

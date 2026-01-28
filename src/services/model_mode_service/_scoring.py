@@ -281,9 +281,25 @@ def calculate_consistency_score(issues: list[dict[str, Any]]) -> float:
         return 10.0
 
     # Weight by severity
+    valid_severities = {"critical", "moderate", "minor"}
     penalty = 0.0
     for issue in issues:
-        severity = issue.get("severity", "minor")
+        if "severity" not in issue:
+            logger.warning(
+                f"Continuity issue missing 'severity' field: {issue}. "
+                f"Expected one of: {valid_severities}."
+            )
+            raise ValueError(
+                f"Continuity issue is missing required 'severity' field. "
+                f"Each issue must have a 'severity' of: {valid_severities}"
+            )
+        severity = issue["severity"]
+        if severity not in valid_severities:
+            logger.warning(
+                f"Unknown severity '{severity}' in continuity issue. "
+                f"Expected one of: {valid_severities}."
+            )
+            raise ValueError(f"Unknown severity '{severity}'. Valid options: {valid_severities}")
         if severity == "critical":
             penalty += 3.0
         elif severity == "moderate":

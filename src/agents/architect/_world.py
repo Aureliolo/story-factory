@@ -4,8 +4,6 @@ Handles world creation, character generation, location generation,
 and relationship generation.
 """
 
-from __future__ import annotations
-
 import logging
 import random
 from typing import TYPE_CHECKING, Any
@@ -22,7 +20,7 @@ from src.utils.validation import validate_not_none, validate_positive, validate_
 if TYPE_CHECKING:
     from . import ArchitectAgent
 
-logger = logging.getLogger("src.agents.architect._world")
+logger = logging.getLogger(__name__)
 
 
 def create_world(agent: ArchitectAgent, story_state: StoryState) -> str:
@@ -177,6 +175,11 @@ def create_characters(
                     char.arc_type = protagonist_arc_id
                 elif char.role == "antagonist" and antagonist_arc_template:
                     char.arc_type = antagonist_arc_id
+
+            # Trim to max_chars if the LLM returned too many
+            if len(result.characters) > max_chars:
+                logger.info(f"Trimming characters from {len(result.characters)} to {max_chars}")
+                result.characters = result.characters[:max_chars]
 
             logger.info(
                 f"Created {len(result.characters)} characters: "

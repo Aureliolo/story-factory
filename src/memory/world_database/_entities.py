@@ -1,7 +1,5 @@
 """Entity CRUD operations for WorldDatabase."""
 
-from __future__ import annotations
-
 import json
 import logging
 import sqlite3
@@ -39,7 +37,7 @@ def add_entity(
     Raises:
         ValueError: If name, entity_type, or attributes are invalid
     """
-    from . import VALID_ENTITY_TYPES, _validate_and_normalize_attributes
+    from . import VALID_ENTITY_TYPES, validate_and_normalize_attributes
 
     logger.debug("add_entity called: type=%s, name=%s", entity_type, name)
     # Validate inputs
@@ -66,7 +64,7 @@ def add_entity(
     # Validate and normalize attributes (flattens deep nesting)
     attrs = attributes or {}
     if attrs:
-        attrs = _validate_and_normalize_attributes(attrs)
+        attrs = validate_and_normalize_attributes(attrs)
 
     entity_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
@@ -156,7 +154,7 @@ def update_entity(db: WorldDatabase, entity_id: str, **updates: Any) -> bool:
     Raises:
         ValueError: If validation fails or field names are invalid
     """
-    from . import ENTITY_UPDATE_FIELDS, VALID_ENTITY_TYPES, _validate_and_normalize_attributes
+    from . import ENTITY_UPDATE_FIELDS, VALID_ENTITY_TYPES, validate_and_normalize_attributes
 
     logger.debug("update_entity called: entity_id=%s, fields=%s", entity_id, list(updates.keys()))
     # Filter and validate field names (SQL injection prevention)
@@ -206,7 +204,7 @@ def update_entity(db: WorldDatabase, entity_id: str, **updates: Any) -> bool:
     if "attributes" in update_fields:
         attrs = update_fields["attributes"]
         if attrs:
-            attrs = _validate_and_normalize_attributes(attrs)
+            attrs = validate_and_normalize_attributes(attrs)
         update_fields["attributes"] = json.dumps(attrs or {})
 
     update_fields["updated_at"] = datetime.now().isoformat()

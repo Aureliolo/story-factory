@@ -132,6 +132,7 @@ class StoryOrchestrator:
 
     def create_new_story(self) -> StoryState:
         """Initialize a new story with a default project name."""
+        logger.debug("create_new_story called")
         now = datetime.now()
         default_name = f"New Story - {now.strftime('%b %d, %Y %I:%M %p')}"
 
@@ -152,6 +153,7 @@ class StoryOrchestrator:
 
     def update_project_name(self, name: str) -> None:
         """Update the project name."""
+        logger.debug("update_project_name called: name=%s", name)
         if self.story_state:
             self.story_state.project_name = name
             self.autosave()

@@ -135,9 +135,14 @@ def list_events(db, limit: int | None = None) -> list[WorldEvent]:
     Returns:
         List of events
     """
+    # Guard against invalid limit values
+    if limit is not None and limit <= 0:
+        logger.debug(f"list_events called with limit={limit}, returning empty list")
+        return []
+
     with db._lock:
         cursor = db.conn.cursor()
-        if limit:
+        if limit is not None:
             cursor.execute(
                 "SELECT * FROM events ORDER BY chapter_number, created_at LIMIT ?",
                 (limit,),

@@ -30,7 +30,7 @@ MAX_ATTRIBUTES_DEPTH = 3
 MAX_ATTRIBUTES_SIZE_BYTES = 10 * 1024  # 10KB
 
 
-def _flatten_deep_attributes(
+def flatten_deep_attributes(
     obj: Any, max_depth: int = MAX_ATTRIBUTES_DEPTH, current_depth: int = 0
 ) -> Any:
     """Flatten attributes that exceed max nesting depth.
@@ -61,15 +61,13 @@ def _flatten_deep_attributes(
             return str(obj)
 
     if isinstance(obj, dict):
-        return {
-            k: _flatten_deep_attributes(v, max_depth, current_depth + 1) for k, v in obj.items()
-        }
+        return {k: flatten_deep_attributes(v, max_depth, current_depth + 1) for k, v in obj.items()}
     elif isinstance(obj, list):
-        return [_flatten_deep_attributes(item, max_depth, current_depth + 1) for item in obj]
+        return [flatten_deep_attributes(item, max_depth, current_depth + 1) for item in obj]
     return obj
 
 
-def _check_nesting_depth(obj: Any, max_depth: int, current_depth: int = 0) -> bool:
+def check_nesting_depth(obj: Any, max_depth: int, current_depth: int = 0) -> bool:
     """Check if object exceeds maximum nesting depth.
 
     Args:
@@ -83,13 +81,13 @@ def _check_nesting_depth(obj: Any, max_depth: int, current_depth: int = 0) -> bo
     if current_depth > max_depth:
         return True
     if isinstance(obj, dict):
-        return any(_check_nesting_depth(v, max_depth, current_depth + 1) for v in obj.values())
+        return any(check_nesting_depth(v, max_depth, current_depth + 1) for v in obj.values())
     elif isinstance(obj, list):
-        return any(_check_nesting_depth(item, max_depth, current_depth + 1) for item in obj)
+        return any(check_nesting_depth(item, max_depth, current_depth + 1) for item in obj)
     return False
 
 
-def _validate_and_normalize_attributes(
+def validate_and_normalize_attributes(
     attrs: dict[str, Any], max_depth: int = MAX_ATTRIBUTES_DEPTH
 ) -> dict[str, Any]:
     """Validate and normalize attributes dict.
@@ -107,11 +105,11 @@ def _validate_and_normalize_attributes(
         ValueError: If attributes exceed size limit.
     """
     # Check if flattening is needed and flatten
-    if _check_nesting_depth(attrs, max_depth, current_depth=1):
+    if check_nesting_depth(attrs, max_depth, current_depth=1):
         logger.warning(
             f"Attributes exceed maximum nesting depth of {max_depth}, flattening deep structures"
         )
-        attrs = _flatten_deep_attributes(attrs, max_depth, current_depth=1)
+        attrs = flatten_deep_attributes(attrs, max_depth, current_depth=1)
 
     # Check size (after flattening)
     attrs_json = json.dumps(attrs)
@@ -568,7 +566,7 @@ __all__ = [
     "RelationshipValidationError",
     "WorldDatabase",
     "WorldEvent",
-    "_check_nesting_depth",
-    "_flatten_deep_attributes",
-    "_validate_and_normalize_attributes",
+    "check_nesting_depth",
+    "flatten_deep_attributes",
+    "validate_and_normalize_attributes",
 ]

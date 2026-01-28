@@ -14,7 +14,7 @@ from src.memory.mode_models import (
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
 
-logger = logging.getLogger("src.services.model_mode_service._learning")
+logger = logging.getLogger(__name__)
 
 
 def set_learning_settings(svc: ModelModeService, settings: LearningSettings) -> None:
@@ -24,6 +24,7 @@ def set_learning_settings(svc: ModelModeService, settings: LearningSettings) -> 
         svc: The ModelModeService instance.
         settings: New learning settings.
     """
+    logger.debug("set_learning_settings called: settings=%s", settings)
     svc._learning_settings = settings
 
 
@@ -36,6 +37,7 @@ def get_learning_settings(svc: ModelModeService) -> LearningSettings:
     Returns:
         Current LearningSettings.
     """
+    logger.debug("get_learning_settings called")
     return svc._learning_settings
 
 
@@ -48,6 +50,7 @@ def should_tune(svc: ModelModeService) -> bool:
     Returns:
         True if tuning analysis should run.
     """
+    logger.debug("should_tune called")
     triggers = svc._learning_settings.triggers
 
     if LearningTrigger.OFF in triggers:
@@ -69,6 +72,7 @@ def on_chapter_complete(svc: ModelModeService) -> None:
     Args:
         svc: The ModelModeService instance.
     """
+    logger.debug("on_chapter_complete called")
     svc._chapters_since_analysis += 1
 
 
@@ -83,6 +87,7 @@ def on_project_complete(svc: ModelModeService) -> list[TuningRecommendation]:
     Returns:
         List of tuning recommendations, may be empty.
     """
+    logger.debug("on_project_complete called")
     svc._chapters_since_analysis = 0
 
     if LearningTrigger.AFTER_PROJECT in svc._learning_settings.triggers:
@@ -100,6 +105,7 @@ def get_recommendations(svc: ModelModeService) -> list[TuningRecommendation]:
     Returns:
         List of recommendations, may be empty if insufficient data.
     """
+    logger.debug("get_recommendations called")
     recommendations: list[TuningRecommendation] = []
     min_samples = svc._learning_settings.min_samples_for_recommendation
 
@@ -181,7 +187,7 @@ def apply_recommendation(svc: ModelModeService, recommendation: TuningRecommenda
         True if the recommendation was applied, False otherwise.
     """
     try:
-        if recommendation.recommendation_type == "model_swap":
+        if recommendation.recommendation_type == RecommendationType.MODEL_SWAP:
             if recommendation.affected_role and svc._current_mode:
                 svc._current_mode.agent_models[recommendation.affected_role] = (
                     recommendation.suggested_value
@@ -200,7 +206,7 @@ def apply_recommendation(svc: ModelModeService, recommendation: TuningRecommenda
                     )
                 return True
 
-        elif recommendation.recommendation_type == "temp_adjust":
+        elif recommendation.recommendation_type == RecommendationType.TEMP_ADJUST:
             if recommendation.affected_role and svc._current_mode:
                 svc._current_mode.agent_temperatures[recommendation.affected_role] = float(
                     recommendation.suggested_value
@@ -238,6 +244,7 @@ def handle_recommendations(
     Returns:
         Recommendations that were not auto-applied (need user approval).
     """
+    logger.debug("handle_recommendations called: recommendations_count=%s", len(recommendations))
     autonomy = svc._learning_settings.autonomy
     pending = []
 
@@ -263,7 +270,7 @@ def handle_recommendations(
         if autonomy == AutonomyLevel.MANUAL:
             should_apply = False
         elif autonomy == AutonomyLevel.CAUTIOUS:
-            should_apply = rec.recommendation_type == "temp_adjust"
+            should_apply = rec.recommendation_type == RecommendationType.TEMP_ADJUST
         elif autonomy == AutonomyLevel.BALANCED:
             should_apply = rec.confidence >= svc._learning_settings.confidence_threshold
         elif autonomy in (AutonomyLevel.AGGRESSIVE, AutonomyLevel.EXPERIMENTAL):

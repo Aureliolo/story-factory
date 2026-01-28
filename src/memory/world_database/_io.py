@@ -17,20 +17,21 @@ def export_to_json(db) -> dict[str, Any]:
     Returns:
         Dict with all data
     """
-    return {
-        "entities": [e.model_dump(mode="json") for e in db.list_entities()],
-        "relationships": [r.model_dump(mode="json") for r in db.list_relationships()],
-        "events": [
-            {
-                **e.model_dump(mode="json"),
-                "participants": [
-                    {"entity_id": p.entity_id, "role": p.role}
-                    for p in db.get_event_participants(e.id)
-                ],
-            }
-            for e in db.list_events()
-        ],
-    }
+    with db._lock:
+        return {
+            "entities": [e.model_dump(mode="json") for e in db.list_entities()],
+            "relationships": [r.model_dump(mode="json") for r in db.list_relationships()],
+            "events": [
+                {
+                    **e.model_dump(mode="json"),
+                    "participants": [
+                        {"entity_id": p.entity_id, "role": p.role}
+                        for p in db.get_event_participants(e.id)
+                    ],
+                }
+                for e in db.list_events()
+            ],
+        }
 
 
 def import_from_json(db, data: dict[str, Any]) -> None:

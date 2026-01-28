@@ -22,7 +22,7 @@ from src.utils.json_parser import extract_json_list
 from src.utils.prompt_builder import PromptBuilder
 from src.utils.validation import validate_not_none, validate_type
 
-logger = logging.getLogger("src.agents.architect._structure")
+logger = logging.getLogger(__name__)
 
 
 def create_plot_outline(agent, story_state: StoryState) -> tuple[str, list[PlotPoint]]:
@@ -101,14 +101,12 @@ def create_chapter_outline(agent, story_state: StoryState) -> list[Chapter]:
             "novella": agent.settings.chapters_novella,
             "novel": agent.settings.chapters_novel,
         }
-        chapter_count = length_map.get(brief.target_length)
-        if chapter_count is None:
-            logger.warning(
-                f"Unknown target_length '{brief.target_length}', using novella chapter count"
+        if brief.target_length not in length_map:
+            raise ValueError(
+                f"Unknown target_length '{brief.target_length}'. "
+                f"Valid options: {list(length_map.keys())}"
             )
-            num_chapters = agent.settings.chapters_novella
-        else:
-            num_chapters = chapter_count
+        num_chapters = length_map[brief.target_length]
         logger.debug(f"Using length-based chapter count: {num_chapters} for {brief.target_length}")
 
     plot_points_text = "\n".join(f"- {p.description}" for p in story_state.plot_points)

@@ -5,6 +5,7 @@ for the adaptive learning system.
 """
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,7 @@ class ModeDatabase:
         """
         self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self._init_db()
 
     def _init_db(self) -> None:

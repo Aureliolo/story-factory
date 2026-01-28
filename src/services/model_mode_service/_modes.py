@@ -17,7 +17,7 @@ from src.utils.validation import validate_not_empty, validate_not_none
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
 
-logger = logging.getLogger("src.services.model_mode_service._modes")
+logger = logging.getLogger(__name__)
 
 
 def set_mode(svc: ModelModeService, mode_id: str) -> GenerationMode:
@@ -298,7 +298,7 @@ def select_model_with_size_preference(
     Raises:
         ValueError: If no installed model is tagged for the given agent_role.
     """
-    from src.settings import RECOMMENDED_MODELS, get_installed_models_with_sizes
+    from src.settings import RECOMMENDED_MODELS, get_installed_models_with_sizes, get_model_info
 
     installed_models = get_installed_models_with_sizes()
 
@@ -313,12 +313,9 @@ def select_model_with_size_preference(
     for model_id, size_gb in installed_models.items():
         tags = svc.settings.get_model_tags(model_id)
         if agent_role in tags:
-            # Get quality from RECOMMENDED_MODELS if available
-            quality = 5.0
-            for rec_id, info in RECOMMENDED_MODELS.items():
-                if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
-                    quality = info.get("quality", 5.0)
-                    break
+            # Get quality from RECOMMENDED_MODELS or estimate from model size
+            model_info = get_model_info(model_id)
+            quality: float = model_info["quality"]
 
             estimated_vram = int(size_gb * 1.2)
             fits_vram = estimated_vram <= available_vram
@@ -385,6 +382,7 @@ def calculate_tier_score(size_gb: float, size_pref: SizePreference) -> float:
     Returns:
         A score between 0.0 and 10.0 where higher values indicate a closer match.
     """
+    logger.debug("calculate_tier_score called: size_gb=%s, size_pref=%s", size_gb, size_pref)
     tier = get_size_tier(size_gb)
 
     # Define ideal sizes for each preference
@@ -413,6 +411,7 @@ def get_temperature_for_agent(svc: ModelModeService, agent_role: str) -> float:
     Returns:
         Temperature value for the specified agent role.
     """
+    logger.debug("get_temperature_for_agent called: agent_role=%s", agent_role)
     validate_not_empty(agent_role, "agent_role")
     mode = svc.get_current_mode()
     temp = mode.agent_temperatures.get(agent_role)

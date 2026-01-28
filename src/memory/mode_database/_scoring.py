@@ -16,6 +16,7 @@ from src.memory.mode_models import (
     PerformanceMetrics,
     QualityScores,
 )
+from src.utils.exceptions import ValidationError
 
 logger = logging.getLogger("src.memory.mode_database._scoring")
 
@@ -69,50 +70,51 @@ def record_score(
     Raises:
         sqlite3.Error: If the database operation fails.
     """
-    try:
-        with sqlite3.connect(db.db_path) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO generation_scores (
-                    project_id, chapter_id, agent_role, model_id, mode_name, genre,
-                    tokens_generated, time_seconds, tokens_per_second, vram_used_gb,
-                    prose_quality, instruction_following, consistency_score,
-                    was_regenerated, edit_distance, user_rating, prompt_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    project_id,
-                    chapter_id,
-                    agent_role,
-                    model_id,
-                    mode_name,
-                    genre,
-                    tokens_generated,
-                    time_seconds,
-                    tokens_per_second,
-                    vram_used_gb,
-                    prose_quality,
-                    instruction_following,
-                    consistency_score,
-                    1 if was_regenerated else 0,
-                    edit_distance,
-                    user_rating,
-                    prompt_hash,
-                ),
+    with db._lock:
+        try:
+            with sqlite3.connect(db.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO generation_scores (
+                        project_id, chapter_id, agent_role, model_id, mode_name, genre,
+                        tokens_generated, time_seconds, tokens_per_second, vram_used_gb,
+                        prose_quality, instruction_following, consistency_score,
+                        was_regenerated, edit_distance, user_rating, prompt_hash
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project_id,
+                        chapter_id,
+                        agent_role,
+                        model_id,
+                        mode_name,
+                        genre,
+                        tokens_generated,
+                        time_seconds,
+                        tokens_per_second,
+                        vram_used_gb,
+                        prose_quality,
+                        instruction_following,
+                        consistency_score,
+                        1 if was_regenerated else 0,
+                        edit_distance,
+                        user_rating,
+                        prompt_hash,
+                    ),
+                )
+                conn.commit()
+                return cursor.lastrowid or 0
+        except sqlite3.Error as e:
+            logger.error(
+                "Failed to record score for project=%s model=%s agent=%s chapter=%s: %s",
+                project_id,
+                model_id,
+                agent_role,
+                chapter_id,
+                e,
+                exc_info=True,
             )
-            conn.commit()
-            return cursor.lastrowid or 0
-    except sqlite3.Error as e:
-        logger.error(
-            "Failed to record score for project=%s model=%s agent=%s chapter=%s: %s",
-            project_id,
-            model_id,
-            agent_role,
-            chapter_id,
-            e,
-            exc_info=True,
-        )
-        raise
+            raise
 
 
 def update_score(
@@ -158,14 +160,15 @@ def update_score(
 
     set_clause = ", ".join(set_expressions)
     values.append(score_id)
-    try:
-        with sqlite3.connect(db.db_path) as conn:
-            sql = f"UPDATE generation_scores SET {set_clause} WHERE id = ?"
-            conn.execute(sql, values)
-            conn.commit()
-    except sqlite3.Error as e:
-        logger.error(f"Failed to update score {score_id}: {e}", exc_info=True)
-        raise
+    with db._lock:
+        try:
+            with sqlite3.connect(db.db_path) as conn:
+                sql = f"UPDATE generation_scores SET {set_clause} WHERE id = ?"
+                conn.execute(sql, values)
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update score {score_id}: {e}", exc_info=True)
+            raise
 
 
 def update_performance_metrics(
@@ -210,21 +213,22 @@ def update_performance_metrics(
         return
 
     values.append(score_id)
-    try:
-        with sqlite3.connect(db.db_path) as conn:
-            conn.execute(
-                f"UPDATE generation_scores SET {', '.join(updates)} WHERE id = ?",
-                values,
+    with db._lock:
+        try:
+            with sqlite3.connect(db.db_path) as conn:
+                conn.execute(
+                    f"UPDATE generation_scores SET {', '.join(updates)} WHERE id = ?",
+                    values,
+                )
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error(
+                "Failed to update performance metrics for score_id=%s: %s",
+                score_id,
+                e,
+                exc_info=True,
             )
-            conn.commit()
-    except sqlite3.Error as e:
-        logger.error(
-            "Failed to update performance metrics for score_id=%s: %s",
-            score_id,
-            e,
-            exc_info=True,
-        )
-        raise
+            raise
 
 
 def get_scores_for_model(
@@ -248,10 +252,11 @@ def get_scores_for_model(
     query += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
 
 
 def get_scores_for_project(db, project_id: str) -> list[dict[str, Any]]:
@@ -261,17 +266,18 @@ def get_scores_for_project(db, project_id: str) -> list[dict[str, Any]]:
         list[dict[str, Any]]: List of rows from `generation_scores` as dictionaries,
         ordered by `timestamp` descending.
     """
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT * FROM generation_scores
-            WHERE project_id = ?
-            ORDER BY timestamp DESC
-            """,
-            (project_id,),
-        )
-        return [dict(row) for row in cursor.fetchall()]
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM generation_scores
+                WHERE project_id = ?
+                ORDER BY timestamp DESC
+                """,
+                (project_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
 
 def get_latest_score_for_chapter(db, project_id: str, chapter_id: str) -> dict[str, Any] | None:
@@ -286,24 +292,25 @@ def get_latest_score_for_chapter(db, project_id: str, chapter_id: str) -> dict[s
         The latest score dict or None if not found.
     """
     logger.debug(f"Fetching latest score for project {project_id} chapter {chapter_id}")
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT * FROM generation_scores
-            WHERE project_id = ? AND chapter_id = ?
-            ORDER BY timestamp DESC
-            LIMIT 1
-            """,
-            (project_id, chapter_id),
-        )
-        row = cursor.fetchone()
-        result = dict(row) if row else None
-        if result:
-            logger.debug(f"Found score id={result.get('id')} for chapter {chapter_id}")
-        else:
-            logger.debug(f"No score found for project {project_id} chapter {chapter_id}")
-        return result
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM generation_scores
+                WHERE project_id = ? AND chapter_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+                (project_id, chapter_id),
+            )
+            row = cursor.fetchone()
+            result = dict(row) if row else None
+            if result:
+                logger.debug(f"Found score id={result.get('id')} for chapter {chapter_id}")
+            else:
+                logger.debug(f"No score found for project {project_id} chapter {chapter_id}")
+            return result
 
 
 def get_score_count(
@@ -336,10 +343,11 @@ def get_score_count(
         query += " AND genre = ?"
         params.append(genre)
 
-    with sqlite3.connect(db.db_path) as conn:
-        cursor = conn.execute(query, params)
-        result = cursor.fetchone()[0]
-        return int(result) if result is not None else 0
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute(query, params)
+            result = cursor.fetchone()[0]
+            return int(result) if result is not None else 0
 
 
 def get_all_scores(
@@ -362,42 +370,43 @@ def get_all_scores(
     query += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(query, params)
-        results = []
-        for row in cursor.fetchall():
-            results.append(
-                GenerationScore(
-                    project_id=row["project_id"],
-                    chapter_id=row["chapter_id"],
-                    agent_role=row["agent_role"],
-                    model_id=row["model_id"],
-                    mode_name=row["mode_name"],
-                    genre=row["genre"],
-                    quality=QualityScores(
-                        prose_quality=row["prose_quality"],
-                        instruction_following=row["instruction_following"],
-                        consistency_score=row["consistency_score"],
-                    ),
-                    performance=PerformanceMetrics(
-                        tokens_generated=row["tokens_generated"],
-                        time_seconds=row["time_seconds"],
-                        tokens_per_second=row["tokens_per_second"],
-                        vram_used_gb=row["vram_used_gb"],
-                    ),
-                    signals=ImplicitSignals(
-                        was_regenerated=bool(row["was_regenerated"]),
-                        edit_distance=row["edit_distance"],
-                        user_rating=row["user_rating"],
-                    ),
-                    prompt_hash=row["prompt_hash"],
-                    timestamp=datetime.fromisoformat(row["timestamp"])
-                    if row["timestamp"]
-                    else datetime.now(),
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            results = []
+            for row in cursor.fetchall():
+                results.append(
+                    GenerationScore(
+                        project_id=row["project_id"],
+                        chapter_id=row["chapter_id"],
+                        agent_role=row["agent_role"],
+                        model_id=row["model_id"],
+                        mode_name=row["mode_name"],
+                        genre=row["genre"],
+                        quality=QualityScores(
+                            prose_quality=row["prose_quality"],
+                            instruction_following=row["instruction_following"],
+                            consistency_score=row["consistency_score"],
+                        ),
+                        performance=PerformanceMetrics(
+                            tokens_generated=row["tokens_generated"],
+                            time_seconds=row["time_seconds"],
+                            tokens_per_second=row["tokens_per_second"],
+                            vram_used_gb=row["vram_used_gb"],
+                        ),
+                        signals=ImplicitSignals(
+                            was_regenerated=bool(row["was_regenerated"]),
+                            edit_distance=row["edit_distance"],
+                            user_rating=row["user_rating"],
+                        ),
+                        prompt_hash=row["prompt_hash"],
+                        timestamp=datetime.fromisoformat(row["timestamp"])
+                        if row["timestamp"]
+                        else datetime.now(),
+                    )
                 )
-            )
-        return results
+            return results
 
 
 def export_scores_csv(db, output_path: Path | str) -> int:
@@ -407,21 +416,22 @@ def export_scores_csv(db, output_path: Path | str) -> int:
         Number of rows exported.
     """
     output_path = Path(output_path)
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute("SELECT * FROM generation_scores ORDER BY timestamp")
-        rows = cursor.fetchall()
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM generation_scores ORDER BY timestamp")
+            rows = cursor.fetchall()
 
-        if not rows:
-            return 0
+    if not rows:
+        return 0
 
-        with open(output_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-            writer.writeheader()
-            for row in rows:
-                writer.writerow(dict(row))
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(dict(row))
 
-        return len(rows)
+    return len(rows)
 
 
 def get_average_score(
@@ -460,10 +470,11 @@ def get_average_score(
         query += " AND genre = ?"
         params.append(genre)
 
-    with sqlite3.connect(db.db_path) as conn:
-        cursor = conn.execute(query, params)
-        result = cursor.fetchone()[0]
-        return float(result) if result is not None else None
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute(query, params)
+            result = cursor.fetchone()[0]
+            return float(result) if result is not None else None
 
 
 def get_content_statistics(
@@ -493,30 +504,31 @@ def get_content_statistics(
 
     where_sql = " AND ".join(where_clauses)
 
-    with sqlite3.connect(db.db_path) as conn:
-        cursor = conn.execute(
-            f"""
-            SELECT
-                COUNT(*) as generation_count,
-                SUM(tokens_generated) as total_tokens,
-                AVG(tokens_generated) as avg_tokens,
-                MIN(tokens_generated) as min_tokens,
-                MAX(tokens_generated) as max_tokens,
-                AVG(time_seconds) as avg_time
-            FROM generation_scores
-            WHERE {where_sql}
-            """,
-            params,
-        )
-        row = cursor.fetchone()
-        return {
-            "generation_count": row[0] or 0,
-            "total_tokens": row[1] or 0,
-            "avg_tokens": row[2],
-            "min_tokens": row[3],
-            "max_tokens": row[4],
-            "avg_generation_time": row[5],
-        }
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    COUNT(*) as generation_count,
+                    SUM(tokens_generated) as total_tokens,
+                    AVG(tokens_generated) as avg_tokens,
+                    MIN(tokens_generated) as min_tokens,
+                    MAX(tokens_generated) as max_tokens,
+                    AVG(time_seconds) as avg_time
+                FROM generation_scores
+                WHERE {where_sql}
+                """,
+                params,
+            )
+            row = cursor.fetchone()
+            return {
+                "generation_count": row[0] or 0,
+                "total_tokens": row[1] or 0,
+                "avg_tokens": row[2],
+                "min_tokens": row[3],
+                "max_tokens": row[4],
+                "avg_generation_time": row[5],
+            }
 
 
 def get_quality_time_series(
@@ -561,10 +573,11 @@ def get_quality_time_series(
     query += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(query, params)
-        return [{"timestamp": row[0], "value": row[1]} for row in cursor.fetchall()]
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            return [{"timestamp": row[0], "value": row[1]} for row in cursor.fetchall()]
 
 
 def get_daily_quality_averages(
@@ -594,6 +607,13 @@ def get_daily_quality_averages(
         logger.warning(f"Invalid metric {metric}, defaulting to prose_quality")
         metric = "prose_quality"
 
+    try:
+        validated_days = int(days)
+    except (ValueError, TypeError) as e:
+        raise ValidationError(f"days must be a positive integer, got {days!r}") from e
+    if validated_days < 0:
+        raise ValidationError(f"days must be a non-negative integer, got {validated_days}")
+
     query = f"""
         SELECT
             DATE(timestamp) as date,
@@ -601,9 +621,9 @@ def get_daily_quality_averages(
             COUNT(*) as sample_count
         FROM generation_scores
         WHERE {metric} IS NOT NULL
-        AND DATE(timestamp) >= DATE('now', '-{days} days')
+        AND DATE(timestamp) >= DATE('now', ?)
     """
-    params: list = []
+    params: list = [f"-{validated_days} days"]
 
     if agent_role:
         query += " AND agent_role = ?"
@@ -611,10 +631,11 @@ def get_daily_quality_averages(
 
     query += " GROUP BY DATE(timestamp) ORDER BY date DESC"
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(query, params)
-        return [
-            {"date": row[0], "avg_value": row[1], "sample_count": row[2]}
-            for row in cursor.fetchall()
-        ]
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            return [
+                {"date": row[0], "avg_value": row[1], "sample_count": row[2]}
+                for row in cursor.fetchall()
+            ]

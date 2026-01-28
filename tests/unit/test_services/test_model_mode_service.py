@@ -1159,6 +1159,20 @@ class TestModelModeServiceAdditional:
         # Should have generated recommendations (lines 590-629)
         assert isinstance(recommendations, list)
 
+    def test_score_continuity_missing_severity_raises(self, service: ModelModeService) -> None:
+        """Test that calculate_consistency_score raises ValueError when issue is missing severity."""
+        issues = [{"description": "Some issue without severity field"}]
+
+        with pytest.raises(ValueError, match="missing required 'severity' field"):
+            service.calculate_consistency_score(issues)
+
+    def test_score_continuity_unknown_severity_raises(self, service: ModelModeService) -> None:
+        """Test that calculate_consistency_score raises ValueError for unknown severity."""
+        issues = [{"severity": "catastrophic"}]
+
+        with pytest.raises(ValueError, match="Unknown severity 'catastrophic'"):
+            service.calculate_consistency_score(issues)
+
     def test_judge_quality_with_direct_json_decode_error(self, service: ModelModeService) -> None:
         """Test judge_quality catches json.JSONDecodeError directly."""
         from unittest.mock import patch

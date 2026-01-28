@@ -28,7 +28,7 @@ def build_world_gen_section(page: SettingsPage) -> None:
         )
 
         # Store inputs for saving
-        page._world_gen_inputs: dict[str, tuple[ui.number, ui.number]] = {}
+        page._world_gen_inputs: dict[str, tuple[ui.number, ui.number]] = {}  # type: ignore[misc]
 
         entity_configs = [
             ("characters", "Characters", "people", 1, 20),
@@ -141,7 +141,7 @@ def build_story_structure_section(page: SettingsPage) -> None:
         )
 
         # Store inputs for saving
-        page._chapter_inputs: dict[str, ui.number] = {}
+        page._chapter_inputs: dict[str, ui.number] = {}  # type: ignore[misc]
 
         length_configs = [
             ("short_story", "Short Story", "Quick reads", 1, 5),

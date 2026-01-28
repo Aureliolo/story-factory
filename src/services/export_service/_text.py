@@ -8,7 +8,7 @@ from src.utils.validation import validate_not_none, validate_type
 
 from ._types import ExportOptions
 
-logger = logging.getLogger("src.services.export_service._text")
+logger = logging.getLogger(__name__)
 
 
 def to_markdown(svc, state: StoryState) -> str:
@@ -107,6 +107,8 @@ def to_html(
     Returns:
         HTML formatted string.
     """
+    validate_not_none(state, "state")
+    validate_type(state, "state", StoryState)
     logger.debug(f"Exporting story to HTML: {state.id}")
 
     # Get template and options

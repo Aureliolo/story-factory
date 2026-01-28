@@ -10,7 +10,7 @@ from src.utils.validation import validate_not_none, validate_type
 
 from ._types import ExportOptions
 
-logger = logging.getLogger("src.services.export_service._epub")
+logger = logging.getLogger(__name__)
 
 
 def to_epub(

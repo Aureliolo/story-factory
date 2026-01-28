@@ -111,8 +111,8 @@ def build_temperature_section(page: SettingsPage) -> None:
                 ui.element("div").classes("w-3 h-3 rounded bg-orange-500")
                 ui.label("Creative (1.2+)").classes("text-gray-500 dark:text-gray-400")
 
-        page._temp_sliders: dict[str, Any] = {}
-        page._temp_labels: dict[str, Any] = {}
+        page._temp_sliders: dict[str, Any] = {}  # type: ignore[misc]
+        page._temp_labels: dict[str, Any] = {}  # type: ignore[misc]
         # 3-column grid for temperature sliders
         with ui.element("div").classes("grid grid-cols-2 lg:grid-cols-3 gap-3"):
             for role, info in AGENT_ROLES.items():

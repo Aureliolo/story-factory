@@ -24,7 +24,7 @@ from ._types import (
     WEB_SERIAL_TEMPLATE,
     ExportOptions,
     ExportTemplate,
-    _validate_export_path,
+    validate_export_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -226,7 +226,7 @@ class ExportService:
 
         try:
             # Validate export path
-            filepath = _validate_export_path(filepath)
+            filepath = validate_export_path(filepath)
             filepath.parent.mkdir(parents=True, exist_ok=True)
 
             if format == "markdown":
@@ -277,7 +277,11 @@ class ExportService:
             "pdf": ".pdf",
             "docx": ".docx",
         }
-        return extensions.get(format, ".txt")
+        if format not in extensions:
+            raise ValueError(
+                f"Unknown export format '{format}'. Supported formats: {list(extensions.keys())}"
+            )
+        return extensions[format]
 
 
 __all__ = [
@@ -288,5 +292,5 @@ __all__ = [
     "ExportOptions",
     "ExportService",
     "ExportTemplate",
-    "_validate_export_path",
+    "validate_export_path",
 ]

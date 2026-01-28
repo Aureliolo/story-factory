@@ -9,7 +9,7 @@ from src.utils.validation import validate_not_none, validate_type
 
 from ._types import ExportOptions
 
-logger = logging.getLogger("src.services.export_service._pdf")
+logger = logging.getLogger(__name__)
 
 
 def to_pdf(
@@ -80,8 +80,14 @@ def to_pdf(
     font_map = {
         "Courier New, monospace": "Courier",
         "Georgia, serif": "Times-Roman",
+        "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif": "Helvetica",
     }
-    font_name = font_map.get(opts.font_family, "Times-Roman")
+    if opts.font_family not in font_map:
+        raise ValueError(
+            f"Unsupported font_family '{opts.font_family}' for PDF export. "
+            f"Supported font families: {list(font_map.keys())}"
+        )
+    font_name = font_map[opts.font_family]
 
     body_style = ParagraphStyle(
         "Body",

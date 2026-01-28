@@ -10,7 +10,7 @@ from typing import Any
 from src.settings import Settings
 from src.utils.exceptions import ValidationError
 
-logger = logging.getLogger("src.memory.mode_database._prompt_metrics")
+logger = logging.getLogger(__name__)
 
 
 def record_prompt_metrics(
@@ -54,30 +54,31 @@ def record_prompt_metrics(
         return 0
 
     try:
-        with sqlite3.connect(db.db_path) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO prompt_metrics (
-                    prompt_hash, agent_role, task, template_version, model_id,
-                    tokens_generated, generation_time_seconds, success,
-                    project_id, error_message
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    prompt_hash,
-                    agent_role,
-                    task,
-                    template_version,
-                    model_id,
-                    tokens_generated,
-                    generation_time_seconds,
-                    1 if success else 0,
-                    project_id,
-                    error_message,
-                ),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+        with db._lock:
+            with sqlite3.connect(db.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO prompt_metrics (
+                        prompt_hash, agent_role, task, template_version, model_id,
+                        tokens_generated, generation_time_seconds, success,
+                        project_id, error_message
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        prompt_hash,
+                        agent_role,
+                        task,
+                        template_version,
+                        model_id,
+                        tokens_generated,
+                        generation_time_seconds,
+                        1 if success else 0,
+                        project_id,
+                        error_message,
+                    ),
+                )
+                conn.commit()
+                return cursor.lastrowid or 0
     except sqlite3.Error as e:
         logger.error(
             "Failed to record prompt metrics for hash=%s role=%s task=%s model=%s: %s",
@@ -111,8 +112,17 @@ def get_prompt_analytics(
     Raises:
         ValueError: If days is negative.
     """
+    logger.debug(
+        "get_prompt_analytics called: agent_role=%s, task=%s, days=%s",
+        agent_role,
+        task,
+        days,
+    )
     # Validate days to prevent SQL injection
-    validated_days = int(days)
+    try:
+        validated_days = int(days)
+    except (ValueError, TypeError) as e:
+        raise ValidationError(f"days must be a non-negative integer, got {days!r}") from e
     if validated_days < 0:
         raise ValidationError("days must be a non-negative integer")
 
@@ -147,10 +157,11 @@ def get_prompt_analytics(
         ORDER BY total_calls DESC
     """
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(query, params)
-        return [dict(row) for row in cursor.fetchall()]
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
 
 
 def get_prompt_metrics_summary(db) -> dict[str, Any]:
@@ -159,64 +170,66 @@ def get_prompt_metrics_summary(db) -> dict[str, Any]:
     Returns:
         Dictionary with summary statistics.
     """
-    with sqlite3.connect(db.db_path) as conn:
-        # Overall statistics
-        cursor = conn.execute(
-            """
-            SELECT
-                COUNT(*) as total_generations,
-                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
-                SUM(tokens_generated) as total_tokens,
-                AVG(generation_time_seconds) as avg_time,
-                COUNT(DISTINCT agent_role) as unique_agents,
-                COUNT(DISTINCT task) as unique_tasks,
-                COUNT(DISTINCT prompt_hash) as unique_templates
-            FROM prompt_metrics
-            """
-        )
-        row = cursor.fetchone()
-        summary = {
-            "total_generations": row[0] or 0,
-            "successful_generations": row[1] or 0,
-            "total_tokens": row[2] or 0,
-            "avg_generation_time": row[3],
-            "unique_agents": row[4] or 0,
-            "unique_tasks": row[5] or 0,
-            "unique_templates": row[6] or 0,
-        }
-
-        # Calculate success rate
-        if summary["total_generations"] > 0:
-            summary["success_rate"] = round(
-                (summary["successful_generations"] / summary["total_generations"]) * 100, 1
+    logger.debug("get_prompt_metrics_summary called")
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            # Overall statistics
+            cursor = conn.execute(
+                """
+                SELECT
+                    COUNT(*) as total_generations,
+                    SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
+                    SUM(tokens_generated) as total_tokens,
+                    AVG(generation_time_seconds) as avg_time,
+                    COUNT(DISTINCT agent_role) as unique_agents,
+                    COUNT(DISTINCT task) as unique_tasks,
+                    COUNT(DISTINCT prompt_hash) as unique_templates
+                FROM prompt_metrics
+                """
             )
-        else:
-            summary["success_rate"] = 0.0
-
-        # By agent role
-        cursor = conn.execute(
-            """
-            SELECT
-                agent_role,
-                COUNT(*) as count,
-                AVG(tokens_generated) as avg_tokens,
-                ROUND(AVG(CASE WHEN success = 1 THEN 1.0 ELSE 0.0 END) * 100, 1) as success_rate
-            FROM prompt_metrics
-            GROUP BY agent_role
-            ORDER BY count DESC
-            """
-        )
-        summary["by_agent"] = [
-            {
-                "agent_role": r[0],
-                "count": r[1],
-                "avg_tokens": r[2],
-                "success_rate": r[3],
+            row = cursor.fetchone()
+            summary = {
+                "total_generations": row[0] or 0,
+                "successful_generations": row[1] or 0,
+                "total_tokens": row[2] or 0,
+                "avg_generation_time": row[3],
+                "unique_agents": row[4] or 0,
+                "unique_tasks": row[5] or 0,
+                "unique_templates": row[6] or 0,
             }
-            for r in cursor.fetchall()
-        ]
 
-        return summary
+            # Calculate success rate
+            if summary["total_generations"] > 0:
+                summary["success_rate"] = round(
+                    (summary["successful_generations"] / summary["total_generations"]) * 100, 1
+                )
+            else:
+                summary["success_rate"] = 0.0
+
+            # By agent role
+            cursor = conn.execute(
+                """
+                SELECT
+                    agent_role,
+                    COUNT(*) as count,
+                    AVG(tokens_generated) as avg_tokens,
+                    ROUND(AVG(CASE WHEN success = 1 THEN 1.0 ELSE 0.0 END) * 100, 1) as success_rate
+                FROM prompt_metrics
+                GROUP BY agent_role
+                ORDER BY count DESC
+                """
+            )
+            summary["by_agent"] = [
+                {
+                    "agent_role": r[0],
+                    "count": r[1],
+                    "avg_tokens": r[2],
+                    "success_rate": r[3],
+                }
+                for r in cursor.fetchall()
+            ]
+
+            return summary
 
 
 def get_prompt_metrics_by_hash(
@@ -234,18 +247,20 @@ def get_prompt_metrics_by_hash(
     Returns:
         List of metric records for the template.
     """
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT * FROM prompt_metrics
-            WHERE prompt_hash = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            (prompt_hash, limit),
-        )
-        return [dict(row) for row in cursor.fetchall()]
+    logger.debug("get_prompt_metrics_by_hash called: prompt_hash=%s, limit=%s", prompt_hash, limit)
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM prompt_metrics
+                WHERE prompt_hash = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (prompt_hash, limit),
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
 
 def get_prompt_error_summary(db, days: int = 7) -> list[dict[str, Any]]:
@@ -261,28 +276,33 @@ def get_prompt_error_summary(db, days: int = 7) -> list[dict[str, Any]]:
     Raises:
         ValueError: If days is negative.
     """
+    logger.debug("get_prompt_error_summary called: days=%s", days)
     # Validate days to prevent SQL injection
-    validated_days = int(days)
+    try:
+        validated_days = int(days)
+    except (ValueError, TypeError) as e:
+        raise ValidationError(f"days must be a non-negative integer, got {days!r}") from e
     if validated_days < 0:
         raise ValidationError("days must be a non-negative integer")
 
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT
-                agent_role,
-                task,
-                template_version,
-                prompt_hash,
-                COUNT(*) as error_count,
-                GROUP_CONCAT(DISTINCT error_message) as error_messages
-            FROM prompt_metrics
-            WHERE success = 0
-            AND DATE(timestamp) >= DATE('now', ?)
-            GROUP BY agent_role, task, template_version, prompt_hash
-            ORDER BY error_count DESC
-            """,
-            (f"-{validated_days} days",),
-        )
-        return [dict(row) for row in cursor.fetchall()]
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT
+                    agent_role,
+                    task,
+                    template_version,
+                    prompt_hash,
+                    COUNT(*) as error_count,
+                    GROUP_CONCAT(DISTINCT error_message) as error_messages
+                FROM prompt_metrics
+                WHERE success = 0
+                AND DATE(timestamp) >= DATE('now', ?)
+                GROUP BY agent_role, task, template_version, prompt_hash
+                ORDER BY error_count DESC
+                """,
+                (f"-{validated_days} days",),
+            )
+            return [dict(row) for row in cursor.fetchall()]

@@ -8,7 +8,7 @@ from src.utils.validation import validate_not_none, validate_type
 
 from ._types import ExportOptions
 
-logger = logging.getLogger("src.services.export_service._docx")
+logger = logging.getLogger(__name__)
 
 
 def to_docx(
@@ -76,8 +76,14 @@ def to_docx(
     font_map = {
         "Courier New, monospace": "Courier New",
         "Georgia, serif": "Georgia",
+        "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif": "Calibri",
     }
-    font_name = font_map.get(opts.font_family, "Georgia")
+    if opts.font_family not in font_map:
+        raise ValueError(
+            f"Unsupported font_family '{opts.font_family}' for DOCX export. "
+            f"Supported font families: {list(font_map.keys())}"
+        )
+    font_name = font_map[opts.font_family]
 
     # Chapters
     for chapter in state.chapters:

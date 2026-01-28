@@ -165,7 +165,10 @@ disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
 [[tool.mypy.overrides]]
-# UI page helpers access dynamic widget attributes set during build()
+# UI page helpers access dynamic NiceGUI widget attributes (e.g. self.xyz_input,
+# self.xyz_select) that are assigned during build() at runtime. mypy cannot see
+# these attributes because they are not declared in __init__ type stubs, so
+# attr-defined errors are expected and suppressed here.
 module = [
     "src.ui.pages.settings._persistence",
     "src.ui.pages.settings._advanced",
@@ -176,7 +179,7 @@ module = [
     "src.ui.pages.world._editor",
     "src.ui.pages.world._editor_ops",
 ]
-disable_error_code = ["attr-defined", "misc"]
+disable_error_code = ["attr-defined"]
 
 # Pytest configuration
 [tool.pytest.ini_options]

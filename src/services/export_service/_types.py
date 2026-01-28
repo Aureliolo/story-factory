@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.settings import STORIES_DIR
 
-logger = logging.getLogger("src.services.export_service._types")
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -150,7 +150,7 @@ EXPORT_TEMPLATES: dict[str, ExportTemplate] = {
 }
 
 
-def _validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Path:
+def validate_export_path(path: Path, base_dir: Path = STORIES_DIR.parent) -> Path:
     """Validate that an export path is safe to write to.
 
     Args:

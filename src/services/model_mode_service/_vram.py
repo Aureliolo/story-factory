@@ -9,7 +9,7 @@ from src.utils.validation import validate_not_empty
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
 
-logger = logging.getLogger("src.services.model_mode_service._vram")
+logger = logging.getLogger(__name__)
 
 
 def prepare_model(svc: ModelModeService, model_id: str) -> None:

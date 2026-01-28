@@ -1727,12 +1727,82 @@ class TestModeDatabase:
         with pytest.raises(ValidationError, match="days must be a non-negative integer"):
             db.get_prompt_analytics(days=-1)
 
+    def test_get_prompt_analytics_invalid_days(self, db: ModeDatabase) -> None:
+        """Test that get_prompt_analytics raises ValidationError for non-integer days."""
+        from src.utils.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="days must be a non-negative integer"):
+            db.get_prompt_analytics(days="abc")  # type: ignore[arg-type]
+
     def test_get_prompt_error_summary_negative_days_raises(self, db: ModeDatabase) -> None:
         """Test that get_prompt_error_summary raises ValidationError for negative days."""
         from src.utils.exceptions import ValidationError
 
         with pytest.raises(ValidationError, match="days must be a non-negative integer"):
             db.get_prompt_error_summary(days=-1)
+
+    def test_get_prompt_error_summary_invalid_days(self, db: ModeDatabase) -> None:
+        """Test that get_prompt_error_summary raises ValidationError for non-integer days."""
+        from src.utils.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="days must be a non-negative integer"):
+            db.get_prompt_error_summary(days="xyz")  # type: ignore[arg-type]
+
+    def test_get_custom_mode_corrupt_json(self, db: ModeDatabase) -> None:
+        """Test get_custom_mode returns None for corrupt JSON in agent_models_json."""
+        # Insert a custom mode with invalid JSON directly into the database
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO custom_modes (id, name, agent_models_json, agent_temperatures_json)
+                VALUES (?, ?, ?, ?)
+                """,
+                ("corrupt-mode", "Corrupt Mode", "not valid json{{{", '{"writer": 0.8}'),
+            )
+            conn.commit()
+
+        result = db.get_custom_mode("corrupt-mode")
+        assert result is None
+
+    def test_list_custom_modes_skips_corrupt_json(self, db: ModeDatabase) -> None:
+        """Test list_custom_modes skips entries with corrupt JSON."""
+        # Insert a valid custom mode
+        db.save_custom_mode(
+            mode_id="valid-mode",
+            name="Valid Mode",
+            agent_models={"writer": "model-a"},
+            agent_temperatures={"writer": 0.8},
+        )
+
+        # Insert a corrupt custom mode directly into the database
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO custom_modes (id, name, agent_models_json, agent_temperatures_json)
+                VALUES (?, ?, ?, ?)
+                """,
+                ("corrupt-mode", "Corrupt Mode", "{invalid json", '{"writer": 0.8}'),
+            )
+            conn.commit()
+
+        modes = db.list_custom_modes()
+        # Only the valid mode should be returned
+        assert len(modes) == 1
+        assert modes[0]["name"] == "Valid Mode"
+
+    def test_get_daily_quality_averages_invalid_days_type(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages raises ValidationError for non-integer days."""
+        from src.utils.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="days must be a positive integer"):
+            db.get_daily_quality_averages(days="abc")  # type: ignore[arg-type]
+
+    def test_get_daily_quality_averages_negative_days(self, db: ModeDatabase) -> None:
+        """Test get_daily_quality_averages raises ValidationError for negative days."""
+        from src.utils.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="days must be a non-negative integer"):
+            db.get_daily_quality_averages(days=-1)
 
 
 class TestModeDatabaseMigrations:
@@ -2095,6 +2165,13 @@ class TestRefinementEffectivenessTracking:
 
         loc_breakdown = next(b for b in summary["by_entity_type"] if b["entity_type"] == "location")
         assert loc_breakdown["count"] == 1
+
+    def test_get_refinement_progression_data_negative_limit(self, db: ModeDatabase) -> None:
+        """Test that get_refinement_progression_data raises ValidationError for negative limit."""
+        from src.utils.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="limit must be a non-negative integer"):
+            db.get_refinement_progression_data(limit=-1)
 
     def test_get_refinement_progression_data_with_empty_string_progression(
         self, db: ModeDatabase

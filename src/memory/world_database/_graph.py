@@ -1,7 +1,5 @@
 """NetworkX graph operations for WorldDatabase."""
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -190,6 +188,8 @@ def remove_relationship_from_graph(
 def rebuild_graph(db: WorldDatabase) -> None:
     """Rebuild NetworkX graph from database.
 
+    Callers must hold db._lock before calling this function.
+
     Args:
         db: WorldDatabase instance.
     """
@@ -242,7 +242,10 @@ def get_graph(db: WorldDatabase) -> DiGraph[Any]:
         NetworkX directed graph
     """
     if db._graph is None:
-        rebuild_graph(db)
+        with db._lock:
+            # Double-checked locking: re-check after acquiring the lock
+            if db._graph is None:
+                rebuild_graph(db)
     assert db._graph is not None  # Guaranteed by rebuild_graph
     return db._graph
 

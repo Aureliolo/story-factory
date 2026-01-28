@@ -1,7 +1,5 @@
 """Relationship CRUD operations and context extraction for WorldDatabase."""
 
-from __future__ import annotations
-
 import json
 import logging
 import sqlite3
@@ -360,30 +358,42 @@ def get_context_for_agents(db: WorldDatabase, max_entities: int = 50) -> dict[st
 
     Args:
         db: WorldDatabase instance.
-        max_entities: Maximum entities to include per type
+        max_entities: Maximum entities to include per type. Limits are derived
+            proportionally: characters get 40%, locations 30%, items and factions
+            each get 20%, relationships get 60%, and recent events get 40%.
 
     Returns:
         Dict with world context
     """
+    # Derive per-type limits from max_entities
+    char_limit = max(1, int(max_entities * 0.4))
+    location_limit = max(1, int(max_entities * 0.3))
+    item_limit = max(1, int(max_entities * 0.2))
+    faction_limit = max(1, int(max_entities * 0.2))
+    relationship_limit = max(1, int(max_entities * 0.6))
+    event_limit = max(1, int(max_entities * 0.4))
+
     return {
         "characters": [
             {"name": e.name, "description": e.description, "attributes": e.attributes}
-            for e in db.list_entities("character")[:20]
+            for e in db.list_entities("character")[:char_limit]
         ],
         "locations": [
             {"name": e.name, "description": e.description, "attributes": e.attributes}
-            for e in db.list_entities("location")[:15]
+            for e in db.list_entities("location")[:location_limit]
         ],
         "items": [
-            {"name": e.name, "description": e.description} for e in db.list_entities("item")[:10]
+            {"name": e.name, "description": e.description}
+            for e in db.list_entities("item")[:item_limit]
         ],
         "factions": [
-            {"name": e.name, "description": e.description} for e in db.list_entities("faction")[:10]
+            {"name": e.name, "description": e.description}
+            for e in db.list_entities("faction")[:faction_limit]
         ],
-        "key_relationships": get_important_relationships(db, limit=30),
+        "key_relationships": get_important_relationships(db, limit=relationship_limit),
         "recent_events": [
             {"description": e.description, "chapter": e.chapter_number}
-            for e in db.list_events(limit=20)
+            for e in db.list_events(limit=event_limit)
         ],
         "entity_counts": {
             "characters": db.count_entities("character"),

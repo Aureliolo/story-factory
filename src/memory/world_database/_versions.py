@@ -237,20 +237,20 @@ def revert_entity_to_version(db, entity_id: str, version_number: int) -> bool:
         )
         db.conn.commit()
 
-        # Update graph after commit
-        from . import _graph
+    # Update graph after commit and outside the lock
+    from . import _graph
 
-        _graph.update_entity_in_graph(
-            db,
-            entity_id,
-            version_data["name"],
-            version_data["type"],
-            version_data["description"],
-            version_data.get("attributes"),
-        )
+    _graph.update_entity_in_graph(
+        db,
+        entity_id,
+        version_data["name"],
+        version_data["type"],
+        version_data["description"],
+        version_data.get("attributes"),
+    )
 
-        logger.info(f"Entity {entity_id} reverted to version {version_number}")
-        return True
+    logger.info(f"Entity {entity_id} reverted to version {version_number}")
+    return True
 
 
 def apply_version_retention(entity_id: str, cursor: sqlite3.Cursor) -> None:

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.memory.mode_models import RecommendationType, TuningRecommendation
-from src.utils.validation import validate_positive
+from src.utils.validation import validate_not_empty, validate_positive
 
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
@@ -28,6 +28,7 @@ def get_quality_vs_speed_data(
     Returns:
         List of data points with quality and speed metrics.
     """
+    logger.debug("get_quality_vs_speed_data called: agent_role=%s", agent_role)
     return svc._db.get_quality_vs_speed_data(agent_role)
 
 
@@ -46,6 +47,7 @@ def get_model_performance(
     Returns:
         List of performance data dicts.
     """
+    logger.debug("get_model_performance called: model_id=%s, agent_role=%s", model_id, agent_role)
     return svc._db.get_model_performance(model_id, agent_role)
 
 
@@ -173,6 +175,8 @@ def on_regenerate(svc: ModelModeService, project_id: str, chapter_id: str) -> No
         project_id: The project ID.
         chapter_id: The chapter being regenerated.
     """
+    validate_not_empty(project_id, "project_id")
+    validate_not_empty(chapter_id, "chapter_id")
     try:
         # Find the most recent score for this project/chapter using efficient LIMIT 1 query
         score = svc._db.get_latest_score_for_chapter(project_id, chapter_id)

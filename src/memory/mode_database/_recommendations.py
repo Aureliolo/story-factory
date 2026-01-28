@@ -11,7 +11,7 @@ from typing import Any
 
 from src.memory.mode_models import RecommendationType, TuningRecommendation
 
-logger = logging.getLogger("src.memory.mode_database._recommendations")
+logger = logging.getLogger(__name__)
 
 
 def record_recommendation(
@@ -34,28 +34,29 @@ def record_recommendation(
         sqlite3.Error: If database operation fails.
     """
     try:
-        with sqlite3.connect(db.db_path) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO recommendations (
-                    recommendation_type, current_value, suggested_value,
-                    affected_role, reason, confidence, evidence_json,
-                    expected_improvement
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    recommendation_type,
-                    current_value,
-                    suggested_value,
-                    affected_role,
-                    reason,
-                    confidence,
-                    json.dumps(evidence) if evidence else None,
-                    expected_improvement,
-                ),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+        with db._lock:
+            with sqlite3.connect(db.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO recommendations (
+                        recommendation_type, current_value, suggested_value,
+                        affected_role, reason, confidence, evidence_json,
+                        expected_improvement
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        recommendation_type,
+                        current_value,
+                        suggested_value,
+                        affected_role,
+                        reason,
+                        confidence,
+                        json.dumps(evidence) if evidence is not None else None,
+                        expected_improvement,
+                    ),
+                )
+                conn.commit()
+                return cursor.lastrowid or 0
     except sqlite3.Error as e:
         logger.error(
             "Failed to record recommendation type=%s role=%s: %s",
@@ -81,16 +82,22 @@ def update_recommendation_outcome(
         was_applied (bool): True if the recommendation was applied, False otherwise.
         user_feedback (str | None): Optional free-text feedback.
     """
-    with sqlite3.connect(db.db_path) as conn:
-        conn.execute(
-            """
-            UPDATE recommendations
-            SET was_applied = ?, user_feedback = ?
-            WHERE id = ?
-            """,
-            (1 if was_applied else 0, user_feedback, recommendation_id),
-        )
-        conn.commit()
+    logger.debug(
+        "update_recommendation_outcome called: recommendation_id=%s, was_applied=%s",
+        recommendation_id,
+        was_applied,
+    )
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE recommendations
+                SET was_applied = ?, user_feedback = ?
+                WHERE id = ?
+                """,
+                (1 if was_applied else 0, user_feedback, recommendation_id),
+            )
+            conn.commit()
 
 
 def get_pending_recommendations(db, limit: int = 50) -> list[dict[str, Any]]:
@@ -103,69 +110,79 @@ def get_pending_recommendations(db, limit: int = 50) -> list[dict[str, Any]]:
     Returns:
         list[dict[str, Any]]: Recommendation records ordered by timestamp descending.
     """
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT * FROM recommendations
-            WHERE was_applied = 0 AND user_feedback IS NULL
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        return [dict(row) for row in cursor.fetchall()]
+    logger.debug("get_pending_recommendations called: limit=%s", limit)
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM recommendations
+                WHERE was_applied = 0 AND user_feedback IS NULL
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
 
 def get_recommendation_history(db, limit: int = 50) -> list[dict[str, Any]]:
     """Get recent recommendation history."""
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT * FROM recommendations
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        return [dict(row) for row in cursor.fetchall()]
+    logger.debug("get_recommendation_history called: limit=%s", limit)
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM recommendations
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
 
 def get_recent_recommendations(db, limit: int = 10) -> list[TuningRecommendation]:
     """Get recent recommendations as TuningRecommendation objects."""
-    with sqlite3.connect(db.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            """
-            SELECT * FROM recommendations
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        results = []
-        for row in cursor.fetchall():
-            evidence = json.loads(row["evidence_json"]) if row["evidence_json"] else None
-            try:
-                rec_type = RecommendationType(row["recommendation_type"])
-            except ValueError:
-                rec_type = RecommendationType.MODEL_SWAP
-
-            results.append(
-                TuningRecommendation(
-                    id=row["id"],
-                    timestamp=datetime.fromisoformat(row["timestamp"]),
-                    recommendation_type=rec_type,
-                    current_value=row["current_value"],
-                    suggested_value=row["suggested_value"],
-                    affected_role=row["affected_role"],
-                    reason=row["reason"],
-                    confidence=row["confidence"],
-                    evidence=evidence,
-                    expected_improvement=row["expected_improvement"],
-                    was_applied=bool(row["was_applied"]),
-                    user_feedback=row["user_feedback"],
-                )
+    logger.debug("get_recent_recommendations called: limit=%s", limit)
+    with db._lock:
+        with sqlite3.connect(db.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM recommendations
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (limit,),
             )
-        return results
+            results = []
+            for row in cursor.fetchall():
+                evidence = json.loads(row["evidence_json"]) if row["evidence_json"] else None
+                try:
+                    rec_type = RecommendationType(row["recommendation_type"])
+                except ValueError:
+                    logger.warning(
+                        "Invalid recommendation type: %s, falling back to MODEL_SWAP",
+                        row["recommendation_type"],
+                    )
+                    rec_type = RecommendationType.MODEL_SWAP
+
+                results.append(
+                    TuningRecommendation(
+                        id=row["id"],
+                        timestamp=datetime.fromisoformat(row["timestamp"]),
+                        recommendation_type=rec_type,
+                        current_value=row["current_value"],
+                        suggested_value=row["suggested_value"],
+                        affected_role=row["affected_role"],
+                        reason=row["reason"],
+                        confidence=row["confidence"],
+                        evidence=evidence,
+                        expected_improvement=row["expected_improvement"],
+                        was_applied=bool(row["was_applied"]),
+                        user_feedback=row["user_feedback"],
+                    )
+                )
+            return results
