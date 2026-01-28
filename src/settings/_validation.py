@@ -9,7 +9,7 @@ from src.settings._types import AGENT_ROLES, REFINEMENT_TEMP_DECAY_CURVES
 if TYPE_CHECKING:
     from src.settings._settings import Settings
 
-logger = logging.getLogger("src.settings._validation")
+logger = logging.getLogger(__name__)
 
 
 def validate(settings: Settings) -> None:

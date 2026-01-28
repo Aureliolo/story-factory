@@ -13,7 +13,7 @@ from src.utils.exceptions import ExportError
 if TYPE_CHECKING:
     from . import StoryOrchestrator, WorkflowEvent
 
-logger = logging.getLogger("src.services.orchestrator._editing")
+logger = logging.getLogger(__name__)
 
 
 def continue_chapter(

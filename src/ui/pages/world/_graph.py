@@ -7,7 +7,7 @@ from nicegui import ui
 from src.ui.components.graph import GraphComponent
 from src.ui.state import ActionType, UndoAction
 
-logger = logging.getLogger("src.ui.pages.world._graph")
+logger = logging.getLogger(__name__)
 
 # Default value for relationship strength when creating via drag-and-drop
 DEFAULT_RELATIONSHIP_STRENGTH = 0.5

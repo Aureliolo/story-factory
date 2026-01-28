@@ -16,7 +16,7 @@ from src.utils.constants import get_language_code
 if TYPE_CHECKING:
     from . import StoryOrchestrator
 
-logger = logging.getLogger("src.services.orchestrator._persistence")
+logger = logging.getLogger(__name__)
 
 
 def autosave(orc: StoryOrchestrator) -> str | None:

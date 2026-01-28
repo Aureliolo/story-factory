@@ -16,7 +16,7 @@ from src.utils.validation import (
 if TYPE_CHECKING:
     from src.services.story_service import StoryService
 
-logger = logging.getLogger("src.services.story_service._writing")
+logger = logging.getLogger(__name__)
 
 
 def write_chapter(

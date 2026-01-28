@@ -29,7 +29,7 @@ from src.ui.pages.world._gen_entity_types import (
 )
 from src.utils.exceptions import WorldGenerationError
 
-logger = logging.getLogger("src.ui.pages.world._gen_operations")
+logger = logging.getLogger(__name__)
 
 
 async def generate_more(

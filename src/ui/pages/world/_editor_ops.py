@@ -19,7 +19,7 @@ from src.ui.state import ActionType, UndoAction
 if TYPE_CHECKING:
     from . import WorldPage
 
-logger = logging.getLogger("src.ui.pages.world._editor_ops")
+logger = logging.getLogger(__name__)
 
 
 async def show_regenerate_dialog(page: WorldPage) -> None:

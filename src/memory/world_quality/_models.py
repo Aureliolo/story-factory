@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("src.memory.world_quality._models")
+logger = logging.getLogger(__name__)
 
 
 class IterationRecord(BaseModel):

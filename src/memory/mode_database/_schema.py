@@ -3,7 +3,7 @@
 import logging
 import sqlite3
 
-logger = logging.getLogger("src.memory.mode_database._schema")
+logger = logging.getLogger(__name__)
 
 
 def init_db(db) -> None:

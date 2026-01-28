@@ -15,7 +15,7 @@ from src.settings._paths import BACKUPS_DIR, SETTINGS_FILE
 from src.settings._utils import get_installed_models_with_sizes
 
 # Configure module logger
-logger = logging.getLogger("src.settings._settings")
+logger = logging.getLogger(__name__)
 
 
 @dataclass

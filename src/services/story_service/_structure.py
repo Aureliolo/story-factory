@@ -10,7 +10,7 @@ from src.utils.validation import validate_not_none, validate_type
 if TYPE_CHECKING:
     from src.services.story_service import StoryService
 
-logger = logging.getLogger("src.services.story_service._structure")
+logger = logging.getLogger(__name__)
 
 
 def build_structure(svc: StoryService, state: StoryState, world_db: WorldDatabase) -> StoryState:

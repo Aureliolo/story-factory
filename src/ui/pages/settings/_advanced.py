@@ -10,7 +10,7 @@ from src.settings import REFINEMENT_TEMP_DECAY_CURVES
 if TYPE_CHECKING:
     from src.ui.pages.settings import SettingsPage
 
-logger = logging.getLogger("src.ui.pages.settings._advanced")
+logger = logging.getLogger(__name__)
 
 
 def build_world_gen_section(page: SettingsPage) -> None:

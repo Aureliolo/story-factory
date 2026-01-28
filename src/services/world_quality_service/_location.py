@@ -9,7 +9,7 @@ from src.services.llm_client import generate_structured
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
-logger = logging.getLogger("src.services.world_quality_service._location")
+logger = logging.getLogger(__name__)
 
 
 def generate_location_with_quality(

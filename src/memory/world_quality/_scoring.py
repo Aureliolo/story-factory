@@ -8,7 +8,7 @@ import logging
 
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("src.memory.world_quality._scoring")
+logger = logging.getLogger(__name__)
 
 
 class ScoreStatistics(BaseModel):

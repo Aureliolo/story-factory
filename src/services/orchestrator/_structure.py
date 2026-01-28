@@ -11,7 +11,7 @@ from src.memory.story_state import Character, StoryState
 if TYPE_CHECKING:
     from . import StoryOrchestrator
 
-logger = logging.getLogger("src.services.orchestrator._structure")
+logger = logging.getLogger(__name__)
 
 
 def build_story_structure(orc: StoryOrchestrator) -> StoryState:

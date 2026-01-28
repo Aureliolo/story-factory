@@ -10,7 +10,7 @@ from typing import Any
 
 from src.utils.exceptions import ValidationError
 
-logger = logging.getLogger("src.memory.mode_database._refinement")
+logger = logging.getLogger(__name__)
 
 
 def get_refinement_effectiveness_summary(

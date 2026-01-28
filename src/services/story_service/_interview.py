@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 from src.memory.story_state import StoryState
 
-logger = logging.getLogger("src.services.story_service._interview")
+logger = logging.getLogger(__name__)
 
 
 def start_interview(svc: StoryService, state: StoryState) -> str:

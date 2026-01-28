@@ -6,7 +6,7 @@ from nicegui import ui
 
 from src.ui.pages.analytics._summary import build_stat_card
 
-logger = logging.getLogger("src.ui.pages.analytics._content")
+logger = logging.getLogger(__name__)
 
 
 def build_content_statistics_section(page) -> None:

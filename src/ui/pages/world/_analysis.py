@@ -11,7 +11,7 @@ from src.ui.graph_renderer import (
     render_path_result,
 )
 
-logger = logging.getLogger("src.ui.pages.world._analysis")
+logger = logging.getLogger(__name__)
 
 
 def build_health_section(page) -> None:

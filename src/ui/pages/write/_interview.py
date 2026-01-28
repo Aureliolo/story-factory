@@ -12,7 +12,7 @@ from src.ui.theme import get_status_color
 if TYPE_CHECKING:
     from . import WritePage
 
-logger = logging.getLogger("src.ui.pages.write._interview")
+logger = logging.getLogger(__name__)
 
 
 def build_interview_section(page: WritePage) -> None:

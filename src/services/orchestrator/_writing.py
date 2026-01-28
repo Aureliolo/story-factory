@@ -14,7 +14,7 @@ from src.utils.exceptions import ExportError
 if TYPE_CHECKING:
     from . import StoryOrchestrator, WorkflowEvent
 
-logger = logging.getLogger("src.services.orchestrator._writing")
+logger = logging.getLogger(__name__)
 
 
 def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, str]:

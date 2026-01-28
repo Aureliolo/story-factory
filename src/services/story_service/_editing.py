@@ -11,7 +11,7 @@ from src.services.orchestrator import WorkflowEvent
 if TYPE_CHECKING:
     from src.services.story_service import StoryService
 
-logger = logging.getLogger("src.services.story_service._editing")
+logger = logging.getLogger(__name__)
 
 
 def continue_chapter(

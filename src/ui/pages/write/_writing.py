@@ -13,7 +13,7 @@ from src.ui.components.generation_status import GenerationStatus
 if TYPE_CHECKING:
     from . import WritePage
 
-logger = logging.getLogger("src.ui.pages.write._writing")
+logger = logging.getLogger(__name__)
 
 
 def build_live_writing(page: WritePage) -> None:

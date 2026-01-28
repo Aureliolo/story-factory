@@ -15,7 +15,7 @@ from src.memory.mode_models import (
 if TYPE_CHECKING:
     from src.ui.pages.settings import SettingsPage
 
-logger = logging.getLogger("src.ui.pages.settings._modes")
+logger = logging.getLogger(__name__)
 
 
 def build_mode_section(page: SettingsPage) -> None:

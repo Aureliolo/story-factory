@@ -6,7 +6,7 @@ from nicegui import ui
 
 from src.ui.components.build_dialog import show_build_structure_dialog
 
-logger = logging.getLogger("src.ui.pages.world._generation")
+logger = logging.getLogger(__name__)
 
 
 def build_generation_toolbar(page) -> None:

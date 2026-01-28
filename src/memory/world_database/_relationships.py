@@ -13,7 +13,7 @@ from src.utils.exceptions import RelationshipValidationError
 if TYPE_CHECKING:
     from . import WorldDatabase
 
-logger = logging.getLogger("src.memory.world_database._relationships")
+logger = logging.getLogger(__name__)
 
 
 def add_relationship(

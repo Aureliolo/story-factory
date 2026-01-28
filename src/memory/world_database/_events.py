@@ -7,7 +7,7 @@ from datetime import datetime
 
 from src.memory.entities import EventParticipant, WorldEvent
 
-logger = logging.getLogger("src.memory.world_database._events")
+logger = logging.getLogger(__name__)
 
 
 def add_event(

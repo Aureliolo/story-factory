@@ -11,7 +11,7 @@ from src.memory.entities import Entity
 if TYPE_CHECKING:
     from . import WorldDatabase
 
-logger = logging.getLogger("src.memory.world_database._graph")
+logger = logging.getLogger(__name__)
 
 
 def invalidate_graph(db: WorldDatabase) -> None:

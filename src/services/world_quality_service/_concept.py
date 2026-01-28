@@ -10,7 +10,7 @@ from src.utils.exceptions import WorldGenerationError
 from src.utils.json_parser import extract_json
 from src.utils.validation import validate_unique_name
 
-logger = logging.getLogger("src.services.world_quality_service._concept")
+logger = logging.getLogger(__name__)
 
 
 def generate_concept_with_quality(

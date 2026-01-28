@@ -9,7 +9,7 @@ from src.memory.world_database import WorldDatabase
 if TYPE_CHECKING:
     from src.services.world_service import WorldService
 
-logger = logging.getLogger("src.services.world_service._graph")
+logger = logging.getLogger(__name__)
 
 
 def find_path(

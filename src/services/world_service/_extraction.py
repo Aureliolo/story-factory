@@ -16,7 +16,7 @@ from src.utils.validation import (
 if TYPE_CHECKING:
     from src.services.world_service import WorldService
 
-logger = logging.getLogger("src.services.world_service._extraction")
+logger = logging.getLogger(__name__)
 
 
 def extract_entities_from_structure(

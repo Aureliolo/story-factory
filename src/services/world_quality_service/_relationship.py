@@ -10,7 +10,7 @@ from src.memory.world_quality import RefinementHistory, RelationshipQualityScore
 from src.utils.exceptions import WorldGenerationError
 from src.utils.json_parser import extract_json
 
-logger = logging.getLogger("src.services.world_quality_service._relationship")
+logger = logging.getLogger(__name__)
 
 
 def generate_relationship_with_quality(

@@ -7,7 +7,7 @@ from typing import Any
 
 from nicegui import ui
 
-logger = logging.getLogger("src.ui.pages.models._download")
+logger = logging.getLogger(__name__)
 
 
 def update_queue_status(page: Any) -> None:

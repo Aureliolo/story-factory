@@ -7,7 +7,7 @@ from nicegui import ui
 from src.ui.pages.analytics._summary import build_stat_card
 from src.utils import extract_model_name
 
-logger = logging.getLogger("src.ui.pages.analytics._trends")
+logger = logging.getLogger(__name__)
 
 
 def build_quality_trends_section(page) -> None:

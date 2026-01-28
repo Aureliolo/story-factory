@@ -6,7 +6,7 @@ from nicegui import ui
 
 from src.ui.state import ActionType
 
-logger = logging.getLogger("src.ui.pages.world._undo")
+logger = logging.getLogger(__name__)
 
 
 def update_undo_redo_buttons(page) -> None:

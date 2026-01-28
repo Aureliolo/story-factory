@@ -10,7 +10,7 @@ from src.settings import AGENT_ROLES
 if TYPE_CHECKING:
     from src.ui.pages.settings import SettingsPage
 
-logger = logging.getLogger("src.ui.pages.settings._models")
+logger = logging.getLogger(__name__)
 
 
 def build_model_section(page: SettingsPage) -> None:

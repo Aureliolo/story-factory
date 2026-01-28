@@ -8,7 +8,7 @@ from datetime import datetime
 
 from src.memory.entities import EntityVersion
 
-logger = logging.getLogger("src.memory.world_database._versions")
+logger = logging.getLogger(__name__)
 
 
 def save_entity_version_internal(

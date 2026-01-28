@@ -16,7 +16,7 @@ from src.memory.world_quality import (
 )
 from src.utils.exceptions import WorldGenerationError
 
-logger = logging.getLogger("src.services.world_quality_service._batch")
+logger = logging.getLogger(__name__)
 
 
 def generate_factions_with_quality(

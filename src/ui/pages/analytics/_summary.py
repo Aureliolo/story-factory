@@ -4,7 +4,7 @@ import logging
 
 from nicegui import ui
 
-logger = logging.getLogger("src.ui.pages.analytics._summary")
+logger = logging.getLogger(__name__)
 
 
 def build_summary_section(page) -> None:

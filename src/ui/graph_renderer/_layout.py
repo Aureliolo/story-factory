@@ -3,7 +3,7 @@
 import logging
 import math
 
-logger = logging.getLogger("src.ui.graph_renderer._layout")
+logger = logging.getLogger(__name__)
 
 
 def get_layout_options(layout: str) -> str:

@@ -8,7 +8,7 @@ import logging
 import sqlite3
 from typing import Any
 
-logger = logging.getLogger("src.memory.mode_database._custom_modes")
+logger = logging.getLogger(__name__)
 
 
 def save_custom_mode(

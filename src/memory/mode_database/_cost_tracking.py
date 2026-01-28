@@ -10,7 +10,7 @@ from typing import Any
 
 from src.utils.exceptions import ValidationError
 
-logger = logging.getLogger("src.memory.mode_database._cost_tracking")
+logger = logging.getLogger(__name__)
 
 
 def start_generation_run(

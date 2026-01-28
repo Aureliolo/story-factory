@@ -12,7 +12,7 @@ from src.ui.components.recommendation_dialog import show_recommendations
 if TYPE_CHECKING:
     from . import WritePage
 
-logger = logging.getLogger("src.ui.pages.write._generation")
+logger = logging.getLogger(__name__)
 
 
 async def write_current_chapter(page: WritePage) -> None:

@@ -6,7 +6,7 @@ import logging
 from src.memory.world_database import WorldDatabase
 from src.ui.theme import ENTITY_COLORS
 
-logger = logging.getLogger("src.ui.graph_renderer._results")
+logger = logging.getLogger(__name__)
 
 
 def render_entity_summary_html(world_db: WorldDatabase) -> str:

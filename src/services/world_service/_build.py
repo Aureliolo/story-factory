@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from src.services import ServiceContainer
     from src.services.world_service import WorldBuildOptions, WorldBuildProgress, WorldService
 
-logger = logging.getLogger("src.services.world_service._build")
+logger = logging.getLogger(__name__)
 
 
 def build_world(

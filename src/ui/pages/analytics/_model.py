@@ -6,7 +6,7 @@ from nicegui import ui
 
 from src.utils import extract_model_name
 
-logger = logging.getLogger("src.ui.pages.analytics._model")
+logger = logging.getLogger(__name__)
 
 
 def build_model_section(page) -> None:

@@ -5,7 +5,7 @@ from typing import Any
 
 from nicegui import ui
 
-logger = logging.getLogger("src.ui.pages.world._import")
+logger = logging.getLogger(__name__)
 
 
 def show_import_wizard(page) -> None:

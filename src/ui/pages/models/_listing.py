@@ -8,7 +8,7 @@ from nicegui import ui
 from src.settings import RECOMMENDED_MODELS, ModelInfo
 from src.ui.theme import get_quality_color
 
-logger = logging.getLogger("src.ui.pages.models._listing")
+logger = logging.getLogger(__name__)
 
 
 def build_available_section(page: Any) -> None:

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from src.memory.world_health import WorldHealthMetrics
     from src.services.world_service import WorldService
 
-logger = logging.getLogger("src.services.world_service._health")
+logger = logging.getLogger(__name__)
 
 
 def find_orphan_entities(

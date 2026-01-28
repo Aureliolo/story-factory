@@ -10,7 +10,7 @@ from src.memory.story_state import StoryBrief
 from src.memory.world_quality import RefinementConfig
 from src.utils.json_parser import extract_json
 
-logger = logging.getLogger("src.services.world_quality_service._validation")
+logger = logging.getLogger(__name__)
 
 
 def generate_mini_description(

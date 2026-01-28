@@ -11,7 +11,7 @@ from src.utils.validation import validate_not_empty, validate_not_none, validate
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
 
-logger = logging.getLogger("src.services.model_mode_service._scoring")
+logger = logging.getLogger(__name__)
 
 
 def record_generation(

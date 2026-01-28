@@ -13,7 +13,7 @@ from nicegui import ui
 from src.memory.entities import Entity, EntityVersion
 from src.ui.state import ActionType, UndoAction
 
-logger = logging.getLogger("src.ui.pages.world._editor")
+logger = logging.getLogger(__name__)
 
 
 def build_entity_editor(page) -> None:

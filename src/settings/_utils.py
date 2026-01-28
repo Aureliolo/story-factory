@@ -6,7 +6,7 @@ import subprocess
 from src.settings._model_registry import RECOMMENDED_MODELS
 from src.settings._types import ModelInfo
 
-logger = logging.getLogger("src.settings._utils")
+logger = logging.getLogger(__name__)
 
 # Cross-platform subprocess flags (CREATE_NO_WINDOW only exists on Windows)
 _SUBPROCESS_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)

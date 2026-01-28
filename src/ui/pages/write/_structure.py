@@ -10,7 +10,7 @@ from src.ui.graph_renderer import render_entity_summary_html
 if TYPE_CHECKING:
     from . import WritePage
 
-logger = logging.getLogger("src.ui.pages.write._structure")
+logger = logging.getLogger(__name__)
 
 
 def build_world_overview_content(page: WritePage) -> None:

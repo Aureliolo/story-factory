@@ -8,7 +8,7 @@ from nicegui import ui
 
 from src.settings import AGENT_ROLES, Settings
 
-logger = logging.getLogger("src.ui.pages.models._operations")
+logger = logging.getLogger(__name__)
 
 
 def build_installed_section(page: Any) -> None:

@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-logger = logging.getLogger("src.memory.world_database._io")
+logger = logging.getLogger(__name__)
 
 
 def export_to_json(db) -> dict[str, Any]:

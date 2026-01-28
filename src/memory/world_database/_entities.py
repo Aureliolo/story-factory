@@ -12,7 +12,7 @@ from src.memory.entities import Entity
 if TYPE_CHECKING:
     from . import WorldDatabase
 
-logger = logging.getLogger("src.memory.world_database._entities")
+logger = logging.getLogger(__name__)
 
 
 def add_entity(

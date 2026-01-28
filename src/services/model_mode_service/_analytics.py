@@ -12,7 +12,7 @@ from src.utils.validation import validate_not_empty, validate_positive
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
 
-logger = logging.getLogger("src.services.model_mode_service._analytics")
+logger = logging.getLogger(__name__)
 
 
 def get_quality_vs_speed_data(

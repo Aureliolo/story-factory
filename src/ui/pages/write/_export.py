@@ -8,7 +8,7 @@ from nicegui import ui
 if TYPE_CHECKING:
     from . import WritePage
 
-logger = logging.getLogger("src.ui.pages.write._export")
+logger = logging.getLogger(__name__)
 
 
 async def export(page: WritePage, fmt: str) -> None:

@@ -8,7 +8,7 @@ from src.memory.world_quality import CharacterQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
 from src.utils.exceptions import WorldGenerationError
 
-logger = logging.getLogger("src.services.world_quality_service._character")
+logger = logging.getLogger(__name__)
 
 
 def generate_character_with_quality(

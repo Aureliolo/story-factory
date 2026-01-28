@@ -10,7 +10,7 @@ from nicegui import ui
 from src.memory.world_quality import RefinementConfig
 from src.services.world_quality_service import EntityGenerationProgress
 
-logger = logging.getLogger("src.ui.pages.world._gen_dialogs")
+logger = logging.getLogger(__name__)
 
 
 def notify_partial_failure(

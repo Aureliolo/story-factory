@@ -11,7 +11,7 @@ from src.utils.message_analyzer import analyze_message, format_inference_context
 if TYPE_CHECKING:
     from . import StoryOrchestrator
 
-logger = logging.getLogger("src.services.orchestrator._interview")
+logger = logging.getLogger(__name__)
 
 
 def start_interview(orc: StoryOrchestrator) -> str:

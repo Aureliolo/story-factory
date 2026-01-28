@@ -14,7 +14,7 @@ from src.ui.graph_renderer._layout import (
 )
 from src.ui.theme import ENTITY_COLORS, RELATION_COLORS, get_role_graph_style
 
-logger = logging.getLogger("src.ui.graph_renderer._renderer")
+logger = logging.getLogger(__name__)
 
 # Entity type shapes (fallback for non-icon mode)
 ENTITY_SHAPES = {

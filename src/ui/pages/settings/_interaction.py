@@ -8,7 +8,7 @@ from nicegui import ui
 if TYPE_CHECKING:
     from src.ui.pages.settings import SettingsPage
 
-logger = logging.getLogger("src.ui.pages.settings._interaction")
+logger = logging.getLogger(__name__)
 
 
 def build_interaction_section(page: SettingsPage) -> None:

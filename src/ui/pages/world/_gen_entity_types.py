@@ -19,7 +19,7 @@ from src.ui.pages.world._gen_dialogs import (
     show_entity_preview_dialog,
 )
 
-logger = logging.getLogger("src.ui.pages.world._gen_entity_types")
+logger = logging.getLogger(__name__)
 
 
 async def _generate_factions(

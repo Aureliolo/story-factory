@@ -18,7 +18,7 @@ from src.memory.mode_models import (
 )
 from src.utils.exceptions import ValidationError
 
-logger = logging.getLogger("src.memory.mode_database._scoring")
+logger = logging.getLogger(__name__)
 
 
 def record_score(

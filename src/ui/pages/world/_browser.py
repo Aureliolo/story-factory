@@ -9,7 +9,7 @@ from src.memory.entities import Entity
 from src.ui.components.entity_card import entity_list_item
 from src.ui.state import ActionType, UndoAction
 
-logger = logging.getLogger("src.ui.pages.world._browser")
+logger = logging.getLogger(__name__)
 
 
 def build_entity_browser(page) -> None:
