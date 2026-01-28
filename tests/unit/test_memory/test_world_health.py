@@ -371,3 +371,29 @@ class TestWorldHealthMetrics:
 
         # Healthy world should have empty or minimal recommendations
         assert len(recs) == 0
+
+    def test_generate_recommendations_temporal_errors(self):
+        """Test recommendation generation for temporal errors."""
+        metrics = WorldHealthMetrics(
+            temporal_error_count=3,
+            temporal_warning_count=0,
+        )
+
+        recs = metrics.generate_recommendations()
+
+        assert len(recs) > 0
+        assert any("temporal" in r.lower() for r in recs)
+        assert any("3" in r for r in recs)
+
+    def test_generate_recommendations_temporal_warnings_only(self):
+        """Test recommendation generation for temporal warnings only."""
+        metrics = WorldHealthMetrics(
+            temporal_error_count=0,
+            temporal_warning_count=5,
+        )
+
+        recs = metrics.generate_recommendations()
+
+        assert len(recs) > 0
+        assert any("temporal" in r.lower() and "warning" in r.lower() for r in recs)
+        assert any("5" in r for r in recs)

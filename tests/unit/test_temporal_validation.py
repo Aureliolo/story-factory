@@ -5,7 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.memory.entities import Entity
-from src.memory.timeline_types import EntityLifecycle, StoryTimestamp
+from src.memory.timeline_types import (
+    EntityLifecycle,
+    StoryTimestamp,
+    extract_lifecycle_from_attributes,
+)
 from src.memory.world_calendar import CalendarMonth, WorldCalendar
 from src.services.temporal_validation_service import (
     TemporalErrorSeverity,
@@ -351,6 +355,95 @@ class TestStoryTimestampFormatDisplay:
         # Should use calendar formatting
         assert "500" in result
         assert "Firstmoon" in result
+
+
+class TestStoryTimestampDisplayText:
+    """Tests for StoryTimestamp.display_text property."""
+
+    def test_display_text_with_era_name(self) -> None:
+        """Test display_text includes era_name when present."""
+        ts = StoryTimestamp(year=500, era_name="Third Age")
+        result = ts.display_text
+
+        assert "500" in result
+        assert "Third Age" in result
+
+    def test_display_text_year_only(self) -> None:
+        """Test display_text with year only."""
+        ts = StoryTimestamp(year=300)
+        result = ts.display_text
+
+        assert result == "Year 300"
+
+    def test_display_text_year_month_day(self) -> None:
+        """Test display_text with full date."""
+        ts = StoryTimestamp(year=300, month=6, day=15)
+        result = ts.display_text
+
+        assert "Year 300" in result
+        assert "Month 6" in result
+        assert "Day 15" in result
+
+
+class TestExtractLifecycleFromAttributes:
+    """Tests for extract_lifecycle_from_attributes function."""
+
+    def test_extract_with_string_founding_year(self) -> None:
+        """Test extracting lifecycle with string founding_year."""
+        attributes = {
+            "lifecycle": {
+                "founding_year": "500",  # String instead of int
+            }
+        }
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year == 500
+
+    def test_extract_with_string_destruction_year(self) -> None:
+        """Test extracting lifecycle with string destruction_year."""
+        attributes = {
+            "lifecycle": {
+                "destruction_year": "750",  # String instead of int
+            }
+        }
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.destruction_year == 750
+
+    def test_extract_with_int_founding_year(self) -> None:
+        """Test extracting lifecycle with int founding_year."""
+        attributes = {
+            "lifecycle": {
+                "founding_year": 500,
+            }
+        }
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year == 500
+
+    def test_extract_with_int_destruction_year(self) -> None:
+        """Test extracting lifecycle with int destruction_year."""
+        attributes = {
+            "lifecycle": {
+                "destruction_year": 750,
+            }
+        }
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.destruction_year == 750
+
+    def test_extract_with_non_numeric_string_ignored(self) -> None:
+        """Test that non-numeric string values are ignored."""
+        attributes = {
+            "lifecycle": {
+                "founding_year": "unknown",
+                "destruction_year": "ancient",
+            }
+        }
+        lifecycle = extract_lifecycle_from_attributes(attributes)
+        assert lifecycle is not None
+        assert lifecycle.founding_year is None
+        assert lifecycle.destruction_year is None
 
 
 class TestEntityLifecycleProperties:

@@ -235,3 +235,37 @@ class TestCreateDefaultCalendar:
         assert calendar.current_era_name == "Age of Wonders"
         assert calendar.era_abbreviation == "AW"
         assert calendar.current_story_year == 500
+
+
+class TestWorldCalendarEdgeCases:
+    """Tests for edge cases in WorldCalendar."""
+
+    def test_empty_months_list(self) -> None:
+        """Test calendar with empty months list."""
+        calendar = WorldCalendar(
+            current_era_name="Test Era",
+            era_abbreviation="TE",
+            era_start_year=1,
+            months=[],  # Empty list
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=100,
+        )
+        # Should use fallback for total_days_per_year
+        assert calendar.total_days_per_year == 365
+        assert calendar.month_count == 12
+
+    def test_calendar_without_eras_list(self) -> None:
+        """Test calendar without historical eras."""
+        calendar = WorldCalendar(
+            current_era_name="Single Era",
+            era_abbreviation="SE",
+            era_start_year=1,
+            months=[CalendarMonth(name="Month1", days=30)],
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=100,
+            eras=[],
+        )
+        assert len(calendar.eras) == 0
+        assert calendar.get_era_for_year(50) is None
