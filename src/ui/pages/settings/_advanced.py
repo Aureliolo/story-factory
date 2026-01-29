@@ -490,17 +490,6 @@ def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
     return {rel_type: rel_type.replace("_", " ").title() for rel_type in sorted(all_types)}
 
 
-def _on_circular_types_change(page: SettingsPage, selected: list[str]) -> None:
-    """Handle changes to circular relationship types selection.
-
-    Args:
-        page: The SettingsPage instance.
-        selected: List of selected relationship types.
-    """
-    logger.debug("Circular relationship types changed to: %s", selected)
-    page.settings.circular_relationship_types = list(selected)
-
-
 def build_relationship_validation_section(page: SettingsPage) -> None:
     """Build relationship validation and world health settings section.
 
@@ -538,33 +527,28 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
             with ui.row().classes("items-center gap-3 flex-wrap"):
                 with ui.column().classes("gap-1"):
                     ui.label("Fuzzy Threshold").classes("text-xs text-gray-500")
-                    page._fuzzy_threshold_input = (
-                        ui.number(
-                            value=page.settings.fuzzy_match_threshold,
-                            min=0.5,
-                            max=1.0,
-                            step=0.05,
-                        )
-                        .props("outlined dense")
-                        .classes("w-16")
-                        .tooltip("Similarity for name matching (0.5-1.0)")
+                    page._fuzzy_threshold_input = page._build_number_input(
+                        value=page.settings.fuzzy_match_threshold,
+                        min_val=0.5,
+                        max_val=1.0,
+                        step=0.05,
+                        tooltip_text="Similarity for name matching (0.5-1.0)",
+                        width="w-16",
                     )
 
                 with ui.column().classes("gap-1"):
                     ui.label("Max Relationships").classes("text-xs text-gray-500")
-                    page._max_relationships_input = (
-                        ui.number(
-                            value=page.settings.max_relationships_per_entity,
-                            min=1,
-                            max=50,
-                            step=1,
-                        )
-                        .props("outlined dense")
-                        .classes("w-16")
-                        .tooltip("Per entity for suggestions (1-50)")
+                    page._max_relationships_input = page._build_number_input(
+                        value=page.settings.max_relationships_per_entity,
+                        min_val=1,
+                        max_val=50,
+                        step=1,
+                        tooltip_text="Per entity for suggestions (1-50)",
+                        width="w-16",
                     )
 
             # Circular relationship types (multi-select dropdown)
+            # Note: Values are extracted during save_to_settings() to preserve undo/redo
             ui.separator().classes("my-2")
             ui.label("Circular Check Types").classes("text-sm font-medium")
             ui.label("Relationship types to check for cycles").classes("text-xs text-gray-500 mb-1")
@@ -574,7 +558,6 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
                     options=_get_circular_type_options(page.settings.circular_relationship_types),
                     value=page.settings.circular_relationship_types,
                     multiple=True,
-                    on_change=lambda e: _on_circular_types_change(page, e.value),
                 )
                 .props("outlined dense use-chips")
                 .classes("w-full")
@@ -731,7 +714,8 @@ def save_to_settings(page: SettingsPage) -> None:
         settings.fuzzy_match_threshold = float(page._fuzzy_threshold_input.value)
     if hasattr(page, "_max_relationships_input"):
         settings.max_relationships_per_entity = int(page._max_relationships_input.value)
-    # circular_relationship_types is modified directly by the multi-select on_change
+    if hasattr(page, "_circular_types_select"):
+        settings.circular_relationship_types = list(page._circular_types_select.value)
 
     # Relationship minimums (extract from number inputs)
     if hasattr(page, "_relationship_min_inputs"):

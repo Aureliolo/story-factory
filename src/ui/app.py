@@ -1,6 +1,7 @@
 """Main NiceGUI application for Story Factory."""
 
 import logging
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -51,8 +52,6 @@ class StoryFactoryApp:
 
     def _load_last_project(self) -> None:
         """Load the last opened project if it still exists."""
-        import time
-
         last_id = self.services.settings.last_project_id
         if not last_id:
             logger.debug("No last project to load")
@@ -69,11 +68,11 @@ class StoryFactoryApp:
             )
         except FileNotFoundError:
             # Project was deleted, clear the setting
-            logger.info(f"Last project {last_id} no longer exists, clearing setting")
+            logger.info("Last project %s no longer exists, clearing setting", last_id)
             self.services.settings.last_project_id = None
             self.services.settings.save()
         except Exception as e:
-            logger.warning(f"Failed to auto-load last project {last_id}: {e}")
+            logger.warning("Failed to auto-load last project %s: %s", last_id, e)
             # Clear invalid project reference
             self.services.settings.last_project_id = None
             self.services.settings.save()

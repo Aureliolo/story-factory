@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import logging
+import time
 
 from src.utils.environment import check_environment
 from src.utils.logging_config import setup_logging
@@ -33,8 +34,6 @@ def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False) 
         port: Port to listen on.
         reload: Enable auto-reload for development.
     """
-    import time
-
     from src.services import ServiceContainer
     from src.settings import Settings
     from src.ui import create_app
