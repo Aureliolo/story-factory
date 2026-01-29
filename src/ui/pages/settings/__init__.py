@@ -100,8 +100,8 @@ class SettingsPage:
                         "Collapse All", on_click=self._collapse_all, icon="unfold_less"
                     ).props("flat dense")
 
-            # Clear expansions list for fresh build
-            self._expansions = []
+            # Reset for page rebuilds (build() may be called more than once)
+            self._expansions.clear()
 
             # Define setting groups: (title, icon, [build_functions])
             setting_groups = [
@@ -160,20 +160,17 @@ class SettingsPage:
 
         logger.debug("Settings page built with %d collapsible groups", len(self._expansions))
 
-    def _collapsible_group(
-        self, title: str, icon: str, expanded: bool = True
-    ) -> tuple[ui.expansion, ui.element]:
+    def _collapsible_group(self, title: str, icon: str) -> tuple[ui.expansion, ui.element]:
         """Create a collapsible group with grid container inside.
 
         Args:
             title: Group title displayed in the expansion header.
             icon: Material icon name for the group.
-            expanded: Whether the group starts expanded (default True).
 
         Returns:
             Tuple of (expansion element, grid container element).
         """
-        expansion = ui.expansion(title, icon=icon, value=expanded).classes(
+        expansion = ui.expansion(title, icon=icon, value=True).classes(
             "w-full bg-gray-50 dark:bg-gray-800 rounded-lg mb-4"
         )
         with expansion:
