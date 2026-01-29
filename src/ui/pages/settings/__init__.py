@@ -96,7 +96,8 @@ class SettingsPage:
         """Build the settings page UI with masonry layout in collapsible groups."""
         # Load Masonry.js for true masonry packing (items placed into shortest column)
         ui.add_head_html(
-            '<script src="https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js"></script>'
+            '<script src="https://unpkg.com/masonry-layout@4.2.2/dist/masonry.pkgd.min.js">'
+            "</script>"
         )
 
         # Responsive column widths: 1 → 2 → 3 → 4 columns as viewport grows
@@ -191,7 +192,7 @@ class SettingsPage:
                 with container:
                     for item in build_items:
                         if isinstance(item, tuple):
-                            func, _size = item
+                            func, _ = item
                             css = "masonry-item masonry-item-wide"
                         else:
                             func = item
@@ -235,8 +236,6 @@ class SettingsPage:
         """Expand all collapsible groups."""
         for exp in self._expansions:
             exp.value = True
-        # Re-layout masonry after expansion animation
-        ui.timer(0.4, self._layout_masonry, once=True)
         logger.debug("Expanded all %d groups", len(self._expansions))
 
     def _collapse_all(self) -> None:
@@ -248,56 +247,72 @@ class SettingsPage:
     def _init_masonry(self) -> None:
         """Initialize Masonry.js on all containers and set up resize handling."""
         ui.run_javascript("""
-            function initAllMasonry() {
-                document.querySelectorAll('.masonry-container').forEach(container => {
-                    if (container._msnry) {
-                        container._msnry.layout();
-                    } else {
-                        container._msnry = new Masonry(container, {
-                            itemSelector: '.masonry-item',
-                            columnWidth: '.masonry-sizer',
-                            percentPosition: true,
-                            transitionDuration: '0.2s'
-                        });
-                    }
-                });
-            }
+            try {
+                if (typeof Masonry === 'undefined') {
+                    console.error('[Settings] Masonry.js not loaded');
+                    return;
+                }
 
-            // Initial layout
-            initAllMasonry();
+                function initAllMasonry() {
+                    document.querySelectorAll('.masonry-container').forEach(container => {
+                        try {
+                            if (container._msnry) {
+                                container._msnry.layout();
+                            } else {
+                                container._msnry = new Masonry(container, {
+                                    itemSelector: '.masonry-item',
+                                    columnWidth: '.masonry-sizer',
+                                    percentPosition: true,
+                                    transitionDuration: '0.2s'
+                                });
+                            }
+                        } catch (err) {
+                            console.error('[Settings] Masonry init failed:', err);
+                        }
+                    });
+                }
 
-            // Re-layout on window resize (debounced)
-            if (!window._masonryResizeHandler) {
+                // Clean up previous handlers before re-initializing (page rebuild safety)
+                if (window._masonryObserver) {
+                    window._masonryObserver.disconnect();
+                    window._masonryObserver = null;
+                }
+                if (window._masonryResizeHandler) {
+                    window.removeEventListener('resize', window._masonryResizeHandler);
+                    window._masonryResizeHandler = null;
+                }
+
+                // Initial layout
+                initAllMasonry();
+
+                // Re-layout on window resize (debounced)
                 window._masonryResizeHandler = () => {
                     clearTimeout(window._masonryResizeTimer);
                     window._masonryResizeTimer = setTimeout(initAllMasonry, 150);
                 };
                 window.addEventListener('resize', window._masonryResizeHandler);
-            }
 
-            // Re-layout when any expansion toggles (MutationObserver on visibility)
-            if (!window._masonryObserver) {
-                window._masonryObserver = new MutationObserver(() => {
-                    clearTimeout(window._masonryMutationTimer);
-                    window._masonryMutationTimer = setTimeout(initAllMasonry, 300);
+                // Re-layout when expansion panels toggle (observe aria-expanded changes)
+                window._masonryObserver = new MutationObserver((mutations) => {
+                    const isExpansionToggle = mutations.some(m =>
+                        m.type === 'attributes' && m.attributeName === 'aria-expanded'
+                    );
+                    if (isExpansionToggle) {
+                        clearTimeout(window._masonryMutationTimer);
+                        window._masonryMutationTimer = setTimeout(initAllMasonry, 300);
+                    }
                 });
                 document.querySelectorAll('.q-expansion-item').forEach(exp => {
                     window._masonryObserver.observe(exp, {
-                        attributes: true, childList: true, subtree: true
+                        attributes: true, attributeFilter: ['aria-expanded'],
+                        subtree: true
                     });
                 });
+            } catch (err) {
+                console.error('[Settings] Masonry setup failed:', err);
             }
         """)
         logger.debug("Masonry.js initialized on all containers")
-
-    def _layout_masonry(self) -> None:
-        """Trigger a masonry re-layout on all containers."""
-        ui.run_javascript("""
-            document.querySelectorAll('.masonry-container').forEach(container => {
-                if (container._msnry) container._msnry.layout();
-            });
-        """)
-        logger.debug("Masonry re-layout triggered")
 
     # ── UI utilities ──────────────────────────────────────────────────────
 
