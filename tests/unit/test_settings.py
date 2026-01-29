@@ -455,6 +455,20 @@ class TestSettingsValidation:
         ):
             settings.validate()
 
+    def test_validate_raises_on_non_bool_generate_calendar_on_world_build(self):
+        """Should raise ValueError for non-boolean generate_calendar_on_world_build."""
+        settings = Settings()
+        settings.generate_calendar_on_world_build = "true"  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="generate_calendar_on_world_build must be a boolean"):
+            settings.validate()
+
+    def test_validate_raises_on_non_bool_validate_temporal_consistency(self):
+        """Should raise ValueError for non-boolean validate_temporal_consistency."""
+        settings = Settings()
+        settings.validate_temporal_consistency = 1  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="validate_temporal_consistency must be a boolean"):
+            settings.validate()
+
 
 class TestSettingsSaveLoad:
     """Tests for Settings save and load methods."""
