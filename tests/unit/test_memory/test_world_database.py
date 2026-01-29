@@ -1861,3 +1861,92 @@ class TestCircularDetection:
 
         # Degenerate cycle should be skipped
         assert cycles == []
+
+
+class TestWorldDatabaseWorldSettings:
+    """Tests for world settings persistence."""
+
+    def test_get_world_settings_returns_none_when_empty(self, db):
+        """Test get_world_settings returns None when no settings exist."""
+        result = db.get_world_settings()
+        assert result is None
+
+    def test_save_and_get_world_settings_without_calendar(self, db):
+        """Test saving and retrieving world settings without calendar."""
+        from src.memory.world_settings import WorldSettings
+
+        settings = WorldSettings(
+            timeline_start_year=100,
+            timeline_end_year=500,
+            validate_temporal_consistency=False,
+        )
+
+        db.save_world_settings(settings)
+        result = db.get_world_settings()
+
+        assert result is not None
+        assert result.id == settings.id
+        assert result.timeline_start_year == 100
+        assert result.timeline_end_year == 500
+        assert result.validate_temporal_consistency is False
+        assert result.calendar is None
+
+    def test_save_and_get_world_settings_with_calendar(self, db):
+        """Test saving and retrieving world settings with calendar."""
+        from src.memory.world_calendar import CalendarMonth, WorldCalendar
+        from src.memory.world_settings import WorldSettings
+
+        calendar = WorldCalendar(
+            current_era_name="Third Age",
+            era_abbreviation="TA",
+            era_start_year=1,
+            months=[
+                CalendarMonth(name="Firstmoon", days=30),
+                CalendarMonth(name="Secondmoon", days=31),
+            ],
+            days_per_week=7,
+            day_names=["Day1", "Day2", "Day3", "Day4", "Day5", "Day6", "Day7"],
+            current_story_year=500,
+        )
+
+        settings = WorldSettings(
+            calendar=calendar,
+            timeline_start_year=1,
+            timeline_end_year=1000,
+        )
+
+        db.save_world_settings(settings)
+        result = db.get_world_settings()
+
+        assert result is not None
+        assert result.calendar is not None
+        assert result.calendar.current_era_name == "Third Age"
+        assert result.calendar.era_abbreviation == "TA"
+        assert len(result.calendar.months) == 2
+        assert result.calendar.months[0].name == "Firstmoon"
+
+    def test_save_world_settings_updates_existing(self, db):
+        """Test that saving world settings updates existing record."""
+        from src.memory.world_settings import WorldSettings
+
+        # Save initial settings
+        settings1 = WorldSettings(
+            id="test-settings-id",
+            timeline_start_year=100,
+        )
+        db.save_world_settings(settings1)
+
+        # Update settings with same ID
+        settings2 = WorldSettings(
+            id="test-settings-id",
+            timeline_start_year=200,
+            timeline_end_year=500,
+        )
+        db.save_world_settings(settings2)
+
+        result = db.get_world_settings()
+
+        assert result is not None
+        assert result.id == "test-settings-id"
+        assert result.timeline_start_year == 200
+        assert result.timeline_end_year == 500

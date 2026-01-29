@@ -23,6 +23,7 @@ from src.services.temporal_validation_service import (
 def validation_service() -> TemporalValidationService:
     """Create a temporal validation service for testing."""
     settings = MagicMock()
+    settings.validate_temporal_consistency = True
     return TemporalValidationService(settings)
 
 
@@ -41,6 +42,50 @@ def sample_calendar() -> WorldCalendar:
         day_names=["Day1", "Day2", "Day3", "Day4", "Day5", "Day6", "Day7"],
         current_story_year=500,
     )
+
+
+class TestTemporalValidationDisabled:
+    """Tests for when temporal validation is disabled."""
+
+    def test_validate_entity_returns_empty_when_disabled(self) -> None:
+        """Test that validation returns empty result when disabled."""
+        settings = MagicMock()
+        settings.validate_temporal_consistency = False
+        service = TemporalValidationService(settings)
+
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Test",
+            description="Test",
+            attributes={
+                "lifecycle": {
+                    "birth": {"year": 100},
+                }
+            },
+        )
+
+        result = service.validate_entity(entity, None, [entity], [])
+
+        # Should return empty result without checking
+        assert result.is_valid is True
+        assert result.error_count == 0
+        assert result.warning_count == 0
+
+    def test_validate_world_returns_empty_when_disabled(self) -> None:
+        """Test that world validation returns empty result when disabled."""
+        settings = MagicMock()
+        settings.validate_temporal_consistency = False
+        service = TemporalValidationService(settings)
+
+        mock_world_db = MagicMock()
+        # These should not be called
+        mock_world_db.list_entities.side_effect = Exception("Should not be called")
+
+        result = service.validate_world(mock_world_db)
+
+        assert result.is_valid is True
+        assert result.error_count == 0
 
 
 class TestTemporalValidationResult:
