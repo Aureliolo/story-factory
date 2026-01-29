@@ -259,33 +259,26 @@ def build_data_integrity_section(page: SettingsPage) -> None:
     logger.debug("Data integrity section built")
 
 
-def build_advanced_llm_section(page: SettingsPage) -> None:
-    """Build advanced LLM settings section (WP1/WP2 settings).
+def build_circuit_breaker_section(page: SettingsPage) -> None:
+    """Build circuit breaker settings card.
 
     Args:
         page: The SettingsPage instance.
     """
     with ui.card().classes("w-full"):
         page._section_header(
-            "Advanced LLM Settings",
-            "tune",
-            "Configure circuit breaker, retry strategies, duplicate detection, "
-            "dynamic temperature, and early stopping behavior.",
+            "Circuit Breaker",
+            "security",
+            "Protect against cascading LLM failures by opening the circuit after repeated errors.",
         )
 
-        # Circuit Breaker
-        _subsection_header("Circuit Breaker", "security")
         with ui.row().classes("items-center gap-3 mb-3"):
             page._circuit_breaker_enabled_switch = ui.switch(
                 "Enabled",
                 value=page.settings.circuit_breaker_enabled,
             ).tooltip("Protect against cascading LLM failures")
 
-        with (
-            ui.element("div")
-            .classes("mb-4")
-            .bind_visibility_from(page._circuit_breaker_enabled_switch, "value")
-        ):
+        with ui.element("div").bind_visibility_from(page._circuit_breaker_enabled_switch, "value"):
             with ui.row().classes("items-center gap-3 flex-wrap"):
                 with ui.column().classes("gap-1"):
                     ui.label("Failures").classes("text-xs text-gray-500")
@@ -320,11 +313,23 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                         width="w-16",
                     )
 
-        ui.separator().classes("my-2")
+    logger.debug("Circuit breaker section built")
 
-        # Retry Strategy
-        _subsection_header("Retry Strategy", "replay")
-        with ui.row().classes("items-center gap-3 flex-wrap mb-4"):
+
+def build_retry_strategy_section(page: SettingsPage) -> None:
+    """Build retry strategy settings card.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Retry Strategy",
+            "replay",
+            "Configure how failed LLM requests are retried with adjusted parameters.",
+        )
+
+        with ui.row().classes("items-center gap-3 flex-wrap"):
             with ui.column().classes("gap-1"):
                 ui.label("Temp Increase").classes("text-xs text-gray-500")
                 page._retry_temp_increase_input = page._build_number_input(
@@ -347,20 +352,30 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                     width="w-16",
                 )
 
-        ui.separator().classes("my-2")
+    logger.debug("Retry strategy section built")
 
-        # Duplicate Detection
-        _subsection_header("Duplicate Detection", "content_copy")
+
+def build_duplicate_detection_section(page: SettingsPage) -> None:
+    """Build duplicate detection settings card.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Duplicate Detection",
+            "content_copy",
+            "Use semantic embeddings to detect and prevent similar content generation.",
+        )
+
         with ui.row().classes("items-center gap-3 mb-3"):
             page._semantic_duplicate_enabled_switch = ui.switch(
                 "Semantic Detection",
                 value=page.settings.semantic_duplicate_enabled,
             ).tooltip("Use embeddings to detect similar content")
 
-        with (
-            ui.element("div")
-            .classes("mb-4")
-            .bind_visibility_from(page._semantic_duplicate_enabled_switch, "value")
+        with ui.element("div").bind_visibility_from(
+            page._semantic_duplicate_enabled_switch, "value"
         ):
             with ui.row().classes("items-center gap-3 flex-wrap"):
                 with ui.column().classes("gap-1"):
@@ -376,10 +391,8 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
 
                 with ui.column().classes("gap-1"):
                     ui.label("Embedding Model").classes("text-xs text-gray-500")
-                    # Get installed models for embedding selection
                     installed_models = page.services.model.list_installed()
                     embedding_options = {m: m for m in installed_models}
-                    # Add current value if not in list
                     if page.settings.embedding_model not in embedding_options:
                         embedding_options[page.settings.embedding_model] = (
                             page.settings.embedding_model
@@ -394,14 +407,23 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                         .tooltip("Model for generating embeddings")
                     )
 
-        ui.separator().classes("my-2")
+    logger.debug("Duplicate detection section built")
 
-        # Refinement Temperature
-        _subsection_header("Refinement Temperature", "thermostat")
-        ui.label("Dynamic temperature decay during quality refinement").classes(
-            "text-xs text-gray-500 mb-2"
+
+def build_refinement_stopping_section(page: SettingsPage) -> None:
+    """Build refinement temperature and early stopping settings card.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Refinement & Stopping",
+            "thermostat",
+            "Configure dynamic temperature decay and early stopping for quality refinement.",
         )
 
+        _subsection_header("Temperature Decay", "thermostat")
         with ui.row().classes("items-center gap-3 flex-wrap mb-4"):
             with ui.column().classes("gap-1"):
                 ui.label("Start").classes("text-xs text-gray-500")
@@ -439,7 +461,6 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
 
         ui.separator().classes("my-2")
 
-        # Early Stopping
         _subsection_header("Early Stopping", "stop_circle")
         ui.label("Stop refinement when quality improvements plateau").classes(
             "text-xs text-gray-500 mb-2"
@@ -468,7 +489,7 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                     width="w-16",
                 )
 
-    logger.debug("Advanced LLM section built")
+    logger.debug("Refinement & stopping section built")
 
 
 def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
@@ -490,21 +511,20 @@ def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
     return {rel_type: rel_type.replace("_", " ").title() for rel_type in sorted(all_types)}
 
 
-def build_relationship_validation_section(page: SettingsPage) -> None:
-    """Build relationship validation and world health settings section.
+def build_validation_rules_section(page: SettingsPage) -> None:
+    """Build validation rules settings card.
 
     Args:
         page: The SettingsPage instance.
     """
     with ui.card().classes("w-full"):
         page._section_header(
-            "Relationship Validation",
+            "Validation Rules",
             "fact_check",
-            "Configure validation, orphan detection, and circular relationship checking.",
+            "Configure validation, orphan detection, and fuzzy matching thresholds.",
         )
 
         with ui.column().classes("w-full gap-3"):
-            # Validation toggles in a compact row
             with ui.row().classes("flex-wrap gap-x-4 gap-y-2"):
                 page._relationship_validation_switch = ui.switch(
                     "Validate on Creation",
@@ -523,7 +543,6 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
 
             ui.separator().classes("my-2")
 
-            # Numeric settings in a row
             with ui.row().classes("items-center gap-3 flex-wrap"):
                 with ui.column().classes("gap-1"):
                     ui.label("Fuzzy Threshold").classes("text-xs text-gray-500")
@@ -547,51 +566,82 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
                         width="w-16",
                     )
 
-            # Circular relationship types (multi-select dropdown)
-            # Note: Values are extracted during save_to_settings() to preserve undo/redo
-            ui.separator().classes("my-2")
-            ui.label("Circular Check Types").classes("text-sm font-medium")
-            ui.label("Relationship types to check for cycles").classes("text-xs text-gray-500 mb-1")
+    logger.debug("Validation rules section built")
 
-            page._circular_types_select = (
-                ui.select(
-                    options=_get_circular_type_options(page.settings.circular_relationship_types),
-                    value=page.settings.circular_relationship_types,
-                    multiple=True,
-                )
-                .props("outlined dense use-chips")
-                .classes("w-full")
-                .tooltip("Select types where cycles would be illogical")
+
+def build_circular_types_section(page: SettingsPage) -> None:
+    """Build circular relationship types settings card.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Circular Types",
+            "loop",
+            "Select relationship types where cycles would be illogical.",
+        )
+
+        # Note: Values are extracted during save_to_settings() to preserve undo/redo
+        page._circular_types_select = (
+            ui.select(
+                options=_get_circular_type_options(page.settings.circular_relationship_types),
+                value=page.settings.circular_relationship_types,
+                multiple=True,
             )
+            .props("outlined dense use-chips")
+            .classes("w-full")
+            .tooltip("Select types where cycles would be illogical")
+        )
 
-            ui.separator().classes("my-2")
+    logger.debug("Circular types section built")
 
-            # Calendar and Temporal Validation subsection
-            _subsection_header("Calendar & Temporal", "calendar_month")
 
-            with ui.row().classes("flex-wrap gap-x-4 gap-y-2"):
-                page._generate_calendar_switch = ui.switch(
-                    "Auto-Generate Calendar",
-                    value=page.settings.generate_calendar_on_world_build,
-                ).tooltip("Create calendar during world build")
+def build_calendar_temporal_section(page: SettingsPage) -> None:
+    """Build calendar and temporal validation settings card.
 
-                page._temporal_validation_switch = ui.switch(
-                    "Temporal Validation",
-                    value=page.settings.validate_temporal_consistency,
-                ).tooltip("Validate timeline consistency")
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Calendar & Temporal",
+            "calendar_month",
+            "Configure automatic calendar generation and timeline consistency validation.",
+        )
 
-            ui.separator().classes("my-2")
+        with ui.row().classes("flex-wrap gap-x-4 gap-y-2"):
+            page._generate_calendar_switch = ui.switch(
+                "Auto-Generate Calendar",
+                value=page.settings.generate_calendar_on_world_build,
+            ).tooltip("Create calendar during world build")
 
-            # Relationship minimums (editable) - simple header instead of expansion
-            _subsection_header("Relationship Minimums", "tune")
-            ui.label("Minimum relationships per entity type/role:").classes(
-                "text-xs text-gray-500 mb-2"
-            )
-            # Container for relationship minimum inputs - can be rebuilt on settings restore
-            page._relationship_min_container = ui.column().classes("w-full")
-            _build_relationship_minimums_inputs(page)
+            page._temporal_validation_switch = ui.switch(
+                "Temporal Validation",
+                value=page.settings.validate_temporal_consistency,
+            ).tooltip("Validate timeline consistency")
 
-    logger.debug("Relationship validation section built")
+    logger.debug("Calendar & temporal section built")
+
+
+def build_relationship_minimums_section(page: SettingsPage) -> None:
+    """Build relationship minimums settings card.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Relationship Minimums",
+            "tune",
+            "Minimum relationships required per entity type and role.",
+        )
+
+        # Container for relationship minimum inputs - can be rebuilt on settings restore
+        page._relationship_min_container = ui.column().classes("w-full")
+        _build_relationship_minimums_inputs(page)
+
+    logger.debug("Relationship minimums section built")
 
 
 def _build_relationship_minimums_inputs(page: SettingsPage) -> None:
