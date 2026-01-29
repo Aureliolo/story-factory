@@ -174,11 +174,16 @@ class EntityLifecycle(BaseModel):
         # For characters: use birth/death
         if self.birth and self.birth.year is not None:
             if self.death and self.death.year is not None:
-                return self.death.year - self.birth.year
+                result = self.death.year - self.birth.year
+                logger.debug(f"EntityLifecycle.lifespan (birth/death): {result}")
+                return result
         # For factions/locations: use founding/destruction
         if self.founding_year is not None:
             if self.destruction_year is not None:
-                return self.destruction_year - self.founding_year
+                result = self.destruction_year - self.founding_year
+                logger.debug(f"EntityLifecycle.lifespan (founding/destruction): {result}")
+                return result
+        logger.debug("EntityLifecycle.lifespan: unavailable")
         return None
 
     @property
@@ -189,7 +194,9 @@ class EntityLifecycle(BaseModel):
             Birth year, founding year, or None.
         """
         if self.birth and self.birth.year is not None:
+            logger.debug(f"EntityLifecycle.start_year (birth): {self.birth.year}")
             return self.birth.year
+        logger.debug(f"EntityLifecycle.start_year (founding): {self.founding_year}")
         return self.founding_year
 
     @property
@@ -200,7 +207,9 @@ class EntityLifecycle(BaseModel):
             Death year, destruction year, or None if still active.
         """
         if self.death and self.death.year is not None:
+            logger.debug(f"EntityLifecycle.end_year (death): {self.death.year}")
             return self.death.year
+        logger.debug(f"EntityLifecycle.end_year (destruction): {self.destruction_year}")
         return self.destruction_year
 
 

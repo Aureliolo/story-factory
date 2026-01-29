@@ -228,7 +228,7 @@ class TemporalValidationService:
                     if target_lifecycle:
                         founding_year = target_lifecycle.founding_year
 
-                    if founding_year and birth_year < founding_year:
+                    if founding_year is not None and birth_year < founding_year:
                         error = TemporalValidationIssue(
                             entity_id=entity.id,
                             entity_name=entity.name,
@@ -265,7 +265,7 @@ class TemporalValidationService:
             founding_year = lifecycle.founding_year
             # destruction_year could be used for future validation rules
 
-        if not founding_year:
+        if founding_year is None:
             logger.debug(f"Faction '{entity.name}' has no founding year, skipping checks")
             return
 
@@ -282,7 +282,7 @@ class TemporalValidationService:
                     if target_lifecycle:
                         parent_founding = target_lifecycle.founding_year
 
-                    if parent_founding and founding_year < parent_founding:
+                    if parent_founding is not None and founding_year < parent_founding:
                         error = TemporalValidationIssue(
                             entity_id=entity.id,
                             entity_name=entity.name,
@@ -298,6 +298,7 @@ class TemporalValidationService:
                             suggestion=(f"Adjust founding year to {parent_founding} or later"),
                         )
                         result.errors.append(error)
+                        logger.warning(f"Temporal error: {error.message}")
 
     def _validate_location(
         self,
@@ -313,7 +314,7 @@ class TemporalValidationService:
         if lifecycle:
             destruction_year = lifecycle.destruction_year
 
-        if not destruction_year:
+        if destruction_year is None:
             # No destruction year means location still exists, no post-destruction checks needed
             return
 
@@ -331,22 +332,23 @@ class TemporalValidationService:
                     if source_lifecycle and source_lifecycle.birth:
                         event_year = source_lifecycle.birth.year
 
-                    if event_year and event_year > destruction_year:
+                    if event_year is not None and event_year > destruction_year:
                         error = TemporalValidationIssue(
-                            entity_id=source.id,
-                            entity_name=source.name,
-                            entity_type=source.type,
+                            entity_id=entity.id,
+                            entity_name=entity.name,
+                            entity_type=entity.type,
                             error_type=TemporalErrorType.POST_DESTRUCTION,
                             severity=TemporalErrorSeverity.ERROR,
                             message=(
-                                f"Event in {event_year} occurs at location "
+                                f"Event '{source.name}' in {event_year} occurs at location "
                                 f"'{entity.name}' destroyed in {destruction_year}"
                             ),
-                            related_entity_id=entity.id,
-                            related_entity_name=entity.name,
+                            related_entity_id=source.id,
+                            related_entity_name=source.name,
                             suggestion=(f"Adjust event year to before {destruction_year}"),
                         )
                         result.errors.append(error)
+                        logger.warning(f"Temporal error: {error.message}")
 
     def _validate_item(
         self,
@@ -367,7 +369,7 @@ class TemporalValidationService:
         if lifecycle.birth:
             creation_year = lifecycle.birth.year
 
-        if not creation_year:
+        if creation_year is None:
             return
 
         # Check creator relationship
@@ -381,7 +383,7 @@ class TemporalValidationService:
 
                     if creator_lifecycle and creator_lifecycle.birth:
                         creator_birth = creator_lifecycle.birth.year
-                        if creator_birth and creation_year < creator_birth:
+                        if creator_birth is not None and creation_year < creator_birth:
                             error = TemporalValidationIssue(
                                 entity_id=entity.id,
                                 entity_name=entity.name,
@@ -397,6 +399,7 @@ class TemporalValidationService:
                                 suggestion=(f"Adjust creation year to {creator_birth} or later"),
                             )
                             result.errors.append(error)
+                            logger.warning(f"Temporal error: {error.message}")
 
     def _validate_dates_against_calendar(
         self,
@@ -424,6 +427,7 @@ class TemporalValidationService:
                     suggestion="Adjust date to match calendar rules",
                 )
                 result.warnings.append(warning)
+                logger.warning(f"Temporal warning: {warning.message}")
 
         # Validate death date
         if lifecycle.death and lifecycle.death.year is not None:
@@ -443,6 +447,7 @@ class TemporalValidationService:
                     suggestion="Adjust date to match calendar rules",
                 )
                 result.warnings.append(warning)
+                logger.warning(f"Temporal warning: {warning.message}")
 
     def calculate_temporal_consistency_score(self, result: TemporalValidationResult) -> float:
         """Calculate a temporal consistency score (0-10) from validation result.

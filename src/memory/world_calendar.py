@@ -217,7 +217,13 @@ class WorldCalendar(BaseModel):
             # Day validation
             if day is not None:
                 month_obj = self.get_month_by_number(month)
-                if month_obj and (day < 1 or day > month_obj.days):
+                if month_obj is None:
+                    # Month metadata missing (empty months list) - can't validate day
+                    return (
+                        False,
+                        f"Cannot validate day {day} for month {month}: month metadata missing",
+                    )
+                if day < 1 or day > month_obj.days:
                     return False, f"Day {day} is invalid for {month_obj.name} (1-{month_obj.days})"
 
         logger.debug(f"Date validation passed: year={year}, month={month}, day={day}")

@@ -97,7 +97,9 @@ def isolate_project_directories(tmp_path, monkeypatch):
     them with exist_ok=True, and tests that need dirs before service init create their own.
     """
     import src.services.backup_service as backup_service_module
+    import src.services.orchestrator._persistence as orchestrator_persistence_module
     import src.services.project_service as project_service_module
+    import src.services.world_template_service as world_template_service_module
     import src.settings as settings_module
 
     # Also need to patch export service types if it exists
@@ -120,6 +122,8 @@ def isolate_project_directories(tmp_path, monkeypatch):
     monkeypatch.setattr(project_service_module, "WORLDS_DIR", worlds_dir)
     monkeypatch.setattr(backup_service_module, "STORIES_DIR", stories_dir)
     monkeypatch.setattr(backup_service_module, "WORLDS_DIR", worlds_dir)
+    monkeypatch.setattr(orchestrator_persistence_module, "STORIES_DIR", stories_dir)
+    monkeypatch.setattr(world_template_service_module, "STORIES_DIR", stories_dir)
 
     if has_export_types:
         monkeypatch.setattr(export_types_module, "STORIES_DIR", stories_dir)

@@ -5,9 +5,12 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from networkx import DiGraph
+
+if TYPE_CHECKING:
+    from src.memory.world_settings import WorldSettings
 
 from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
 from src.utils.exceptions import RelationshipValidationError
@@ -587,7 +590,7 @@ class WorldDatabase:
     # World Settings (calendar, timeline config)
     # =========================================================================
 
-    def get_world_settings(self) -> Any:
+    def get_world_settings(self) -> WorldSettings | None:
         """Get world settings including calendar configuration.
 
         Returns:
@@ -628,7 +631,7 @@ class WorldDatabase:
         )
         return WorldSettings.from_dict(settings_data)
 
-    def save_world_settings(self, settings: Any) -> None:
+    def save_world_settings(self, settings: WorldSettings) -> None:
         """Save or update world settings.
 
         Args:
