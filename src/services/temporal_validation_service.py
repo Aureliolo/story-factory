@@ -33,8 +33,8 @@ class TemporalErrorSeverity(str, Enum):
     ERROR = "error"  # Significant inconsistency, should fix
 
 
-class TemporalValidationError(BaseModel):
-    """A detected temporal consistency error."""
+class TemporalValidationIssue(BaseModel):
+    """A detected temporal consistency issue (error or warning)."""
 
     entity_id: str = Field(description="ID of the entity with the error")
     entity_name: str = Field(description="Name of the entity")
@@ -52,8 +52,8 @@ class TemporalValidationError(BaseModel):
 class TemporalValidationResult(BaseModel):
     """Result of temporal validation for an entity or world."""
 
-    errors: list[TemporalValidationError] = Field(default_factory=list)
-    warnings: list[TemporalValidationError] = Field(default_factory=list)
+    errors: list[TemporalValidationIssue] = Field(default_factory=list)
+    warnings: list[TemporalValidationIssue] = Field(default_factory=list)
     is_valid: bool = Field(default=True, description="True if no errors (warnings OK)")
 
     @property
@@ -229,7 +229,7 @@ class TemporalValidationService:
                         founding_year = target_lifecycle.founding_year
 
                     if founding_year and birth_year < founding_year:
-                        error = TemporalValidationError(
+                        error = TemporalValidationIssue(
                             entity_id=entity.id,
                             entity_name=entity.name,
                             entity_type=entity.type,
@@ -283,7 +283,7 @@ class TemporalValidationService:
                         parent_founding = target_lifecycle.founding_year
 
                     if parent_founding and founding_year < parent_founding:
-                        error = TemporalValidationError(
+                        error = TemporalValidationIssue(
                             entity_id=entity.id,
                             entity_name=entity.name,
                             entity_type=entity.type,
@@ -332,7 +332,7 @@ class TemporalValidationService:
                         event_year = source_lifecycle.birth.year
 
                     if event_year and event_year > destruction_year:
-                        error = TemporalValidationError(
+                        error = TemporalValidationIssue(
                             entity_id=source.id,
                             entity_name=source.name,
                             entity_type=source.type,
@@ -382,7 +382,7 @@ class TemporalValidationService:
                     if creator_lifecycle and creator_lifecycle.birth:
                         creator_birth = creator_lifecycle.birth.year
                         if creator_birth and creation_year < creator_birth:
-                            error = TemporalValidationError(
+                            error = TemporalValidationIssue(
                                 entity_id=entity.id,
                                 entity_name=entity.name,
                                 entity_type=entity.type,
@@ -414,7 +414,7 @@ class TemporalValidationService:
                 lifecycle.birth.day,
             )
             if not is_valid:
-                warning = TemporalValidationError(
+                warning = TemporalValidationIssue(
                     entity_id=entity.id,
                     entity_name=entity.name,
                     entity_type=entity.type,
@@ -433,7 +433,7 @@ class TemporalValidationService:
                 lifecycle.death.day,
             )
             if not is_valid:
-                warning = TemporalValidationError(
+                warning = TemporalValidationIssue(
                     entity_id=entity.id,
                     entity_name=entity.name,
                     entity_type=entity.type,

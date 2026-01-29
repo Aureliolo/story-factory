@@ -101,11 +101,11 @@ class TestTemporalValidationResult:
 
     def test_result_with_warnings_is_valid(self) -> None:
         """Test that a result with only warnings is still valid."""
-        from src.services.temporal_validation_service import TemporalValidationError
+        from src.services.temporal_validation_service import TemporalValidationIssue
 
         result = TemporalValidationResult()
         result.warnings.append(
-            TemporalValidationError(
+            TemporalValidationIssue(
                 entity_id="1",
                 entity_name="Test",
                 entity_type="character",
@@ -122,11 +122,11 @@ class TestTemporalValidationResult:
 
     def test_result_with_errors_is_invalid(self) -> None:
         """Test that a result with errors is invalid."""
-        from src.services.temporal_validation_service import TemporalValidationError
+        from src.services.temporal_validation_service import TemporalValidationIssue
 
         result = TemporalValidationResult()
         result.errors.append(
-            TemporalValidationError(
+            TemporalValidationIssue(
                 entity_id="1",
                 entity_name="Test",
                 entity_type="character",
@@ -338,13 +338,13 @@ class TestTemporalValidationService:
         self, validation_service: TemporalValidationService
     ) -> None:
         """Test score calculation with errors."""
-        from src.services.temporal_validation_service import TemporalValidationError
+        from src.services.temporal_validation_service import TemporalValidationIssue
 
         result = TemporalValidationResult()
         # Add 3 errors (3 * 2 = 6 penalty)
         for i in range(3):
             result.errors.append(
-                TemporalValidationError(
+                TemporalValidationIssue(
                     entity_id=f"e{i}",
                     entity_name=f"Entity {i}",
                     entity_type="character",
@@ -361,13 +361,13 @@ class TestTemporalValidationService:
         self, validation_service: TemporalValidationService
     ) -> None:
         """Test score calculation with warnings only."""
-        from src.services.temporal_validation_service import TemporalValidationError
+        from src.services.temporal_validation_service import TemporalValidationIssue
 
         result = TemporalValidationResult()
         # Add 4 warnings (4 * 0.5 = 2 penalty)
         for i in range(4):
             result.warnings.append(
-                TemporalValidationError(
+                TemporalValidationIssue(
                     entity_id=f"e{i}",
                     entity_name=f"Entity {i}",
                     entity_type="character",

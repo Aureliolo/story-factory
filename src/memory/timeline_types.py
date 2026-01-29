@@ -8,9 +8,12 @@ These models define the structure for:
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from src.memory.world_calendar import WorldCalendar
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +93,7 @@ class StoryTimestamp(BaseModel):
         else:
             return "Unknown time"
 
-    def format_display(self, calendar: Any = None) -> str:
+    def format_display(self, calendar: WorldCalendar | None = None) -> str:
         """Format timestamp using a WorldCalendar for custom display.
 
         Args:

@@ -118,6 +118,8 @@ class WorldSettings(BaseModel):
             WorldSettings instance.
         """
         logger.debug("Creating WorldSettings from dict")
+        # Create a shallow copy to avoid mutating the input
+        data = data.copy()
         # Handle calendar deserialization
         if "calendar" in data and data["calendar"] is not None:
             data["calendar"] = WorldCalendar.from_dict(data["calendar"])
