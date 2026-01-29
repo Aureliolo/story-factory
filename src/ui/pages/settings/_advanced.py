@@ -1,6 +1,7 @@
 """Settings page - advanced LLM, world gen, story structure, data integrity, and relationship sections."""
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from nicegui import ui
@@ -454,6 +455,27 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
     logger.debug("Advanced LLM section built")
 
 
+def _make_remove_handler(page: SettingsPage, rel_type: str) -> Callable[[], None]:
+    """Create a handler to remove a relationship type.
+
+    Args:
+        page: The SettingsPage instance.
+        rel_type: The relationship type to remove.
+
+    Returns:
+        A callable that removes the type when invoked.
+    """
+
+    def remove() -> None:
+        """Remove the relationship type and rebuild chips."""
+        if rel_type in page.settings.circular_relationship_types:
+            logger.debug("Removing circular relationship type: %s", rel_type)
+            page.settings.circular_relationship_types.remove(rel_type)
+            _build_circular_type_chips(page)
+
+    return remove
+
+
 def _build_circular_type_chips(page: SettingsPage) -> None:
     """Build chips for circular relationship types.
 
@@ -463,35 +485,19 @@ def _build_circular_type_chips(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    from collections.abc import Callable
-
+    logger.debug(
+        "Building circular type chips for %d types",
+        len(page.settings.circular_relationship_types),
+    )
     page._circular_types_container.clear()
     with page._circular_types_container:
         for rel_type in page.settings.circular_relationship_types:
-
-            def make_remove_handler(t: str) -> Callable[[], None]:
-                """Create a handler to remove a relationship type.
-
-                Args:
-                    t: The relationship type to remove.
-
-                Returns:
-                    A callable that removes the type when invoked.
-                """
-
-                def remove() -> None:
-                    if t in page.settings.circular_relationship_types:
-                        page.settings.circular_relationship_types.remove(t)
-                        _build_circular_type_chips(page)
-
-                return remove
-
             with ui.element("div").classes(
                 "flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 "
                 "rounded-full text-xs"
             ):
                 ui.label(rel_type).classes("text-blue-700 dark:text-blue-200")
-                ui.button(icon="close", on_click=make_remove_handler(rel_type)).props(
+                ui.button(icon="close", on_click=_make_remove_handler(page, rel_type)).props(
                     "flat dense round size=xs"
                 ).classes("text-blue-500 dark:text-blue-300")
 

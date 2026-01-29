@@ -405,7 +405,7 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
     if "circular_relationship_types" in snapshot:
         settings.circular_relationship_types = snapshot["circular_relationship_types"]
     if "relationship_minimums" in snapshot:
-        # Deep copy the nested dict
+        # Shallow copy the nested dict (roles.copy() creates shallow copies of inner dicts)
         settings.relationship_minimums = {
             et: roles.copy() for et, roles in snapshot["relationship_minimums"].items()
         }
@@ -553,6 +553,7 @@ def refresh_ui_from_settings(page: SettingsPage) -> None:
 
     # Relationship minimums
     if hasattr(page, "_relationship_min_inputs"):
+        logger.debug("Refreshing relationship minimum inputs from settings")
         for entity_type, roles in page._relationship_min_inputs.items():
             for role, num_input in roles.items():
                 if entity_type in settings.relationship_minimums:
@@ -561,6 +562,7 @@ def refresh_ui_from_settings(page: SettingsPage) -> None:
 
     # Rebuild circular type chips from settings
     if hasattr(page, "_circular_types_container"):
+        logger.debug("Rebuilding circular type chips from settings")
         from src.ui.pages.settings._advanced import _build_circular_type_chips
 
         _build_circular_type_chips(page)
