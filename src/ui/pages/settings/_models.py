@@ -19,7 +19,7 @@ def build_model_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Model Selection",
             "smart_toy",
@@ -91,7 +91,7 @@ def build_temperature_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Creativity (Temperature)",
             "thermostat",

@@ -17,7 +17,7 @@ def build_interaction_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Workflow",
             "tune",
@@ -80,7 +80,7 @@ def build_context_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Memory & Context",
             "memory",

@@ -32,7 +32,7 @@ def build_world_gen_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "World Generation",
             "public",
@@ -143,7 +143,7 @@ def build_story_structure_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Story Structure",
             "menu_book",
@@ -199,7 +199,7 @@ def build_data_integrity_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Data Integrity",
             "verified_user",
@@ -265,7 +265,7 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Advanced LLM Settings",
             "tune",
@@ -496,7 +496,7 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Relationship Validation",
             "fact_check",
