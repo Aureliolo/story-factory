@@ -181,7 +181,15 @@ def save_settings(page: SettingsPage) -> None:
         # Relationship minimums (extract from number inputs)
         if hasattr(page, "_relationship_min_inputs"):
             for entity_type, roles in page._relationship_min_inputs.items():
+                if entity_type not in page.settings.relationship_minimums:
+                    raise ValueError(f"Unknown relationship minimums entity type: {entity_type}")
                 for role, num_input in roles.items():
+                    if role not in page.settings.relationship_minimums[entity_type]:
+                        raise ValueError(
+                            f"Unknown relationship minimums role: {entity_type}/{role}"
+                        )
+                    if num_input.value is None:
+                        raise ValueError(f"Relationship minimum required for {entity_type}/{role}")
                     page.settings.relationship_minimums[entity_type][role] = int(num_input.value)
 
         # Calendar and temporal validation settings
@@ -403,7 +411,8 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
     if "max_relationships_per_entity" in snapshot:
         settings.max_relationships_per_entity = snapshot["max_relationships_per_entity"]
     if "circular_relationship_types" in snapshot:
-        settings.circular_relationship_types = snapshot["circular_relationship_types"]
+        # Create a copy to keep the snapshot immutable (chip UI mutates in-place)
+        settings.circular_relationship_types = list(snapshot["circular_relationship_types"])
     if "relationship_minimums" in snapshot:
         # Shallow copy the nested dict (roles.copy() creates shallow copies of inner dicts)
         settings.relationship_minimums = {

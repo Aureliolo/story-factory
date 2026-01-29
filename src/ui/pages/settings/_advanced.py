@@ -602,10 +602,17 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
                     def add_circular_type() -> None:
                         """Add a new circular relationship type from the input field."""
                         new_type = page._new_circular_type_input.value.strip().lower()
-                        if new_type and new_type not in page.settings.circular_relationship_types:
-                            page.settings.circular_relationship_types.append(new_type)
+                        if not new_type:
+                            logger.debug("Skipped adding circular relationship type: empty input")
+                            return
+                        if new_type in page.settings.circular_relationship_types:
+                            logger.debug("Circular relationship type already present: %s", new_type)
                             page._new_circular_type_input.value = ""
-                            _build_circular_type_chips(page)
+                            return
+                        page.settings.circular_relationship_types.append(new_type)
+                        logger.info("Added circular relationship type: %s", new_type)
+                        page._new_circular_type_input.value = ""
+                        _build_circular_type_chips(page)
 
                     ui.button(icon="add", on_click=add_circular_type).props(
                         "flat dense round"
