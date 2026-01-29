@@ -11,15 +11,22 @@ Package structure:
 """
 
 import logging
+from collections.abc import Callable
 
 from nicegui import ui
 
 from src.services import ServiceContainer
 from src.ui.pages.settings._advanced import (
-    build_advanced_llm_section,
+    build_calendar_temporal_section,
+    build_circuit_breaker_section,
+    build_circular_types_section,
     build_data_integrity_section,
-    build_relationship_validation_section,
+    build_duplicate_detection_section,
+    build_refinement_stopping_section,
+    build_relationship_minimums_section,
+    build_retry_strategy_section,
     build_story_structure_section,
+    build_validation_rules_section,
     build_world_gen_section,
 )
 from src.ui.pages.settings._connection import (
@@ -86,7 +93,32 @@ class SettingsPage:
         self.state.on_redo(self._do_redo)
 
     def build(self) -> None:
-        """Build the settings page UI with collapsible category groups."""
+        """Build the settings page UI with masonry layout in collapsible groups."""
+        # Load Masonry.js for true masonry packing (items placed into shortest column)
+        ui.add_head_html(
+            '<script src="https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js"></script>'
+        )
+
+        # Responsive column widths: 1 → 2 → 3 → 4 columns as viewport grows
+        ui.add_css("""
+            .masonry-sizer, .masonry-item { width: 100%; }
+            .masonry-item-wide { width: 100%; }
+            .masonry-item { box-sizing: border-box; padding: 8px; }
+
+            @media (min-width: 700px) {
+                .masonry-sizer, .masonry-item { width: 50%; }
+                .masonry-item-wide { width: 100%; }
+            }
+            @media (min-width: 1050px) {
+                .masonry-sizer, .masonry-item { width: 33.333%; }
+                .masonry-item-wide { width: 66.666%; }
+            }
+            @media (min-width: 1400px) {
+                .masonry-sizer, .masonry-item { width: 25%; }
+                .masonry-item-wide { width: 50%; }
+            }
+        """)
+
         # Max-width centered container
         with ui.element("div").classes("w-full max-w-[1600px] mx-auto p-4"):
             # Header with Expand/Collapse All buttons
@@ -103,15 +135,18 @@ class SettingsPage:
             # Reset for page rebuilds (build() may be called more than once)
             self._expansions.clear()
 
-            # Define setting groups: (title, icon, [build_functions])
-            setting_groups = [
+            # Define setting groups: (title, icon, build_items)
+            # Each build_item is either a function (normal width) or
+            # a (function, "wide") tuple for double-width cards.
+            _BuildItem = Callable[[], None] | tuple[Callable[[], None], str]
+            setting_groups: list[tuple[str, str, list[_BuildItem]]] = [
                 (
                     "Connection & Models",
                     "dns",
                     [
                         self._build_connection_section,
                         self._build_model_section,
-                        self._build_temperature_section,
+                        (self._build_temperature_section, "wide"),
                     ],
                 ),
                 (
@@ -129,7 +164,10 @@ class SettingsPage:
                     [
                         self._build_story_structure_section,
                         self._build_world_gen_section,
-                        self._build_relationship_validation_section,
+                        self._build_validation_rules_section,
+                        self._build_circular_types_section,
+                        self._build_calendar_temporal_section,
+                        self._build_relationship_minimums_section,
                         self._build_context_section,
                     ],
                 ),
@@ -138,18 +176,28 @@ class SettingsPage:
                     "security",
                     [
                         self._build_data_integrity_section,
-                        self._build_advanced_llm_section,
+                        self._build_circuit_breaker_section,
+                        self._build_retry_strategy_section,
+                        self._build_duplicate_detection_section,
+                        self._build_refinement_stopping_section,
                     ],
                 ),
             ]
 
             # Build groups from the data structure
-            for title, icon, build_functions in setting_groups:
-                exp, grid = self._collapsible_group(title, icon)
+            for title, icon, build_items in setting_groups:
+                exp, container = self._collapsible_group(title, icon)
                 self._expansions.append(exp)
-                with grid:
-                    for func in build_functions:
-                        func()
+                with container:
+                    for item in build_items:
+                        if isinstance(item, tuple):
+                            func, _size = item
+                            css = "masonry-item masonry-item-wide"
+                        else:
+                            func = item
+                            css = "masonry-item"
+                        with ui.element("div").classes(css):
+                            func()
 
             # Save button
             ui.button(
@@ -158,33 +206,37 @@ class SettingsPage:
                 icon="save",
             ).props("color=primary").classes("mt-4")
 
+        # Initialize masonry layout after DOM renders
+        ui.timer(0.5, self._init_masonry, once=True)
+
         logger.debug("Settings page built with %d collapsible groups", len(self._expansions))
 
     def _collapsible_group(self, title: str, icon: str) -> tuple[ui.expansion, ui.element]:
-        """Create a collapsible group with grid container inside.
+        """Create a collapsible group with masonry container inside.
 
         Args:
             title: Group title displayed in the expansion header.
             icon: Material icon name for the group.
 
         Returns:
-            Tuple of (expansion element, grid container element).
+            Tuple of (expansion element, masonry container element).
         """
         expansion = ui.expansion(title, icon=icon, value=True).classes(
             "w-full bg-gray-50 dark:bg-gray-800 rounded-lg mb-4"
         )
         with expansion:
-            grid = (
-                ui.element("div")
-                .classes("grid gap-4 items-start")
-                .style("grid-template-columns: repeat(auto-fit, minmax(300px, 400px));")
-            )
-        return expansion, grid
+            container = ui.element("div").classes("masonry-container")
+            with container:
+                # Invisible sizer element — Masonry reads its width to set column size
+                ui.element("div").classes("masonry-sizer")
+        return expansion, container
 
     def _expand_all(self) -> None:
         """Expand all collapsible groups."""
         for exp in self._expansions:
             exp.value = True
+        # Re-layout masonry after expansion animation
+        ui.timer(0.4, self._layout_masonry, once=True)
         logger.debug("Expanded all %d groups", len(self._expansions))
 
     def _collapse_all(self) -> None:
@@ -192,6 +244,60 @@ class SettingsPage:
         for exp in self._expansions:
             exp.value = False
         logger.debug("Collapsed all %d groups", len(self._expansions))
+
+    def _init_masonry(self) -> None:
+        """Initialize Masonry.js on all containers and set up resize handling."""
+        ui.run_javascript("""
+            function initAllMasonry() {
+                document.querySelectorAll('.masonry-container').forEach(container => {
+                    if (container._msnry) {
+                        container._msnry.layout();
+                    } else {
+                        container._msnry = new Masonry(container, {
+                            itemSelector: '.masonry-item',
+                            columnWidth: '.masonry-sizer',
+                            percentPosition: true,
+                            transitionDuration: '0.2s'
+                        });
+                    }
+                });
+            }
+
+            // Initial layout
+            initAllMasonry();
+
+            // Re-layout on window resize (debounced)
+            if (!window._masonryResizeHandler) {
+                window._masonryResizeHandler = () => {
+                    clearTimeout(window._masonryResizeTimer);
+                    window._masonryResizeTimer = setTimeout(initAllMasonry, 150);
+                };
+                window.addEventListener('resize', window._masonryResizeHandler);
+            }
+
+            // Re-layout when any expansion toggles (MutationObserver on visibility)
+            if (!window._masonryObserver) {
+                window._masonryObserver = new MutationObserver(() => {
+                    clearTimeout(window._masonryMutationTimer);
+                    window._masonryMutationTimer = setTimeout(initAllMasonry, 300);
+                });
+                document.querySelectorAll('.q-expansion-item').forEach(exp => {
+                    window._masonryObserver.observe(exp, {
+                        attributes: true, childList: true, subtree: true
+                    });
+                });
+            }
+        """)
+        logger.debug("Masonry.js initialized on all containers")
+
+    def _layout_masonry(self) -> None:
+        """Trigger a masonry re-layout on all containers."""
+        ui.run_javascript("""
+            document.querySelectorAll('.masonry-container').forEach(container => {
+                if (container._msnry) container._msnry.layout();
+            });
+        """)
+        logger.debug("Masonry re-layout triggered")
 
     # ── UI utilities ──────────────────────────────────────────────────────
 
@@ -275,13 +381,37 @@ class SettingsPage:
         """Build data integrity settings."""
         build_data_integrity_section(self)
 
-    def _build_advanced_llm_section(self) -> None:
-        """Build advanced LLM settings."""
-        build_advanced_llm_section(self)
+    def _build_circuit_breaker_section(self) -> None:
+        """Build circuit breaker settings."""
+        build_circuit_breaker_section(self)
 
-    def _build_relationship_validation_section(self) -> None:
-        """Build relationship validation settings."""
-        build_relationship_validation_section(self)
+    def _build_retry_strategy_section(self) -> None:
+        """Build retry strategy settings."""
+        build_retry_strategy_section(self)
+
+    def _build_duplicate_detection_section(self) -> None:
+        """Build duplicate detection settings."""
+        build_duplicate_detection_section(self)
+
+    def _build_refinement_stopping_section(self) -> None:
+        """Build refinement and stopping settings."""
+        build_refinement_stopping_section(self)
+
+    def _build_validation_rules_section(self) -> None:
+        """Build validation rules settings."""
+        build_validation_rules_section(self)
+
+    def _build_circular_types_section(self) -> None:
+        """Build circular types settings."""
+        build_circular_types_section(self)
+
+    def _build_calendar_temporal_section(self) -> None:
+        """Build calendar and temporal settings."""
+        build_calendar_temporal_section(self)
+
+    def _build_relationship_minimums_section(self) -> None:
+        """Build relationship minimums settings."""
+        build_relationship_minimums_section(self)
 
     # ── Connection test ───────────────────────────────────────────────────
 
