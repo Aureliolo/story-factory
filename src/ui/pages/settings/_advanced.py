@@ -14,6 +14,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _subsection_header(title: str, icon: str) -> None:
+    """Build a compact subsection header with icon.
+
+    Args:
+        title: The subsection title.
+        icon: Material icon name.
+    """
+    with ui.row().classes("items-center gap-2 mb-2"):
+        ui.icon(icon, size="xs").classes("text-gray-500")
+        ui.label(title).classes("text-sm font-medium")
+
+
 def build_world_gen_section(page: SettingsPage) -> None:
     """Build world generation settings section.
 
@@ -73,9 +85,7 @@ def build_world_gen_section(page: SettingsPage) -> None:
 
         # Quality refinement settings (subsection)
         ui.separator().classes("my-3")
-        with ui.row().classes("items-center gap-2 mb-2"):
-            ui.icon("auto_fix_high", size="xs").classes("text-gray-500")
-            ui.label("Quality Refinement").classes("text-sm font-medium")
+        _subsection_header("Quality Refinement", "auto_fix_high")
 
         # Quality threshold and iterations in a row
         with ui.row().classes("items-center gap-4"):
@@ -230,17 +240,19 @@ def build_data_integrity_section(page: SettingsPage) -> None:
                     "(checksums, file completeness, SQLite validity) before restoration"
                 )
 
-            # Info about what verification checks
-            with ui.expansion("Verification Checks", icon="info").classes("w-full"):
-                checks = [
-                    ("check_circle", "File completeness"),
-                    ("fingerprint", "SHA-256 checksums"),
-                    ("storage", "SQLite integrity"),
-                    ("code", "JSON validity"),
-                    ("update", "Version compatibility"),
-                ]
+            # Verification checks info (inline instead of expansion)
+            ui.separator().classes("my-2")
+            _subsection_header("Verification Checks", "info")
+            checks = [
+                ("check_circle", "File completeness"),
+                ("fingerprint", "SHA-256 checksums"),
+                ("storage", "SQLite integrity"),
+                ("code", "JSON validity"),
+                ("update", "Version compatibility"),
+            ]
+            with ui.row().classes("flex-wrap gap-x-4 gap-y-1"):
                 for icon, label in checks:
-                    with ui.row().classes("items-center gap-2"):
+                    with ui.row().classes("items-center gap-1"):
                         ui.icon(icon, size="xs").classes("text-green-500")
                         ui.label(label).classes("text-xs")
 
@@ -261,198 +273,200 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
             "dynamic temperature, and early stopping behavior.",
         )
 
-        with ui.expansion("Circuit Breaker", icon="security", value=True).classes("w-full"):
-            with ui.column().classes("w-full gap-3 p-2"):
-                with ui.row().classes("w-full items-center gap-3"):
-                    with ui.column().classes("flex-grow"):
-                        ui.label("Enabled").classes("text-sm font-medium")
-                        ui.label("Protect against cascading LLM failures").classes(
-                            "text-xs text-gray-500"
-                        )
-                    page._circuit_breaker_enabled_switch = ui.switch(
-                        value=page.settings.circuit_breaker_enabled,
-                    ).tooltip("When enabled, temporarily stops requests after repeated failures")
+        # Circuit Breaker
+        _subsection_header("Circuit Breaker", "security")
+        with ui.row().classes("items-center gap-3 mb-3"):
+            page._circuit_breaker_enabled_switch = ui.switch(
+                "Enabled",
+                value=page.settings.circuit_breaker_enabled,
+            ).tooltip("Protect against cascading LLM failures")
 
-                # Settings visible when enabled
-                with (
-                    ui.element("div")
-                    .classes("w-full")
-                    .bind_visibility_from(page._circuit_breaker_enabled_switch, "value")
-                ):
-                    with ui.row().classes("items-center gap-4 flex-wrap"):
-                        with ui.column().classes("gap-1"):
-                            ui.label("Failure Threshold").classes("text-xs text-gray-500")
-                            page._circuit_breaker_failure_threshold_input = (
-                                page._build_number_input(
-                                    value=page.settings.circuit_breaker_failure_threshold,
-                                    min_val=1,
-                                    max_val=20,
-                                    step=1,
-                                    tooltip_text="Failures before opening circuit (1-20)",
-                                )
-                            )
-
-                        with ui.column().classes("gap-1"):
-                            ui.label("Success Threshold").classes("text-xs text-gray-500")
-                            page._circuit_breaker_success_threshold_input = (
-                                page._build_number_input(
-                                    value=page.settings.circuit_breaker_success_threshold,
-                                    min_val=1,
-                                    max_val=10,
-                                    step=1,
-                                    tooltip_text="Successes to close from half-open (1-10)",
-                                )
-                            )
-
-                        with ui.column().classes("gap-1"):
-                            ui.label("Timeout (s)").classes("text-xs text-gray-500")
-                            page._circuit_breaker_timeout_input = page._build_number_input(
-                                value=page.settings.circuit_breaker_timeout,
-                                min_val=10,
-                                max_val=600,
-                                step=10,
-                                tooltip_text="Seconds before half-open (10-600)",
-                            )
-
-        with ui.expansion("Retry Strategy", icon="replay", value=True).classes("w-full"):
-            with ui.column().classes("w-full gap-3 p-2"):
-                with ui.row().classes("items-center gap-4 flex-wrap"):
-                    with ui.column().classes("gap-1"):
-                        ui.label("Temp Increase").classes("text-xs text-gray-500")
-                        page._retry_temp_increase_input = page._build_number_input(
-                            value=page.settings.retry_temp_increase,
-                            min_val=0.0,
-                            max_val=1.0,
-                            step=0.05,
-                            tooltip_text="Temperature increase on retry attempt 2+ (0.0-1.0)",
-                        )
-
-                    with ui.column().classes("gap-1"):
-                        ui.label("Simplify on Attempt").classes("text-xs text-gray-500")
-                        page._retry_simplify_on_attempt_input = page._build_number_input(
-                            value=page.settings.retry_simplify_on_attempt,
-                            min_val=2,
-                            max_val=10,
-                            step=1,
-                            tooltip_text="Attempt number to start simplifying prompts (2-10)",
-                        )
-
-        with ui.expansion("Duplicate Detection", icon="content_copy", value=True).classes("w-full"):
-            with ui.column().classes("w-full gap-3 p-2"):
-                with ui.row().classes("w-full items-center gap-3"):
-                    with ui.column().classes("flex-grow"):
-                        ui.label("Semantic Duplicate Detection").classes("text-sm font-medium")
-                        ui.label("Use embeddings to detect similar content").classes(
-                            "text-xs text-gray-500"
-                        )
-                    page._semantic_duplicate_enabled_switch = ui.switch(
-                        value=page.settings.semantic_duplicate_enabled,
-                    ).tooltip("Opt-in: detect duplicates using embedding similarity")
-
-                # Settings visible when enabled
-                with (
-                    ui.element("div")
-                    .classes("w-full")
-                    .bind_visibility_from(page._semantic_duplicate_enabled_switch, "value")
-                ):
-                    with ui.row().classes("items-center gap-4 flex-wrap"):
-                        with ui.column().classes("gap-1"):
-                            ui.label("Similarity Threshold").classes("text-xs text-gray-500")
-                            page._semantic_duplicate_threshold_input = page._build_number_input(
-                                value=page.settings.semantic_duplicate_threshold,
-                                min_val=0.5,
-                                max_val=1.0,
-                                step=0.05,
-                                tooltip_text="Cosine similarity threshold (0.5-1.0)",
-                            )
-
-                        with ui.column().classes("gap-1 flex-grow"):
-                            ui.label("Embedding Model").classes("text-xs text-gray-500")
-                            # Get installed models for embedding selection
-                            installed_models = page.services.model.list_installed()
-                            embedding_options = {m: m for m in installed_models}
-                            # Add current value if not in list
-                            if page.settings.embedding_model not in embedding_options:
-                                embedding_options[page.settings.embedding_model] = (
-                                    page.settings.embedding_model
-                                )
-                            page._embedding_model_select = (
-                                ui.select(
-                                    options=embedding_options,
-                                    value=page.settings.embedding_model,
-                                )
-                                .props("outlined dense")
-                                .classes("w-full")
-                                .tooltip("Model for generating embeddings")
-                            )
-
-        with ui.expansion("Refinement Temperature", icon="thermostat", value=True).classes(
-            "w-full"
+        with (
+            ui.element("div")
+            .classes("mb-4")
+            .bind_visibility_from(page._circuit_breaker_enabled_switch, "value")
         ):
-            with ui.column().classes("w-full gap-3 p-2"):
-                ui.label("Dynamic temperature decay during quality refinement iterations").classes(
-                    "text-xs text-gray-500 mb-2"
+            with ui.row().classes("items-center gap-3 flex-wrap"):
+                with ui.column().classes("gap-1"):
+                    ui.label("Failures").classes("text-xs text-gray-500")
+                    page._circuit_breaker_failure_threshold_input = page._build_number_input(
+                        value=page.settings.circuit_breaker_failure_threshold,
+                        min_val=1,
+                        max_val=20,
+                        step=1,
+                        tooltip_text="Failures before opening circuit (1-20)",
+                        width="w-16",
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Successes").classes("text-xs text-gray-500")
+                    page._circuit_breaker_success_threshold_input = page._build_number_input(
+                        value=page.settings.circuit_breaker_success_threshold,
+                        min_val=1,
+                        max_val=10,
+                        step=1,
+                        tooltip_text="Successes to close from half-open (1-10)",
+                        width="w-16",
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Timeout").classes("text-xs text-gray-500")
+                    page._circuit_breaker_timeout_input = page._build_number_input(
+                        value=page.settings.circuit_breaker_timeout,
+                        min_val=10,
+                        max_val=600,
+                        step=10,
+                        tooltip_text="Seconds before half-open (10-600)",
+                        width="w-16",
+                    )
+
+        ui.separator().classes("my-2")
+
+        # Retry Strategy
+        _subsection_header("Retry Strategy", "replay")
+        with ui.row().classes("items-center gap-3 flex-wrap mb-4"):
+            with ui.column().classes("gap-1"):
+                ui.label("Temp Increase").classes("text-xs text-gray-500")
+                page._retry_temp_increase_input = page._build_number_input(
+                    value=page.settings.retry_temp_increase,
+                    min_val=0.0,
+                    max_val=1.0,
+                    step=0.05,
+                    tooltip_text="Temperature increase on retry (0.0-1.0)",
+                    width="w-16",
                 )
 
-                with ui.row().classes("items-center gap-4 flex-wrap"):
-                    with ui.column().classes("gap-1"):
-                        ui.label("Start Temp").classes("text-xs text-gray-500")
-                        page._refinement_temp_start_input = page._build_number_input(
-                            value=page.settings.world_quality_refinement_temp_start,
-                            min_val=0.0,
-                            max_val=2.0,
-                            step=0.05,
-                            tooltip_text="Starting temperature (0.0-2.0)",
-                        )
-
-                    with ui.column().classes("gap-1"):
-                        ui.label("End Temp").classes("text-xs text-gray-500")
-                        page._refinement_temp_end_input = page._build_number_input(
-                            value=page.settings.world_quality_refinement_temp_end,
-                            min_val=0.0,
-                            max_val=2.0,
-                            step=0.05,
-                            tooltip_text="Ending temperature (0.0-2.0)",
-                        )
-
-                    with ui.column().classes("gap-1"):
-                        ui.label("Decay Curve").classes("text-xs text-gray-500")
-                        page._refinement_temp_decay_select = (
-                            ui.select(
-                                options=REFINEMENT_TEMP_DECAY_CURVES,
-                                value=page.settings.world_quality_refinement_temp_decay,
-                            )
-                            .props("outlined dense")
-                            .classes("w-32")
-                            .tooltip("How temperature decreases over iterations")
-                        )
-
-        with ui.expansion("Early Stopping", icon="stop_circle", value=True).classes("w-full"):
-            with ui.column().classes("w-full gap-3 p-2"):
-                ui.label("Stop refinement early when quality improvements plateau").classes(
-                    "text-xs text-gray-500 mb-2"
+            with ui.column().classes("gap-1"):
+                ui.label("Simplify At").classes("text-xs text-gray-500")
+                page._retry_simplify_on_attempt_input = page._build_number_input(
+                    value=page.settings.retry_simplify_on_attempt,
+                    min_val=2,
+                    max_val=10,
+                    step=1,
+                    tooltip_text="Attempt to start simplifying prompts (2-10)",
+                    width="w-16",
                 )
 
-                with ui.row().classes("items-center gap-4 flex-wrap"):
-                    with ui.column().classes("gap-1"):
-                        ui.label("Min Iterations").classes("text-xs text-gray-500")
-                        page._early_stopping_min_iterations_input = page._build_number_input(
-                            value=page.settings.world_quality_early_stopping_min_iterations,
-                            min_val=1,
-                            max_val=10,
-                            step=1,
-                            tooltip_text="Minimum iterations before early stop (1-10)",
-                        )
+        ui.separator().classes("my-2")
 
-                    with ui.column().classes("gap-1"):
-                        ui.label("Variance Tolerance").classes("text-xs text-gray-500")
-                        page._early_stopping_variance_tolerance_input = page._build_number_input(
-                            value=page.settings.world_quality_early_stopping_variance_tolerance,
-                            min_val=0.0,
-                            max_val=2.0,
-                            step=0.05,
-                            tooltip_text="Score variance tolerance for plateau detection (0.0-2.0)",
+        # Duplicate Detection
+        _subsection_header("Duplicate Detection", "content_copy")
+        with ui.row().classes("items-center gap-3 mb-3"):
+            page._semantic_duplicate_enabled_switch = ui.switch(
+                "Semantic Detection",
+                value=page.settings.semantic_duplicate_enabled,
+            ).tooltip("Use embeddings to detect similar content")
+
+        with (
+            ui.element("div")
+            .classes("mb-4")
+            .bind_visibility_from(page._semantic_duplicate_enabled_switch, "value")
+        ):
+            with ui.row().classes("items-center gap-3 flex-wrap"):
+                with ui.column().classes("gap-1"):
+                    ui.label("Threshold").classes("text-xs text-gray-500")
+                    page._semantic_duplicate_threshold_input = page._build_number_input(
+                        value=page.settings.semantic_duplicate_threshold,
+                        min_val=0.5,
+                        max_val=1.0,
+                        step=0.05,
+                        tooltip_text="Cosine similarity threshold (0.5-1.0)",
+                        width="w-16",
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Embedding Model").classes("text-xs text-gray-500")
+                    # Get installed models for embedding selection
+                    installed_models = page.services.model.list_installed()
+                    embedding_options = {m: m for m in installed_models}
+                    # Add current value if not in list
+                    if page.settings.embedding_model not in embedding_options:
+                        embedding_options[page.settings.embedding_model] = (
+                            page.settings.embedding_model
                         )
+                    page._embedding_model_select = (
+                        ui.select(
+                            options=embedding_options,
+                            value=page.settings.embedding_model,
+                        )
+                        .props("outlined dense")
+                        .classes("w-48")
+                        .tooltip("Model for generating embeddings")
+                    )
+
+        ui.separator().classes("my-2")
+
+        # Refinement Temperature
+        _subsection_header("Refinement Temperature", "thermostat")
+        ui.label("Dynamic temperature decay during quality refinement").classes(
+            "text-xs text-gray-500 mb-2"
+        )
+
+        with ui.row().classes("items-center gap-3 flex-wrap mb-4"):
+            with ui.column().classes("gap-1"):
+                ui.label("Start").classes("text-xs text-gray-500")
+                page._refinement_temp_start_input = page._build_number_input(
+                    value=page.settings.world_quality_refinement_temp_start,
+                    min_val=0.0,
+                    max_val=2.0,
+                    step=0.05,
+                    tooltip_text="Starting temperature (0.0-2.0)",
+                    width="w-16",
+                )
+
+            with ui.column().classes("gap-1"):
+                ui.label("End").classes("text-xs text-gray-500")
+                page._refinement_temp_end_input = page._build_number_input(
+                    value=page.settings.world_quality_refinement_temp_end,
+                    min_val=0.0,
+                    max_val=2.0,
+                    step=0.05,
+                    tooltip_text="Ending temperature (0.0-2.0)",
+                    width="w-16",
+                )
+
+            with ui.column().classes("gap-1"):
+                ui.label("Decay").classes("text-xs text-gray-500")
+                page._refinement_temp_decay_select = (
+                    ui.select(
+                        options=REFINEMENT_TEMP_DECAY_CURVES,
+                        value=page.settings.world_quality_refinement_temp_decay,
+                    )
+                    .props("outlined dense")
+                    .classes("w-24")
+                    .tooltip("How temperature decreases over iterations")
+                )
+
+        ui.separator().classes("my-2")
+
+        # Early Stopping
+        _subsection_header("Early Stopping", "stop_circle")
+        ui.label("Stop refinement when quality improvements plateau").classes(
+            "text-xs text-gray-500 mb-2"
+        )
+
+        with ui.row().classes("items-center gap-3 flex-wrap"):
+            with ui.column().classes("gap-1"):
+                ui.label("Min Iter.").classes("text-xs text-gray-500")
+                page._early_stopping_min_iterations_input = page._build_number_input(
+                    value=page.settings.world_quality_early_stopping_min_iterations,
+                    min_val=1,
+                    max_val=10,
+                    step=1,
+                    tooltip_text="Minimum iterations before early stop (1-10)",
+                    width="w-16",
+                )
+
+            with ui.column().classes("gap-1"):
+                ui.label("Variance").classes("text-xs text-gray-500")
+                page._early_stopping_variance_tolerance_input = page._build_number_input(
+                    value=page.settings.world_quality_early_stopping_variance_tolerance,
+                    min_val=0.0,
+                    max_val=2.0,
+                    step=0.05,
+                    tooltip_text="Score variance tolerance for plateau detection (0.0-2.0)",
+                    width="w-16",
+                )
 
     logger.debug("Advanced LLM section built")
 
@@ -476,17 +490,6 @@ def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
     return {rel_type: rel_type.replace("_", " ").title() for rel_type in sorted(all_types)}
 
 
-def _on_circular_types_change(page: SettingsPage, selected: list[str]) -> None:
-    """Handle changes to circular relationship types selection.
-
-    Args:
-        page: The SettingsPage instance.
-        selected: List of selected relationship types.
-    """
-    logger.debug("Circular relationship types changed to: %s", selected)
-    page.settings.circular_relationship_types = list(selected)
-
-
 def build_relationship_validation_section(page: SettingsPage) -> None:
     """Build relationship validation and world health settings section.
 
@@ -500,139 +503,93 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
             "Configure validation, orphan detection, and circular relationship checking.",
         )
 
-        with ui.column().classes("w-full gap-4"):
-            # Validation toggle
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Validate on Creation").classes("text-sm font-medium")
-                    ui.label("Check entity existence").classes("text-xs text-gray-500")
-
+        with ui.column().classes("w-full gap-3"):
+            # Validation toggles in a compact row
+            with ui.row().classes("flex-wrap gap-x-4 gap-y-2"):
                 page._relationship_validation_switch = ui.switch(
+                    "Validate on Creation",
                     value=page.settings.relationship_validation_enabled,
-                ).tooltip("Validate source/target entities exist when creating relationships")
-
-            # Orphan detection toggle
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Orphan Detection").classes("text-sm font-medium")
-                    ui.label("Find entities without relationships").classes("text-xs text-gray-500")
+                ).tooltip("Validate source/target entities exist")
 
                 page._orphan_detection_switch = ui.switch(
+                    "Orphan Detection",
                     value=page.settings.orphan_detection_enabled,
-                ).tooltip("Enable detection of orphan entities in world health checks")
-
-            # Circular detection toggle
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Circular Detection").classes("text-sm font-medium")
-                    ui.label("Find relationship loops").classes("text-xs text-gray-500")
+                ).tooltip("Find entities without relationships")
 
                 page._circular_detection_switch = ui.switch(
+                    "Circular Detection",
                     value=page.settings.circular_detection_enabled,
-                ).tooltip("Enable detection of circular relationship chains")
+                ).tooltip("Find relationship loops")
 
             ui.separator().classes("my-2")
 
-            # Fuzzy match threshold
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Fuzzy Match Threshold").classes("text-sm font-medium")
-                    ui.label("Similarity for name matching").classes("text-xs text-gray-500")
-
-                page._fuzzy_threshold_input = (
-                    ui.number(
+            # Numeric settings in a row
+            with ui.row().classes("items-center gap-3 flex-wrap"):
+                with ui.column().classes("gap-1"):
+                    ui.label("Fuzzy Threshold").classes("text-xs text-gray-500")
+                    page._fuzzy_threshold_input = page._build_number_input(
                         value=page.settings.fuzzy_match_threshold,
-                        min=0.5,
-                        max=1.0,
+                        min_val=0.5,
+                        max_val=1.0,
                         step=0.05,
+                        tooltip_text="Similarity for name matching (0.5-1.0)",
+                        width="w-16",
                     )
-                    .props("outlined dense")
-                    .classes("w-20")
-                    .tooltip("Minimum similarity (0.5-1.0) for fuzzy entity name matching")
-                )
 
-            # Max relationships per entity
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Max Relationships").classes("text-sm font-medium")
-                    ui.label("Per entity for suggestions").classes("text-xs text-gray-500")
-
-                page._max_relationships_input = (
-                    ui.number(
+                with ui.column().classes("gap-1"):
+                    ui.label("Max Relationships").classes("text-xs text-gray-500")
+                    page._max_relationships_input = page._build_number_input(
                         value=page.settings.max_relationships_per_entity,
-                        min=1,
-                        max=50,
+                        min_val=1,
+                        max_val=50,
                         step=1,
+                        tooltip_text="Per entity for suggestions (1-50)",
+                        width="w-16",
                     )
-                    .props("outlined dense")
-                    .classes("w-20")
-                    .tooltip("Maximum relationships to suggest per entity (1-50)")
-                )
 
             # Circular relationship types (multi-select dropdown)
-            with ui.column().classes("w-full gap-1"):
-                ui.label("Circular Check Types").classes("text-sm font-medium")
-                ui.label("Relationship types to check for cycles").classes("text-xs text-gray-500")
+            # Note: Values are extracted during save_to_settings() to preserve undo/redo
+            ui.separator().classes("my-2")
+            ui.label("Circular Check Types").classes("text-sm font-medium")
+            ui.label("Relationship types to check for cycles").classes("text-xs text-gray-500 mb-1")
 
-                page._circular_types_select = (
-                    ui.select(
-                        options=_get_circular_type_options(
-                            page.settings.circular_relationship_types
-                        ),
-                        value=page.settings.circular_relationship_types,
-                        multiple=True,
-                        on_change=lambda e: _on_circular_types_change(page, e.value),
-                    )
-                    .props("outlined dense use-chips")
-                    .classes("w-full")
-                    .tooltip(
-                        "Select relationship types where cycles would be illogical "
-                        "(e.g., A owns B, B owns C, C owns A)"
-                    )
+            page._circular_types_select = (
+                ui.select(
+                    options=_get_circular_type_options(page.settings.circular_relationship_types),
+                    value=page.settings.circular_relationship_types,
+                    multiple=True,
                 )
+                .props("outlined dense use-chips")
+                .classes("w-full")
+                .tooltip("Select types where cycles would be illogical")
+            )
 
             ui.separator().classes("my-2")
 
             # Calendar and Temporal Validation subsection
-            with ui.row().classes("items-center gap-2 mb-2"):
-                ui.icon("calendar_month", size="xs").classes("text-gray-500")
-                ui.label("Calendar & Temporal").classes("text-sm font-medium")
+            _subsection_header("Calendar & Temporal", "calendar_month")
 
-            # Generate calendar on world build
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Auto-Generate Calendar").classes("text-sm font-medium")
-                    ui.label("Create calendar during world build").classes("text-xs text-gray-500")
-
+            with ui.row().classes("flex-wrap gap-x-4 gap-y-2"):
                 page._generate_calendar_switch = ui.switch(
+                    "Auto-Generate Calendar",
                     value=page.settings.generate_calendar_on_world_build,
-                ).tooltip(
-                    "Automatically generate a fictional calendar system when building world structure"
-                )
-
-            # Temporal consistency validation
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Temporal Validation").classes("text-sm font-medium")
-                    ui.label("Validate timeline consistency").classes("text-xs text-gray-500")
+                ).tooltip("Create calendar during world build")
 
                 page._temporal_validation_switch = ui.switch(
+                    "Temporal Validation",
                     value=page.settings.validate_temporal_consistency,
-                ).tooltip(
-                    "Validate that entity timelines are consistent "
-                    "(e.g., characters born before factions they join)"
-                )
+                ).tooltip("Validate timeline consistency")
 
             ui.separator().classes("my-2")
 
-            # Relationship minimums (editable) - uses clear and rebuild pattern
-            with ui.expansion("Relationship Minimums", icon="tune", value=True).classes("w-full"):
-                ui.label("Minimum relationships per entity type/role:").classes(
-                    "text-xs text-gray-500 mb-2"
-                )
-                # Container for relationship minimum inputs - can be rebuilt on settings restore
-                page._relationship_min_container = ui.column().classes("w-full")
-                _build_relationship_minimums_inputs(page)
+            # Relationship minimums (editable) - simple header instead of expansion
+            _subsection_header("Relationship Minimums", "tune")
+            ui.label("Minimum relationships per entity type/role:").classes(
+                "text-xs text-gray-500 mb-2"
+            )
+            # Container for relationship minimum inputs - can be rebuilt on settings restore
+            page._relationship_min_container = ui.column().classes("w-full")
+            _build_relationship_minimums_inputs(page)
 
     logger.debug("Relationship validation section built")
 
@@ -757,7 +714,8 @@ def save_to_settings(page: SettingsPage) -> None:
         settings.fuzzy_match_threshold = float(page._fuzzy_threshold_input.value)
     if hasattr(page, "_max_relationships_input"):
         settings.max_relationships_per_entity = int(page._max_relationships_input.value)
-    # circular_relationship_types is modified directly by the multi-select on_change, no extraction needed
+    if hasattr(page, "_circular_types_select"):
+        settings.circular_relationship_types = list(page._circular_types_select.value)
 
     # Relationship minimums (extract from number inputs)
     if hasattr(page, "_relationship_min_inputs"):
@@ -785,7 +743,7 @@ def refresh_from_settings(page: SettingsPage) -> None:
 
     Handles world generation, story structure, data integrity, advanced LLM,
     and relationship validation settings. Uses clear-and-rebuild for dynamic
-    elements like relationship minimums and circular type chips.
+    elements like relationship minimums.
 
     Args:
         page: The SettingsPage instance.

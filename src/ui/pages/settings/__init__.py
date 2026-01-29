@@ -104,27 +104,27 @@ class SettingsPage:
                     self._build_learning_section()
 
             # Bottom row: Creativity, Model Selection, Story Structure, World Generation,
-            # Data Integrity
+            # Data Integrity, Advanced LLM, Relationship Validation
             with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch mt-4"):
-                with ui.element("div").style("flex: 1.5 1 450px; min-width: 450px;"):
+                with ui.element("div").style("flex: 1 1 400px; min-width: 360px;"):
                     self._build_temperature_section()
 
-                with ui.element("div").style("flex: 1.2 1 380px; min-width: 380px;"):
+                with ui.element("div").style("flex: 1 1 340px; min-width: 300px;"):
                     self._build_model_section()
 
-                with ui.element("div").style("flex: 1 1 200px; min-width: 200px;"):
+                with ui.element("div").style("flex: 1 1 180px; min-width: 180px;"):
                     self._build_story_structure_section()
 
-                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
+                with ui.element("div").style("flex: 1 1 220px; min-width: 200px;"):
                     self._build_world_gen_section()
 
-                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
+                with ui.element("div").style("flex: 1 1 240px; min-width: 220px;"):
                     self._build_data_integrity_section()
 
-                with ui.element("div").style("flex: 1 1 400px; min-width: 400px;"):
+                with ui.element("div").style("flex: 1 1 280px; min-width: 260px;"):
                     self._build_advanced_llm_section()
 
-                with ui.element("div").style("flex: 1 1 320px; min-width: 320px;"):
+                with ui.element("div").style("flex: 1 1 280px; min-width: 260px;"):
                     self._build_relationship_validation_section()
 
             # Save button

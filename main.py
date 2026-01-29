@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import logging
+import time
 
 from src.utils.environment import check_environment
 from src.utils.logging_config import setup_logging
@@ -39,12 +40,21 @@ def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False) 
 
     logger.info("Starting Story Factory web UI...")
 
-    # Load settings and create services
+    # Load settings and create services (with timing for startup debugging)
+    t0 = time.perf_counter()
     settings = Settings.load()
+    logger.debug("Settings loaded in %.2fs", time.perf_counter() - t0)
+
+    t1 = time.perf_counter()
     services = ServiceContainer(settings)
+    logger.debug("Services created in %.2fs", time.perf_counter() - t1)
 
     # Create and run app
+    t2 = time.perf_counter()
     app = create_app(services)
+    logger.debug("App created in %.2fs", time.perf_counter() - t2)
+
+    logger.info("Startup complete in %.2fs, launching server...", time.perf_counter() - t0)
     app.run(host=host, port=port, reload=reload)
 
 
