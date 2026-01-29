@@ -457,14 +457,23 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
     logger.debug("Advanced LLM section built")
 
 
-def _get_circular_type_options() -> dict[str, str]:
+def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
     """Get options for circular relationship type multi-select.
+
+    Merges known relationship types from RELATION_CONFLICT_MAPPING with any
+    existing user-configured types to prevent data loss.
+
+    Args:
+        current_types: Currently configured circular relationship types.
 
     Returns:
         Dictionary mapping relationship type to display label.
     """
-    # Use known relationship types from RELATION_CONFLICT_MAPPING
-    return {rel_type: rel_type.replace("_", " ").title() for rel_type in RELATION_CONFLICT_MAPPING}
+    # Start with known relationship types from RELATION_CONFLICT_MAPPING
+    all_types = set(RELATION_CONFLICT_MAPPING.keys())
+    # Include any existing user-configured types (prevents data loss)
+    all_types.update(current_types)
+    return {rel_type: rel_type.replace("_", " ").title() for rel_type in sorted(all_types)}
 
 
 def _on_circular_types_change(page: SettingsPage, selected: list[str]) -> None:
@@ -567,7 +576,9 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
 
                 page._circular_types_select = (
                     ui.select(
-                        options=_get_circular_type_options(),
+                        options=_get_circular_type_options(
+                            page.settings.circular_relationship_types
+                        ),
                         value=page.settings.circular_relationship_types,
                         multiple=True,
                         on_change=lambda e: _on_circular_types_change(page, e.value),
@@ -746,7 +757,7 @@ def save_to_settings(page: SettingsPage) -> None:
         settings.fuzzy_match_threshold = float(page._fuzzy_threshold_input.value)
     if hasattr(page, "_max_relationships_input"):
         settings.max_relationships_per_entity = int(page._max_relationships_input.value)
-    # circular_relationship_types is modified directly by the chip UI, no extraction needed
+    # circular_relationship_types is modified directly by the multi-select on_change, no extraction needed
 
     # Relationship minimums (extract from number inputs)
     if hasattr(page, "_relationship_min_inputs"):
