@@ -1,11 +1,11 @@
 """Settings page - advanced LLM, world gen, story structure, data integrity, and relationship sections."""
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from nicegui import ui
 
+from src.memory.conflict_types import RELATION_CONFLICT_MAPPING
 from src.settings import REFINEMENT_TEMP_DECAY_CURVES
 
 if TYPE_CHECKING:
@@ -261,7 +261,7 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
             "dynamic temperature, and early stopping behavior.",
         )
 
-        with ui.expansion("Circuit Breaker", icon="security").classes("w-full"):
+        with ui.expansion("Circuit Breaker", icon="security", value=True).classes("w-full"):
             with ui.column().classes("w-full gap-3 p-2"):
                 with ui.row().classes("w-full items-center gap-3"):
                     with ui.column().classes("flex-grow"):
@@ -314,7 +314,7 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                                 tooltip_text="Seconds before half-open (10-600)",
                             )
 
-        with ui.expansion("Retry Strategy", icon="replay").classes("w-full"):
+        with ui.expansion("Retry Strategy", icon="replay", value=True).classes("w-full"):
             with ui.column().classes("w-full gap-3 p-2"):
                 with ui.row().classes("items-center gap-4 flex-wrap"):
                     with ui.column().classes("gap-1"):
@@ -337,7 +337,7 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                             tooltip_text="Attempt number to start simplifying prompts (2-10)",
                         )
 
-        with ui.expansion("Duplicate Detection", icon="content_copy").classes("w-full"):
+        with ui.expansion("Duplicate Detection", icon="content_copy", value=True).classes("w-full"):
             with ui.column().classes("w-full gap-3 p-2"):
                 with ui.row().classes("w-full items-center gap-3"):
                     with ui.column().classes("flex-grow"):
@@ -386,7 +386,9 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                                 .tooltip("Model for generating embeddings")
                             )
 
-        with ui.expansion("Refinement Temperature", icon="thermostat").classes("w-full"):
+        with ui.expansion("Refinement Temperature", icon="thermostat", value=True).classes(
+            "w-full"
+        ):
             with ui.column().classes("w-full gap-3 p-2"):
                 ui.label("Dynamic temperature decay during quality refinement iterations").classes(
                     "text-xs text-gray-500 mb-2"
@@ -425,7 +427,7 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
                             .tooltip("How temperature decreases over iterations")
                         )
 
-        with ui.expansion("Early Stopping", icon="stop_circle").classes("w-full"):
+        with ui.expansion("Early Stopping", icon="stop_circle", value=True).classes("w-full"):
             with ui.column().classes("w-full gap-3 p-2"):
                 ui.label("Stop refinement early when quality improvements plateau").classes(
                     "text-xs text-gray-500 mb-2"
@@ -455,51 +457,34 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
     logger.debug("Advanced LLM section built")
 
 
-def _make_remove_handler(page: SettingsPage, rel_type: str) -> Callable[[], None]:
-    """Create a handler to remove a relationship type.
+def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
+    """Get options for circular relationship type multi-select.
+
+    Merges known relationship types from RELATION_CONFLICT_MAPPING with any
+    existing user-configured types to prevent data loss.
 
     Args:
-        page: The SettingsPage instance.
-        rel_type: The relationship type to remove.
+        current_types: Currently configured circular relationship types.
 
     Returns:
-        A callable that removes the type when invoked.
+        Dictionary mapping relationship type to display label.
     """
-
-    def remove() -> None:
-        """Remove the relationship type and rebuild chips."""
-        if rel_type in page.settings.circular_relationship_types:
-            logger.debug("Removing circular relationship type: %s", rel_type)
-            page.settings.circular_relationship_types.remove(rel_type)
-            _build_circular_type_chips(page)
-
-    return remove
+    # Start with known relationship types from RELATION_CONFLICT_MAPPING
+    all_types = set(RELATION_CONFLICT_MAPPING.keys())
+    # Include any existing user-configured types (prevents data loss)
+    all_types.update(current_types)
+    return {rel_type: rel_type.replace("_", " ").title() for rel_type in sorted(all_types)}
 
 
-def _build_circular_type_chips(page: SettingsPage) -> None:
-    """Build chips for circular relationship types.
-
-    Creates visual chip elements for each relationship type that can be removed
-    by clicking the X button.
+def _on_circular_types_change(page: SettingsPage, selected: list[str]) -> None:
+    """Handle changes to circular relationship types selection.
 
     Args:
         page: The SettingsPage instance.
+        selected: List of selected relationship types.
     """
-    logger.debug(
-        "Building circular type chips for %d types",
-        len(page.settings.circular_relationship_types),
-    )
-    page._circular_types_container.clear()
-    with page._circular_types_container:
-        for rel_type in page.settings.circular_relationship_types:
-            with ui.element("div").classes(
-                "flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 "
-                "rounded-full text-xs"
-            ):
-                ui.label(rel_type).classes("text-blue-700 dark:text-blue-200")
-                ui.button(icon="close", on_click=_make_remove_handler(page, rel_type)).props(
-                    "flat dense round size=xs"
-                ).classes("text-blue-500 dark:text-blue-300")
+    logger.debug("Circular relationship types changed to: %s", selected)
+    page.settings.circular_relationship_types = list(selected)
 
 
 def build_relationship_validation_section(page: SettingsPage) -> None:
@@ -584,39 +569,27 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
                     .tooltip("Maximum relationships to suggest per entity (1-50)")
                 )
 
-            # Circular relationship types (chip-based editor)
+            # Circular relationship types (multi-select dropdown)
             with ui.column().classes("w-full gap-1"):
                 ui.label("Circular Check Types").classes("text-sm font-medium")
                 ui.label("Relationship types to check for cycles").classes("text-xs text-gray-500")
 
-                # Container for chips - will be refreshed when types change
-                page._circular_types_container = ui.row().classes("flex-wrap gap-1 mt-1")
-                _build_circular_type_chips(page)
-
-                # Add new type input
-                with ui.row().classes("items-center gap-2 mt-2"):
-                    page._new_circular_type_input = (
-                        ui.input(placeholder="Add type...").props("outlined dense").classes("w-32")
+                page._circular_types_select = (
+                    ui.select(
+                        options=_get_circular_type_options(
+                            page.settings.circular_relationship_types
+                        ),
+                        value=page.settings.circular_relationship_types,
+                        multiple=True,
+                        on_change=lambda e: _on_circular_types_change(page, e.value),
                     )
-
-                    def add_circular_type() -> None:
-                        """Add a new circular relationship type from the input field."""
-                        new_type = page._new_circular_type_input.value.strip().lower()
-                        if not new_type:
-                            logger.debug("Skipped adding circular relationship type: empty input")
-                            return
-                        if new_type in page.settings.circular_relationship_types:
-                            logger.debug("Circular relationship type already present: %s", new_type)
-                            page._new_circular_type_input.value = ""
-                            return
-                        page.settings.circular_relationship_types.append(new_type)
-                        logger.info("Added circular relationship type: %s", new_type)
-                        page._new_circular_type_input.value = ""
-                        _build_circular_type_chips(page)
-
-                    ui.button(icon="add", on_click=add_circular_type).props(
-                        "flat dense round"
-                    ).classes("text-blue-500")
+                    .props("outlined dense use-chips")
+                    .classes("w-full")
+                    .tooltip(
+                        "Select relationship types where cycles would be illogical "
+                        "(e.g., A owns B, B owns C, C owns A)"
+                    )
+                )
 
             ui.separator().classes("my-2")
 
@@ -653,7 +626,7 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
             ui.separator().classes("my-2")
 
             # Relationship minimums (editable) - uses clear and rebuild pattern
-            with ui.expansion("Relationship Minimums", icon="tune", value=False).classes("w-full"):
+            with ui.expansion("Relationship Minimums", icon="tune", value=True).classes("w-full"):
                 ui.label("Minimum relationships per entity type/role:").classes(
                     "text-xs text-gray-500 mb-2"
                 )
@@ -784,7 +757,7 @@ def save_to_settings(page: SettingsPage) -> None:
         settings.fuzzy_match_threshold = float(page._fuzzy_threshold_input.value)
     if hasattr(page, "_max_relationships_input"):
         settings.max_relationships_per_entity = int(page._max_relationships_input.value)
-    # circular_relationship_types is modified directly by the chip UI, no extraction needed
+    # circular_relationship_types is modified directly by the multi-select on_change, no extraction needed
 
     # Relationship minimums (extract from number inputs)
     if hasattr(page, "_relationship_min_inputs"):
@@ -884,10 +857,14 @@ def refresh_from_settings(page: SettingsPage) -> None:
         logger.debug("Rebuilding relationship minimums inputs from settings")
         _build_relationship_minimums_inputs(page)
 
-    # Rebuild circular type chips from settings
-    if hasattr(page, "_circular_types_container"):
-        logger.debug("Rebuilding circular type chips from settings")
-        _build_circular_type_chips(page)
+    # Update circular types multi-select from settings
+    if hasattr(page, "_circular_types_select"):
+        logger.debug("Updating circular types select from settings")
+        # Update options to include any types from restored settings
+        page._circular_types_select.options = _get_circular_type_options(
+            settings.circular_relationship_types
+        )
+        page._circular_types_select.value = list(settings.circular_relationship_types)
 
     # Calendar and temporal validation settings
     if hasattr(page, "_generate_calendar_switch"):
