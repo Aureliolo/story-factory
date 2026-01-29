@@ -269,3 +269,19 @@ class TestWorldCalendarEdgeCases:
         )
         assert len(calendar.eras) == 0
         assert calendar.get_era_for_year(50) is None
+
+    def test_validate_date_day_without_month_metadata(self) -> None:
+        """Test validate_date returns error when day provided but month metadata missing."""
+        calendar = WorldCalendar(
+            current_era_name="Test Era",
+            era_abbreviation="TE",
+            era_start_year=1,
+            months=[],  # Empty list - no month metadata
+            days_per_week=7,
+            day_names=["D1"],
+            current_story_year=100,
+        )
+        # Day validation should fail because month metadata is missing
+        is_valid, error_msg = calendar.validate_date(50, month=5, day=15)
+        assert not is_valid
+        assert "month metadata missing" in error_msg
