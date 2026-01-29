@@ -60,6 +60,16 @@ repos:
       - id: check-json
       - id: check-added-large-files
 
+  # Enforce maximum file length (1000 lines) - DO NOT SKIP, split the file instead
+  - repo: local
+    hooks:
+      - id: check-file-size
+        name: check file size (max 1000 lines)
+        entry: python scripts/check_file_size.py
+        language: system
+        types: [python]
+        stages: [pre-commit, pre-push]
+
   # Docstring coverage enforcement
   - repo: https://github.com/econchick/interrogate
     rev: 1.7.0

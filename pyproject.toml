@@ -221,6 +221,7 @@ omit = [
     # Standalone utility scripts (not part of main application)
     "scripts/audit_exceptions.py",
     "scripts/check_deps.py",
+    "scripts/check_file_size.py",
     "scripts/healthcheck.py",
 ]
 
