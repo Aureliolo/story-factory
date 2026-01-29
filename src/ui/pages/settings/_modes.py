@@ -186,3 +186,68 @@ def build_learning_section(page: SettingsPage) -> None:
                     )
 
     logger.debug("Learning section built")
+
+
+def save_to_settings(page: SettingsPage) -> None:
+    """Extract mode and learning settings from UI and save to settings.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    # Generation mode
+    page.settings.use_mode_system = page._use_mode_system.value
+    if hasattr(page, "_mode_select"):
+        page.settings.current_mode = page._mode_select.value
+    if hasattr(page, "_vram_strategy_select"):
+        page.settings.vram_strategy = page._vram_strategy_select.value
+
+    # Learning settings
+    page.settings.learning_autonomy = page._autonomy_select.value
+
+    # Collect enabled triggers using list comprehension
+    enabled_triggers = [
+        trigger_value
+        for trigger_value, checkbox in page._trigger_checkboxes.items()
+        if checkbox.value
+    ]
+    if not enabled_triggers:
+        enabled_triggers = ["off"]
+    page.settings.learning_triggers = enabled_triggers
+
+    page.settings.learning_periodic_interval = int(page._periodic_interval.value)
+    page.settings.learning_min_samples = int(page._min_samples.value)
+    page.settings.learning_confidence_threshold = page._confidence_slider.value
+
+    logger.debug("Mode and learning settings saved")
+
+
+def refresh_from_settings(page: SettingsPage) -> None:
+    """Refresh mode and learning UI elements from current settings values.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    settings = page.settings
+
+    # Mode settings
+    if hasattr(page, "_use_mode_system"):
+        page._use_mode_system.value = settings.use_mode_system
+    if hasattr(page, "_mode_select"):
+        page._mode_select.value = settings.current_mode
+    if hasattr(page, "_vram_strategy_select"):
+        page._vram_strategy_select.value = settings.vram_strategy
+
+    # Learning settings
+    if hasattr(page, "_autonomy_select"):
+        page._autonomy_select.value = settings.learning_autonomy
+    if hasattr(page, "_trigger_checkboxes"):
+        for trigger_value, checkbox in page._trigger_checkboxes.items():
+            checkbox.value = trigger_value in settings.learning_triggers
+    if hasattr(page, "_confidence_slider"):
+        page._confidence_slider.value = settings.learning_confidence_threshold
+    if hasattr(page, "_periodic_interval"):
+        page._periodic_interval.value = settings.learning_periodic_interval
+    if hasattr(page, "_min_samples"):
+        page._min_samples.value = settings.learning_min_samples
+
+    logger.debug("Mode and learning UI refreshed from settings")
