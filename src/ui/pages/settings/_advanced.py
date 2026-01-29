@@ -652,26 +652,247 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
 
             ui.separator().classes("my-2")
 
-            # Relationship minimums (editable)
+            # Relationship minimums (editable) - uses clear and rebuild pattern
             with ui.expansion("Relationship Minimums", icon="tune", value=False).classes("w-full"):
                 ui.label("Minimum relationships per entity type/role:").classes(
                     "text-xs text-gray-500 mb-2"
                 )
-                page._relationship_min_inputs: dict[str, dict[str, ui.number]] = {}  # type: ignore[misc]
-                for entity_type, roles in page.settings.relationship_minimums.items():
-                    page._relationship_min_inputs[entity_type] = {}
-                    with ui.row().classes("items-center gap-2 mb-2"):
-                        ui.icon("folder", size="xs").classes("text-blue-500")
-                        ui.label(f"{entity_type}:").classes("text-xs font-medium w-20")
-                        for role, count in roles.items():
-                            with ui.column().classes("gap-0"):
-                                ui.label(role).classes("text-[10px] text-gray-500")
-                                num_input = (
-                                    ui.number(value=count, min=0, max=10, step=1)
-                                    .props("outlined dense")
-                                    .classes("w-14")
-                                    .tooltip(f"Min relationships for {entity_type}/{role}")
-                                )
-                                page._relationship_min_inputs[entity_type][role] = num_input
+                # Container for relationship minimum inputs - can be rebuilt on settings restore
+                page._relationship_min_container = ui.column().classes("w-full")
+                _build_relationship_minimums_inputs(page)
 
     logger.debug("Relationship validation section built")
+
+
+def _build_relationship_minimums_inputs(page: SettingsPage) -> None:
+    """Build number inputs for relationship minimums using clear and rebuild pattern.
+
+    Creates editable number inputs for each entity type and role combination.
+    This function clears and rebuilds the container, ensuring UI stays in sync
+    with settings even when structure changes.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    logger.debug(
+        "Building relationship minimums inputs for %d entity types",
+        len(page.settings.relationship_minimums),
+    )
+    page._relationship_min_container.clear()
+    page._relationship_min_inputs: dict[str, dict[str, ui.number]] = {}  # type: ignore[misc]
+
+    with page._relationship_min_container:
+        for entity_type, roles in page.settings.relationship_minimums.items():
+            page._relationship_min_inputs[entity_type] = {}
+            with ui.row().classes("items-center gap-2 mb-2"):
+                ui.icon("folder", size="xs").classes("text-blue-500")
+                ui.label(f"{entity_type}:").classes("text-xs font-medium w-20")
+                for role, count in roles.items():
+                    with ui.column().classes("gap-0"):
+                        ui.label(role).classes("text-[10px] text-gray-500")
+                        num_input = (
+                            ui.number(value=count, min=0, max=10, step=1)
+                            .props("outlined dense")
+                            .classes("w-14")
+                            .tooltip(f"Min relationships for {entity_type}/{role}")
+                        )
+                        page._relationship_min_inputs[entity_type][role] = num_input
+
+
+def save_to_settings(page: SettingsPage) -> None:
+    """Extract advanced settings from UI and save to settings.
+
+    Handles world generation, story structure, data integrity, advanced LLM,
+    and relationship validation settings.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    settings = page.settings
+
+    # World generation settings
+    for key, (min_input, max_input) in page._world_gen_inputs.items():
+        min_val = int(min_input.value)
+        max_val = int(max_input.value)
+        # Ensure min <= max
+        if min_val > max_val:
+            max_val = min_val
+        setattr(settings, f"world_gen_{key}_min", min_val)
+        setattr(settings, f"world_gen_{key}_max", max_val)
+
+    # Quality refinement settings
+    if hasattr(page, "_quality_threshold_input"):
+        settings.world_quality_threshold = float(page._quality_threshold_input.value)
+    if hasattr(page, "_quality_max_iterations_input"):
+        settings.world_quality_max_iterations = int(page._quality_max_iterations_input.value)
+    if hasattr(page, "_quality_patience_input"):
+        settings.world_quality_early_stopping_patience = int(page._quality_patience_input.value)
+
+    # Story structure settings (chapter counts)
+    if hasattr(page, "_chapter_inputs"):
+        for key, input_widget in page._chapter_inputs.items():
+            setattr(settings, f"chapters_{key}", int(input_widget.value))
+
+    # Data integrity settings
+    if hasattr(page, "_entity_version_retention_input"):
+        settings.entity_version_retention = int(page._entity_version_retention_input.value)
+    if hasattr(page, "_backup_verify_on_restore_switch"):
+        settings.backup_verify_on_restore = page._backup_verify_on_restore_switch.value
+
+    # Advanced LLM settings (WP1/WP2)
+    advanced_llm_settings_map = [
+        ("_circuit_breaker_enabled_switch", "circuit_breaker_enabled", None),
+        ("_circuit_breaker_failure_threshold_input", "circuit_breaker_failure_threshold", int),
+        ("_circuit_breaker_success_threshold_input", "circuit_breaker_success_threshold", int),
+        ("_circuit_breaker_timeout_input", "circuit_breaker_timeout", float),
+        ("_retry_temp_increase_input", "retry_temp_increase", float),
+        ("_retry_simplify_on_attempt_input", "retry_simplify_on_attempt", int),
+        ("_semantic_duplicate_enabled_switch", "semantic_duplicate_enabled", None),
+        ("_semantic_duplicate_threshold_input", "semantic_duplicate_threshold", float),
+        ("_embedding_model_select", "embedding_model", None),
+        ("_refinement_temp_start_input", "world_quality_refinement_temp_start", float),
+        ("_refinement_temp_end_input", "world_quality_refinement_temp_end", float),
+        ("_refinement_temp_decay_select", "world_quality_refinement_temp_decay", None),
+        (
+            "_early_stopping_min_iterations_input",
+            "world_quality_early_stopping_min_iterations",
+            int,
+        ),
+        (
+            "_early_stopping_variance_tolerance_input",
+            "world_quality_early_stopping_variance_tolerance",
+            float,
+        ),
+    ]
+
+    for ui_attr, setting_attr, type_conv in advanced_llm_settings_map:
+        if hasattr(page, ui_attr):
+            ui_element = getattr(page, ui_attr)
+            value = ui_element.value
+            if type_conv:
+                value = type_conv(value)
+            setattr(settings, setting_attr, value)
+
+    # Relationship validation settings
+    if hasattr(page, "_relationship_validation_switch"):
+        settings.relationship_validation_enabled = page._relationship_validation_switch.value
+    if hasattr(page, "_orphan_detection_switch"):
+        settings.orphan_detection_enabled = page._orphan_detection_switch.value
+    if hasattr(page, "_circular_detection_switch"):
+        settings.circular_detection_enabled = page._circular_detection_switch.value
+    if hasattr(page, "_fuzzy_threshold_input"):
+        settings.fuzzy_match_threshold = float(page._fuzzy_threshold_input.value)
+    if hasattr(page, "_max_relationships_input"):
+        settings.max_relationships_per_entity = int(page._max_relationships_input.value)
+    # circular_relationship_types is modified directly by the chip UI, no extraction needed
+
+    # Relationship minimums (extract from number inputs)
+    if hasattr(page, "_relationship_min_inputs"):
+        for entity_type, roles in page._relationship_min_inputs.items():
+            if entity_type not in settings.relationship_minimums:
+                raise ValueError(f"Unknown relationship minimums entity type: {entity_type}")
+            for role, num_input in roles.items():
+                if role not in settings.relationship_minimums[entity_type]:
+                    raise ValueError(f"Unknown relationship minimums role: {entity_type}/{role}")
+                if num_input.value is None:
+                    raise ValueError(f"Relationship minimum required for {entity_type}/{role}")
+                settings.relationship_minimums[entity_type][role] = int(num_input.value)
+
+    # Calendar and temporal validation settings
+    if hasattr(page, "_generate_calendar_switch"):
+        settings.generate_calendar_on_world_build = page._generate_calendar_switch.value
+    if hasattr(page, "_temporal_validation_switch"):
+        settings.validate_temporal_consistency = page._temporal_validation_switch.value
+
+    logger.debug("Advanced settings saved")
+
+
+def refresh_from_settings(page: SettingsPage) -> None:
+    """Refresh advanced UI elements from current settings values.
+
+    Handles world generation, story structure, data integrity, advanced LLM,
+    and relationship validation settings. Uses clear-and-rebuild for dynamic
+    elements like relationship minimums and circular type chips.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    settings = page.settings
+
+    # World generation settings
+    if hasattr(page, "_world_gen_inputs"):
+        for key, (min_input, max_input) in page._world_gen_inputs.items():
+            min_attr = f"world_gen_{key}_min"
+            max_attr = f"world_gen_{key}_max"
+            if hasattr(settings, min_attr):
+                min_input.value = getattr(settings, min_attr)
+                max_input.value = getattr(settings, max_attr)
+
+    # Quality refinement settings
+    if hasattr(page, "_quality_threshold_input") and page._quality_threshold_input:
+        page._quality_threshold_input.value = settings.world_quality_threshold
+    if hasattr(page, "_quality_max_iterations_input") and page._quality_max_iterations_input:
+        page._quality_max_iterations_input.value = settings.world_quality_max_iterations
+    if hasattr(page, "_quality_patience_input") and page._quality_patience_input:
+        page._quality_patience_input.value = settings.world_quality_early_stopping_patience
+
+    # Data integrity settings
+    if hasattr(page, "_entity_version_retention_input") and page._entity_version_retention_input:
+        page._entity_version_retention_input.value = settings.entity_version_retention
+    if hasattr(page, "_backup_verify_on_restore_switch") and page._backup_verify_on_restore_switch:
+        page._backup_verify_on_restore_switch.value = settings.backup_verify_on_restore
+
+    # Advanced LLM settings (WP1/WP2)
+    advanced_llm_ui_map = [
+        ("_circuit_breaker_enabled_switch", "circuit_breaker_enabled"),
+        ("_circuit_breaker_failure_threshold_input", "circuit_breaker_failure_threshold"),
+        ("_circuit_breaker_success_threshold_input", "circuit_breaker_success_threshold"),
+        ("_circuit_breaker_timeout_input", "circuit_breaker_timeout"),
+        ("_retry_temp_increase_input", "retry_temp_increase"),
+        ("_retry_simplify_on_attempt_input", "retry_simplify_on_attempt"),
+        ("_semantic_duplicate_enabled_switch", "semantic_duplicate_enabled"),
+        ("_semantic_duplicate_threshold_input", "semantic_duplicate_threshold"),
+        ("_embedding_model_select", "embedding_model"),
+        ("_refinement_temp_start_input", "world_quality_refinement_temp_start"),
+        ("_refinement_temp_end_input", "world_quality_refinement_temp_end"),
+        ("_refinement_temp_decay_select", "world_quality_refinement_temp_decay"),
+        ("_early_stopping_min_iterations_input", "world_quality_early_stopping_min_iterations"),
+        (
+            "_early_stopping_variance_tolerance_input",
+            "world_quality_early_stopping_variance_tolerance",
+        ),
+    ]
+
+    for ui_attr, setting_attr in advanced_llm_ui_map:
+        if hasattr(page, ui_attr) and getattr(page, ui_attr):
+            getattr(page, ui_attr).value = getattr(settings, setting_attr)
+
+    # Relationship validation settings
+    if hasattr(page, "_relationship_validation_switch") and page._relationship_validation_switch:
+        page._relationship_validation_switch.value = settings.relationship_validation_enabled
+    if hasattr(page, "_orphan_detection_switch") and page._orphan_detection_switch:
+        page._orphan_detection_switch.value = settings.orphan_detection_enabled
+    if hasattr(page, "_circular_detection_switch") and page._circular_detection_switch:
+        page._circular_detection_switch.value = settings.circular_detection_enabled
+    if hasattr(page, "_fuzzy_threshold_input") and page._fuzzy_threshold_input:
+        page._fuzzy_threshold_input.value = settings.fuzzy_match_threshold
+    if hasattr(page, "_max_relationships_input") and page._max_relationships_input:
+        page._max_relationships_input.value = settings.max_relationships_per_entity
+
+    # Rebuild relationship minimums using clear-and-rebuild pattern
+    if hasattr(page, "_relationship_min_container"):
+        logger.debug("Rebuilding relationship minimums inputs from settings")
+        _build_relationship_minimums_inputs(page)
+
+    # Rebuild circular type chips from settings
+    if hasattr(page, "_circular_types_container"):
+        logger.debug("Rebuilding circular type chips from settings")
+        _build_circular_type_chips(page)
+
+    # Calendar and temporal validation settings
+    if hasattr(page, "_generate_calendar_switch") and page._generate_calendar_switch:
+        page._generate_calendar_switch.value = settings.generate_calendar_on_world_build
+    if hasattr(page, "_temporal_validation_switch") and page._temporal_validation_switch:
+        page._temporal_validation_switch.value = settings.validate_temporal_consistency
+
+    logger.debug("Advanced UI refreshed from settings")

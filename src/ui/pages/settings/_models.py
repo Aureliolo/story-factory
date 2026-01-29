@@ -143,3 +143,51 @@ def build_temperature_section(page: SettingsPage) -> None:
                     )
 
     logger.debug("Temperature section built")
+
+
+def save_to_settings(page: SettingsPage) -> None:
+    """Extract model settings from UI and save to settings.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    page.settings.default_model = page._default_model_select.value
+    page.settings.use_per_agent_models = page._use_per_agent.value
+
+    # Per-agent models
+    for role, select in page._agent_model_selects.items():
+        page.settings.agent_models[role] = select.value
+
+    # Temperatures
+    for role, slider in page._temp_sliders.items():
+        page.settings.agent_temperatures[role] = slider.value
+
+    logger.debug("Model settings saved")
+
+
+def refresh_from_settings(page: SettingsPage) -> None:
+    """Refresh model UI elements from current settings values.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    settings = page.settings
+
+    if hasattr(page, "_default_model_select") and page._default_model_select:
+        page._default_model_select.value = settings.default_model
+    if hasattr(page, "_use_per_agent") and page._use_per_agent:
+        page._use_per_agent.value = settings.use_per_agent_models
+
+    # Per-agent model selects
+    if hasattr(page, "_agent_model_selects"):
+        for role, select in page._agent_model_selects.items():
+            if select and role in settings.agent_models:
+                select.value = settings.agent_models[role]
+
+    # Temperature sliders
+    if hasattr(page, "_temp_sliders"):
+        for role, slider in page._temp_sliders.items():
+            if slider and role in settings.agent_temperatures:
+                slider.value = settings.agent_temperatures[role]
+
+    logger.debug("Model UI refreshed from settings")

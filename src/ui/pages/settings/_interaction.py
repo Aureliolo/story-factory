@@ -153,3 +153,50 @@ def build_context_section(page: SettingsPage) -> None:
             )
 
     logger.debug("Context section built")
+
+
+def save_to_settings(page: SettingsPage) -> None:
+    """Extract interaction and context settings from UI and save to settings.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    page.settings.interaction_mode = page._interaction_mode_select.value
+    page.settings.chapters_between_checkpoints = int(page._checkpoint_input.value)
+    page.settings.max_revision_iterations = int(page._revision_input.value)
+
+    # Context settings
+    page.settings.context_size = int(page._context_size_input.value)
+    page.settings.max_tokens = int(page._max_tokens_input.value)
+    page.settings.previous_chapter_context_chars = int(page._prev_chapter_chars.value)
+    page.settings.chapter_analysis_chars = int(page._chapter_analysis_chars.value)
+    page.settings.full_text_preview_chars = int(page._full_text_preview_chars.value)
+
+    logger.debug("Interaction and context settings saved")
+
+
+def refresh_from_settings(page: SettingsPage) -> None:
+    """Refresh interaction and context UI elements from current settings values.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    settings = page.settings
+
+    # Workflow settings
+    if hasattr(page, "_interaction_mode_select") and page._interaction_mode_select:
+        page._interaction_mode_select.value = settings.interaction_mode
+    if hasattr(page, "_checkpoint_input") and page._checkpoint_input:
+        page._checkpoint_input.value = settings.chapters_between_checkpoints
+    if hasattr(page, "_revision_input") and page._revision_input:
+        page._revision_input.value = settings.max_revision_iterations
+
+    # Context settings
+    if hasattr(page, "_context_size_input") and page._context_size_input:
+        page._context_size_input.value = settings.context_size
+    if hasattr(page, "_max_tokens_input") and page._max_tokens_input:
+        page._max_tokens_input.value = settings.max_tokens
+    if hasattr(page, "_full_text_preview_chars") and page._full_text_preview_chars:
+        page._full_text_preview_chars.value = settings.full_text_preview_chars
+
+    logger.debug("Interaction and context UI refreshed from settings")

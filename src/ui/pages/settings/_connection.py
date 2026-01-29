@@ -78,3 +78,24 @@ async def test_connection(page: SettingsPage) -> None:
     else:
         ui.notify(f"Connection failed: {health.message}", type="negative")
         logger.warning(f"Connection test failed: {health.message}")
+
+
+def save_to_settings(page: SettingsPage) -> None:
+    """Extract connection settings from UI and save to settings.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    page.settings.ollama_url = page._ollama_url_input.value
+    logger.debug("Connection settings saved")
+
+
+def refresh_from_settings(page: SettingsPage) -> None:
+    """Refresh connection UI elements from current settings values.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    if hasattr(page, "_ollama_url_input") and page._ollama_url_input:
+        page._ollama_url_input.value = page.settings.ollama_url
+    logger.debug("Connection UI refreshed from settings")
