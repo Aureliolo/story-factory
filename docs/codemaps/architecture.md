@@ -140,7 +140,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 10. **Quality Refinement Loop**: Iterative entity improvement with scoring
 11. **Auto Model Selection**: Tag-based model selection per agent role
 12. **Temporal Validation**: Calendar-aware consistency checking
-13. **Undo/Redo System**: Snapshot-based state management for settings and world entities
+13. **Undo/Redo System**: Snapshot-based state management for settings and world entities.
 
 ## Data Flow
 
@@ -207,4 +207,5 @@ story-factory/
 | UI Pages | 47 | 5 | ~10,671 |
 | UI Components | 13 | 1 | ~4,896 |
 | Memory Models | 28 | 3 | ~11,932 |
-| **Total** | **119** | **15** | **~42,769** |
+| Agents | 10 | 1 | ~2,500 |
+| **Total** | **129** | **16** | **~45,269** |

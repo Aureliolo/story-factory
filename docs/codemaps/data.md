@@ -241,20 +241,40 @@ class WorldSettings(BaseModel):
 ### WorldHealthMetrics
 ```python
 class WorldHealthMetrics(BaseModel):
-    entity_count: int
-    relationship_count: int
-    orphan_entity_count: int
-    weak_relationship_count: int
-    entity_type_distribution: dict[str, int]
-    relationship_type_distribution: dict[str, int]
-    average_relationships_per_entity: float
-    max_relationships_entity: str | None
+    # Entity counts
+    total_entities: int
+    entity_counts: dict[str, int]  # Counts by type
+    total_relationships: int
+
+    # Orphan detection
+    orphan_count: int
+    orphan_entities: list[dict]  # id, name, type
+
+    # Circular relationship detection
+    circular_count: int
+    circular_relationships: list[dict]
+
+    # Quality metrics
+    average_quality: float  # 0-10
+    quality_distribution: dict[str, int]  # e.g., '0-2': 5
+    low_quality_entities: list[dict]
+
+    # Contradiction detection
+    contradiction_count: int
+    contradictions: list[dict]
+
+    # Temporal consistency
     temporal_error_count: int
     temporal_warning_count: int
-    average_temporal_consistency: float
-    health_score: float  # 0-100
+    average_temporal_consistency: float  # 0-10
+    temporal_issues: list[dict]
 
-    def calculate_health_score() -> float
+    # Computed metrics
+    relationship_density: float
+    health_score: float  # 0-100
+    recommendations: list[str]
+
+    def calculate_health_score(self) -> float
 ```
 
 ## Generation Mode Models (`memory/mode_models.py`)
@@ -403,6 +423,8 @@ class TemporalValidationIssue(BaseModel):
 
 ## Database Schema (`memory/world_database/`)
 
+> **Note**: Schemas shown are simplified representations of key fields. See source files for complete schemas including constraints, defaults, and additional columns.
+
 ### SQLite Tables
 
 **entities**
@@ -482,6 +504,8 @@ CREATE TABLE schema_version (
 ```
 
 ## Mode Database Schema (`memory/mode_database/`)
+
+> **Note**: Schemas shown are simplified representations. See `_schema.py` for complete schemas with all fields, constraints, and migrations.
 
 ### Tables
 
