@@ -51,14 +51,22 @@ class StoryFactoryApp:
 
     def _load_last_project(self) -> None:
         """Load the last opened project if it still exists."""
+        import time
+
         last_id = self.services.settings.last_project_id
         if not last_id:
+            logger.debug("No last project to load")
             return
 
         try:
+            t0 = time.perf_counter()
             project, world_db = self.services.project.load_project(last_id)
             self.state.set_project(last_id, project, world_db)
-            logger.info(f"Auto-loaded last project: {project.project_name}")
+            logger.info(
+                "Auto-loaded last project: %s (%.2fs)",
+                project.project_name,
+                time.perf_counter() - t0,
+            )
         except FileNotFoundError:
             # Project was deleted, clear the setting
             logger.info(f"Last project {last_id} no longer exists, clearing setting")

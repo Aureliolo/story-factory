@@ -60,15 +60,12 @@ def build_mode_section(page: SettingsPage) -> None:
                     .tooltip("Choose a preset mode for model assignments")
                 )
 
-                # Show current mode details
+                # Show current mode description (inline, no expansion)
                 current_mode = PRESET_MODES.get(page.settings.current_mode)
                 if current_mode:
-                    with ui.expansion("Mode Details", icon="info").classes("w-full mt-2"):
-                        with ui.column().classes("gap-2 text-sm"):
-                            # Description
-                            ui.label(current_mode.description).classes(
-                                "text-gray-600 dark:text-gray-400 italic"
-                            )
+                    ui.label(current_mode.description).classes(
+                        "text-xs text-gray-600 dark:text-gray-400 italic mt-2"
+                    )
 
                 # VRAM strategy (persisted in settings)
                 vram_options = {
