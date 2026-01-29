@@ -386,16 +386,19 @@ class RefinementConfig(BaseModel):
 
 ## Temporal Validation Models
 
-### TemporalValidationError
+### TemporalValidationIssue
 ```python
-class TemporalValidationError(BaseModel):
+class TemporalValidationIssue(BaseModel):
     entity_id: str
     entity_name: str
-    error_type: str  # predates_dependency, invalid_era, anachronism,
-                     # post_destruction, invalid_date, lifespan_overlap, founding_order
-    severity: str    # warning, error
+    entity_type: str  # e.g., "character", "faction", "location"
+    error_type: TemporalErrorType  # predates_dependency, invalid_era, anachronism,
+                                   # post_destruction, invalid_date, lifespan_overlap, founding_order
+    severity: TemporalErrorSeverity  # warning, error
     message: str
     related_entity_id: str | None
+    related_entity_name: str | None
+    suggestion: str  # Suggested fix for the issue
 ```
 
 ## Database Schema (`memory/world_database/`)
@@ -462,8 +465,11 @@ CREATE TABLE entity_versions (
     id TEXT PRIMARY KEY,
     entity_id TEXT NOT NULL,
     version_number INTEGER NOT NULL,
-    data TEXT NOT NULL,  -- JSON snapshot
+    data_json TEXT NOT NULL,  -- JSON snapshot
     created_at TEXT NOT NULL,
+    change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+    change_reason TEXT DEFAULT '',
+    quality_score REAL DEFAULT NULL,
     FOREIGN KEY (entity_id) REFERENCES entities(id)
 )
 ```

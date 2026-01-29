@@ -88,13 +88,13 @@ AI agent implementations extending BaseAgent with retry logic.
 | `ContinuityAgent` | Detects plot holes | 0.3 |
 | `ValidatorAgent` | Validates AI responses | 0.1 |
 
-### Workflows Layer (`workflows/`)
+### Orchestration Layer (`services/orchestrator/`)
 Orchestration of agent pipelines.
 
 | Component | Package | Purpose |
 |-----------|---------|---------|
-| `StoryOrchestrator` | `orchestrator/` (6 modules) | Coordinates agents through story creation |
-| `WorkflowEvent` | `orchestrator/` | Event model for UI updates |
+| `StoryOrchestrator` | `services/orchestrator/` (6 modules) | Coordinates agents through story creation |
+| `WorkflowEvent` | `services/orchestrator/` | Event model for UI updates |
 
 ### Memory Layer (`memory/`)
 Pydantic models and persistent storage.
@@ -180,13 +180,12 @@ story-factory/
 │   ├── app.py              # App routing with timing
 │   ├── state.py            # Centralized state with undo/redo
 │   ├── components/         # Reusable UI components (13 files)
-│   └── pages/              # Route handlers (6 packages)
+│   └── pages/              # Route handlers (5 packages)
 │       ├── analytics/      # Analytics dashboard (7 modules)
 │       ├── models/         # Model management (4 modules)
 │       ├── settings/       # Configuration UI (7 modules)
 │       ├── world/          # World editor (13 modules)
 │       └── write/          # Writing interface (6 modules)
-├── workflows/               # Orchestration (1 package)
 ├── utils/                   # Shared utilities (16 files)
 ├── prompts/                 # Prompt templates
 ├── tests/                   # Test suites
@@ -205,7 +204,7 @@ story-factory/
 | Layer | Files | Packages | Lines |
 |-------|-------|----------|-------|
 | Services | 31 | 6 | ~15,270 |
-| UI Pages | 47 | 6 | ~10,671 |
+| UI Pages | 47 | 5 | ~10,671 |
 | UI Components | 13 | 1 | ~4,896 |
 | Memory Models | 28 | 3 | ~11,932 |
-| **Total** | **119** | **16** | **~42,769** |
+| **Total** | **119** | **15** | **~42,769** |

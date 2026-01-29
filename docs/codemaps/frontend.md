@@ -96,11 +96,11 @@ Configuration UI with modular sections and undo/redo support.
 |--------|-------|---------|
 | `__init__.py` | 284 | Main SettingsPage with flexbox layout |
 | `_connection.py` | ~100 | Ollama connection settings |
-| `_models.py` | ~150 | Model selection and temperature |
-| `_interaction.py` | ~120 | Interaction mode and context |
+| `_models.py` | ~190 | Model selection and temperature |
+| `_interaction.py` | ~200 | Interaction mode and context |
 | `_modes.py` | ~250 | Generation mode and adaptive learning |
-| `_advanced.py` | ~400 | Advanced LLM, world gen, story structure, data integrity |
-| `_persistence.py` | ~150 | Save, snapshot, restore, undo/redo |
+| `_advanced.py` | ~830 | Advanced LLM, world gen, story structure, data integrity |
+| `_persistence.py` | ~320 | Save, snapshot, restore, undo/redo |
 
 **Features:**
 - 7-section flexbox layout (2 rows of responsive cards)
@@ -297,8 +297,8 @@ NetworkX to visualization:
 
 | Category | Files | Modules | Lines |
 |----------|-------|---------|-------|
-| Page Packages | 6 | 37 | ~10,231 |
+| Page Packages | 5 | 37 | ~10,231 |
 | Standalone Pages | 5 | 5 | ~1,750 |
 | Components | 13 | 13 | ~4,896 |
 | Core UI | 5 | 5 | ~1,200 |
-| **Total** | **29** | **60** | **~18,077** |
+| **Total** | **28** | **60** | **~18,077** |
