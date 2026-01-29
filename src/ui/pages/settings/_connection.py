@@ -96,6 +96,6 @@ def refresh_from_settings(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    if hasattr(page, "_ollama_url_input") and page._ollama_url_input:
+    if hasattr(page, "_ollama_url_input"):
         page._ollama_url_input.value = page.settings.ollama_url
     logger.debug("Connection UI refreshed from settings")

@@ -829,17 +829,17 @@ def refresh_from_settings(page: SettingsPage) -> None:
                 max_input.value = getattr(settings, max_attr)
 
     # Quality refinement settings
-    if hasattr(page, "_quality_threshold_input") and page._quality_threshold_input:
+    if hasattr(page, "_quality_threshold_input"):
         page._quality_threshold_input.value = settings.world_quality_threshold
-    if hasattr(page, "_quality_max_iterations_input") and page._quality_max_iterations_input:
+    if hasattr(page, "_quality_max_iterations_input"):
         page._quality_max_iterations_input.value = settings.world_quality_max_iterations
-    if hasattr(page, "_quality_patience_input") and page._quality_patience_input:
+    if hasattr(page, "_quality_patience_input"):
         page._quality_patience_input.value = settings.world_quality_early_stopping_patience
 
     # Data integrity settings
-    if hasattr(page, "_entity_version_retention_input") and page._entity_version_retention_input:
+    if hasattr(page, "_entity_version_retention_input"):
         page._entity_version_retention_input.value = settings.entity_version_retention
-    if hasattr(page, "_backup_verify_on_restore_switch") and page._backup_verify_on_restore_switch:
+    if hasattr(page, "_backup_verify_on_restore_switch"):
         page._backup_verify_on_restore_switch.value = settings.backup_verify_on_restore
 
     # Advanced LLM settings (WP1/WP2)
@@ -864,19 +864,19 @@ def refresh_from_settings(page: SettingsPage) -> None:
     ]
 
     for ui_attr, setting_attr in advanced_llm_ui_map:
-        if hasattr(page, ui_attr) and getattr(page, ui_attr):
+        if hasattr(page, ui_attr):
             getattr(page, ui_attr).value = getattr(settings, setting_attr)
 
     # Relationship validation settings
-    if hasattr(page, "_relationship_validation_switch") and page._relationship_validation_switch:
+    if hasattr(page, "_relationship_validation_switch"):
         page._relationship_validation_switch.value = settings.relationship_validation_enabled
-    if hasattr(page, "_orphan_detection_switch") and page._orphan_detection_switch:
+    if hasattr(page, "_orphan_detection_switch"):
         page._orphan_detection_switch.value = settings.orphan_detection_enabled
-    if hasattr(page, "_circular_detection_switch") and page._circular_detection_switch:
+    if hasattr(page, "_circular_detection_switch"):
         page._circular_detection_switch.value = settings.circular_detection_enabled
-    if hasattr(page, "_fuzzy_threshold_input") and page._fuzzy_threshold_input:
+    if hasattr(page, "_fuzzy_threshold_input"):
         page._fuzzy_threshold_input.value = settings.fuzzy_match_threshold
-    if hasattr(page, "_max_relationships_input") and page._max_relationships_input:
+    if hasattr(page, "_max_relationships_input"):
         page._max_relationships_input.value = settings.max_relationships_per_entity
 
     # Rebuild relationship minimums using clear-and-rebuild pattern
@@ -890,9 +890,9 @@ def refresh_from_settings(page: SettingsPage) -> None:
         _build_circular_type_chips(page)
 
     # Calendar and temporal validation settings
-    if hasattr(page, "_generate_calendar_switch") and page._generate_calendar_switch:
+    if hasattr(page, "_generate_calendar_switch"):
         page._generate_calendar_switch.value = settings.generate_calendar_on_world_build
-    if hasattr(page, "_temporal_validation_switch") and page._temporal_validation_switch:
+    if hasattr(page, "_temporal_validation_switch"):
         page._temporal_validation_switch.value = settings.validate_temporal_consistency
 
     logger.debug("Advanced UI refreshed from settings")

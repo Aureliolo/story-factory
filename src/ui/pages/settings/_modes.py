@@ -204,11 +204,12 @@ def save_to_settings(page: SettingsPage) -> None:
     # Learning settings
     page.settings.learning_autonomy = page._autonomy_select.value
 
-    # Collect enabled triggers
-    enabled_triggers = []
-    for trigger_value, checkbox in page._trigger_checkboxes.items():
-        if checkbox.value:
-            enabled_triggers.append(trigger_value)
+    # Collect enabled triggers using list comprehension
+    enabled_triggers = [
+        trigger_value
+        for trigger_value, checkbox in page._trigger_checkboxes.items()
+        if checkbox.value
+    ]
     if not enabled_triggers:
         enabled_triggers = ["off"]
     page.settings.learning_triggers = enabled_triggers
@@ -229,19 +230,24 @@ def refresh_from_settings(page: SettingsPage) -> None:
     settings = page.settings
 
     # Mode settings
-    if hasattr(page, "_mode_select") and page._mode_select:
+    if hasattr(page, "_use_mode_system"):
+        page._use_mode_system.value = settings.use_mode_system
+    if hasattr(page, "_mode_select"):
         page._mode_select.value = settings.current_mode
-    if hasattr(page, "_vram_strategy_select") and page._vram_strategy_select:
+    if hasattr(page, "_vram_strategy_select"):
         page._vram_strategy_select.value = settings.vram_strategy
 
     # Learning settings
-    if hasattr(page, "_autonomy_select") and page._autonomy_select:
+    if hasattr(page, "_autonomy_select"):
         page._autonomy_select.value = settings.learning_autonomy
-    if hasattr(page, "_confidence_slider") and page._confidence_slider:
+    if hasattr(page, "_trigger_checkboxes"):
+        for trigger_value, checkbox in page._trigger_checkboxes.items():
+            checkbox.value = trigger_value in settings.learning_triggers
+    if hasattr(page, "_confidence_slider"):
         page._confidence_slider.value = settings.learning_confidence_threshold
-    if hasattr(page, "_periodic_interval") and page._periodic_interval:
+    if hasattr(page, "_periodic_interval"):
         page._periodic_interval.value = settings.learning_periodic_interval
-    if hasattr(page, "_min_samples") and page._min_samples:
+    if hasattr(page, "_min_samples"):
         page._min_samples.value = settings.learning_min_samples
 
     logger.debug("Mode and learning UI refreshed from settings")

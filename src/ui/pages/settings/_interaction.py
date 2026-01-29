@@ -184,19 +184,23 @@ def refresh_from_settings(page: SettingsPage) -> None:
     settings = page.settings
 
     # Workflow settings
-    if hasattr(page, "_interaction_mode_select") and page._interaction_mode_select:
+    if hasattr(page, "_interaction_mode_select"):
         page._interaction_mode_select.value = settings.interaction_mode
-    if hasattr(page, "_checkpoint_input") and page._checkpoint_input:
+    if hasattr(page, "_checkpoint_input"):
         page._checkpoint_input.value = settings.chapters_between_checkpoints
-    if hasattr(page, "_revision_input") and page._revision_input:
+    if hasattr(page, "_revision_input"):
         page._revision_input.value = settings.max_revision_iterations
 
     # Context settings
-    if hasattr(page, "_context_size_input") and page._context_size_input:
+    if hasattr(page, "_context_size_input"):
         page._context_size_input.value = settings.context_size
-    if hasattr(page, "_max_tokens_input") and page._max_tokens_input:
+    if hasattr(page, "_max_tokens_input"):
         page._max_tokens_input.value = settings.max_tokens
-    if hasattr(page, "_full_text_preview_chars") and page._full_text_preview_chars:
+    if hasattr(page, "_prev_chapter_chars"):
+        page._prev_chapter_chars.value = settings.previous_chapter_context_chars
+    if hasattr(page, "_chapter_analysis_chars"):
+        page._chapter_analysis_chars.value = settings.chapter_analysis_chars
+    if hasattr(page, "_full_text_preview_chars"):
         page._full_text_preview_chars.value = settings.full_text_preview_chars
 
     logger.debug("Interaction and context UI refreshed from settings")
