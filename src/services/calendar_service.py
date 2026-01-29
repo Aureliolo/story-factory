@@ -155,25 +155,34 @@ Make the era_abbreviation 2-3 letters that could follow a year number."""
             result = agent.generate_structured(prompt, GeneratedCalendarData)
 
             # Convert to WorldCalendar
-            months = [
-                CalendarMonth(
-                    name=m.get("name", f"Month {i + 1}"),
-                    days=m.get("days", 30),
-                    description=m.get("description", ""),
-                )
-                for i, m in enumerate(result.months)
-            ]
+            # Note: LLM outputs may have missing fields, so we use fallbacks here.
+            # This is intentional for LLM parsing (unlike config values which must be explicit).
+            months = []
+            for i, m in enumerate(result.months):
+                name = m.get("name") or f"Month {i + 1}"
+                days = m.get("days") or 30
+                description = m.get("description") or ""
+                if name != m.get("name"):
+                    logger.debug(f"Month {i + 1}: using fallback name '{name}'")
+                months.append(CalendarMonth(name=name, days=days, description=description))
 
-            eras = [
-                HistoricalEra(
-                    name=e.get("name", f"Era {i + 1}"),
-                    start_year=e.get("start_year", 1),
-                    end_year=e.get("end_year"),
-                    description=e.get("description", ""),
-                    display_order=i,
+            eras = []
+            for i, e in enumerate(result.historical_eras):
+                name = e.get("name") or f"Era {i + 1}"
+                start_year = e.get("start_year") or 1
+                end_year = e.get("end_year")  # None is valid for ongoing era
+                description = e.get("description") or ""
+                if name != e.get("name"):
+                    logger.debug(f"Era {i + 1}: using fallback name '{name}'")
+                eras.append(
+                    HistoricalEra(
+                        name=name,
+                        start_year=start_year,
+                        end_year=end_year,
+                        description=description,
+                        display_order=i,
+                    )
                 )
-                for i, e in enumerate(result.historical_eras)
-            ]
 
             calendar = WorldCalendar(
                 current_era_name=result.era_name,
@@ -201,15 +210,13 @@ Make the era_abbreviation 2-3 letters that could follow a year number."""
         """Generate a basic calendar for a genre without full story context.
 
         Useful for quick calendar generation when full story brief isn't available.
+        Falls back to a default calendar if LLM generation fails.
 
         Args:
             genre: Story genre (e.g., "Fantasy", "Sci-Fi", "Historical").
 
         Returns:
             WorldCalendar with genre-appropriate defaults.
-
-        Raises:
-            CalendarGenerationError: If calendar generation fails.
         """
         logger.info(f"Generating genre-based calendar for {genre}")
 

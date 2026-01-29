@@ -101,9 +101,12 @@ class WorldCalendar(BaseModel):
     @field_validator("months")
     @classmethod
     def validate_months(cls, v: list[CalendarMonth]) -> list[CalendarMonth]:
-        """Ensure at least one month is defined."""
+        """Log a debug message if the months list is empty.
+
+        Empty months are allowed; fallback values are used in properties.
+        """
         if v is not None and len(v) == 0:
-            logger.debug("Empty months list provided, using default 12 months")
+            logger.debug("Empty months list provided, fallback values will be used")
         return v
 
     @property
@@ -205,10 +208,11 @@ class WorldCalendar(BaseModel):
         if year < self.era_start_year:
             return False, f"Year {year} is before era start ({self.era_start_year})"
 
-        # Month validation
+        # Month validation - use month_count for consistency with empty months fallback
         if month is not None:
-            if month < 1 or month > len(self.months):
-                return False, f"Month {month} is invalid (1-{len(self.months)})"
+            max_month = self.month_count
+            if month < 1 or month > max_month:
+                return False, f"Month {month} is invalid (1-{max_month})"
 
             # Day validation
             if day is not None:

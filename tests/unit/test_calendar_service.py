@@ -13,8 +13,8 @@ from src.utils.exceptions import CalendarGenerationError
 
 @pytest.fixture
 def settings() -> Settings:
-    """Create settings for testing."""
-    return Settings.load()
+    """Create settings for testing (in-memory, not disk-backed)."""
+    return Settings()
 
 
 @pytest.fixture

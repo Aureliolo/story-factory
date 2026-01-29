@@ -583,6 +583,87 @@ class WorldDatabase:
     def import_from_json(self, data: dict[str, Any]) -> None:
         _io.import_from_json(self, data)
 
+    # =========================================================================
+    # World Settings (calendar, timeline config)
+    # =========================================================================
+
+    def get_world_settings(self) -> Any:
+        """Get world settings including calendar configuration.
+
+        Returns:
+            WorldSettings instance or None if not configured.
+        """
+        # Import here to avoid circular imports
+        from src.memory.world_settings import WorldSettings
+
+        logger.debug("Loading world settings from database")
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, calendar_json, timeline_start_year, timeline_end_year,
+                       validate_temporal_consistency, created_at, updated_at
+                FROM world_settings
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+
+        if not row:
+            logger.debug("No world settings found in database")
+            return None
+
+        calendar_data = json.loads(row[1]) if row[1] else None
+        settings_data = {
+            "id": row[0],
+            "calendar": calendar_data,
+            "timeline_start_year": row[2],
+            "timeline_end_year": row[3],
+            "validate_temporal_consistency": bool(row[4]),
+            "created_at": row[5],
+            "updated_at": row[6],
+        }
+        logger.debug(
+            f"Loaded world settings: id={row[0]}, has_calendar={calendar_data is not None}"
+        )
+        return WorldSettings.from_dict(settings_data)
+
+    def save_world_settings(self, settings: Any) -> None:
+        """Save or update world settings.
+
+        Args:
+            settings: WorldSettings instance to save.
+        """
+        from datetime import datetime
+
+        logger.debug(f"Saving world settings: id={settings.id}")
+        calendar_json = json.dumps(settings.calendar.to_dict()) if settings.calendar else None
+        now = datetime.now().isoformat()
+
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO world_settings
+                (id, calendar_json, timeline_start_year, timeline_end_year,
+                 validate_temporal_consistency, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    settings.id,
+                    calendar_json,
+                    settings.timeline_start_year,
+                    settings.timeline_end_year,
+                    int(settings.validate_temporal_consistency),
+                    settings.created_at.isoformat()
+                    if hasattr(settings.created_at, "isoformat")
+                    else now,
+                    now,
+                ),
+            )
+            self.conn.commit()
+        logger.info(f"Saved world settings: id={settings.id}")
+
 
 # Re-export for backward compatibility
 __all__ = [

@@ -74,9 +74,10 @@ class StoryTimestamp(BaseModel):
 
         parts = []
         if self.year is not None:
-            parts.append(f"Year {self.year}")
+            year_str = f"Year {self.year}"
             if self.era_name:
-                parts[-1] = f"Year {self.year} {self.era_name}"
+                year_str = f"{year_str} {self.era_name}"
+            parts.append(year_str)
         if self.month is not None:
             parts.append(f"Month {self.month}")
         if self.day is not None:
@@ -381,13 +382,16 @@ def extract_lifecycle_from_attributes(attributes: dict[str, Any]) -> EntityLifec
     if notes := lifecycle_data.get("temporal_notes"):
         result.temporal_notes = str(notes)
 
-    if founding := lifecycle_data.get("founding_year"):
+    # Use 'is not None' to handle year 0 correctly
+    founding = lifecycle_data.get("founding_year")
+    if founding is not None:
         if isinstance(founding, int):
             result.founding_year = founding
         elif isinstance(founding, str) and founding.isdigit():
             result.founding_year = int(founding)
 
-    if destruction := lifecycle_data.get("destruction_year"):
+    destruction = lifecycle_data.get("destruction_year")
+    if destruction is not None:
         if isinstance(destruction, int):
             result.destruction_year = destruction
         elif isinstance(destruction, str) and destruction.isdigit():

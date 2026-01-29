@@ -88,9 +88,23 @@ def _get_world_calendar(page: WorldPage) -> Any:
     Returns:
         WorldCalendar or None.
     """
-    # TODO: Implement loading calendar from world_settings table
-    # For now, return None until database integration is complete
-    return None
+    logger.debug("Attempting to load world calendar from world settings")
+
+    world_db = page.state.world_db
+    if not world_db:
+        logger.debug("No world database available")
+        return None
+
+    try:
+        world_settings = world_db.get_world_settings()
+        if world_settings and world_settings.calendar:
+            logger.debug(f"Loaded calendar: {world_settings.calendar.current_era_name}")
+            return world_settings.calendar
+        logger.debug("No calendar in world settings")
+        return None
+    except Exception as e:
+        logger.debug(f"Could not load world calendar: {e}")
+        return None
 
 
 def _display_calendar_info(page: WorldPage, calendar: Any) -> None:
@@ -148,6 +162,10 @@ async def _generate_calendar(page: WorldPage) -> None:
     Args:
         page: WorldPage instance.
     """
+    from nicegui import run
+
+    from src.memory.world_settings import WorldSettings
+
     logger.info("Generating calendar for world")
 
     # Check if story state has a brief
@@ -160,16 +178,27 @@ async def _generate_calendar(page: WorldPage) -> None:
         ui.notify("Calendar service not available.", type="negative")
         return
 
+    if not page.state.world_db:
+        ui.notify("No world database loaded.", type="negative")
+        return
+
     # Show loading state
     page.generate_calendar_btn.props("loading")  # type: ignore[attr-defined]
     page.generate_calendar_btn.disable()  # type: ignore[attr-defined]
 
     try:
-        # Generate calendar using service (synchronously for simplicity)
-        calendar = page.services.calendar.generate_calendar(story_state.brief)
+        # Generate calendar using service - run off event loop to avoid blocking
+        calendar = await run.io_bound(page.services.calendar.generate_calendar, story_state.brief)
 
-        # TODO: Save calendar to world_settings table
-        logger.info(f"Generated calendar: {calendar.current_era_name}")
+        # Save calendar to world settings
+        world_settings = page.state.world_db.get_world_settings()
+        if world_settings:
+            world_settings.calendar = calendar
+        else:
+            world_settings = WorldSettings(calendar=calendar)
+        page.state.world_db.save_world_settings(world_settings)
+
+        logger.info(f"Generated and saved calendar: {calendar.current_era_name}")
 
         ui.notify(
             f"Generated calendar: {calendar.current_era_name} ({calendar.era_abbreviation})",

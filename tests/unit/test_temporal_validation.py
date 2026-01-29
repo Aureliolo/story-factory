@@ -881,6 +881,7 @@ class TestValidateWorld:
         mock_world_db = MagicMock()
         mock_world_db.list_entities.return_value = [faction, character]
         mock_world_db.list_relationships.return_value = [mock_rel]
+        mock_world_db.get_world_settings.return_value = None  # No calendar
 
         result = validation_service.validate_world(mock_world_db)
 
@@ -923,6 +924,7 @@ class TestValidateWorld:
         mock_world_db = MagicMock()
         mock_world_db.list_entities.return_value = [faction, character]
         mock_world_db.list_relationships.return_value = [mock_rel]
+        mock_world_db.get_world_settings.return_value = None  # No calendar
 
         result = validation_service.validate_world(mock_world_db)
 

@@ -113,6 +113,11 @@ class TemporalValidationService:
         logger.debug(f"Validating temporal consistency for {entity.type} '{entity.name}'")
         result = TemporalValidationResult()
 
+        # Check if temporal validation is enabled in settings
+        if not self.settings.validate_temporal_consistency:
+            logger.debug("Temporal validation disabled in settings, skipping")
+            return result
+
         # Extract lifecycle from entity attributes
         lifecycle = None
         if entity.attributes:
@@ -156,6 +161,11 @@ class TemporalValidationService:
         logger.info("Validating temporal consistency for world")
         result = TemporalValidationResult()
 
+        # Check if temporal validation is enabled in settings
+        if not self.settings.validate_temporal_consistency:
+            logger.debug("Temporal validation disabled in settings, skipping world validation")
+            return result
+
         # Get all entities
         all_entities = world_db.list_entities()
 
@@ -165,8 +175,15 @@ class TemporalValidationService:
             for rel in world_db.list_relationships()
         ]
 
-        # TODO: Load calendar from world settings when that integration is complete
+        # Attempt to load calendar from world settings if available
         calendar = None
+        try:
+            world_settings = world_db.get_world_settings()
+            if world_settings and world_settings.calendar:
+                calendar = world_settings.calendar
+                logger.debug(f"Loaded calendar for validation: {calendar.current_era_name}")
+        except Exception as e:
+            logger.debug(f"Could not load world calendar (table may not exist): {e}")
 
         # Validate each entity
         for entity in all_entities:

@@ -3,6 +3,7 @@
 Displays entity lifespans and events on a horizontal timeline.
 """
 
+import html
 import json
 import logging
 import uuid
@@ -197,6 +198,10 @@ class WorldTimelineComponent:
             calendar: WorldCalendar to use for date formatting, or None to use default.
         """
         self._calendar = calendar
+        logger.debug(
+            "Calendar set for timeline: %s",
+            calendar.current_era_name if calendar else "None",
+        )
         self._render_timeline()
 
     def refresh(self) -> None:
@@ -412,18 +417,19 @@ class WorldTimelineComponent:
 
         for item in items:
             # Format dates using calendar if available
-            title = item.description or item.label
+            # Escape user/LLM-provided text to prevent XSS in tooltips
+            title = html.escape(item.description or item.label)
             if self._calendar and item.start.year is not None:
-                formatted_start = item.start.format_display(self._calendar)
+                formatted_start = html.escape(item.start.format_display(self._calendar))
                 if item.end and item.end.year is not None:
-                    formatted_end = item.end.format_display(self._calendar)
+                    formatted_end = html.escape(item.end.format_display(self._calendar))
                     title = f"{title}<br>({formatted_start} - {formatted_end})"
                 else:
                     title = f"{title}<br>({formatted_start})"
 
             vis_item: dict[str, Any] = {
                 "id": item.id,
-                "content": item.label,
+                "content": html.escape(item.label),
                 "group": item.group or item.item_type,
                 "title": title,
                 "style": f"background-color: {item.color}; border-color: {item.color};",

@@ -53,7 +53,9 @@ class WorldSettings(BaseModel):
     @property
     def has_calendar(self) -> bool:
         """Check if a custom calendar is configured."""
-        return self.calendar is not None
+        result = self.calendar is not None
+        logger.debug(f"has_calendar check: {result}")
+        return result
 
     @property
     def timeline_span(self) -> int | None:
@@ -71,7 +73,10 @@ class WorldSettings(BaseModel):
             Era abbreviation string.
         """
         if self.calendar:
-            return self.calendar.era_abbreviation
+            abbrev = self.calendar.era_abbreviation
+            logger.debug(f"Era abbreviation from calendar: {abbrev}")
+            return abbrev
+        logger.debug("No calendar, using default era abbreviation 'Y'")
         return "Y"
 
     def format_year(self, year: int) -> str:
@@ -84,9 +89,13 @@ class WorldSettings(BaseModel):
             Formatted year string (e.g., "Year 342 TE" or "342 Y").
         """
         if self.calendar:
-            return self.calendar.format_date(year)
+            result = self.calendar.format_date(year)
+            logger.debug(f"Formatted year {year} with calendar: {result}")
+            return result
         era = self.get_era_abbreviation()
-        return f"Year {year} {era}"
+        result = f"Year {year} {era}"
+        logger.debug(f"Formatted year {year} without calendar: {result}")
+        return result
 
     def to_dict(self) -> dict[str, Any]:
         """Convert settings to dictionary for storage.
@@ -94,11 +103,9 @@ class WorldSettings(BaseModel):
         Returns:
             Dictionary representation suitable for JSON storage.
         """
-        data = self.model_dump(mode="json")
-        # Handle calendar serialization explicitly
-        if self.calendar:
-            data["calendar"] = self.calendar.to_dict()
-        return data
+        logger.debug("Converting WorldSettings to dict")
+        # Pydantic's model_dump handles nested models recursively
+        return self.model_dump(mode="json")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WorldSettings:
@@ -110,6 +117,7 @@ class WorldSettings(BaseModel):
         Returns:
             WorldSettings instance.
         """
+        logger.debug("Creating WorldSettings from dict")
         # Handle calendar deserialization
         if "calendar" in data and data["calendar"] is not None:
             data["calendar"] = WorldCalendar.from_dict(data["calendar"])
