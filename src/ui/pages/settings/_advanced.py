@@ -860,6 +860,10 @@ def refresh_from_settings(page: SettingsPage) -> None:
     # Update circular types multi-select from settings
     if hasattr(page, "_circular_types_select"):
         logger.debug("Updating circular types select from settings")
+        # Update options to include any types from restored settings
+        page._circular_types_select.options = _get_circular_type_options(
+            settings.circular_relationship_types
+        )
         page._circular_types_select.value = list(settings.circular_relationship_types)
 
     # Calendar and temporal validation settings
