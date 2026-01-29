@@ -17,7 +17,7 @@ def build_connection_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Connection",
             "link",

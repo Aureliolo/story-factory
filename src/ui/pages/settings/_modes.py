@@ -24,7 +24,7 @@ def build_mode_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Generation Mode",
             "tune",
@@ -93,7 +93,7 @@ def build_learning_section(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    with ui.card().classes("w-full h-full"):
+    with ui.card().classes("w-full"):
         page._section_header(
             "Adaptive Learning",
             "psychology",

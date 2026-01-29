@@ -62,6 +62,7 @@ class SettingsPage:
     - Context limits
     - Generation modes (presets for model combinations)
     - Adaptive learning settings (autonomy, triggers, thresholds)
+    - Collapsible category groups with expand/collapse all
     """
 
     def __init__(self, state: AppState, services: ServiceContainer):
@@ -77,55 +78,62 @@ class SettingsPage:
         # Settings reference
         self.settings = services.settings
 
+        # Store expansion refs for expand/collapse all
+        self._expansions: list[ui.expansion] = []
+
         # Register undo/redo handlers for this page
         self.state.on_undo(self._do_undo)
         self.state.on_redo(self._do_redo)
 
     def build(self) -> None:
-        """Build the settings page UI."""
-        with ui.column().classes("w-full gap-6 p-4"):
-            ui.label("Settings").classes("text-2xl font-bold")
+        """Build the settings page UI with collapsible category groups."""
+        # Max-width centered container
+        with ui.element("div").classes("w-full max-w-[1600px] mx-auto p-4"):
+            # Header with Expand/Collapse All buttons
+            with ui.row().classes("w-full items-center justify-between mb-4"):
+                ui.label("Settings").classes("text-2xl font-bold")
+                with ui.row().classes("gap-2"):
+                    ui.button("Expand All", on_click=self._expand_all, icon="unfold_more").props(
+                        "flat dense"
+                    )
+                    ui.button(
+                        "Collapse All", on_click=self._collapse_all, icon="unfold_less"
+                    ).props("flat dense")
 
-            # Top row: Connection, Workflow, Memory, Generation Mode, Adaptive Learning
-            with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch"):
-                with ui.element("div").style("flex: 1 1 240px; min-width: 240px;"):
-                    self._build_connection_section()
+            # Clear expansions list for fresh build
+            self._expansions = []
 
-                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
-                    self._build_interaction_section()
+            # Group 1: Connection & Models
+            exp, grid = self._collapsible_group("Connection & Models", "dns")
+            self._expansions.append(exp)
+            with grid:
+                self._build_connection_section()
+                self._build_model_section()
+                self._build_temperature_section()
 
-                with ui.element("div").style("flex: 1 1 280px; min-width: 280px;"):
-                    self._build_context_section()
+            # Group 2: Workflow & Learning
+            exp, grid = self._collapsible_group("Workflow & Learning", "route")
+            self._expansions.append(exp)
+            with grid:
+                self._build_interaction_section()
+                self._build_mode_section()
+                self._build_learning_section()
 
-                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
-                    self._build_mode_section()
+            # Group 3: Story & World
+            exp, grid = self._collapsible_group("Story & World", "auto_stories")
+            self._expansions.append(exp)
+            with grid:
+                self._build_story_structure_section()
+                self._build_world_gen_section()
+                self._build_relationship_validation_section()
+                self._build_context_section()
 
-                with ui.element("div").style("flex: 1 1 300px; min-width: 300px;"):
-                    self._build_learning_section()
-
-            # Bottom row: Creativity, Model Selection, Story Structure, World Generation,
-            # Data Integrity, Advanced LLM, Relationship Validation
-            with ui.element("div").classes("flex flex-wrap gap-4 w-full items-stretch mt-4"):
-                with ui.element("div").style("flex: 1 1 400px; min-width: 360px;"):
-                    self._build_temperature_section()
-
-                with ui.element("div").style("flex: 1 1 340px; min-width: 300px;"):
-                    self._build_model_section()
-
-                with ui.element("div").style("flex: 1 1 180px; min-width: 180px;"):
-                    self._build_story_structure_section()
-
-                with ui.element("div").style("flex: 1 1 220px; min-width: 200px;"):
-                    self._build_world_gen_section()
-
-                with ui.element("div").style("flex: 1 1 240px; min-width: 220px;"):
-                    self._build_data_integrity_section()
-
-                with ui.element("div").style("flex: 1 1 280px; min-width: 260px;"):
-                    self._build_advanced_llm_section()
-
-                with ui.element("div").style("flex: 1 1 280px; min-width: 260px;"):
-                    self._build_relationship_validation_section()
+            # Group 4: System & Reliability
+            exp, grid = self._collapsible_group("System & Reliability", "security")
+            self._expansions.append(exp)
+            with grid:
+                self._build_data_integrity_section()
+                self._build_advanced_llm_section()
 
             # Save button
             ui.button(
@@ -133,6 +141,45 @@ class SettingsPage:
                 on_click=self._save_settings,
                 icon="save",
             ).props("color=primary").classes("mt-4")
+
+        logger.debug("Settings page built with %d collapsible groups", len(self._expansions))
+
+    def _collapsible_group(
+        self, title: str, icon: str, expanded: bool = True
+    ) -> tuple[ui.expansion, ui.element]:
+        """Create a collapsible group with grid container inside.
+
+        Args:
+            title: Group title displayed in the expansion header.
+            icon: Material icon name for the group.
+            expanded: Whether the group starts expanded (default True).
+
+        Returns:
+            Tuple of (expansion element, grid container element).
+        """
+        expansion = ui.expansion(title, icon=icon, value=expanded).classes(
+            "w-full bg-gray-50 dark:bg-gray-800 rounded-lg mb-4"
+        )
+        with expansion:
+            grid = ui.element("div").style(
+                "display: grid; "
+                "grid-template-columns: repeat(auto-fit, minmax(300px, 400px)); "
+                "gap: 1rem; "
+                "align-items: start;"
+            )
+        return expansion, grid
+
+    def _expand_all(self) -> None:
+        """Expand all collapsible groups."""
+        for exp in self._expansions:
+            exp.value = True
+        logger.debug("Expanded all %d groups", len(self._expansions))
+
+    def _collapse_all(self) -> None:
+        """Collapse all collapsible groups."""
+        for exp in self._expansions:
+            exp.value = False
+        logger.debug("Collapsed all %d groups", len(self._expansions))
 
     # ── UI utilities ──────────────────────────────────────────────────────
 
