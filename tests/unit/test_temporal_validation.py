@@ -976,6 +976,30 @@ class TestValidateWorld:
         assert result.is_valid is False
         assert result.error_count >= 1
 
+    def test_validate_world_handles_settings_error(
+        self, validation_service: TemporalValidationService
+    ) -> None:
+        """Test that world validation handles errors when loading settings."""
+        entity = Entity(
+            id="char-1",
+            type="character",
+            name="Test",
+            description="Test",
+            attributes={},
+        )
+
+        mock_world_db = MagicMock()
+        mock_world_db.list_entities.return_value = [entity]
+        mock_world_db.list_relationships.return_value = []
+        # Simulate error loading world settings (e.g., table doesn't exist)
+        mock_world_db.get_world_settings.side_effect = Exception("Table not found")
+
+        # Should not raise - should handle gracefully
+        result = validation_service.validate_world(mock_world_db)
+
+        assert result.is_valid is True
+        assert result.error_count == 0
+
 
 class TestDeathDateValidation:
     """Tests for death date validation against calendar."""
