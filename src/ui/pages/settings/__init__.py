@@ -225,7 +225,7 @@ class SettingsPage:
             "w-full bg-gray-50 dark:bg-gray-800 rounded-lg mb-4"
         )
         with expansion:
-            container = ui.element("div").classes("masonry-container")
+            container = ui.element("div").classes("masonry-container w-full")
             with container:
                 # Invisible sizer element — Masonry reads its width to set column size
                 ui.element("div").classes("masonry-sizer")
