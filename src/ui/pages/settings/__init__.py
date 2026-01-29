@@ -103,37 +103,53 @@ class SettingsPage:
             # Clear expansions list for fresh build
             self._expansions = []
 
-            # Group 1: Connection & Models
-            exp, grid = self._collapsible_group("Connection & Models", "dns")
-            self._expansions.append(exp)
-            with grid:
-                self._build_connection_section()
-                self._build_model_section()
-                self._build_temperature_section()
+            # Define setting groups: (title, icon, [build_functions])
+            setting_groups = [
+                (
+                    "Connection & Models",
+                    "dns",
+                    [
+                        self._build_connection_section,
+                        self._build_model_section,
+                        self._build_temperature_section,
+                    ],
+                ),
+                (
+                    "Workflow & Learning",
+                    "route",
+                    [
+                        self._build_interaction_section,
+                        self._build_mode_section,
+                        self._build_learning_section,
+                    ],
+                ),
+                (
+                    "Story & World",
+                    "auto_stories",
+                    [
+                        self._build_story_structure_section,
+                        self._build_world_gen_section,
+                        self._build_relationship_validation_section,
+                        self._build_context_section,
+                    ],
+                ),
+                (
+                    "System & Reliability",
+                    "security",
+                    [
+                        self._build_data_integrity_section,
+                        self._build_advanced_llm_section,
+                    ],
+                ),
+            ]
 
-            # Group 2: Workflow & Learning
-            exp, grid = self._collapsible_group("Workflow & Learning", "route")
-            self._expansions.append(exp)
-            with grid:
-                self._build_interaction_section()
-                self._build_mode_section()
-                self._build_learning_section()
-
-            # Group 3: Story & World
-            exp, grid = self._collapsible_group("Story & World", "auto_stories")
-            self._expansions.append(exp)
-            with grid:
-                self._build_story_structure_section()
-                self._build_world_gen_section()
-                self._build_relationship_validation_section()
-                self._build_context_section()
-
-            # Group 4: System & Reliability
-            exp, grid = self._collapsible_group("System & Reliability", "security")
-            self._expansions.append(exp)
-            with grid:
-                self._build_data_integrity_section()
-                self._build_advanced_llm_section()
+            # Build groups from the data structure
+            for title, icon, build_functions in setting_groups:
+                exp, grid = self._collapsible_group(title, icon)
+                self._expansions.append(exp)
+                with grid:
+                    for func in build_functions:
+                        func()
 
             # Save button
             ui.button(
@@ -161,11 +177,10 @@ class SettingsPage:
             "w-full bg-gray-50 dark:bg-gray-800 rounded-lg mb-4"
         )
         with expansion:
-            grid = ui.element("div").style(
-                "display: grid; "
-                "grid-template-columns: repeat(auto-fit, minmax(300px, 400px)); "
-                "gap: 1rem; "
-                "align-items: start;"
+            grid = (
+                ui.element("div")
+                .classes("grid gap-4 items-start")
+                .style("grid-template-columns: repeat(auto-fit, minmax(300px, 400px));")
             )
         return expansion, grid
 
