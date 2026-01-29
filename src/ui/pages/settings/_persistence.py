@@ -176,11 +176,13 @@ def save_settings(page: SettingsPage) -> None:
             page.settings.fuzzy_match_threshold = float(page._fuzzy_threshold_input.value)
         if hasattr(page, "_max_relationships_input"):
             page.settings.max_relationships_per_entity = int(page._max_relationships_input.value)
-        if hasattr(page, "_circular_types_input"):
-            # Parse comma-separated types, strip whitespace, filter empty
-            types_str = page._circular_types_input.value or ""
-            types_list = [t.strip() for t in types_str.split(",") if t.strip()]
-            page.settings.circular_relationship_types = types_list
+        # circular_relationship_types is modified directly by the chip UI, no extraction needed
+
+        # Relationship minimums (extract from number inputs)
+        if hasattr(page, "_relationship_min_inputs"):
+            for entity_type, roles in page._relationship_min_inputs.items():
+                for role, num_input in roles.items():
+                    page.settings.relationship_minimums[entity_type][role] = int(num_input.value)
 
         # Calendar and temporal validation settings
         if hasattr(page, "_generate_calendar_switch"):
@@ -273,6 +275,9 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "fuzzy_match_threshold": settings.fuzzy_match_threshold,
         "max_relationships_per_entity": settings.max_relationships_per_entity,
         "circular_relationship_types": settings.circular_relationship_types.copy(),
+        "relationship_minimums": {
+            et: roles.copy() for et, roles in settings.relationship_minimums.items()
+        },
         # Calendar and temporal validation
         "generate_calendar_on_world_build": settings.generate_calendar_on_world_build,
         "validate_temporal_consistency": settings.validate_temporal_consistency,
@@ -399,6 +404,11 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
         settings.max_relationships_per_entity = snapshot["max_relationships_per_entity"]
     if "circular_relationship_types" in snapshot:
         settings.circular_relationship_types = snapshot["circular_relationship_types"]
+    if "relationship_minimums" in snapshot:
+        # Deep copy the nested dict
+        settings.relationship_minimums = {
+            et: roles.copy() for et, roles in snapshot["relationship_minimums"].items()
+        }
 
     # Calendar and temporal validation (with backward compatibility for old snapshots)
     if "generate_calendar_on_world_build" in snapshot:
@@ -539,8 +549,21 @@ def refresh_ui_from_settings(page: SettingsPage) -> None:
         page._fuzzy_threshold_input.value = settings.fuzzy_match_threshold
     if hasattr(page, "_max_relationships_input") and page._max_relationships_input:
         page._max_relationships_input.value = settings.max_relationships_per_entity
-    if hasattr(page, "_circular_types_input") and page._circular_types_input:
-        page._circular_types_input.value = ", ".join(settings.circular_relationship_types)
+    # circular_relationship_types chips are rebuilt from settings directly
+
+    # Relationship minimums
+    if hasattr(page, "_relationship_min_inputs"):
+        for entity_type, roles in page._relationship_min_inputs.items():
+            for role, num_input in roles.items():
+                if entity_type in settings.relationship_minimums:
+                    if role in settings.relationship_minimums[entity_type]:
+                        num_input.value = settings.relationship_minimums[entity_type][role]
+
+    # Rebuild circular type chips from settings
+    if hasattr(page, "_circular_types_container"):
+        from src.ui.pages.settings._advanced import _build_circular_type_chips
+
+        _build_circular_type_chips(page)
 
     # Calendar and temporal validation settings
     if hasattr(page, "_generate_calendar_switch") and page._generate_calendar_switch:

@@ -454,6 +454,48 @@ def build_advanced_llm_section(page: SettingsPage) -> None:
     logger.debug("Advanced LLM section built")
 
 
+def _build_circular_type_chips(page: SettingsPage) -> None:
+    """Build chips for circular relationship types.
+
+    Creates visual chip elements for each relationship type that can be removed
+    by clicking the X button.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    from collections.abc import Callable
+
+    page._circular_types_container.clear()
+    with page._circular_types_container:
+        for rel_type in page.settings.circular_relationship_types:
+
+            def make_remove_handler(t: str) -> Callable[[], None]:
+                """Create a handler to remove a relationship type.
+
+                Args:
+                    t: The relationship type to remove.
+
+                Returns:
+                    A callable that removes the type when invoked.
+                """
+
+                def remove() -> None:
+                    if t in page.settings.circular_relationship_types:
+                        page.settings.circular_relationship_types.remove(t)
+                        _build_circular_type_chips(page)
+
+                return remove
+
+            with ui.element("div").classes(
+                "flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 "
+                "rounded-full text-xs"
+            ):
+                ui.label(rel_type).classes("text-blue-700 dark:text-blue-200")
+                ui.button(icon="close", on_click=make_remove_handler(rel_type)).props(
+                    "flat dense round size=xs"
+                ).classes("text-blue-500 dark:text-blue-300")
+
+
 def build_relationship_validation_section(page: SettingsPage) -> None:
     """Build relationship validation and world health settings section.
 
@@ -536,22 +578,32 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
                     .tooltip("Maximum relationships to suggest per entity (1-50)")
                 )
 
-            # Circular relationship types (editable)
-            with ui.row().classes("w-full items-center gap-3"):
-                with ui.column().classes("flex-grow"):
-                    ui.label("Circular Check Types").classes("text-sm font-medium")
-                    ui.label("Comma-separated relationship types").classes("text-xs text-gray-500")
+            # Circular relationship types (chip-based editor)
+            with ui.column().classes("w-full gap-1"):
+                ui.label("Circular Check Types").classes("text-sm font-medium")
+                ui.label("Relationship types to check for cycles").classes("text-xs text-gray-500")
 
-                page._circular_types_input = (
-                    ui.input(
-                        value=", ".join(page.settings.circular_relationship_types),
+                # Container for chips - will be refreshed when types change
+                page._circular_types_container = ui.row().classes("flex-wrap gap-1 mt-1")
+                _build_circular_type_chips(page)
+
+                # Add new type input
+                with ui.row().classes("items-center gap-2 mt-2"):
+                    page._new_circular_type_input = (
+                        ui.input(placeholder="Add type...").props("outlined dense").classes("w-32")
                     )
-                    .props("outlined dense")
-                    .classes("w-64")
-                    .tooltip(
-                        "Relationship types to check for cycles (e.g., owns, reports_to, parent_of)"
-                    )
-                )
+
+                    def add_circular_type() -> None:
+                        """Add a new circular relationship type from the input field."""
+                        new_type = page._new_circular_type_input.value.strip().lower()
+                        if new_type and new_type not in page.settings.circular_relationship_types:
+                            page.settings.circular_relationship_types.append(new_type)
+                            page._new_circular_type_input.value = ""
+                            _build_circular_type_chips(page)
+
+                    ui.button(icon="add", on_click=add_circular_type).props(
+                        "flat dense round"
+                    ).classes("text-blue-500")
 
             ui.separator().classes("my-2")
 
@@ -587,19 +639,26 @@ def build_relationship_validation_section(page: SettingsPage) -> None:
 
             ui.separator().classes("my-2")
 
-            # Relationship minimums info (read-only display)
-            with ui.expansion("Relationship Minimums", icon="info", value=False).classes("w-full"):
+            # Relationship minimums (editable)
+            with ui.expansion("Relationship Minimums", icon="tune", value=False).classes("w-full"):
                 ui.label("Minimum relationships per entity type/role:").classes(
                     "text-xs text-gray-500 mb-2"
                 )
+                page._relationship_min_inputs: dict[str, dict[str, ui.number]] = {}  # type: ignore[misc]
                 for entity_type, roles in page.settings.relationship_minimums.items():
-                    with ui.row().classes("items-center gap-2 mb-1"):
+                    page._relationship_min_inputs[entity_type] = {}
+                    with ui.row().classes("items-center gap-2 mb-2"):
                         ui.icon("folder", size="xs").classes("text-blue-500")
                         ui.label(f"{entity_type}:").classes("text-xs font-medium w-20")
-                        roles_str = ", ".join(f"{r}={c}" for r, c in roles.items())
-                        ui.label(roles_str).classes("text-xs text-gray-600")
-                ui.label("Edit settings.json directly to customize minimums").classes(
-                    "text-xs text-gray-400 italic mt-2"
-                )
+                        for role, count in roles.items():
+                            with ui.column().classes("gap-0"):
+                                ui.label(role).classes("text-[10px] text-gray-500")
+                                num_input = (
+                                    ui.number(value=count, min=0, max=10, step=1)
+                                    .props("outlined dense")
+                                    .classes("w-14")
+                                    .tooltip(f"Min relationships for {entity_type}/{role}")
+                                )
+                                page._relationship_min_inputs[entity_type][role] = num_input
 
     logger.debug("Relationship validation section built")
