@@ -16,6 +16,8 @@ Exception Hierarchy:
     │   └── DuplicateNameError (duplicate entity name detected)
     ├── GenerationCancelledError (user cancelled generation)
     ├── SuggestionError (AI suggestion generation failures)
+    ├── CalendarGenerationError (calendar system generation failures)
+    ├── TemporalValidationError (temporal consistency validation failures)
     └── JSONParseError (JSON parsing failures)
 
 Usage:
@@ -159,6 +161,60 @@ class SuggestionError(StoryFactoryError):
     """
 
     pass
+
+
+class CalendarGenerationError(StoryFactoryError):
+    """Raised when calendar system generation fails.
+
+    This indicates a failure to generate a fictional calendar system
+    for a story world, including era definitions and month configurations.
+    """
+
+    pass
+
+
+class TemporalValidationError(StoryFactoryError):
+    """Raised when temporal consistency validation fails.
+
+    This indicates entities have temporal inconsistencies such as
+    characters being born before factions they belong to were founded,
+    or events occurring after locations were destroyed.
+
+    Attributes:
+        entity_id: The entity that failed validation.
+        entity_name: Name of the entity for display.
+        error_type: Type of temporal error (e.g., "predates_dependency").
+        related_entity_id: ID of the related entity causing the conflict.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        entity_id: str | None = None,
+        entity_name: str | None = None,
+        error_type: str | None = None,
+        related_entity_id: str | None = None,
+    ):
+        """Initialize TemporalValidationError with context.
+
+        Args:
+            message: Human-readable error message.
+            entity_id: ID of the entity that failed validation.
+            entity_name: Name of the entity for display.
+            error_type: Type of temporal error.
+            related_entity_id: ID of the related entity causing conflict.
+        """
+        super().__init__(message)
+        self.entity_id = entity_id
+        self.entity_name = entity_name
+        self.error_type = error_type
+        self.related_entity_id = related_entity_id
+        logger.debug(
+            "TemporalValidationError initialized: entity=%s, type=%s, related=%s",
+            entity_name,
+            error_type,
+            related_entity_id,
+        )
 
 
 class ConfigError(StoryFactoryError):

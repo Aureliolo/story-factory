@@ -21,18 +21,32 @@ from src.ui.app import StoryFactoryApp
 def setup_test_app():
     """Initialize the app for testing.
 
-    Uses a temporary database path to prevent writing to the real analytics database.
+    Uses temporary paths to prevent writing to real analytics database and project directories.
     Registers cleanup handler to remove temp directory on process exit.
     """
     settings = Settings()
-    # Use temp directory for mode database to avoid polluting real analytics
+    # Use temp directory for all data to avoid polluting real output
     temp_dir = Path(tempfile.mkdtemp())
     # Register cleanup to prevent temp dir accumulation (runpy.run_path may not
     # execute finally blocks, but atexit handlers run on normal interpreter shutdown)
     atexit.register(shutil.rmtree, temp_dir, ignore_errors=True)
-    mode_db_path = temp_dir / "test_mode.db"
 
-    with patch("src.memory.mode_database.DEFAULT_DB_PATH", mode_db_path):
+    mode_db_path = temp_dir / "test_mode.db"
+    stories_dir = temp_dir / "stories"
+    worlds_dir = temp_dir / "worlds"
+    stories_dir.mkdir(parents=True, exist_ok=True)
+    worlds_dir.mkdir(parents=True, exist_ok=True)
+
+    # Patch at ALL import locations to prevent real data pollution
+    with (
+        patch("src.memory.mode_database.DEFAULT_DB_PATH", mode_db_path),
+        patch("src.settings.STORIES_DIR", stories_dir),
+        patch("src.settings.WORLDS_DIR", worlds_dir),
+        patch("src.services.project_service.STORIES_DIR", stories_dir),
+        patch("src.services.project_service.WORLDS_DIR", worlds_dir),
+        patch("src.services.backup_service.STORIES_DIR", stories_dir),
+        patch("src.services.backup_service.WORLDS_DIR", worlds_dir),
+    ):
         services = ServiceContainer(settings)
         story_app = StoryFactoryApp(services)
         story_app.build()

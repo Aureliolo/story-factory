@@ -20,6 +20,16 @@ template: |
   {{ custom_instructions }}
   {% endif %}
 
+  {% if calendar_context %}
+  === WORLD TIMELINE ===
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% if calendar_context.historical_eras %}Historical Eras: {{ calendar_context.historical_eras }}{% endif %}
+
+  Include the item's creation year in its history.
+  Reference the era abbreviation when giving dates.
+  {% endif %}
+
   Create an item with:
   1. Physical description and history
   2. Powers/abilities or significance
@@ -50,3 +60,4 @@ variables:
   optional:
     - existing_names
     - custom_instructions
+    - calendar_context

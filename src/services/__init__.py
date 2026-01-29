@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from src.settings import Settings
 
 from .backup_service import BackupService
+from .calendar_service import CalendarService
 from .comparison_service import ComparisonService
 from .conflict_analysis_service import ConflictAnalysisService
 from .content_guidelines_service import ContentGuidelinesService
@@ -21,6 +22,7 @@ from .scoring_service import ScoringService
 from .story_service import StoryService
 from .suggestion_service import SuggestionService
 from .template_service import TemplateService
+from .temporal_validation_service import TemporalValidationService
 from .timeline_service import TimelineService
 from .world_quality_service import WorldQualityService
 from .world_service import WorldBuildOptions, WorldBuildProgress, WorldService
@@ -58,6 +60,8 @@ class ServiceContainer:
     conflict_analysis: ConflictAnalysisService
     world_template: WorldTemplateService
     content_guidelines: ContentGuidelinesService
+    calendar: CalendarService
+    temporal_validation: TemporalValidationService
 
     def __init__(self, settings: Settings | None = None):
         """
@@ -88,10 +92,13 @@ class ServiceContainer:
         self.conflict_analysis = ConflictAnalysisService(self.settings)
         self.world_template = WorldTemplateService(self.settings)
         self.content_guidelines = ContentGuidelinesService(self.settings)
+        self.calendar = CalendarService(self.settings)
+        self.temporal_validation = TemporalValidationService(self.settings)
 
 
 __all__ = [
     "BackupService",
+    "CalendarService",
     "ComparisonService",
     "ConflictAnalysisService",
     "ContentGuidelinesService",
@@ -105,6 +112,7 @@ __all__ = [
     "StoryService",
     "SuggestionService",
     "TemplateService",
+    "TemporalValidationService",
     "TimelineService",
     "WorldBuildOptions",
     "WorldBuildProgress",

@@ -15,16 +15,23 @@ template: |
   Methods: {{ faction_methods }}
   Structure: {{ faction_structure }}
 
+  {% if calendar_context %}
+  WORLD TIMELINE:
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% endif %}
+
   Rate each dimension 0-10:
   - coherence: Internal logic and consistency
   - conflict_potential: Ability to drive story conflict
   - uniqueness: Distinctiveness from genre cliches
   - world_fit: How well it fits the setting
+  - temporal_consistency: Timeline accuracy, era-appropriate organization
 
   Provide specific, actionable feedback for improvement.
 
   OUTPUT FORMAT - Return ONLY a flat JSON object:
-  {"coherence": <number>, "conflict_potential": <number>, "uniqueness": <number>, "world_fit": <number>, "feedback": "<string>"}
+  {"coherence": <number>, "conflict_potential": <number>, "uniqueness": <number>, "world_fit": <number>, "temporal_consistency": <number>, "feedback": "<string>"}
 
 variables:
   required:
@@ -34,4 +41,5 @@ variables:
     - faction_ideology
     - faction_methods
     - faction_structure
-  optional: []
+  optional:
+    - calendar_context

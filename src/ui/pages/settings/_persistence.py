@@ -182,6 +182,12 @@ def save_settings(page: SettingsPage) -> None:
             types_list = [t.strip() for t in types_str.split(",") if t.strip()]
             page.settings.circular_relationship_types = types_list
 
+        # Calendar and temporal validation settings
+        if hasattr(page, "_generate_calendar_switch"):
+            page.settings.generate_calendar_on_world_build = page._generate_calendar_switch.value
+        if hasattr(page, "_temporal_validation_switch"):
+            page.settings.validate_temporal_consistency = page._temporal_validation_switch.value
+
         # Validate and save first - only record undo if successful
         page.settings.validate()
         page.settings.save()
@@ -267,6 +273,9 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "fuzzy_match_threshold": settings.fuzzy_match_threshold,
         "max_relationships_per_entity": settings.max_relationships_per_entity,
         "circular_relationship_types": settings.circular_relationship_types.copy(),
+        # Calendar and temporal validation
+        "generate_calendar_on_world_build": settings.generate_calendar_on_world_build,
+        "validate_temporal_consistency": settings.validate_temporal_consistency,
     }
 
     # Advanced LLM settings (WP1/WP2) - add using key iteration
@@ -390,6 +399,12 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
         settings.max_relationships_per_entity = snapshot["max_relationships_per_entity"]
     if "circular_relationship_types" in snapshot:
         settings.circular_relationship_types = snapshot["circular_relationship_types"]
+
+    # Calendar and temporal validation (with backward compatibility for old snapshots)
+    if "generate_calendar_on_world_build" in snapshot:
+        settings.generate_calendar_on_world_build = snapshot["generate_calendar_on_world_build"]
+    if "validate_temporal_consistency" in snapshot:
+        settings.validate_temporal_consistency = snapshot["validate_temporal_consistency"]
 
     # Save changes
     settings.save()
@@ -526,3 +541,9 @@ def refresh_ui_from_settings(page: SettingsPage) -> None:
         page._max_relationships_input.value = settings.max_relationships_per_entity
     if hasattr(page, "_circular_types_input") and page._circular_types_input:
         page._circular_types_input.value = ", ".join(settings.circular_relationship_types)
+
+    # Calendar and temporal validation settings
+    if hasattr(page, "_generate_calendar_switch") and page._generate_calendar_switch:
+        page._generate_calendar_switch.value = settings.generate_calendar_on_world_build
+    if hasattr(page, "_temporal_validation_switch") and page._temporal_validation_switch:
+        page._temporal_validation_switch.value = settings.validate_temporal_consistency

@@ -230,6 +230,9 @@ def run_migrations(db, conn: sqlite3.Connection) -> None:
         ("best_iteration", "INTEGER DEFAULT 0"),
         ("quality_threshold", "REAL"),
         ("max_iterations", "INTEGER"),
+        # Temporal consistency tracking columns (added in calendar feature)
+        ("temporal_consistency_score", "REAL"),
+        ("temporal_validation_errors", "TEXT"),
     ]
 
     for col_name, col_def in refinement_columns:

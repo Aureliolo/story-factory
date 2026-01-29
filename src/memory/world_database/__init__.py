@@ -5,9 +5,12 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from networkx import DiGraph
+
+if TYPE_CHECKING:
+    from src.memory.world_settings import WorldSettings
 
 from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
 from src.utils.exceptions import RelationshipValidationError
@@ -17,7 +20,7 @@ from . import _entities, _events, _graph, _io, _relationships, _versions
 logger = logging.getLogger(__name__)
 
 # Schema version for migration support
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Valid entity types (whitelist)
 VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
@@ -324,6 +327,38 @@ class WorldDatabase:
             )
             logger.info("Migration v1->v2: Added entity_versions table")
 
+        # Migration from v2 to v3: Add world_settings and historical_eras tables
+        if from_version < 3:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS world_settings (
+                    id TEXT PRIMARY KEY,
+                    calendar_json TEXT,
+                    timeline_start_year INTEGER,
+                    timeline_end_year INTEGER,
+                    validate_temporal_consistency INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS historical_eras (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    start_year INTEGER NOT NULL,
+                    end_year INTEGER,
+                    description TEXT DEFAULT '',
+                    display_order INTEGER DEFAULT 0
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_historical_eras_start ON historical_eras(start_year)"
+            )
+            logger.info("Migration v2->v3: Added world_settings and historical_eras tables")
+
         logger.info("Database migration complete")
 
     def close(self) -> None:
@@ -550,6 +585,87 @@ class WorldDatabase:
 
     def import_from_json(self, data: dict[str, Any]) -> None:
         _io.import_from_json(self, data)
+
+    # =========================================================================
+    # World Settings (calendar, timeline config)
+    # =========================================================================
+
+    def get_world_settings(self) -> WorldSettings | None:
+        """Get world settings including calendar configuration.
+
+        Returns:
+            WorldSettings instance or None if not configured.
+        """
+        # Import here to avoid circular imports
+        from src.memory.world_settings import WorldSettings
+
+        logger.debug("Loading world settings from database")
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, calendar_json, timeline_start_year, timeline_end_year,
+                       validate_temporal_consistency, created_at, updated_at
+                FROM world_settings
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+
+        if not row:
+            logger.debug("No world settings found in database")
+            return None
+
+        calendar_data = json.loads(row[1]) if row[1] else None
+        settings_data = {
+            "id": row[0],
+            "calendar": calendar_data,
+            "timeline_start_year": row[2],
+            "timeline_end_year": row[3],
+            "validate_temporal_consistency": bool(row[4]),
+            "created_at": row[5],
+            "updated_at": row[6],
+        }
+        logger.debug(
+            f"Loaded world settings: id={row[0]}, has_calendar={calendar_data is not None}"
+        )
+        return WorldSettings.from_dict(settings_data)
+
+    def save_world_settings(self, settings: WorldSettings) -> None:
+        """Save or update world settings.
+
+        Args:
+            settings: WorldSettings instance to save.
+        """
+        from datetime import datetime
+
+        logger.debug(f"Saving world settings: id={settings.id}")
+        calendar_json = json.dumps(settings.calendar.to_dict()) if settings.calendar else None
+        now = datetime.now().isoformat()
+
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO world_settings
+                (id, calendar_json, timeline_start_year, timeline_end_year,
+                 validate_temporal_consistency, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    settings.id,
+                    calendar_json,
+                    settings.timeline_start_year,
+                    settings.timeline_end_year,
+                    int(settings.validate_temporal_consistency),
+                    settings.created_at.isoformat()
+                    if hasattr(settings.created_at, "isoformat")
+                    else now,
+                    now,
+                ),
+            )
+            self.conn.commit()
+        logger.info(f"Saved world settings: id={settings.id}")
 
 
 # Re-export for backward compatibility

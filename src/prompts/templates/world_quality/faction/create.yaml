@@ -20,6 +20,16 @@ template: |
   {{ custom_instructions }}
   {% endif %}
 
+  {% if calendar_context %}
+  === WORLD TIMELINE ===
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% if calendar_context.historical_eras %}Historical Eras: {{ calendar_context.historical_eras }}{% endif %}
+
+  Include the faction's founding year and any dissolution year if applicable.
+  Reference the era abbreviation when giving dates.
+  {% endif %}
+
   Create a faction with:
   1. Clear goals and ideology
   2. Internal structure and hierarchy
@@ -50,3 +60,4 @@ variables:
   optional:
     - existing_names
     - custom_instructions
+    - calendar_context

@@ -14,16 +14,23 @@ template: |
   Atmosphere: {{ location_atmosphere }}
   Significance: {{ location_significance }}
 
+  {% if calendar_context %}
+  WORLD TIMELINE:
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% endif %}
+
   Rate each dimension 0-10:
   - atmosphere: Mood, sensory details, immersion
   - plot_utility: Usefulness for scenes, conflict potential
   - uniqueness: Distinctiveness, memorability
   - world_fit: How well it fits the story setting
+  - temporal_consistency: Timeline accuracy, era-appropriate architecture/technology
 
   Provide specific, actionable feedback for improvement.
 
   OUTPUT FORMAT - Return ONLY a flat JSON object:
-  {"atmosphere": <number>, "plot_utility": <number>, "uniqueness": <number>, "world_fit": <number>, "feedback": "<string>"}
+  {"atmosphere": <number>, "plot_utility": <number>, "uniqueness": <number>, "world_fit": <number>, "temporal_consistency": <number>, "feedback": "<string>"}
 
 variables:
   required:
@@ -32,4 +39,5 @@ variables:
     - location_description
     - location_atmosphere
     - location_significance
-  optional: []
+  optional:
+    - calendar_context

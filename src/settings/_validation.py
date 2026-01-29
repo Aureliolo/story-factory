@@ -721,3 +721,15 @@ def _validate_world_health(settings: Settings) -> None:
                     f"relationship_minimums[{entity_type}][{role}] ({min_count}) exceeds "
                     f"max_relationships_per_entity ({settings.max_relationships_per_entity})"
                 )
+
+    # Validate calendar settings
+    if not isinstance(settings.generate_calendar_on_world_build, bool):
+        raise ValueError(
+            f"generate_calendar_on_world_build must be a boolean, "
+            f"got {type(settings.generate_calendar_on_world_build)}"
+        )
+    if not isinstance(settings.validate_temporal_consistency, bool):
+        raise ValueError(
+            f"validate_temporal_consistency must be a boolean, "
+            f"got {type(settings.validate_temporal_consistency)}"
+        )

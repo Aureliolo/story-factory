@@ -372,14 +372,16 @@ async def handle_keyboard(page, e: Any) -> None:
     # Ctrl+F or Cmd+F focuses the search input (cross-platform)
     ctrl_pressed = getattr(e.modifiers, "ctrl", False)
     meta_pressed = getattr(e.modifiers, "meta", False)
-    if (ctrl_pressed or meta_pressed) and e.key.lower() == "f":
+    # e.key is a KeyboardKey object, convert to string for comparison
+    key_str = str(e.key).lower() if e.key else ""
+    if (ctrl_pressed or meta_pressed) and key_str == "f":
         if page._search_input:
             await page._search_input.run_method("focus")
             await page._search_input.run_method("select")
         return
 
     # Esc clears the search
-    if e.key == "Escape" and page._search_input:
+    if key_str == "escape" and page._search_input:
         page._search_input.value = ""
         page.state.entity_search_query = ""
         refresh_entity_list(page)

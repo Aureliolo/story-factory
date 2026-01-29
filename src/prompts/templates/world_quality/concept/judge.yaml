@@ -15,16 +15,23 @@ template: |
   Impact: {{ concept_impact }}
   Thematic Role: {{ concept_thematic_role }}
 
+  {% if calendar_context %}
+  WORLD TIMELINE:
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+  {% endif %}
+
   Rate each dimension 0-10:
   - coherence: Internal logic and consistency
   - thematic_fit: Relevance to story themes
   - uniqueness: Distinctiveness and creativity
   - usability: Ease of integration into story
+  - temporal_consistency: Era-appropriate development and evolution
 
   Provide specific, actionable feedback for improvement.
 
   OUTPUT FORMAT - Return ONLY a flat JSON object:
-  {"coherence": <number>, "thematic_fit": <number>, "uniqueness": <number>, "usability": <number>, "feedback": "<string>"}
+  {"coherence": <number>, "thematic_fit": <number>, "uniqueness": <number>, "usability": <number>, "temporal_consistency": <number>, "feedback": "<string>"}
 
 variables:
   required:
@@ -34,4 +41,5 @@ variables:
     - concept_rules
     - concept_impact
     - concept_thematic_role
-  optional: []
+  optional:
+    - calendar_context

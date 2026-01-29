@@ -26,6 +26,14 @@ template: |
   {{ custom_instructions }}
   {% endif %}
 
+  {% if calendar_context %}
+  === WORLD TIMELINE ===
+  Current Era: {{ calendar_context.era_name }} ({{ calendar_context.era_abbreviation }})
+  Current Year: {{ calendar_context.current_year }} {{ calendar_context.era_abbreviation }}
+
+  Consider when this relationship began and how it may have evolved over time.
+  {% endif %}
+
   Create a relationship with:
   1. Emotional depth and complexity
   2. Conflict potential or tension
@@ -55,3 +63,4 @@ variables:
   optional:
     - existing_relationships
     - custom_instructions
+    - calendar_context

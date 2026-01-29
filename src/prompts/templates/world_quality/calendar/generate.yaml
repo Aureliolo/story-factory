@@ -1,0 +1,73 @@
+name: calendar_generate
+version: "1.0"
+description: "Generates a fictional calendar system for a story world"
+agent: world_quality
+task: calendar_generate
+is_system_prompt: false
+
+template: |
+  Design a fictional calendar system for this {{ genre }} story world.
+
+  STORY CONTEXT:
+  Premise: {{ premise }}
+  Tone: {{ tone }}
+  Setting Time: {{ setting_time }}
+  Setting Place: {{ setting_place }}
+  Themes: {{ themes | join(", ") if themes else "None specified" }}
+  {% if subgenres %}Subgenres: {{ subgenres | join(", ") }}{% endif %}
+  {% if world_template_name %}World Template: {{ world_template_name }}{% endif %}
+
+  Create a calendar that:
+  1. Has 8-14 months with evocative names fitting the {{ genre }} setting
+  2. Includes 5-8 day names for the week
+  3. Defines 2-5 historical eras (most recent is current)
+  4. Sets an appropriate "current year" for the story
+  5. Uses a date format natural to this culture
+
+  The calendar should feel authentic to this world - not just a renamed Gregorian calendar.
+
+  === MONTH REQUIREMENTS ===
+  Each month needs:
+  - name: Evocative name (e.g., "Frostfall", "Highsun", "Reaping Moon")
+  - days: Number of days (20-40 range)
+  - description: Brief flavor text about this month
+
+  Consider:
+  - Seasonal cycles (if applicable)
+  - Cultural/religious significance
+  - Agricultural or celestial patterns
+  - Mood matching the {{ tone }} tone
+
+  === HISTORICAL ERA REQUIREMENTS ===
+  Each era needs:
+  - name: Era name (e.g., "Age of Dragons", "The Long Winter")
+  - start_year: When this era began
+  - end_year: When this era ended (null/empty for current era)
+  - description: What characterized this era
+
+  The eras should:
+  - Build narrative depth and history
+  - Connect to the themes: {{ themes | join(", ") if themes else "adventure" }}
+  - Support potential backstory references
+
+  === OUTPUT FORMAT ===
+  Return valid JSON with:
+  - era_name: Name of the current era
+  - era_abbreviation: 2-3 letter abbreviation (follows year numbers)
+  - current_year: The year the story takes place
+  - months: Array of month objects
+  - day_names: Array of weekday names
+  - historical_eras: Array of era objects
+  - date_format: Template string using {day}, {month}, {year}, {era}
+
+variables:
+  required:
+    - genre
+    - premise
+    - tone
+    - setting_time
+    - setting_place
+  optional:
+    - themes
+    - subgenres
+    - world_template_name
