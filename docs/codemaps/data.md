@@ -1,10 +1,10 @@
 # Data Models and Schemas
 
-> Generated: 2026-01-24 | Updated: 2026-01-24 | Freshness: Current
+> Generated: 2026-01-24 | Updated: 2026-01-29 | Freshness: Current
 
 ## Core Story Models (`memory/story_state.py`)
 
-### StoryState (`story_state.py:404-622`)
+### StoryState
 Complete story context, serialized to JSON.
 
 ```python
@@ -42,7 +42,7 @@ class StoryState(BaseModel):
     # ... more target_* fields
 ```
 
-### StoryBrief (`story_state.py:344-359`)
+### StoryBrief
 Initial story configuration from interview.
 
 ```python
@@ -62,7 +62,7 @@ class StoryBrief(BaseModel):
     additional_notes: str
 ```
 
-### Character (`story_state.py:15-66`)
+### Character
 ```python
 class Character(BaseModel):
     name: str
@@ -75,7 +75,7 @@ class Character(BaseModel):
     arc_progress: dict[int, str]  # chapter → arc state
 ```
 
-### Chapter (`story_state.py:132-341`)
+### Chapter
 ```python
 class Chapter(BaseModel):
     number: int
@@ -90,7 +90,7 @@ class Chapter(BaseModel):
     current_version_id: str | None
 ```
 
-### Scene (`story_state.py:90-118`)
+### Scene
 ```python
 class Scene(BaseModel):
     id: str
@@ -107,7 +107,7 @@ class Scene(BaseModel):
     status: str
 ```
 
-### PlotPoint (`story_state.py:81-87`)
+### PlotPoint
 ```python
 class PlotPoint(BaseModel):
     description: str
@@ -116,7 +116,7 @@ class PlotPoint(BaseModel):
     foreshadowing_planted: bool
 ```
 
-### OutlineVariation (`story_state.py:362-401`)
+### OutlineVariation
 Alternative story structures for user selection.
 
 ```python
@@ -138,7 +138,7 @@ class OutlineVariation(BaseModel):
 
 ## World Database Models (`memory/entities.py`)
 
-### Entity (`entities.py:9-18`)
+### Entity
 ```python
 class Entity(BaseModel):
     id: str
@@ -150,7 +150,7 @@ class Entity(BaseModel):
     updated_at: datetime
 ```
 
-### Relationship (`entities.py:21-32`)
+### Relationship
 ```python
 class Relationship(BaseModel):
     id: str
@@ -164,7 +164,7 @@ class Relationship(BaseModel):
     created_at: datetime
 ```
 
-### WorldEvent (`entities.py:35-43`)
+### WorldEvent
 ```python
 class WorldEvent(BaseModel):
     id: str
@@ -175,12 +175,86 @@ class WorldEvent(BaseModel):
     created_at: datetime
 ```
 
-### EventParticipant (`entities.py:46-51`)
+### EventParticipant
 ```python
 class EventParticipant(BaseModel):
     event_id: str
     entity_id: str
     role: str  # actor, location, affected, witness
+```
+
+## World Calendar Models (`memory/world_calendar.py`)
+
+### CalendarMonth
+```python
+class CalendarMonth(BaseModel):
+    name: str           # e.g., "Frostfall"
+    days: int = 30
+    description: str = ""
+```
+
+### HistoricalEra
+```python
+class HistoricalEra(BaseModel):
+    name: str           # e.g., "Age of Dragons"
+    start_year: int
+    end_year: int | None = None
+    description: str = ""
+```
+
+### WorldCalendar
+```python
+class WorldCalendar(BaseModel):
+    id: str
+    current_era_name: str
+    era_abbreviation: str           # e.g., "AD", "TE"
+    era_start_year: int = 1
+    months: list[CalendarMonth]
+    days_per_week: int = 7
+    day_names: list[str] = []
+    current_story_year: int
+    story_start_year: int | None
+    story_end_year: int | None
+    eras: list[HistoricalEra]
+    date_format: str = "{day} {month}, Year {year} {era}"
+
+    def format_date(self, year, month=None, day=None) -> str
+    def validate_date(self, year, month=None, day=None) -> bool
+```
+
+## World Settings Models (`memory/world_settings.py`)
+
+### WorldSettings
+```python
+class WorldSettings(BaseModel):
+    id: str
+    calendar: WorldCalendar | None
+    timeline_start_year: int | None
+    timeline_end_year: int | None
+    validate_temporal_consistency: bool = True
+    created_at: datetime
+    updated_at: datetime
+```
+
+## World Health Models (`memory/world_health.py`)
+
+### WorldHealthMetrics
+```python
+class WorldHealthMetrics(BaseModel):
+    entity_count: int
+    relationship_count: int
+    orphan_entity_count: int
+    weak_relationship_count: int
+    entity_type_distribution: dict[str, int]
+    relationship_type_distribution: dict[str, int]
+    average_relationships_per_entity: float
+    max_relationships_entity: str | None
+    temporal_error_count: int
+    temporal_warning_count: int
+    average_temporal_consistency: float
+    health_score: float  # 0-100
+
+    def calculate_health_score() -> float
 ```
 
 ## Generation Mode Models (`memory/mode_models.py`)
@@ -213,7 +287,7 @@ class ModelSizeTier(str, Enum):
     TINY = "tiny"      # <3GB
 ```
 
-### GenerationMode (`mode_models.py:43-70`)
+### GenerationMode
 
 ```python
 class GenerationMode(BaseModel):
@@ -263,7 +337,7 @@ class GenerationScore(BaseModel):
 | `draft_fast` | Smaller models | PARALLEL |
 | `experimental` | Varies for data | ADAPTIVE |
 
-## World Quality Models (`memory/world_quality.py`)
+## World Quality Models (`memory/world_quality/`)
 
 ### Refinement Tracking
 
@@ -310,7 +384,21 @@ class RefinementConfig(BaseModel):
     refinement_temperature: float = 0.7
 ```
 
-## Database Schema (`memory/world_database.py`)
+## Temporal Validation Models
+
+### TemporalValidationError
+```python
+class TemporalValidationError(BaseModel):
+    entity_id: str
+    entity_name: str
+    error_type: str  # predates_dependency, invalid_era, anachronism,
+                     # post_destruction, invalid_date, lifespan_overlap, founding_order
+    severity: str    # warning, error
+    message: str
+    related_entity_id: str | None
+```
+
+## Database Schema (`memory/world_database/`)
 
 ### SQLite Tables
 
@@ -368,10 +456,93 @@ CREATE TABLE event_participants (
 )
 ```
 
+**entity_versions** (for backup/versioning)
+```sql
+CREATE TABLE entity_versions (
+    id TEXT PRIMARY KEY,
+    entity_id TEXT NOT NULL,
+    version_number INTEGER NOT NULL,
+    data TEXT NOT NULL,  -- JSON snapshot
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (entity_id) REFERENCES entities(id)
+)
+```
+
 **schema_version**
 ```sql
 CREATE TABLE schema_version (
     version INTEGER PRIMARY KEY
+)
+```
+
+## Mode Database Schema (`memory/mode_database/`)
+
+### Tables
+
+**generation_scores**
+```sql
+CREATE TABLE generation_scores (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    chapter_id TEXT,
+    agent_role TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    mode_name TEXT NOT NULL,
+    prose_quality REAL,
+    instruction_following REAL,
+    consistency_score REAL,
+    tokens_generated INTEGER,
+    time_seconds REAL,
+    tokens_per_second REAL,
+    vram_used_gb REAL,
+    timestamp TEXT NOT NULL
+)
+```
+
+**world_entity_scores**
+```sql
+CREATE TABLE world_entity_scores (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    quality_scores TEXT,  -- JSON
+    iteration INTEGER,
+    timestamp TEXT NOT NULL,
+    temporal_consistency_score REAL,      -- NEW
+    temporal_validation_errors TEXT       -- NEW: JSON array
+)
+```
+
+**prompt_metrics**
+```sql
+CREATE TABLE prompt_metrics (
+    id TEXT PRIMARY KEY,
+    prompt_hash TEXT NOT NULL,
+    prompt_version TEXT,
+    agent_role TEXT NOT NULL,
+    task TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    tokens_in INTEGER,
+    tokens_out INTEGER,
+    time_seconds REAL,
+    success INTEGER,
+    timestamp TEXT NOT NULL
+)
+```
+
+**custom_modes**
+```sql
+CREATE TABLE custom_modes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    agent_models TEXT NOT NULL,  -- JSON
+    agent_temperatures TEXT,      -- JSON
+    vram_strategy TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 )
 ```
 
@@ -409,7 +580,11 @@ CREATE TABLE schema_version (
 - `world_quality_max_iterations`: int = 3
 - `world_quality_threshold`: float = 7.5
 
-### ModelInfo TypedDict (`settings.py:28-39`)
+**Temporal Validation:**
+- `validate_temporal_consistency`: bool = True
+- `generate_calendar_on_world_build`: bool = True
+
+### ModelInfo TypedDict
 ```python
 class ModelInfo(TypedDict):
     name: str
@@ -422,7 +597,7 @@ class ModelInfo(TypedDict):
     tags: list[str]  # Role suitability
 ```
 
-## Workflow Events (`workflows/orchestrator.py:33-49`)
+## Workflow Events (`services/orchestrator/`)
 
 ```python
 @dataclass
@@ -441,7 +616,7 @@ class WorkflowEvent:
 
 ## UI State (`ui/state.py`)
 
-### ActionType Enum (`state.py:15-34`)
+### ActionType Enum
 ```python
 class ActionType(Enum):
     ADD_ENTITY = "add_entity"
@@ -457,7 +632,7 @@ class ActionType(Enum):
     UPDATE_SETTINGS = "update_settings"
 ```
 
-### UndoAction (`state.py:37-42`)
+### UndoAction
 ```python
 @dataclass
 class UndoAction:
@@ -477,5 +652,5 @@ class UndoAction:
 **Backups:** `output/backups/{uuid}_{timestamp}.zip`
 - Story JSON + World SQLite bundled
 
-**Logs:** `logs/story_factory.log`
+**Logs:** `output/logs/story_factory.log`
 - Rotating file handler
