@@ -13,8 +13,8 @@
 }
 
 /* Quasar separator visibility in dark mode */
-.q-separator {
-    background: rgba(255, 255, 255, 0.18) !important;
+body.body--dark .q-separator {
+    background: rgba(255, 255, 255, 0.18);
 }
 
 /* Smooth transitions for all interactive elements */

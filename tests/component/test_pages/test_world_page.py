@@ -1,8 +1,8 @@
 """Component tests for the World page.
 
 Tests that would catch runtime NiceGUI errors like:
-- Dark mode styling issues
 - Interview required message not showing
+- Entity browser rendering failures
 """
 
 import pytest
@@ -100,14 +100,11 @@ class TestWorldPageWithData:
 
         test_app_state.interview_complete = True
 
-        page_ref = []
-
         @ui.page("/test-world-entity-browser")
         def test_page():
             """Build test page with world page entity browser."""
             page = WorldPage(test_app_state, test_services)
             page.build()
-            page_ref.append(page)
 
         await user.open("/test-world-entity-browser")
         await user.should_see("Entity Browser")
