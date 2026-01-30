@@ -401,11 +401,11 @@ class TestAppStateFilters:
         assert state.entity_quality_filter == "all"
 
     def test_default_sort_by(self):
-        """Test that default sort is by name."""
+        """Test that default sort is by type."""
         from src.ui.state import AppState
 
         state = AppState()
-        assert state.entity_sort_by == "name"
+        assert state.entity_sort_by == "type"
 
     def test_default_sort_direction(self):
         """Test that default sort direction is ascending."""

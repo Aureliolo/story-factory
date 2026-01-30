@@ -7,6 +7,7 @@ import ollama
 
 from src.memory.story_state import StoryState
 from src.memory.world_quality import RefinementHistory, RelationshipQualityScores
+from src.services.llm_client import generate_structured
 from src.utils.exceptions import WorldGenerationError
 from src.utils.json_parser import extract_json
 
@@ -320,6 +321,15 @@ def _judge_relationship_quality(
 ) -> RelationshipQualityScores:
     """Judge relationship quality using the validator model.
 
+    Args:
+        svc: WorldQualityService instance.
+        relationship: Relationship dict to evaluate.
+        story_state: Current story state for context.
+        temperature: Judge temperature (low for consistency).
+
+    Returns:
+        RelationshipQualityScores with ratings and feedback.
+
     Raises:
         WorldGenerationError: If quality judgment fails or returns invalid data.
     """
@@ -335,54 +345,27 @@ Type: {relationship.get("relation_type", "unknown")}
 Description: {relationship.get("description", "")}
 
 Rate each dimension 0-10:
-- TENSION: Conflict potential
-- DYNAMICS: Complexity, power balance, history
-- STORY_POTENTIAL: Opportunities for scenes and development
-- AUTHENTICITY: Believability of the connection
+- tension: Conflict potential
+- dynamics: Complexity, power balance, history
+- story_potential: Opportunities for scenes and development
+- authenticity: Believability of the connection
 
-Provide specific improvement feedback.
+Provide specific, actionable feedback for improvement in the feedback field.
 
-IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
+{{"tension": <number>, "dynamics": <number>, "story_potential": <number>, "authenticity": <number>, "feedback": "<string>"}}
 
-Output ONLY valid JSON:
-{{"tension": <your_score>, "dynamics": <your_score>, "story_potential": <your_score>, "authenticity": <your_score>, "feedback": "<your_specific_feedback>"}}"""
+DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
     try:
         model = svc._get_judge_model(entity_type="relationship")
-        response = svc.client.generate(
+        return generate_structured(
+            settings=svc.settings,
             model=model,
             prompt=prompt,
-            format="json",
-            options={
-                "temperature": temperature,
-                "num_predict": svc.settings.llm_tokens_relationship_judge,
-            },
+            response_model=RelationshipQualityScores,
+            temperature=temperature,
         )
-
-        data = extract_json(response["response"], strict=False)
-        if data and isinstance(data, dict):
-            # Validate all required fields are present
-            required_fields = ["tension", "dynamics", "story_potential", "authenticity"]
-            missing = [f for f in required_fields if f not in data]
-            if missing:
-                raise WorldGenerationError(
-                    f"Relationship judge response missing required fields: {missing}"
-                )
-
-            return RelationshipQualityScores(
-                tension=float(data["tension"]),
-                dynamics=float(data["dynamics"]),
-                story_potential=float(data["story_potential"]),
-                authenticity=float(data["authenticity"]),
-                feedback=data.get("feedback", ""),
-            )
-
-        raise WorldGenerationError(
-            f"Failed to extract JSON from relationship judge: {response['response'][:200]}..."
-        )
-
-    except WorldGenerationError:
-        raise
     except Exception as e:
         logger.exception(
             "Relationship quality judgment failed for %s->%s: %s",

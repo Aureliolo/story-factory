@@ -10,6 +10,7 @@ from src.memory.mode_models import (
     RecommendationType,
     TuningRecommendation,
 )
+from src.settings import AGENT_ROLES
 
 if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
@@ -119,7 +120,7 @@ def get_recommendations(svc: ModelModeService) -> list[TuningRecommendation]:
     mode = svc.get_current_mode()
 
     # Analyze each agent role
-    for role in ["writer", "architect", "editor", "continuity"]:
+    for role in AGENT_ROLES:
         current_model = mode.agent_models.get(role)
         if not current_model:
             continue

@@ -6,9 +6,12 @@ from typing import Any
 from nicegui import ui
 
 from src.settings import RECOMMENDED_MODELS, ModelInfo
+from src.ui.local_prefs import load_prefs_deferred, save_pref
 from src.ui.theme import get_quality_color
 
 logger = logging.getLogger(__name__)
+
+_PAGE_KEY = "models_listing"
 
 
 def build_available_section(page: Any) -> None:
@@ -39,22 +42,26 @@ def build_available_section(page: Any) -> None:
             ).classes("w-full").props("dense clearable")
 
             # Quality filter
-            ui.select(
-                label="Min Quality",
-                options={0: "Any", 5: "5+", 7: "7+", 8: "8+"},
-                value=0,
-                on_change=lambda e: apply_filters(page, quality=e.value),
-            ).classes("w-full").props("dense")
+            page._quality_min_select = (
+                ui.select(
+                    label="Min Quality",
+                    options={0: "Any", 5: "5+", 7: "7+", 8: "8+"},
+                    value=0,
+                    on_change=lambda e: apply_filters(page, quality=e.value),
+                )
+                .classes("w-full")
+                .props("dense")
+            )
 
             # Checkboxes row
             with ui.column().classes("gap-2"):
-                ui.checkbox(
+                page._fits_vram_cb = ui.checkbox(
                     "Fits my VRAM (~10% tolerance)",
                     value=True,
                     on_change=lambda e: apply_filters(page, fits_vram=e.value),
                 ).tooltip("Show models that fit your available VRAM with 10% tolerance")
 
-                ui.checkbox(
+                page._uncensored_cb = ui.checkbox(
                     "Uncensored only",
                     value=False,
                     on_change=lambda e: apply_filters(page, uncensored=e.value),
@@ -99,6 +106,9 @@ def build_available_section(page: Any) -> None:
         page._model_list = ui.column().classes("w-full gap-4")
         refresh_model_list(page)
 
+    # Restore persisted preferences from localStorage
+    load_prefs_deferred(_PAGE_KEY, lambda prefs: _apply_prefs(page, prefs))
+
 
 def apply_filters(
     page: Any,
@@ -120,10 +130,13 @@ def apply_filters(
         page._filter_search = search
     if quality is not None:
         page._filter_quality_min = quality
+        save_pref(_PAGE_KEY, "filter_quality_min", quality)
     if fits_vram is not None:
         page._filter_fits_vram = fits_vram
+        save_pref(_PAGE_KEY, "filter_fits_vram", fits_vram)
     if uncensored is not None:
         page._filter_uncensored_only = uncensored
+        save_pref(_PAGE_KEY, "filter_uncensored_only", uncensored)
 
     refresh_model_list(page)
     update_download_all_btn(page)
@@ -329,3 +342,45 @@ def build_model_card(
                                 "width: 8px; height: 8px; border-radius: 2px;"
                             )
                     ui.label(f"{info['speed']}/10").classes("text-xs ml-1")
+
+
+def _apply_prefs(page: Any, prefs: dict) -> None:
+    """Apply loaded preferences to model listing filter state and UI widgets.
+
+    Args:
+        page: ModelsPage instance.
+        prefs: Dict of field→value from localStorage.
+    """
+    if not prefs:
+        return
+
+    changed = False
+
+    if "filter_quality_min" in prefs and isinstance(prefs["filter_quality_min"], int):
+        val = prefs["filter_quality_min"]
+        if val in (0, 5, 7, 8) and val != page._filter_quality_min:
+            page._filter_quality_min = val
+            changed = True
+            if hasattr(page, "_quality_min_select") and page._quality_min_select:
+                page._quality_min_select.value = val
+
+    if "filter_fits_vram" in prefs and isinstance(prefs["filter_fits_vram"], bool):
+        val = prefs["filter_fits_vram"]
+        if val != page._filter_fits_vram:
+            page._filter_fits_vram = val
+            changed = True
+            if hasattr(page, "_fits_vram_cb") and page._fits_vram_cb:
+                page._fits_vram_cb.value = val
+
+    if "filter_uncensored_only" in prefs and isinstance(prefs["filter_uncensored_only"], bool):
+        val = prefs["filter_uncensored_only"]
+        if val != page._filter_uncensored_only:
+            page._filter_uncensored_only = val
+            changed = True
+            if hasattr(page, "_uncensored_cb") and page._uncensored_cb:
+                page._uncensored_cb.value = val
+
+    if changed:
+        logger.info("Restored model listing preferences from localStorage")
+        refresh_model_list(page)
+        update_download_all_btn(page)

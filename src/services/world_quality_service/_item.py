@@ -7,7 +7,6 @@ from src.memory.story_state import Item, StoryState
 from src.memory.world_quality import ItemQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
 from src.utils.exceptions import WorldGenerationError
-from src.utils.json_parser import extract_json
 from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
@@ -266,7 +265,20 @@ def _judge_item_quality(
     story_state: StoryState,
     temperature: float,
 ) -> ItemQualityScores:
-    """Judge item quality using the validator model."""
+    """Judge item quality using the validator model.
+
+    Args:
+        svc: WorldQualityService instance.
+        item: Item dict to evaluate.
+        story_state: Current story state for context.
+        temperature: Judge temperature (low for consistency).
+
+    Returns:
+        ItemQualityScores with ratings and feedback.
+
+    Raises:
+        WorldGenerationError: If quality judgment fails or returns invalid data.
+    """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
@@ -279,58 +291,27 @@ Significance: {item.get("significance", "")}
 Properties: {svc._format_properties(item.get("properties", []))}
 
 Rate each dimension 0-10:
-- SIGNIFICANCE: Story importance, plot relevance
-- UNIQUENESS: Distinctive qualities
-- NARRATIVE_POTENTIAL: Opportunities for scenes
-- INTEGRATION: How well it fits the world
+- significance: Story importance, plot relevance
+- uniqueness: Distinctive qualities
+- narrative_potential: Opportunities for scenes
+- integration: How well it fits the world
 
-Provide specific improvement feedback.
+Provide specific, actionable feedback for improvement in the feedback field.
 
-IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
+{{"significance": <number>, "uniqueness": <number>, "narrative_potential": <number>, "integration": <number>, "feedback": "<string>"}}
 
-Output ONLY valid JSON:
-{{"significance": <your_score>, "uniqueness": <your_score>, "narrative_potential": <your_score>, "integration": <your_score>, "feedback": "<your_specific_feedback>"}}"""
+DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
     try:
         model = svc._get_judge_model(entity_type="item")
-        response = svc.client.generate(
+        return generate_structured(
+            settings=svc.settings,
             model=model,
             prompt=prompt,
-            format="json",
-            options={
-                "temperature": temperature,
-                "num_predict": svc.settings.llm_tokens_item_judge,
-            },
+            response_model=ItemQualityScores,
+            temperature=temperature,
         )
-
-        data = extract_json(response["response"], strict=False)
-        if data and isinstance(data, dict):
-            required_fields = [
-                "significance",
-                "uniqueness",
-                "narrative_potential",
-                "integration",
-            ]
-            missing = [f for f in required_fields if f not in data]
-            if missing:
-                raise WorldGenerationError(
-                    f"Item judge response missing required fields: {missing}"
-                )
-
-            return ItemQualityScores(
-                significance=float(data["significance"]),
-                uniqueness=float(data["uniqueness"]),
-                narrative_potential=float(data["narrative_potential"]),
-                integration=float(data["integration"]),
-                feedback=data.get("feedback", ""),
-            )
-
-        raise WorldGenerationError(
-            f"Failed to extract JSON from item judge response: {response['response'][:200]}..."
-        )
-
-    except WorldGenerationError:
-        raise
     except Exception as e:
         logger.exception(
             "Item quality judgment failed for '%s': %s", item.get("name") or "Unknown", e

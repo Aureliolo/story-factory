@@ -91,7 +91,7 @@ class AppState:
 
     # Enhanced entity browser filters (Issue #182)
     entity_quality_filter: str = "all"  # all, high, medium, low
-    entity_sort_by: str = "name"  # name, type, quality, created, relationships
+    entity_sort_by: str = "type"  # name, type, quality, created, relationships
     entity_sort_descending: bool = False
     entity_search_names: bool = True
     entity_search_descriptions: bool = True

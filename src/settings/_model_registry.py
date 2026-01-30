@@ -64,7 +64,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "description": "MoE (30B/3B active), strong reasoning - excellent for architect",
         "tags": ["architect", "continuity", "interviewer", "suggestion"],
     },
-    # Quality 7 reasoning: architect, continuity, interviewer. No suggestion (reasoning focus).
+    # Quality 7 reasoning: architect, continuity, interviewer, validator. No suggestion.
     "huihui_ai/qwen3-abliterated:8b": {
         "name": "Qwen3 8B Abliterated",
         "size_gb": 5,
@@ -73,7 +73,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Good reasoning at smaller size",
-        "tags": ["architect", "continuity", "interviewer"],
+        "tags": ["architect", "continuity", "interviewer", "validator"],
     },
     # === HIGH-END ===
     # 70B+ models: Large enough to excel at everything
@@ -139,5 +139,38 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "uncensored": True,
         "description": "Fast inference, good for quick tasks",
         "tags": ["validator", "interviewer"],
+    },
+    # === EMBEDDING MODELS ===
+    # Used for semantic duplicate detection during world generation.
+    # Not agent models — selected via the embedding_model setting, not auto-selection.
+    "nomic-embed-text": {
+        "name": "Nomic Embed Text",
+        "size_gb": 0.3,
+        "vram_required": 1,
+        "quality": 8,
+        "speed": 10,
+        "uncensored": False,
+        "description": "Popular 137M param embedding model, 768-dim vectors",
+        "tags": ["embedding"],
+    },
+    "mxbai-embed-large": {
+        "name": "MxBAI Embed Large",
+        "size_gb": 0.7,
+        "vram_required": 1,
+        "quality": 9,
+        "speed": 9,
+        "uncensored": False,
+        "description": "High-quality 335M embeddings, 1024-dim vectors",
+        "tags": ["embedding"],
+    },
+    "snowflake-arctic-embed:335m": {
+        "name": "Snowflake Arctic Embed 335M",
+        "size_gb": 0.7,
+        "vram_required": 1,
+        "quality": 9,
+        "speed": 9,
+        "uncensored": False,
+        "description": "Top-ranked embedding model from Snowflake",
+        "tags": ["embedding"],
     },
 }

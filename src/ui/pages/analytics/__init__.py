@@ -8,6 +8,7 @@ from nicegui.elements.column import Column
 from src.memory.mode_database import ModeDatabase
 from src.services import ServiceContainer
 from src.settings import AGENT_ROLES
+from src.ui.local_prefs import load_prefs_deferred, save_pref
 from src.ui.pages.analytics._content import build_content_statistics_section
 from src.ui.pages.analytics._costs import build_generation_costs_section, format_time, format_tokens
 from src.ui.pages.analytics._export import export_csv
@@ -21,6 +22,8 @@ from src.ui.pages.analytics._trends import (
 from src.ui.state import AppState
 
 logger = logging.getLogger(__name__)
+
+_PAGE_KEY = "analytics"
 
 __all__ = ["AnalyticsPage"]
 
@@ -62,6 +65,10 @@ class AnalyticsPage:
         # Filter state
         self._filter_agent_role: str | None = None
         self._filter_genre: str | None = None
+
+        # Widget references for deferred preference loading
+        self._agent_role_select: ui.select | None = None
+        self._genre_select: ui.select | None = None
 
     def build(self) -> None:
         """
@@ -107,6 +114,9 @@ class AnalyticsPage:
             self._recommendations_section = ui.column().classes("w-full")
             self._build_recommendations_section()
 
+        # Restore persisted preferences from localStorage
+        load_prefs_deferred(_PAGE_KEY, self._apply_prefs)
+
     def _build_header(self) -> None:
         """Build the header with title and actions."""
         with ui.row().classes("w-full items-center flex-wrap gap-2"):
@@ -142,32 +152,82 @@ class AnalyticsPage:
                     role_options = {"": "All Agents"} | {
                         role: info["name"] for role, info in AGENT_ROLES.items()
                     }
-                    ui.select(
-                        label="Agent Role",
-                        options=role_options,
-                        value="",
-                        on_change=lambda e: self._apply_filter(agent_role=e.value or None),
-                    ).classes("w-full sm:w-40").props("dense outlined")
+                    self._agent_role_select = (
+                        ui.select(
+                            label="Agent Role",
+                            options=role_options,
+                            value="",
+                            on_change=lambda e: self._apply_filter(agent_role=e.value or None),
+                        )
+                        .classes("w-full sm:w-40")
+                        .props("dense outlined")
+                    )
 
                     # Genre filter (populated from data)
                     genres = self._db.get_unique_genres()
                     genre_options = {"": "All Genres"} | {g: g for g in genres if g}
-                    ui.select(
-                        label="Genre",
-                        options=genre_options,
-                        value="",
-                        on_change=lambda e: self._apply_filter(genre=e.value or None),
-                    ).classes("w-full sm:w-40").props("dense outlined")
+                    self._genre_select = (
+                        ui.select(
+                            label="Genre",
+                            options=genre_options,
+                            value="",
+                            on_change=lambda e: self._apply_filter(genre=e.value or None),
+                        )
+                        .classes("w-full sm:w-40")
+                        .props("dense outlined")
+                    )
 
     def _apply_filter(self, agent_role: str | None = None, genre: str | None = None) -> None:
         """Apply filters and refresh data."""
         if agent_role is not None:
             self._filter_agent_role = agent_role if agent_role else None
+            save_pref(_PAGE_KEY, "filter_agent_role", self._filter_agent_role)
         if genre is not None:
             self._filter_genre = genre if genre else None
+            save_pref(_PAGE_KEY, "filter_genre", self._filter_genre)
 
         self._build_summary_section()
         self._build_model_section()
+
+    def _apply_prefs(self, prefs: dict) -> None:
+        """Apply loaded preferences to analytics filter state and UI widgets.
+
+        Validates each field against allowed values before applying.
+        Invalid or stale localStorage entries are silently ignored.
+
+        Args:
+            prefs: Dict of field→value from localStorage.
+        """
+        if not prefs:
+            return
+
+        valid_roles = set(AGENT_ROLES.keys())
+        changed = False
+
+        if "filter_agent_role" in prefs:
+            val = prefs["filter_agent_role"]
+            # Accept None (show all) or a valid role key
+            if val is None or (isinstance(val, str) and val in valid_roles):
+                if val != self._filter_agent_role:
+                    self._filter_agent_role = val
+                    changed = True
+                    if self._agent_role_select:
+                        self._agent_role_select.value = val or ""
+
+        if "filter_genre" in prefs:
+            val = prefs["filter_genre"]
+            # Accept None (show all) or any non-empty string
+            if val is None or (isinstance(val, str) and val):
+                if val != self._filter_genre:
+                    self._filter_genre = val
+                    changed = True
+                    if self._genre_select:
+                        self._genre_select.value = val or ""
+
+        if changed:
+            logger.info("Restored analytics preferences from localStorage")
+            self._build_summary_section()
+            self._build_model_section()
 
     # --- Delegated section builders ---
 

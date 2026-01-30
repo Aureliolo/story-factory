@@ -1,5 +1,6 @@
 """Tests for ModelService."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -297,6 +298,38 @@ class TestModelServiceGetVram:
             except Exception:
                 # If it raises, that's also acceptable behavior to test
                 pass
+
+
+class TestLogHealthFailure:
+    """Tests for _log_health_failure helper method."""
+
+    def test_logs_warning_when_not_previously_unhealthy(self, model_service, caplog):
+        """Test _log_health_failure logs WARNING when _last_health_healthy is None (first call)."""
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+            model_service._log_health_failure("test failure message")
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("test failure message" in r.message for r in warn_records)
+
+    def test_logs_debug_when_already_unhealthy(self, model_service, caplog):
+        """Test _log_health_failure logs DEBUG when _last_health_healthy is False."""
+        model_service._last_health_healthy = False
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+            model_service._log_health_failure("repeated failure message")
+
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("repeated failure message" in r.message for r in debug_records)
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert not any("repeated failure message" in r.message for r in warn_records)
+
+    def test_logs_warning_when_was_healthy(self, model_service, caplog):
+        """Test _log_health_failure logs WARNING when transitioning from healthy to unhealthy."""
+        model_service._last_health_healthy = True
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+            model_service._log_health_failure("transition failure")
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("transition failure" in r.message for r in warn_records)
 
 
 class TestModelServiceCheckHealthEdgeCases:
@@ -880,3 +913,250 @@ class TestModelServiceCompareModels:
             assert result[0]["success"] is True
             assert result[1]["success"] is False
             assert "error" in result[1]
+
+
+class TestModelServiceStateChangeLogging:
+    """Tests for state-change-only logging in ModelService."""
+
+    def test_health_check_logs_info_on_first_success(self, model_service, caplog):
+        """Test health check logs at INFO on first successful call."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            patch("src.services.model_service.get_available_vram", return_value=24),
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.return_value = MagicMock(models=[])
+
+            model_service.check_health()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert any("health check successful" in r.message for r in info_records)
+
+    def test_health_check_logs_debug_on_repeated_success(self, model_service, caplog):
+        """Test health check logs at DEBUG on repeated identical success."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            patch("src.services.model_service.get_available_vram", return_value=24),
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.return_value = MagicMock(models=[])
+
+            model_service.check_health()
+            caplog.clear()
+
+            model_service.check_health()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert not any("health check successful" in r.message for r in info_records)
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("health check successful" in r.message for r in debug_records)
+
+    def test_health_check_logs_info_on_vram_change(self, model_service, caplog):
+        """Test health check logs at INFO when VRAM changes."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            patch("src.services.model_service.get_available_vram") as mock_vram,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.return_value = MagicMock(models=[])
+
+            mock_vram.return_value = 24
+            model_service.check_health()
+            caplog.clear()
+
+            mock_vram.return_value = 16
+            model_service.check_health()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert any("health check successful" in r.message for r in info_records)
+
+    def test_health_check_logs_warning_on_first_failure(self, model_service, caplog):
+        """Test health check logs at WARNING on first failure."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.side_effect = ConnectionError("Connection refused")
+
+            model_service.check_health()
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("Cannot connect" in r.message for r in warn_records)
+
+    def test_health_check_logs_debug_on_repeated_failure(self, model_service, caplog):
+        """Test health check logs at DEBUG on repeated failure."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.side_effect = ConnectionError("Connection refused")
+
+            model_service.check_health()
+            caplog.clear()
+
+            model_service.check_health()
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert not any("Cannot connect" in r.message for r in warn_records)
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("Cannot connect" in r.message for r in debug_records)
+
+    def test_health_check_logs_debug_on_repeated_response_error(self, model_service, caplog):
+        """Test health check logs at DEBUG on repeated ResponseError failure."""
+        import ollama
+
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.side_effect = ollama.ResponseError("API error")
+
+            model_service.check_health()
+            caplog.clear()
+
+            model_service.check_health()
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert not any("API error" in r.message for r in warn_records)
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("API error" in r.message for r in debug_records)
+
+    def test_health_check_logs_info_on_recovery(self, model_service, caplog):
+        """Test health check logs at INFO when recovering from failure."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            patch("src.services.model_service.get_available_vram", return_value=24),
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+
+            # First call fails
+            mock_instance.list.side_effect = ConnectionError("Connection refused")
+            model_service.check_health()
+            caplog.clear()
+
+            # Second call succeeds (recovery)
+            mock_instance.list.side_effect = None
+            mock_instance.list.return_value = MagicMock(models=[])
+            model_service.check_health()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert any("health check successful" in r.message for r in info_records)
+
+    def test_list_installed_logs_info_on_first_call(self, model_service, caplog):
+        """Test list_installed logs at INFO on first call."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_model = MagicMock()
+            mock_model.model = "llama3:8b"
+            mock_instance.list.return_value = MagicMock(models=[mock_model])
+
+            model_service.list_installed()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert any("Found 1 installed models" in r.message for r in info_records)
+
+    def test_list_installed_logs_debug_on_same_count(self, model_service, caplog):
+        """Test list_installed logs at DEBUG when count is unchanged."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_model = MagicMock()
+            mock_model.model = "llama3:8b"
+            mock_instance.list.return_value = MagicMock(models=[mock_model])
+
+            model_service.list_installed()
+            caplog.clear()
+
+            model_service.list_installed()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert not any("Found 1 installed models" in r.message for r in info_records)
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("Found 1 installed models" in r.message for r in debug_records)
+
+    def test_list_installed_logs_info_on_count_change(self, model_service, caplog):
+        """Test list_installed logs at INFO when model count changes."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+
+            mock_model1 = MagicMock()
+            mock_model1.model = "llama3:8b"
+            mock_instance.list.return_value = MagicMock(models=[mock_model1])
+
+            model_service.list_installed()
+            caplog.clear()
+
+            mock_model2 = MagicMock()
+            mock_model2.model = "mistral:7b"
+            mock_instance.list.return_value = MagicMock(models=[mock_model1, mock_model2])
+
+            model_service.list_installed()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert any("Found 2 installed models" in r.message for r in info_records)
+
+    def test_list_installed_with_sizes_logs_info_on_first_call(self, model_service, caplog):
+        """Test list_installed_with_sizes logs at INFO on first call."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_model = MagicMock()
+            mock_model.model = "llama3:8b"
+            mock_model.size = 5 * 1024**3
+            mock_instance.list.return_value = MagicMock(models=[mock_model])
+
+            model_service.list_installed_with_sizes()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert any("Found 1 installed models with sizes" in r.message for r in info_records)
+
+    def test_list_installed_with_sizes_logs_debug_on_same_count(self, model_service, caplog):
+        """Test list_installed_with_sizes logs at DEBUG when count unchanged."""
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_model = MagicMock()
+            mock_model.model = "llama3:8b"
+            mock_model.size = 5 * 1024**3
+            mock_instance.list.return_value = MagicMock(models=[mock_model])
+
+            model_service.list_installed_with_sizes()
+            caplog.clear()
+
+            model_service.list_installed_with_sizes()
+
+            info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert not any("Found 1 installed models with sizes" in r.message for r in info_records)
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("Found 1 installed models with sizes" in r.message for r in debug_records)

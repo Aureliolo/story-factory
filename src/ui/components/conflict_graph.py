@@ -17,12 +17,15 @@ from src.memory.conflict_types import (
     ConflictCategory,
     ConflictGraphData,
 )
+from src.ui.local_prefs import load_prefs_deferred, save_pref
 
 if TYPE_CHECKING:
     from src.memory.world_database import WorldDatabase
     from src.services import ServiceContainer
 
 logger = logging.getLogger(__name__)
+
+_PAGE_KEY = "conflict_graph"
 
 
 def _ensure_vis_network_loaded() -> None:
@@ -101,6 +104,10 @@ class ConflictGraphComponent:
 
             ui.on(self._callback_id, handle_node_select)
 
+        # Widget references for deferred preference loading
+        self._category_checkboxes: dict[str, ui.checkbox] = {}
+        self._entity_type_checkboxes: dict[str, ui.checkbox] = {}
+
         with ui.row().classes("w-full gap-4"):
             # Main graph area
             with ui.column().classes("flex-grow gap-4"):
@@ -116,7 +123,7 @@ class ConflictGraphComponent:
                                 f'<div style="width: 12px; height: 12px; background: {color}; border-radius: 2px;"></div>',
                                 sanitize=False,
                             )
-                            ui.checkbox(
+                            self._category_checkboxes[category.value] = ui.checkbox(
                                 category.value.title(),
                                 value=category in self._filter_categories,
                                 on_change=lambda e, c=category: self._toggle_category(c, e.value),
@@ -125,12 +132,12 @@ class ConflictGraphComponent:
                     ui.space()
 
                     ui.label("Entities:").classes("text-sm font-medium")
-                    ui.checkbox(
+                    self._entity_type_checkboxes["character"] = ui.checkbox(
                         "Characters",
                         value="character" in self._entity_types,
                         on_change=lambda e: self._toggle_entity_type("character", e.value),
                     )
-                    ui.checkbox(
+                    self._entity_type_checkboxes["faction"] = ui.checkbox(
                         "Factions",
                         value="faction" in self._entity_types,
                         on_change=lambda e: self._toggle_entity_type("faction", e.value),
@@ -159,6 +166,9 @@ class ConflictGraphComponent:
 
         # Initial render
         self._render_graph()
+
+        # Restore persisted preferences from localStorage
+        load_prefs_deferred(_PAGE_KEY, self._apply_prefs)
 
     def set_world_db(self, world_db: WorldDatabase | None) -> None:
         """
@@ -469,6 +479,7 @@ class ConflictGraphComponent:
             self._filter_categories.append(category)
         elif not enabled and category in self._filter_categories:
             self._filter_categories.remove(category)
+        save_pref(_PAGE_KEY, "filter_categories", [c.value for c in self._filter_categories])
         self._render_graph()
 
     def _toggle_entity_type(self, entity_type: str, enabled: bool) -> None:
@@ -485,4 +496,40 @@ class ConflictGraphComponent:
             self._entity_types.append(entity_type)
         elif not enabled and entity_type in self._entity_types:
             self._entity_types.remove(entity_type)
+        save_pref(_PAGE_KEY, "entity_types", self._entity_types)
         self._render_graph()
+
+    def _apply_prefs(self, prefs: dict) -> None:
+        """Apply loaded preferences to conflict graph state and UI widgets.
+
+        Args:
+            prefs: Dict of field→value from localStorage.
+        """
+        if not prefs:
+            return
+
+        changed = False
+
+        if "filter_categories" in prefs and isinstance(prefs["filter_categories"], list):
+            valid_values = {c.value for c in ConflictCategory}
+            loaded_cats = [
+                ConflictCategory(v) for v in prefs["filter_categories"] if v in valid_values
+            ]
+            if loaded_cats != self._filter_categories:
+                self._filter_categories = loaded_cats
+                changed = True
+                for cat_value, cb in self._category_checkboxes.items():
+                    cb.value = any(c.value == cat_value for c in self._filter_categories)
+
+        if "entity_types" in prefs and isinstance(prefs["entity_types"], list):
+            valid_types = {"character", "faction"}
+            loaded_types: list[str] = [t for t in prefs["entity_types"] if t in valid_types]
+            if loaded_types != self._entity_types:
+                self._entity_types = loaded_types
+                changed = True
+                for etype, cb in self._entity_type_checkboxes.items():
+                    cb.value = etype in self._entity_types
+
+        if changed:
+            logger.info("Restored conflict graph preferences from localStorage")
+            self._render_graph()
