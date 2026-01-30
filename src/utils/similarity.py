@@ -215,7 +215,7 @@ class SemanticDuplicateChecker:
 
             # Check if model is installed
             try:
-                if self._client is None:
+                if self._client is None:  # pragma: no cover - defensive, set in __post_init__
                     self._client = ollama.Client(host=self.ollama_url, timeout=self.timeout)
                 self._client.show(model_id)
             except Exception:
