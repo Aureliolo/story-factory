@@ -112,10 +112,8 @@ def build_writing_display(page: WritePage) -> None:
     page._generation_status.build()
 
     # Writing area
-    with (
-        ui.element("div")
-        .classes("w-full flex-grow p-4 rounded-lg border overflow-auto")
-        .style("background-color: #1f2937; border-color: #374151")
+    with ui.element("div").classes(
+        "w-full flex-grow p-4 rounded-lg border overflow-auto bg-gray-800 border-gray-700"
     ):
         page._writing_display = ui.markdown().classes("prose prose-invert max-w-none")
 
@@ -526,7 +524,7 @@ def view_version(page: WritePage, version_id: str) -> None:
 
         # Content
         with ui.column().classes("flex-grow overflow-auto p-6"):
-            ui.markdown(version.content).classes("prose-invert max-w-none")
+            ui.markdown(version.content).classes("prose prose-invert max-w-none")
 
         # Footer with actions
         with ui.row().classes("w-full justify-end gap-2 p-4 border-t border-gray-700"):

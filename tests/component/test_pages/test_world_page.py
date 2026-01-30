@@ -110,4 +110,4 @@ class TestWorldPageWithData:
             page_ref.append(page)
 
         await user.open("/test-world-entity-browser")
-        # The page should build without errors
+        await user.should_see("Entity Browser")

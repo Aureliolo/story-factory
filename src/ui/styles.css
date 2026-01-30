@@ -110,22 +110,21 @@ select:focus-visible {
     margin-bottom: 1em;
 }
 
-/* Chat message markdown styling */
-.q-markdown,
-.q-markdown p,
-.q-markdown span,
-.q-markdown li {
-    color: #e0e0e0 !important;
-    background: transparent !important;
+/* Markdown styling scoped to non-chat contexts.
+   Chat messages set their own text colors (text-white for user, prose-invert
+   for assistant) so these rules must not override them. */
+.q-markdown {
+    color: inherit;
+    background: transparent;
 }
 
 .q-markdown code {
-    background: rgba(0, 0, 0, 0.2) !important;
-    color: #e0e0e0 !important;
+    background: rgba(0, 0, 0, 0.2);
+    color: inherit;
 }
 
 .q-markdown pre {
-    background: rgba(0, 0, 0, 0.3) !important;
+    background: rgba(0, 0, 0, 0.3);
 }
 
 /* Ensure markdown links are visible */

@@ -137,17 +137,14 @@ def show_generate_dialog(page, entity_type: str) -> None:
     }
     type_name = type_names.get(entity_type, entity_type.title())
 
-    card_bg = "#1f2937"
-    inner_card_bg = "#374151"
-
     with (
         ui.dialog() as dialog,
-        ui.card().classes("w-[450px]").style(f"background-color: {card_bg}"),
+        ui.card().classes("w-[450px] bg-gray-800"),
     ):
         ui.label(f"Generate {type_name}").classes("text-xl font-bold mb-4")
 
         # Count input
-        with ui.card().classes("w-full mb-4 p-3").style(f"background-color: {inner_card_bg}"):
+        with ui.card().classes("w-full mb-4 p-3 bg-gray-700"):
             ui.label("How many to generate?").classes("font-medium mb-2")
             count_input = (
                 ui.number(
@@ -162,7 +159,7 @@ def show_generate_dialog(page, entity_type: str) -> None:
             ui.label(f"Default range: {min_val}-{max_val}").classes("text-xs text-gray-500 mt-1")
 
         # Custom instructions textarea
-        with ui.card().classes("w-full mb-4 p-3").style(f"background-color: {inner_card_bg}"):
+        with ui.card().classes("w-full mb-4 p-3 bg-gray-700"):
             ui.label("Custom Instructions (optional)").classes("font-medium mb-2")
             custom_prompt = (
                 ui.textarea(
@@ -475,12 +472,9 @@ def prompt_for_relationships_after_add(page, entity_names: list[str]) -> None:
 
     logger.info(f"Prompting for relationships for {len(entity_names)} new entities")
 
-    card_bg = "#1f2937"
-    inner_card_bg = "#374151"
-
     with (
         ui.dialog() as dialog,
-        ui.card().classes("w-[450px]").style(f"background-color: {card_bg}"),
+        ui.card().classes("w-[450px] bg-gray-800"),
     ):
         ui.label("Generate Relationships?").classes("text-xl font-bold mb-2")
         ui.label(
@@ -488,7 +482,7 @@ def prompt_for_relationships_after_add(page, entity_names: list[str]) -> None:
             "newly added entities?"
         ).classes("text-gray-400 mb-4")
 
-        with ui.card().classes("w-full mb-4 p-3").style(f"background-color: {inner_card_bg}"):
+        with ui.card().classes("w-full mb-4 p-3 bg-gray-700"):
             ui.label("New entities:").classes("font-medium mb-2")
             for name in entity_names[:5]:  # Show first 5
                 ui.label(f"• {name}").classes("text-sm")

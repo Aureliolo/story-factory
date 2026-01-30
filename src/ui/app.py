@@ -86,6 +86,7 @@ class StoryFactoryApp:
         # NiceGUI's dark mode only sets Quasar's body--dark class.
         # Add 'dark' class for Tailwind CSS dark: variant support.
         ui.query("html").classes("dark")
+        logger.debug("Applied dark theme with background class: %s", bg_class)
 
     def _add_styles(self) -> None:
         """Add custom CSS styles."""

@@ -154,7 +154,7 @@ class ChatComponent:
         """Create an assistant message bubble."""
         with ui.row().classes("w-full justify-start"):
             with ui.card().classes("chat-message max-w-[75%] bg-gray-700"):
-                ui.markdown(content).classes("prose-invert")
+                ui.markdown(content).classes("prose prose-sm prose-invert")
 
     def set_messages(self, messages: list[dict[str, str]]) -> None:
         """Set all messages at once (replacing existing).

@@ -5,8 +5,6 @@ show_regenerate_dialog, execute_regenerate, refine_entity, regenerate_full,
 regenerate_with_guidance, confirm_delete_entity, delete_entity.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
