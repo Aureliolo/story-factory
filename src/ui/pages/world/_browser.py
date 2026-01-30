@@ -506,6 +506,9 @@ def add_entity(page, dialog: ui.dialog, name: str, entity_type: str, description
 def _apply_prefs(page, prefs: dict) -> None:
     """Apply loaded preferences to state and UI widgets.
 
+    Validates every field against its allowed values/types before applying.
+    Invalid or stale localStorage entries are silently ignored.
+
     Args:
         page: WorldPage instance.
         prefs: Dict of field→value from localStorage.
@@ -513,22 +516,44 @@ def _apply_prefs(page, prefs: dict) -> None:
     if not prefs:
         return
 
-    _FIELDS = [
-        "entity_quality_filter",
-        "entity_sort_by",
-        "entity_sort_descending",
-        "entity_search_names",
-        "entity_search_descriptions",
-    ]
+    _VALID_QUALITY = {"all", "high", "medium", "low"}
+    _VALID_SORT = {"name", "type", "quality", "created", "relationships"}
 
     changed = False
-    for field in _FIELDS:
-        if field in prefs:
-            current = getattr(page.state, field)
-            saved = prefs[field]
-            if current != saved:
-                setattr(page.state, field, saved)
-                changed = True
+
+    if "entity_quality_filter" in prefs:
+        val = prefs["entity_quality_filter"]
+        if (
+            isinstance(val, str)
+            and val in _VALID_QUALITY
+            and val != page.state.entity_quality_filter
+        ):
+            page.state.entity_quality_filter = val
+            changed = True
+
+    if "entity_sort_by" in prefs:
+        val = prefs["entity_sort_by"]
+        if isinstance(val, str) and val in _VALID_SORT and val != page.state.entity_sort_by:
+            page.state.entity_sort_by = val
+            changed = True
+
+    if "entity_sort_descending" in prefs:
+        val = prefs["entity_sort_descending"]
+        if isinstance(val, bool) and val != page.state.entity_sort_descending:
+            page.state.entity_sort_descending = val
+            changed = True
+
+    if "entity_search_names" in prefs:
+        val = prefs["entity_search_names"]
+        if isinstance(val, bool) and val != page.state.entity_search_names:
+            page.state.entity_search_names = val
+            changed = True
+
+    if "entity_search_descriptions" in prefs:
+        val = prefs["entity_search_descriptions"]
+        if isinstance(val, bool) and val != page.state.entity_search_descriptions:
+            page.state.entity_search_descriptions = val
+            changed = True
 
     if changed:
         logger.info("Restored entity browser preferences from localStorage")

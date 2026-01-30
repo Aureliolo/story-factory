@@ -71,6 +71,20 @@ class ModelService:
         self._last_model_count_with_sizes: int | None = None
         logger.debug("ModelService initialized successfully")
 
+    def _log_health_failure(self, message: str) -> None:
+        """Log a health check failure at the appropriate level.
+
+        Logs at WARNING on first failure or transition from healthy to unhealthy,
+        and at DEBUG on consecutive failures to reduce log noise.
+
+        Args:
+            message: The log message describing the failure.
+        """
+        if self._last_health_healthy is not False:
+            logger.warning(message)
+        else:
+            logger.debug(message)
+
     def check_health(self) -> OllamaHealth:
         """Check Ollama service health and connectivity.
 
@@ -105,20 +119,14 @@ class ModelService:
                 available_vram=vram,
             )
         except ollama.ResponseError as e:
-            if self._last_health_healthy is not False:
-                logger.warning(f"Ollama API error during health check: {e}")
-            else:
-                logger.debug(f"Ollama API error during health check: {e}")
+            self._log_health_failure(f"Ollama API error during health check: {e}")
             self._last_health_healthy = False
             return OllamaHealth(
                 is_healthy=False,
                 message=f"Ollama API error: {e}",
             )
         except (ConnectionError, TimeoutError) as e:
-            if self._last_health_healthy is not False:
-                logger.warning(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
-            else:
-                logger.debug(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
+            self._log_health_failure(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
             self._last_health_healthy = False
             return OllamaHealth(
                 is_healthy=False,

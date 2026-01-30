@@ -37,8 +37,17 @@ class TestSavePref:
         mock_ui.run_javascript.assert_called_once()
         js = mock_ui.run_javascript.call_args[0][0]
         assert "sf_prefs_entity_browser" in js
-        assert "'sort_by'" in js
+        assert '"sort_by"' in js
         assert '"name"' in js
+
+    @patch("src.ui.local_prefs.ui")
+    def test_guards_against_non_object_stored_value(self, mock_ui):
+        """JS resets to {} if stored value parses to non-object (array, number, null)."""
+        save_pref("page", "key", "value")
+        js = mock_ui.run_javascript.call_args[0][0]
+        # Must check typeof and Array.isArray
+        assert "typeof raw==='object'" in js
+        assert "Array.isArray(raw)" in js
 
     @patch("src.ui.local_prefs.ui")
     def test_serialises_bool(self, mock_ui):
@@ -80,6 +89,14 @@ class TestSavePrefs:
         # The JSON dump of the fields dict should appear in the JS
         assert '"x"' in js
         assert '"y"' in js
+
+    @patch("src.ui.local_prefs.ui")
+    def test_guards_against_non_object_stored_value(self, mock_ui):
+        """JS resets to {} if stored value parses to non-object (array, number, null)."""
+        save_prefs("page", {"a": 1})
+        js = mock_ui.run_javascript.call_args[0][0]
+        assert "typeof raw==='object'" in js
+        assert "Array.isArray(raw)" in js
 
 
 class TestLoadPrefs:
@@ -125,6 +142,16 @@ class TestLoadPrefs:
         mock_ui.run_javascript = AsyncMock(return_value="")
         result = await _load_prefs("page")
         assert result == {}
+
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.ui")
+    async def test_uses_json_serialised_key(self, mock_ui):
+        """_load_prefs passes the key through JSON.dumps to prevent injection."""
+        mock_ui.run_javascript = AsyncMock(return_value=None)
+        await _load_prefs("test_page")
+        js_call = mock_ui.run_javascript.call_args[0][0]
+        # Key should be JSON-encoded (double-quoted), not single-quoted
+        assert '"sf_prefs_test_page"' in js_call
 
 
 class TestLoadPrefsDeferred:

@@ -377,26 +377,46 @@ def render_graph_html(
             window.graphNodes = nodes;
             window.graphEdges = edges;
 
-            // Draw radial gradient glow behind role/selected nodes
-            network.on('beforeDrawing', function(ctx) {{
-                var positions = network.getPositions();
+            // Precompute glow node list — only recompute when data changes
+            var _glowNodes = [];
+            function _updateGlowNodes() {{
+                _glowNodes = [];
                 nodes.forEach(function(node) {{
-                    if (node.glowColor && positions[node.id]) {{
-                        var pos = positions[node.id];
-                        var radius = node.glowSize || 35;
-                        var gradient = ctx.createRadialGradient(
-                            pos.x, pos.y, 0,
-                            pos.x, pos.y, radius
-                        );
-                        gradient.addColorStop(0, node.glowColor + 'BB');
-                        gradient.addColorStop(0.4, node.glowColor + '77');
-                        gradient.addColorStop(1, node.glowColor + '00');
-                        ctx.beginPath();
-                        ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
-                        ctx.fillStyle = gradient;
-                        ctx.fill();
+                    if (node.glowColor) {{
+                        _glowNodes.push({{
+                            id: node.id,
+                            glowColor: node.glowColor,
+                            glowSize: node.glowSize || 35
+                        }});
                     }}
                 }});
+            }}
+            _updateGlowNodes();
+            nodes.on('*', _updateGlowNodes);
+
+            // Draw radial gradient glow behind role/selected nodes
+            // Only iterates precomputed glow nodes, not all nodes
+            network.on('beforeDrawing', function(ctx) {{
+                if (_glowNodes.length === 0) return;
+                var glowIds = _glowNodes.map(function(n) {{ return n.id; }});
+                var positions = network.getPositions(glowIds);
+                for (var i = 0; i < _glowNodes.length; i++) {{
+                    var gn = _glowNodes[i];
+                    var pos = positions[gn.id];
+                    if (!pos) continue;
+                    var radius = gn.glowSize;
+                    var gradient = ctx.createRadialGradient(
+                        pos.x, pos.y, 0,
+                        pos.x, pos.y, radius
+                    );
+                    gradient.addColorStop(0, gn.glowColor + 'BB');
+                    gradient.addColorStop(0.4, gn.glowColor + '77');
+                    gradient.addColorStop(1, gn.glowColor + '00');
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                }}
             }});
 
             // Drag-to-connect relationship creation

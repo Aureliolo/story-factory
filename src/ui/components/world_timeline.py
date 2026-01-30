@@ -555,6 +555,12 @@ class WorldTimelineComponent:
                 changed = True
                 for etype, cb in self._filter_checkboxes.items():
                     cb.value = etype in self._filter_types
+                # Sync _include_events from filter_types to keep checkbox consistent
+                events_in_types = "event" in self._filter_types
+                if events_in_types != self._include_events:
+                    self._include_events = events_in_types
+                    if self._events_checkbox:
+                        self._events_checkbox.value = self._include_events
 
         if "include_events" in prefs and isinstance(prefs["include_events"], bool):
             if prefs["include_events"] != self._include_events:

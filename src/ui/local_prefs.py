@@ -43,12 +43,17 @@ def save_pref(page_key: str, field: str, value: object) -> None:
     """
     key = _storage_key(page_key)
     # Read existing prefs, merge, and write back in one JS call.
+    # Use JSON.stringify for key/field to prevent injection via special chars.
+    # Guard against non-object parse results (arrays, numbers, null).
+    key_json = json.dumps(key)
+    field_json = json.dumps(field)
     value_json = json.dumps(value)
     js = (
         f"(function(){{ "
-        f"var k='{key}'; "
-        f"var p={{}}; try{{ p=JSON.parse(localStorage.getItem(k))||{{}}; }}catch(e){{}} "
-        f"p['{field}']={value_json}; "
+        f"var k={key_json}; "
+        f"var raw; try{{ raw=JSON.parse(localStorage.getItem(k)); }}catch(e){{}} "
+        f"var p=(raw && typeof raw==='object' && !Array.isArray(raw)) ? raw : {{}}; "
+        f"p[{field_json}]={value_json}; "
         f"localStorage.setItem(k, JSON.stringify(p)); "
         f"}})()"
     )
@@ -64,11 +69,13 @@ def save_prefs(page_key: str, fields: dict[str, object]) -> None:
         fields: Mapping of field name → value.
     """
     key = _storage_key(page_key)
+    key_json = json.dumps(key)
     fields_json = json.dumps(fields)
     js = (
         f"(function(){{ "
-        f"var k='{key}'; "
-        f"var p={{}}; try{{ p=JSON.parse(localStorage.getItem(k))||{{}}; }}catch(e){{}} "
+        f"var k={key_json}; "
+        f"var raw; try{{ raw=JSON.parse(localStorage.getItem(k)); }}catch(e){{}} "
+        f"var p=(raw && typeof raw==='object' && !Array.isArray(raw)) ? raw : {{}}; "
         f"Object.assign(p, {fields_json}); "
         f"localStorage.setItem(k, JSON.stringify(p)); "
         f"}})()"
@@ -85,7 +92,8 @@ async def _load_prefs(page_key: str) -> dict:
         or the stored JSON is corrupt.
     """
     key = _storage_key(page_key)
-    raw = await ui.run_javascript(f"localStorage.getItem('{key}')")
+    key_json = json.dumps(key)
+    raw = await ui.run_javascript(f"localStorage.getItem({key_json})")
     if not raw:
         logger.debug("No saved preferences for %s", page_key)
         return {}

@@ -192,29 +192,37 @@ class AnalyticsPage:
     def _apply_prefs(self, prefs: dict) -> None:
         """Apply loaded preferences to analytics filter state and UI widgets.
 
+        Validates each field against allowed values before applying.
+        Invalid or stale localStorage entries are silently ignored.
+
         Args:
             prefs: Dict of field→value from localStorage.
         """
         if not prefs:
             return
 
+        valid_roles = set(AGENT_ROLES.keys())
         changed = False
 
         if "filter_agent_role" in prefs:
             val = prefs["filter_agent_role"]
-            if val != self._filter_agent_role:
-                self._filter_agent_role = val
-                changed = True
-                if self._agent_role_select:
-                    self._agent_role_select.value = val or ""
+            # Accept None (show all) or a valid role key
+            if val is None or (isinstance(val, str) and val in valid_roles):
+                if val != self._filter_agent_role:
+                    self._filter_agent_role = val
+                    changed = True
+                    if self._agent_role_select:
+                        self._agent_role_select.value = val or ""
 
         if "filter_genre" in prefs:
             val = prefs["filter_genre"]
-            if val != self._filter_genre:
-                self._filter_genre = val
-                changed = True
-                if self._genre_select:
-                    self._genre_select.value = val or ""
+            # Accept None (show all) or any non-empty string
+            if val is None or (isinstance(val, str) and val):
+                if val != self._filter_genre:
+                    self._filter_genre = val
+                    changed = True
+                    if self._genre_select:
+                        self._genre_select.value = val or ""
 
         if changed:
             logger.info("Restored analytics preferences from localStorage")

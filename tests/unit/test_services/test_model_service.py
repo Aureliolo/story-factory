@@ -300,6 +300,38 @@ class TestModelServiceGetVram:
                 pass
 
 
+class TestLogHealthFailure:
+    """Tests for _log_health_failure helper method."""
+
+    def test_logs_warning_when_not_previously_unhealthy(self, model_service, caplog):
+        """Test _log_health_failure logs WARNING when _last_health_healthy is None (first call)."""
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+            model_service._log_health_failure("test failure message")
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("test failure message" in r.message for r in warn_records)
+
+    def test_logs_debug_when_already_unhealthy(self, model_service, caplog):
+        """Test _log_health_failure logs DEBUG when _last_health_healthy is False."""
+        model_service._last_health_healthy = False
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+            model_service._log_health_failure("repeated failure message")
+
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("repeated failure message" in r.message for r in debug_records)
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert not any("repeated failure message" in r.message for r in warn_records)
+
+    def test_logs_warning_when_was_healthy(self, model_service, caplog):
+        """Test _log_health_failure logs WARNING when transitioning from healthy to unhealthy."""
+        model_service._last_health_healthy = True
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_service"):
+            model_service._log_health_failure("transition failure")
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("transition failure" in r.message for r in warn_records)
+
+
 class TestModelServiceCheckHealthEdgeCases:
     """Additional edge case tests for check_health."""
 
@@ -1126,3 +1158,5 @@ class TestModelServiceStateChangeLogging:
 
             info_records = [r for r in caplog.records if r.levelno == logging.INFO]
             assert not any("Found 1 installed models with sizes" in r.message for r in info_records)
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("Found 1 installed models with sizes" in r.message for r in debug_records)
