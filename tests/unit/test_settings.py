@@ -1864,6 +1864,30 @@ class TestTagBasedModelSelection:
             settings.get_model_for_agent("continuity", available_vram=24) == "versatile-model:12b"
         )
 
+    def test_skips_embedding_model_for_chat_roles(self, monkeypatch):
+        """Embedding-tagged models are skipped when selecting for chat roles."""
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda timeout=None: {
+                "nomic-embed-text": 0.3,  # Embedding model
+                "chat-model:8b": 5.0,  # Chat model
+            },
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"architect": "auto"}
+        # Tag both for architect, but nomic also has embedding tag
+        settings.custom_model_tags = {
+            "nomic-embed-text": ["architect", "embedding"],
+            "chat-model:8b": ["architect"],
+        }
+
+        result = settings.get_model_for_agent("architect", available_vram=24)
+
+        # Should skip the embedding model and select the chat model
+        assert result == "chat-model:8b"
+
     def test_raises_error_when_no_tagged_model_fits_vram(self, monkeypatch):
         """Test raises error when tagged models exist but none fit VRAM."""
         monkeypatch.setattr(

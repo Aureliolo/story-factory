@@ -530,6 +530,25 @@ class TestModelValidation:
         # Only the 2 sanity check calls, no additional calls
         assert mock_ollama_client.embeddings.call_count == 2
 
+    def test_sanity_check_degrades_on_unexpected_error(self, mock_ollama_client):
+        """Model is degraded if sanity check encounters an unexpected error."""
+        # Embeddings succeed but cosine_similarity raises
+        mock_ollama_client.embeddings.side_effect = [
+            {"embedding": [1.0, 0.0, 0.0]},
+            {"embedding": [0.0, 1.0, 0.0]},
+        ]
+
+        with patch(
+            "src.utils.similarity.cosine_similarity", side_effect=RuntimeError("unexpected")
+        ):
+            checker = SemanticDuplicateChecker(
+                ollama_url=self.TEST_OLLAMA_URL,
+                embedding_model=self.TEST_MODEL,
+                similarity_threshold=self.TEST_THRESHOLD,
+            )
+
+        assert checker.is_degraded is True
+
     def test_sanity_check_ceiling_value(self):
         """Verify the sanity check ceiling constant is reasonable."""
         assert _SANITY_CHECK_CEILING == 0.85
