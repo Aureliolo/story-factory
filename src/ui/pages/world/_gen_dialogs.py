@@ -137,9 +137,8 @@ def show_generate_dialog(page, entity_type: str) -> None:
     }
     type_name = type_names.get(entity_type, entity_type.title())
 
-    # Use state-based dark mode styling
-    card_bg = "#1f2937" if page.state.dark_mode else "#ffffff"
-    inner_card_bg = "#374151" if page.state.dark_mode else "#f9fafb"
+    card_bg = "#1f2937"
+    inner_card_bg = "#374151"
 
     with (
         ui.dialog() as dialog,
@@ -349,7 +348,7 @@ def show_entity_preview_dialog(
         ui.label(f"Preview Generated {entity_type.title()}s").classes("text-lg font-bold mb-2")
         ui.label(
             f"Select which {entity_type}s to add to your world. Uncheck any you don't want."
-        ).classes("text-gray-600 dark:text-gray-400 mb-4")
+        ).classes("text-gray-400 mb-4")
 
         # Scrollable container for entities
         with ui.scroll_area().classes("w-full max-h-[400px]"):
@@ -424,18 +423,16 @@ def show_entity_preview_dialog(
                     else ""
                 )
 
-                with ui.row().classes(
-                    "w-full items-start gap-2 py-2 border-b border-gray-200 dark:border-gray-700"
-                ):
+                with ui.row().classes("w-full items-start gap-2 py-2 border-b border-gray-700"):
                     ui.checkbox(value=True, on_change=lambda _, i=idx: toggle_selection(i)).classes(
                         "mt-1"
                     )
                     with ui.column().classes("flex-1"):
                         ui.label(f"{name}{extra}").classes("font-semibold")
                         if desc:
-                            ui.label(desc).classes("text-sm text-gray-600 dark:text-gray-400")
+                            ui.label(desc).classes("text-sm text-gray-400")
                         if quality:
-                            ui.label(quality).classes("text-xs text-blue-600 dark:text-blue-400")
+                            ui.label(quality).classes("text-xs text-blue-400")
 
         # Helper functions for select/deselect all
         def select_all() -> None:
@@ -478,9 +475,8 @@ def prompt_for_relationships_after_add(page, entity_names: list[str]) -> None:
 
     logger.info(f"Prompting for relationships for {len(entity_names)} new entities")
 
-    # Use state-based dark mode styling
-    card_bg = "#1f2937" if page.state.dark_mode else "#ffffff"
-    inner_card_bg = "#374151" if page.state.dark_mode else "#f9fafb"
+    card_bg = "#1f2937"
+    inner_card_bg = "#374151"
 
     with (
         ui.dialog() as dialog,
@@ -490,7 +486,7 @@ def prompt_for_relationships_after_add(page, entity_names: list[str]) -> None:
         ui.label(
             f"Would you like to generate relationships for the {len(entity_names)} "
             "newly added entities?"
-        ).classes("text-gray-600 dark:text-gray-400 mb-4")
+        ).classes("text-gray-400 mb-4")
 
         with ui.card().classes("w-full mb-4 p-3").style(f"background-color: {inner_card_bg}"):
             ui.label("New entities:").classes("font-medium mb-2")

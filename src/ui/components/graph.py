@@ -193,9 +193,9 @@ class GraphComponent:
                 ui.space()
 
                 # Help text for drag-to-connect
-                ui.label("Shift+Drag to connect").classes(
-                    "text-xs text-gray-500 dark:text-gray-400"
-                ).tooltip("Hold Shift and drag from one node to another to create a relationship")
+                ui.label("Shift+Drag to connect").classes("text-xs text-gray-400").tooltip(
+                    "Hold Shift and drag from one node to another to create a relationship"
+                )
 
                 ui.space()
 
@@ -216,7 +216,7 @@ class GraphComponent:
             # Graph container (no script tags allowed here)
             self._container = (
                 ui.html("", sanitize=False)
-                .classes("w-full border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800")
+                .classes("w-full border border-gray-700 rounded-lg bg-gray-800")
                 .style(f"height: {self.height}px;")
             )
 
@@ -264,15 +264,12 @@ class GraphComponent:
 
         if not self.world_db:
             self._container.content = """
-                <style>
-                    .graph-empty { color: #6b7280; }
-                    .dark .graph-empty { color: #9ca3af; }
-                </style>
-                <div class="graph-empty" style="
+                <div style="
                     height: 100%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
+                    color: #9ca3af;
                 ">
                     <p>No world data to display. Create or load a project first.</p>
                 </div>
@@ -483,7 +480,7 @@ def mini_graph(
     from src.settings import Settings
 
     if not world_db:
-        ui.label("No world data").classes("text-gray-500 dark:text-gray-400 text-sm")
+        ui.label("No world data").classes("text-gray-400 text-sm")
         return
 
     settings = settings or Settings.load()
@@ -505,7 +502,7 @@ def mini_graph(
 
     # Add HTML container (no script tags)
     ui.html(result.html, sanitize=False).classes(
-        "w-full border dark:border-gray-700 rounded bg-white dark:bg-gray-800"
+        "w-full border border-gray-700 rounded bg-gray-800"
     ).style(f"height: {height}px;")
 
     # Run JavaScript initialization

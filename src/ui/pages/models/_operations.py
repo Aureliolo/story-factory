@@ -50,10 +50,8 @@ def refresh_installed_section(page: Any) -> None:
         installed_with_sizes = page.services.model.list_installed_with_sizes()
 
         if not installed_with_sizes:
-            ui.label("No models installed").classes("text-gray-500 dark:text-gray-400")
-            ui.label("Download models below to get started").classes(
-                "text-sm text-gray-400 dark:text-gray-500"
-            )
+            ui.label("No models installed").classes("text-gray-400")
+            ui.label("Download models below to get started").classes("text-sm text-gray-500")
             return
 
         # Model cards for installed
@@ -65,8 +63,8 @@ def refresh_installed_section(page: Any) -> None:
                 with ui.row().classes("w-full items-center"):
                     with ui.column().classes("flex-grow gap-0"):
                         ui.label(info["name"]).classes("font-medium")
-                        ui.label(model_id).classes("text-xs text-gray-500 dark:text-gray-400")
-                    ui.label(f"{size_gb} GB").classes("text-sm text-gray-600 dark:text-gray-400")
+                        ui.label(model_id).classes("text-xs text-gray-400")
+                    ui.label(f"{size_gb} GB").classes("text-sm text-gray-400")
                     with ui.row().classes("gap-1"):
                         ui.button(
                             icon="play_arrow",
@@ -83,7 +81,7 @@ def refresh_installed_section(page: Any) -> None:
 
                 # Tags configuration
                 with ui.row().classes("w-full items-center gap-2 mt-2"):
-                    ui.label("Roles:").classes("text-xs text-gray-500 dark:text-gray-400")
+                    ui.label("Roles:").classes("text-xs text-gray-400")
                     role_options = {role: AGENT_ROLES[role]["name"] for role in AGENT_ROLES}
                     ui.select(
                         options=role_options,
@@ -104,15 +102,13 @@ def build_comparison_section(page: Any) -> None:
     with ui.card().classes("w-full"):
         ui.label("Model Comparison").classes("text-lg font-semibold mb-4")
         ui.label("Compare models on the same prompt to see output quality and speed").classes(
-            "text-sm text-gray-500 dark:text-gray-400 mb-4"
+            "text-sm text-gray-400 mb-4"
         )
 
         installed = page.services.model.list_installed()
 
         if len(installed) < 2:
-            ui.label("Install at least 2 models to compare").classes(
-                "text-gray-500 dark:text-gray-400"
-            )
+            ui.label("Install at least 2 models to compare").classes("text-gray-400")
             return
 
         # Model selection
@@ -199,9 +195,7 @@ async def delete_model(page: Any, model_id: str) -> None:
     """
     with ui.dialog() as dialog, ui.card():
         ui.label("Delete Model?").classes("text-lg font-semibold")
-        ui.label(f"Are you sure you want to delete {model_id}?").classes(
-            "text-gray-600 dark:text-gray-400"
-        )
+        ui.label(f"Are you sure you want to delete {model_id}?").classes("text-gray-400")
 
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
             ui.button("Cancel", on_click=dialog.close).props("flat")
@@ -280,7 +274,7 @@ async def check_all_updates(page: Any) -> None:
     with ui.dialog() as update_dialog, ui.card().classes("w-96"):
         ui.label("Updates Available").classes("text-lg font-semibold mb-2")
         ui.label(f"Found updates for {len(updates_available)} model(s):").classes(
-            "text-gray-600 dark:text-gray-400 mb-2"
+            "text-gray-400 mb-2"
         )
         for model_id in updates_available:
             ui.label(f"• {model_id}").classes("text-sm ml-2")
@@ -321,7 +315,7 @@ async def run_comparison(page: Any) -> None:
     page._comparison_result.clear()
 
     with page._comparison_result:
-        ui.label("Running comparison...").classes("text-gray-500 dark:text-gray-400")
+        ui.label("Running comparison...").classes("text-gray-400")
         ui.spinner()
 
     # Run comparison

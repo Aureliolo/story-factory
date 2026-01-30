@@ -63,9 +63,7 @@ def build_mode_section(page: SettingsPage) -> None:
                 # Show current mode description (inline, no expansion)
                 current_mode = PRESET_MODES.get(page.settings.current_mode)
                 if current_mode:
-                    ui.label(current_mode.description).classes(
-                        "text-xs text-gray-600 dark:text-gray-400 italic mt-2"
-                    )
+                    ui.label(current_mode.description).classes("text-xs text-gray-400 italic mt-2")
 
                 # VRAM strategy (persisted in settings)
                 vram_options = {

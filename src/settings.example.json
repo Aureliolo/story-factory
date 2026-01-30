@@ -35,7 +35,6 @@
   "chapters_between_checkpoints": 3,
   "max_revision_iterations": 3,
   "comparison_models": [],
-  "dark_mode": true,
   "last_project_id": null,
   "backup_folder": "/home/runner/work/story-factory/story-factory/output/backups",
   "current_mode": "balanced",

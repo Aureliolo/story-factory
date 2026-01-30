@@ -25,7 +25,7 @@ def show_import_wizard(page) -> None:
         ui.label(
             "Paste or upload story text to automatically extract characters, "
             "locations, items, and relationships."
-        ).classes("text-sm text-gray-600 dark:text-gray-400 mb-4")
+        ).classes("text-sm text-gray-400 mb-4")
 
         # Text input
         text_input = (
@@ -179,13 +179,13 @@ async def show_import_review_dialog(page, extraction_result: dict[str, Any]) -> 
             f"Found {summary.get('total_entities', 0)} entities and "
             f"{summary.get('relationships', 0)} relationships. "
             f"Review below and uncheck any items you don't want to import."
-        ).classes("text-sm text-gray-600 dark:text-gray-400 mb-4")
+        ).classes("text-sm text-gray-400 mb-4")
 
         if summary.get("needs_review", 0) > 0:
             ui.label(
                 f"⚠️ {summary['needs_review']} items flagged for review (marked with ⚠️) "
                 "- low confidence extraction"
-            ).classes("text-sm text-orange-600 dark:text-orange-400 mb-4")
+            ).classes("text-sm text-orange-400 mb-4")
 
         # Tabs for different entity types
         with ui.tabs().classes("w-full") as tabs:
@@ -218,7 +218,7 @@ async def show_import_review_dialog(page, extraction_result: dict[str, Any]) -> 
                                         name_label.text = f"⚠️ {name_label.text}"
 
                                     ui.label(f"Role: {char.get('role', 'Unknown')}").classes(
-                                        "text-sm text-gray-600"
+                                        "text-sm text-gray-400"
                                     )
                                     ui.label(char.get("description", "No description")).classes(
                                         "text-sm"
@@ -252,7 +252,7 @@ async def show_import_review_dialog(page, extraction_result: dict[str, Any]) -> 
                                     )
                                     if loc.get("significance"):
                                         ui.label(f"Significance: {loc['significance']}").classes(
-                                            "text-sm text-gray-600"
+                                            "text-sm text-gray-400"
                                         )
                                     ui.label(f"Confidence: {loc.get('confidence', 0):.0%}").classes(
                                         "text-xs text-gray-500"
@@ -286,7 +286,7 @@ async def show_import_review_dialog(page, extraction_result: dict[str, Any]) -> 
                                     if item.get("properties"):
                                         props_str = ", ".join(item["properties"])
                                         ui.label(f"Properties: {props_str}").classes(
-                                            "text-sm text-gray-600"
+                                            "text-sm text-gray-400"
                                         )
                                     ui.label(
                                         f"Confidence: {item.get('confidence', 0):.0%}"
@@ -314,7 +314,7 @@ async def show_import_review_dialog(page, extraction_result: dict[str, Any]) -> 
 
                                     ui.label(
                                         f"Type: {rel.get('relation_type', 'unknown')}"
-                                    ).classes("text-sm text-gray-600")
+                                    ).classes("text-sm text-gray-400")
                                     ui.label(rel.get("description", "No description")).classes(
                                         "text-sm"
                                     )

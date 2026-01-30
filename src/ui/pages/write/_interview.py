@@ -35,9 +35,7 @@ def build_interview_section(page: WritePage) -> None:
         ui.badge(status.title()).style(f"background-color: {color}; color: white;")
 
         if page.state.interview_complete:
-            ui.label("Interview complete - structure ready").classes(
-                "text-sm text-gray-500 dark:text-gray-400"
-            )
+            ui.label("Interview complete - structure ready").classes("text-sm text-gray-400")
             ui.button(
                 "Continue Interview",
                 on_click=lambda: enable_continue_interview(page),
@@ -196,13 +194,12 @@ async def _finalize_interview(page: WritePage) -> None:
             logger.exception("Failed to finalize interview")
             page._notify(f"Error: {e}", type="negative")
 
-    dialog_bg = "#1f2937" if page.state.dark_mode else "#ffffff"
-    with dialog, ui.card().classes("w-96").style(f"background-color: {dialog_bg}"):
+    with dialog, ui.card().classes("w-96").style("background-color: #1f2937"):
         ui.label("Finalize Interview?").classes("text-xl font-bold mb-2")
         ui.label(
             "This will generate a story brief based on the conversation so far. "
             "Are you sure you want to finalize?"
-        ).classes("text-gray-600 dark:text-gray-400 mb-4")
+        ).classes("text-gray-400 mb-4")
 
         with ui.row().classes("w-full justify-end gap-2"):
             ui.button("Cancel", on_click=dialog.close).props("flat")

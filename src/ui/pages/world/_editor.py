@@ -29,9 +29,7 @@ def build_entity_editor(page) -> None:
         ui.label("Entity Editor").classes("text-lg font-semibold")
 
         if not page.state.selected_entity_id or not page.state.world_db:
-            ui.label("Select an entity to edit").classes(
-                "text-gray-500 dark:text-gray-400 text-sm mt-4"
-            )
+            ui.label("Select an entity to edit").classes("text-gray-400 text-sm mt-4")
             return
 
         entity = page.services.world.get_entity(page.state.world_db, page.state.selected_entity_id)
@@ -227,9 +225,7 @@ def build_version_history_panel(page, entity_id: str) -> None:
         return  # No versions yet, skip showing the panel
 
     with ui.expansion("Version History", icon="history", value=False).classes("w-full mt-2"):
-        ui.label(f"{len(versions)} versions").classes(
-            "text-xs text-gray-500 dark:text-gray-400 mb-2"
-        )
+        ui.label(f"{len(versions)} versions").classes("text-xs text-gray-400 mb-2")
 
         for version in versions:
             change_type_icons = {
@@ -240,9 +236,7 @@ def build_version_history_panel(page, entity_id: str) -> None:
             }
             icon = change_type_icons.get(version.change_type, "history")
 
-            with ui.row().classes(
-                "w-full items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-            ):
+            with ui.row().classes("w-full items-center gap-2 p-2 rounded hover:bg-gray-700"):
                 ui.icon(icon, size="xs").classes("text-gray-500")
 
                 with ui.column().classes("flex-grow gap-0"):
@@ -251,11 +245,11 @@ def build_version_history_panel(page, entity_id: str) -> None:
                             "text-sm font-mono font-bold"
                         )
                         ui.label(version.change_type).classes(
-                            "text-xs px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-600"
+                            "text-xs px-1 py-0.5 rounded bg-gray-600"
                         )
                         if version.quality_score is not None:
                             ui.label(f"{version.quality_score:.1f}").classes(
-                                "text-xs text-blue-600 dark:text-blue-400"
+                                "text-xs text-blue-400"
                             )
 
                     # Format timestamp
@@ -294,7 +288,7 @@ def confirm_revert_version(page, version: EntityVersion) -> None:
         ui.label(
             f"Revert to version {version.version_number} "
             f"({version.change_type} from {version.created_at.strftime('%Y-%m-%d %H:%M')})?"
-        ).classes("text-sm text-gray-600 dark:text-gray-400 mb-4")
+        ).classes("text-sm text-gray-400 mb-4")
 
         ui.label(
             "This will restore the entity's name, type, description, and attributes "
@@ -380,10 +374,10 @@ def show_version_diff(page, version: EntityVersion) -> None:
             if old_val != new_val:
                 ui.label(field.title()).classes("text-sm font-semibold mt-2")
                 with ui.row().classes("w-full gap-4"):
-                    with ui.column().classes("flex-1 p-2 bg-red-50 dark:bg-red-900/20 rounded"):
+                    with ui.column().classes("flex-1 p-2 bg-red-900/20 rounded"):
                         ui.label("Version").classes("text-xs text-gray-500")
                         ui.label(str(old_val) or "(empty)").classes("text-sm")
-                    with ui.column().classes("flex-1 p-2 bg-green-50 dark:bg-green-900/20 rounded"):
+                    with ui.column().classes("flex-1 p-2 bg-green-900/20 rounded"):
                         ui.label("Current").classes("text-xs text-gray-500")
                         ui.label(str(new_val) or "(empty)").classes("text-sm")
 
@@ -402,16 +396,14 @@ def show_version_diff(page, version: EntityVersion) -> None:
                 attr_new_val: Any = new_attrs.get(key)
 
                 if attr_old_val != attr_new_val:
-                    ui.label(key.replace("_", " ").title()).classes("text-xs text-gray-600 mt-2")
+                    ui.label(key.replace("_", " ").title()).classes("text-xs text-gray-400 mt-2")
                     with ui.row().classes("w-full gap-4"):
-                        with ui.column().classes("flex-1 p-2 bg-red-50 dark:bg-red-900/20 rounded"):
+                        with ui.column().classes("flex-1 p-2 bg-red-900/20 rounded"):
                             old_str = (
                                 "(not set)" if attr_old_val is None else str(attr_old_val)[:200]
                             )
                             ui.label(old_str).classes("text-xs")
-                        with ui.column().classes(
-                            "flex-1 p-2 bg-green-50 dark:bg-green-900/20 rounded"
-                        ):
+                        with ui.column().classes("flex-1 p-2 bg-green-900/20 rounded"):
                             new_str = (
                                 "(not set)" if attr_new_val is None else str(attr_new_val)[:200]
                             )

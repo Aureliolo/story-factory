@@ -223,7 +223,7 @@ class SettingsPage:
             Tuple of (expansion element, masonry container element).
         """
         expansion = ui.expansion(title, icon=icon, value=True).classes(
-            "w-full bg-gray-50 dark:bg-gray-800 rounded-lg mb-4"
+            "w-full bg-gray-800 rounded-lg mb-4"
         )
         with expansion:
             container = ui.element("div").classes("masonry-container w-full")
@@ -321,9 +321,7 @@ class SettingsPage:
         with ui.row().classes("items-center gap-2 mb-4"):
             ui.icon(icon).classes("text-blue-500")
             ui.label(title).classes("text-lg font-semibold")
-            ui.icon("help_outline", size="xs").classes(
-                "text-gray-400 dark:text-gray-500 cursor-help"
-            ).tooltip(tooltip)
+            ui.icon("help_outline", size="xs").classes("text-gray-500 cursor-help").tooltip(tooltip)
 
     def _build_number_input(
         self,

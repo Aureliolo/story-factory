@@ -45,7 +45,6 @@ class StoryFactoryApp:
         """Initialize the application."""
         self.services = services
         self.state = AppState()
-        self.state.dark_mode = services.settings.dark_mode
 
         # Auto-load last project if available
         self._load_last_project()
@@ -78,16 +77,15 @@ class StoryFactoryApp:
             self.services.settings.save()
 
     def _apply_theme(self) -> None:
-        """Apply theme settings to the page."""
+        """Apply dark theme to the page."""
         from src.ui.theme import get_background_class
 
         bg_class = get_background_class()
         ui.query("body").classes(bg_class)
-
-        if self.state.dark_mode:
-            ui.dark_mode().enable()
-        else:
-            ui.dark_mode().disable()
+        ui.dark_mode().enable()
+        # NiceGUI's dark mode only sets Quasar's body--dark class.
+        # Add 'dark' class for Tailwind CSS dark: variant support.
+        ui.query("html").classes("dark")
 
     def _add_styles(self) -> None:
         """Add custom CSS styles."""

@@ -136,7 +136,7 @@ class SceneEditorDialog:
                 # Word count indicator
                 if self.scene.word_count > 0:
                     ui.label(f"Word count: {self.scene.word_count}").classes(
-                        "text-sm text-gray-500 dark:text-gray-400"
+                        "text-sm text-gray-400"
                     )
 
             # Action buttons
@@ -249,9 +249,9 @@ class SceneListComponent:
 
             # Scene list
             if not self.chapter.scenes:
-                with ui.card().classes("w-full bg-gray-50 dark:bg-gray-800"):
+                with ui.card().classes("w-full bg-gray-800"):
                     ui.label("No scenes yet. Click 'Add Scene' to create one.").classes(
-                        "text-sm text-gray-500 dark:text-gray-400 p-2"
+                        "text-sm text-gray-400 p-2"
                     )
             else:
                 # Create sortable container for scenes
@@ -285,7 +285,7 @@ class SceneListComponent:
             else "gray"
         )
 
-        card = ui.card().classes("w-full p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-move")
+        card = ui.card().classes("w-full p-3 hover:bg-gray-700 cursor-move")
         self._scene_cards[scene.id] = card
 
         with card:
@@ -310,9 +310,7 @@ class SceneListComponent:
                         metadata_parts.append(f"{scene.word_count} words")
 
                     if metadata_parts:
-                        ui.label(" • ".join(metadata_parts)).classes(
-                            "text-xs text-gray-500 dark:text-gray-400"
-                        )
+                        ui.label(" • ".join(metadata_parts)).classes("text-xs text-gray-400")
 
                     # Outline preview
                     if scene.outline:
@@ -321,9 +319,7 @@ class SceneListComponent:
                             if len(scene.outline) > 100
                             else scene.outline
                         )
-                        ui.label(outline_preview).classes(
-                            "text-sm text-gray-600 dark:text-gray-400"
-                        )
+                        ui.label(outline_preview).classes("text-sm text-gray-400")
 
                     # Goals
                     if scene.goals:
@@ -444,9 +440,9 @@ class SceneListComponent:
 
                 # Scene list
                 if not self.chapter.scenes:
-                    with ui.card().classes("w-full bg-gray-50 dark:bg-gray-800"):
+                    with ui.card().classes("w-full bg-gray-800"):
                         ui.label("No scenes yet. Click 'Add Scene' to create one.").classes(
-                            "text-sm text-gray-500 dark:text-gray-400 p-2"
+                            "text-sm text-gray-400 p-2"
                         )
                 else:
                     self._build_scene_list()

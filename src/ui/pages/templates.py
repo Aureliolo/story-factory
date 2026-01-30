@@ -121,12 +121,10 @@ class TemplatesPage:
                         if template.is_builtin:
                             ui.badge("Built-in").props("color=secondary")
 
-                    ui.label(template.description).classes(
-                        "text-sm text-gray-600 dark:text-gray-400"
-                    )
+                    ui.label(template.description).classes("text-sm text-gray-400")
 
                     # Details
-                    with ui.row().classes("gap-4 text-sm text-gray-600 dark:text-gray-300"):
+                    with ui.row().classes("gap-4 text-sm text-gray-300"):
                         if template.subgenres:
                             ui.label(f"Subgenres: {', '.join(template.subgenres)}")
                         ui.label(f"Length: {template.target_length.replace('_', ' ').title()}")
@@ -173,7 +171,7 @@ class TemplatesPage:
         with ui.column().classes("w-full gap-4"):
             ui.label(
                 "Structure presets provide proven story frameworks to guide your narrative."
-            ).classes("text-gray-600 dark:text-gray-400")
+            ).classes("text-gray-400")
 
             for preset in presets:
                 with ui.card().classes("w-full"):
@@ -187,9 +185,7 @@ class TemplatesPage:
                         # Preset info
                         with ui.column().classes("flex-grow gap-2"):
                             ui.label(preset.name).classes("text-lg font-semibold")
-                            ui.label(preset.description).classes(
-                                "text-sm text-gray-600 dark:text-gray-400"
-                            )
+                            ui.label(preset.description).classes("text-sm text-gray-400")
 
                             # Acts
                             with ui.row().classes("gap-2 mt-2"):
@@ -198,9 +194,7 @@ class TemplatesPage:
                                     ui.badge(act).props("color=secondary")
 
                             # Stats
-                            with ui.row().classes(
-                                "gap-4 text-sm text-gray-600 dark:text-gray-300 mt-2"
-                            ):
+                            with ui.row().classes("gap-4 text-sm text-gray-300 mt-2"):
                                 ui.label(f"{len(preset.plot_points)} plot points")
                                 ui.label(f"{len(preset.beats)} story beats")
 
@@ -226,7 +220,7 @@ class TemplatesPage:
                         if template.is_builtin:
                             ui.badge("Built-in").props("color=secondary")
 
-                    ui.label(template.description).classes("text-gray-600 dark:text-gray-400")
+                    ui.label(template.description).classes("text-gray-400")
 
                     # Settings
                     ui.label("Story Settings").classes("text-lg font-semibold mt-4")
@@ -245,24 +239,20 @@ class TemplatesPage:
                     # World building
                     if template.world_description:
                         ui.label("World Description").classes("text-lg font-semibold mt-4")
-                        ui.label(template.world_description).classes(
-                            "text-gray-600 dark:text-gray-400"
-                        )
+                        ui.label(template.world_description).classes("text-gray-400")
 
                     if template.world_rules:
                         ui.label("World Rules").classes("text-lg font-semibold mt-4")
                         for rule in template.world_rules:
-                            ui.label(f"• {rule}").classes("text-gray-600 dark:text-gray-400")
+                            ui.label(f"• {rule}").classes("text-gray-400")
 
                     # Characters
                     if template.characters:
                         ui.label("Character Archetypes").classes("text-lg font-semibold mt-4")
                         for char in template.characters:
-                            with ui.card().classes("w-full bg-gray-50 dark:bg-gray-800"):
+                            with ui.card().classes("w-full bg-gray-800"):
                                 ui.label(f"{char.name} ({char.role})").classes("font-medium")
-                                ui.label(char.description).classes(
-                                    "text-sm text-gray-600 dark:text-gray-400"
-                                )
+                                ui.label(char.description).classes("text-sm text-gray-400")
                                 if char.personality_traits:
                                     with ui.row().classes("gap-2 mt-2"):
                                         for trait in char.personality_traits:
@@ -274,9 +264,7 @@ class TemplatesPage:
                         for i, point in enumerate(template.plot_points, 1):
                             with ui.row().classes("gap-2"):
                                 ui.label(f"{i}.").classes("font-medium")
-                                ui.label(point.description).classes(
-                                    "text-gray-600 dark:text-gray-400"
-                                )
+                                ui.label(point.description).classes("text-gray-400")
 
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("Close", on_click=dialog.close).props("flat")
@@ -302,7 +290,7 @@ class TemplatesPage:
 
             with ui.scroll_area().classes("h-[500px]"):
                 with ui.column().classes("gap-4 p-4"):
-                    ui.label(preset.description).classes("text-gray-600 dark:text-gray-400")
+                    ui.label(preset.description).classes("text-gray-400")
 
                     # Acts
                     ui.label("Structure").classes("text-lg font-semibold mt-4")
@@ -317,13 +305,13 @@ class TemplatesPage:
                                 ui.label(f"{point.percentage}%").classes(
                                     "text-sm text-gray-500 w-12"
                                 )
-                            ui.label(point.description).classes("text-gray-600 dark:text-gray-400")
+                            ui.label(point.description).classes("text-gray-400")
 
                     # Beats
                     if preset.beats:
                         ui.label("Story Beats").classes("text-lg font-semibold mt-4")
                         for i, beat in enumerate(preset.beats, 1):
-                            ui.label(f"{i}. {beat}").classes("text-gray-600 dark:text-gray-400")
+                            ui.label(f"{i}. {beat}").classes("text-gray-400")
 
             ui.button("Close", on_click=dialog.close).props("flat").classes("mt-4")
 
@@ -414,9 +402,7 @@ class TemplatesPage:
             ui.separator()
 
             with ui.column().classes("gap-4 w-96"):
-                ui.label("Select a template JSON file to import:").classes(
-                    "text-gray-600 dark:text-gray-400"
-                )
+                ui.label("Select a template JSON file to import:").classes("text-gray-400")
 
                 # Note: In production, this would use a proper file upload component
                 ui.label("File upload UI would go here").classes("text-sm text-gray-500")

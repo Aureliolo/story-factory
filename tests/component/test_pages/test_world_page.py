@@ -92,23 +92,22 @@ class TestWorldPageWithData:
         # Should show entity browser elements
         await user.should_see("Entity Browser")
 
-    async def test_world_page_entity_browser_has_dark_mode_classes(
+    async def test_world_page_entity_browser_builds_successfully(
         self, user: User, test_app_state, test_services
     ):
-        """Entity browser uses dark mode compatible classes."""
+        """Entity browser builds without errors."""
         from src.ui.pages.world import WorldPage
 
         test_app_state.interview_complete = True
-        test_app_state.dark_mode = True
 
         page_ref = []
 
-        @ui.page("/test-world-dark-mode")
+        @ui.page("/test-world-entity-browser")
         def test_page():
-            """Build test page with world page in dark mode."""
+            """Build test page with world page entity browser."""
             page = WorldPage(test_app_state, test_services)
             page.build()
             page_ref.append(page)
 
-        await user.open("/test-world-dark-mode")
-        # The page should build without errors in dark mode
+        await user.open("/test-world-entity-browser")
+        # The page should build without errors

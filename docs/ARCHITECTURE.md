@@ -235,7 +235,6 @@ class AppState:
     # UI-only state
     selected_entity_id: str | None = None
     active_tab: str = "write"
-    dark_mode: bool = False
     feedback_mode: str = "per-chapter"
 ```
 
@@ -555,7 +554,6 @@ async def generate_content(prompt: str) -> str:
 class AppState:
     current_project: StoryState | None = None
     selected_entity_id: str | None = None
-    dark_mode: bool = True
     active_tab: str = "write"
 
     def load_project(self, project: StoryState):

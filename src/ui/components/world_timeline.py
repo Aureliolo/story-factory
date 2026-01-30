@@ -181,7 +181,7 @@ class WorldTimelineComponent:
             # Timeline container
             self._container = (
                 ui.html("", sanitize=False)
-                .classes("w-full border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800")
+                .classes("w-full border border-gray-700 rounded-lg bg-gray-800")
                 .style(f"height: {self.height}px;")
             )
 
@@ -226,8 +226,7 @@ class WorldTimelineComponent:
         if not self.world_db or not self.services:
             self._container.content = """
                 <style>
-                    .timeline-empty { color: #6b7280; }
-                    .dark .timeline-empty { color: #9ca3af; }
+                    .timeline-empty { color: #9ca3af; }
                 </style>
                 <div class="timeline-empty" style="
                     height: 100%;
@@ -257,8 +256,7 @@ class WorldTimelineComponent:
         if not items:
             self._container.content = """
                 <style>
-                    .timeline-empty { color: #6b7280; }
-                    .dark .timeline-empty { color: #9ca3af; }
+                    .timeline-empty { color: #9ca3af; }
                 </style>
                 <div class="timeline-empty" style="
                     height: 100%;
@@ -295,46 +293,45 @@ class WorldTimelineComponent:
                 border-color: #FFD700 !important;
                 box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
             }}
-            .dark #{container_id} .vis-time-axis .vis-text {{
+            #{container_id} .vis-time-axis .vis-text {{
                 color: #e5e7eb;
             }}
-            .dark #{container_id} .vis-labelset .vis-label {{
+            #{container_id} .vis-labelset .vis-label {{
                 color: #e5e7eb;
             }}
-            /* Dark mode fixes for timeline panels and grid */
-            .dark #{container_id} .vis-panel.vis-center {{
+            #{container_id} .vis-panel.vis-center {{
                 background: #1f2937;
                 border-color: #374151;
             }}
-            .dark #{container_id} .vis-panel.vis-left {{
+            #{container_id} .vis-panel.vis-left {{
                 background: #1f2937;
                 border-color: #374151;
             }}
-            .dark #{container_id} .vis-panel.vis-right {{
+            #{container_id} .vis-panel.vis-right {{
                 background: #1f2937;
                 border-color: #374151;
             }}
-            .dark #{container_id} .vis-panel.vis-top {{
+            #{container_id} .vis-panel.vis-top {{
                 background: #111827;
                 border-color: #374151;
             }}
-            .dark #{container_id} .vis-panel.vis-bottom {{
+            #{container_id} .vis-panel.vis-bottom {{
                 background: #111827;
                 border-color: #374151;
             }}
-            .dark #{container_id} .vis-time-axis {{
+            #{container_id} .vis-time-axis {{
                 background: #111827;
             }}
-            .dark #{container_id} .vis-grid.vis-minor {{
+            #{container_id} .vis-grid.vis-minor {{
                 border-color: #374151;
             }}
-            .dark #{container_id} .vis-grid.vis-major {{
+            #{container_id} .vis-grid.vis-major {{
                 border-color: #374151;
             }}
-            .dark #{container_id} .vis-item .vis-item-content {{
+            #{container_id} .vis-item .vis-item-content {{
                 color: #111827;
             }}
-            .dark #{container_id} .vis-item.vis-background {{
+            #{container_id} .vis-item.vis-background {{
                 background-color: rgba(55, 65, 81, 0.3);
             }}
         </style>

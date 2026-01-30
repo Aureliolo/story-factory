@@ -143,7 +143,7 @@ class EntityCard:
                     desc = self.entity.description
                     if self.compact and len(desc) > 100:
                         desc = desc[:100] + "..."
-                    ui.label(desc).classes("text-sm text-gray-600 dark:text-gray-400")
+                    ui.label(desc).classes("text-sm text-gray-400")
 
                 # Attributes (only in non-compact mode)
                 if not self.compact and self.entity.attributes:
@@ -160,15 +160,11 @@ class EntityCard:
         with ui.expansion("Attributes", icon="list").classes("w-full"):
             for key, value in display_attrs.items():
                 with ui.row().classes("w-full items-start gap-2"):
-                    ui.label(f"{key}:").classes(
-                        "text-sm font-medium text-gray-700 dark:text-gray-300"
-                    )
+                    ui.label(f"{key}:").classes("text-sm font-medium text-gray-300")
                     if isinstance(value, list):
-                        ui.label(", ".join(str(v) for v in value)).classes(
-                            "text-sm text-gray-600 dark:text-gray-400"
-                        )
+                        ui.label(", ".join(str(v) for v in value)).classes("text-sm text-gray-400")
                     else:
-                        ui.label(str(value)).classes("text-sm text-gray-600 dark:text-gray-400")
+                        ui.label(str(value)).classes("text-sm text-gray-400")
 
     async def _handle_select(self) -> None:
         """Handle card selection."""
@@ -204,9 +200,9 @@ def entity_list_item(
     # Get role-based border styling using centralized helper
     border_style = get_role_border_style(entity.attributes)
 
-    item_classes = "w-full items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+    item_classes = "w-full items-center gap-2 p-2 rounded cursor-pointer hover:bg-gray-700"
     if selected:
-        item_classes += " bg-blue-50 dark:bg-blue-900"
+        item_classes += " bg-blue-900"
 
     with (
         ui.row()

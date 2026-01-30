@@ -131,7 +131,7 @@ class ShortcutManager:
                         with ui.row().classes("w-full justify-between items-center py-1"):
                             ui.label(shortcut.description).classes("text-sm")
                             ui.label(self.get_shortcut_display(shortcut)).classes(
-                                "text-sm font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded"
+                                "text-sm font-mono bg-gray-700 px-2 py-1 rounded"
                             )
 
                 with ui.row().classes("w-full justify-end mt-4"):

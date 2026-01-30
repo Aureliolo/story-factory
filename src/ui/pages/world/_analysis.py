@@ -258,7 +258,7 @@ def build_conflict_map_tab(page) -> None:
         ui.label(
             "Visualize relationships colored by conflict category: "
             "alliances (green), rivalries (red), tensions (yellow), and neutral (blue)."
-        ).classes("text-sm text-gray-600 dark:text-gray-400")
+        ).classes("text-sm text-gray-400")
 
         # Conflict graph component
         conflict_graph = ConflictGraphComponent(

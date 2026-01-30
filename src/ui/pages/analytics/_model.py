@@ -46,7 +46,7 @@ def build_model_section(page) -> None:
             if not summaries:
                 ui.label(
                     "No performance data yet. Generate some stories to collect metrics!"
-                ).classes("text-gray-500 dark:text-gray-400 py-8 text-center")
+                ).classes("text-gray-400 py-8 text-center")
                 return
 
             # Performance table

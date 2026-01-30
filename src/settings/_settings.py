@@ -96,7 +96,6 @@ class Settings:
     comparison_models: list[str] = field(default_factory=list)
 
     # UI settings
-    dark_mode: bool = True
     last_project_id: str | None = None  # Remember last opened project
 
     # Backup settings

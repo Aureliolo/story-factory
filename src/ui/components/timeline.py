@@ -215,9 +215,7 @@ class TimelineComponent:
                                 f'border-radius: 2px;"></div>',
                                 sanitize=False,
                             )
-                            ui.label(track_id.title()).classes(
-                                "text-xs text-gray-600 dark:text-gray-400"
-                            )
+                            ui.label(track_id.title()).classes("text-xs text-gray-400")
 
                 # Refresh button
                 ui.button(
@@ -227,8 +225,7 @@ class TimelineComponent:
 
             # Timeline container
             self._container = ui.column().classes(
-                "w-full border border-gray-300 dark:border-gray-700 rounded-lg overflow-x-auto "
-                "bg-gray-50 dark:bg-gray-900"
+                "w-full border border-gray-700 rounded-lg overflow-x-auto bg-gray-900"
             )
 
             # Initial render
@@ -281,11 +278,11 @@ class TimelineComponent:
                 .classes("w-full items-center justify-center gap-4 p-8")
                 .style(f"min-height: {self.height}px")
             ):
-                ui.icon("timeline", size="xl").classes("text-gray-400 dark:text-gray-500")
-                ui.label("No timeline data available").classes("text-gray-500 dark:text-gray-400")
+                ui.icon("timeline", size="xl").classes("text-gray-500")
+                ui.label("No timeline data available").classes("text-gray-400")
                 ui.label(
                     "Complete the interview and generate chapters to see your story timeline."
-                ).classes("text-sm text-gray-400 dark:text-gray-500 text-center")
+                ).classes("text-sm text-gray-500 text-center")
 
     def _build_chapter_timeline(self) -> None:
         """Build chapter-based timeline using native NiceGUI."""
@@ -330,8 +327,7 @@ class TimelineComponent:
             # Chapter header cells
             for i in range(1, num_chapters + 1):
                 ui.label(f"Ch. {i}").classes(
-                    "text-center text-sm font-semibold text-gray-700 dark:text-gray-300 "
-                    "border-l dark:border-gray-600 py-2"
+                    "text-center text-sm font-semibold text-gray-300 border-l border-gray-600 py-2"
                 )
 
     def _build_chapters_track(self, chapters: list, label_width: str, chapter_width: str) -> None:
@@ -354,9 +350,7 @@ class TimelineComponent:
             )
         ):
             # Track label
-            ui.label("Chapters").classes(
-                "text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center"
-            )
+            ui.label("Chapters").classes("text-sm font-medium text-gray-400 flex items-center")
 
             # Chapter cells
             for chapter in chapters:
@@ -364,7 +358,7 @@ class TimelineComponent:
 
             # Fill remaining cells if chapters list is shorter
             for _ in range(num_chapters - len(chapters)):
-                ui.html('<div class="h-full border-l dark:border-gray-600"></div>', sanitize=False)
+                ui.html('<div class="h-full border-l border-gray-600"></div>', sanitize=False)
 
     def _build_chapter_cell(self, chapter) -> None:
         """Build a single chapter cell.
@@ -375,9 +369,7 @@ class TimelineComponent:
         color = TRACK_COLORS["chapters"]["bg"]
         border_color = TRACK_COLORS["chapters"]["border"]
 
-        with ui.element("div").classes(
-            "h-full border-l dark:border-gray-600 p-1 flex items-center"
-        ):
+        with ui.element("div").classes("h-full border-l border-gray-600 p-1 flex items-center"):
             with (
                 ui.element("div")
                 .classes(
@@ -417,9 +409,7 @@ class TimelineComponent:
             )
         ):
             # Track label
-            ui.label("Events").classes(
-                "text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center"
-            )
+            ui.label("Events").classes("text-sm font-medium text-gray-400 flex items-center")
 
             # Event cells per chapter
             for i in range(1, num_chapters + 1):
@@ -434,9 +424,7 @@ class TimelineComponent:
         color = TRACK_COLORS["events"]["bg"]
         border_color = TRACK_COLORS["events"]["border"]
 
-        with ui.element("div").classes(
-            "h-full border-l dark:border-gray-600 p-1 flex flex-col gap-1"
-        ):
+        with ui.element("div").classes("h-full border-l border-gray-600 p-1 flex flex-col gap-1"):
             if not events:
                 ui.html('<div class="flex-1"></div>', sanitize=False)
             else:
@@ -455,9 +443,7 @@ class TimelineComponent:
                         )
 
                 if len(events) > 3:
-                    ui.label(f"+{len(events) - 3} more").classes(
-                        "text-xs text-gray-500 dark:text-gray-400"
-                    )
+                    ui.label(f"+{len(events) - 3} more").classes("text-xs text-gray-400")
 
     def _build_characters_track(
         self, num_chapters: int, label_width: str, chapter_width: str
@@ -482,9 +468,7 @@ class TimelineComponent:
             )
         ):
             # Track label
-            ui.label("Characters").classes(
-                "text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center"
-            )
+            ui.label("Characters").classes("text-sm font-medium text-gray-400 flex items-center")
 
             # Character spans across chapters
             self._build_character_spans(characters, num_chapters)
@@ -506,7 +490,7 @@ class TimelineComponent:
                 chars_in_chapter = [c for c in characters if c["start"] <= i <= c["end"]]
 
                 with ui.element("div").classes(
-                    "h-full border-l dark:border-gray-600 p-1 flex flex-col gap-1"
+                    "h-full border-l border-gray-600 p-1 flex flex-col gap-1"
                 ):
                     if not chars_in_chapter:
                         ui.html('<div class="flex-1"></div>', sanitize=False)
@@ -544,7 +528,7 @@ class TimelineComponent:
 
                         if len(chars_in_chapter) > 4:
                             ui.label(f"+{len(chars_in_chapter) - 4}").classes(
-                                "text-xs text-gray-500 dark:text-gray-400"
+                                "text-xs text-gray-400"
                             )
 
     def _build_locations_track(
@@ -570,9 +554,7 @@ class TimelineComponent:
             )
         ):
             # Track label
-            ui.label("Locations").classes(
-                "text-sm font-medium text-gray-600 dark:text-gray-400 flex items-center"
-            )
+            ui.label("Locations").classes("text-sm font-medium text-gray-400 flex items-center")
 
             # Location spans
             self._build_location_spans(locations, num_chapters)
@@ -592,7 +574,7 @@ class TimelineComponent:
             locs_in_chapter = [loc for loc in locations if loc["start"] <= i <= loc["end"]]
 
             with ui.element("div").classes(
-                "h-full border-l dark:border-gray-600 p-1 flex flex-col gap-1"
+                "h-full border-l border-gray-600 p-1 flex flex-col gap-1"
             ):
                 if not locs_in_chapter:
                     ui.html('<div class="flex-1"></div>', sanitize=False)

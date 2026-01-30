@@ -32,10 +32,8 @@ def render_entity_summary_html(world_db: WorldDatabase) -> str:
     # Use CSS class-based dark mode for proper theming
     return f"""
     <style>
-        .entity-summary-label {{ color: #6b7280; }}
-        .dark .entity-summary-label {{ color: #9ca3af; }}
-        .entity-summary-total {{ color: #9ca3af; }}
-        .dark .entity-summary-total {{ color: #6b7280; }}
+        .entity-summary-label {{ color: #9ca3af; }}
+        .entity-summary-total {{ color: #6b7280; }}
     </style>
     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
         <div style="background: {ENTITY_COLORS["character"]}22; border-left: 4px solid {ENTITY_COLORS["character"]}; padding: 10px; border-radius: 4px; min-width: 100px;">
@@ -78,8 +76,7 @@ def render_path_result(world_db: WorldDatabase, path: list[str]) -> str:
     if not path:
         return """
         <style>
-            .path-no-result { color: #6b7280; }
-            .dark .path-no-result { color: #9ca3af; }
+            .path-no-result { color: #9ca3af; }
         </style>
         <p class='path-no-result'>No path found between these entities.</p>
         """
@@ -107,8 +104,7 @@ def render_path_result(world_db: WorldDatabase, path: list[str]) -> str:
 
     return f"""
     <style>
-        .path-arrow {{ color: #6b7280; margin: 0 8px; }}
-        .dark .path-arrow {{ color: #9ca3af; }}
+        .path-arrow {{ color: #9ca3af; margin: 0 8px; }}
     </style>
     <div style='display: flex; align-items: center; flex-wrap: wrap; gap: 4px;'>{"".join(parts)}</div>
     """
@@ -129,8 +125,7 @@ def render_centrality_result(world_db: WorldDatabase, limit: int = 10) -> str:
     if not most_connected:
         return """
         <style>
-            .centrality-no-result { color: #6b7280; }
-            .dark .centrality-no-result { color: #9ca3af; }
+            .centrality-no-result { color: #9ca3af; }
         </style>
         <p class='centrality-no-result'>No entities found.</p>
         """
@@ -155,10 +150,8 @@ def render_centrality_result(world_db: WorldDatabase, limit: int = 10) -> str:
 
     return f"""
     <style>
-        .centrality-header {{ background: #f3f4f6; }}
-        .dark .centrality-header {{ background: #374151; }}
-        .centrality-row {{ color: #374151; }}
-        .dark .centrality-row {{ color: #e5e7eb; }}
+        .centrality-header {{ background: #374151; }}
+        .centrality-row {{ color: #e5e7eb; }}
     </style>
     <table style='width: 100%; border-collapse: collapse;'>
         <thead>
@@ -190,8 +183,7 @@ def render_communities_result(world_db: WorldDatabase) -> str:
     if not communities:
         return """
         <style>
-            .communities-no-result { color: #6b7280; }
-            .dark .communities-no-result { color: #9ca3af; }
+            .communities-no-result { color: #9ca3af; }
         </style>
         <p class='communities-no-result'>No communities found.</p>
         """
@@ -228,26 +220,17 @@ def render_communities_result(world_db: WorldDatabase) -> str:
         .community-card {{
             margin-bottom: 12px;
             padding: 10px;
-            background: #f3f4f6;
-            border-radius: 4px;
-        }}
-        .dark .community-card {{
             background: #374151;
+            border-radius: 4px;
         }}
         .community-title {{
             font-weight: bold;
             margin-bottom: 8px;
-            color: #374151;
-        }}
-        .dark .community-title {{
             color: #e5e7eb;
         }}
         .community-overflow {{
-            color: #6b7280;
-            margin-left: 8px;
-        }}
-        .dark .community-overflow {{
             color: #9ca3af;
+            margin-left: 8px;
         }}
     </style>
     <div>{"".join(parts)}</div>

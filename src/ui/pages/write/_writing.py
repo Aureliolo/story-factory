@@ -81,7 +81,7 @@ def build_chapter_navigator(page: WritePage) -> None:
             ui.row()
             .classes(
                 f"w-full items-center gap-2 p-2 rounded cursor-pointer "
-                f"{'bg-blue-50 dark:bg-blue-900' if is_current else 'hover:bg-gray-50 dark:hover:bg-gray-700'}"
+                f"{'bg-blue-900' if is_current else 'hover:bg-gray-700'}"
             )
             .on("click", lambda n=chapter.number: select_chapter(page, n))
         ):
@@ -99,9 +99,7 @@ def build_writing_display(page: WritePage) -> None:
     with ui.row().classes("w-full items-center"):
         ui.label("Story Content").classes("text-lg font-semibold")
         ui.space()
-        page._word_count_label = ui.label("0 words").classes(
-            "text-sm text-gray-500 dark:text-gray-400"
-        )
+        page._word_count_label = ui.label("0 words").classes("text-sm text-gray-400")
 
     # Scene editor section (collapsible)
     with ui.expansion("Scene Editor", icon="view_list", value=False).classes("w-full mb-4"):
@@ -113,16 +111,13 @@ def build_writing_display(page: WritePage) -> None:
     page._generation_status = GenerationStatus(page.state)
     page._generation_status.build()
 
-    # Writing area - use state-based dark mode detection for reliable styling
-    bg_color = "#1f2937" if page.state.dark_mode else "#ffffff"
-    border_color = "#374151" if page.state.dark_mode else "#e5e7eb"
-    text_class = "prose-invert" if page.state.dark_mode else ""
+    # Writing area
     with (
         ui.element("div")
         .classes("w-full flex-grow p-4 rounded-lg border overflow-auto")
-        .style(f"background-color: {bg_color}; border-color: {border_color}")
+        .style("background-color: #1f2937; border-color: #374151")
     ):
-        page._writing_display = ui.markdown().classes(f"prose {text_class} max-w-none")
+        page._writing_display = ui.markdown().classes("prose prose-invert max-w-none")
 
     # Load current chapter content
     refresh_writing_display(page)
@@ -190,7 +185,7 @@ def build_writing_controls(page: WritePage) -> None:
     # Regenerate with Feedback
     with ui.expansion("Regenerate with Feedback", icon="autorenew", value=False).classes("w-full"):
         ui.label("Provide specific feedback to improve this chapter").classes(
-            "text-sm text-gray-600 dark:text-gray-400 mb-2"
+            "text-sm text-gray-400 mb-2"
         )
         page._regenerate_feedback_input = (
             ui.textarea(
@@ -267,7 +262,7 @@ def build_scene_editor(page: WritePage) -> None:
     from src.ui.components.scene_editor import SceneListComponent
 
     if not page.state.project or page.state.current_chapter is None:
-        ui.label("Select a chapter to manage scenes.").classes("text-gray-500 dark:text-gray-400")
+        ui.label("Select a chapter to manage scenes.").classes("text-gray-400")
         return
 
     # Get current chapter
@@ -277,7 +272,7 @@ def build_scene_editor(page: WritePage) -> None:
     )
 
     if not chapter:
-        ui.label("Chapter not found.").classes("text-gray-500 dark:text-gray-400")
+        ui.label("Chapter not found.").classes("text-gray-400")
         return
 
     # Build scene list component
@@ -369,9 +364,7 @@ def build_version_history(page: WritePage) -> None:
         page: The WritePage instance.
     """
     if not page.state.project or page.state.current_chapter is None:
-        ui.label("Select a chapter to see its version history").classes(
-            "text-gray-500 dark:text-gray-400 text-sm"
-        )
+        ui.label("Select a chapter to see its version history").classes("text-gray-400 text-sm")
         return
 
     chapter = next(
@@ -380,14 +373,14 @@ def build_version_history(page: WritePage) -> None:
     )
 
     if not chapter or not chapter.versions:
-        ui.label("No previous versions yet").classes("text-gray-500 dark:text-gray-400 text-sm")
+        ui.label("No previous versions yet").classes("text-gray-400 text-sm")
         return
 
     # Sort versions by version number (newest first)
     sorted_versions = sorted(chapter.versions, key=lambda v: v.version_number, reverse=True)
 
     for version in sorted_versions:
-        with ui.card().classes("w-full p-2 bg-gray-50 dark:bg-gray-800"):
+        with ui.card().classes("w-full p-2 bg-gray-800"):
             with ui.row().classes("w-full items-center justify-between"):
                 with ui.column().classes("gap-1 flex-grow"):
                     with ui.row().classes("items-center gap-2"):
@@ -395,17 +388,15 @@ def build_version_history(page: WritePage) -> None:
                         if version.is_current:
                             ui.badge("Current").props("color=green-7")
                         ui.label(version.created_at.strftime("%b %d, %I:%M %p")).classes(
-                            "text-xs text-gray-500 dark:text-gray-400"
+                            "text-xs text-gray-400"
                         )
 
                     if version.feedback:
                         ui.label(f'Feedback: "{version.feedback}"').classes(
-                            "text-xs italic text-gray-600 dark:text-gray-300 mt-1"
+                            "text-xs italic text-gray-300 mt-1"
                         )
 
-                    ui.label(f"{version.word_count} words").classes(
-                        "text-xs text-gray-500 dark:text-gray-400"
-                    )
+                    ui.label(f"{version.word_count} words").classes("text-xs text-gray-400")
 
                 # Action buttons
                 with ui.row().classes("gap-1"):
@@ -510,11 +501,9 @@ def view_version(page: WritePage, version_id: str) -> None:
     # Create dialog to show version
     dialog = ui.dialog().props("maximized")
 
-    with dialog, ui.card().classes("w-full h-full flex flex-col bg-white dark:bg-gray-800"):
+    with dialog, ui.card().classes("w-full h-full flex flex-col bg-gray-800"):
         # Header
-        with ui.row().classes(
-            "w-full items-center justify-between p-4 border-b dark:border-gray-700"
-        ):
+        with ui.row().classes("w-full items-center justify-between p-4 border-b border-gray-700"):
             with ui.column().classes("gap-1"):
                 with ui.row().classes("items-center gap-2"):
                     ui.label(f"Chapter {chapter.number}: {chapter.title}").classes(
@@ -530,17 +519,17 @@ def view_version(page: WritePage, version_id: str) -> None:
 
                 if version.feedback:
                     ui.label(f'Feedback used: "{version.feedback}"').classes(
-                        "text-sm italic text-gray-600 dark:text-gray-400 mt-1"
+                        "text-sm italic text-gray-400 mt-1"
                     )
 
             ui.button(icon="close", on_click=dialog.close).props("flat round")
 
         # Content
         with ui.column().classes("flex-grow overflow-auto p-6"):
-            ui.markdown(version.content).classes("prose dark:prose-invert max-w-none")
+            ui.markdown(version.content).classes("prose-invert max-w-none")
 
         # Footer with actions
-        with ui.row().classes("w-full justify-end gap-2 p-4 border-t dark:border-gray-700"):
+        with ui.row().classes("w-full justify-end gap-2 p-4 border-t border-gray-700"):
             if not version.is_current:
 
                 def restore_and_close() -> None:
@@ -616,11 +605,9 @@ async def show_suggestions(page: WritePage) -> None:
                 loading_spinner.set_visibility(False)
             page._notify(f"Error generating suggestions: {e}", type="negative")
 
-    with dialog, ui.card().classes("w-full h-full flex flex-col bg-white dark:bg-gray-800"):
+    with dialog, ui.card().classes("w-full h-full flex flex-col bg-gray-800"):
         # Header
-        with ui.row().classes(
-            "w-full items-center justify-between p-4 border-b dark:border-gray-700"
-        ):
+        with ui.row().classes("w-full items-center justify-between p-4 border-b border-gray-700"):
             with ui.row().classes("items-center gap-2"):
                 ui.icon("lightbulb", size="md").classes("text-amber-500")
                 ui.label("Writing Suggestions").classes("text-2xl font-bold")
@@ -633,7 +620,7 @@ async def show_suggestions(page: WritePage) -> None:
             suggestions_html.set_visibility(False)
 
         # Footer
-        with ui.row().classes("w-full justify-end gap-2 p-4 border-t dark:border-gray-700"):
+        with ui.row().classes("w-full justify-end gap-2 p-4 border-t border-gray-700"):
             ui.button("Refresh", on_click=load_suggestions, icon="refresh").props("flat")
 
             def close_dialog():

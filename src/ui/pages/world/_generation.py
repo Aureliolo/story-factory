@@ -55,9 +55,7 @@ def build_generation_toolbar(page) -> None:
                 )
                 with ui.column().classes("gap-0"):
                     ui.label("World Readiness").classes("text-sm font-medium")
-                    ui.label(readiness_text).classes(
-                        f"text-xs text-{readiness_color}-600 dark:text-{readiness_color}-400"
-                    )
+                    ui.label(readiness_text).classes(f"text-xs text-{readiness_color}-400")
 
         # Quality refinement toggle
         with ui.row().classes("items-center gap-2"):
@@ -187,7 +185,7 @@ def confirm_regenerate(page) -> None:
             f"• {chapter_count} chapter outlines\n"
             f"• {char_count} characters\n\n"
             "Then generate everything fresh from your story brief."
-        ).classes("text-gray-600 dark:text-gray-400 whitespace-pre-line")
+        ).classes("text-gray-400 whitespace-pre-line")
 
         async def confirm_and_build() -> None:
             """Close the confirmation dialog and trigger a full rebuild."""
@@ -257,7 +255,7 @@ def confirm_clear_world(page) -> None:
             f"• {char_count} characters\n\n"
             f"Your interview and story brief will be kept.\n"
             f"This action cannot be undone."
-        ).classes("text-gray-600 dark:text-gray-400 whitespace-pre-line")
+        ).classes("text-gray-400 whitespace-pre-line")
 
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
             ui.button("Cancel", on_click=dialog.close).props("flat")

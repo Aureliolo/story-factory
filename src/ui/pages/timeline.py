@@ -56,23 +56,21 @@ class TimelinePage:
     def _build_no_project_message(self) -> None:
         """Build message when no project is selected."""
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-4 py-16"):
-            ui.icon("timeline", size="xl").classes("text-gray-400 dark:text-gray-500")
-            ui.label("No Project Selected").classes("text-xl text-gray-500 dark:text-gray-400")
+            ui.icon("timeline", size="xl").classes("text-gray-500")
+            ui.label("No Project Selected").classes("text-xl text-gray-400")
             ui.label("Select a project from the header to view its timeline.").classes(
-                "text-gray-400 dark:text-gray-500"
+                "text-gray-500"
             )
 
     def _build_interview_required_message(self) -> None:
         """Build message when interview is not complete."""
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-6 py-16"):
             ui.icon("chat", size="xl").classes("text-blue-400")
-            ui.label("Complete the Interview First").classes(
-                "text-xl font-semibold text-gray-700 dark:text-gray-200"
-            )
+            ui.label("Complete the Interview First").classes("text-xl font-semibold text-gray-200")
             ui.label(
                 "The Timeline requires story context from the interview. "
                 "Complete the interview to see your story's timeline."
-            ).classes("text-gray-500 dark:text-gray-400 text-center max-w-md")
+            ).classes("text-gray-400 text-center max-w-md")
 
             ui.button(
                 "Go to Interview",
@@ -98,7 +96,7 @@ class TimelinePage:
                 with ui.column().classes("items-center"):
                     ui.icon("event", size="lg").classes("text-blue-500")
                     ui.label(str(event_count)).classes("text-2xl font-bold")
-                    ui.label("Events").classes("text-sm text-gray-500 dark:text-gray-400")
+                    ui.label("Events").classes("text-sm text-gray-400")
 
                 ui.separator().props("vertical")
 
@@ -106,7 +104,7 @@ class TimelinePage:
                 with ui.column().classes("items-center"):
                     ui.icon("menu_book", size="lg").classes("text-green-500")
                     ui.label(str(chapter_count)).classes("text-2xl font-bold")
-                    ui.label("Chapters").classes("text-sm text-gray-500 dark:text-gray-400")
+                    ui.label("Chapters").classes("text-sm text-gray-400")
 
                 ui.separator().props("vertical")
 
@@ -114,7 +112,7 @@ class TimelinePage:
                 with ui.column().classes("items-center"):
                     ui.icon("people", size="lg").classes("text-orange-500")
                     ui.label(str(character_count)).classes("text-2xl font-bold")
-                    ui.label("Characters").classes("text-sm text-gray-500 dark:text-gray-400")
+                    ui.label("Characters").classes("text-sm text-gray-400")
 
                 ui.space()
 
@@ -144,18 +142,16 @@ class TimelinePage:
         with ui.expansion("Story Events", icon="list", value=True).classes("w-full"):
             if not self.state.project.timeline:
                 ui.label("No events recorded yet. Add events using the button above.").classes(
-                    "text-gray-500 dark:text-gray-400 text-sm p-4"
+                    "text-gray-400 text-sm p-4"
                 )
             else:
                 with ui.column().classes("w-full gap-2 p-2"):
                     for idx, event in enumerate(self.state.project.timeline):
-                        with ui.card().classes(
-                            "w-full p-3 hover:bg-gray-50 dark:hover:bg-gray-700"
-                        ):
+                        with ui.card().classes("w-full p-3 hover:bg-gray-700"):
                             with ui.row().classes("w-full items-center gap-2"):
                                 ui.icon("event", size="sm").classes("text-blue-500")
                                 ui.label(f"Event {idx + 1}").classes(
-                                    "text-sm font-medium text-gray-500 dark:text-gray-400"
+                                    "text-sm font-medium text-gray-400"
                                 )
                                 ui.label(event).classes("flex-grow")
 
@@ -221,7 +217,7 @@ class TimelinePage:
             with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[400px]"):
                 ui.label("Delete Event?").classes("text-lg font-bold text-red-600")
                 ui.label(f'Are you sure you want to delete this event?\n\n"{event}"').classes(
-                    "text-gray-600 dark:text-gray-400 whitespace-pre-line mt-2"
+                    "text-gray-400 whitespace-pre-line mt-2"
                 )
 
                 with ui.row().classes("w-full justify-end gap-2 mt-4"):

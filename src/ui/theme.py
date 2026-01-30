@@ -60,7 +60,7 @@ CONFLICT_COLORS = {
     "neutral": "#2196F3",  # Blue - informational
 }
 
-# ========== Primary Colors (Light Mode) ==========
+# ========== Primary Colors (Dark Mode) ==========
 COLORS = {
     "primary": "#2196F3",
     "primary_dark": "#1976D2",
@@ -72,11 +72,11 @@ COLORS = {
     "warning": "#FF9800",
     "error": "#F44336",
     "info": "#00BCD4",
-    "background": "#FAFAFA",
-    "surface": "#FFFFFF",
-    "text_primary": "#212121",
-    "text_secondary": "#757575",
-    "divider": "#BDBDBD",
+    "background": "#111827",
+    "surface": "#1f2937",
+    "text_primary": "#f3f4f6",
+    "text_secondary": "#d1d5db",
+    "divider": "#374151",
 }
 
 # ========== Graph Visualization Settings ==========
@@ -171,39 +171,37 @@ def status_badge_style(status: str) -> str:
 
 
 def get_background_class() -> str:
-    """Get background class for the current theme.
+    """Get background class for the dark theme.
 
     Returns:
-        Background class string with Tailwind dark: variant.
+        Background class string.
     """
-    return "bg-gray-50 dark:bg-gray-900"
+    return "bg-gray-900"
 
 
 def get_surface_class() -> str:
-    """Get surface (card/panel) class for the current theme.
+    """Get surface (card/panel) class for the dark theme.
 
     Returns:
-        Surface class string with Tailwind dark: variant.
+        Surface class string.
     """
-    return "bg-white dark:bg-gray-800"
+    return "bg-gray-800"
 
 
 def get_text_class(variant: str = "primary") -> str:
-    """Get text color class for the current theme.
-
-    Uses Tailwind dark: variants for automatic dark mode support.
+    """Get text color class for the dark theme.
 
     Args:
         variant: Text variant (primary, secondary, muted).
 
     Returns:
-        Text class string with dark: variants.
+        Text class string.
     """
     return {
-        "primary": "text-gray-800 dark:text-gray-100",
-        "secondary": "text-gray-600 dark:text-gray-300",
-        "muted": "text-gray-500 dark:text-gray-400",
-    }.get(variant, "text-gray-800 dark:text-gray-100")
+        "primary": "text-gray-100",
+        "secondary": "text-gray-300",
+        "muted": "text-gray-400",
+    }.get(variant, "text-gray-100")
 
 
 def get_role_type(attributes: dict | None) -> str | None:

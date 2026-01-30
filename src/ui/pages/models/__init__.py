@@ -150,7 +150,7 @@ class ModelsPage:
             ui.space()
 
             # VRAM indicator
-            with ui.row().classes("items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded"):
+            with ui.row().classes("items-center gap-2 p-2 bg-gray-700 rounded"):
                 ui.icon("memory")
                 ui.label(f"{vram} GB VRAM").classes("font-medium")
 
