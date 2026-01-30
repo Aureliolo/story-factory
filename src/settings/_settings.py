@@ -215,11 +215,6 @@ class Settings:
     prompt_templates_dir: str = "src/prompts/templates"
     prompt_metrics_enabled: bool = True
 
-    # Graph visualization settings
-    graph_filter_types: list[str] = field(
-        default_factory=lambda: ["character", "location", "item", "faction", "concept"]
-    )
-
     # LLM generation token limits (num_predict values)
     llm_tokens_character_create: int = 500
     llm_tokens_character_judge: int = 300

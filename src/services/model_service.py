@@ -64,6 +64,11 @@ class ModelService:
         """
         logger.debug("Initializing ModelService")
         self.settings = settings
+        # State tracking for change-only logging
+        self._last_health_healthy: bool | None = None
+        self._last_health_vram: int | None = None
+        self._last_model_count: int | None = None
+        self._last_model_count_with_sizes: int | None = None
         logger.debug("ModelService initialized successfully")
 
     def check_health(self) -> OllamaHealth:
@@ -83,9 +88,16 @@ class ModelService:
             # Get VRAM
             vram = get_available_vram()
 
-            logger.info(
-                f"Ollama health check successful: {self.settings.ollama_url}, VRAM={vram}GB"
-            )
+            if not self._last_health_healthy or self._last_health_vram != vram:
+                logger.info(
+                    f"Ollama health check successful: {self.settings.ollama_url}, VRAM={vram}GB"
+                )
+            else:
+                logger.debug(
+                    f"Ollama health check successful: {self.settings.ollama_url}, VRAM={vram}GB"
+                )
+            self._last_health_healthy = True
+            self._last_health_vram = vram
             return OllamaHealth(
                 is_healthy=True,
                 message="Ollama is running",
@@ -93,13 +105,21 @@ class ModelService:
                 available_vram=vram,
             )
         except ollama.ResponseError as e:
-            logger.warning(f"Ollama API error during health check: {e}")
+            if self._last_health_healthy is not False:
+                logger.warning(f"Ollama API error during health check: {e}")
+            else:
+                logger.debug(f"Ollama API error during health check: {e}")
+            self._last_health_healthy = False
             return OllamaHealth(
                 is_healthy=False,
                 message=f"Ollama API error: {e}",
             )
         except (ConnectionError, TimeoutError) as e:
-            logger.warning(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
+            if self._last_health_healthy is not False:
+                logger.warning(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
+            else:
+                logger.debug(f"Cannot connect to Ollama at {self.settings.ollama_url}: {e}")
+            self._last_health_healthy = False
             return OllamaHealth(
                 is_healthy=False,
                 message=f"Cannot connect to Ollama: {e}",
@@ -118,7 +138,12 @@ class ModelService:
             )
             response = client.list()
             models = [model.model for model in response.models if model.model]
-            logger.info(f"Found {len(models)} installed models")
+            count = len(models)
+            if self._last_model_count != count:
+                logger.info(f"Found {count} installed models")
+                self._last_model_count = count
+            else:
+                logger.debug(f"Found {count} installed models")
             return models
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning(f"Failed to list models from Ollama: {e}")
@@ -143,7 +168,12 @@ class ModelService:
                     size_bytes = getattr(model, "size", 0) or 0
                     size_gb = round(size_bytes / (1024**3), 1)
                     models[model.model] = size_gb
-            logger.info(f"Found {len(models)} installed models with sizes")
+            count = len(models)
+            if self._last_model_count_with_sizes != count:
+                logger.info(f"Found {count} installed models with sizes")
+                self._last_model_count_with_sizes = count
+            else:
+                logger.debug(f"Found {count} installed models with sizes")
             return models
         except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
             logger.warning(f"Failed to list models from Ollama: {e}")
@@ -459,7 +489,7 @@ class ModelService:
         all_models = self.list_available()
 
         filtered = [m for m in all_models if m.vram_required <= vram]
-        logger.info(f"Found {len(filtered)}/{len(all_models)} models that fit in {vram}GB VRAM")
+        logger.debug(f"Found {len(filtered)}/{len(all_models)} models that fit in {vram}GB VRAM")
         return filtered
 
     def test_model(self, model_id: str) -> tuple[bool, str]:
@@ -532,7 +562,7 @@ class ModelService:
 
         # Sort by quality descending
         filtered.sort(key=lambda m: m.quality, reverse=True)
-        logger.info(
+        logger.debug(
             f"Found {len(filtered)} models matching quality>={min_quality}, "
             f"vram<={vram}GB, uncensored={uncensored_required}"
         )

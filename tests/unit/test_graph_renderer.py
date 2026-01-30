@@ -1,10 +1,11 @@
 """Tests for graph renderer - Issues #172 and #173."""
 
 from src.ui.graph_renderer import ENTITY_COLORS, ENTITY_ICON_CODES, ENTITY_SHAPES
+from src.ui.theme import ROLE_COLORS, get_role_graph_style
 
 
 class TestEntityIconCodes:
-    """Tests for Font Awesome icon codes (Issue #172)."""
+    """Tests for Material Icons codepoints used in graph visualization."""
 
     def test_icon_codes_defined_for_all_entity_types(self):
         """Test that icon codes exist for all standard entity types."""
@@ -14,24 +15,24 @@ class TestEntityIconCodes:
             assert entity_type in ENTITY_ICON_CODES, f"Missing icon code for {entity_type}"
 
     def test_character_icon_code(self):
-        """Test character uses fa-user icon."""
-        assert ENTITY_ICON_CODES["character"] == "\uf007"  # fa-user
+        """Test character uses Material Icons 'person' codepoint."""
+        assert ENTITY_ICON_CODES["character"] == "\ue7fd"  # person
 
     def test_location_icon_code(self):
-        """Test location uses fa-map-marker-alt icon."""
-        assert ENTITY_ICON_CODES["location"] == "\uf3c5"  # fa-map-marker-alt
+        """Test location uses Material Icons 'place' codepoint."""
+        assert ENTITY_ICON_CODES["location"] == "\ue55f"  # place
 
     def test_item_icon_code(self):
-        """Test item uses fa-box icon."""
-        assert ENTITY_ICON_CODES["item"] == "\uf466"  # fa-box
+        """Test item uses Material Icons 'inventory_2' codepoint."""
+        assert ENTITY_ICON_CODES["item"] == "\ue1a1"  # inventory_2
 
     def test_faction_icon_code(self):
-        """Test faction uses fa-users icon."""
-        assert ENTITY_ICON_CODES["faction"] == "\uf0c0"  # fa-users
+        """Test faction uses Material Icons 'groups' codepoint."""
+        assert ENTITY_ICON_CODES["faction"] == "\uf233"  # groups
 
     def test_concept_icon_code(self):
-        """Test concept uses fa-lightbulb icon."""
-        assert ENTITY_ICON_CODES["concept"] == "\uf0eb"  # fa-lightbulb
+        """Test concept uses Material Icons 'lightbulb' codepoint."""
+        assert ENTITY_ICON_CODES["concept"] == "\ue0f0"  # lightbulb
 
     def test_icon_codes_are_strings(self):
         """Test that all icon codes are non-empty strings."""
@@ -104,23 +105,64 @@ class TestProtagonistNodeStyling:
             assert is_antagonist == expected_antag, f"Failed for {attributes}"
             assert is_mentor == expected_mentor, f"Failed for {attributes}"
 
-    def test_protagonist_gold_border_color(self):
-        """Test that protagonist nodes get gold (#FFD700) border."""
-        # The expected gold color used for protagonist styling
-        gold_color = "#FFD700"
+    def test_protagonist_gold_shadow_color(self):
+        """Test that protagonist nodes get gold (#FFD700) shadow."""
+        assert ROLE_COLORS["protagonist"] == "#FFD700"
 
-        # Verify the gold color is the expected protagonist border
-        assert gold_color == "#FFD700"
+    def test_antagonist_red_shadow_color(self):
+        """Test that antagonist nodes get red (#F44336) shadow."""
+        assert ROLE_COLORS["antagonist"] == "#F44336"
 
-    def test_antagonist_red_border_color(self):
-        """Test that antagonist nodes get red (#F44336) border."""
-        red_color = "#F44336"
-        assert red_color == "#F44336"
+    def test_mentor_blue_shadow_color(self):
+        """Test that mentor nodes get blue (#2196F3) shadow."""
+        assert ROLE_COLORS["mentor"] == "#2196F3"
 
-    def test_mentor_blue_border_color(self):
-        """Test that mentor nodes get blue (#2196F3) border."""
-        blue_color = "#2196F3"
-        assert blue_color == "#2196F3"
+
+class TestRoleGraphStyle:
+    """Tests for get_role_graph_style shadow-based styling."""
+
+    def test_protagonist_returns_glow_style(self):
+        """Test protagonist gets a gold glow."""
+        style = get_role_graph_style({"role": "protagonist"}, "#4CAF50")
+
+        assert style is not None
+        assert style["glow_color"] == ROLE_COLORS["protagonist"]
+        assert style["glow_size"] == 40
+        assert style["icon_color"] == "#4CAF50"
+
+    def test_antagonist_returns_glow_style(self):
+        """Test antagonist gets a red glow."""
+        style = get_role_graph_style({"role": "antagonist"}, "#4CAF50")
+
+        assert style is not None
+        assert style["glow_color"] == ROLE_COLORS["antagonist"]
+        assert style["glow_size"] == 35
+
+    def test_mentor_returns_glow_style(self):
+        """Test mentor gets a blue glow."""
+        style = get_role_graph_style({"role": "mentor"}, "#2196F3")
+
+        assert style is not None
+        assert style["glow_color"] == ROLE_COLORS["mentor"]
+        assert style["glow_size"] == 35
+
+    def test_no_role_returns_none(self):
+        """Test no role returns None."""
+        assert get_role_graph_style({}, "#4CAF50") is None
+        assert get_role_graph_style(None, "#4CAF50") is None
+        assert get_role_graph_style({"role": "supporting"}, "#4CAF50") is None
+
+    def test_protagonist_has_larger_glow_than_others(self):
+        """Test protagonist glow is more prominent than antagonist/mentor."""
+        protag = get_role_graph_style({"role": "protagonist"}, "#4CAF50")
+        antag = get_role_graph_style({"role": "antagonist"}, "#4CAF50")
+        mentor = get_role_graph_style({"role": "mentor"}, "#4CAF50")
+
+        assert protag is not None
+        assert antag is not None
+        assert mentor is not None
+        assert protag["glow_size"] > antag["glow_size"]
+        assert protag["glow_size"] > mentor["glow_size"]
 
 
 class TestIconNodeConfiguration:
@@ -131,13 +173,13 @@ class TestIconNodeConfiguration:
         entity_type = "character"
         base_color = ENTITY_COLORS.get(entity_type, "#607D8B")
 
-        # Build icon config dict
+        # Build icon config dict matching renderer output
         icon_config: dict[str, str | int] = {
-            "face": "'Font Awesome 5 Free'",
-            "code": ENTITY_ICON_CODES.get(entity_type, "\uf128"),
+            "face": "'Material Icons'",
+            "code": ENTITY_ICON_CODES.get(entity_type, "\ue8fd"),
             "size": 40,
             "color": base_color,
-            "weight": "900",
+            "weight": "normal",
         }
 
         # Build a node the same way graph_renderer does
@@ -153,15 +195,15 @@ class TestIconNodeConfiguration:
         # Verify structure
         assert node["shape"] == "icon"
         assert "icon" in node
-        assert icon_config["face"] == "'Font Awesome 5 Free'"
-        assert icon_config["code"] == "\uf007"
+        assert icon_config["face"] == "'Material Icons'"
+        assert icon_config["code"] == "\ue7fd"
         assert icon_config["size"] == 40
-        assert icon_config["weight"] == "900"
+        assert icon_config["weight"] == "normal"
         assert icon_config["color"] == base_color
 
     def test_fallback_icon_code(self):
         """Test that unknown entity types get fallback icon."""
         unknown_type = "unknown_entity_type"
-        fallback_code = ENTITY_ICON_CODES.get(unknown_type, "\uf128")
+        fallback_code = ENTITY_ICON_CODES.get(unknown_type, "\ue8fd")
 
-        assert fallback_code == "\uf128"  # fa-question
+        assert fallback_code == "\ue8fd"  # help_outline

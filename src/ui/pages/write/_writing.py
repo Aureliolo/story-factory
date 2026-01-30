@@ -9,6 +9,7 @@ from nicegui.elements.html import Html
 
 from src.memory.mode_models import PRESET_MODES
 from src.ui.components.generation_status import GenerationStatus
+from src.ui.local_prefs import load_prefs_deferred, save_pref
 
 if TYPE_CHECKING:
     from . import WritePage
@@ -180,10 +181,10 @@ def build_writing_controls(page: WritePage) -> None:
 
     # Feedback mode
     ui.label("Feedback Mode").classes("text-sm font-medium")
-    ui.select(
+    page._feedback_mode_select = ui.select(
         options=["per-chapter", "mid-chapter", "on-demand"],
         value=page.state.feedback_mode,
-        on_change=lambda e: setattr(page.state, "feedback_mode", e.value),
+        on_change=lambda e: _on_feedback_mode_change(page, e.value),
     ).classes("w-full")
 
     # Regenerate with Feedback
@@ -220,6 +221,41 @@ def build_writing_controls(page: WritePage) -> None:
         ui.button("TXT", on_click=lambda: export_mod.export(page, "text")).props("flat size=sm")
         ui.button("EPUB", on_click=lambda: export_mod.export(page, "epub")).props("flat size=sm")
         ui.button("PDF", on_click=lambda: export_mod.export(page, "pdf")).props("flat size=sm")
+
+    # Restore persisted preferences from localStorage
+    load_prefs_deferred("write_page", lambda prefs: _apply_write_prefs(page, prefs))
+
+
+def _on_feedback_mode_change(page: WritePage, value: str) -> None:
+    """Handle feedback mode change and persist to localStorage.
+
+    Args:
+        page: The WritePage instance.
+        value: New feedback mode value.
+    """
+    page.state.feedback_mode = value
+    save_pref("write_page", "feedback_mode", value)
+    logger.debug("Feedback mode changed to: %s", value)
+
+
+def _apply_write_prefs(page: WritePage, prefs: dict) -> None:
+    """Apply loaded preferences to write page state and UI widgets.
+
+    Args:
+        page: The WritePage instance.
+        prefs: Dict of field→value from localStorage.
+    """
+    if not prefs:
+        return
+
+    valid_modes = {"per-chapter", "mid-chapter", "on-demand"}
+    if "feedback_mode" in prefs and prefs["feedback_mode"] in valid_modes:
+        val = prefs["feedback_mode"]
+        if val != page.state.feedback_mode:
+            page.state.feedback_mode = val
+            if hasattr(page, "_feedback_mode_select") and page._feedback_mode_select:
+                page._feedback_mode_select.value = val
+            logger.info("Restored write page preferences from localStorage")
 
 
 def build_scene_editor(page: WritePage) -> None:

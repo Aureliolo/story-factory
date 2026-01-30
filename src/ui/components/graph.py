@@ -11,27 +11,25 @@ from nicegui.elements.html import Html
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
 from src.ui.graph_renderer import render_graph_html
+from src.ui.local_prefs import load_prefs_deferred, save_pref
 
 logger = logging.getLogger(__name__)
 
+_PAGE_KEY = "world_graph"
+
 
 def _ensure_vis_network_loaded() -> None:
-    """Add vis-network library script and Font Awesome CSS to current page.
+    """Add vis-network library script to current page.
 
     This must be called for each page/client that needs the graph,
     since ui.add_body_html only adds to the current client's page.
     NiceGUI handles deduplication if called multiple times in same page.
+
+    Graph icons use Material Icons (already loaded by NiceGUI/Quasar).
     """
     # vis-network version tracked in /package.json for Dependabot
     ui.add_body_html(
         '<script src="https://unpkg.com/vis-network@10.0.2/standalone/umd/vis-network.min.js"></script>'
-    )
-    # Font Awesome 5 for consistent icon rendering in graph nodes
-    ui.add_head_html(
-        '<link rel="stylesheet" '
-        'href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" '
-        'integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" '
-        'crossorigin="anonymous" referrerpolicy="no-referrer" />'
     )
 
 
@@ -78,12 +76,13 @@ class GraphComponent:
         self.height = height
 
         self._container: Html | None = None
-        # Use filter types from settings if available, otherwise default to all
-        self._filter_types: list[str] = (
-            list(self.settings.graph_filter_types)
-            if hasattr(self.settings, "graph_filter_types")
-            else ["character", "location", "item", "faction", "concept"]
-        )
+        self._filter_types: list[str] = [
+            "character",
+            "location",
+            "item",
+            "faction",
+            "concept",
+        ]
         self._layout = "force-directed"
         self._selected_entity_id: str | None = None
         self._callback_id = f"graph_node_select_{uuid.uuid4().hex[:8]}"
@@ -156,32 +155,36 @@ class GraphComponent:
 
             ui.on(self._edge_context_callback_id, handle_edge_context_menu)
 
+        # Widget references for deferred preference loading
+        self._filter_checkboxes: dict[str, ui.checkbox] = {}
+        self._layout_select: ui.select | None = None
+
         with ui.column().classes("w-full"):
             # Controls
             with ui.row().classes("w-full items-center gap-4 mb-2"):
                 # Type filter
                 ui.label("Show:").classes("text-sm font-medium")
-                ui.checkbox(
+                self._filter_checkboxes["character"] = ui.checkbox(
                     "Characters",
                     value="character" in self._filter_types,
                     on_change=lambda e: self._toggle_filter("character", e.value),
                 )
-                ui.checkbox(
+                self._filter_checkboxes["location"] = ui.checkbox(
                     "Locations",
                     value="location" in self._filter_types,
                     on_change=lambda e: self._toggle_filter("location", e.value),
                 )
-                ui.checkbox(
+                self._filter_checkboxes["item"] = ui.checkbox(
                     "Items",
                     value="item" in self._filter_types,
                     on_change=lambda e: self._toggle_filter("item", e.value),
                 )
-                ui.checkbox(
+                self._filter_checkboxes["faction"] = ui.checkbox(
                     "Factions",
                     value="faction" in self._filter_types,
                     on_change=lambda e: self._toggle_filter("faction", e.value),
                 )
-                ui.checkbox(
+                self._filter_checkboxes["concept"] = ui.checkbox(
                     "Concepts",
                     value="concept" in self._filter_types,
                     on_change=lambda e: self._toggle_filter("concept", e.value),
@@ -197,7 +200,7 @@ class GraphComponent:
                 ui.space()
 
                 # Layout selector
-                ui.select(
+                self._layout_select = ui.select(
                     options=["force-directed", "hierarchical", "circular"],
                     value=self._layout,
                     label="Layout",
@@ -219,6 +222,9 @@ class GraphComponent:
 
             # Initial render
             self._render_graph()
+
+        # Restore persisted preferences from localStorage
+        load_prefs_deferred(_PAGE_KEY, self._apply_prefs)
 
     def set_world_db(self, world_db: WorldDatabase | None) -> None:
         """Set the world database and refresh.
@@ -415,11 +421,7 @@ class GraphComponent:
         elif not enabled and entity_type in self._filter_types:
             self._filter_types.remove(entity_type)
 
-        # Persist to settings
-        if hasattr(self.settings, "graph_filter_types"):
-            self.settings.graph_filter_types = list(self._filter_types)
-            self.settings.save()
-
+        save_pref(_PAGE_KEY, "filter_types", self._filter_types)
         self._render_graph()
 
     def _on_layout_change(self, e: Any) -> None:
@@ -429,7 +431,39 @@ class GraphComponent:
             e: Change event with new value.
         """
         self._layout = e.value
+        save_pref(_PAGE_KEY, "layout", e.value)
         self._render_graph()
+
+    def _apply_prefs(self, prefs: dict) -> None:
+        """Apply loaded preferences to graph state and UI widgets.
+
+        Args:
+            prefs: Dict of field→value from localStorage.
+        """
+        if not prefs:
+            return
+
+        changed = False
+
+        if "filter_types" in prefs and isinstance(prefs["filter_types"], list):
+            valid_types = {"character", "location", "item", "faction", "concept"}
+            loaded = [t for t in prefs["filter_types"] if t in valid_types]
+            if loaded != self._filter_types:
+                self._filter_types = loaded
+                changed = True
+                for etype, cb in self._filter_checkboxes.items():
+                    cb.value = etype in self._filter_types
+
+        if "layout" in prefs and prefs["layout"] in ("force-directed", "hierarchical", "circular"):
+            if prefs["layout"] != self._layout:
+                self._layout = prefs["layout"]
+                changed = True
+                if self._layout_select:
+                    self._layout_select.value = self._layout
+
+        if changed:
+            logger.info("Restored world graph preferences from localStorage")
+            self._render_graph()
 
 
 def mini_graph(

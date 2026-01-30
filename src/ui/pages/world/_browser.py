@@ -7,9 +7,12 @@ from nicegui import ui
 
 from src.memory.entities import Entity
 from src.ui.components.entity_card import entity_list_item
+from src.ui.local_prefs import load_prefs_deferred, save_pref
 from src.ui.state import ActionType, UndoAction
 
 logger = logging.getLogger(__name__)
+
+_PAGE_KEY = "entity_browser"
 
 
 def build_entity_browser(page) -> None:
@@ -18,6 +21,7 @@ def build_entity_browser(page) -> None:
     Args:
         page: WorldPage instance.
     """
+
     with ui.card().classes("w-full h-full"):
         ui.label("Entity Browser").classes("text-lg font-semibold")
 
@@ -34,12 +38,12 @@ def build_entity_browser(page) -> None:
 
         # Search scope checkboxes
         with ui.row().classes("w-full gap-4 text-xs items-center"):
-            ui.checkbox(
+            page._search_names_cb = ui.checkbox(
                 "Names",
                 value=page.state.entity_search_names,
                 on_change=lambda e: update_search_scope(page, "names", e.value),
             ).props("dense")
-            ui.checkbox(
+            page._search_desc_cb = ui.checkbox(
                 "Descriptions",
                 value=page.state.entity_search_descriptions,
                 on_change=lambda e: update_search_scope(page, "descriptions", e.value),
@@ -48,25 +52,33 @@ def build_entity_browser(page) -> None:
         # Filter and sort row
         with ui.row().classes("w-full gap-2 items-center mt-1"):
             # Quality filter
-            ui.select(
-                label="Quality",
-                options={"all": "All", "high": "8+", "medium": "6-8", "low": "<6"},
-                value=page.state.entity_quality_filter,
-                on_change=lambda e: on_quality_filter_change(page, e),
-            ).classes("w-20").props("dense outlined")
+            page._quality_select = (
+                ui.select(
+                    label="Quality",
+                    options={"all": "All", "high": "8+", "medium": "6-8", "low": "<6"},
+                    value=page.state.entity_quality_filter,
+                    on_change=lambda e: on_quality_filter_change(page, e),
+                )
+                .classes("w-28")
+                .props("dense outlined")
+            )
 
             # Sort dropdown
-            ui.select(
-                label="Sort",
-                options={
-                    "name": "Name",
-                    "type": "Type",
-                    "quality": "Quality",
-                    "relationships": "Relationships",
-                },
-                value=page.state.entity_sort_by,
-                on_change=lambda e: on_sort_change(page, e),
-            ).classes("w-28").props("dense outlined")
+            page._sort_select = (
+                ui.select(
+                    label="Sort",
+                    options={
+                        "name": "Name",
+                        "type": "Type",
+                        "quality": "Quality",
+                        "relationships": "Relationships",
+                    },
+                    value=page.state.entity_sort_by,
+                    on_change=lambda e: on_sort_change(page, e),
+                )
+                .classes("w-28")
+                .props("dense outlined")
+            )
 
             # Sort direction toggle
             page._sort_direction_btn = (
@@ -119,6 +131,9 @@ def build_entity_browser(page) -> None:
 
         # Register Ctrl+F keyboard shortcut
         register_keyboard_shortcuts(page)
+
+    # Restore persisted preferences from localStorage
+    load_prefs_deferred(_PAGE_KEY, lambda prefs: _apply_prefs(page, prefs))
 
 
 def refresh_entity_list(page) -> None:
@@ -304,8 +319,10 @@ def update_search_scope(page, scope: str, enabled: bool) -> None:
     """
     if scope == "names":
         page.state.entity_search_names = enabled
+        save_pref(_PAGE_KEY, "entity_search_names", enabled)
     elif scope == "descriptions":
         page.state.entity_search_descriptions = enabled
+        save_pref(_PAGE_KEY, "entity_search_descriptions", enabled)
     logger.debug(f"Search scope updated: {scope}={enabled}")
     refresh_entity_list(page)
 
@@ -319,6 +336,7 @@ def on_quality_filter_change(page, e: Any) -> None:
     """
     page.state.entity_quality_filter = e.value
     logger.debug(f"Quality filter changed to: {e.value}")
+    save_pref(_PAGE_KEY, "entity_quality_filter", e.value)
     refresh_entity_list(page)
 
 
@@ -331,6 +349,7 @@ def on_sort_change(page, e: Any) -> None:
     """
     page.state.entity_sort_by = e.value
     logger.debug(f"Sort changed to: {e.value}")
+    save_pref(_PAGE_KEY, "entity_sort_by", e.value)
     refresh_entity_list(page)
 
 
@@ -350,6 +369,7 @@ def toggle_sort_direction(page) -> None:
         icon = "arrow_downward" if page.state.entity_sort_descending else "arrow_upward"
         page._sort_direction_btn.props(f"icon={icon}")
 
+    save_pref(_PAGE_KEY, "entity_sort_descending", page.state.entity_sort_descending)
     refresh_entity_list(page)
 
 
@@ -481,3 +501,46 @@ def add_entity(page, dialog: ui.dialog, name: str, entity_type: str, description
     except Exception as e:
         logger.exception(f"Failed to add entity {name}")
         ui.notify(f"Error: {e}", type="negative")
+
+
+def _apply_prefs(page, prefs: dict) -> None:
+    """Apply loaded preferences to state and UI widgets.
+
+    Args:
+        page: WorldPage instance.
+        prefs: Dict of field→value from localStorage.
+    """
+    if not prefs:
+        return
+
+    _FIELDS = [
+        "entity_quality_filter",
+        "entity_sort_by",
+        "entity_sort_descending",
+        "entity_search_names",
+        "entity_search_descriptions",
+    ]
+
+    changed = False
+    for field in _FIELDS:
+        if field in prefs:
+            current = getattr(page.state, field)
+            saved = prefs[field]
+            if current != saved:
+                setattr(page.state, field, saved)
+                changed = True
+
+    if changed:
+        logger.info("Restored entity browser preferences from localStorage")
+        if hasattr(page, "_quality_select") and page._quality_select:
+            page._quality_select.value = page.state.entity_quality_filter
+        if hasattr(page, "_sort_select") and page._sort_select:
+            page._sort_select.value = page.state.entity_sort_by
+        if hasattr(page, "_sort_direction_btn") and page._sort_direction_btn:
+            icon = "arrow_downward" if page.state.entity_sort_descending else "arrow_upward"
+            page._sort_direction_btn.props(f"icon={icon}")
+        if hasattr(page, "_search_names_cb") and page._search_names_cb:
+            page._search_names_cb.value = page.state.entity_search_names
+        if hasattr(page, "_search_desc_cb") and page._search_desc_cb:
+            page._search_desc_cb.value = page.state.entity_search_descriptions
+        refresh_entity_list(page)

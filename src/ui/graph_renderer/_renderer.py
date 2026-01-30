@@ -25,16 +25,15 @@ ENTITY_SHAPES = {
     "concept": "star",
 }
 
-# Font Awesome 5 icon codes for consistent visualization
-# These match the Material Design icons used in the entity list:
-# character: person -> fa-user, location: place -> fa-map-marker-alt,
-# item: inventory_2 -> fa-box, faction: groups -> fa-users, concept: lightbulb -> fa-lightbulb
+# Material Icons unicode codepoints for graph visualization
+# Same icons as the entity browser (Material Design via NiceGUI):
+# character: person, location: place, item: inventory_2, faction: groups, concept: lightbulb
 ENTITY_ICON_CODES = {
-    "character": "\uf007",  # fa-user
-    "location": "\uf3c5",  # fa-map-marker-alt
-    "item": "\uf466",  # fa-box
-    "faction": "\uf0c0",  # fa-users
-    "concept": "\uf0eb",  # fa-lightbulb
+    "character": "\ue7fd",  # person
+    "location": "\ue55f",  # place
+    "item": "\ue1a1",  # inventory_2
+    "faction": "\uf233",  # groups
+    "concept": "\ue0f0",  # lightbulb
 }
 
 
@@ -138,33 +137,27 @@ def render_graph_html(
             "group": node_type,
             "shape": "icon",
             "icon": {
-                "face": "'Font Awesome 5 Free'",
-                "code": ENTITY_ICON_CODES.get(node_type, "\uf128"),  # fa-question as fallback
+                "face": "'Material Icons'",
+                "code": ENTITY_ICON_CODES.get(node_type, "\ue8fd"),  # help_outline as fallback
                 "size": 40,
                 "color": base_color,
-                "weight": "900",  # Solid style
+                "weight": "normal",
             },
             "title": build_tooltip(data, max_words),
         }
 
-        # Apply role-based styling using centralized helper
+        # Apply role-based glow using centralized helper
         attributes = data.get("attributes", {})
         role_style = get_role_graph_style(attributes, base_color)
         if role_style:
-            node["borderWidth"] = role_style["borderWidth"]
-            node["color"] = role_style["color"]
+            node["glowColor"] = role_style["glow_color"]
+            node["glowSize"] = role_style["glow_size"]
             node["icon"]["color"] = role_style["icon_color"]
-            if "shapeProperties" in role_style:
-                node["shapeProperties"] = role_style["shapeProperties"]
 
-        # Highlight selected node (overrides role-based styling)
+        # Highlight selected node (overrides role-based glow)
         if node_id == selected_entity_id:
-            node["borderWidth"] = 4
-            node["borderWidthSelected"] = 5
-            node["color"] = {
-                "background": "#FFD70060",  # Brighter gold background
-                "border": "#FFD700",  # Gold border for selected
-            }
+            node["glowColor"] = "#FFD700"
+            node["glowSize"] = 40
             node["icon"]["color"] = base_color
 
         nodes.append(node)
@@ -383,6 +376,28 @@ def render_graph_html(
             window.graphNetwork = network;
             window.graphNodes = nodes;
             window.graphEdges = edges;
+
+            // Draw radial gradient glow behind role/selected nodes
+            network.on('beforeDrawing', function(ctx) {{
+                var positions = network.getPositions();
+                nodes.forEach(function(node) {{
+                    if (node.glowColor && positions[node.id]) {{
+                        var pos = positions[node.id];
+                        var radius = node.glowSize || 35;
+                        var gradient = ctx.createRadialGradient(
+                            pos.x, pos.y, 0,
+                            pos.x, pos.y, radius
+                        );
+                        gradient.addColorStop(0, node.glowColor + 'BB');
+                        gradient.addColorStop(0.4, node.glowColor + '77');
+                        gradient.addColorStop(1, node.glowColor + '00');
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
+                        ctx.fillStyle = gradient;
+                        ctx.fill();
+                    }}
+                }});
+            }});
 
             // Drag-to-connect relationship creation
             var dragStartNode = null;

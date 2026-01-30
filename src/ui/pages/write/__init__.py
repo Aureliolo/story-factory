@@ -75,6 +75,7 @@ class WritePage:
         self._scene_list_container: ui.column | None = None  # Container for scene list
         self._generation_status: GenerationStatus | None = None
         self._world_overview_container: ui.column | None = None  # Container for world overview
+        self._feedback_mode_select: Select | None = None
         self._background_tasks: set[asyncio.Task[Any]] = set()  # Prevent task GC
 
     def _notify(

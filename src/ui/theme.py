@@ -247,40 +247,33 @@ def get_role_border_style(attributes: dict | None) -> str:
 def get_role_graph_style(attributes: dict | None, base_color: str) -> dict | None:
     """Get graph node style for entity based on role.
 
+    Uses shadow-based highlighting because vis.js icon-shaped nodes
+    do not render borders or background colors.
+
     Args:
         attributes: Entity attributes dictionary.
         base_color: Base color for the entity type.
 
     Returns:
-        Dictionary with border/color settings for vis.js, or None if no role styling.
+        Dictionary with shadow/icon_color settings for vis.js, or None if no role styling.
     """
     role_type = get_role_type(attributes)
     if role_type == "protagonist":
         return {
-            "borderWidth": 3,
-            "shapeProperties": {"borderDashes": False},
-            "color": {
-                "background": f"{ROLE_COLORS['protagonist']}40",
-                "border": ROLE_COLORS["protagonist"],
-            },
+            "glow_color": ROLE_COLORS["protagonist"],
+            "glow_size": 40,
             "icon_color": base_color,
         }
     if role_type == "antagonist":
         return {
-            "borderWidth": 2,
-            "color": {
-                "background": f"{ROLE_COLORS['antagonist']}40",
-                "border": ROLE_COLORS["antagonist"],
-            },
+            "glow_color": ROLE_COLORS["antagonist"],
+            "glow_size": 35,
             "icon_color": base_color,
         }
     if role_type == "mentor":
         return {
-            "borderWidth": 2,
-            "color": {
-                "background": f"{ROLE_COLORS['mentor']}40",
-                "border": ROLE_COLORS["mentor"],
-            },
+            "glow_color": ROLE_COLORS["mentor"],
+            "glow_size": 35,
             "icon_color": base_color,
         }
     return None
