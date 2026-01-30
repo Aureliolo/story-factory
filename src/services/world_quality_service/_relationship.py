@@ -51,13 +51,15 @@ def generate_relationship_with_quality(
     scores: RelationshipQualityScores | None = None
     last_error: str = ""
     needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
+    rejected_pairs: list[tuple[str, str]] = []  # Track rejected duplicates for retry
 
     while iteration < config.max_iterations:
         try:
             # Create new relationship on first iteration OR if previous was invalid/duplicate
             if needs_fresh_creation:
+                combined_rels = existing_rels + rejected_pairs
                 relationship = svc._create_relationship(
-                    story_state, entity_names, existing_rels, config.creator_temperature
+                    story_state, entity_names, combined_rels, config.creator_temperature
                 )
             else:
                 if relationship and scores:
@@ -79,13 +81,15 @@ def generate_relationship_with_quality(
                 iteration += 1
                 continue
 
-            # Check for duplicate relationship
+            # Check for duplicate relationship (includes previously rejected pairs)
             source = relationship.get("source", "")
             target = relationship.get("target", "")
             rel_type = relationship.get("relation_type", "knows")
-            if _is_duplicate_relationship(source, target, rel_type, existing_rels):
+            combined_rels = existing_rels + rejected_pairs
+            if _is_duplicate_relationship(source, target, rel_type, combined_rels):
                 last_error = f"Generated duplicate relationship {source} -> {target}"
                 logger.warning(last_error)
+                rejected_pairs.append((source, target))
                 needs_fresh_creation = True  # Retry with fresh creation
                 iteration += 1
                 continue
@@ -255,7 +259,7 @@ def _create_relationship(
     if not brief:
         return {}
 
-    existing_rel_strs = [f"{s} -> {t}" for s, t in existing_rels]
+    existing_rel_strs = [f"- {s} <-> {t}" for s, t in existing_rels]
 
     prompt = f"""Create a compelling relationship between entities for a {brief.genre} story.
 
@@ -264,7 +268,8 @@ TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
 AVAILABLE ENTITIES: {", ".join(entity_names)}
-EXISTING RELATIONSHIPS (avoid): {", ".join(existing_rel_strs[:10]) if existing_rel_strs else "None"}
+DO NOT create any of these entity pairs (already exist or rejected):
+{chr(10).join(existing_rel_strs[:15]) if existing_rel_strs else "None"}
 
 Create a relationship with:
 1. Tension - conflict potential
@@ -291,11 +296,25 @@ Output ONLY valid JSON (all text in {brief.language}):
             },
         )
 
-        data = extract_json(response["response"], strict=False)
+        raw_response = response["response"]
+        data = extract_json(raw_response, strict=False)
         if data and isinstance(data, dict):
             return data
         else:
-            logger.error(f"Relationship creation returned invalid JSON structure: {data}")
+            # Detect likely truncation: unbalanced braces suggest output was cut off
+            open_braces = raw_response.count("{") - raw_response.count("}")
+            if open_braces > 0:
+                logger.error(
+                    "Relationship creation JSON appears truncated "
+                    "(unbalanced braces: %d unclosed). "
+                    "Token limit llm_tokens_relationship_create=%d may be too low. "
+                    "Raw response tail: ...%s",
+                    open_braces,
+                    svc.settings.llm_tokens_relationship_create,
+                    raw_response[-100:],
+                )
+            else:
+                logger.error(f"Relationship creation returned invalid JSON structure: {data}")
             raise WorldGenerationError(f"Invalid relationship JSON structure: {data}")
     except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
         logger.error("Relationship creation LLM error for story %s: %s", story_state.id, e)

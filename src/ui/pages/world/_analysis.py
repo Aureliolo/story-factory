@@ -60,7 +60,10 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
         )
         dashboard.build()
     if notify:
-        ui.notify("Health metrics refreshed", type="positive")
+        try:
+            ui.notify("Health metrics refreshed", type="positive")
+        except RuntimeError:
+            logger.warning("Could not show notification — parent UI element was deleted")
 
 
 async def handle_fix_orphan(page, entity_id: str) -> None:

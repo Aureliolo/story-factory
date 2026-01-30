@@ -15,7 +15,7 @@ class ModelInfo(TypedDict):
     description: str
     # Tags for role suitability - list of agent roles this model is good for
     tags: list[str]
-    # Prompt prefix required by embedding models (e.g., "search_document: " for nomic).
+    # Prompt prefix required by some embedding models before input text.
     # Only relevant for models tagged "embedding". Omit for models that work raw.
     embedding_prefix: NotRequired[str]
 

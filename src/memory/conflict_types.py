@@ -39,9 +39,15 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "mentors": ConflictCategory.ALLIANCE,
     "parent_of": ConflictCategory.ALLIANCE,
     "child_of": ConflictCategory.ALLIANCE,
+    "works_for": ConflictCategory.ALLIANCE,
+    "follows": ConflictCategory.ALLIANCE,
+    "leads": ConflictCategory.ALLIANCE,
     # Rivalry - active opposition, hostility
     "hates": ConflictCategory.RIVALRY,
     "enemy_of": ConflictCategory.RIVALRY,
+    "enemies_with": ConflictCategory.RIVALRY,
+    "rivals_with": ConflictCategory.RIVALRY,
+    "rivals": ConflictCategory.RIVALRY,
     "opposes": ConflictCategory.RIVALRY,
     "betrayed": ConflictCategory.RIVALRY,
     "fights": ConflictCategory.RIVALRY,
@@ -56,6 +62,9 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "suspects": ConflictCategory.TENSION,
     "jealous_of": ConflictCategory.TENSION,
     "avoids": ConflictCategory.TENSION,
+    "threatens": ConflictCategory.TENSION,
+    "manipulates": ConflictCategory.TENSION,
+    "envies": ConflictCategory.TENSION,
     # Neutral - informational, no inherent conflict
     "knows": ConflictCategory.NEUTRAL,
     "works_with": ConflictCategory.NEUTRAL,
@@ -65,6 +74,14 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "created": ConflictCategory.NEUTRAL,
     "contains": ConflictCategory.NEUTRAL,
     "uses": ConflictCategory.NEUTRAL,
+    "inhabits": ConflictCategory.NEUTRAL,
+    "teaches": ConflictCategory.NEUTRAL,
+    "studies": ConflictCategory.NEUTRAL,
+    "develops": ConflictCategory.NEUTRAL,
+    "interconnected": ConflictCategory.NEUTRAL,
+    "consults_with": ConflictCategory.NEUTRAL,
+    # Romantic / emotional bonds
+    "romantic_interest": ConflictCategory.TENSION,
 }
 
 
@@ -81,24 +98,48 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
     """
     Map a relationship type string to its corresponding ConflictCategory.
 
+    Handles pipe-delimited compound types (e.g., ``"created|consults_with"``) by
+    splitting on ``|`` and returning the first non-NEUTRAL match (or NEUTRAL if
+    all parts are neutral/unknown).
+
     Parameters:
         relation_type (str): Relationship label (e.g., "enemy_of", "trusts", "works with").
 
     Returns:
-        ConflictCategory: The category for the given relationship; defaults to `ConflictCategory.NEUTRAL` if unrecognized.
+        ConflictCategory: The category for the given relationship; defaults to
+        ``ConflictCategory.NEUTRAL`` if unrecognized.
     """
+    # Handle pipe-delimited compound types the LLM sometimes generates
+    if "|" in relation_type:
+        parts = [p.strip() for p in relation_type.split("|") if p.strip()]
+        if parts:
+            for part in parts:
+                part_category = classify_relationship(part)
+                if part_category != ConflictCategory.NEUTRAL:
+                    logger.debug(
+                        "Compound type '%s': resolved to %s via part '%s'",
+                        relation_type,
+                        part_category.value,
+                        part,
+                    )
+                    return part_category
+            logger.debug("Compound type '%s': all parts are NEUTRAL", relation_type)
+            return ConflictCategory.NEUTRAL
+
     # Normalize to lowercase for matching
     normalized = relation_type.lower().replace("-", "_").replace(" ", "_")
     category = RELATION_CONFLICT_MAPPING.get(normalized)
 
     if category is None:
         logger.warning(
-            f"Unknown relationship type '{relation_type}' (normalized: '{normalized}') - "
-            f"defaulting to NEUTRAL. Consider adding to RELATION_CONFLICT_MAPPING."
+            "Unknown relationship type '%s' (normalized: '%s') - "
+            "defaulting to NEUTRAL. Consider adding to RELATION_CONFLICT_MAPPING.",
+            relation_type,
+            normalized,
         )
         category = ConflictCategory.NEUTRAL
     else:
-        logger.debug(f"Classified relationship '{relation_type}' as {category.value}")
+        logger.debug("Classified relationship '%s' as %s", relation_type, category.value)
 
     return category
 

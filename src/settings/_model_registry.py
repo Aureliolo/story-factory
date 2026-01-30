@@ -143,17 +143,6 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
     # === EMBEDDING MODELS ===
     # Used for semantic duplicate detection during world generation.
     # Not agent models — selected via the embedding_model setting, not auto-selection.
-    "nomic-embed-text": {
-        "name": "Nomic Embed Text",
-        "size_gb": 0.3,
-        "vram_required": 1,
-        "quality": 8,
-        "speed": 10,
-        "uncensored": False,
-        "description": "Popular 137M param embedding model, 768-dim vectors",
-        "tags": ["embedding"],
-        "embedding_prefix": "search_document: ",
-    },
     "mxbai-embed-large": {
         "name": "MxBAI Embed Large",
         "size_gb": 0.7,
@@ -174,20 +163,27 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "description": "Top-ranked embedding model from Snowflake",
         "tags": ["embedding"],
     },
+    "bge-m3": {
+        "name": "BGE-M3",
+        "size_gb": 1.2,
+        "vram_required": 2,
+        "quality": 10,
+        "speed": 8,
+        "uncensored": False,
+        "description": "Top-ranked 567M multilingual embedding model, 1024-dim vectors",
+        "tags": ["embedding"],
+    },
 }
 
 
 def get_embedding_prefix(model_name: str) -> str:
     """Look up the embedding prompt prefix for a model.
 
-    Each embedding model may require a specific prompt prefix for optimal results.
-    For example, nomic-embed-text requires ``search_document: `` to produce
-    meaningful vectors for short text.
-
+    Some embedding models require a specific prompt prefix for optimal results.
     Models not in the registry, or models without a prefix, return ``""``.
 
     Args:
-        model_name: The Ollama model name (e.g., ``"nomic-embed-text"``).
+        model_name: The Ollama model name (e.g., ``"mxbai-embed-large"``).
 
     Returns:
         The prompt prefix string, or ``""`` if no prefix is needed.

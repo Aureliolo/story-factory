@@ -6,12 +6,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.memory.world_quality import CharacterQualityScores
+from src.memory.world_quality import CharacterQualityScores, FactionQualityScores
 from src.services.model_mode_service import ModelModeService
 from src.services.world_quality_service import (
     EntityGenerationProgress,
     WorldQualityService,
 )
+from src.services.world_quality_service._relationship import _is_duplicate_relationship
 
 
 @pytest.fixture
@@ -704,3 +705,102 @@ class TestProgressCallback:
         assert len(results) == 1
         assert len(progress_updates) == 2  # 1 generating + 1 complete
         assert all(p.entity_type == "relationship" for p in progress_updates)
+
+
+class TestFactionCreationTemperatureEscalation:
+    """Tests for temperature escalation when faction creation returns duplicate names."""
+
+    def test_temperature_increases_on_creation_retries(self, world_quality_service):
+        """When _create_faction returns empty (name conflict), temperature escalates."""
+        svc = world_quality_service
+
+        # Build a minimal StoryState with a brief
+        brief = MagicMock()
+        brief.genre = "fantasy"
+        brief.premise = "A dark fantasy world"
+        brief.tone = "dark"
+        brief.themes = ["power"]
+        brief.setting_place = "Realm"
+        brief.setting_time = "Medieval"
+        brief.language = "English"
+        story_state = MagicMock()
+        story_state.brief = brief
+        story_state.id = "test-story"
+
+        existing_names = ["The Luminous Circuit"]
+
+        # Track temperature arguments passed to _create_faction
+        temps_used = []
+
+        def fake_create_faction(_story_state, _names, temperature, _locations=None):
+            """Return empty dict twice (name conflict), then valid faction."""
+            temps_used.append(temperature)
+            # Return empty dict (name conflict) for first 2 calls, valid on 3rd
+            if len(temps_used) <= 2:
+                return {}
+            return {"name": "New Faction", "type": "faction", "description": "A new faction"}
+
+        # Mock all internal methods
+        svc._create_faction = fake_create_faction
+        svc._judge_faction_quality = MagicMock(
+            return_value=FactionQualityScores(
+                coherence=9,
+                influence=9,
+                conflict_potential=9,
+                distinctiveness=9,
+                feedback="Good",
+            )
+        )
+        svc._log_refinement_analytics = MagicMock()
+
+        faction, _scores, _iterations = svc.generate_faction_with_quality(
+            story_state, existing_names
+        )
+
+        assert faction["name"] == "New Faction"
+        assert len(temps_used) == 3
+        # First call: base temp (0.9), second: 0.9 + 0.15 = 1.05, third: 0.9 + 0.30 = 1.20
+        assert temps_used[0] == pytest.approx(0.9, abs=0.01)
+        assert temps_used[1] > temps_used[0]
+        assert temps_used[2] > temps_used[1]
+
+    def test_temperature_capped_at_1_5(self, world_quality_service):
+        """Temperature escalation is capped at 1.5."""
+        svc = world_quality_service
+        config = svc.get_config()
+
+        # With creator_temperature=0.9 and 0.15 step:
+        # retry 0: 0.9, retry 1: 1.05, retry 2: 1.20, retry 3: 1.35, retry 4: 1.50
+        # retry 5: min(0.9 + 5*0.15, 1.5) = min(1.65, 1.5) = 1.5
+        for retries in range(10):
+            expected = min(config.creator_temperature + (retries * 0.15), 1.5)
+            assert expected <= 1.5
+
+
+class TestDuplicateRelationshipDetection:
+    """Tests for _is_duplicate_relationship bidirectionality."""
+
+    def test_detects_same_direction_duplicate(self):
+        """Duplicate detected when same source->target pair exists."""
+        existing = [("Alice", "Bob")]
+        assert _is_duplicate_relationship("Alice", "Bob", "knows", existing) is True
+
+    def test_detects_reverse_direction_duplicate(self):
+        """Duplicate detected when target->source pair exists (bidirectional)."""
+        existing = [("Alice", "Bob")]
+        assert _is_duplicate_relationship("Bob", "Alice", "knows", existing) is True
+
+    def test_allows_new_pair(self):
+        """New pair is not flagged as duplicate."""
+        existing = [("Alice", "Bob")]
+        assert _is_duplicate_relationship("Alice", "Carol", "knows", existing) is False
+
+    def test_empty_existing_rels(self):
+        """No duplicates when existing list is empty."""
+        assert _is_duplicate_relationship("Alice", "Bob", "knows", []) is False
+
+    def test_multiple_existing_rels(self):
+        """Correctly checks against multiple existing pairs."""
+        existing = [("Alice", "Bob"), ("Carol", "Dave")]
+        assert _is_duplicate_relationship("Dave", "Carol", "knows", existing) is True
+        assert _is_duplicate_relationship("Alice", "Carol", "knows", existing) is False

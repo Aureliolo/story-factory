@@ -111,9 +111,15 @@ def build_temperature_section(page: SettingsPage) -> None:
 
         page._temp_sliders: dict[str, Any] = {}  # type: ignore[misc]
         page._temp_labels: dict[str, Any] = {}  # type: ignore[misc]
+
+        # Embedding models are deterministic — no temperature slider needed
+        ROLES_WITHOUT_TEMPERATURE = {"embedding"}
+
         # 3-column grid for temperature sliders
         with ui.element("div").classes("grid grid-cols-2 lg:grid-cols-3 gap-3"):
             for role, info in AGENT_ROLES.items():
+                if role in ROLES_WITHOUT_TEMPERATURE:
+                    continue
                 default_temp = page.settings.get_temperature_for_agent(role)
                 with ui.card().classes("p-4 bg-gray-800").tooltip(info["description"]):
                     with ui.row().classes("w-full items-center justify-between mb-3"):

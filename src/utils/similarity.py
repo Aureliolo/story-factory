@@ -81,10 +81,9 @@ class SemanticDuplicateChecker:
     Caches embeddings to avoid redundant API calls and provides
     thread-safe operations for concurrent usage.
 
-    Each embedding model may require a specific prompt prefix for optimal
-    results (e.g., ``nomic-embed-text`` needs ``"search_document: "``).
-    The prefix is auto-resolved from the model registry at init time and
-    applied transparently in :meth:`get_embedding`.
+    Some embedding models require a specific prompt prefix for optimal
+    results.  The prefix is auto-resolved from the model registry at init
+    time and applied transparently in :meth:`get_embedding`.
 
     Includes a sanity check on initialization: two obviously-different
     entity names are embedded (through :meth:`get_embedding`, so the
@@ -137,8 +136,8 @@ class SemanticDuplicateChecker:
         (which applies the model's prompt prefix) and checks their cosine
         similarity. This tests the exact same code path used in production.
 
-        If the similarity exceeds the ceiling, the model cannot differentiate
-        short entity names and semantic checks are disabled.
+        If the similarity exceeds the ceiling, tries fallback embedding models
+        from the registry before degrading.
         """
         if self._skip_validation:
             logger.debug("Skipping embedding model validation (test mode)")
@@ -151,10 +150,11 @@ class SemanticDuplicateChecker:
             if not vec_a or not vec_b:
                 logger.warning(
                     "Embedding model '%s' returned empty vectors during sanity check — "
-                    "disabling semantic duplicate detection",
+                    "attempting fallback models",
                     self.embedding_model,
                 )
-                self._degraded = True
+                if not self._try_fallback_model():
+                    self._degraded = True
                 return
 
             similarity = cosine_similarity(vec_a, vec_b)
@@ -163,15 +163,19 @@ class SemanticDuplicateChecker:
                     "Embedding model '%s' FAILED sanity check: "
                     "'%s' vs '%s' returned similarity %.3f (>= %.2f ceiling). "
                     "This model cannot differentiate short entity names. "
-                    "Semantic duplicate detection is DISABLED. "
-                    "Try mxbai-embed-large or snowflake-arctic-embed instead.",
+                    "Attempting fallback models.",
                     self.embedding_model,
                     _SANITY_CHECK_A,
                     _SANITY_CHECK_B,
                     similarity,
                     _SANITY_CHECK_CEILING,
                 )
-                self._degraded = True
+                if not self._try_fallback_model():
+                    logger.error(
+                        "No fallback embedding model passed sanity check. "
+                        "Semantic duplicate detection is DISABLED."
+                    )
+                    self._degraded = True
             else:
                 logger.info(
                     "Embedding model '%s' passed sanity check "
@@ -184,12 +188,88 @@ class SemanticDuplicateChecker:
 
         except Exception as e:
             logger.warning(
-                "Embedding model sanity check failed for '%s': %s — "
-                "disabling semantic duplicate detection",
+                "Embedding model sanity check failed for '%s': %s — attempting fallback models",
                 self.embedding_model,
                 e,
             )
-            self._degraded = True
+            if not self._try_fallback_model():
+                self._degraded = True
+
+    def _try_fallback_model(self) -> bool:
+        """Try alternative embedding models from the registry when primary fails.
+
+        Iterates through RECOMMENDED_MODELS with the "embedding" tag, skips the
+        current model, checks if each is installed via Ollama, and validates it
+        with the sanity check. Switches to the first model that passes.
+
+        Returns:
+            True if a fallback model was found and activated, False otherwise.
+        """
+        from src.settings._model_registry import RECOMMENDED_MODELS, get_embedding_prefix
+
+        for model_id, info in RECOMMENDED_MODELS.items():
+            if "embedding" not in info.get("tags", []):
+                continue
+            if model_id == self.embedding_model:
+                continue
+
+            # Check if model is installed
+            try:
+                if self._client is None:
+                    self._client = ollama.Client(host=self.ollama_url, timeout=self.timeout)
+                self._client.show(model_id)
+            except Exception:
+                logger.debug("Fallback model '%s' not installed, skipping", model_id)
+                continue
+
+            # Clear cache from previous model's embeddings
+            self.clear_cache()
+
+            # Try this model
+            old_model = self.embedding_model
+            old_prefix = self._embedding_prefix
+            self.embedding_model = model_id
+            self._embedding_prefix = get_embedding_prefix(model_id)
+
+            try:
+                vec_a = self.get_embedding(_SANITY_CHECK_A)
+                vec_b = self.get_embedding(_SANITY_CHECK_B)
+
+                if not vec_a or not vec_b:
+                    logger.debug("Fallback model '%s' returned empty vectors", model_id)
+                    self.embedding_model = old_model
+                    self._embedding_prefix = old_prefix
+                    self.clear_cache()
+                    continue
+
+                similarity = cosine_similarity(vec_a, vec_b)
+                if similarity < _SANITY_CHECK_CEILING:
+                    logger.info(
+                        "Fallback embedding model '%s' passed sanity check "
+                        "(similarity=%.3f, ceiling=%.2f). Switching from '%s'.",
+                        model_id,
+                        similarity,
+                        _SANITY_CHECK_CEILING,
+                        old_model,
+                    )
+                    return True
+                else:
+                    logger.debug(
+                        "Fallback model '%s' also failed sanity check (similarity=%.3f)",
+                        model_id,
+                        similarity,
+                    )
+                    self.embedding_model = old_model
+                    self._embedding_prefix = old_prefix
+                    self.clear_cache()
+
+            except Exception as e:
+                logger.debug("Fallback model '%s' failed: %s", model_id, e)
+                self.embedding_model = old_model
+                self._embedding_prefix = old_prefix
+                self.clear_cache()
+
+        return False
 
     @property
     def is_degraded(self) -> bool:
@@ -199,10 +279,10 @@ class SemanticDuplicateChecker:
     def get_embedding(self, text: str) -> list[float]:
         """Get embedding vector for text, using cache if available.
 
-        Applies the model-specific prompt prefix (e.g., ``"search_document: "``
-        for nomic-embed-text) before calling the embedding API.  The prefix is
-        resolved from the model registry at init time, so each model is prompted
-        correctly without the caller needing to know about prefixes.
+        Applies the model-specific prompt prefix (if any) before calling the
+        embedding API.  The prefix is resolved from the model registry at init
+        time, so each model is prompted correctly without the caller needing to
+        know about prefixes.
 
         Args:
             text: Text to embed (raw, without prefix).
@@ -228,9 +308,8 @@ class SemanticDuplicateChecker:
             if self._client is None:
                 self._client = ollama.Client(host=self.ollama_url, timeout=self.timeout)
 
-            # Apply model-specific prompt prefix from the registry.
-            # e.g., nomic-embed-text requires "search_document: " for meaningful vectors.
-            # Models without a prefix (mxbai-embed-large, snowflake-arctic-embed) get raw text.
+            # Apply model-specific prompt prefix from the registry (if configured).
+            # Models without a prefix get raw text.
             prompt = f"{self._embedding_prefix}{text}"
             response = self._client.embeddings(model=self.embedding_model, prompt=prompt)
 

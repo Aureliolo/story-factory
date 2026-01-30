@@ -126,6 +126,15 @@ def _validate_temperatures(settings: Settings) -> None:
             f"expected only: {sorted(expected_agents)}"
         )
 
+    # Backfill missing agents from defaults (e.g., "embedding" added after settings file saved)
+    from src.settings._settings import Settings as _Settings
+
+    default_temps = _Settings().agent_temperatures
+    missing_agents = expected_agents - set(settings.agent_temperatures)
+    for agent in sorted(missing_agents):
+        settings.agent_temperatures[agent] = default_temps[agent]
+        logger.info("Added missing agent temperature: %s=%.1f", agent, default_temps[agent])
+
     for agent, temp in settings.agent_temperatures.items():
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")

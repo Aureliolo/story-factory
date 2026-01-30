@@ -44,6 +44,56 @@ class TestConflictCategory:
         for rel_type in neutral_types:
             assert classify_relationship(rel_type) == ConflictCategory.NEUTRAL
 
+    def test_classify_new_alliance_relationships(self):
+        """Test classification of newly added alliance relationships."""
+        new_alliance_types = ["works_for", "follows", "leads"]
+        for rel_type in new_alliance_types:
+            assert classify_relationship(rel_type) == ConflictCategory.ALLIANCE
+
+    def test_classify_new_rivalry_relationships(self):
+        """Test classification of newly added rivalry relationships."""
+        new_rivalry_types = ["enemies_with", "rivals_with", "rivals"]
+        for rel_type in new_rivalry_types:
+            assert classify_relationship(rel_type) == ConflictCategory.RIVALRY
+
+    def test_classify_new_tension_relationships(self):
+        """Test classification of newly added tension relationships."""
+        new_tension_types = ["threatens", "manipulates", "envies"]
+        for rel_type in new_tension_types:
+            assert classify_relationship(rel_type) == ConflictCategory.TENSION
+
+    def test_classify_new_neutral_relationships(self):
+        """Test classification of newly added neutral relationships."""
+        new_neutral_types = ["inhabits", "teaches", "studies"]
+        for rel_type in new_neutral_types:
+            assert classify_relationship(rel_type) == ConflictCategory.NEUTRAL
+
+    def test_classify_log_discovered_neutral_relationships(self):
+        """Test classification of neutral types found in production logs."""
+        log_neutral_types = ["develops", "interconnected", "consults_with"]
+        for rel_type in log_neutral_types:
+            assert classify_relationship(rel_type) == ConflictCategory.NEUTRAL
+
+    def test_classify_romantic_interest_as_tension(self):
+        """romantic_interest generates emotional tension, classified as TENSION."""
+        assert classify_relationship("romantic_interest") == ConflictCategory.TENSION
+
+    def test_classify_pipe_delimited_compound_type(self):
+        """Pipe-delimited types like 'created|consults_with' are handled."""
+        # Both parts are NEUTRAL → result is NEUTRAL
+        assert classify_relationship("created|consults_with") == ConflictCategory.NEUTRAL
+
+    def test_classify_pipe_delimited_picks_first_non_neutral(self):
+        """Pipe-delimited types return the first non-NEUTRAL match."""
+        # "knows" is NEUTRAL, "hates" is RIVALRY → result is RIVALRY
+        assert classify_relationship("knows|hates") == ConflictCategory.RIVALRY
+        # "enemy_of" is RIVALRY → first non-neutral wins
+        assert classify_relationship("enemy_of|loves") == ConflictCategory.RIVALRY
+
+    def test_classify_pipe_delimited_single_part(self):
+        """Pipe-delimited with single valid part still classifies correctly."""
+        assert classify_relationship("loves|") == ConflictCategory.ALLIANCE
+
     def test_classify_unknown_defaults_to_neutral(self):
         """Test unknown relationship types default to neutral."""
         assert classify_relationship("unknown_type") == ConflictCategory.NEUTRAL

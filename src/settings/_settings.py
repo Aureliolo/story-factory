@@ -231,7 +231,7 @@ class Settings:
     llm_tokens_concept_create: int = 500
     llm_tokens_concept_judge: int = 200
     llm_tokens_concept_refine: int = 500
-    llm_tokens_relationship_create: int = 500
+    llm_tokens_relationship_create: int = 800
     llm_tokens_relationship_judge: int = 200
     llm_tokens_relationship_refine: int = 500
     llm_tokens_mini_description: int = 50
