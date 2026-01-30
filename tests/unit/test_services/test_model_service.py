@@ -979,6 +979,28 @@ class TestModelServiceStateChangeLogging:
             debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
             assert any("Cannot connect" in r.message for r in debug_records)
 
+    def test_health_check_logs_debug_on_repeated_response_error(self, model_service, caplog):
+        """Test health check logs at DEBUG on repeated ResponseError failure."""
+        import ollama
+
+        with (
+            patch("src.services.model_service.ollama.Client") as mock_client,
+            caplog.at_level(logging.DEBUG, logger="src.services.model_service"),
+        ):
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.list.side_effect = ollama.ResponseError("API error")
+
+            model_service.check_health()
+            caplog.clear()
+
+            model_service.check_health()
+
+            warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert not any("API error" in r.message for r in warn_records)
+            debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+            assert any("API error" in r.message for r in debug_records)
+
     def test_health_check_logs_info_on_recovery(self, model_service, caplog):
         """Test health check logs at INFO when recovering from failure."""
         with (
