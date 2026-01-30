@@ -16,23 +16,23 @@ class TestEntityIconCodes:
 
     def test_character_icon_code(self):
         """Test character uses Material Icons 'person' codepoint."""
-        assert ENTITY_ICON_CODES["character"] == "\ue7fd"  # person
+        assert ENTITY_ICON_CODES["character"] == "\ue491"  # person
 
     def test_location_icon_code(self):
         """Test location uses Material Icons 'place' codepoint."""
-        assert ENTITY_ICON_CODES["location"] == "\ue55f"  # place
+        assert ENTITY_ICON_CODES["location"] == "\ue4c9"  # place
 
     def test_item_icon_code(self):
         """Test item uses Material Icons 'inventory_2' codepoint."""
-        assert ENTITY_ICON_CODES["item"] == "\ue1a1"  # inventory_2
+        assert ENTITY_ICON_CODES["item"] == "\ue34a"  # inventory_2
 
     def test_faction_icon_code(self):
         """Test faction uses Material Icons 'groups' codepoint."""
-        assert ENTITY_ICON_CODES["faction"] == "\uf233"  # groups
+        assert ENTITY_ICON_CODES["faction"] == "\ue2ee"  # groups
 
     def test_concept_icon_code(self):
         """Test concept uses Material Icons 'lightbulb' codepoint."""
-        assert ENTITY_ICON_CODES["concept"] == "\ue0f0"  # lightbulb
+        assert ENTITY_ICON_CODES["concept"] == "\ue37b"  # lightbulb
 
     def test_icon_codes_are_strings(self):
         """Test that all icon codes are non-empty strings."""
@@ -176,7 +176,7 @@ class TestIconNodeConfiguration:
         # Build icon config dict matching renderer output
         icon_config: dict[str, str | int] = {
             "face": "'Material Icons'",
-            "code": ENTITY_ICON_CODES.get(entity_type, "\ue8fd"),
+            "code": ENTITY_ICON_CODES.get(entity_type, "\ue30b"),
             "size": 40,
             "color": base_color,
             "weight": "normal",
@@ -196,7 +196,7 @@ class TestIconNodeConfiguration:
         assert node["shape"] == "icon"
         assert "icon" in node
         assert icon_config["face"] == "'Material Icons'"
-        assert icon_config["code"] == "\ue7fd"
+        assert icon_config["code"] == "\ue491"
         assert icon_config["size"] == 40
         assert icon_config["weight"] == "normal"
         assert icon_config["color"] == base_color
@@ -204,6 +204,6 @@ class TestIconNodeConfiguration:
     def test_fallback_icon_code(self):
         """Test that unknown entity types get fallback icon."""
         unknown_type = "unknown_entity_type"
-        fallback_code = ENTITY_ICON_CODES.get(unknown_type, "\ue8fd")
+        fallback_code = ENTITY_ICON_CODES.get(unknown_type, "\ue30b")
 
-        assert fallback_code == "\ue8fd"  # help_outline
+        assert fallback_code == "\ue30b"  # help_outline

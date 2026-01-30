@@ -29,11 +29,11 @@ ENTITY_SHAPES = {
 # Same icons as the entity browser (Material Design via NiceGUI):
 # character: person, location: place, item: inventory_2, faction: groups, concept: lightbulb
 ENTITY_ICON_CODES = {
-    "character": "\ue7fd",  # person
-    "location": "\ue55f",  # place
-    "item": "\ue1a1",  # inventory_2
-    "faction": "\uf233",  # groups
-    "concept": "\ue0f0",  # lightbulb
+    "character": "\ue491",  # person
+    "location": "\ue4c9",  # place
+    "item": "\ue34a",  # inventory_2
+    "faction": "\ue2ee",  # groups
+    "concept": "\ue37b",  # lightbulb
 }
 
 
@@ -138,7 +138,7 @@ def render_graph_html(
             "shape": "icon",
             "icon": {
                 "face": "'Material Icons'",
-                "code": ENTITY_ICON_CODES.get(node_type, "\ue8fd"),  # help_outline as fallback
+                "code": ENTITY_ICON_CODES.get(node_type, "\ue30b"),  # help_outline as fallback
                 "size": 40,
                 "color": base_color,
                 "weight": "normal",

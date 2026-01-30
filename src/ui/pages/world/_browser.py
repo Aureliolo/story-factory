@@ -517,7 +517,7 @@ def _apply_prefs(page, prefs: dict) -> None:
         return
 
     _VALID_QUALITY = {"all", "high", "medium", "low"}
-    _VALID_SORT = {"name", "type", "quality", "created", "relationships"}
+    _VALID_SORT = {"name", "type", "quality", "relationships"}
 
     changed = False
 
