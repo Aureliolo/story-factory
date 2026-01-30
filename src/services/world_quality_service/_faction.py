@@ -8,7 +8,6 @@ from src.memory.story_state import Faction, StoryState
 from src.memory.world_quality import FactionQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
 from src.utils.exceptions import WorldGenerationError
-from src.utils.json_parser import extract_json
 from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
@@ -361,7 +360,20 @@ def _judge_faction_quality(
     story_state: StoryState,
     temperature: float,
 ) -> FactionQualityScores:
-    """Judge faction quality using the validator model."""
+    """Judge faction quality using the validator model.
+
+    Args:
+        svc: WorldQualityService instance.
+        faction: Faction dict to evaluate.
+        story_state: Current story state for context.
+        temperature: Judge temperature (low for consistency).
+
+    Returns:
+        FactionQualityScores with ratings and feedback.
+
+    Raises:
+        WorldGenerationError: If quality judgment fails or returns invalid data.
+    """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
@@ -374,65 +386,28 @@ Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
 
-SCORING GUIDE (use the FULL range):
-- 9-10: EXCEPTIONAL - publishable quality, deeply compelling, no improvements needed
-- 7-8: GOOD - solid foundation, minor improvements possible
-- 5-6: ACCEPTABLE - functional but generic, needs more depth
-- 3-4: WEAK - major issues, significant rework needed
-- 1-2: POOR - fundamentally flawed, start over
+Rate each dimension 0-10:
+- coherence: Internal consistency, clear structure
+- influence: World impact, power level
+- conflict_potential: Story conflict opportunities
+- distinctiveness: Memorable, unique qualities
 
-Rate each dimension using this calibration:
-- COHERENCE: Internal consistency, clear structure (9+ = seamless logic, no contradictions)
-- INFLUENCE: World impact, power level (9+ = shapes entire world, major player)
-- CONFLICT_POTENTIAL: Story conflict opportunities (9+ = multiple compelling story hooks)
-- DISTINCTIVENESS: Memorable, unique qualities (9+ = unlike any other faction, iconic)
+Provide specific, actionable feedback for improvement in the feedback field.
 
-BE HONEST: Award 9-10 ONLY for truly exceptional work. Most factions score 6-8.
-Provide SPECIFIC feedback on exactly what would raise each dimension's score.
+OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
+{{"coherence": <number>, "influence": <number>, "conflict_potential": <number>, "distinctiveness": <number>, "feedback": "<string>"}}
 
-Output ONLY valid JSON:
-{{"coherence": <score>, "influence": <score>, "conflict_potential": <score>, "distinctiveness": <score>, "feedback": "<specific_actionable_feedback>"}}"""
+DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
     try:
         model = svc._get_judge_model(entity_type="faction")
-        response = svc.client.generate(
+        return generate_structured(
+            settings=svc.settings,
             model=model,
             prompt=prompt,
-            format="json",
-            options={
-                "temperature": temperature,
-                "num_predict": svc.settings.llm_tokens_faction_judge,
-            },
+            response_model=FactionQualityScores,
+            temperature=temperature,
         )
-
-        data = extract_json(response["response"], strict=False)
-        if data and isinstance(data, dict):
-            required_fields = [
-                "coherence",
-                "influence",
-                "conflict_potential",
-                "distinctiveness",
-            ]
-            missing = [f for f in required_fields if f not in data]
-            if missing:
-                raise WorldGenerationError(
-                    f"Faction judge response missing required fields: {missing}"
-                )
-
-            return FactionQualityScores(
-                coherence=float(data["coherence"]),
-                influence=float(data["influence"]),
-                conflict_potential=float(data["conflict_potential"]),
-                distinctiveness=float(data["distinctiveness"]),
-                feedback=data.get("feedback", ""),
-            )
-
-        raise WorldGenerationError(
-            f"Failed to extract JSON from faction judge response: {response['response'][:200]}..."
-        )
-
-    except WorldGenerationError:
-        raise
     except Exception as e:
         logger.exception(
             "Faction quality judgment failed for '%s': %s",

@@ -7,7 +7,6 @@ from src.memory.story_state import Concept, StoryState
 from src.memory.world_quality import ConceptQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
 from src.utils.exceptions import WorldGenerationError
-from src.utils.json_parser import extract_json
 from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
@@ -268,7 +267,20 @@ def _judge_concept_quality(
     story_state: StoryState,
     temperature: float,
 ) -> ConceptQualityScores:
-    """Judge concept quality using the validator model."""
+    """Judge concept quality using the validator model.
+
+    Args:
+        svc: WorldQualityService instance.
+        concept: Concept dict to evaluate.
+        story_state: Current story state for context.
+        temperature: Judge temperature (low for consistency).
+
+    Returns:
+        ConceptQualityScores with ratings and feedback.
+
+    Raises:
+        WorldGenerationError: If quality judgment fails or returns invalid data.
+    """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
@@ -280,53 +292,27 @@ Description: {concept.get("description", "")}
 Manifestations: {concept.get("manifestations", "")}
 
 Rate each dimension 0-10:
-- RELEVANCE: Alignment with story themes
-- DEPTH: Philosophical richness
-- MANIFESTATION: How well it can appear in story
-- RESONANCE: Emotional impact potential
+- relevance: Alignment with story themes
+- depth: Philosophical richness
+- manifestation: How well it can appear in story
+- resonance: Emotional impact potential
 
-Provide specific improvement feedback.
+Provide specific, actionable feedback for improvement in the feedback field.
 
-IMPORTANT: Evaluate honestly. Do NOT copy these example values - provide YOUR OWN assessment scores.
+OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
+{{"relevance": <number>, "depth": <number>, "manifestation": <number>, "resonance": <number>, "feedback": "<string>"}}
 
-Output ONLY valid JSON:
-{{"relevance": <your_score>, "depth": <your_score>, "manifestation": <your_score>, "resonance": <your_score>, "feedback": "<your_specific_feedback>"}}"""
+DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
     try:
         model = svc._get_judge_model(entity_type="concept")
-        response = svc.client.generate(
+        return generate_structured(
+            settings=svc.settings,
             model=model,
             prompt=prompt,
-            format="json",
-            options={
-                "temperature": temperature,
-                "num_predict": svc.settings.llm_tokens_concept_judge,
-            },
+            response_model=ConceptQualityScores,
+            temperature=temperature,
         )
-
-        data = extract_json(response["response"], strict=False)
-        if data and isinstance(data, dict):
-            required_fields = ["relevance", "depth", "manifestation", "resonance"]
-            missing = [f for f in required_fields if f not in data]
-            if missing:
-                raise WorldGenerationError(
-                    f"Concept judge response missing required fields: {missing}"
-                )
-
-            return ConceptQualityScores(
-                relevance=float(data["relevance"]),
-                depth=float(data["depth"]),
-                manifestation=float(data["manifestation"]),
-                resonance=float(data["resonance"]),
-                feedback=data.get("feedback", ""),
-            )
-
-        raise WorldGenerationError(
-            f"Failed to extract JSON from concept judge response: {response['response'][:200]}..."
-        )
-
-    except WorldGenerationError:
-        raise
     except Exception as e:
         logger.exception(
             "Concept quality judgment failed for '%s': %s",

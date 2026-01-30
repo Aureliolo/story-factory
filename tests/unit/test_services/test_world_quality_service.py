@@ -1419,19 +1419,18 @@ class TestCreateRelationship:
 class TestJudgeRelationshipQuality:
     """Tests for _judge_relationship_quality method."""
 
-    def test_judge_relationship_quality_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service._relationship.generate_structured")
+    def test_judge_relationship_quality_success(
+        self, mock_generate_structured, service, story_state
+    ):
         """Test successful relationship quality judgment."""
-        scores_json = json.dumps(
-            {
-                "tension": 8.0,
-                "dynamics": 7.5,
-                "story_potential": 8.0,
-                "authenticity": 8.5,
-                "feedback": "Strong dynamic, more conflict potential",
-            }
+        mock_generate_structured.return_value = RelationshipQualityScores(
+            tension=8.0,
+            dynamics=7.5,
+            story_potential=8.0,
+            authenticity=8.5,
+            feedback="Strong dynamic, more conflict potential",
         )
-        mock_ollama_client.generate.return_value = {"response": scores_json}
-        service._client = mock_ollama_client
 
         relationship = {
             "source": "Alice",
@@ -1445,23 +1444,40 @@ class TestJudgeRelationshipQuality:
         assert scores.tension == 8.0
         assert scores.average == 8.0
 
-    def test_judge_relationship_quality_missing_fields_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("src.services.world_quality_service._relationship.generate_structured")
+    def test_judge_relationship_quality_validation_error_raises(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test judge raises error when response is missing required fields."""
-        incomplete_json = json.dumps(
-            {
-                "tension": 8.0,
-                # Missing other fields
-            }
-        )
-        mock_ollama_client.generate.return_value = {"response": incomplete_json}
-        service._client = mock_ollama_client
+        """Test judge raises error on validation failure."""
+        mock_generate_structured.side_effect = Exception("Validation failed")
 
         relationship = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
 
-        with pytest.raises(WorldGenerationError, match="missing required fields"):
+        with pytest.raises(WorldGenerationError, match="judgment failed"):
             service._judge_relationship_quality(relationship, story_state, temperature=0.1)
+
+    @patch("src.services.world_quality_service._relationship.generate_structured")
+    def test_judge_relationship_quality_no_brief_uses_default_genre(
+        self, mock_generate_structured, service
+    ):
+        """Test judge uses default genre when brief is missing."""
+        mock_generate_structured.return_value = RelationshipQualityScores(
+            tension=7.0,
+            dynamics=7.0,
+            story_potential=7.0,
+            authenticity=7.0,
+            feedback="Decent relationship",
+        )
+
+        state = StoryState(id="test-id")
+        state.brief = None
+        relationship = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
+
+        scores = service._judge_relationship_quality(relationship, state, temperature=0.1)
+
+        assert scores.average == 7.0
+        call_args = mock_generate_structured.call_args
+        assert "fiction" in call_args.kwargs["prompt"]
 
 
 class TestRefineRelationship:
@@ -1691,19 +1707,16 @@ class TestCreateFaction:
 class TestJudgeFactionQuality:
     """Tests for _judge_faction_quality method."""
 
-    def test_judge_faction_quality_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service._faction.generate_structured")
+    def test_judge_faction_quality_success(self, mock_generate_structured, service, story_state):
         """Test successful faction quality judgment."""
-        scores_json = json.dumps(
-            {
-                "coherence": 8.0,
-                "influence": 7.5,
-                "conflict_potential": 8.0,
-                "distinctiveness": 8.5,
-                "feedback": "Strong faction with clear identity",
-            }
+        mock_generate_structured.return_value = FactionQualityScores(
+            coherence=8.0,
+            influence=7.5,
+            conflict_potential=8.0,
+            distinctiveness=8.5,
+            feedback="Strong faction with clear identity",
         )
-        mock_ollama_client.generate.return_value = {"response": scores_json}
-        service._client = mock_ollama_client
 
         faction = {
             "name": "Test Guild",
@@ -1718,23 +1731,40 @@ class TestJudgeFactionQuality:
         assert scores.coherence == 8.0
         assert scores.average == 8.0
 
-    def test_judge_faction_quality_missing_fields_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("src.services.world_quality_service._faction.generate_structured")
+    def test_judge_faction_quality_validation_error_raises(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test judge raises error when response is missing required fields."""
-        incomplete_json = json.dumps(
-            {
-                "coherence": 8.0,
-                # Missing other fields
-            }
-        )
-        mock_ollama_client.generate.return_value = {"response": incomplete_json}
-        service._client = mock_ollama_client
+        """Test judge raises error on validation failure."""
+        mock_generate_structured.side_effect = Exception("Validation failed")
 
         faction = {"name": "Test", "description": "Test"}
 
-        with pytest.raises(WorldGenerationError, match="missing required fields"):
+        with pytest.raises(WorldGenerationError, match="judgment failed"):
             service._judge_faction_quality(faction, story_state, temperature=0.1)
+
+    @patch("src.services.world_quality_service._faction.generate_structured")
+    def test_judge_faction_quality_no_brief_uses_default_genre(
+        self, mock_generate_structured, service
+    ):
+        """Test judge uses default genre when brief is missing."""
+        mock_generate_structured.return_value = FactionQualityScores(
+            coherence=7.0,
+            influence=7.0,
+            conflict_potential=7.0,
+            distinctiveness=7.0,
+            feedback="Decent faction",
+        )
+
+        state = StoryState(id="test-id")
+        state.brief = None
+        faction = {"name": "Test", "description": "Test"}
+
+        scores = service._judge_faction_quality(faction, state, temperature=0.1)
+
+        assert scores.average == 7.0
+        call_args = mock_generate_structured.call_args
+        assert "fiction" in call_args.kwargs["prompt"]
 
 
 class TestRefineFaction:
@@ -1889,19 +1919,16 @@ class TestCreateItem:
 class TestJudgeItemQuality:
     """Tests for _judge_item_quality method."""
 
-    def test_judge_item_quality_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service._item.generate_structured")
+    def test_judge_item_quality_success(self, mock_generate_structured, service, story_state):
         """Test successful item quality judgment."""
-        scores_json = json.dumps(
-            {
-                "significance": 8.0,
-                "uniqueness": 7.5,
-                "narrative_potential": 8.0,
-                "integration": 8.5,
-                "feedback": "Strong item with good story potential",
-            }
+        mock_generate_structured.return_value = ItemQualityScores(
+            significance=8.0,
+            uniqueness=7.5,
+            narrative_potential=8.0,
+            integration=8.5,
+            feedback="Strong item with good story potential",
         )
-        mock_ollama_client.generate.return_value = {"response": scores_json}
-        service._client = mock_ollama_client
 
         item = {
             "name": "Magic Sword",
@@ -1915,23 +1942,40 @@ class TestJudgeItemQuality:
         assert scores.significance == 8.0
         assert scores.average == 8.0
 
-    def test_judge_item_quality_missing_fields_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("src.services.world_quality_service._item.generate_structured")
+    def test_judge_item_quality_validation_error_raises(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test judge raises error when response is missing required fields."""
-        incomplete_json = json.dumps(
-            {
-                "significance": 8.0,
-                # Missing other fields
-            }
-        )
-        mock_ollama_client.generate.return_value = {"response": incomplete_json}
-        service._client = mock_ollama_client
+        """Test judge raises error on validation failure."""
+        mock_generate_structured.side_effect = Exception("Validation failed")
 
         item = {"name": "Test", "description": "Test"}
 
-        with pytest.raises(WorldGenerationError, match="missing required fields"):
+        with pytest.raises(WorldGenerationError, match="judgment failed"):
             service._judge_item_quality(item, story_state, temperature=0.1)
+
+    @patch("src.services.world_quality_service._item.generate_structured")
+    def test_judge_item_quality_no_brief_uses_default_genre(
+        self, mock_generate_structured, service
+    ):
+        """Test judge uses default genre when brief is missing."""
+        mock_generate_structured.return_value = ItemQualityScores(
+            significance=7.0,
+            uniqueness=7.0,
+            narrative_potential=7.0,
+            integration=7.0,
+            feedback="Decent item",
+        )
+
+        state = StoryState(id="test-id")
+        state.brief = None
+        item = {"name": "Test", "description": "Test"}
+
+        scores = service._judge_item_quality(item, state, temperature=0.1)
+
+        assert scores.average == 7.0
+        call_args = mock_generate_structured.call_args
+        assert "fiction" in call_args.kwargs["prompt"]
 
 
 class TestRefineItem:
@@ -2086,19 +2130,16 @@ class TestCreateConcept:
 class TestJudgeConceptQuality:
     """Tests for _judge_concept_quality method."""
 
-    def test_judge_concept_quality_success(self, service, story_state, mock_ollama_client):
+    @patch("src.services.world_quality_service._concept.generate_structured")
+    def test_judge_concept_quality_success(self, mock_generate_structured, service, story_state):
         """Test successful concept quality judgment."""
-        scores_json = json.dumps(
-            {
-                "relevance": 8.0,
-                "depth": 7.5,
-                "manifestation": 8.0,
-                "resonance": 8.5,
-                "feedback": "Strong thematic concept",
-            }
+        mock_generate_structured.return_value = ConceptQualityScores(
+            relevance=8.0,
+            depth=7.5,
+            manifestation=8.0,
+            resonance=8.5,
+            feedback="Strong thematic concept",
         )
-        mock_ollama_client.generate.return_value = {"response": scores_json}
-        service._client = mock_ollama_client
 
         concept = {
             "name": "Redemption",
@@ -2111,23 +2152,40 @@ class TestJudgeConceptQuality:
         assert scores.relevance == 8.0
         assert scores.average == 8.0
 
-    def test_judge_concept_quality_missing_fields_raises_error(
-        self, service, story_state, mock_ollama_client
+    @patch("src.services.world_quality_service._concept.generate_structured")
+    def test_judge_concept_quality_validation_error_raises(
+        self, mock_generate_structured, service, story_state
     ):
-        """Test judge raises error when response is missing required fields."""
-        incomplete_json = json.dumps(
-            {
-                "relevance": 8.0,
-                # Missing other fields
-            }
-        )
-        mock_ollama_client.generate.return_value = {"response": incomplete_json}
-        service._client = mock_ollama_client
+        """Test judge raises error on validation failure."""
+        mock_generate_structured.side_effect = Exception("Validation failed")
 
         concept = {"name": "Test", "description": "Test"}
 
-        with pytest.raises(WorldGenerationError, match="missing required fields"):
+        with pytest.raises(WorldGenerationError, match="judgment failed"):
             service._judge_concept_quality(concept, story_state, temperature=0.1)
+
+    @patch("src.services.world_quality_service._concept.generate_structured")
+    def test_judge_concept_quality_no_brief_uses_default_genre(
+        self, mock_generate_structured, service
+    ):
+        """Test judge uses default genre when brief is missing."""
+        mock_generate_structured.return_value = ConceptQualityScores(
+            relevance=7.0,
+            depth=7.0,
+            manifestation=7.0,
+            resonance=7.0,
+            feedback="Decent concept",
+        )
+
+        state = StoryState(id="test-id")
+        state.brief = None
+        concept = {"name": "Test", "description": "Test"}
+
+        scores = service._judge_concept_quality(concept, state, temperature=0.1)
+
+        assert scores.average == 7.0
+        call_args = mock_generate_structured.call_args
+        assert "fiction" in call_args.kwargs["prompt"]
 
 
 class TestRefineConcept:
