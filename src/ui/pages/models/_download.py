@@ -59,7 +59,7 @@ async def download_all_filtered(page: Any) -> None:
     with ui.dialog() as dialog, ui.card().classes("w-96"):
         ui.label(f"Download {len(downloadable)} Models?").classes("text-lg font-semibold mb-2")
         ui.label(f"Downloads will run {page._max_concurrent_downloads} at a time.").classes(
-            "text-sm text-gray-500 dark:text-gray-400 mb-2"
+            "text-sm text-gray-400 mb-2"
         )
 
         with ui.scroll_area().classes("max-h-48 w-full"):
@@ -145,7 +145,7 @@ def create_download_card(page: Any, task: Any) -> None:
                             ui.label(task.model_id).classes("font-medium")
                         task.progress_bar = ui.linear_progress(value=0).classes("w-full")
                         task.status_label = ui.label(task.status_text).classes(
-                            "text-sm text-gray-500 dark:text-gray-400"
+                            "text-sm text-gray-400"
                         )
                     ui.button(
                         icon="close",

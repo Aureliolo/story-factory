@@ -218,17 +218,13 @@ class GenerationStatus:
 
                     with ui.row().classes("gap-2 items-center"):
                         self._phase_label = ui.label("Phase: Interview").classes(
-                            "text-sm text-gray-600 dark:text-gray-400"
+                            "text-sm text-gray-400"
                         )
-                        self._chapter_label = ui.label("Chapter 1").classes(
-                            "text-sm text-gray-600 dark:text-gray-400"
-                        )
+                        self._chapter_label = ui.label("Chapter 1").classes("text-sm text-gray-400")
                         self._chapter_label.set_visibility(
                             False
                         )  # Hidden until we have chapter info
-                        self._eta_label = ui.label("ETA: --").classes(
-                            "text-sm text-gray-600 dark:text-gray-400"
-                        )
+                        self._eta_label = ui.label("ETA: --").classes("text-sm text-gray-400")
                         self._eta_label.set_visibility(False)  # Hidden until we have ETA
 
                 # Pause/Resume button

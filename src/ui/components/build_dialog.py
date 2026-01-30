@@ -176,9 +176,8 @@ async def show_build_structure_dialog(
             logger.exception(f"Error during structure {mode}: {e}")
             ui.notify(f"Error: {e}", type="negative")
 
-    # Use state-based dark mode styling
-    card_bg = "#1f2937" if state.dark_mode else "#ffffff"
-    inner_card_bg = "#374151" if state.dark_mode else "#f9fafb"
+    card_bg = "#1f2937"
+    inner_card_bg = "#374151"
 
     # Responsive dialog: wider on larger screens, max 800px
     with (
@@ -196,7 +195,7 @@ async def show_build_structure_dialog(
                 .style(f"background-color: {inner_card_bg}")
             ):
                 ui.label("This will clear and rebuild the entire world:").classes(
-                    "font-medium text-orange-600 dark:text-orange-400"
+                    "font-medium text-orange-400"
                 )
                 ui.label("All existing entities will be deleted").classes("text-sm ml-2")
                 ui.label("All relationships will be removed").classes("text-sm ml-2")
@@ -213,19 +212,15 @@ async def show_build_structure_dialog(
                 .style(f"background-color: {inner_card_bg}")
             ):
                 ui.label("Story Overview:").classes("font-medium mb-2")
-                ui.label(f"Genre: {brief.genre}").classes(
-                    "text-sm text-gray-600 dark:text-gray-400"
-                )
-                ui.label(f"Tone: {brief.tone}").classes("text-sm text-gray-600 dark:text-gray-400")
+                ui.label(f"Genre: {brief.genre}").classes("text-sm text-gray-400")
+                ui.label(f"Tone: {brief.tone}").classes("text-sm text-gray-400")
                 ui.label(f"Length: {brief.target_length.replace('_', ' ').title()}").classes(
-                    "text-sm text-gray-600 dark:text-gray-400"
+                    "text-sm text-gray-400"
                 )
                 premise_text = (
                     brief.premise[:120] + "..." if len(brief.premise) > 120 else brief.premise
                 )
-                ui.label(f"Premise: {premise_text}").classes(
-                    "text-sm text-gray-600 dark:text-gray-400 mt-2"
-                )
+                ui.label(f"Premise: {premise_text}").classes("text-sm text-gray-400 mt-2")
 
             # AI Actions
             with (
@@ -437,9 +432,7 @@ async def show_build_structure_dialog(
             await do_build(selected_template)
 
         ready_text = "Ready to rebuild..." if rebuild else "Ready to build..."
-        progress_label = ui.label(ready_text).classes(
-            "text-sm text-gray-500 dark:text-gray-400 mb-2"
-        )
+        progress_label = ui.label(ready_text).classes("text-sm text-gray-400 mb-2")
         progress_bar = ui.linear_progress(value=0, show_value=False).classes("w-full mb-4")
 
         with ui.row().classes("w-full justify-end gap-2"):

@@ -104,5 +104,5 @@ def build_stat_card(title: str, value: str, icon: str, color_class: str) -> None
     with ui.card().classes("p-4"):
         with ui.row().classes("items-center gap-2 mb-2"):
             ui.icon(icon).classes(color_class)
-            ui.label(title).classes("text-sm text-gray-500 dark:text-gray-400")
+            ui.label(title).classes("text-sm text-gray-400")
         ui.label(value).classes("text-2xl font-bold")

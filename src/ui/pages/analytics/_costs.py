@@ -95,7 +95,7 @@ def build_generation_costs_section(page) -> None:
 
             if cost_summary["total_runs"] == 0:
                 ui.label("No generation runs recorded yet. Generate content to see costs!").classes(
-                    "text-gray-500 dark:text-gray-400 py-8 text-center"
+                    "text-gray-400 py-8 text-center"
                 )
                 return
 
@@ -142,11 +142,7 @@ def build_generation_costs_section(page) -> None:
 
             # Efficiency insight
             if efficiency < 0.8:
-                with (
-                    ui.card()
-                    .classes("w-full mt-4 bg-amber-50 dark:bg-amber-900/20")
-                    .props("flat bordered")
-                ):
+                with ui.card().classes("w-full mt-4 bg-amber-900/20").props("flat bordered"):
                     with ui.row().classes("items-center gap-2"):
                         ui.icon("lightbulb", color="amber")
                         ui.label(

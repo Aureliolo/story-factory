@@ -1,4 +1,21 @@
-/* Story Factory - Custom Styles */
+/* Story Factory - Custom Styles (Dark Mode Only) */
+
+/* Dark-mode borders — Quasar resets borders on cards and expansion panels.
+   Override globally so every section has a visible boundary. */
+.q-card {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.q-expansion-item {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+/* Quasar separator visibility in dark mode */
+body.body--dark .q-separator {
+    background: rgba(255, 255, 255, 0.18);
+}
 
 /* Smooth transitions for all interactive elements */
 * {
@@ -40,16 +57,8 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-    outline: 2px solid #2196F3;
+    outline: 2px solid #42A5F5;
     outline-offset: 2px;
-}
-
-/* Dark mode specific styles */
-.dark button:focus-visible,
-.dark input:focus-visible,
-.dark textarea:focus-visible,
-.dark select:focus-visible {
-    outline-color: #42A5F5;
 }
 
 /* Hover effects for cards */
@@ -59,11 +68,6 @@ select:focus-visible {
 
 .card-hover:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-}
-
-/* Dark mode card hover */
-.dark .card-hover:hover {
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
 }
 
@@ -74,35 +78,23 @@ select:focus-visible {
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: #2d2d2d;
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #888;
+    background: #555;
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* Dark mode scrollbars */
-.dark ::-webkit-scrollbar-track {
-    background: #2d2d2d;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-    background: #555;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
     background: #777;
 }
 
 /* Prose styling for markdown content */
 .prose {
     max-width: none;
+    color: #e0e0e0;
 }
 
 .prose h1,
@@ -111,44 +103,32 @@ select:focus-visible {
 .prose h4 {
     margin-top: 1.5em;
     margin-bottom: 0.5em;
+    color: #f0f0f0;
 }
 
 .prose p {
     margin-bottom: 1em;
 }
 
-/* Dark mode prose */
-.dark .prose {
-    color: #e0e0e0;
+/* Markdown styling scoped to non-chat contexts.
+   Chat messages set their own text colors (text-white for user, prose-invert
+   for assistant) so these rules must not override them. */
+.q-markdown {
+    color: inherit;
+    background: transparent;
 }
 
-.dark .prose h1,
-.dark .prose h2,
-.dark .prose h3,
-.dark .prose h4 {
-    color: #f0f0f0;
+.q-markdown code {
+    background: rgba(0, 0, 0, 0.2);
+    color: inherit;
 }
 
-/* Chat message markdown styling */
-.dark .q-markdown,
-.dark .q-markdown p,
-.dark .q-markdown span,
-.dark .q-markdown li {
-    color: #e0e0e0 !important;
-    background: transparent !important;
+.q-markdown pre {
+    background: rgba(0, 0, 0, 0.3);
 }
 
-.dark .q-markdown code {
-    background: rgba(0, 0, 0, 0.2) !important;
-    color: #e0e0e0 !important;
-}
-
-.dark .q-markdown pre {
-    background: rgba(0, 0, 0, 0.3) !important;
-}
-
-/* Ensure markdown links are visible in dark mode */
-.dark .q-markdown a {
+/* Ensure markdown links are visible */
+.q-markdown a {
     color: #60a5fa !important;
 }
 
@@ -157,7 +137,7 @@ select:focus-visible {
     background: rgba(59, 130, 246, 0.3);
 }
 
-.dark .q-markdown strong {
+.q-markdown strong {
     color: #f0f0f0 !important;
 }
 
@@ -209,13 +189,6 @@ button.loading::after {
 input:focus,
 textarea:focus,
 select:focus {
-    border-color: #2196F3;
-    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
-}
-
-.dark input:focus,
-.dark textarea:focus,
-.dark select:focus {
     border-color: #42A5F5;
     box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
 }
@@ -266,26 +239,22 @@ select:disabled {
 .graph-container {
     border-radius: 0.5rem;
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.dark .graph-container {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* vis.js navigation button styling for dark mode */
-.dark .vis-navigation .vis-button {
+/* vis.js navigation button styling */
+.vis-navigation .vis-button {
     filter: invert(0.85) hue-rotate(180deg);
     background-color: #374151 !important;
     border: 1px solid #4b5563 !important;
     border-radius: 4px;
 }
 
-.dark .vis-navigation .vis-button:hover {
+.vis-navigation .vis-button:hover {
     background-color: #4b5563 !important;
     box-shadow: 0 0 4px rgba(255, 255, 255, 0.4) !important;
 }
 
-.dark .vis-navigation .vis-button:active {
+.vis-navigation .vis-button:active {
     background-color: #1f2937 !important;
 }

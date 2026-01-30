@@ -119,7 +119,7 @@ def build_relationships_section(page) -> None:
 
                 ui.table(columns=columns, rows=rows).classes("w-full")
             else:
-                ui.label("No relationships yet").classes("text-gray-500 dark:text-gray-400")
+                ui.label("No relationships yet").classes("text-gray-400")
 
 
 def on_node_select(page, entity_id: str) -> None:
@@ -164,9 +164,7 @@ def on_edge_select(page, relationship_id: str) -> None:
     # Show relationship editor dialog
     with ui.dialog() as dialog, ui.card().classes("w-96"):
         ui.label("Edit Relationship").classes("text-lg font-semibold")
-        ui.label(f"{source_name} → {target_name}").classes(
-            "text-sm text-gray-500 dark:text-gray-400"
-        )
+        ui.label(f"{source_name} → {target_name}").classes("text-sm text-gray-400")
 
         ui.separator()
 
@@ -304,9 +302,7 @@ def on_create_relationship(page, source_id: str, target_id: str) -> None:
     # Show dialog to configure relationship
     with ui.dialog() as dialog, ui.card().classes("w-96 p-4"):
         ui.label("Create Relationship").classes("text-lg font-semibold mb-2")
-        ui.label(f"{source_name} → {target_name}").classes(
-            "text-sm text-gray-500 dark:text-gray-400 mb-4"
-        )
+        ui.label(f"{source_name} → {target_name}").classes("text-sm text-gray-400 mb-4")
 
         ui.separator()
 

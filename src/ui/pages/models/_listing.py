@@ -32,7 +32,7 @@ def build_available_section(page: Any) -> None:
 
         # Filter controls - responsive grid
         with ui.element("div").classes(
-            "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+            "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 p-4 bg-gray-800 rounded-lg"
         ):
             # Search
             ui.input(
@@ -76,15 +76,13 @@ def build_available_section(page: Any) -> None:
                 icon="download",
                 on_click=lambda: download_all_filtered(page),
             ).props("color=primary")
-            page._queue_status_label = ui.label("").classes(
-                "text-sm text-gray-600 dark:text-gray-400"
-            )
+            page._queue_status_label = ui.label("").classes("text-sm text-gray-400")
             update_download_all_btn(page)
 
         # Custom model pull
         with ui.expansion("Pull Custom Model", icon="add_circle").classes("w-full"):
             ui.label("Enter any Ollama model name to download").classes(
-                "text-sm text-gray-500 dark:text-gray-400 mb-2"
+                "text-sm text-gray-400 mb-2"
             )
             with ui.row().classes("w-full gap-2"):
                 page._custom_model_input = (
@@ -229,9 +227,7 @@ def refresh_model_list(page: Any) -> None:
             shown_count += 1
 
         if shown_count == 0:
-            ui.label("No models match your filters").classes(
-                "text-gray-500 dark:text-gray-400 text-center py-8"
-            )
+            ui.label("No models match your filters").classes("text-gray-400 text-center py-8")
 
 
 def build_model_card(
@@ -282,7 +278,7 @@ def build_model_card(
                     ).props("color=primary dense")
                 else:
                     ui.label(f"Needs {info['vram_required']}GB").classes(
-                        "text-sm text-orange-500 dark:text-orange-400"
+                        "text-sm text-orange-400"
                     ).tooltip(
                         f"Requires {info['vram_required']}GB VRAM, you have ~{available_vram}GB available"
                     )
@@ -296,18 +292,18 @@ def build_model_card(
                     ).props("flat dense round color=negative").tooltip("Delete model")
 
         # Description
-        ui.label(info["description"]).classes("text-sm text-gray-600 dark:text-gray-400 mb-3")
+        ui.label(info["description"]).classes("text-sm text-gray-400 mb-3")
 
         # Stats grid
         with ui.element("div").classes("grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"):
             # Size
             with ui.column().classes("gap-0.5"):
-                ui.label("Disk Size").classes("text-xs text-gray-500 dark:text-gray-400")
+                ui.label("Disk Size").classes("text-xs text-gray-400")
                 ui.label(f"{info['size_gb']} GB").classes("font-medium")
 
             # VRAM
             with ui.column().classes("gap-0.5"):
-                ui.label("VRAM Needed").classes("text-xs text-gray-500 dark:text-gray-400")
+                ui.label("VRAM Needed").classes("text-xs text-gray-400")
                 vram_class = "font-medium"
                 if not fits_vram:
                     vram_class += " text-orange-500"
@@ -315,7 +311,7 @@ def build_model_card(
 
             # Quality bar
             with ui.column().classes("gap-0.5"):
-                ui.label("Quality").classes("text-xs text-gray-500 dark:text-gray-400")
+                ui.label("Quality").classes("text-xs text-gray-400")
                 with ui.row().classes("gap-0.5 items-center"):
                     for i in range(10):
                         if i < info["quality"]:
@@ -323,14 +319,14 @@ def build_model_card(
                                 f"width: 8px; height: 8px; background: {quality_color}; border-radius: 2px;"
                             )
                         else:
-                            ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
+                            ui.element("div").classes("bg-gray-600").style(
                                 "width: 8px; height: 8px; border-radius: 2px;"
                             )
                     ui.label(f"{info['quality']}/10").classes("text-xs ml-1")
 
             # Speed bar
             with ui.column().classes("gap-0.5"):
-                ui.label("Speed").classes("text-xs text-gray-500 dark:text-gray-400")
+                ui.label("Speed").classes("text-xs text-gray-400")
                 with ui.row().classes("gap-0.5 items-center"):
                     for i in range(10):
                         if i < info["speed"]:
@@ -338,7 +334,7 @@ def build_model_card(
                                 "width: 8px; height: 8px; background: #4CAF50; border-radius: 2px;"
                             )
                         else:
-                            ui.element("div").classes("bg-gray-200 dark:bg-gray-600").style(
+                            ui.element("div").classes("bg-gray-600").style(
                                 "width: 8px; height: 8px; border-radius: 2px;"
                             )
                     ui.label(f"{info['speed']}/10").classes("text-xs ml-1")

@@ -43,7 +43,7 @@ def build_content_statistics_section(page) -> None:
 
             if stats["generation_count"] == 0:
                 ui.label("No content generated yet. Start writing to see statistics!").classes(
-                    "text-gray-500 dark:text-gray-400 py-8 text-center"
+                    "text-gray-400 py-8 text-center"
                 )
                 return
 

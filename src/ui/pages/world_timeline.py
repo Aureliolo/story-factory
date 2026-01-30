@@ -70,10 +70,10 @@ class WorldTimelinePage:
         Render a full-width, centered message panel prompting the user to select a project to view the world timeline.
         """
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-4 py-16"):
-            ui.icon("timeline", size="xl").classes("text-gray-400 dark:text-gray-500")
-            ui.label("No Project Selected").classes("text-xl text-gray-500 dark:text-gray-400")
+            ui.icon("timeline", size="xl").classes("text-gray-500")
+            ui.label("No Project Selected").classes("text-xl text-gray-400")
             ui.label("Select a project from the header to view its world timeline.").classes(
-                "text-gray-400 dark:text-gray-500"
+                "text-gray-500"
             )
 
     def _build_no_world_message(self) -> None:
@@ -84,11 +84,9 @@ class WorldTimelinePage:
         """
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-6 py-16"):
             ui.icon("public", size="xl").classes("text-gray-400")
-            ui.label("No World Data").classes(
-                "text-xl font-semibold text-gray-700 dark:text-gray-200"
-            )
+            ui.label("No World Data").classes("text-xl font-semibold text-gray-200")
             ui.label("Build the world first to see entities and events on the timeline.").classes(
-                "text-gray-500 dark:text-gray-400 text-center max-w-md"
+                "text-gray-400 text-center max-w-md"
             )
 
             ui.button(
@@ -180,24 +178,24 @@ class WorldTimelinePage:
                     ui.icon("info", size="xs").classes("text-blue-500 mt-1")
                     ui.label(
                         "Entity lifespans are shown as horizontal bars when birth/death dates are available."
-                    ).classes("text-sm text-gray-600 dark:text-gray-400")
+                    ).classes("text-sm text-gray-400")
 
                 with ui.row().classes("items-start gap-2"):
                     ui.icon("info", size="xs").classes("text-blue-500 mt-1")
                     ui.label("Events appear as point markers on the timeline.").classes(
-                        "text-sm text-gray-600 dark:text-gray-400"
+                        "text-sm text-gray-400"
                     )
 
                 with ui.row().classes("items-start gap-2"):
                     ui.icon("info", size="xs").classes("text-blue-500 mt-1")
                     ui.label(
                         "Use the filter checkboxes to show/hide different entity types."
-                    ).classes("text-sm text-gray-600 dark:text-gray-400")
+                    ).classes("text-sm text-gray-400")
 
                 with ui.row().classes("items-start gap-2"):
                     ui.icon("info", size="xs").classes("text-blue-500 mt-1")
                     ui.label("Scroll to zoom, drag to pan. Click 'Fit' to show all items.").classes(
-                        "text-sm text-gray-600 dark:text-gray-400"
+                        "text-sm text-gray-400"
                     )
 
                 with ui.row().classes("items-start gap-2"):
@@ -205,7 +203,7 @@ class WorldTimelinePage:
                     ui.label(
                         "To add lifecycle data to entities, edit them in the World page "
                         "and include birth/death dates in attributes."
-                    ).classes("text-sm text-gray-600 dark:text-gray-400")
+                    ).classes("text-sm text-gray-400")
 
     def _handle_item_select(self, item_id: str) -> None:
         """

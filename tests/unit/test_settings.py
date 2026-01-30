@@ -576,14 +576,14 @@ class TestSettingsSaveLoad:
         settings1 = Settings.load()
 
         # Modify the cached instance
-        settings1.dark_mode = not settings1.dark_mode
+        settings1.world_quality_enabled = not settings1.world_quality_enabled
 
         # Load with use_cache=False should create a new instance
         settings2 = Settings.load(use_cache=False)
 
         assert settings1 is not settings2
         # New instance has default value
-        assert settings2.dark_mode != settings1.dark_mode
+        assert settings2.world_quality_enabled != settings1.world_quality_enabled
 
     def test_clear_cache_clears_cached_instance(self, tmp_path, monkeypatch):
         """Test clear_cache() clears the cached instance."""
@@ -616,14 +616,14 @@ class TestRecoverPartialSettings:
         # Data with valid fields
         data = {
             "ollama_url": "http://custom:11434",  # Valid
-            "dark_mode": False,  # Valid
+            "world_quality_enabled": False,  # Valid
         }
 
         with caplog.at_level(logging.INFO):
             settings = Settings._recover_partial_settings(data)
 
         assert settings.ollama_url == "http://custom:11434"
-        assert settings.dark_mode is False
+        assert settings.world_quality_enabled is False
         assert "Recovered" in caplog.text
 
     def test_falls_back_to_defaults_when_recovery_fails_validation(self, tmp_path, monkeypatch):

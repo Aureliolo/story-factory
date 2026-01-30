@@ -40,7 +40,7 @@ class Header:
 
     def build(self) -> None:
         """Build the header UI."""
-        bg_color = "#1f2937" if self.state.dark_mode else "#ffffff"
+        bg_color = "#1f2937"
         with ui.header().classes("shadow-sm items-center").style(f"background-color: {bg_color}"):
             with ui.row().classes("w-full items-center gap-2 px-4 py-2"):
                 # Logo/Title
@@ -55,9 +55,6 @@ class Header:
 
                 # Project selector (compact)
                 self._build_project_selector()
-
-                # Dark mode toggle
-                self._build_theme_toggle()
 
                 # Ollama status (compact)
                 self._build_status_display()
@@ -113,27 +110,6 @@ class Header:
             else:
                 ui.icon("error", size="xs").classes("text-red-500")
                 self._status_label = ui.label("Offline").classes("text-xs text-red-500")
-
-    def _build_theme_toggle(self) -> None:
-        """Build the dark mode toggle button."""
-
-        def toggle_theme() -> None:
-            """Toggle between dark and light mode."""
-            self.state.dark_mode = not self.state.dark_mode
-            self.services.settings.dark_mode = self.state.dark_mode
-            self.services.settings.save()
-            ui.notify(
-                f"{'Dark' if self.state.dark_mode else 'Light'} mode enabled. Refresh to apply.",
-                type="info",
-            )
-
-        icon = "dark_mode" if not self.state.dark_mode else "light_mode"
-        tooltip = "Enable dark mode" if not self.state.dark_mode else "Enable light mode"
-
-        ui.button(
-            icon=icon,
-            on_click=toggle_theme,
-        ).props("flat round").tooltip(tooltip)
 
     async def _on_project_change(self, e: Any) -> None:
         """Handle project selection change."""

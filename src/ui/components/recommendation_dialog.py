@@ -87,7 +87,7 @@ class RecommendationDialog:
         ui.label(
             "Based on your generation history, the learning system suggests "
             "these changes to improve quality or performance."
-        ).classes("text-sm text-gray-600 dark:text-gray-400 mb-4")
+        ).classes("text-sm text-gray-400 mb-4")
 
     def _build_recommendations(self) -> None:
         """
@@ -131,12 +131,12 @@ class RecommendationDialog:
                             rec_type_str = str(rec_type_value)
 
                         type_colors = {
-                            "model_swap": "bg-purple-100 text-purple-800",
-                            "temp_adjust": "bg-blue-100 text-blue-800",
-                            "mode_change": "bg-green-100 text-green-800",
-                            "vram_strategy": "bg-orange-100 text-orange-800",
+                            "model_swap": "bg-purple-900 text-purple-200",
+                            "temp_adjust": "bg-blue-900 text-blue-200",
+                            "mode_change": "bg-green-900 text-green-200",
+                            "vram_strategy": "bg-orange-900 text-orange-200",
                         }
-                        type_color = type_colors.get(rec_type_str, "bg-gray-100 text-gray-800")
+                        type_color = type_colors.get(rec_type_str, "bg-gray-700 text-gray-100")
 
                         ui.label(rec_type_str.replace("_", " ").title()).classes(
                             f"text-xs px-2 py-0.5 rounded {type_color}"
@@ -144,14 +144,14 @@ class RecommendationDialog:
 
                         if rec.affected_role:
                             ui.label(rec.affected_role.title()).classes(
-                                "text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700"
+                                "text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300"
                             )
 
                     # Change description
                     ui.label(f"{rec.current_value} → {rec.suggested_value}").classes("font-medium")
 
                     # Reason
-                    ui.label(rec.reason).classes("text-sm text-gray-600 dark:text-gray-400")
+                    ui.label(rec.reason).classes("text-sm text-gray-400")
 
                     # Confidence and expected improvement
                     with ui.row().classes("items-center gap-4 mt-1"):

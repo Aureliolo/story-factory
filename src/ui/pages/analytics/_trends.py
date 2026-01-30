@@ -52,7 +52,7 @@ def build_quality_trends_section(page) -> None:
 
             if not prose_trends and not speed_trends:
                 ui.label("Not enough data yet. Generate more content to see trends!").classes(
-                    "text-gray-500 dark:text-gray-400 py-8 text-center"
+                    "text-gray-400 py-8 text-center"
                 )
                 return
 
@@ -166,7 +166,7 @@ def build_world_quality_section(page) -> None:
                 ui.label(
                     "No world entity quality data yet. Generate entities with Quality Refinement "
                     "enabled to collect metrics!"
-                ).classes("text-gray-500 dark:text-gray-400 py-8 text-center")
+                ).classes("text-gray-400 py-8 text-center")
                 return
 
             # Summary stats row
@@ -299,7 +299,7 @@ def build_recommendations_section(page) -> None:
                 ui.label("Recent Recommendations").classes("text-lg font-semibold")
 
             if not recommendations:
-                ui.label("No recommendations yet.").classes("text-gray-500 dark:text-gray-400")
+                ui.label("No recommendations yet.").classes("text-gray-400")
                 return
 
             for rec in recommendations:
@@ -340,7 +340,7 @@ def _build_recommendation_card(rec) -> None:
                     )
 
                 # Reason
-                ui.label(rec.reason).classes("text-sm text-gray-600 dark:text-gray-400")
+                ui.label(rec.reason).classes("text-sm text-gray-400")
 
             # Confidence badge
             confidence_color = "green" if rec.confidence >= 0.8 else "orange"

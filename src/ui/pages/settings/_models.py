@@ -56,12 +56,10 @@ def build_model_section(page: SettingsPage) -> None:
         # Per-agent model selects
         with (
             ui.element("div")
-            .classes("w-full mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg")
+            .classes("w-full mt-4 p-4 bg-gray-800 rounded-lg")
             .bind_visibility_from(page._use_per_agent, "value")
         ):
-            ui.label("Per-Agent Model Overrides").classes(
-                "font-medium text-sm text-gray-600 dark:text-gray-400 mb-3"
-            )
+            ui.label("Per-Agent Model Overrides").classes("font-medium text-sm text-gray-400 mb-3")
 
             page._agent_model_selects = {}
             with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-3"):
@@ -103,13 +101,13 @@ def build_temperature_section(page: SettingsPage) -> None:
         with ui.row().classes("w-full justify-center gap-6 mb-4 text-xs"):
             with ui.row().classes("items-center gap-1"):
                 ui.element("div").classes("w-3 h-3 rounded bg-blue-500")
-                ui.label("Focused (0.3)").classes("text-gray-500 dark:text-gray-400")
+                ui.label("Focused (0.3)").classes("text-gray-400")
             with ui.row().classes("items-center gap-1"):
                 ui.element("div").classes("w-3 h-3 rounded bg-green-500")
-                ui.label("Balanced (0.7)").classes("text-gray-500 dark:text-gray-400")
+                ui.label("Balanced (0.7)").classes("text-gray-400")
             with ui.row().classes("items-center gap-1"):
                 ui.element("div").classes("w-3 h-3 rounded bg-orange-500")
-                ui.label("Creative (1.2+)").classes("text-gray-500 dark:text-gray-400")
+                ui.label("Creative (1.2+)").classes("text-gray-400")
 
         page._temp_sliders: dict[str, Any] = {}  # type: ignore[misc]
         page._temp_labels: dict[str, Any] = {}  # type: ignore[misc]
@@ -117,15 +115,11 @@ def build_temperature_section(page: SettingsPage) -> None:
         with ui.element("div").classes("grid grid-cols-2 lg:grid-cols-3 gap-3"):
             for role, info in AGENT_ROLES.items():
                 default_temp = page.settings.get_temperature_for_agent(role)
-                with (
-                    ui.card()
-                    .classes("p-4 bg-gray-50 dark:bg-gray-800")
-                    .tooltip(info["description"])
-                ):
+                with ui.card().classes("p-4 bg-gray-800").tooltip(info["description"]):
                     with ui.row().classes("w-full items-center justify-between mb-3"):
                         ui.label(info["name"]).classes("font-medium text-sm")
                         page._temp_labels[role] = ui.label(f"{default_temp:.1f}").classes(
-                            "text-sm font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded"
+                            "text-sm font-mono bg-gray-700 px-2 py-0.5 rounded"
                         )
 
                     # Slider without floating label (value shown in corner)

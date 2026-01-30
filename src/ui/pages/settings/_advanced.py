@@ -187,7 +187,7 @@ def build_story_structure_section(page: SettingsPage) -> None:
             with ui.row().classes("items-center gap-2"):
                 ui.icon("info", size="xs").classes("text-blue-500")
                 ui.label("Individual projects can override these in 'Generation Settings'").classes(
-                    "text-xs text-gray-500 dark:text-gray-400"
+                    "text-xs text-gray-400"
                 )
 
     logger.debug("Story structure section built")

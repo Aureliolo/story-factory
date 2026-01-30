@@ -452,26 +452,6 @@ python --version
 
 5. **Check JavaScript is enabled**
 
-### Dark Mode Issues
-
-**Symptoms**:
-- Colors are wrong
-- Text unreadable
-- Theme doesn't persist
-
-**Solutions**:
-
-1. **Toggle dark mode**: Click sun/moon icon
-
-2. **Check settings.json**:
-   ```json
-   {
-     "dark_mode": true
-   }
-   ```
-
-3. **Clear browser localStorage**: DevTools → Application → Local Storage
-
 ## Generation Issues
 
 ### Story Generation Stops

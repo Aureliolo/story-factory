@@ -153,9 +153,7 @@ class ConflictGraphComponent:
                 # Graph container
                 self._container = (
                     ui.html("", sanitize=False)
-                    .classes(
-                        "w-full border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
-                    )
+                    .classes("w-full border border-gray-700 rounded-lg bg-gray-800")
                     .style(f"height: {self.height}px;")
                 )
 
@@ -196,8 +194,7 @@ class ConflictGraphComponent:
         if not self.world_db or not self.services:
             self._container.content = """
                 <style>
-                    .conflict-empty { color: #6b7280; }
-                    .dark .conflict-empty { color: #9ca3af; }
+                    .conflict-empty { color: #9ca3af; }
                 </style>
                 <div class="conflict-empty" style="
                     height: 100%;
@@ -227,8 +224,7 @@ class ConflictGraphComponent:
         if not self._graph_data.nodes:
             self._container.content = """
                 <style>
-                    .conflict-empty { color: #6b7280; }
-                    .dark .conflict-empty { color: #9ca3af; }
+                    .conflict-empty { color: #9ca3af; }
                 </style>
                 <div class="conflict-empty" style="
                     height: 100%;
@@ -397,7 +393,7 @@ class ConflictGraphComponent:
 
         if not metrics:
             with self._metrics_container:
-                ui.label("No data available").classes("text-gray-500 dark:text-gray-400 text-sm")
+                ui.label("No data available").classes("text-gray-400 text-sm")
             return
 
         with self._metrics_container:

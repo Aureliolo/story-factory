@@ -122,11 +122,11 @@ class WorldHealthDashboard:
                 if score >= 40
                 else "Critical"
             )
-            ui.label(health_text).classes(f"text-sm text-{color}-600 dark:text-{color}-400")
+            ui.label(health_text).classes(f"text-sm text-{color}-400")
 
     def _build_entity_counts(self) -> None:
         """Build entity count summary."""
-        with ui.card().classes("p-3 bg-gray-50 dark:bg-gray-800"):
+        with ui.card().classes("p-3 bg-gray-800"):
             ui.label("Entities").classes("text-sm font-medium mb-2")
 
             total = self.metrics.total_entities
@@ -144,7 +144,7 @@ class WorldHealthDashboard:
 
     def _build_relationship_stats(self) -> None:
         """Build relationship statistics."""
-        with ui.card().classes("p-3 bg-gray-50 dark:bg-gray-800"):
+        with ui.card().classes("p-3 bg-gray-800"):
             ui.label("Relationships").classes("text-sm font-medium mb-2")
 
             with ui.row().classes("items-baseline gap-2"):
@@ -155,26 +155,24 @@ class WorldHealthDashboard:
             density_color = "green" if density >= 1.5 else "orange" if density >= 1.0 else "red"
             with ui.row().classes("items-center gap-1 mt-1"):
                 ui.icon("density_small", size="xs").classes(f"text-{density_color}-500")
-                ui.label(f"Density: {density:.2f}").classes(
-                    f"text-xs text-{density_color}-600 dark:text-{density_color}-400"
-                )
+                ui.label(f"Density: {density:.2f}").classes(f"text-xs text-{density_color}-400")
 
     def _build_orphan_section(self) -> None:
         """Build orphan entity warning section."""
         orphan_count = self.metrics.orphan_count
 
         if orphan_count == 0:
-            with ui.row().classes("items-center gap-2 p-2 bg-green-50 dark:bg-green-900 rounded"):
+            with ui.row().classes("items-center gap-2 p-2 bg-green-900 rounded"):
                 ui.icon("check_circle", size="sm").classes("text-green-500")
-                ui.label("No orphan entities").classes("text-sm text-green-700 dark:text-green-300")
+                ui.label("No orphan entities").classes("text-sm text-green-300")
             return
 
         # Warning card
-        with ui.card().classes("p-3 bg-yellow-50 dark:bg-yellow-900"):
+        with ui.card().classes("p-3 bg-yellow-900"):
             with ui.row().classes("items-center gap-2 mb-2"):
                 ui.icon("warning", size="sm").classes("text-yellow-600")
                 ui.label(f"{orphan_count} Orphan Entities").classes(
-                    "text-sm font-medium text-yellow-800 dark:text-yellow-200"
+                    "text-sm font-medium text-yellow-200"
                 )
 
             # List orphans (max 5)
@@ -197,28 +195,24 @@ class WorldHealthDashboard:
                             ).props("flat round size=xs").tooltip("Add relationship")
 
                 if orphan_count > 5:
-                    ui.label(f"+{orphan_count - 5} more...").classes(
-                        "text-xs text-gray-500 dark:text-gray-400"
-                    )
+                    ui.label(f"+{orphan_count - 5} more...").classes("text-xs text-gray-400")
 
     def _build_circular_section(self) -> None:
         """Build circular relationship warning section."""
         circular_count = self.metrics.circular_count
 
         if circular_count == 0:
-            with ui.row().classes("items-center gap-2 p-2 bg-green-50 dark:bg-green-900 rounded"):
+            with ui.row().classes("items-center gap-2 p-2 bg-green-900 rounded"):
                 ui.icon("check_circle", size="sm").classes("text-green-500")
-                ui.label("No circular relationships").classes(
-                    "text-sm text-green-700 dark:text-green-300"
-                )
+                ui.label("No circular relationships").classes("text-sm text-green-300")
             return
 
         # Warning card
-        with ui.card().classes("p-3 bg-orange-50 dark:bg-orange-900"):
+        with ui.card().classes("p-3 bg-orange-900"):
             with ui.row().classes("items-center gap-2 mb-2"):
                 ui.icon("autorenew", size="sm").classes("text-orange-600")
                 ui.label(f"{circular_count} Circular Chains").classes(
-                    "text-sm font-medium text-orange-800 dark:text-orange-200"
+                    "text-sm font-medium text-orange-200"
                 )
 
             # List cycles (max 3)
@@ -256,13 +250,11 @@ class WorldHealthDashboard:
                             ).props("flat round size=xs").tooltip("View cycle")
 
                 if circular_count > 3:
-                    ui.label(f"+{circular_count - 3} more...").classes(
-                        "text-xs text-gray-500 dark:text-gray-400"
-                    )
+                    ui.label(f"+{circular_count - 3} more...").classes("text-xs text-gray-400")
 
     def _build_quality_section(self) -> None:
         """Build quality distribution section."""
-        with ui.card().classes("p-3 bg-gray-50 dark:bg-gray-800"):
+        with ui.card().classes("p-3 bg-gray-800"):
             ui.label("Quality Distribution").classes("text-sm font-medium mb-2")
 
             # Average quality
@@ -292,9 +284,7 @@ class WorldHealthDashboard:
 
                             with ui.row().classes("items-center gap-2 w-full"):
                                 ui.label(bracket).classes("text-xs w-8")
-                                with ui.element("div").classes(
-                                    "flex-grow h-3 bg-gray-200 dark:bg-gray-700 rounded"
-                                ):
+                                with ui.element("div").classes("flex-grow h-3 bg-gray-700 rounded"):
                                     ui.element("div").classes(
                                         f"h-full bg-{color}-500 rounded"
                                     ).style(f"width: {pct}%;")
@@ -304,9 +294,7 @@ class WorldHealthDashboard:
             low_quality = self.metrics.low_quality_entities
             if low_quality:
                 ui.separator().classes("my-2")
-                ui.label(f"{len(low_quality)} low quality").classes(
-                    "text-xs text-red-600 dark:text-red-400"
-                )
+                ui.label(f"{len(low_quality)} low quality").classes("text-xs text-red-400")
 
     def _build_recommendations(self) -> None:
         """Build recommendations section."""
@@ -319,7 +307,7 @@ class WorldHealthDashboard:
             for rec in recommendations:
                 with ui.row().classes("items-start gap-2 mb-2"):
                     ui.icon("arrow_right", size="xs").classes("text-blue-500 mt-1")
-                    ui.label(rec).classes("text-sm text-gray-700 dark:text-gray-300")
+                    ui.label(rec).classes("text-sm text-gray-300")
 
 
 def build_health_summary_compact(metrics: WorldHealthMetrics) -> None:
@@ -331,7 +319,7 @@ def build_health_summary_compact(metrics: WorldHealthMetrics) -> None:
     score = metrics.health_score
     color = _get_health_color(score)
 
-    with ui.row().classes("items-center gap-3 p-2 bg-gray-50 dark:bg-gray-800 rounded"):
+    with ui.row().classes("items-center gap-3 p-2 bg-gray-800 rounded"):
         # Health score
         ui.circular_progress(
             value=score / 100,

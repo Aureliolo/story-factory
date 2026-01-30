@@ -199,7 +199,7 @@ def render_graph_html(
         edge = {
             "from": u,
             "to": v,
-            "color": RELATION_COLORS.get(rel_type, "#6b7280"),
+            "color": {"color": RELATION_COLORS.get(rel_type, "#6b7280"), "inherit": False},
             "arrows": {"to": {"enabled": True, "scaleFactor": 0.5}},
             "title": tooltip,
             "width": 2,
@@ -213,12 +213,8 @@ def render_graph_html(
     graph_html = f"""
     <style>
         #{container_id} {{
-            border: 1px solid #e5e7eb;
+            border: 1px solid #374151;
             border-radius: 4px;
-            background: #ffffff;
-        }}
-        .dark #{container_id} {{
-            border-color: #374151;
             background: #1f2937;
         }}
     </style>
@@ -257,28 +253,8 @@ def render_graph_html(
         }}
 
         function _buildGraph() {{
-            // Robust dark mode detection for NiceGUI
-            var isDarkMode = (function() {{
-                // Check body class (NiceGUI's primary method)
-                if (document.body.classList.contains('dark')) return true;
-                // Check html element
-                if (document.documentElement.classList.contains('dark')) return true;
-                // Check for NiceGUI's dark theme attribute
-                if (document.body.getAttribute('data-theme') === 'dark') return true;
-                // Check computed background color (fallback)
-                var bgColor = getComputedStyle(document.body).backgroundColor;
-                if (bgColor) {{
-                    var rgb = bgColor.match(/\\d+/g);
-                    if (rgb && rgb.length >= 3) {{
-                        var luminance = (parseInt(rgb[0]) * 0.299 + parseInt(rgb[1]) * 0.587 + parseInt(rgb[2]) * 0.114);
-                        if (luminance < 128) return true;
-                    }}
-                }}
-                // Check system preference as last resort
-                return window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }})();
-            var fontColor = isDarkMode ? '#e5e7eb' : '#374151';
-            var bgColor = isDarkMode ? '#1f2937' : '#ffffff';
+            var fontColor = '#e5e7eb';
+            var bgColor = '#1f2937';
 
             var nodes = new vis.DataSet({json.dumps(nodes)});
             var edges = new vis.DataSet({json.dumps(edges)});
@@ -300,7 +276,7 @@ def render_graph_html(
                 edges: {{
                     smooth: false,
                     width: 2,
-                    color: {{ color: '#6b7280', highlight: '#3b82f6' }},
+                    color: {{ color: '#6b7280', highlight: '#3b82f6', inherit: false }},
                     arrows: {{ to: {{ enabled: true, scaleFactor: 0.5 }} }}
                 }},
                 interaction: {{

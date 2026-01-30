@@ -183,23 +183,21 @@ class WorldPage:
     def _build_no_project_message(self) -> None:
         """Build message when no project is selected."""
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-4 py-16"):
-            ui.icon("public_off", size="xl").classes("text-gray-400 dark:text-gray-500")
-            ui.label("No Project Selected").classes("text-xl text-gray-500 dark:text-gray-400")
+            ui.icon("public_off", size="xl").classes("text-gray-500")
+            ui.label("No Project Selected").classes("text-xl text-gray-400")
             ui.label("Select a project from the header to explore its world.").classes(
-                "text-gray-400 dark:text-gray-500"
+                "text-gray-500"
             )
 
     def _build_interview_required_message(self) -> None:
         """Build message when interview is not complete."""
         with ui.column().classes("w-full min-h-96 items-center justify-center gap-6 py-16"):
             ui.icon("chat", size="xl").classes("text-blue-400")
-            ui.label("Complete the Interview First").classes(
-                "text-xl font-semibold text-gray-700 dark:text-gray-200"
-            )
+            ui.label("Complete the Interview First").classes("text-xl font-semibold text-gray-200")
             ui.label(
                 "The World Builder requires story context from the interview. "
                 "Complete the interview to populate your story's world."
-            ).classes("text-gray-500 dark:text-gray-400 text-center max-w-md")
+            ).classes("text-gray-400 text-center max-w-md")
 
             ui.button(
                 "Go to Interview",

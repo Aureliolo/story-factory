@@ -46,15 +46,11 @@ def build_connection_section(page: SettingsPage) -> None:
             if health.is_healthy:
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("check_circle", size="sm").classes("text-green-500")
-                    ui.label(f"{health.available_vram} GB VRAM").classes(
-                        "text-sm text-green-600 dark:text-green-400"
-                    )
+                    ui.label(f"{health.available_vram} GB VRAM").classes("text-sm text-green-400")
             else:
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("error", size="sm").classes("text-red-500")
-                    ui.label("Offline").classes("text-sm text-red-600 dark:text-red-400").tooltip(
-                        health.message
-                    )
+                    ui.label("Offline").classes("text-sm text-red-400").tooltip(health.message)
 
     logger.debug("Connection section built")
 

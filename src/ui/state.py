@@ -99,9 +99,6 @@ class AppState:
     # ========== Feedback Settings ==========
     feedback_mode: str = "per-chapter"  # per-chapter, mid-chapter, on-demand
 
-    # ========== UI Settings ==========
-    dark_mode: bool = False  # Dark mode toggle
-
     # ========== Undo/Redo History ==========
     _undo_stack: list[UndoAction] = field(default_factory=list)
     _redo_stack: list[UndoAction] = field(default_factory=list)

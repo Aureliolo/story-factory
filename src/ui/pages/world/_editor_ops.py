@@ -5,8 +5,6 @@ show_regenerate_dialog, execute_regenerate, refine_entity, regenerate_full,
 regenerate_with_guidance, confirm_delete_entity, delete_entity.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
@@ -81,9 +79,7 @@ async def show_regenerate_dialog(page: WorldPage) -> None:
 
         # Relationship warning
         if rel_count > 0:
-            with ui.row().classes(
-                "w-full items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900 rounded mt-4"
-            ):
+            with ui.row().classes("w-full items-center gap-2 p-2 bg-amber-900 rounded mt-4"):
                 ui.icon("warning", color="amber")
                 ui.label(f"{rel_count} relationship(s) will be preserved.").classes("text-sm")
 
@@ -92,9 +88,7 @@ async def show_regenerate_dialog(page: WorldPage) -> None:
         if quality_scores and isinstance(quality_scores, dict):
             avg = quality_scores.get("average", 0)
             with ui.row().classes("w-full items-center gap-2 mt-2"):
-                ui.label(f"Current quality: {avg:.1f}/10").classes(
-                    "text-sm text-gray-500 dark:text-gray-400"
-                )
+                ui.label(f"Current quality: {avg:.1f}/10").classes("text-sm text-gray-400")
 
         # Actions
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
@@ -306,7 +300,7 @@ def confirm_delete_entity(page: WorldPage) -> None:
         # Custom dialog with more info
         with ui.dialog() as dialog, ui.card().classes("p-4 min-w-[400px]"):
             ui.label("Delete Entity?").classes("text-lg font-bold text-red-600")
-            ui.label(message).classes("text-gray-600 dark:text-gray-400 whitespace-pre-line mt-2")
+            ui.label(message).classes("text-gray-400 whitespace-pre-line mt-2")
 
             if rel_count > 0:
                 with ui.expansion("Show affected relationships", icon="link").classes(

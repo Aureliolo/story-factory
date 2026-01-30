@@ -116,10 +116,10 @@ class ProjectsPage:
                             project.premise[:150] + "..."
                             if len(project.premise) > 150
                             else project.premise
-                        ).classes("text-sm text-gray-600 dark:text-gray-400")
+                        ).classes("text-sm text-gray-400")
 
                     # Stats
-                    with ui.row().classes("gap-4 text-sm text-gray-600 dark:text-gray-300"):
+                    with ui.row().classes("gap-4 text-sm text-gray-300"):
                         ui.label(f"{project.chapter_count} chapters")
                         ui.label(f"{project.word_count:,} words")
                         ui.label(f"Updated: {self._format_date(project.updated_at)}")
@@ -203,9 +203,7 @@ class ProjectsPage:
                 ).classes("w-full")
 
                 # Show template description when selected
-                template_desc = ui.label("").classes(
-                    "text-sm text-gray-600 dark:text-gray-400 mt-2"
-                )
+                template_desc = ui.label("").classes("text-sm text-gray-400 mt-2")
 
                 def on_template_change():
                     """Handle template selection change."""
@@ -355,9 +353,7 @@ class ProjectsPage:
                     with suggestion_container:
                         with ui.row().classes("items-center gap-2"):
                             ui.spinner("dots", size="sm")
-                            ui.label("Generating suggestions...").classes(
-                                "text-sm text-gray-500 dark:text-gray-400"
-                            )
+                            ui.label("Generating suggestions...").classes("text-sm text-gray-400")
 
                     try:
                         # Run LLM call in background to avoid blocking UI
@@ -447,7 +443,7 @@ class ProjectsPage:
             with ui.column().classes("gap-4 p-4 w-full"):
                 ui.label(
                     "Enter a name for this backup. This will be used in the backup filename."
-                ).classes("text-sm text-gray-600 dark:text-gray-400")
+                ).classes("text-sm text-gray-400")
 
                 name_input = ui.input(
                     "Backup Name",
@@ -490,7 +486,7 @@ class ProjectsPage:
             backups = self.services.backup.list_backups()
 
             if not backups:
-                ui.label("No backups found.").classes("text-gray-600 dark:text-gray-400 my-4")
+                ui.label("No backups found.").classes("text-gray-400 my-4")
             else:
                 with ui.column().classes("w-full gap-2 my-4"):
                     for backup in backups:
@@ -500,9 +496,9 @@ class ProjectsPage:
                                     ui.label(backup.project_name).classes("font-semibold")
                                     ui.label(
                                         f"Created: {self._format_date(backup.created_at)}"
-                                    ).classes("text-sm text-gray-600 dark:text-gray-400")
+                                    ).classes("text-sm text-gray-400")
                                     ui.label(f"Size: {backup.size_bytes / 1024:.1f} KB").classes(
-                                        "text-sm text-gray-600 dark:text-gray-400"
+                                        "text-sm text-gray-400"
                                     )
 
                                 with ui.row().classes("gap-2"):
@@ -547,9 +543,7 @@ class ProjectsPage:
             ui.separator()
 
             with ui.column().classes("gap-4 p-4 w-full"):
-                ui.label("Enter a name for the restored project.").classes(
-                    "text-sm text-gray-600 dark:text-gray-400"
-                )
+                ui.label("Enter a name for the restored project.").classes("text-sm text-gray-400")
 
                 name_input = ui.input(
                     "Project Name",
@@ -626,7 +620,7 @@ class ProjectsPage:
             with ui.column().classes("gap-4 p-4 w-full"):
                 ui.label(
                     f'A project named "{project_name}" already exists. What would you like to do?'
-                ).classes("text-gray-700 dark:text-gray-300")
+                ).classes("text-gray-300")
 
                 with ui.row().classes("w-full justify-end gap-2 mt-4"):
                     ui.button(

@@ -95,9 +95,7 @@ def build_entity_browser(page) -> None:
         # Entity list with flexible height to match editor
         page._entity_list = (
             ui.column()
-            .classes(
-                "w-full gap-1 overflow-auto flex-grow p-2 bg-gray-50 dark:bg-gray-800 rounded-lg"
-            )
+            .classes("w-full gap-1 overflow-auto flex-grow p-2 bg-gray-800 rounded-lg")
             .style("max-height: calc(100vh - 520px); min-height: 200px")
         )
         refresh_entity_list(page)
@@ -184,22 +182,16 @@ def refresh_entity_list(page) -> None:
             if not all_entities:
                 # No entities exist at all - show guidance
                 with ui.column().classes("items-center gap-2 py-4"):
-                    ui.icon("group_add", size="md").classes("text-gray-400 dark:text-gray-500")
-                    ui.label("No entities yet").classes(
-                        "text-gray-500 dark:text-gray-400 font-medium"
-                    )
+                    ui.icon("group_add", size="md").classes("text-gray-500")
+                    ui.label("No entities yet").classes("text-gray-400 font-medium")
                     ui.label("Add characters, locations, and more").classes(
-                        "text-xs text-gray-400 dark:text-gray-500 text-center"
+                        "text-xs text-gray-500 text-center"
                     )
-                    ui.label("using the button below.").classes(
-                        "text-xs text-gray-400 dark:text-gray-500 text-center"
-                    )
+                    ui.label("using the button below.").classes("text-xs text-gray-500 text-center")
             else:
                 # Entities exist but are filtered out
-                ui.label("No matching entities").classes("text-gray-500 dark:text-gray-400 text-sm")
-                ui.label("Try adjusting filters or search").classes(
-                    "text-xs text-gray-400 dark:text-gray-500"
-                )
+                ui.label("No matching entities").classes("text-gray-400 text-sm")
+                ui.label("Try adjusting filters or search").classes("text-xs text-gray-500")
         else:
             for entity in entities:
                 entity_list_item(
