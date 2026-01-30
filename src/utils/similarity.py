@@ -6,6 +6,7 @@ that string-based methods miss (e.g., "Shadow Council" vs "Council of Shadows").
 
 import logging
 import math
+import re
 import threading
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -61,6 +62,16 @@ _SANITY_CHECK_CEILING = 0.85  # Above this for obviously-different names = degen
 # it's almost certainly a model artifact, not a real semantic duplicate.
 # Real duplicates ("Shadow Council" vs "Council of Shadows") score 0.85-0.95.
 FALSE_POSITIVE_CEILING = 0.98
+
+
+def _normalize_for_ceiling(text: str) -> str:
+    """Normalize text for false-positive ceiling identity checks.
+
+    Strips punctuation, collapses whitespace, and lowercases so that
+    near-identical strings like ``"Shadow-Council"`` and ``"Shadow Council"``
+    are recognised as the same entity before the ceiling filter fires.
+    """
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
 @dataclass
@@ -220,7 +231,7 @@ class SemanticDuplicateChecker:
             # Apply model-specific prompt prefix from the registry.
             # e.g., nomic-embed-text requires "search_document: " for meaningful vectors.
             # Models without a prefix (mxbai-embed-large, snowflake-arctic-embed) get raw text.
-            prompt = f"{self._embedding_prefix}{text}" if self._embedding_prefix else text
+            prompt = f"{self._embedding_prefix}{text}"
             response = self._client.embeddings(model=self.embedding_model, prompt=prompt)
 
             embedding: list[float] = response.get("embedding", [])
@@ -319,8 +330,8 @@ class SemanticDuplicateChecker:
                 # Real semantic duplicates ("Shadow Council" vs "Council of
                 # Shadows") score 0.85-0.95, not 0.98+.
                 if similarity >= FALSE_POSITIVE_CEILING:
-                    normalized_new = name.lower().strip()
-                    normalized_existing = existing.lower().strip()
+                    normalized_new = _normalize_for_ceiling(name)
+                    normalized_existing = _normalize_for_ceiling(existing)
                     if normalized_new != normalized_existing:
                         logger.warning(
                             "Ignoring likely false positive: '%s' vs '%s' "

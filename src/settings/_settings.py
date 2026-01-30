@@ -68,6 +68,7 @@ class Settings:
             "continuity": 0.3,
             "validator": 0.1,  # Very low for consistent validation
             "suggestion": 0.8,  # Creative for writing prompts
+            "embedding": 0.0,  # Not used for generation — embeddings are deterministic
         }
     )
 

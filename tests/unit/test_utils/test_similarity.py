@@ -9,6 +9,7 @@ from src.utils.similarity import (
     _SANITY_CHECK_CEILING,
     FALSE_POSITIVE_CEILING,
     SemanticDuplicateChecker,
+    _normalize_for_ceiling,
     cosine_similarity,
     get_semantic_checker,
     reset_global_checker,
@@ -78,7 +79,7 @@ class TestSemanticDuplicateChecker:
 
     # Test constants to avoid hardcoded URLs that could hit real services
     TEST_OLLAMA_URL = "http://test-ollama:11434"
-    TEST_MODEL = "test-embed-model"
+    TEST_MODEL = "mxbai-embed-large"
     TEST_THRESHOLD = 0.85
 
     @pytest.fixture
@@ -314,13 +315,15 @@ class TestSemanticDuplicateChecker:
         """get_cache_stats returns correct information."""
         mock_ollama_client.embeddings.return_value = {"embedding": [1.0, 2.0, 3.0]}
 
-        checker = self._create_checker(embedding_model="test-model", similarity_threshold=0.9)
+        checker = self._create_checker(
+            embedding_model="snowflake-arctic-embed:335m", similarity_threshold=0.9
+        )
         checker.get_embedding("text1")
         checker.get_embedding("text2")
 
         stats = checker.get_cache_stats()
         assert stats["cache_size"] == 2
-        assert stats["model"] == "test-model"
+        assert stats["model"] == "snowflake-arctic-embed:335m"
         assert stats["threshold"] == 0.9
 
     def test_get_cache_stats_includes_degraded(self, mock_ollama_client):
@@ -382,7 +385,7 @@ class TestModelValidation:
     """Tests for the embedding model sanity check."""
 
     TEST_OLLAMA_URL = "http://test-ollama:11434"
-    TEST_MODEL = "test-embed-model"
+    TEST_MODEL = "mxbai-embed-large"
     TEST_THRESHOLD = 0.85
 
     @pytest.fixture(autouse=True)
@@ -559,7 +562,7 @@ class TestFalsePositiveCeiling:
     """Tests for the false-positive ceiling in find_semantic_duplicate."""
 
     TEST_OLLAMA_URL = "http://test-ollama:11434"
-    TEST_MODEL = "test-embed-model"
+    TEST_MODEL = "mxbai-embed-large"
 
     @pytest.fixture
     def mock_ollama_client(self):
@@ -635,6 +638,28 @@ class TestFalsePositiveCeiling:
         assert is_dup is True
         assert match == "shadow council"
 
+    def test_false_positive_ceiling_allows_punctuation_variant_match(self, mock_ollama_client):
+        """Punctuation-only differences are recognized as the same entity at ceiling."""
+        # Identical vectors = similarity 1.0 (above ceiling)
+        mock_ollama_client.embeddings.side_effect = [
+            {"embedding": [1.0, 0.0, 0.0]},  # "Shadow-Council"
+            {"embedding": [1.0, 0.0, 0.0]},  # "Shadow Council" (punctuation variant)
+        ]
+
+        checker = SemanticDuplicateChecker(
+            ollama_url=self.TEST_OLLAMA_URL,
+            embedding_model=self.TEST_MODEL,
+            similarity_threshold=0.85,
+        )
+
+        is_dup, match, _score = checker.find_semantic_duplicate(
+            "Shadow-Council", ["Shadow Council"]
+        )
+
+        # Punctuation variant normalizes identically — legitimate duplicate
+        assert is_dup is True
+        assert match == "Shadow Council"
+
     def test_false_positive_ceiling_continues_to_next_name(self, mock_ollama_client):
         """After skipping a false positive, continues checking remaining names."""
         mock_ollama_client.embeddings.side_effect = [
@@ -669,7 +694,7 @@ class TestGlobalChecker:
 
     # Test constants to avoid hardcoded URLs that could hit real services
     TEST_OLLAMA_URL = "http://test-ollama:11434"
-    TEST_MODEL = "test-embed-model"
+    TEST_MODEL = "mxbai-embed-large"
 
     def setup_method(self):
         """Reset global state before each test."""
@@ -753,3 +778,35 @@ class TestEmbeddingPrefixRegistry:
     def test_non_embedding_model_has_no_prefix(self):
         """Chat models in the registry have no embedding prefix."""
         assert get_embedding_prefix("huihui_ai/dolphin3-abliterated:8b") == ""
+
+
+class TestNormalizeForCeiling:
+    """Tests for the _normalize_for_ceiling helper."""
+
+    def test_lowercase_and_strip(self):
+        """Basic lowercasing and stripping."""
+        assert _normalize_for_ceiling("  Hello World  ") == "hello world"
+
+    def test_removes_punctuation(self):
+        """Punctuation is replaced with spaces and collapsed."""
+        assert _normalize_for_ceiling("Shadow-Council") == "shadow council"
+        assert _normalize_for_ceiling("Dr. Sarah Chen!") == "dr sarah chen"
+
+    def test_collapses_whitespace(self):
+        """Multiple whitespace chars collapse to single space."""
+        assert _normalize_for_ceiling("The   Iron   Guard") == "the iron guard"
+
+    def test_strips_special_characters(self):
+        """Special characters are removed."""
+        assert _normalize_for_ceiling("Council's of Shadows") == "council s of shadows"
+        assert _normalize_for_ceiling("(The Binary Veil)") == "the binary veil"
+
+    def test_empty_string(self):
+        """Empty and whitespace-only strings return empty."""
+        assert _normalize_for_ceiling("") == ""
+        assert _normalize_for_ceiling("   ") == ""
+
+    def test_punctuation_only_variants_match(self):
+        """Names differing only by punctuation normalize identically."""
+        assert _normalize_for_ceiling("Shadow Council") == _normalize_for_ceiling("Shadow-Council")
+        assert _normalize_for_ceiling("Dr. Chen") == _normalize_for_ceiling("Dr Chen")

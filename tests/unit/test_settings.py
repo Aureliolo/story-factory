@@ -204,6 +204,22 @@ class TestAgentRoles:
             assert "description" in AGENT_ROLES[role]
 
 
+class TestEmbeddingTemperature:
+    """Tests for the embedding agent temperature default."""
+
+    def test_embedding_role_has_default_temperature(self):
+        """Embedding role must have a default temperature in agent_temperatures."""
+        settings = Settings()
+        assert "embedding" in settings.agent_temperatures
+        assert settings.agent_temperatures["embedding"] == 0.0
+
+    def test_get_temperature_for_embedding_role(self):
+        """get_temperature_for_agent returns the embedding temperature without error."""
+        settings = Settings()
+        temp = settings.get_temperature_for_agent("embedding")
+        assert temp == 0.0
+
+
 class TestSettingsValidation:
     """Additional tests for Settings validation."""
 
