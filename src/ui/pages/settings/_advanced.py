@@ -392,15 +392,15 @@ def build_duplicate_detection_section(page: SettingsPage) -> None:
                 with ui.column().classes("gap-1"):
                     ui.label("Embedding Model").classes("text-xs text-gray-500")
                     installed_models = page.services.model.list_installed()
-                    embedding_options = {m: m for m in installed_models}
-                    if page.settings.embedding_model not in embedding_options:
-                        embedding_options[page.settings.embedding_model] = (
-                            page.settings.embedding_model
-                        )
+                    embedding_options: dict[str, str] = {"": "(Select a model)"}
+                    embedding_options.update({m: m for m in installed_models})
+                    current_value = page.settings.embedding_model
+                    if current_value and current_value not in embedding_options:
+                        embedding_options[current_value] = current_value
                     page._embedding_model_select = (
                         ui.select(
                             options=embedding_options,
-                            value=page.settings.embedding_model,
+                            value=current_value,
                         )
                         .props("outlined dense")
                         .classes("w-48")

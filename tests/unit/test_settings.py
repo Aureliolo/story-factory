@@ -29,6 +29,11 @@ class TestSettings:
         assert settings.interaction_mode == "checkpoint"
         assert settings.world_quality_threshold == 7.5
 
+    def test_embedding_model_defaults_to_empty(self):
+        """Embedding model should default to empty string (no hardcoded model)."""
+        settings = Settings()
+        assert settings.embedding_model == ""
+
     def test_get_temperature_for_agent(self):
         """Should return correct temperature for each agent role."""
         settings = Settings()
@@ -183,11 +188,36 @@ class TestAgentRoles:
 
     def test_all_roles_defined(self):
         """Should have all required agent roles defined."""
-        required_roles = ["interviewer", "architect", "writer", "editor", "continuity"]
+        required_roles = [
+            "interviewer",
+            "architect",
+            "writer",
+            "editor",
+            "continuity",
+            "validator",
+            "suggestion",
+            "embedding",
+        ]
         for role in required_roles:
             assert role in AGENT_ROLES
             assert "name" in AGENT_ROLES[role]
             assert "description" in AGENT_ROLES[role]
+
+
+class TestEmbeddingTemperature:
+    """Tests for the embedding agent temperature default."""
+
+    def test_embedding_role_has_default_temperature(self):
+        """Embedding role must have a default temperature in agent_temperatures."""
+        settings = Settings()
+        assert "embedding" in settings.agent_temperatures
+        assert settings.agent_temperatures["embedding"] == 0.0
+
+    def test_get_temperature_for_embedding_role(self):
+        """get_temperature_for_agent returns the embedding temperature without error."""
+        settings = Settings()
+        temp = settings.get_temperature_for_agent("embedding")
+        assert temp == 0.0
 
 
 class TestSettingsValidation:
@@ -1849,6 +1879,30 @@ class TestTagBasedModelSelection:
         assert (
             settings.get_model_for_agent("continuity", available_vram=24) == "versatile-model:12b"
         )
+
+    def test_skips_embedding_model_for_chat_roles(self, monkeypatch):
+        """Embedding-tagged models are skipped when selecting for chat roles."""
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda timeout=None: {
+                "nomic-embed-text": 0.3,  # Embedding model
+                "chat-model:8b": 5.0,  # Chat model
+            },
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"architect": "auto"}
+        # Tag both for architect, but nomic also has embedding tag
+        settings.custom_model_tags = {
+            "nomic-embed-text": ["architect", "embedding"],
+            "chat-model:8b": ["architect"],
+        }
+
+        result = settings.get_model_for_agent("architect", available_vram=24)
+
+        # Should skip the embedding model and select the chat model
+        assert result == "chat-model:8b"
 
     def test_raises_error_when_no_tagged_model_fits_vram(self, monkeypatch):
         """Test raises error when tagged models exist but none fit VRAM."""

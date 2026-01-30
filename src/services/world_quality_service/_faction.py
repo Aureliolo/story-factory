@@ -97,7 +97,7 @@ def generate_faction_with_quality(
 
             if not faction.get("name"):
                 last_error = f"Faction creation returned empty on iteration {iteration + 1}"
-                logger.error(last_error)
+                logger.warning(last_error)
                 iteration += 1
                 continue
 

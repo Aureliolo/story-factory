@@ -158,12 +158,11 @@ async def show_build_structure_dialog(
 
         except GenerationCancelledError:
             logger.info(f"Structure {mode} cancelled by user")
-            dialog.close()
             cancel_msg = "Rebuild cancelled." if rebuild else "Build cancelled."
             ui.notify(cancel_msg, type="warning")
+            dialog.close()
 
         except WorldGenerationError as e:
-            dialog.close()
             logger.error(f"Structure {mode} generation failed: {e}")
             ui.notify(
                 f"Structure {mode} failed: {e}",
@@ -171,10 +170,11 @@ async def show_build_structure_dialog(
                 close_button=True,
                 timeout=10,
             )
-        except Exception as e:
             dialog.close()
+        except Exception as e:
             logger.exception(f"Error during structure {mode}: {e}")
             ui.notify(f"Error: {e}", type="negative")
+            dialog.close()
 
     card_bg = "#1f2937"
     inner_card_bg = "#374151"
