@@ -156,7 +156,7 @@ class Settings:
     # Semantic duplicate detection settings (#176)
     semantic_duplicate_enabled: bool = False  # Opt-in: use embedding-based similarity
     semantic_duplicate_threshold: float = 0.85  # Cosine similarity threshold for duplicates
-    embedding_model: str = "nomic-embed-text"  # Model for generating embeddings
+    embedding_model: str = ""  # Model for generating embeddings (must be set when semantic duplicate detection is enabled)
 
     # Content guidelines checking settings
     content_check_enabled: bool = True  # Enable content guideline checking for generated content
@@ -536,6 +536,12 @@ class Settings:
         for model_id, size_gb in installed_models.items():
             tags = self.get_model_tags(model_id)
             if agent_role in tags:
+                # Embedding models only generate vectors — skip them for chat roles
+                if agent_role != "embedding" and "embedding" in tags:
+                    logger.debug(
+                        "Skipping embedding model %s for chat role %s", model_id, agent_role
+                    )
+                    continue
                 estimated_vram = int(size_gb * 1.2)
                 # Get quality from RECOMMENDED_MODELS if available, else default to 5
                 quality = 5.0

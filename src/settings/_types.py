@@ -1,6 +1,6 @@
 """Type definitions and constants for Story Factory settings."""
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class ModelInfo(TypedDict):
@@ -15,6 +15,9 @@ class ModelInfo(TypedDict):
     description: str
     # Tags for role suitability - list of agent roles this model is good for
     tags: list[str]
+    # Prompt prefix required by embedding models (e.g., "search_document: " for nomic).
+    # Only relevant for models tagged "embedding". Omit for models that work raw.
+    embedding_prefix: NotRequired[str]
 
 
 class AgentRoleInfo(TypedDict):
@@ -61,5 +64,9 @@ AGENT_ROLES: dict[str, AgentRoleInfo] = {
     "suggestion": {
         "name": "Suggestion Assistant",
         "description": "Generates writing prompts and suggestions",
+    },
+    "embedding": {
+        "name": "Embedding",
+        "description": "Generates text embeddings for semantic similarity",
     },
 }

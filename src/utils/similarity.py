@@ -8,9 +8,11 @@ import logging
 import math
 import threading
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 import ollama
+
+from src.settings._model_registry import get_embedding_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +49,37 @@ def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
     return dot_product / (magnitude1 * magnitude2)
 
 
+# Sanity check reference strings — short entity names that are obviously different.
+# These mimic the actual use case (faction names vs character names, 2-4 words).
+# If a model returns high similarity for these, it can't differentiate short strings
+# and will produce false positives in production.
+_SANITY_CHECK_A = "The Iron Guard"
+_SANITY_CHECK_B = "Dr. Sarah Chen"
+_SANITY_CHECK_CEILING = 0.85  # Above this for obviously-different names = degenerate
+
+# False-positive ceiling — if two different strings score above this,
+# it's almost certainly a model artifact, not a real semantic duplicate.
+# Real duplicates ("Shadow Council" vs "Council of Shadows") score 0.85-0.95.
+FALSE_POSITIVE_CEILING = 0.98
+
+
 @dataclass
 class SemanticDuplicateChecker:
     """Checks for semantic duplicates using Ollama embeddings.
 
     Caches embeddings to avoid redundant API calls and provides
     thread-safe operations for concurrent usage.
+
+    Each embedding model may require a specific prompt prefix for optimal
+    results (e.g., ``nomic-embed-text`` needs ``"search_document: "``).
+    The prefix is auto-resolved from the model registry at init time and
+    applied transparently in :meth:`get_embedding`.
+
+    Includes a sanity check on initialization: two obviously-different
+    entity names are embedded (through :meth:`get_embedding`, so the
+    prefix is applied) and their cosine similarity is compared to a
+    ceiling.  If the similarity exceeds the ceiling, the model is
+    marked as degraded and all semantic checks are skipped.
 
     All parameters are required to avoid accidental use of hardcoded URLs
     that could hit real services in tests.
@@ -64,6 +91,10 @@ class SemanticDuplicateChecker:
         timeout: Timeout for Ollama API calls in seconds.
     """
 
+    # Testing hook: skip model validation during unit tests to avoid needing
+    # to mock the sanity check in every test. Production code never sets this.
+    _skip_validation: ClassVar[bool] = False
+
     ollama_url: str
     embedding_model: str
     similarity_threshold: float
@@ -73,21 +104,97 @@ class SemanticDuplicateChecker:
     _cache: dict[str, list[float]] = field(default_factory=dict, init=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False)
     _client: ollama.Client | None = field(default=None, init=False)
+    _degraded: bool = field(default=False, init=False)
+    _embedding_prefix: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
-        """Initialize the Ollama client."""
+        """Initialize the Ollama client, resolve model prefix, and validate."""
         self._client = ollama.Client(host=self.ollama_url, timeout=self.timeout)
+        self._embedding_prefix = get_embedding_prefix(self.embedding_model)
         logger.info(
-            "SemanticDuplicateChecker initialized: model=%s, threshold=%.2f",
+            "SemanticDuplicateChecker initialized: model=%s, threshold=%.2f, prefix=%r",
             self.embedding_model,
             self.similarity_threshold,
+            self._embedding_prefix,
         )
+        self._validate_model()
+
+    def _validate_model(self) -> None:
+        """Validate that the embedding model produces meaningful vectors.
+
+        Embeds two obviously-different entity names through :meth:`get_embedding`
+        (which applies the model's prompt prefix) and checks their cosine
+        similarity. This tests the exact same code path used in production.
+
+        If the similarity exceeds the ceiling, the model cannot differentiate
+        short entity names and semantic checks are disabled.
+        """
+        if self._skip_validation:
+            logger.debug("Skipping embedding model validation (test mode)")
+            return
+
+        try:
+            vec_a = self.get_embedding(_SANITY_CHECK_A)
+            vec_b = self.get_embedding(_SANITY_CHECK_B)
+
+            if not vec_a or not vec_b:
+                logger.warning(
+                    "Embedding model '%s' returned empty vectors during sanity check — "
+                    "disabling semantic duplicate detection",
+                    self.embedding_model,
+                )
+                self._degraded = True
+                return
+
+            similarity = cosine_similarity(vec_a, vec_b)
+            if similarity >= _SANITY_CHECK_CEILING:
+                logger.error(
+                    "Embedding model '%s' FAILED sanity check: "
+                    "'%s' vs '%s' returned similarity %.3f (>= %.2f ceiling). "
+                    "This model cannot differentiate short entity names. "
+                    "Semantic duplicate detection is DISABLED. "
+                    "Try mxbai-embed-large or snowflake-arctic-embed instead.",
+                    self.embedding_model,
+                    _SANITY_CHECK_A,
+                    _SANITY_CHECK_B,
+                    similarity,
+                    _SANITY_CHECK_CEILING,
+                )
+                self._degraded = True
+            else:
+                logger.info(
+                    "Embedding model '%s' passed sanity check "
+                    "(similarity=%.3f, ceiling=%.2f, prefix=%r)",
+                    self.embedding_model,
+                    similarity,
+                    _SANITY_CHECK_CEILING,
+                    self._embedding_prefix,
+                )
+
+        except Exception as e:
+            logger.warning(
+                "Embedding model sanity check failed for '%s': %s — "
+                "disabling semantic duplicate detection",
+                self.embedding_model,
+                e,
+            )
+            self._degraded = True
+
+    @property
+    def is_degraded(self) -> bool:
+        """Whether the embedding model failed validation and semantic checks are disabled."""
+        return self._degraded
 
     def get_embedding(self, text: str) -> list[float]:
         """Get embedding vector for text, using cache if available.
 
+        Applies the model-specific prompt prefix (e.g., ``"search_document: "``
+        for nomic-embed-text) before calling the embedding API.  The prefix is
+        resolved from the model registry at init time, so each model is prompted
+        correctly without the caller needing to know about prefixes.
+
         Args:
-            text: Text to embed.
+            text: Text to embed (raw, without prefix).
 
         Returns:
             Embedding vector as list of floats.
@@ -96,7 +203,8 @@ class SemanticDuplicateChecker:
         if not text or not text.strip():
             return []
 
-        # Normalize text for caching
+        # Normalize text for caching (prefix-independent — same text always
+        # maps to the same cache entry within a checker instance)
         normalized = text.lower().strip()
 
         with self._lock:
@@ -109,7 +217,11 @@ class SemanticDuplicateChecker:
             if self._client is None:
                 self._client = ollama.Client(host=self.ollama_url, timeout=self.timeout)
 
-            response = self._client.embeddings(model=self.embedding_model, prompt=text)
+            # Apply model-specific prompt prefix from the registry.
+            # e.g., nomic-embed-text requires "search_document: " for meaningful vectors.
+            # Models without a prefix (mxbai-embed-large, snowflake-arctic-embed) get raw text.
+            prompt = f"{self._embedding_prefix}{text}" if self._embedding_prefix else text
+            response = self._client.embeddings(model=self.embedding_model, prompt=prompt)
 
             embedding: list[float] = response.get("embedding", [])
             if not embedding:
@@ -171,6 +283,11 @@ class SemanticDuplicateChecker:
         if not name or not existing_names:
             return False, None, 0.0
 
+        # Skip if model failed sanity check
+        if self._degraded:
+            logger.debug("Skipping semantic check for '%s' — embedding model is degraded", name)
+            return False, None, 0.0
+
         # Get embedding for the new name
         new_embedding = self.get_embedding(name)
         if not new_embedding:
@@ -196,6 +313,26 @@ class SemanticDuplicateChecker:
 
             # Early exit if we find a clear duplicate
             if similarity >= self.similarity_threshold:
+                # False-positive ceiling: if similarity is suspiciously high
+                # (>= 0.98) for two strings that aren't near-identical by text,
+                # the model is producing degenerate embeddings for these inputs.
+                # Real semantic duplicates ("Shadow Council" vs "Council of
+                # Shadows") score 0.85-0.95, not 0.98+.
+                if similarity >= FALSE_POSITIVE_CEILING:
+                    normalized_new = name.lower().strip()
+                    normalized_existing = existing.lower().strip()
+                    if normalized_new != normalized_existing:
+                        logger.warning(
+                            "Ignoring likely false positive: '%s' vs '%s' "
+                            "scored %.3f (>= %.2f ceiling). "
+                            "The embedding model may not differentiate short strings well.",
+                            name,
+                            existing,
+                            similarity,
+                            FALSE_POSITIVE_CEILING,
+                        )
+                        continue
+
                 logger.info(
                     "Semantic duplicate detected: '%s' similar to '%s' (%.3f >= %.3f)",
                     name,
@@ -236,6 +373,7 @@ class SemanticDuplicateChecker:
                 "cache_size": len(self._cache),
                 "model": self.embedding_model,
                 "threshold": self.similarity_threshold,
+                "degraded": self._degraded,
             }
 
 

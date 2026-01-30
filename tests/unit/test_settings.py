@@ -29,6 +29,11 @@ class TestSettings:
         assert settings.interaction_mode == "checkpoint"
         assert settings.world_quality_threshold == 7.5
 
+    def test_embedding_model_defaults_to_empty(self):
+        """Embedding model should default to empty string (no hardcoded model)."""
+        settings = Settings()
+        assert settings.embedding_model == ""
+
     def test_get_temperature_for_agent(self):
         """Should return correct temperature for each agent role."""
         settings = Settings()
@@ -183,7 +188,16 @@ class TestAgentRoles:
 
     def test_all_roles_defined(self):
         """Should have all required agent roles defined."""
-        required_roles = ["interviewer", "architect", "writer", "editor", "continuity"]
+        required_roles = [
+            "interviewer",
+            "architect",
+            "writer",
+            "editor",
+            "continuity",
+            "validator",
+            "suggestion",
+            "embedding",
+        ]
         for role in required_roles:
             assert role in AGENT_ROLES
             assert "name" in AGENT_ROLES[role]

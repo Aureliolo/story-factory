@@ -152,6 +152,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "uncensored": False,
         "description": "Popular 137M param embedding model, 768-dim vectors",
         "tags": ["embedding"],
+        "embedding_prefix": "search_document: ",
     },
     "mxbai-embed-large": {
         "name": "MxBAI Embed Large",
@@ -174,3 +175,24 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "tags": ["embedding"],
     },
 }
+
+
+def get_embedding_prefix(model_name: str) -> str:
+    """Look up the embedding prompt prefix for a model.
+
+    Each embedding model may require a specific prompt prefix for optimal results.
+    For example, nomic-embed-text requires ``search_document: `` to produce
+    meaningful vectors for short text.
+
+    Models not in the registry, or models without a prefix, return ``""``.
+
+    Args:
+        model_name: The Ollama model name (e.g., ``"nomic-embed-text"``).
+
+    Returns:
+        The prompt prefix string, or ``""`` if no prefix is needed.
+    """
+    info = RECOMMENDED_MODELS.get(model_name)
+    if info is None:
+        return ""
+    return info.get("embedding_prefix", "")

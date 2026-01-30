@@ -292,7 +292,16 @@ def build_model_card(
                     ).props("flat dense round color=negative").tooltip("Delete model")
 
         # Description
-        ui.label(info["description"]).classes("text-sm text-gray-400 mb-3")
+        ui.label(info["description"]).classes("text-sm text-gray-400 mb-1")
+
+        # Role tags
+        tags = info.get("tags", [])
+        if tags:
+            with ui.row().classes("flex-wrap gap-1 mb-3"):
+                for tag in tags:
+                    ui.badge(tag).props("outline color=grey-7").classes("text-xs")
+        else:
+            ui.space().classes("mb-3")
 
         # Stats grid
         with ui.element("div").classes("grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"):
