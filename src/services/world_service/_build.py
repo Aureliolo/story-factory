@@ -11,6 +11,7 @@ from src.utils.exceptions import GenerationCancelledError
 from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
+    from src.memory.entities import Entity
     from src.services import ServiceContainer
     from src.services.world_service import WorldBuildOptions, WorldBuildProgress, WorldService
 
@@ -509,20 +510,25 @@ def _generate_relationships(
     return added_count
 
 
+_LEADING_ARTICLES = ("the ", "a ", "an ")
+
+
 def _normalize_name(name: str) -> str:
     """Normalize an entity name for fuzzy comparison.
 
-    Strips whitespace, lowercases, and removes common LLM-added prefixes
-    like "The" that cause mismatches (e.g., "The Echoes of the Network"
-    vs "Echoes of the Network").
+    Collapses whitespace, lowercases, and strips common English articles
+    ("The", "A", "An") that LLMs frequently prepend, causing mismatches
+    (e.g., "The Echoes of the Network" vs "Echoes of the Network").
     """
-    normalized = name.strip().lower()
-    if normalized.startswith("the "):
-        normalized = normalized[4:]
+    normalized = " ".join(name.split()).lower()
+    for article in _LEADING_ARTICLES:
+        if normalized.startswith(article):
+            normalized = normalized[len(article) :]
+            break
     return normalized
 
 
-def _find_entity_by_name(entities: list, name: str):
+def _find_entity_by_name(entities: list[Entity], name: str) -> Entity | None:
     """Find an entity by name with fuzzy matching.
 
     Tries exact match first, then falls back to normalized comparison

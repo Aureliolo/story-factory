@@ -22,7 +22,7 @@ class TestConfirmDelete:
         with (
             patch(
                 "src.ui.pages.models._operations.refresh_all",
-                side_effect=lambda p: call_order.append("refresh_all"),
+                side_effect=lambda p, **kw: call_order.append("refresh_all"),
             ),
             patch("src.ui.pages.models._operations.ui") as mock_ui,
         ):
@@ -71,7 +71,7 @@ class TestConfirmDelete:
             confirm_delete(page, dialog, "test-model:8b")
 
         mock_ui.notify.assert_called_once_with("Deleted test-model:8b", type="positive")
-        mock_refresh.assert_called_once_with(page)
+        mock_refresh.assert_called_once_with(page, notify=False)
 
     def test_failed_delete_notifies_negatively(self):
         """Failed deletion should notify negatively and not refresh."""

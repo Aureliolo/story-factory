@@ -2305,8 +2305,6 @@ class TestEmbeddingModelMigration:
 
     def test_migration_persists_to_disk_on_load(self, tmp_path, monkeypatch):
         """Loading settings with a stale embedding model should auto-save the fix."""
-        import json
-
         settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
 

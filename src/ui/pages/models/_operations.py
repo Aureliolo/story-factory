@@ -223,7 +223,7 @@ def confirm_delete(page: Any, dialog: ui.dialog, model_id: str) -> None:
         logger.info(f"Model {model_id} deleted successfully")
         dialog.close()
         ui.notify(f"Deleted {model_id}", type="positive")
-        refresh_all(page)
+        refresh_all(page, notify=False)
     else:
         logger.error(f"Failed to delete model {model_id}")
         dialog.close()

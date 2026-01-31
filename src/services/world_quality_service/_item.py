@@ -11,6 +11,30 @@ from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
 
+_RETRY_TEMP_INCREMENT = 0.15
+_RETRY_TEMP_MAX = 1.5
+
+
+def _retry_temperature(config: Any, creation_retries: int) -> float:
+    """Calculate escalating temperature for creation retries.
+
+    Each retry increases temperature by 0.15 above the configured creator
+    temperature, capped at 1.5, to encourage the model to produce different names.
+
+    Args:
+        config: RefinementConfig with creator_temperature.
+        creation_retries: Number of retries so far.
+
+    Returns:
+        Temperature value for the next creation attempt.
+    """
+    return float(
+        min(
+            config.creator_temperature + (creation_retries * _RETRY_TEMP_INCREMENT),
+            _RETRY_TEMP_MAX,
+        )
+    )
+
 
 def generate_item_with_quality(
     svc,
@@ -52,7 +76,7 @@ def generate_item_with_quality(
             # (e.g., duplicate name detection returns {} to force retry)
             if iteration == 0 or not item.get("name"):
                 # Increase temperature on retries to avoid regenerating the same name
-                retry_temp = min(config.creator_temperature + (creation_retries * 0.15), 1.5)
+                retry_temp = _retry_temperature(config, creation_retries)
                 item = svc._create_item(story_state, existing_names, retry_temp)
             else:
                 if item and scores:
@@ -72,7 +96,7 @@ def generate_item_with_quality(
                     "%s (retry %d, next temp=%.2f)",
                     last_error,
                     creation_retries,
-                    min(config.creator_temperature + (creation_retries * 0.15), 1.5),
+                    _retry_temperature(config, creation_retries),
                 )
                 iteration += 1
                 continue

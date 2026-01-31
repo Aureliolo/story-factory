@@ -1103,6 +1103,7 @@ class TestLocationQualityRefinement:
         mock_services.world_quality.generate_locations_with_quality.return_value = []
 
         def my_cancel_check():
+            """Stub cancel check that never cancels."""
             return False
 
         world_service._generate_locations(
@@ -1195,3 +1196,63 @@ class TestFuzzyEntityNameMatching:
             sample_story_state, mock_world_db, mock_services
         )
         assert count == 0
+
+    def test_fuzzy_match_a_prefix(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles 'A' prefix added by LLM."""
+        mock_world_db.add_entity("item", "Cursed Blade", "A sword")
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "A Cursed Blade",
+                "target": "Kai Chen",
+                "relation_type": "wields",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+
+    def test_fuzzy_match_an_prefix(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles 'An' prefix added by LLM."""
+        mock_world_db.add_entity("concept", "Ancient Promise", "A concept")
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "An Ancient Promise",
+                "target": "Kai Chen",
+                "relation_type": "binds",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+
+    def test_fuzzy_match_whitespace_normalization(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles extra whitespace in LLM-generated names."""
+        mock_world_db.add_entity("location", "Dark Forest", "A forest")
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "  Dark   Forest  ",
+                "target": "Kai Chen",
+                "relation_type": "explores",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1

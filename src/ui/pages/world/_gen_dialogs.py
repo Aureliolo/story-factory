@@ -545,6 +545,7 @@ def create_progress_dialog(
 
         # Attach cancel button disable to cancel event
         def _on_cancel_click() -> None:
+            """Disable cancel button and update label on click."""
             cancel_btn.disable()
             if progress_label:
                 progress_label.text = f"Cancelling after current {entity_type[:-1]}..."

@@ -948,6 +948,35 @@ class TestItemRetryLogLevel:
         assert "creation_retries" in source
 
 
+class TestRetryTemperatureHelper:
+    """Tests for _retry_temperature helper extracted from item/location modules."""
+
+    def test_zero_retries_returns_base_temperature(self):
+        """With no retries, temperature equals the base creator temperature."""
+        from src.services.world_quality_service._item import _retry_temperature
+
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        assert _retry_temperature(config, 0) == 0.9
+
+    def test_increments_by_015_per_retry(self):
+        """Each retry adds 0.15 to the temperature."""
+        from src.services.world_quality_service._location import _retry_temperature
+
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        assert _retry_temperature(config, 1) == pytest.approx(1.05)
+        assert _retry_temperature(config, 2) == pytest.approx(1.2)
+
+    def test_caps_at_1_5(self):
+        """Temperature should never exceed 1.5."""
+        from src.services.world_quality_service._item import _retry_temperature
+
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        assert _retry_temperature(config, 10) == 1.5
+
+
 class TestModelSelectionLogLevel:
     """Tests for Issue 5: model auto-selection logs at DEBUG not INFO."""
 
