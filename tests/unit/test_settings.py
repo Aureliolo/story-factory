@@ -2354,3 +2354,31 @@ class TestEmbeddingModelMigration:
         # Model should be unchanged since no valid alternative exists
         assert settings.embedding_model == "some-old-model"
         assert "No embedding models found in registry" in caplog.text
+
+    def test_validate_returns_true_when_migrated(self):
+        """validate() should return True when embedding model is migrated."""
+        settings = Settings()
+        settings.embedding_model = "nomic-embed-text"
+        changed = settings.validate()
+        assert changed is True
+
+    def test_validate_returns_false_when_no_changes(self):
+        """validate() should return False when no settings are mutated."""
+        settings = Settings()
+        settings.embedding_model = "mxbai-embed-large"  # Already valid, no migration
+        changed = settings.validate()
+        assert changed is False
+
+    def test_validate_returns_false_no_embedding_models_in_registry(self, monkeypatch):
+        """validate() returns False when no embedding models exist (keeps current, no change)."""
+        fake_registry = {
+            "some-chat-model:8b": {"size_gb": 4.0, "tags": ["world_creator"]},
+        }
+        monkeypatch.setattr(
+            "src.settings._model_registry.RECOMMENDED_MODELS",
+            fake_registry,
+        )
+        settings = Settings()
+        settings.embedding_model = "some-old-model"
+        changed = settings.validate()
+        assert changed is False

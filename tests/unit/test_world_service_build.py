@@ -1256,3 +1256,51 @@ class TestFuzzyEntityNameMatching:
             sample_story_state, mock_world_db, mock_services
         )
         assert count == 1
+
+
+class TestFindEntityByNameAmbiguity:
+    """Tests for _find_entity_by_name ambiguity guard."""
+
+    def test_exact_match_returns_entity(self):
+        """Exact name match should return the entity directly."""
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "Dark Forest"
+        result = _find_entity_by_name([e1], "Dark Forest")
+        assert result is e1
+
+    def test_single_fuzzy_match_returns_entity(self):
+        """Single fuzzy match (e.g. article difference) should return the entity."""
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "The Dark Forest"
+        result = _find_entity_by_name([e1], "Dark Forest")
+        assert result is e1
+
+    def test_no_match_returns_none(self):
+        """No match should return None."""
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "Bright Meadow"
+        result = _find_entity_by_name([e1], "Dark Forest")
+        assert result is None
+
+    def test_ambiguous_fuzzy_match_returns_none(self, caplog):
+        """Multiple fuzzy matches should return None and log a warning."""
+        import logging
+
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "The Guild"
+        e2 = MagicMock()
+        e2.name = "A Guild"
+
+        with caplog.at_level(logging.WARNING):
+            result = _find_entity_by_name([e1, e2], "Guild")
+
+        assert result is None
+        assert "Ambiguous fuzzy match" in caplog.text

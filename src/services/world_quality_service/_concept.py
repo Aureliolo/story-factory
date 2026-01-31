@@ -6,6 +6,7 @@ from typing import Any
 from src.memory.story_state import Concept, StoryState
 from src.memory.world_quality import ConceptQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
+from src.services.world_quality_service._common import retry_temperature
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -50,7 +51,7 @@ def generate_concept_with_quality(
         try:
             if needs_fresh_creation:
                 # Increase temperature on retries to avoid regenerating the same name
-                retry_temp = min(config.creator_temperature + (creation_retries * 0.15), 1.5)
+                retry_temp = retry_temperature(config, creation_retries)
                 concept = svc._create_concept(story_state, existing_names, retry_temp)
             else:
                 if concept and scores:
@@ -70,7 +71,7 @@ def generate_concept_with_quality(
                     "%s (retry %d, next temp=%.2f)",
                     last_error,
                     creation_retries,
-                    min(config.creator_temperature + (creation_retries * 0.15), 1.5),
+                    retry_temperature(config, creation_retries),
                 )
                 needs_fresh_creation = True  # Retry with fresh creation
                 iteration += 1

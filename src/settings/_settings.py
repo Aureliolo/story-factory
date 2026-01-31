@@ -317,13 +317,17 @@ class Settings:
         with open(SETTINGS_FILE, "w") as f:
             json.dump(asdict(self), f, indent=2)
 
-    def validate(self) -> None:
+    def validate(self) -> bool:
         """Validate all settings fields. Delegates to _validation module.
+
+        Returns:
+            True if any settings were mutated during validation (e.g. stale
+            embedding model migrated), False otherwise.
 
         Raises:
             ValueError: If any field contains an invalid value (range, enum/choice, or format).
         """
-        _validation_mod.validate(self)
+        return _validation_mod.validate(self)
 
     # Class-level cache for settings (speeds up repeated load() calls)
     _cached_instance: ClassVar[Settings | None] = None
@@ -352,8 +356,8 @@ class Settings:
                     data = json.load(f)
                 settings = cls(**data)
                 # Validate loaded settings (may auto-migrate stale values)
-                settings.validate()
-                if asdict(settings) != data:
+                changed = settings.validate()
+                if changed:
                     logger.info("Settings migrated during validation, saving to disk")
                     with open(SETTINGS_FILE, "w") as f:
                         json.dump(asdict(settings), f, indent=2)

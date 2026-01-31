@@ -533,25 +533,32 @@ def _find_entity_by_name(entities: list[Entity], name: str) -> Entity | None:
 
     Tries exact match first, then falls back to normalized comparison
     to handle LLM name variations like added "The" prefixes or
-    case differences.
+    case differences. If multiple entities match via fuzzy matching,
+    logs a warning and returns None to avoid ambiguous assignment.
 
     Args:
         entities: List of entity objects with .name attribute.
         name: Name to search for.
 
     Returns:
-        Matching entity or None.
+        Matching entity, or None if not found or ambiguous.
     """
     # Exact match first (fast path)
     for e in entities:
         if e.name == name:
             return e
 
-    # Fuzzy match: normalize both sides
+    # Fuzzy match: normalize both sides and collect all matches
     normalized_target = _normalize_name(name)
-    for e in entities:
-        if _normalize_name(e.name) == normalized_target:
-            logger.debug(f"Fuzzy matched relationship entity: '{name}' -> '{e.name}'")
-            return e
+    matches = [e for e in entities if _normalize_name(e.name) == normalized_target]
+
+    if len(matches) == 1:
+        logger.debug(f"Fuzzy matched relationship entity: '{name}' -> '{matches[0].name}'")
+        return matches[0]
+
+    if len(matches) > 1:
+        match_names = [e.name for e in matches]
+        logger.warning(f"Ambiguous fuzzy match for '{name}': {match_names}. Skipping assignment.")
+        return None
 
     return None

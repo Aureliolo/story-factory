@@ -12,10 +12,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def validate(settings: Settings) -> None:
+def validate(settings: Settings) -> bool:
     """Validate all settings fields.
 
     Delegates to individual validation functions for each category of settings.
+
+    Returns:
+        True if any settings were mutated during validation (e.g. stale values
+        migrated), False otherwise. Callers can use this to decide whether to
+        re-save the settings file.
 
     Raises:
         ValueError: If any field contains an invalid value.
@@ -58,7 +63,8 @@ def validate(settings: Settings) -> None:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
-    _validate_embedding_model(settings)
+    changed = _validate_embedding_model(settings)
+    return changed
 
 
 def _validate_url(settings: Settings) -> None:
@@ -745,19 +751,22 @@ def _validate_world_health(settings: Settings) -> None:
         )
 
 
-def _validate_embedding_model(settings: Settings) -> None:
+def _validate_embedding_model(settings: Settings) -> bool:
     """Validate that the configured embedding model is in the registry with an embedding tag.
 
     If the model is not found or lacks the "embedding" tag, auto-migrate to the first
     valid embedding model from the registry. This handles stale settings left over from
     removed models (e.g. nomic-embed-text).
+
+    Returns:
+        True if the embedding model was migrated, False otherwise.
     """
     from src.settings._model_registry import RECOMMENDED_MODELS
 
     model = settings.embedding_model
     info = RECOMMENDED_MODELS.get(model)
     if info is not None and "embedding" in info.get("tags", []):
-        return
+        return False
 
     for model_id, model_info in RECOMMENDED_MODELS.items():
         if "embedding" in model_info.get("tags", []):
@@ -767,9 +776,10 @@ def _validate_embedding_model(settings: Settings) -> None:
                 model_id,
             )
             settings.embedding_model = model_id
-            return
+            return True
 
     logger.warning(
         "No embedding models found in registry; keeping current embedding_model '%s'",
         model,
     )
+    return False

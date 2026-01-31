@@ -13,13 +13,14 @@ from src.services.world_quality_service import (
     WorldQualityService,
 )
 from src.services.world_quality_service._relationship import _is_duplicate_relationship
+from tests.shared.mock_ollama import TEST_MODEL
 
 
 @pytest.fixture
 def mock_mode_service(tmp_path):
     """Create a mock ModelModeService."""
     mode_service = MagicMock(spec=ModelModeService)
-    mode_service.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
+    mode_service.get_model_for_agent.return_value = TEST_MODEL
     return mode_service
 
 
@@ -857,12 +858,24 @@ class TestJudgeCalibrationPrompts:
     @pytest.fixture
     def judge_modules(self):
         """Import all judge function modules."""
-        import src.services.world_quality_service._character as char_mod
-        import src.services.world_quality_service._concept as concept_mod
-        import src.services.world_quality_service._faction as faction_mod
-        import src.services.world_quality_service._item as item_mod
-        import src.services.world_quality_service._location as location_mod
-        import src.services.world_quality_service._relationship as rel_mod
+        from src.services.world_quality_service import (
+            _character as char_mod,
+        )
+        from src.services.world_quality_service import (
+            _concept as concept_mod,
+        )
+        from src.services.world_quality_service import (
+            _faction as faction_mod,
+        )
+        from src.services.world_quality_service import (
+            _item as item_mod,
+        )
+        from src.services.world_quality_service import (
+            _location as location_mod,
+        )
+        from src.services.world_quality_service import (
+            _relationship as rel_mod,
+        )
 
         return {
             "character": char_mod,
@@ -929,7 +942,7 @@ class TestItemRetryLogLevel:
         """Test that _item module uses logger.warning for empty creation retries."""
         import inspect
 
-        import src.services.world_quality_service._item as item_mod
+        from src.services.world_quality_service import _item as item_mod
 
         source = inspect.getsource(item_mod.generate_item_with_quality)
         # Should use warning for empty creation retries, not error
@@ -941,7 +954,7 @@ class TestItemRetryLogLevel:
         """Test that _location module uses logger.warning for empty creation retries."""
         import inspect
 
-        import src.services.world_quality_service._location as loc_mod
+        from src.services.world_quality_service import _location as loc_mod
 
         source = inspect.getsource(loc_mod.generate_location_with_quality)
         assert "logger.warning(" in source
@@ -949,32 +962,60 @@ class TestItemRetryLogLevel:
 
 
 class TestRetryTemperatureHelper:
-    """Tests for _retry_temperature helper extracted from item/location modules."""
+    """Tests for retry_temperature helper in shared _common module."""
 
     def test_zero_retries_returns_base_temperature(self):
         """With no retries, temperature equals the base creator temperature."""
-        from src.services.world_quality_service._item import _retry_temperature
+        from src.services.world_quality_service._common import retry_temperature
 
         config = MagicMock()
         config.creator_temperature = 0.9
-        assert _retry_temperature(config, 0) == 0.9
+        assert retry_temperature(config, 0) == 0.9
 
     def test_increments_by_015_per_retry(self):
         """Each retry adds 0.15 to the temperature."""
-        from src.services.world_quality_service._location import _retry_temperature
+        from src.services.world_quality_service._common import retry_temperature
 
         config = MagicMock()
         config.creator_temperature = 0.9
-        assert _retry_temperature(config, 1) == pytest.approx(1.05)
-        assert _retry_temperature(config, 2) == pytest.approx(1.2)
+        assert retry_temperature(config, 1) == pytest.approx(1.05)
+        assert retry_temperature(config, 2) == pytest.approx(1.2)
 
     def test_caps_at_1_5(self):
         """Temperature should never exceed 1.5."""
-        from src.services.world_quality_service._item import _retry_temperature
+        from src.services.world_quality_service._common import retry_temperature
 
         config = MagicMock()
         config.creator_temperature = 0.9
-        assert _retry_temperature(config, 10) == 1.5
+        assert retry_temperature(config, 10) == 1.5
+
+    def test_entity_modules_use_shared_retry_temperature(self):
+        """All entity modules with retry logic should import from _common, not duplicate."""
+        import inspect
+
+        from src.services.world_quality_service import (
+            _concept as concept_mod,
+        )
+        from src.services.world_quality_service import (
+            _faction as faction_mod,
+        )
+        from src.services.world_quality_service import (
+            _item as item_mod,
+        )
+        from src.services.world_quality_service import (
+            _location as location_mod,
+        )
+
+        for name, mod in [
+            ("item", item_mod),
+            ("location", location_mod),
+            ("faction", faction_mod),
+            ("concept", concept_mod),
+        ]:
+            source = inspect.getsource(mod)
+            assert "from src.services.world_quality_service._common import retry_temperature" in (
+                source
+            ), f"{name} module should import retry_temperature from _common"
 
 
 class TestModelSelectionLogLevel:
@@ -984,7 +1025,7 @@ class TestModelSelectionLogLevel:
         """Test that _modes.py auto-selection uses logger.debug."""
         import inspect
 
-        import src.services.model_mode_service._modes as modes_mod
+        from src.services.model_mode_service import _modes as modes_mod
 
         source = inspect.getsource(modes_mod.get_model_for_agent)
         # The auto-selection log should use debug, not info
@@ -996,7 +1037,7 @@ class TestModelSelectionLogLevel:
         """Test that _settings.py tagged model auto-selection uses logger.debug."""
         import inspect
 
-        import src.settings._settings as settings_mod
+        from src.settings import _settings as settings_mod
 
         source = inspect.getsource(settings_mod.Settings.get_model_for_agent)
         # Should have debug for the successful auto-selection
@@ -1012,12 +1053,24 @@ class TestPlateauWarningFix:
         """Test all entity modules use score comparison, not iteration number comparison."""
         import inspect
 
-        import src.services.world_quality_service._character as char_mod
-        import src.services.world_quality_service._concept as concept_mod
-        import src.services.world_quality_service._faction as faction_mod
-        import src.services.world_quality_service._item as item_mod
-        import src.services.world_quality_service._location as location_mod
-        import src.services.world_quality_service._relationship as rel_mod
+        from src.services.world_quality_service import (
+            _character as char_mod,
+        )
+        from src.services.world_quality_service import (
+            _concept as concept_mod,
+        )
+        from src.services.world_quality_service import (
+            _faction as faction_mod,
+        )
+        from src.services.world_quality_service import (
+            _item as item_mod,
+        )
+        from src.services.world_quality_service import (
+            _location as location_mod,
+        )
+        from src.services.world_quality_service import (
+            _relationship as rel_mod,
+        )
 
         modules = {
             "character": char_mod.generate_character_with_quality,

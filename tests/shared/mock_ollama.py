@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 # Type alias to avoid shadowing by MockOllamaClient.list method
 MessageList = list
 
-# Use a model that exists in RECOMMENDED_MODELS
-# This model has tags ["continuity", "interviewer", "suggestion"] in RECOMMENDED_MODELS
-# The setup_ollama_mocks function patches get_model_tags to add all roles
-TEST_MODEL = "huihui_ai/dolphin3-abliterated:8b"
+# Use a fake model name for tests — never use real model IDs from RECOMMENDED_MODELS.
+# The setup_ollama_mocks function patches get_model_tags to return all role tags
+# for this test model, so agents can auto-select it for any role.
+TEST_MODEL = "test-model:8b"
 
 # All role tags that agents need for auto-selection
 ALL_ROLE_TAGS = [

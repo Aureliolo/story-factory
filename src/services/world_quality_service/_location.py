@@ -6,34 +6,11 @@ from typing import Any
 from src.memory.story_state import Location, StoryState
 from src.memory.world_quality import LocationQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
+from src.services.world_quality_service._common import retry_temperature
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
-
-_RETRY_TEMP_INCREMENT = 0.15
-_RETRY_TEMP_MAX = 1.5
-
-
-def _retry_temperature(config: Any, creation_retries: int) -> float:
-    """Calculate escalating temperature for creation retries.
-
-    Each retry increases temperature by 0.15 above the configured creator
-    temperature, capped at 1.5, to encourage the model to produce different names.
-
-    Args:
-        config: RefinementConfig with creator_temperature.
-        creation_retries: Number of retries so far.
-
-    Returns:
-        Temperature value for the next creation attempt.
-    """
-    return float(
-        min(
-            config.creator_temperature + (creation_retries * _RETRY_TEMP_INCREMENT),
-            _RETRY_TEMP_MAX,
-        )
-    )
 
 
 def generate_location_with_quality(
@@ -76,7 +53,7 @@ def generate_location_with_quality(
             # (e.g., duplicate name detection returns {} to force retry)
             if iteration == 0 or not location.get("name"):
                 # Increase temperature on retries to avoid regenerating the same name
-                retry_temp = _retry_temperature(config, creation_retries)
+                retry_temp = retry_temperature(config, creation_retries)
                 location = svc._create_location(story_state, existing_names, retry_temp)
             else:
                 if location and scores:
@@ -96,7 +73,7 @@ def generate_location_with_quality(
                     "%s (retry %d, next temp=%.2f)",
                     last_error,
                     creation_retries,
-                    _retry_temperature(config, creation_retries),
+                    retry_temperature(config, creation_retries),
                 )
                 iteration += 1
                 continue

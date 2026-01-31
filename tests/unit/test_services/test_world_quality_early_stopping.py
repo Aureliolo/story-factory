@@ -17,6 +17,7 @@ from src.memory.world_quality import (
 )
 from src.services.world_quality_service import WorldQualityService
 from src.settings import Settings
+from tests.shared.mock_ollama import TEST_MODEL
 
 
 @pytest.fixture
@@ -46,8 +47,7 @@ def settings():
 def mock_mode_service():
     """Create mock mode service."""
     mode_service = MagicMock()
-    # Use a real model name from RECOMMENDED_MODELS to avoid role tag errors
-    mode_service.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
+    mode_service.get_model_for_agent.return_value = TEST_MODEL
     return mode_service
 
 
