@@ -570,7 +570,11 @@ def build_judge_consistency_section(page: SettingsPage) -> None:
                         ui.label("Strategy").classes("text-xs text-gray-500")
                         page._judge_outlier_strategy_select = (
                             ui.select(
-                                options={"median": "Median", "mean": "Mean"},
+                                options={
+                                    "median": "Median",
+                                    "mean": "Mean",
+                                    "retry": "Retry",
+                                },
                                 value=page.settings.judge_outlier_strategy,
                             )
                             .props("outlined dense")

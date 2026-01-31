@@ -81,8 +81,8 @@ def judge_with_averaging(
     Returns:
         Score model instance — either from a single call or averaged across multiple calls.
     """
-    # Single call path — when multi-call is disabled or consistency features are off
-    if not judge_config.multi_call_enabled:
+    # Single call path — when consistency features are off or multi-call is disabled
+    if not judge_config.enabled or not judge_config.multi_call_enabled:
         logger.debug("Multi-call averaging disabled, using single judge call")
         return judge_fn()
 
@@ -167,7 +167,15 @@ def _aggregate_scores(
             stats.detect_outliers(judge_config.outlier_std_threshold)
 
         # Choose final value based on strategy
-        if judge_config.outlier_strategy == "median":
+        strategy = judge_config.outlier_strategy
+        if strategy == "retry":
+            logger.warning(
+                "outlier_strategy='retry' not implemented in _aggregate_scores; "
+                "falling back to median"
+            )
+            strategy = "median"
+
+        if strategy == "median":
             final_scores[dim] = stats.get_median()
         else:
             # "mean" strategy — use filtered mean (excludes outliers)
@@ -187,7 +195,7 @@ def _aggregate_scores(
     # Combine feedback from all results
     feedbacks = [r.feedback for r in results if hasattr(r, "feedback") and r.feedback]
     if len(feedbacks) > 1:
-        # Deduplicate similar feedback — take the longest one and any unique additions
+        # Deduplicate feedback while preserving order: keep first occurrence of each distinct string
         combined_feedback = " | ".join(dict.fromkeys(feedbacks))
     elif feedbacks:
         combined_feedback = feedbacks[0]

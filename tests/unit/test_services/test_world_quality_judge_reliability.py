@@ -123,16 +123,14 @@ class TestResolveModelForRole:
         assert model == "auto-selected-model:8b"
         mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
 
-    def test_missing_agent_model_falls_through_to_mode_service(self, settings, mock_mode_service):
-        """When use_per_agent_models=True but role not in agent_models, fall to mode service."""
+    def test_missing_agent_model_raises_error(self, settings, mock_mode_service):
+        """When use_per_agent_models=True but role not in agent_models, raise ValueError."""
         settings.use_per_agent_models = True
         settings.agent_models = {"writer": "some-writer-model:8b"}  # No validator entry
 
         service = WorldQualityService(settings, mock_mode_service)
-        model = service._resolve_model_for_role("validator")
-
-        assert model == "auto-selected-model:8b"
-        mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
+        with pytest.raises(ValueError, match="Unknown agent role 'validator'"):
+            service._resolve_model_for_role("validator")
 
     def test_get_creator_model_uses_resolve(self, settings, mock_mode_service):
         """_get_creator_model() delegates to _resolve_model_for_role()."""
@@ -203,16 +201,25 @@ class TestGetJudgeConfig:
 class TestJudgeWithAveraging:
     """Test the judge_with_averaging() helper function."""
 
-    def _make_config(self, *, multi_call_enabled=False, multi_call_count=3, **kwargs):
+    def _make_config(
+        self,
+        *,
+        enabled=True,
+        multi_call_enabled=False,
+        multi_call_count=3,
+        outlier_detection=True,
+        outlier_std_threshold=2.0,
+        outlier_strategy="median",
+    ):
         """Create a JudgeConsistencyConfig with test defaults."""
         return JudgeConsistencyConfig(
-            enabled=True,
+            enabled=enabled,
             multi_call_enabled=multi_call_enabled,
             multi_call_count=multi_call_count,
             confidence_threshold=0.7,
-            outlier_detection=kwargs.get("outlier_detection", True),
-            outlier_std_threshold=kwargs.get("outlier_std_threshold", 2.0),
-            outlier_strategy=kwargs.get("outlier_strategy", "median"),
+            outlier_detection=outlier_detection,
+            outlier_std_threshold=outlier_std_threshold,
+            outlier_strategy=outlier_strategy,
         )
 
     def test_single_call_when_disabled(self):
@@ -227,6 +234,24 @@ class TestJudgeWithAveraging:
         )
         judge_fn = MagicMock(return_value=scores)
         config = self._make_config(multi_call_enabled=False)
+
+        result = judge_with_averaging(judge_fn, CharacterQualityScores, config)
+
+        judge_fn.assert_called_once()
+        assert result is scores
+
+    def test_single_call_when_consistency_disabled(self):
+        """When enabled=False, bypasses multi-call even if multi_call_enabled=True."""
+        scores = CharacterQualityScores(
+            depth=7.0,
+            goals=6.0,
+            flaws=5.0,
+            uniqueness=8.0,
+            arc_potential=7.0,
+            feedback="Good character",
+        )
+        judge_fn = MagicMock(return_value=scores)
+        config = self._make_config(enabled=False, multi_call_enabled=True, multi_call_count=5)
 
         result = judge_with_averaging(judge_fn, CharacterQualityScores, config)
 
@@ -691,6 +716,39 @@ class TestAggregateScores:
             assert result.average == 7.0, (
                 f"Failed for {model_class.__name__}: average={result.average}"
             )
+
+    def test_retry_strategy_falls_back_to_median(self):
+        """Retry strategy is not implemented and falls back to median with a warning."""
+        results = [
+            FactionQualityScores(
+                coherence=5.0,
+                influence=5.0,
+                conflict_potential=5.0,
+                distinctiveness=5.0,
+                feedback="Low",
+            ),
+            FactionQualityScores(
+                coherence=9.0,
+                influence=9.0,
+                conflict_potential=9.0,
+                distinctiveness=9.0,
+                feedback="High",
+            ),
+            FactionQualityScores(
+                coherence=7.0,
+                influence=7.0,
+                conflict_potential=7.0,
+                distinctiveness=7.0,
+                feedback="Mid",
+            ),
+        ]
+        config = self._make_config(strategy="retry")
+
+        result = _aggregate_scores(results, FactionQualityScores, config)
+
+        # Should use median (fallback from retry) — median of [5, 7, 9] = 7
+        assert result.coherence == 7.0
+        assert result.influence == 7.0
 
 
 class TestCalibrationBlock:

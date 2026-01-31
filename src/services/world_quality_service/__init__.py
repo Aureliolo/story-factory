@@ -380,7 +380,12 @@ class WorldQualityService:
 
         # 2. Per-agent enabled + explicit model for this role → use it
         if self.settings.use_per_agent_models:
-            model_setting = self.settings.agent_models.get(agent_role, "auto")
+            if agent_role not in self.settings.agent_models:
+                raise ValueError(
+                    f"Unknown agent role '{agent_role}'. "
+                    f"Configured roles: {sorted(self.settings.agent_models.keys())}"
+                )
+            model_setting = self.settings.agent_models[agent_role]
             if model_setting != "auto":
                 logger.debug(
                     "Using explicit agent model '%s' for role '%s'",
