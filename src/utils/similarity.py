@@ -219,7 +219,7 @@ class SemanticDuplicateChecker:
         Returns:
             True if a fallback model was found and activated, False otherwise.
         """
-        from src.settings._model_registry import RECOMMENDED_MODELS, get_embedding_prefix
+        from src.settings._model_registry import RECOMMENDED_MODELS
 
         for model_id, info in RECOMMENDED_MODELS.items():
             if "embedding" not in info.get("tags", []):
