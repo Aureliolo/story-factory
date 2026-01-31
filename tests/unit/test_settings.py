@@ -2331,3 +2331,28 @@ class TestEmbeddingModelMigration:
         with open(settings_file) as f:
             on_disk = json.load(f)
         assert on_disk["embedding_model"] == loaded.embedding_model
+
+    def test_no_embedding_models_in_registry_keeps_current(self, monkeypatch, caplog):
+        """When registry has no embedding-tagged models, keep current model and warn."""
+        import logging
+
+        # Mock RECOMMENDED_MODELS to have no embedding-tagged models
+        fake_registry = {
+            "some-chat-model:8b": {
+                "size_gb": 4.0,
+                "tags": ["world_creator"],
+            },
+        }
+        monkeypatch.setattr(
+            "src.settings._model_registry.RECOMMENDED_MODELS",
+            fake_registry,
+        )
+
+        settings = Settings()
+        settings.embedding_model = "some-old-model"
+        with caplog.at_level(logging.WARNING):
+            settings.validate()
+
+        # Model should be unchanged since no valid alternative exists
+        assert settings.embedding_model == "some-old-model"
+        assert "No embedding models found in registry" in caplog.text
