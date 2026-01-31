@@ -527,45 +527,80 @@ class WorldService:
         state: StoryState,
         world_db: WorldDatabase,
         services: ServiceContainer,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> int:
         """Generate and add locations to world database."""
-        return _build._generate_locations(self, state, world_db, services)
+        return _build._generate_locations(
+            self,
+            state,
+            world_db,
+            services,
+            cancel_check=cancel_check,
+        )
 
     def _generate_factions(
         self,
         state: StoryState,
         world_db: WorldDatabase,
         services: ServiceContainer,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> int:
         """Generate and add factions to world database."""
-        return _build._generate_factions(self, state, world_db, services)
+        return _build._generate_factions(
+            self,
+            state,
+            world_db,
+            services,
+            cancel_check=cancel_check,
+        )
 
     def _generate_items(
         self,
         state: StoryState,
         world_db: WorldDatabase,
         services: ServiceContainer,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> int:
         """Generate and add items to world database."""
-        return _build._generate_items(self, state, world_db, services)
+        return _build._generate_items(
+            self,
+            state,
+            world_db,
+            services,
+            cancel_check=cancel_check,
+        )
 
     def _generate_concepts(
         self,
         state: StoryState,
         world_db: WorldDatabase,
         services: ServiceContainer,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> int:
         """Generate and add concepts to world database."""
-        return _build._generate_concepts(self, state, world_db, services)
+        return _build._generate_concepts(
+            self,
+            state,
+            world_db,
+            services,
+            cancel_check=cancel_check,
+        )
 
     def _generate_relationships(
         self,
         state: StoryState,
         world_db: WorldDatabase,
         services: ServiceContainer,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> int:
         """Generate and add relationships between entities."""
-        return _build._generate_relationships(self, state, world_db, services)
+        return _build._generate_relationships(
+            self,
+            state,
+            world_db,
+            services,
+            cancel_check=cancel_check,
+        )
 
     # ========== WORLD HEALTH DETECTION ==========
 

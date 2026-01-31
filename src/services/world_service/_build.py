@@ -135,7 +135,13 @@ def build_world(
     if options.generate_locations:
         check_cancelled()
         report_progress("Generating locations...", "location")
-        loc_count = _generate_locations(svc, state, world_db, services)
+        loc_count = _generate_locations(
+            svc,
+            state,
+            world_db,
+            services,
+            cancel_check=options.is_cancelled,
+        )
         counts["locations"] = loc_count
         logger.info(f"Generated {loc_count} locations")
 
@@ -143,7 +149,13 @@ def build_world(
     if options.generate_factions:
         check_cancelled()
         report_progress("Generating factions...", "faction")
-        faction_count = _generate_factions(svc, state, world_db, services)
+        faction_count = _generate_factions(
+            svc,
+            state,
+            world_db,
+            services,
+            cancel_check=options.is_cancelled,
+        )
         counts["factions"] = faction_count
         logger.info(f"Generated {faction_count} factions")
 
@@ -151,7 +163,13 @@ def build_world(
     if options.generate_items:
         check_cancelled()
         report_progress("Generating items...", "item")
-        item_count = _generate_items(svc, state, world_db, services)
+        item_count = _generate_items(
+            svc,
+            state,
+            world_db,
+            services,
+            cancel_check=options.is_cancelled,
+        )
         counts["items"] = item_count
         logger.info(f"Generated {item_count} items")
 
@@ -159,7 +177,13 @@ def build_world(
     if options.generate_concepts:
         check_cancelled()
         report_progress("Generating concepts...", "concept")
-        concept_count = _generate_concepts(svc, state, world_db, services)
+        concept_count = _generate_concepts(
+            svc,
+            state,
+            world_db,
+            services,
+            cancel_check=options.is_cancelled,
+        )
         counts["concepts"] = concept_count
         logger.info(f"Generated {concept_count} concepts")
 
@@ -167,7 +191,13 @@ def build_world(
     if options.generate_relationships:
         check_cancelled()
         report_progress("Generating relationships...", "relationship")
-        rel_count = _generate_relationships(svc, state, world_db, services)
+        rel_count = _generate_relationships(
+            svc,
+            state,
+            world_db,
+            services,
+            cancel_check=options.is_cancelled,
+        )
         counts["relationships"] = rel_count
         logger.info(f"Generated {rel_count} relationships")
 
@@ -242,23 +272,38 @@ def _generate_locations(
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> int:
-    """Generate and add locations to world database."""
+    """Generate and add locations to world database using quality refinement."""
     # Use project-level settings if available, otherwise fall back to global
     loc_min = state.target_locations_min or svc.settings.world_gen_locations_min
     loc_max = state.target_locations_max or svc.settings.world_gen_locations_max
     location_count = random.randint(loc_min, loc_max)
 
-    locations = services.story.generate_locations(state, location_count)
-    added_count = 0
+    location_names = [e.name for e in world_db.list_entities() if e.type == "location"]
 
-    for loc in locations:
-        if isinstance(loc, dict) and "name" in loc:
+    location_results = services.world_quality.generate_locations_with_quality(
+        state,
+        location_names,
+        location_count,
+        cancel_check=cancel_check,
+    )
+
+    added_count = 0
+    for loc, scores in location_results:
+        if cancel_check and cancel_check():
+            logger.info(f"Location processing cancelled after {added_count} locations")
+            break
+        name = loc.get("name", "")
+        if name:
             world_db.add_entity(
                 entity_type="location",
-                name=loc["name"],
+                name=name,
                 description=loc.get("description", ""),
-                attributes={"significance": loc.get("significance", "")},
+                attributes={
+                    "significance": loc.get("significance", ""),
+                    "quality_scores": scores.to_dict(),
+                },
             )
             added_count += 1
         else:
@@ -272,10 +317,11 @@ def _generate_factions(
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add factions to world database."""
     all_entities = world_db.list_entities()
-    all_existing_names = [e.name for e in all_entities]
+    faction_names = [e.name for e in all_entities if e.type == "faction"]
     existing_locations = [e.name for e in all_entities if e.type == "location"]
 
     # Use project-level settings if available, otherwise fall back to global
@@ -284,7 +330,11 @@ def _generate_factions(
     faction_count = random.randint(fac_min, fac_max)
 
     faction_results = services.world_quality.generate_factions_with_quality(
-        state, all_existing_names, faction_count, existing_locations
+        state,
+        faction_names,
+        faction_count,
+        existing_locations,
+        cancel_check=cancel_check,
     )
     added_count = 0
 
@@ -329,9 +379,10 @@ def _generate_items(
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add items to world database."""
-    all_existing_names = [e.name for e in world_db.list_entities()]
+    item_names = [e.name for e in world_db.list_entities() if e.type == "item"]
 
     # Use project-level settings if available, otherwise fall back to global
     item_min = state.target_items_min or svc.settings.world_gen_items_min
@@ -339,7 +390,10 @@ def _generate_items(
     item_count = random.randint(item_min, item_max)
 
     item_results = services.world_quality.generate_items_with_quality(
-        state, all_existing_names, item_count
+        state,
+        item_names,
+        item_count,
+        cancel_check=cancel_check,
     )
     added_count = 0
 
@@ -368,9 +422,10 @@ def _generate_concepts(
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add concepts to world database."""
-    all_existing_names = [e.name for e in world_db.list_entities()]
+    concept_names = [e.name for e in world_db.list_entities() if e.type == "concept"]
 
     # Use project-level settings if available, otherwise fall back to global
     concept_min = state.target_concepts_min or svc.settings.world_gen_concepts_min
@@ -378,7 +433,10 @@ def _generate_concepts(
     concept_count = random.randint(concept_min, concept_max)
 
     concept_results = services.world_quality.generate_concepts_with_quality(
-        state, all_existing_names, concept_count
+        state,
+        concept_names,
+        concept_count,
+        cancel_check=cancel_check,
     )
     added_count = 0
 
@@ -406,6 +464,7 @@ def _generate_relationships(
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> int:
     """Generate and add relationships between entities."""
     all_entities = world_db.list_entities()
@@ -423,10 +482,13 @@ def _generate_relationships(
     added_count = 0
 
     for rel in relationships:
+        if cancel_check and cancel_check():
+            logger.info(f"Relationship processing cancelled after {added_count} relationships")
+            break
         if isinstance(rel, dict) and "source" in rel and "target" in rel:
-            # Find source and target entities
-            source_entity = next((e for e in all_entities if e.name == rel["source"]), None)
-            target_entity = next((e for e in all_entities if e.name == rel["target"]), None)
+            # Find source and target entities (fuzzy match for LLM name variations)
+            source_entity = _find_entity_by_name(all_entities, rel["source"])
+            target_entity = _find_entity_by_name(all_entities, rel["target"])
 
             if source_entity and target_entity:
                 world_db.add_relationship(
@@ -445,3 +507,45 @@ def _generate_relationships(
             logger.warning(f"Skipping invalid relationship: {rel}")
 
     return added_count
+
+
+def _normalize_name(name: str) -> str:
+    """Normalize an entity name for fuzzy comparison.
+
+    Strips whitespace, lowercases, and removes common LLM-added prefixes
+    like "The" that cause mismatches (e.g., "The Echoes of the Network"
+    vs "Echoes of the Network").
+    """
+    normalized = name.strip().lower()
+    if normalized.startswith("the "):
+        normalized = normalized[4:]
+    return normalized
+
+
+def _find_entity_by_name(entities: list, name: str):
+    """Find an entity by name with fuzzy matching.
+
+    Tries exact match first, then falls back to normalized comparison
+    to handle LLM name variations like added "The" prefixes or
+    case differences.
+
+    Args:
+        entities: List of entity objects with .name attribute.
+        name: Name to search for.
+
+    Returns:
+        Matching entity or None.
+    """
+    # Exact match first (fast path)
+    for e in entities:
+        if e.name == name:
+            return e
+
+    # Fuzzy match: normalize both sides
+    normalized_target = _normalize_name(name)
+    for e in entities:
+        if _normalize_name(e.name) == normalized_target:
+            logger.debug(f"Fuzzy matched relationship entity: '{name}' -> '{e.name}'")
+            return e
+
+    return None

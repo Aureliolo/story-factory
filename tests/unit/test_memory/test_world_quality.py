@@ -61,6 +61,81 @@ class TestRefinementHistory:
         result = history.get_best_entity()
         assert result is None
 
+    def test_add_iteration_auto_numbers_sequentially(self):
+        """Test add_iteration auto-numbers iterations starting from 1."""
+        history = RefinementHistory(entity_type="character", entity_name="Test")
+        history.add_iteration(
+            entity_data={"name": "First"},
+            scores={"depth": 5.0},
+            average_score=5.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Second"},
+            scores={"depth": 7.0},
+            average_score=7.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Third"},
+            scores={"depth": 6.0},
+            average_score=6.0,
+        )
+        assert len(history.iterations) == 3
+        assert history.iterations[0].iteration == 1
+        assert history.iterations[1].iteration == 2
+        assert history.iterations[2].iteration == 3
+
+    def test_add_iteration_tracks_best_and_degradation(self):
+        """Test add_iteration correctly tracks peak score and consecutive degradations."""
+        history = RefinementHistory(entity_type="faction", entity_name="Test Faction")
+        # Iteration 1: score 5.0 → new peak
+        history.add_iteration(entity_data={"name": "v1"}, scores={"s": 5.0}, average_score=5.0)
+        assert history.best_iteration == 1
+        assert history.peak_score == 5.0
+        assert history.consecutive_degradations == 0
+
+        # Iteration 2: score 7.0 → new peak
+        history.add_iteration(entity_data={"name": "v2"}, scores={"s": 7.0}, average_score=7.0)
+        assert history.best_iteration == 2
+        assert history.peak_score == 7.0
+        assert history.consecutive_degradations == 0
+
+        # Iteration 3: score 6.0 → degradation
+        history.add_iteration(entity_data={"name": "v3"}, scores={"s": 6.0}, average_score=6.0)
+        assert history.best_iteration == 2  # Still iteration 2
+        assert history.consecutive_degradations == 1
+
+    def test_add_iteration_numbering_independent_of_loop_counter(self):
+        """Test that iteration numbering is independent of caller's loop counter.
+
+        This verifies the fix for Issue 1: when creation retries happen (empty name
+        → no add_iteration call), the loop counter advances but iteration numbering
+        stays sequential. Before the fix, best_iteration=3 could happen with only
+        1 iteration recorded, causing 'Total iterations: 1, Best iteration: 3' in logs.
+        """
+        history = RefinementHistory(entity_type="location", entity_name="")
+
+        # Simulate: loop counter 0 → creation fails (no add_iteration)
+        # Simulate: loop counter 1 → creation fails (no add_iteration)
+        # Simulate: loop counter 2 → creation succeeds, judge called
+        history.add_iteration(
+            entity_data={"name": "Place A"},
+            scores={"atmosphere": 7.0},
+            average_score=7.0,
+        )
+        # Should be iteration 1, not 3
+        assert history.iterations[0].iteration == 1
+        assert history.best_iteration == 1
+
+        # Simulate: loop counter 3 → refinement, judge called
+        history.add_iteration(
+            entity_data={"name": "Place A v2"},
+            scores={"atmosphere": 8.0},
+            average_score=8.0,
+        )
+        assert history.iterations[1].iteration == 2
+        assert history.best_iteration == 2
+        assert len(history.iterations) == 2
+
     def test_get_best_entity_returns_correct_entity(self):
         """Test get_best_entity returns entity from best iteration."""
         from src.memory.world_quality import IterationRecord

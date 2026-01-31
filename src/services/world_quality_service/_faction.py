@@ -118,7 +118,6 @@ def generate_faction_with_quality(
 
             # Track this iteration
             history.add_iteration(
-                iteration=iteration + 1,
                 entity_data=faction.copy(),
                 scores=scores.to_dict(),
                 average_score=scores.average,
@@ -176,8 +175,7 @@ def generate_faction_with_quality(
     # Pick best iteration (not necessarily the last one)
     best_entity = history.get_best_entity()
 
-    if best_entity and history.best_iteration != len(history.iterations):
-        # We have a better iteration than the last one
+    if best_entity and history.iterations[-1].average_score < history.peak_score:
         logger.warning(
             f"Faction '{history.entity_name}' iterations got WORSE after peak. "
             f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
@@ -394,6 +392,15 @@ Description: {faction.get("description", "")}
 Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
+
+SCORING CALIBRATION - BE STRICT:
+- 1-3: Poor quality, generic or incoherent
+- 4-5: Below average, lacks depth or originality
+- 6-7: Average, functional but unremarkable (most first drafts land here)
+- 8-9: Good, well-crafted with clear strengths
+- 10: Exceptional, publication-ready
+Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
+Do NOT default to high scores — a 7 is already a good score.
 
 Rate each dimension 0-10:
 - coherence: Internal consistency, clear structure

@@ -44,13 +44,16 @@ def generate_item_with_quality(
     item: dict[str, Any] = {}
     scores: ItemQualityScores | None = None
     last_error: str = ""
+    creation_retries = 0  # Track duplicate-name retries for temperature escalation
 
     while iteration < config.max_iterations:
         try:
             # Create new item on first iteration OR if previous returned empty
             # (e.g., duplicate name detection returns {} to force retry)
             if iteration == 0 or not item.get("name"):
-                item = svc._create_item(story_state, existing_names, config.creator_temperature)
+                # Increase temperature on retries to avoid regenerating the same name
+                retry_temp = min(config.creator_temperature + (creation_retries * 0.15), 1.5)
+                item = svc._create_item(story_state, existing_names, retry_temp)
             else:
                 if item and scores:
                     # Use dynamic temperature that decreases over iterations
@@ -63,8 +66,14 @@ def generate_item_with_quality(
                     )
 
             if not item.get("name"):
+                creation_retries += 1
                 last_error = f"Item creation returned empty on iteration {iteration + 1}"
-                logger.error(last_error)
+                logger.warning(
+                    "%s (retry %d, next temp=%.2f)",
+                    last_error,
+                    creation_retries,
+                    min(config.creator_temperature + (creation_retries * 0.15), 1.5),
+                )
                 iteration += 1
                 continue
 
@@ -76,7 +85,6 @@ def generate_item_with_quality(
 
             # Track this iteration
             history.add_iteration(
-                iteration=iteration + 1,
                 entity_data=item.copy(),
                 scores=scores.to_dict(),
                 average_score=scores.average,
@@ -133,7 +141,7 @@ def generate_item_with_quality(
     # Pick best iteration (not necessarily the last one)
     best_entity = history.get_best_entity()
 
-    if best_entity and history.best_iteration != len(history.iterations):
+    if best_entity and history.iterations[-1].average_score < history.peak_score:
         logger.warning(
             f"Item '{history.entity_name}' iterations got WORSE after peak. "
             f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
@@ -289,6 +297,15 @@ Name: {item.get("name", "Unknown")}
 Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {svc._format_properties(item.get("properties", []))}
+
+SCORING CALIBRATION - BE STRICT:
+- 1-3: Poor quality, generic or incoherent
+- 4-5: Below average, lacks depth or originality
+- 6-7: Average, functional but unremarkable (most first drafts land here)
+- 8-9: Good, well-crafted with clear strengths
+- 10: Exceptional, publication-ready
+Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
+Do NOT default to high scores — a 7 is already a good score.
 
 Rate each dimension 0-10:
 - significance: Story importance, plot relevance

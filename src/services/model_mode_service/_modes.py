@@ -265,7 +265,7 @@ def get_model_for_agent(svc: ModelModeService, agent_role: str) -> str:
 
         vram = get_available_vram()
         selected = select_model_with_size_preference(svc, agent_role, size_pref, vram)
-        logger.info(
+        logger.debug(
             f"Auto-selected {selected} for {agent_role} "
             f"(mode={mode.id}, size_pref={size_pref.value}, vram={vram}GB)"
         )

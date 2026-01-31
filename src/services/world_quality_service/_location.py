@@ -44,15 +44,16 @@ def generate_location_with_quality(
     location: dict[str, Any] = {}
     scores: LocationQualityScores | None = None
     last_error: str = ""
+    creation_retries = 0  # Track duplicate-name retries for temperature escalation
 
     while iteration < config.max_iterations:
         try:
             # Create new location on first iteration OR if previous returned empty
             # (e.g., duplicate name detection returns {} to force retry)
             if iteration == 0 or not location.get("name"):
-                location = svc._create_location(
-                    story_state, existing_names, config.creator_temperature
-                )
+                # Increase temperature on retries to avoid regenerating the same name
+                retry_temp = min(config.creator_temperature + (creation_retries * 0.15), 1.5)
+                location = svc._create_location(story_state, existing_names, retry_temp)
             else:
                 if location and scores:
                     # Use dynamic temperature that decreases over iterations
@@ -65,8 +66,14 @@ def generate_location_with_quality(
                     )
 
             if not location.get("name"):
+                creation_retries += 1
                 last_error = f"Location creation returned empty on iteration {iteration + 1}"
-                logger.error(last_error)
+                logger.warning(
+                    "%s (retry %d, next temp=%.2f)",
+                    last_error,
+                    creation_retries,
+                    min(config.creator_temperature + (creation_retries * 0.15), 1.5),
+                )
                 iteration += 1
                 continue
 
@@ -78,7 +85,6 @@ def generate_location_with_quality(
 
             # Track this iteration
             history.add_iteration(
-                iteration=iteration + 1,
                 entity_data=location.copy(),
                 scores=scores.to_dict(),
                 average_score=scores.average,
@@ -135,7 +141,7 @@ def generate_location_with_quality(
     # Pick best iteration (not necessarily the last one)
     best_entity = history.get_best_entity()
 
-    if best_entity and history.best_iteration != len(history.iterations):
+    if best_entity and history.iterations[-1].average_score < history.peak_score:
         logger.warning(
             f"Location '{history.entity_name}' iterations got WORSE after peak. "
             f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
@@ -281,6 +287,15 @@ LOCATION TO EVALUATE:
 Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
+
+SCORING CALIBRATION - BE STRICT:
+- 1-3: Poor quality, generic or incoherent
+- 4-5: Below average, lacks depth or originality
+- 6-7: Average, functional but unremarkable (most first drafts land here)
+- 8-9: Good, well-crafted with clear strengths
+- 10: Exceptional, publication-ready
+Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
+Do NOT default to high scores — a 7 is already a good score.
 
 Rate each dimension 0-10:
 - atmosphere: Sensory richness, mood, immersion

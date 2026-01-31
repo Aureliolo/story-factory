@@ -849,3 +849,163 @@ class TestDuplicateRelationshipDetection:
         existing = [("Alice", "Bob"), ("Carol", "Dave")]
         assert _is_duplicate_relationship("Dave", "Carol", "knows", existing) is True
         assert _is_duplicate_relationship("Alice", "Carol", "knows", existing) is False
+
+
+class TestJudgeCalibrationPrompts:
+    """Tests for Issue 2: judge prompts contain scoring calibration text."""
+
+    @pytest.fixture
+    def judge_modules(self):
+        """Import all judge function modules."""
+        import src.services.world_quality_service._character as char_mod
+        import src.services.world_quality_service._concept as concept_mod
+        import src.services.world_quality_service._faction as faction_mod
+        import src.services.world_quality_service._item as item_mod
+        import src.services.world_quality_service._location as location_mod
+        import src.services.world_quality_service._relationship as rel_mod
+
+        return {
+            "character": char_mod,
+            "faction": faction_mod,
+            "item": item_mod,
+            "location": location_mod,
+            "concept": concept_mod,
+            "relationship": rel_mod,
+        }
+
+    def test_character_judge_has_calibration(self, judge_modules):
+        """Test character judge prompt contains calibration text."""
+        import inspect
+
+        source = inspect.getsource(judge_modules["character"]._judge_character_quality)
+        assert "SCORING CALIBRATION - BE STRICT" in source
+        assert "Most entities should score 5-7 on first attempt" in source
+
+    def test_faction_judge_has_calibration(self, judge_modules):
+        """Test faction judge prompt contains calibration text."""
+        import inspect
+
+        source = inspect.getsource(judge_modules["faction"]._judge_faction_quality)
+        assert "SCORING CALIBRATION - BE STRICT" in source
+        assert "Most entities should score 5-7 on first attempt" in source
+
+    def test_item_judge_has_calibration(self, judge_modules):
+        """Test item judge prompt contains calibration text."""
+        import inspect
+
+        source = inspect.getsource(judge_modules["item"]._judge_item_quality)
+        assert "SCORING CALIBRATION - BE STRICT" in source
+        assert "Most entities should score 5-7 on first attempt" in source
+
+    def test_location_judge_has_calibration(self, judge_modules):
+        """Test location judge prompt contains calibration text."""
+        import inspect
+
+        source = inspect.getsource(judge_modules["location"]._judge_location_quality)
+        assert "SCORING CALIBRATION - BE STRICT" in source
+        assert "Most entities should score 5-7 on first attempt" in source
+
+    def test_concept_judge_has_calibration(self, judge_modules):
+        """Test concept judge prompt contains calibration text."""
+        import inspect
+
+        source = inspect.getsource(judge_modules["concept"]._judge_concept_quality)
+        assert "SCORING CALIBRATION - BE STRICT" in source
+        assert "Most entities should score 5-7 on first attempt" in source
+
+    def test_relationship_judge_has_calibration(self, judge_modules):
+        """Test relationship judge prompt contains calibration text."""
+        import inspect
+
+        source = inspect.getsource(judge_modules["relationship"]._judge_relationship_quality)
+        assert "SCORING CALIBRATION - BE STRICT" in source
+        assert "Most entities should score 5-7 on first attempt" in source
+
+
+class TestItemRetryLogLevel:
+    """Tests for Issue 4: item/location retry uses WARNING not ERROR."""
+
+    def test_item_empty_creation_uses_warning_log(self):
+        """Test that _item module uses logger.warning for empty creation retries."""
+        import inspect
+
+        import src.services.world_quality_service._item as item_mod
+
+        source = inspect.getsource(item_mod.generate_item_with_quality)
+        # Should use warning for empty creation retries, not error
+        assert "logger.warning(" in source
+        assert "creation_retries" in source
+        assert "retry_temp" in source
+
+    def test_location_empty_creation_uses_warning_log(self):
+        """Test that _location module uses logger.warning for empty creation retries."""
+        import inspect
+
+        import src.services.world_quality_service._location as loc_mod
+
+        source = inspect.getsource(loc_mod.generate_location_with_quality)
+        assert "logger.warning(" in source
+        assert "creation_retries" in source
+
+
+class TestModelSelectionLogLevel:
+    """Tests for Issue 5: model auto-selection logs at DEBUG not INFO."""
+
+    def test_modes_auto_selection_logs_at_debug(self):
+        """Test that _modes.py auto-selection uses logger.debug."""
+        import inspect
+
+        import src.services.model_mode_service._modes as modes_mod
+
+        source = inspect.getsource(modes_mod.get_model_for_agent)
+        # The auto-selection log should use debug, not info
+        assert 'logger.debug(\n            f"Auto-selected' in source or (
+            "logger.debug(" in source and "Auto-selected" in source
+        )
+
+    def test_settings_auto_selection_logs_at_debug(self):
+        """Test that _settings.py tagged model auto-selection uses logger.debug."""
+        import inspect
+
+        import src.settings._settings as settings_mod
+
+        source = inspect.getsource(settings_mod.Settings.get_model_for_agent)
+        # Should have debug for the successful auto-selection
+        assert "logger.debug(" in source
+        # The warning for no model fitting VRAM should still be warning
+        assert "logger.warning(" in source
+
+
+class TestPlateauWarningFix:
+    """Tests for plateau warning: only warn when score actually drops, not on plateaus."""
+
+    def test_worsened_warning_uses_score_comparison(self):
+        """Test all entity modules use score comparison, not iteration number comparison."""
+        import inspect
+
+        import src.services.world_quality_service._character as char_mod
+        import src.services.world_quality_service._concept as concept_mod
+        import src.services.world_quality_service._faction as faction_mod
+        import src.services.world_quality_service._item as item_mod
+        import src.services.world_quality_service._location as location_mod
+        import src.services.world_quality_service._relationship as rel_mod
+
+        modules = {
+            "character": char_mod.generate_character_with_quality,
+            "faction": faction_mod.generate_faction_with_quality,
+            "item": item_mod.generate_item_with_quality,
+            "location": location_mod.generate_location_with_quality,
+            "concept": concept_mod.generate_concept_with_quality,
+            "relationship": rel_mod.generate_relationship_with_quality,
+        }
+
+        for name, func in modules.items():
+            source = inspect.getsource(func)  # type: ignore[arg-type]
+            # Should use actual score comparison, not iteration number comparison
+            assert "average_score < history.peak_score" in source, (
+                f"{name}: should compare scores, not iteration numbers"
+            )
+            # Should NOT use the old broken condition
+            assert "best_iteration != len(history.iterations)" not in source, (
+                f"{name}: still uses old broken iteration number comparison"
+            )

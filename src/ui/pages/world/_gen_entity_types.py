@@ -13,6 +13,7 @@ from nicegui import ui
 from src.ui.pages.world._gen_dialogs import (
     create_progress_dialog,
     get_all_entity_names,
+    get_entity_names_by_type,
     make_update_progress,
     notify_partial_failure,
     prompt_for_relationships_after_add,
@@ -49,13 +50,14 @@ async def _generate_factions(
     if use_quality:
         existing_entities = page.state.world_db.list_entities()
         existing_locations = [e.name for e in existing_entities if e.type == "location"]
+        faction_names = get_entity_names_by_type(page, "faction")
         logger.info(f"Found {len(existing_locations)} existing locations for faction grounding")
 
         logger.info("Calling world quality service to generate factions...")
         faction_results = await run.io_bound(
             page.services.world_quality.generate_factions_with_quality,
             page.state.project,
-            all_existing_names,
+            faction_names,
             count,
             existing_locations,
             should_cancel,
@@ -183,11 +185,12 @@ async def _generate_items(
     from nicegui import run
 
     if use_quality:
+        item_names = get_entity_names_by_type(page, "item")
         logger.info("Calling world quality service to generate items...")
         item_results = await run.io_bound(
             page.services.world_quality.generate_items_with_quality,
             page.state.project,
-            all_existing_names,
+            item_names,
             count,
             should_cancel,
             update_progress,
@@ -291,11 +294,12 @@ async def _generate_concepts(
     from nicegui import run
 
     if use_quality:
+        concept_names = get_entity_names_by_type(page, "concept")
         logger.info("Calling world quality service to generate concepts...")
         concept_results = await run.io_bound(
             page.services.world_quality.generate_concepts_with_quality,
             page.state.project,
-            all_existing_names,
+            concept_names,
             count,
             should_cancel,
             update_progress,

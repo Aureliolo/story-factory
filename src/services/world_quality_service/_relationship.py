@@ -107,7 +107,6 @@ def generate_relationship_with_quality(
 
             # Track this iteration
             history.add_iteration(
-                iteration=iteration + 1,
                 entity_data=relationship.copy(),
                 scores=scores.to_dict(),
                 average_score=scores.average,
@@ -164,7 +163,7 @@ def generate_relationship_with_quality(
     # Pick best iteration (not necessarily the last one)
     best_entity = history.get_best_entity()
 
-    if best_entity and history.best_iteration != len(history.iterations):
+    if best_entity and history.iterations[-1].average_score < history.peak_score:
         logger.warning(
             f"Relationship '{history.entity_name}' iterations got WORSE after peak. "
             f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
@@ -363,6 +362,15 @@ Source: {relationship.get("source", "Unknown")}
 Target: {relationship.get("target", "Unknown")}
 Type: {relationship.get("relation_type", "unknown")}
 Description: {relationship.get("description", "")}
+
+SCORING CALIBRATION - BE STRICT:
+- 1-3: Poor quality, generic or incoherent
+- 4-5: Below average, lacks depth or originality
+- 6-7: Average, functional but unremarkable (most first drafts land here)
+- 8-9: Good, well-crafted with clear strengths
+- 10: Exceptional, publication-ready
+Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
+Do NOT default to high scores — a 7 is already a good score.
 
 Rate each dimension 0-10:
 - tension: Conflict potential

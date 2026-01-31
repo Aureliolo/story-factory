@@ -66,16 +66,15 @@ def build_interview_section(page: WritePage) -> None:
         ).props("flat")
         page._finalize_btn.set_visibility(not page.state.interview_complete)
 
-    # Build Structure button - centered
+    # Build Structure button - centered, only when no entities exist yet
     with ui.row().classes("w-full justify-center mt-4"):
         page._build_structure_btn = ui.button(
             "Build Story Structure",
             on_click=lambda: _build_structure(page),
             icon="auto_fix_high",
         ).props("color=primary size=lg")
-        show_build = bool(
-            page.state.interview_complete and page.state.project and not page.state.project.chapters
-        )
+        has_entities = page.state.world_db and page.state.world_db.count_entities() > 0
+        show_build = bool(page.state.interview_complete and page.state.project and not has_entities)
         page._build_structure_btn.set_visibility(show_build)
 
 
@@ -150,9 +149,8 @@ def update_interview_buttons(page: WritePage) -> None:
     if hasattr(page, "_finalize_btn") and page._finalize_btn:
         page._finalize_btn.set_visibility(not page.state.interview_complete)
     if hasattr(page, "_build_structure_btn") and page._build_structure_btn:
-        show_build = bool(
-            page.state.interview_complete and page.state.project and not page.state.project.chapters
-        )
+        has_entities = page.state.world_db and page.state.world_db.count_entities() > 0
+        show_build = bool(page.state.interview_complete and page.state.project and not has_entities)
         page._build_structure_btn.set_visibility(show_build)
 
 

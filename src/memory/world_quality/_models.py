@@ -39,13 +39,20 @@ class RefinementHistory(BaseModel):
 
     def add_iteration(
         self,
-        iteration: int,
+        *,
         entity_data: dict[str, Any],
         scores: dict[str, Any],
         average_score: float,
         feedback: str = "",
     ) -> None:
-        """Add an iteration record and update consecutive degradation tracking."""
+        """Add an iteration record and update consecutive degradation tracking.
+
+        Iteration numbers are auto-assigned sequentially (1-indexed) based on
+        how many successful iterations have been recorded. This avoids mismatch
+        when the loop counter advances due to creation retries that never reach
+        the judge.
+        """
+        iteration = len(self.iterations) + 1
         self.iterations.append(
             IterationRecord(
                 iteration=iteration,

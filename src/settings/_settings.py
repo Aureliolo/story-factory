@@ -351,8 +351,12 @@ class Settings:
                 with open(SETTINGS_FILE) as f:
                     data = json.load(f)
                 settings = cls(**data)
-                # Validate loaded settings
+                # Validate loaded settings (may auto-migrate stale values)
                 settings.validate()
+                if asdict(settings) != data:
+                    logger.info("Settings migrated during validation, saving to disk")
+                    with open(SETTINGS_FILE, "w") as f:
+                        json.dump(asdict(settings), f, indent=2)
                 cls._cached_instance = settings
                 return settings
             except json.JSONDecodeError as e:
@@ -558,7 +562,7 @@ class Settings:
             # Sort by quality descending, then size descending
             tagged_models_fit.sort(key=lambda x: (x[2], x[1]), reverse=True)
             best = tagged_models_fit[0]
-            logger.info(
+            logger.debug(
                 f"Auto-selected {best[0]} ({best[1]:.1f}GB, quality={best[2]}) "
                 f"for {agent_role} (tagged model)"
             )
