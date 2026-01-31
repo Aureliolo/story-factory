@@ -66,7 +66,7 @@ def generate_concept_with_quality(
             if not concept.get("name"):
                 creation_retries += 1
                 last_error = f"Concept creation returned empty on iteration {iteration + 1}"
-                logger.error(
+                logger.warning(
                     "%s (retry %d, next temp=%.2f)",
                     last_error,
                     creation_retries,

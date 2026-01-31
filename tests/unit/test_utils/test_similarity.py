@@ -543,7 +543,7 @@ class TestModelFallback:
     """Tests for the embedding model fallback mechanism."""
 
     TEST_OLLAMA_URL = "http://test-ollama:11434"
-    TEST_MODEL = "degenerate-embed:test"  # Fake model that always fails sanity check
+    TEST_MODEL = "bge-m3"  # Real model from RECOMMENDED_MODELS; mocked to fail sanity check
     TEST_THRESHOLD = 0.85
 
     @pytest.fixture(autouse=True)
@@ -570,7 +570,7 @@ class TestModelFallback:
             """Return degenerate vectors for primary, differentiated for fallback."""
             call_count["n"] += 1
             model = kwargs.get("model", "")
-            if model == "degenerate-embed:test":
+            if model == "bge-m3":
                 # Primary model returns degenerate embeddings (identical vectors)
                 return {"embedding": [1.0, 1.0, 1.0]}
             elif model == "mxbai-embed-large":
@@ -615,7 +615,7 @@ class TestModelFallback:
             """Return degenerate for primary, working for snowflake only."""
             call_count["n"] += 1
             model = kwargs.get("model", "")
-            if model == "degenerate-embed:test":
+            if model == "bge-m3":
                 # Primary fails
                 return {"embedding": [1.0, 1.0, 1.0]}
             elif model == "snowflake-arctic-embed:335m":
@@ -653,7 +653,7 @@ class TestModelFallback:
             """Return degenerate for primary, differentiated for mxbai fallback."""
             call_count["n"] += 1
             model = kwargs.get("model", "")
-            if model == "degenerate-embed:test":
+            if model == "bge-m3":
                 return {"embedding": [1.0, 1.0, 1.0]}
             elif model == "mxbai-embed-large":
                 if call_count["n"] % 2 == 0:

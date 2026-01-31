@@ -227,6 +227,33 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 - **VRAM:** ~0.3GB
 - **Best for:** High-volume validation where speed matters most
 
+### Embedding Models (Semantic Duplicate Detection)
+
+Used by the world generation pipeline to detect semantic duplicates among entity names (e.g., "Shadow Council" vs "Council of Shadows"). Selected via the `embedding_model` setting, not the agent auto-selection system.
+
+#### BGE-M3 (Recommended)
+- **Parameters:** 567M
+- **Dimensions:** 1024
+- **Strengths:** Top-ranked multilingual embedding model, excellent short-text differentiation
+- **VRAM:** ~2GB
+- **Ollama:** `bge-m3`
+
+#### MxBAI Embed Large
+- **Parameters:** 335M
+- **Dimensions:** 1024
+- **Strengths:** High-quality embeddings, fast inference, good balance of quality and speed
+- **VRAM:** ~1GB
+- **Ollama:** `mxbai-embed-large`
+
+#### Snowflake Arctic Embed 335M
+- **Parameters:** 335M
+- **Dimensions:** 1024
+- **Strengths:** Top-ranked on MTEB, strong retrieval performance
+- **VRAM:** ~1GB
+- **Ollama:** `snowflake-arctic-embed:335m`
+
+> **Note:** Story Factory includes automatic fallback — if the configured embedding model fails a sanity check (returns degenerate embeddings for obviously different names), it tries other installed embedding models before disabling semantic duplicate detection.
+
 ---
 
 ## HuggingFace Models (Manual Install)

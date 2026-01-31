@@ -765,16 +765,61 @@ class TestFactionCreationTemperatureEscalation:
         assert temps_used[2] > temps_used[1]
 
     def test_temperature_capped_at_1_5(self, world_quality_service):
-        """Temperature escalation is capped at 1.5."""
+        """Temperature escalation is capped at 1.5 even after many retries."""
         svc = world_quality_service
-        config = svc.get_config()
 
-        # With creator_temperature=0.9 and 0.15 step:
-        # retry 0: 0.9, retry 1: 1.05, retry 2: 1.20, retry 3: 1.35, retry 4: 1.50
-        # retry 5: min(0.9 + 5*0.15, 1.5) = min(1.65, 1.5) = 1.5
-        for retries in range(10):
-            expected = min(config.creator_temperature + (retries * 0.15), 1.5)
-            assert expected <= 1.5
+        brief = MagicMock()
+        brief.genre = "fantasy"
+        brief.premise = "A dark fantasy world"
+        brief.tone = "dark"
+        brief.themes = ["power"]
+        brief.setting_place = "Realm"
+        brief.setting_time = "Medieval"
+        brief.language = "English"
+        story_state = MagicMock()
+        story_state.brief = brief
+        story_state.id = "test-story"
+
+        existing_names = ["Old Faction"]
+        temps_used = []
+
+        # Return empty 6 times (enough for temp to exceed 1.5 uncapped), then valid
+        def fake_create_faction(_story_state, _names, temperature, _locations=None):
+            """Return empty dict 6 times to force temperature past uncapped 1.5."""
+            temps_used.append(temperature)
+            if len(temps_used) <= 6:
+                return {}
+            return {"name": "Capped Faction", "type": "faction", "description": "desc"}
+
+        svc._create_faction = fake_create_faction
+        svc._judge_faction_quality = MagicMock(
+            return_value=FactionQualityScores(
+                coherence=9,
+                influence=9,
+                conflict_potential=9,
+                distinctiveness=9,
+                feedback="Good",
+            )
+        )
+        svc._log_refinement_analytics = MagicMock()
+
+        # Override max_iterations so the loop runs long enough to test the cap
+        config = svc.get_config()
+        config_with_high_iterations = config.model_copy(update={"max_iterations": 8})
+        svc.get_config = lambda: config_with_high_iterations
+
+        faction, _scores, _iterations = svc.generate_faction_with_quality(
+            story_state, existing_names
+        )
+
+        assert faction["name"] == "Capped Faction"
+        assert len(temps_used) == 7
+        # Retry 5 would be 0.9 + 5*0.15 = 1.65 uncapped, but should be capped at 1.5
+        assert temps_used[5] == pytest.approx(1.5)
+        # Retry 6 would be 0.9 + 6*0.15 = 1.80 uncapped, but should be capped at 1.5
+        assert temps_used[6] == pytest.approx(1.5)
+        # Verify all temps are <= 1.5
+        assert all(t <= 1.5 for t in temps_used)
 
 
 class TestDuplicateRelationshipDetection:

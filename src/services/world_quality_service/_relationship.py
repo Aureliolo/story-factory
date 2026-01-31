@@ -260,6 +260,7 @@ def _create_relationship(
         return {}
 
     existing_rel_strs = [f"- {s} <-> {t}" for s, t in existing_rels]
+    existing_pairs_block = "\n".join(existing_rel_strs[:15]) if existing_rel_strs else "None"
 
     prompt = f"""Create a compelling relationship between entities for a {brief.genre} story.
 
@@ -269,7 +270,7 @@ THEMES: {", ".join(brief.themes)}
 
 AVAILABLE ENTITIES: {", ".join(entity_names)}
 DO NOT create any of these entity pairs (already exist or rejected):
-{chr(10).join(existing_rel_strs[:15]) if existing_rel_strs else "None"}
+{existing_pairs_block}
 
 Create a relationship with:
 1. Tension - conflict potential

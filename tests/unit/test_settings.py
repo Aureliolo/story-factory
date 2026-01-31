@@ -2123,7 +2123,6 @@ class TestSettingsMigration:
             "suggestion": 0.8,
             # No "embedding" key — simulates pre-migration file
         }
-        import json
 
         with open(settings_file, "w") as f:
             json.dump({"agent_temperatures": old_temps}, f)

@@ -195,6 +195,20 @@ class SemanticDuplicateChecker:
             if not self._try_fallback_model():
                 self._degraded = True
 
+    def _revert_model(self, old_model: str, old_prefix: str) -> None:
+        """Revert to a previous embedding model and clear the cache.
+
+        Used during fallback iteration when a candidate model fails validation,
+        restoring the prior model state before trying the next candidate.
+
+        Args:
+            old_model: Model ID to restore.
+            old_prefix: Embedding prefix to restore.
+        """
+        self.embedding_model = old_model
+        self._embedding_prefix = old_prefix
+        self.clear_cache()
+
     def _try_fallback_model(self) -> bool:
         """Try alternative embedding models from the registry when primary fails.
 
@@ -237,9 +251,7 @@ class SemanticDuplicateChecker:
 
                 if not vec_a or not vec_b:
                     logger.debug("Fallback model '%s' returned empty vectors", model_id)
-                    self.embedding_model = old_model
-                    self._embedding_prefix = old_prefix
-                    self.clear_cache()
+                    self._revert_model(old_model, old_prefix)
                     continue
 
                 similarity = cosine_similarity(vec_a, vec_b)
@@ -259,15 +271,11 @@ class SemanticDuplicateChecker:
                         model_id,
                         similarity,
                     )
-                    self.embedding_model = old_model
-                    self._embedding_prefix = old_prefix
-                    self.clear_cache()
+                    self._revert_model(old_model, old_prefix)
 
             except Exception as e:
                 logger.debug("Fallback model '%s' failed: %s", model_id, e)
-                self.embedding_model = old_model
-                self._embedding_prefix = old_prefix
-                self.clear_cache()
+                self._revert_model(old_model, old_prefix)
 
         return False
 

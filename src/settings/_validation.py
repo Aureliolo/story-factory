@@ -133,7 +133,7 @@ def _validate_temperatures(settings: Settings) -> None:
     missing_agents = expected_agents - set(settings.agent_temperatures)
     for agent in sorted(missing_agents):
         settings.agent_temperatures[agent] = default_temps[agent]
-        logger.info("Added missing agent temperature: %s=%.1f", agent, default_temps[agent])
+        logger.warning("Added missing agent temperature: %s=%.1f", agent, default_temps[agent])
 
     for agent, temp in settings.agent_temperatures.items():
         if not 0.0 <= temp <= 2.0:
