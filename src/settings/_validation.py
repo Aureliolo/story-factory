@@ -29,7 +29,7 @@ def validate(settings: Settings) -> bool:
     _validate_numeric_ranges(settings)
     _validate_interaction_mode(settings)
     _validate_vram_strategy(settings)
-    _validate_temperatures(settings)
+    changed = _validate_temperatures(settings)
     _validate_task_temperatures(settings)
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
@@ -63,7 +63,7 @@ def validate(settings: Settings) -> bool:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
-    changed = _validate_embedding_model(settings)
+    changed = _validate_embedding_model(settings) or changed
     return changed
 
 
@@ -122,8 +122,12 @@ def _validate_vram_strategy(settings: Settings) -> None:
         )
 
 
-def _validate_temperatures(settings: Settings) -> None:
-    """Validate agent temperature settings."""
+def _validate_temperatures(settings: Settings) -> bool:
+    """Validate agent temperature settings.
+
+    Returns:
+        True if missing agent temperatures were backfilled, False otherwise.
+    """
     expected_agents = set(AGENT_ROLES)
 
     unknown_temp_agents = set(settings.agent_temperatures) - expected_agents
@@ -138,6 +142,7 @@ def _validate_temperatures(settings: Settings) -> None:
 
     default_temps = _Settings().agent_temperatures
     missing_agents = expected_agents - set(settings.agent_temperatures)
+    changed = bool(missing_agents)
     for agent in sorted(missing_agents):
         settings.agent_temperatures[agent] = default_temps[agent]
         logger.warning("Added missing agent temperature: %s=%.1f", agent, default_temps[agent])
@@ -145,6 +150,8 @@ def _validate_temperatures(settings: Settings) -> None:
     for agent, temp in settings.agent_temperatures.items():
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
+
+    return changed
 
 
 def _validate_task_temperatures(settings: Settings) -> None:

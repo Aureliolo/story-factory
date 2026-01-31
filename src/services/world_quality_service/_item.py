@@ -92,15 +92,16 @@ def generate_item_with_quality(
                 feedback=scores.feedback,
             )
 
+            current_iter = history.iterations[-1].iteration
             logger.info(
-                f"Item '{item.get('name')}' iteration {iteration + 1}: "
+                f"Item '{item.get('name')}' iteration {current_iter}: "
                 f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
                 f"at iteration {history.best_iteration})"
             )
 
             if scores.average >= config.quality_threshold:
                 logger.info(f"Item '{item.get('name')}' met quality threshold")
-                history.final_iteration = iteration + 1
+                history.final_iteration = current_iter
                 history.final_score = scores.average
                 svc._log_refinement_analytics(
                     history,
@@ -110,7 +111,7 @@ def generate_item_with_quality(
                     quality_threshold=config.quality_threshold,
                     max_iterations=config.max_iterations,
                 )
-                return item, scores, iteration + 1
+                return item, scores, current_iter
 
             # Check for early stopping after tracking iteration (enhanced with variance tolerance)
             if history.should_stop_early(

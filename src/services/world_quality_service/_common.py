@@ -22,9 +22,14 @@ def retry_temperature(config: Any, creation_retries: int) -> float:
     Returns:
         Temperature value for the next creation attempt.
     """
-    return float(
-        min(
-            config.creator_temperature + (creation_retries * _RETRY_TEMP_INCREMENT),
-            _RETRY_TEMP_MAX,
-        )
+    computed = config.creator_temperature + (creation_retries * _RETRY_TEMP_INCREMENT)
+    capped = computed > _RETRY_TEMP_MAX
+    result = float(min(computed, _RETRY_TEMP_MAX))
+    logger.debug(
+        "retry_temperature: base=%.2f, retries=%d, computed=%.2f, capped=%s",
+        config.creator_temperature,
+        creation_retries,
+        result,
+        capped,
     )
+    return result

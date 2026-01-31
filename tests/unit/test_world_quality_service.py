@@ -1018,6 +1018,54 @@ class TestRetryTemperatureHelper:
             ), f"{name} module should import retry_temperature from _common"
 
 
+class TestIterationCountAlignment:
+    """Tests for iteration count alignment: use history iteration, not loop counter."""
+
+    def test_entity_modules_use_history_iteration(self):
+        """All entity modules should use history.iterations[-1].iteration, not iteration + 1."""
+        import inspect
+
+        from src.services.world_quality_service import (
+            _character as char_mod,
+        )
+        from src.services.world_quality_service import (
+            _concept as concept_mod,
+        )
+        from src.services.world_quality_service import (
+            _faction as faction_mod,
+        )
+        from src.services.world_quality_service import (
+            _item as item_mod,
+        )
+        from src.services.world_quality_service import (
+            _location as location_mod,
+        )
+        from src.services.world_quality_service import (
+            _relationship as rel_mod,
+        )
+
+        modules = {
+            "character": char_mod.generate_character_with_quality,
+            "faction": faction_mod.generate_faction_with_quality,
+            "item": item_mod.generate_item_with_quality,
+            "location": location_mod.generate_location_with_quality,
+            "concept": concept_mod.generate_concept_with_quality,
+            "relationship": rel_mod.generate_relationship_with_quality,
+        }
+
+        for name, func in modules.items():
+            source = inspect.getsource(func)  # type: ignore[arg-type]
+            assert "current_iter = history.iterations[-1].iteration" in source, (
+                f"{name}: should use history iteration, not loop counter"
+            )
+            assert "history.final_iteration = current_iter" in source, (
+                f"{name}: final_iteration should use current_iter"
+            )
+            assert "return " in source and "current_iter" in source, (
+                f"{name}: return should use current_iter"
+            )
+
+
 class TestModelSelectionLogLevel:
     """Tests for Issue 5: model auto-selection logs at DEBUG not INFO."""
 
