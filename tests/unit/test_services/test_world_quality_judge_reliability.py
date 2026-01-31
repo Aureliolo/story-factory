@@ -593,6 +593,30 @@ class TestAggregateScores:
 
         assert result.feedback == "Only feedback"
 
+    def test_empty_feedback_from_all_calls(self):
+        """When all judge calls return empty feedback, result has empty feedback."""
+        results = [
+            ConceptQualityScores(
+                relevance=7.0,
+                depth=7.0,
+                manifestation=7.0,
+                resonance=7.0,
+                feedback="",
+            ),
+            ConceptQualityScores(
+                relevance=7.0,
+                depth=7.0,
+                manifestation=7.0,
+                resonance=7.0,
+                feedback="",
+            ),
+        ]
+        config = self._make_config(strategy="median")
+
+        result = _aggregate_scores(results, ConceptQualityScores, config)
+
+        assert result.feedback == ""
+
     def test_all_score_model_types(self):
         """Aggregation works for all 6 score model types."""
         # Verify it works with each score model type by checking field discovery
