@@ -492,6 +492,95 @@ def build_refinement_stopping_section(page: SettingsPage) -> None:
     logger.debug("Refinement & stopping section built")
 
 
+def build_judge_consistency_section(page: SettingsPage) -> None:
+    """Build judge consistency settings card.
+
+    Controls multi-call averaging and outlier detection for the quality judge,
+    which reduces score variance from noisy local models.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Judge Consistency",
+            "balance",
+            "Improve scoring reliability by calling the judge multiple times "
+            "and averaging results with outlier detection.",
+        )
+
+        with ui.row().classes("items-center gap-3 mb-3"):
+            page._judge_multi_call_switch = ui.switch(
+                "Multi-Call Averaging",
+                value=page.settings.judge_multi_call_enabled,
+            ).tooltip(
+                "Call the judge model multiple times per entity and average scores. "
+                "Reduces variance from noisy local models at the cost of more LLM calls."
+            )
+
+        with ui.element("div").bind_visibility_from(page._judge_multi_call_switch, "value"):
+            with ui.row().classes("items-center gap-3 flex-wrap mb-3"):
+                with ui.column().classes("gap-1"):
+                    ui.label("Calls").classes("text-xs text-gray-500")
+                    page._judge_multi_call_count_input = page._build_number_input(
+                        value=page.settings.judge_multi_call_count,
+                        min_val=2,
+                        max_val=5,
+                        step=1,
+                        tooltip_text="Number of judge calls per entity (2-5)",
+                        width="w-16",
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Confidence").classes("text-xs text-gray-500")
+                    page._judge_confidence_threshold_input = page._build_number_input(
+                        value=page.settings.judge_confidence_threshold,
+                        min_val=0.0,
+                        max_val=1.0,
+                        step=0.05,
+                        tooltip_text="Min confidence for reliable decisions (0.0-1.0)",
+                        width="w-16",
+                    )
+
+            ui.separator().classes("my-2")
+
+            _subsection_header("Outlier Detection", "filter_alt")
+            with ui.row().classes("items-center gap-3 mb-3"):
+                page._judge_outlier_detection_switch = ui.switch(
+                    "Detect Outliers",
+                    value=page.settings.judge_outlier_detection,
+                ).tooltip("Remove statistical outlier scores before averaging")
+
+            with ui.element("div").bind_visibility_from(
+                page._judge_outlier_detection_switch, "value"
+            ):
+                with ui.row().classes("items-center gap-3 flex-wrap"):
+                    with ui.column().classes("gap-1"):
+                        ui.label("Std Threshold").classes("text-xs text-gray-500")
+                        page._judge_outlier_std_threshold_input = page._build_number_input(
+                            value=page.settings.judge_outlier_std_threshold,
+                            min_val=1.0,
+                            max_val=4.0,
+                            step=0.5,
+                            tooltip_text="Standard deviations for outlier detection (1.0-4.0)",
+                            width="w-16",
+                        )
+
+                    with ui.column().classes("gap-1"):
+                        ui.label("Strategy").classes("text-xs text-gray-500")
+                        page._judge_outlier_strategy_select = (
+                            ui.select(
+                                options={"median": "Median", "mean": "Mean"},
+                                value=page.settings.judge_outlier_strategy,
+                            )
+                            .props("outlined dense")
+                            .classes("w-24")
+                            .tooltip("How to aggregate scores after outlier removal")
+                        )
+
+    logger.debug("Judge consistency section built")
+
+
 def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
     """Get options for circular relationship type multi-select.
 
@@ -743,6 +832,13 @@ def save_to_settings(page: SettingsPage) -> None:
             "world_quality_early_stopping_variance_tolerance",
             float,
         ),
+        # Judge consistency settings
+        ("_judge_multi_call_switch", "judge_multi_call_enabled", None),
+        ("_judge_multi_call_count_input", "judge_multi_call_count", int),
+        ("_judge_confidence_threshold_input", "judge_confidence_threshold", float),
+        ("_judge_outlier_detection_switch", "judge_outlier_detection", None),
+        ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold", float),
+        ("_judge_outlier_strategy_select", "judge_outlier_strategy", None),
     ]
 
     for ui_attr, setting_attr, type_conv in advanced_llm_settings_map:
@@ -752,6 +848,10 @@ def save_to_settings(page: SettingsPage) -> None:
             if type_conv:
                 value = type_conv(value)
             setattr(settings, setting_attr, value)
+
+    # Keep judge_consistency_enabled in sync with judge_multi_call_enabled
+    if hasattr(page, "_judge_multi_call_switch"):
+        settings.judge_consistency_enabled = page._judge_multi_call_switch.value
 
     # Relationship validation settings
     if hasattr(page, "_relationship_validation_switch"):
@@ -842,6 +942,13 @@ def refresh_from_settings(page: SettingsPage) -> None:
             "_early_stopping_variance_tolerance_input",
             "world_quality_early_stopping_variance_tolerance",
         ),
+        # Judge consistency settings
+        ("_judge_multi_call_switch", "judge_multi_call_enabled"),
+        ("_judge_multi_call_count_input", "judge_multi_call_count"),
+        ("_judge_confidence_threshold_input", "judge_confidence_threshold"),
+        ("_judge_outlier_detection_switch", "judge_outlier_detection"),
+        ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold"),
+        ("_judge_outlier_strategy_select", "judge_outlier_strategy"),
     ]
 
     for ui_attr, setting_attr in advanced_llm_ui_map:

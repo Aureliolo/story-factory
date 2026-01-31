@@ -25,6 +25,7 @@ from src.memory.world_quality import (
     ConceptQualityScores,
     FactionQualityScores,
     ItemQualityScores,
+    JudgeConsistencyConfig,
     LocationQualityScores,
     RefinementConfig,
     RefinementHistory,
@@ -346,8 +347,62 @@ class WorldQualityService:
         """Get refinement configuration from src.settings."""
         return RefinementConfig.from_settings(self.settings)
 
+    def get_judge_config(self) -> JudgeConsistencyConfig:
+        """Get judge consistency configuration from settings."""
+        return JudgeConsistencyConfig.from_settings(self.settings)
+
+    def _resolve_model_for_role(self, agent_role: str) -> str:
+        """Resolve the model for an agent role, respecting Settings hierarchy.
+
+        The resolution order is:
+        1. If use_per_agent_models is False and default_model is set → use default_model
+        2. If use_per_agent_models is True and agent_models has an explicit model → use it
+        3. Otherwise → delegate to ModelModeService auto-selection
+
+        This ensures that Settings-level configuration (UI-visible) takes priority
+        over the mode system's automatic selection, which was previously bypassed.
+
+        Args:
+            agent_role: The agent role to resolve (writer, validator, etc.).
+
+        Returns:
+            Model ID to use for this role.
+        """
+        # 1. Per-agent disabled + explicit default → use default for everything
+        if not self.settings.use_per_agent_models:
+            if self.settings.default_model != "auto":
+                logger.debug(
+                    "Using default_model '%s' for role '%s' (use_per_agent_models=False)",
+                    self.settings.default_model,
+                    agent_role,
+                )
+                return self.settings.default_model
+
+        # 2. Per-agent enabled + explicit model for this role → use it
+        if self.settings.use_per_agent_models:
+            model_setting = self.settings.agent_models.get(agent_role, "auto")
+            if model_setting != "auto":
+                logger.debug(
+                    "Using explicit agent model '%s' for role '%s'",
+                    model_setting,
+                    agent_role,
+                )
+                return model_setting
+
+        # 3. Fall through to mode service auto-selection
+        model = self.mode_service.get_model_for_agent(agent_role)
+        logger.debug(
+            "Auto-selected model '%s' for role '%s' via mode service",
+            model,
+            agent_role,
+        )
+        return model
+
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """Get the model to use for creative generation.
+
+        Respects the Settings hierarchy: explicit default_model or per-agent model
+        takes priority over ModelModeService auto-selection.
 
         Args:
             entity_type: Type of entity being created (character, faction, location, etc.).
@@ -359,14 +414,20 @@ class WorldQualityService:
         agent_role = (
             self.ENTITY_CREATOR_ROLES.get(entity_type, "writer") if entity_type else "writer"
         )
-        model = self.mode_service.get_model_for_agent(agent_role)
+        model = self._resolve_model_for_role(agent_role)
         logger.debug(
-            f"Selected creator model '{model}' for entity_type={entity_type} (role={agent_role})"
+            "Selected creator model '%s' for entity_type=%s (role=%s)",
+            model,
+            entity_type,
+            agent_role,
         )
         return model
 
     def _get_judge_model(self, entity_type: str | None = None) -> str:
         """Get the model to use for quality judgment.
+
+        Respects the Settings hierarchy: explicit default_model or per-agent model
+        takes priority over ModelModeService auto-selection.
 
         Args:
             entity_type: Type of entity being judged. Currently all use validator,
@@ -378,9 +439,12 @@ class WorldQualityService:
         agent_role = (
             self.ENTITY_JUDGE_ROLES.get(entity_type, "validator") if entity_type else "validator"
         )
-        model = self.mode_service.get_model_for_agent(agent_role)
+        model = self._resolve_model_for_role(agent_role)
         logger.debug(
-            f"Selected judge model '{model}' for entity_type={entity_type} (role={agent_role})"
+            "Selected judge model '%s' for entity_type=%s (role=%s)",
+            model,
+            entity_type,
+            agent_role,
         )
         return model
 
