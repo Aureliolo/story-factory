@@ -887,52 +887,52 @@ class TestJudgeCalibrationPrompts:
         }
 
     def test_character_judge_has_calibration(self, judge_modules):
-        """Test character judge prompt contains calibration text."""
+        """Test character judge module uses shared calibration block."""
         import inspect
 
-        source = inspect.getsource(judge_modules["character"]._judge_character_quality)
-        assert "SCORING CALIBRATION - BE STRICT" in source
-        assert "Most entities should score 5-7 on first attempt" in source
+        source = inspect.getsource(judge_modules["character"])
+        assert "JUDGE_CALIBRATION_BLOCK" in source
+        assert "judge_with_averaging" in source
 
     def test_faction_judge_has_calibration(self, judge_modules):
-        """Test faction judge prompt contains calibration text."""
+        """Test faction judge module uses shared calibration block."""
         import inspect
 
-        source = inspect.getsource(judge_modules["faction"]._judge_faction_quality)
-        assert "SCORING CALIBRATION - BE STRICT" in source
-        assert "Most entities should score 5-7 on first attempt" in source
+        source = inspect.getsource(judge_modules["faction"])
+        assert "JUDGE_CALIBRATION_BLOCK" in source
+        assert "judge_with_averaging" in source
 
     def test_item_judge_has_calibration(self, judge_modules):
-        """Test item judge prompt contains calibration text."""
+        """Test item judge module uses shared calibration block."""
         import inspect
 
-        source = inspect.getsource(judge_modules["item"]._judge_item_quality)
-        assert "SCORING CALIBRATION - BE STRICT" in source
-        assert "Most entities should score 5-7 on first attempt" in source
+        source = inspect.getsource(judge_modules["item"])
+        assert "JUDGE_CALIBRATION_BLOCK" in source
+        assert "judge_with_averaging" in source
 
     def test_location_judge_has_calibration(self, judge_modules):
-        """Test location judge prompt contains calibration text."""
+        """Test location judge module uses shared calibration block."""
         import inspect
 
-        source = inspect.getsource(judge_modules["location"]._judge_location_quality)
-        assert "SCORING CALIBRATION - BE STRICT" in source
-        assert "Most entities should score 5-7 on first attempt" in source
+        source = inspect.getsource(judge_modules["location"])
+        assert "JUDGE_CALIBRATION_BLOCK" in source
+        assert "judge_with_averaging" in source
 
     def test_concept_judge_has_calibration(self, judge_modules):
-        """Test concept judge prompt contains calibration text."""
+        """Test concept judge module uses shared calibration block."""
         import inspect
 
-        source = inspect.getsource(judge_modules["concept"]._judge_concept_quality)
-        assert "SCORING CALIBRATION - BE STRICT" in source
-        assert "Most entities should score 5-7 on first attempt" in source
+        source = inspect.getsource(judge_modules["concept"])
+        assert "JUDGE_CALIBRATION_BLOCK" in source
+        assert "judge_with_averaging" in source
 
     def test_relationship_judge_has_calibration(self, judge_modules):
-        """Test relationship judge prompt contains calibration text."""
+        """Test relationship judge module uses shared calibration block."""
         import inspect
 
-        source = inspect.getsource(judge_modules["relationship"]._judge_relationship_quality)
-        assert "SCORING CALIBRATION - BE STRICT" in source
-        assert "Most entities should score 5-7 on first attempt" in source
+        source = inspect.getsource(judge_modules["relationship"])
+        assert "JUDGE_CALIBRATION_BLOCK" in source
+        assert "judge_with_averaging" in source
 
 
 class TestItemRetryLogLevel:
@@ -1013,8 +1013,9 @@ class TestRetryTemperatureHelper:
             ("concept", concept_mod),
         ]:
             source = inspect.getsource(mod)
-            assert "from src.services.world_quality_service._common import retry_temperature" in (
-                source
+            assert (
+                "retry_temperature" in source
+                and "from src.services.world_quality_service._common import" in source
             ), f"{name} module should import retry_temperature from _common"
 
 
