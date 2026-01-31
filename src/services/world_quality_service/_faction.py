@@ -75,14 +75,17 @@ def generate_faction_with_quality(
     faction: dict[str, Any] = {}
     scores: FactionQualityScores | None = None
     last_error: str = ""
+    creation_retries = 0  # Track duplicate-name retries for temperature escalation
 
     while iteration < config.max_iterations:
         try:
             # Create new faction on first iteration OR if previous returned empty
             # (e.g., duplicate name detection returns {} to force retry)
             if iteration == 0 or not faction.get("name"):
+                # Increase temperature on retries to avoid regenerating the same name
+                retry_temp = min(config.creator_temperature + (creation_retries * 0.15), 1.5)
                 faction = svc._create_faction(
-                    story_state, existing_names, config.creator_temperature, existing_locations
+                    story_state, existing_names, retry_temp, existing_locations
                 )
             else:
                 if faction and scores:
@@ -96,8 +99,14 @@ def generate_faction_with_quality(
                     )
 
             if not faction.get("name"):
+                creation_retries += 1
                 last_error = f"Faction creation returned empty on iteration {iteration + 1}"
-                logger.warning(last_error)
+                logger.warning(
+                    "%s (retry %d, next temp=%.2f)",
+                    last_error,
+                    creation_retries,
+                    min(config.creator_temperature + (creation_retries * 0.15), 1.5),
+                )
                 iteration += 1
                 continue
 

@@ -44,13 +44,14 @@ def generate_concept_with_quality(
     scores: ConceptQualityScores | None = None
     last_error: str = ""
     needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
+    creation_retries = 0  # Track duplicate-name retries for temperature escalation
 
     while iteration < config.max_iterations:
         try:
             if needs_fresh_creation:
-                concept = svc._create_concept(
-                    story_state, existing_names, config.creator_temperature
-                )
+                # Increase temperature on retries to avoid regenerating the same name
+                retry_temp = min(config.creator_temperature + (creation_retries * 0.15), 1.5)
+                concept = svc._create_concept(story_state, existing_names, retry_temp)
             else:
                 if concept and scores:
                     # Use dynamic temperature that decreases over iterations
@@ -63,8 +64,14 @@ def generate_concept_with_quality(
                     )
 
             if not concept.get("name"):
+                creation_retries += 1
                 last_error = f"Concept creation returned empty on iteration {iteration + 1}"
-                logger.error(last_error)
+                logger.warning(
+                    "%s (retry %d, next temp=%.2f)",
+                    last_error,
+                    creation_retries,
+                    min(config.creator_temperature + (creation_retries * 0.15), 1.5),
+                )
                 needs_fresh_creation = True  # Retry with fresh creation
                 iteration += 1
                 continue

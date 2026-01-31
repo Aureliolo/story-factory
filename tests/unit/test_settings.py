@@ -1885,7 +1885,7 @@ class TestTagBasedModelSelection:
         monkeypatch.setattr(
             "src.settings._settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "nomic-embed-text": 0.3,  # Embedding model
+                "mxbai-embed-large": 0.7,  # Embedding model
                 "chat-model:8b": 5.0,  # Chat model
             },
         )
@@ -1893,9 +1893,9 @@ class TestTagBasedModelSelection:
         settings = Settings()
         settings.use_per_agent_models = True
         settings.agent_models = {"architect": "auto"}
-        # Tag both for architect, but nomic also has embedding tag
+        # Tag both for architect, but mxbai also has embedding tag
         settings.custom_model_tags = {
-            "nomic-embed-text": ["architect", "embedding"],
+            "mxbai-embed-large": ["architect", "embedding"],
             "chat-model:8b": ["architect"],
         }
 
@@ -2076,6 +2076,66 @@ class TestSettingsFixtureIsolation:
         # Load from file - should use file values
         settings_loaded = Settings.load()
         assert settings_loaded.prompt_templates_dir == "different/path"
+
+
+class TestSettingsMigration:
+    """Tests for settings migration when new fields are added."""
+
+    def test_missing_agent_temperature_backfilled_on_validate(self):
+        """Validation should backfill missing agent temperatures from defaults."""
+        settings = Settings()
+        # Simulate an old settings file that lacks the "embedding" key
+        del settings.agent_temperatures["embedding"]
+        assert "embedding" not in settings.agent_temperatures
+
+        # Validation should backfill it
+        settings.validate()
+
+        assert "embedding" in settings.agent_temperatures
+        assert settings.agent_temperatures["embedding"] == 0.0
+
+    def test_missing_multiple_agent_temperatures_backfilled(self):
+        """Validation should backfill all missing agent temperatures."""
+        settings = Settings()
+        # Remove multiple agents
+        del settings.agent_temperatures["embedding"]
+        del settings.agent_temperatures["suggestion"]
+
+        settings.validate()
+
+        assert settings.agent_temperatures["embedding"] == 0.0
+        assert settings.agent_temperatures["suggestion"] == 0.8
+
+    def test_load_old_settings_file_without_embedding_temp(self, tmp_path, monkeypatch):
+        """Loading settings saved before embedding role added should not crash."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        # Create settings file missing the "embedding" key in agent_temperatures
+        old_temps = {
+            "interviewer": 0.7,
+            "architect": 0.85,
+            "writer": 0.9,
+            "editor": 0.6,
+            "continuity": 0.3,
+            "validator": 0.1,
+            "suggestion": 0.8,
+            # No "embedding" key — simulates pre-migration file
+        }
+
+        with open(settings_file, "w") as f:
+            json.dump({"agent_temperatures": old_temps}, f)
+
+        # Should load without crashing and backfill the missing key
+        settings = Settings.load()
+        assert "embedding" in settings.agent_temperatures
+        assert settings.agent_temperatures["embedding"] == 0.0
+
+    def test_relationship_token_limit_default_is_800(self):
+        """Default llm_tokens_relationship_create should be 800 (increased from 500)."""
+        settings = Settings()
+        assert settings.llm_tokens_relationship_create == 800
 
 
 class TestWP1WP2SettingsValidation:
