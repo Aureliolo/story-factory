@@ -123,6 +123,7 @@ def load_prefs_deferred(page_key: str, callback: Callable[[dict], None]) -> None
     """
 
     async def _deferred() -> None:
+        """Load preferences from localStorage and deliver to callback."""
         prefs = await _load_prefs(page_key)
         callback(prefs)
 

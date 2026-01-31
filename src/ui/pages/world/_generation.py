@@ -120,35 +120,31 @@ def build_generation_toolbar(page) -> None:
             icon="upload_file",
         ).props("outline color=primary").tooltip("Extract entities from existing story text")
 
-        # Check if chapters have written content - block destructive actions if so
-        has_written_content = (
-            page.state.project
-            and page.state.project.chapters
-            and any(c.content for c in page.state.project.chapters)
+        # Block destructive actions once written content exists
+        has_written_content = page.state.project and any(
+            ch.content for ch in (page.state.project.chapters or [])
         )
 
-        # Regenerate button (dangerous action) - only show if no written content
         if not has_written_content:
             ui.button(
                 "Rebuild World",
                 on_click=lambda: confirm_regenerate(page),
                 icon="refresh",
             ).props("outline color=negative").tooltip(
-                "Rebuild all entities and relationships (only available before writing)"
+                "Rebuild all entities and relationships (only available before writing begins)"
             )
 
-            # Clear World button - only show if no story content written yet
             ui.button(
                 "Clear World",
                 on_click=lambda: confirm_clear_world(page),
                 icon="delete_sweep",
             ).props("outline color=warning").tooltip(
-                "Remove all entities and relationships (only available before writing)"
+                "Remove all entities and relationships (only available before writing begins)"
             )
 
-    # Build Story Structure button - centered, only show if no chapters yet
-    has_chapters = page.state.project and page.state.project.chapters
-    if not has_chapters:
+    # Build Story Structure button - only show if no entities exist yet
+    has_entities = page.state.world_db and page.state.world_db.count_entities() > 0
+    if not has_entities:
         with ui.row().classes("w-full justify-center mt-4"):
             ui.button(
                 "Build Story Structure",

@@ -149,7 +149,10 @@ def refresh_all(page: Any, notify: bool = True) -> None:
     refresh_model_list(page)
     update_download_all_btn(page)
     if notify:
-        ui.notify("Model lists refreshed", type="info")
+        try:
+            ui.notify("Model lists refreshed", type="info")
+        except RuntimeError:
+            logger.debug("Skipped notification — UI context unavailable")
 
 
 async def test_model(page: Any, model_id: str) -> None:
@@ -218,14 +221,13 @@ def confirm_delete(page: Any, dialog: ui.dialog, model_id: str) -> None:
     logger.info(f"Deleting model: {model_id}")
     if page.services.model.delete_model(model_id):
         logger.info(f"Model {model_id} deleted successfully")
+        dialog.close()
         ui.notify(f"Deleted {model_id}", type="positive")
-        # Refresh lists to reflect deletion
-        refresh_all(page)
+        refresh_all(page, notify=False)
     else:
         logger.error(f"Failed to delete model {model_id}")
+        dialog.close()
         ui.notify("Delete failed", type="negative")
-
-    dialog.close()
 
 
 async def check_all_updates(page: Any) -> None:

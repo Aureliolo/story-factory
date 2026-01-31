@@ -7,6 +7,7 @@ from typing import Any
 from src.memory.story_state import Faction, StoryState
 from src.memory.world_quality import FactionQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
+from src.services.world_quality_service._common import retry_temperature
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -83,7 +84,7 @@ def generate_faction_with_quality(
             # (e.g., duplicate name detection returns {} to force retry)
             if iteration == 0 or not faction.get("name"):
                 # Increase temperature on retries to avoid regenerating the same name
-                retry_temp = min(config.creator_temperature + (creation_retries * 0.15), 1.5)
+                retry_temp = retry_temperature(config, creation_retries)
                 faction = svc._create_faction(
                     story_state, existing_names, retry_temp, existing_locations
                 )
@@ -105,7 +106,7 @@ def generate_faction_with_quality(
                     "%s (retry %d, next temp=%.2f)",
                     last_error,
                     creation_retries,
-                    min(config.creator_temperature + (creation_retries * 0.15), 1.5),
+                    retry_temperature(config, creation_retries),
                 )
                 iteration += 1
                 continue
@@ -118,22 +119,22 @@ def generate_faction_with_quality(
 
             # Track this iteration
             history.add_iteration(
-                iteration=iteration + 1,
                 entity_data=faction.copy(),
                 scores=scores.to_dict(),
                 average_score=scores.average,
                 feedback=scores.feedback,
             )
 
+            current_iter = history.iterations[-1].iteration
             logger.info(
-                f"Faction '{faction.get('name')}' iteration {iteration + 1}: "
+                f"Faction '{faction.get('name')}' iteration {current_iter}: "
                 f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
                 f"at iteration {history.best_iteration})"
             )
 
             if scores.average >= config.quality_threshold:
                 logger.info(f"Faction '{faction.get('name')}' met quality threshold")
-                history.final_iteration = iteration + 1
+                history.final_iteration = current_iter
                 history.final_score = scores.average
                 # Log analytics
                 svc._log_refinement_analytics(
@@ -144,7 +145,7 @@ def generate_faction_with_quality(
                     quality_threshold=config.quality_threshold,
                     max_iterations=config.max_iterations,
                 )
-                return faction, scores, iteration + 1
+                return faction, scores, current_iter
 
             # Check for early stopping after tracking iteration (enhanced with variance tolerance)
             if history.should_stop_early(
@@ -176,8 +177,7 @@ def generate_faction_with_quality(
     # Pick best iteration (not necessarily the last one)
     best_entity = history.get_best_entity()
 
-    if best_entity and history.best_iteration != len(history.iterations):
-        # We have a better iteration than the last one
+    if best_entity and history.iterations[-1].average_score < history.peak_score:
         logger.warning(
             f"Faction '{history.entity_name}' iterations got WORSE after peak. "
             f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
@@ -394,6 +394,15 @@ Description: {faction.get("description", "")}
 Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
+
+SCORING CALIBRATION - BE STRICT:
+- 1-3: Poor quality, generic or incoherent
+- 4-5: Below average, lacks depth or originality
+- 6-7: Average, functional but unremarkable (most first drafts land here)
+- 8-9: Good, well-crafted with clear strengths
+- 10: Exceptional, publication-ready
+Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
+Do NOT default to high scores — a 7 is already a good score.
 
 Rate each dimension 0-10:
 - coherence: Internal consistency, clear structure

@@ -12,10 +12,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def validate(settings: Settings) -> None:
+def validate(settings: Settings) -> bool:
     """Validate all settings fields.
 
     Delegates to individual validation functions for each category of settings.
+
+    Returns:
+        True if any settings were mutated during validation (e.g. stale values
+        migrated), False otherwise. Callers can use this to decide whether to
+        re-save the settings file.
 
     Raises:
         ValueError: If any field contains an invalid value.
@@ -24,7 +29,7 @@ def validate(settings: Settings) -> None:
     _validate_numeric_ranges(settings)
     _validate_interaction_mode(settings)
     _validate_vram_strategy(settings)
-    _validate_temperatures(settings)
+    changed = _validate_temperatures(settings)
     _validate_task_temperatures(settings)
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
@@ -58,6 +63,8 @@ def validate(settings: Settings) -> None:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
+    changed = _validate_embedding_model(settings) or changed
+    return changed
 
 
 def _validate_url(settings: Settings) -> None:
@@ -115,8 +122,12 @@ def _validate_vram_strategy(settings: Settings) -> None:
         )
 
 
-def _validate_temperatures(settings: Settings) -> None:
-    """Validate agent temperature settings."""
+def _validate_temperatures(settings: Settings) -> bool:
+    """Validate agent temperature settings.
+
+    Returns:
+        True if missing agent temperatures were backfilled, False otherwise.
+    """
     expected_agents = set(AGENT_ROLES)
 
     unknown_temp_agents = set(settings.agent_temperatures) - expected_agents
@@ -131,6 +142,7 @@ def _validate_temperatures(settings: Settings) -> None:
 
     default_temps = _Settings().agent_temperatures
     missing_agents = expected_agents - set(settings.agent_temperatures)
+    changed = bool(missing_agents)
     for agent in sorted(missing_agents):
         settings.agent_temperatures[agent] = default_temps[agent]
         logger.warning("Added missing agent temperature: %s=%.1f", agent, default_temps[agent])
@@ -138,6 +150,8 @@ def _validate_temperatures(settings: Settings) -> None:
     for agent, temp in settings.agent_temperatures.items():
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
+
+    return changed
 
 
 def _validate_task_temperatures(settings: Settings) -> None:
@@ -742,3 +756,37 @@ def _validate_world_health(settings: Settings) -> None:
             f"validate_temporal_consistency must be a boolean, "
             f"got {type(settings.validate_temporal_consistency)}"
         )
+
+
+def _validate_embedding_model(settings: Settings) -> bool:
+    """Validate that the configured embedding model is in the registry with an embedding tag.
+
+    If the model is not found or lacks the "embedding" tag, auto-migrate to the first
+    valid embedding model from the registry. This handles stale settings left over from
+    removed models (e.g. nomic-embed-text).
+
+    Returns:
+        True if the embedding model was migrated, False otherwise.
+    """
+    from src.settings._model_registry import RECOMMENDED_MODELS
+
+    model = settings.embedding_model
+    info = RECOMMENDED_MODELS.get(model)
+    if info is not None and "embedding" in info.get("tags", []):
+        return False
+
+    for model_id, model_info in RECOMMENDED_MODELS.items():
+        if "embedding" in model_info.get("tags", []):
+            logger.warning(
+                "Embedding model '%s' not in registry, migrating to '%s'",
+                model,
+                model_id,
+            )
+            settings.embedding_model = model_id
+            return True
+
+    logger.warning(
+        "No embedding models found in registry; keeping current embedding_model '%s'",
+        model,
+    )
+    return False

@@ -2239,3 +2239,146 @@ class TestWP1WP2SettingsValidation:
         )
         # Should not raise
         settings.validate()
+
+
+class TestEmbeddingModelMigration:
+    """Tests for stale embedding model migration during validation."""
+
+    def test_valid_embedding_model_unchanged(self):
+        """Valid embedding model should not be changed by validation."""
+        settings = Settings()
+        settings.embedding_model = "mxbai-embed-large"
+        settings.validate()
+        assert settings.embedding_model == "mxbai-embed-large"
+
+    def test_stale_embedding_model_migrated(self):
+        """Removed embedding model should be migrated to first valid one."""
+        settings = Settings()
+        settings.embedding_model = "nomic-embed-text"
+        settings.validate()
+        # Should have been migrated to a model with "embedding" tag
+        assert settings.embedding_model != "nomic-embed-text"
+        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
+        assert model_info is not None
+        assert "embedding" in model_info["tags"]
+
+    def test_unknown_embedding_model_migrated(self):
+        """Completely unknown embedding model should be migrated."""
+        settings = Settings()
+        settings.embedding_model = "some-nonexistent-model:latest"
+        settings.validate()
+        assert settings.embedding_model != "some-nonexistent-model:latest"
+        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
+        assert model_info is not None
+        assert "embedding" in model_info["tags"]
+
+    def test_non_embedding_model_migrated(self):
+        """A model in the registry but without embedding tag should be migrated."""
+        settings = Settings()
+        settings.embedding_model = "huihui_ai/dolphin3-abliterated:8b"
+        settings.validate()
+        assert settings.embedding_model != "huihui_ai/dolphin3-abliterated:8b"
+        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
+        assert model_info is not None
+        assert "embedding" in model_info["tags"]
+
+    def test_empty_embedding_model_migrated(self):
+        """Empty embedding model string should be migrated to a valid one."""
+        settings = Settings()
+        settings.embedding_model = ""
+        settings.validate()
+        # Empty string is not in the registry, so it should be migrated
+        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
+        assert model_info is not None
+        assert "embedding" in model_info["tags"]
+
+    def test_migration_logs_warning(self, caplog):
+        """Migration should log a warning message."""
+        import logging
+
+        settings = Settings()
+        settings.embedding_model = "nomic-embed-text"
+        with caplog.at_level(logging.WARNING):
+            settings.validate()
+        assert "not in registry" in caplog.text
+        assert "migrating to" in caplog.text
+
+    def test_migration_persists_to_disk_on_load(self, tmp_path, monkeypatch):
+        """Loading settings with a stale embedding model should auto-save the fix."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        # Write settings with stale embedding model
+        defaults = Settings()
+        defaults.embedding_model = "nomic-embed-text"
+        from dataclasses import asdict
+
+        with open(settings_file, "w") as f:
+            json.dump(asdict(defaults), f)
+
+        # Clear cache so load() reads from disk
+        Settings.clear_cache()
+
+        loaded = Settings.load(use_cache=False)
+
+        # In-memory value should be migrated
+        assert loaded.embedding_model != "nomic-embed-text"
+        assert "embedding" in RECOMMENDED_MODELS[loaded.embedding_model]["tags"]
+
+        # On-disk value should also be updated
+        with open(settings_file) as f:
+            on_disk = json.load(f)
+        assert on_disk["embedding_model"] == loaded.embedding_model
+
+    def test_no_embedding_models_in_registry_keeps_current(self, monkeypatch, caplog):
+        """When registry has no embedding-tagged models, keep current model and warn."""
+        import logging
+
+        # Mock RECOMMENDED_MODELS to have no embedding-tagged models
+        fake_registry = {
+            "some-chat-model:8b": {
+                "size_gb": 4.0,
+                "tags": ["world_creator"],
+            },
+        }
+        monkeypatch.setattr(
+            "src.settings._model_registry.RECOMMENDED_MODELS",
+            fake_registry,
+        )
+
+        settings = Settings()
+        settings.embedding_model = "some-old-model"
+        with caplog.at_level(logging.WARNING):
+            settings.validate()
+
+        # Model should be unchanged since no valid alternative exists
+        assert settings.embedding_model == "some-old-model"
+        assert "No embedding models found in registry" in caplog.text
+
+    def test_validate_returns_true_when_migrated(self):
+        """validate() should return True when embedding model is migrated."""
+        settings = Settings()
+        settings.embedding_model = "nomic-embed-text"
+        changed = settings.validate()
+        assert changed is True
+
+    def test_validate_returns_false_when_no_changes(self):
+        """validate() should return False when no settings are mutated."""
+        settings = Settings()
+        settings.embedding_model = "mxbai-embed-large"  # Already valid, no migration
+        changed = settings.validate()
+        assert changed is False
+
+    def test_validate_returns_false_no_embedding_models_in_registry(self, monkeypatch):
+        """validate() returns False when no embedding models exist (keeps current, no change)."""
+        fake_registry = {
+            "some-chat-model:8b": {"size_gb": 4.0, "tags": ["world_creator"]},
+        }
+        monkeypatch.setattr(
+            "src.settings._model_registry.RECOMMENDED_MODELS",
+            fake_registry,
+        )
+        settings = Settings()
+        settings.embedding_model = "some-old-model"
+        changed = settings.validate()
+        assert changed is False

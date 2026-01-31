@@ -17,6 +17,7 @@ from src.memory.world_quality import (
 )
 from src.services.world_quality_service import WorldQualityService
 from src.settings import Settings
+from tests.shared.mock_ollama import TEST_MODEL
 
 
 @pytest.fixture
@@ -46,8 +47,7 @@ def settings():
 def mock_mode_service():
     """Create mock mode service."""
     mode_service = MagicMock()
-    # Use a real model name from RECOMMENDED_MODELS to avoid role tag errors
-    mode_service.get_model_for_agent.return_value = "huihui_ai/dolphin3-abliterated:8b"
+    mode_service.get_model_for_agent.return_value = TEST_MODEL
     return mode_service
 
 
@@ -93,19 +93,25 @@ class TestRefinementHistoryEarlyStopping:
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
         # First iteration - becomes peak
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
         assert history.consecutive_degradations == 0
         assert history.peak_score == 8.0
         assert history.best_iteration == 1
 
         # Second iteration - degrades
-        history.add_iteration(2, {"name": "Test"}, {"score": 7.5}, 7.5)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.5}, average_score=7.5
+        )
         assert history.consecutive_degradations == 1
         assert history.peak_score == 8.0
         assert history.best_iteration == 1
 
         # Third iteration - degrades again
-        history.add_iteration(3, {"name": "Test"}, {"score": 7.0}, 7.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.0}, average_score=7.0
+        )
         assert history.consecutive_degradations == 2
         assert history.peak_score == 8.0
         assert history.best_iteration == 1
@@ -115,21 +121,29 @@ class TestRefinementHistoryEarlyStopping:
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
         # Iteration 1 - peak
-        history.add_iteration(1, {"name": "Test"}, {"score": 7.0}, 7.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.0}, average_score=7.0
+        )
         assert history.consecutive_degradations == 0
 
         # Iteration 2 - degrades
-        history.add_iteration(2, {"name": "Test"}, {"score": 6.5}, 6.5)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 6.5}, average_score=6.5
+        )
         assert history.consecutive_degradations == 1
 
         # Iteration 3 - new peak (resets counter)
-        history.add_iteration(3, {"name": "Test"}, {"score": 8.0}, 8.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
         assert history.consecutive_degradations == 0
         assert history.peak_score == 8.0
         assert history.best_iteration == 3
 
         # Iteration 4 - degrades from new peak
-        history.add_iteration(4, {"name": "Test"}, {"score": 7.5}, 7.5)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.5}, average_score=7.5
+        )
         assert history.consecutive_degradations == 1
 
     def test_should_stop_early_returns_false_initially(self):
@@ -141,8 +155,12 @@ class TestRefinementHistoryEarlyStopping:
         """Test that should_stop_early returns False before patience threshold."""
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
-        history.add_iteration(2, {"name": "Test"}, {"score": 7.5}, 7.5)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.5}, average_score=7.5
+        )
         assert history.consecutive_degradations == 1
         assert not history.should_stop_early(patience=2)
 
@@ -150,9 +168,15 @@ class TestRefinementHistoryEarlyStopping:
         """Test that should_stop_early returns True when patience reached."""
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
-        history.add_iteration(2, {"name": "Test"}, {"score": 7.5}, 7.5)
-        history.add_iteration(3, {"name": "Test"}, {"score": 7.0}, 7.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.5}, average_score=7.5
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.0}, average_score=7.0
+        )
         assert history.consecutive_degradations == 2
         assert history.should_stop_early(patience=2)
 
@@ -160,10 +184,18 @@ class TestRefinementHistoryEarlyStopping:
         """Test that should_stop_early returns True when exceeding patience."""
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
-        history.add_iteration(2, {"name": "Test"}, {"score": 7.5}, 7.5)
-        history.add_iteration(3, {"name": "Test"}, {"score": 7.0}, 7.0)
-        history.add_iteration(4, {"name": "Test"}, {"score": 6.5}, 6.5)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.5}, average_score=7.5
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.0}, average_score=7.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 6.5}, average_score=6.5
+        )
         assert history.consecutive_degradations == 3
         assert history.should_stop_early(patience=2)
 
@@ -172,11 +204,15 @@ class TestRefinementHistoryEarlyStopping:
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
         # Iteration 1 - peak
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
         assert history.consecutive_degradations == 0
 
         # Iteration 2 - same score (plateau)
-        history.add_iteration(2, {"name": "Test"}, {"score": 8.0}, 8.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
         # Plateau doesn't increment degradation counter
         assert history.consecutive_degradations == 0
 
@@ -184,9 +220,15 @@ class TestRefinementHistoryEarlyStopping:
         """Test that analyze_improvement includes consecutive_degradations."""
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
-        history.add_iteration(2, {"name": "Test"}, {"score": 7.5}, 7.5)
-        history.add_iteration(3, {"name": "Test"}, {"score": 7.0}, 7.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.5}, average_score=7.5
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.0}, average_score=7.0
+        )
 
         analysis = history.analyze_improvement()
         assert "consecutive_degradations" in analysis
@@ -713,9 +755,15 @@ class TestEnhancedEarlyStopping:
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
         # Add iterations with small variance in scores
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
-        history.add_iteration(2, {"name": "Test"}, {"score": 7.9}, 7.9)  # -0.1
-        history.add_iteration(3, {"name": "Test"}, {"score": 7.8}, 7.8)  # -0.1
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.9}, average_score=7.9
+        )  # -0.1
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.8}, average_score=7.8
+        )  # -0.1
 
         # Without variance tolerance, this would trigger early stop (patience=2)
         assert history.consecutive_degradations == 2
@@ -734,9 +782,15 @@ class TestEnhancedEarlyStopping:
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
         # Add degrading iterations
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
-        history.add_iteration(2, {"name": "Test"}, {"score": 7.0}, 7.0)
-        history.add_iteration(3, {"name": "Test"}, {"score": 6.0}, 6.0)
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 7.0}, average_score=7.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 6.0}, average_score=6.0
+        )
 
         # With min_iterations=4, should not stop even with 2 degradations
         should_stop = history.should_stop_early(
@@ -751,9 +805,15 @@ class TestEnhancedEarlyStopping:
         history = RefinementHistory(entity_type="faction", entity_name="Test")
 
         # Add iterations with large score drops
-        history.add_iteration(1, {"name": "Test"}, {"score": 8.0}, 8.0)
-        history.add_iteration(2, {"name": "Test"}, {"score": 6.5}, 6.5)  # -1.5
-        history.add_iteration(3, {"name": "Test"}, {"score": 5.0}, 5.0)  # -1.5
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 8.0}, average_score=8.0
+        )
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 6.5}, average_score=6.5
+        )  # -1.5
+        history.add_iteration(
+            entity_data={"name": "Test"}, scores={"score": 5.0}, average_score=5.0
+        )  # -1.5
 
         assert history.consecutive_degradations == 2
 

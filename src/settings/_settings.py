@@ -317,13 +317,17 @@ class Settings:
         with open(SETTINGS_FILE, "w") as f:
             json.dump(asdict(self), f, indent=2)
 
-    def validate(self) -> None:
+    def validate(self) -> bool:
         """Validate all settings fields. Delegates to _validation module.
+
+        Returns:
+            True if any settings were mutated during validation (e.g. stale
+            embedding model migrated), False otherwise.
 
         Raises:
             ValueError: If any field contains an invalid value (range, enum/choice, or format).
         """
-        _validation_mod.validate(self)
+        return _validation_mod.validate(self)
 
     # Class-level cache for settings (speeds up repeated load() calls)
     _cached_instance: ClassVar[Settings | None] = None
@@ -351,8 +355,12 @@ class Settings:
                 with open(SETTINGS_FILE) as f:
                     data = json.load(f)
                 settings = cls(**data)
-                # Validate loaded settings
-                settings.validate()
+                # Validate loaded settings (may auto-migrate stale values)
+                changed = settings.validate()
+                if changed:
+                    logger.info("Settings migrated during validation, saving to disk")
+                    with open(SETTINGS_FILE, "w") as f:
+                        json.dump(asdict(settings), f, indent=2)
                 cls._cached_instance = settings
                 return settings
             except json.JSONDecodeError as e:
@@ -558,7 +566,7 @@ class Settings:
             # Sort by quality descending, then size descending
             tagged_models_fit.sort(key=lambda x: (x[2], x[1]), reverse=True)
             best = tagged_models_fit[0]
-            logger.info(
+            logger.debug(
                 f"Auto-selected {best[0]} ({best[1]:.1f}GB, quality={best[2]}) "
                 f"for {agent_role} (tagged model)"
             )

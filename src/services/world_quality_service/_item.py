@@ -6,6 +6,7 @@ from typing import Any
 from src.memory.story_state import Item, StoryState
 from src.memory.world_quality import ItemQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
+from src.services.world_quality_service._common import retry_temperature
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -44,13 +45,16 @@ def generate_item_with_quality(
     item: dict[str, Any] = {}
     scores: ItemQualityScores | None = None
     last_error: str = ""
+    creation_retries = 0  # Track duplicate-name retries for temperature escalation
 
     while iteration < config.max_iterations:
         try:
             # Create new item on first iteration OR if previous returned empty
             # (e.g., duplicate name detection returns {} to force retry)
             if iteration == 0 or not item.get("name"):
-                item = svc._create_item(story_state, existing_names, config.creator_temperature)
+                # Increase temperature on retries to avoid regenerating the same name
+                retry_temp = retry_temperature(config, creation_retries)
+                item = svc._create_item(story_state, existing_names, retry_temp)
             else:
                 if item and scores:
                     # Use dynamic temperature that decreases over iterations
@@ -63,8 +67,14 @@ def generate_item_with_quality(
                     )
 
             if not item.get("name"):
+                creation_retries += 1
                 last_error = f"Item creation returned empty on iteration {iteration + 1}"
-                logger.error(last_error)
+                logger.warning(
+                    "%s (retry %d, next temp=%.2f)",
+                    last_error,
+                    creation_retries,
+                    retry_temperature(config, creation_retries),
+                )
                 iteration += 1
                 continue
 
@@ -76,22 +86,22 @@ def generate_item_with_quality(
 
             # Track this iteration
             history.add_iteration(
-                iteration=iteration + 1,
                 entity_data=item.copy(),
                 scores=scores.to_dict(),
                 average_score=scores.average,
                 feedback=scores.feedback,
             )
 
+            current_iter = history.iterations[-1].iteration
             logger.info(
-                f"Item '{item.get('name')}' iteration {iteration + 1}: "
+                f"Item '{item.get('name')}' iteration {current_iter}: "
                 f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
                 f"at iteration {history.best_iteration})"
             )
 
             if scores.average >= config.quality_threshold:
                 logger.info(f"Item '{item.get('name')}' met quality threshold")
-                history.final_iteration = iteration + 1
+                history.final_iteration = current_iter
                 history.final_score = scores.average
                 svc._log_refinement_analytics(
                     history,
@@ -101,7 +111,7 @@ def generate_item_with_quality(
                     quality_threshold=config.quality_threshold,
                     max_iterations=config.max_iterations,
                 )
-                return item, scores, iteration + 1
+                return item, scores, current_iter
 
             # Check for early stopping after tracking iteration (enhanced with variance tolerance)
             if history.should_stop_early(
@@ -133,7 +143,7 @@ def generate_item_with_quality(
     # Pick best iteration (not necessarily the last one)
     best_entity = history.get_best_entity()
 
-    if best_entity and history.best_iteration != len(history.iterations):
+    if best_entity and history.iterations[-1].average_score < history.peak_score:
         logger.warning(
             f"Item '{history.entity_name}' iterations got WORSE after peak. "
             f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
@@ -289,6 +299,15 @@ Name: {item.get("name", "Unknown")}
 Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {svc._format_properties(item.get("properties", []))}
+
+SCORING CALIBRATION - BE STRICT:
+- 1-3: Poor quality, generic or incoherent
+- 4-5: Below average, lacks depth or originality
+- 6-7: Average, functional but unremarkable (most first drafts land here)
+- 8-9: Good, well-crafted with clear strengths
+- 10: Exceptional, publication-ready
+Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
+Do NOT default to high scores — a 7 is already a good score.
 
 Rate each dimension 0-10:
 - significance: Story importance, plot relevance

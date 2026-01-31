@@ -178,8 +178,8 @@ def mock_services():
     """Create mock ServiceContainer."""
     services = MagicMock()
     services.story.rebuild_world = MagicMock()
-    services.story.generate_locations = MagicMock(return_value=[])
     services.story.generate_relationships = MagicMock(return_value=[])
+    services.world_quality.generate_locations_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_factions_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_items_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_concepts_with_quality = MagicMock(return_value=[])
@@ -303,13 +303,22 @@ class TestExtractCharactersToWorld:
 class TestGenerateLocations:
     """Tests for _generate_locations method."""
 
-    def test_generates_locations(
+    def test_generates_locations_via_quality_service(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
-        """Test generates and adds locations."""
-        mock_services.story.generate_locations.return_value = [
-            {"name": "Castle", "description": "A grand castle", "significance": "Home base"},
-            {"name": "Forest", "description": "Dark woods", "significance": "Danger zone"},
+        """Test generates locations through quality refinement service."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {"atmosphere": 8.0}
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = [
+            (
+                {"name": "Castle", "description": "A grand castle", "significance": "Home base"},
+                mock_quality_scores,
+            ),
+            (
+                {"name": "Forest", "description": "Dark woods", "significance": "Danger zone"},
+                mock_quality_scores,
+            ),
         ]
 
         count = world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
@@ -320,30 +329,79 @@ class TestGenerateLocations:
         names = [loc.name for loc in locations]
         assert "Castle" in names
         assert "Forest" in names
+        # Verify quality service was called, not story service
+        mock_services.world_quality.generate_locations_with_quality.assert_called_once()
 
-    def test_skips_invalid_locations(
+    def test_stores_quality_scores_in_attributes(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
-        """Test skips locations without name field."""
-        mock_services.story.generate_locations.return_value = [
-            {"name": "Valid", "description": "OK"},
-            {"description": "Missing name"},  # Invalid
-            "just a string",  # Invalid
+        """Test that quality scores are stored in entity attributes."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {"atmosphere": 9.0, "average": 8.5}
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = [
+            (
+                {"name": "Castle", "description": "A castle", "significance": "Important"},
+                mock_quality_scores,
+            ),
         ]
 
-        count = world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
+        world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
 
-        assert count == 1
+        locations = mock_world_db.list_entities(entity_type="location")
+        assert len(locations) == 1
+        assert locations[0].attributes["quality_scores"] == {"atmosphere": 9.0, "average": 8.5}
+
+    def test_skips_locations_without_name(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test skips locations without name field."""
+        import logging
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = [
+            ({"name": "", "description": "No name"}, mock_quality_scores),
+            ({"description": "Missing name entirely"}, mock_quality_scores),
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            count = world_service._generate_locations(
+                sample_story_state, mock_world_db, mock_services
+            )
+
+        assert count == 0
 
     def test_handles_empty_response(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """Test handles empty location list."""
-        mock_services.story.generate_locations.return_value = []
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
 
         count = world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
 
         assert count == 0
+
+    def test_passes_location_names_only(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that only location-type names are passed for duplicate checking."""
+        # Add entities of different types
+        mock_world_db.add_entity("character", "Hero", "The hero")
+        mock_world_db.add_entity("location", "Castle", "A castle")
+        mock_world_db.add_entity("faction", "Guild", "A guild")
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+
+        world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
+
+        # Verify only location names were passed
+        call_args = mock_services.world_quality.generate_locations_with_quality.call_args
+        existing_names = call_args[0][1]  # Second positional arg
+        assert "Castle" in existing_names
+        assert "Hero" not in existing_names
+        assert "Guild" not in existing_names
 
 
 class TestGenerateFactions:
@@ -601,7 +659,7 @@ class TestBuildWorld:
         mock_quality_scores = MagicMock()
         mock_quality_scores.to_dict.return_value = {}
 
-        mock_services.story.generate_locations.return_value = []
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
@@ -652,7 +710,7 @@ class TestBuildWorld:
         mock_quality_scores = MagicMock()
         mock_quality_scores.to_dict.return_value = {}
 
-        mock_services.story.generate_locations.return_value = []
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
@@ -676,9 +734,9 @@ class TestBuildWorld:
         mock_quality_scores = MagicMock()
         mock_quality_scores.to_dict.return_value = {}
 
-        mock_services.story.generate_locations.return_value = [
-            {"name": "Loc1", "description": "A place"},
-            {"name": "Loc2", "description": "Another place"},
+        mock_services.world_quality.generate_locations_with_quality.return_value = [
+            ({"name": "Loc1", "description": "A place"}, mock_quality_scores),
+            ({"name": "Loc2", "description": "Another place"}, mock_quality_scores),
         ]
         mock_services.world_quality.generate_factions_with_quality.return_value = [
             ({"name": "Faction1", "description": "A group"}, mock_quality_scores),
@@ -715,7 +773,7 @@ class TestBuildWorld:
         )
 
         # Setup mocks
-        mock_services.story.generate_locations.return_value = []
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
@@ -770,3 +828,479 @@ class TestWorldBuildCancellation:
                 mock_services,
                 options,
             )
+
+    def test_cancel_check_passed_to_factions(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancel_check is passed to generate_factions_with_quality."""
+        import threading
+
+        cancel_event = threading.Event()
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.story.generate_relationships.return_value = []
+
+        options = WorldBuildOptions.full(cancellation_event=cancel_event)
+
+        world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            options,
+        )
+
+        mock_services.world_quality.generate_factions_with_quality.assert_called_once()
+        call_kwargs = mock_services.world_quality.generate_factions_with_quality.call_args
+        assert call_kwargs.kwargs["cancel_check"] is not None
+        # Verify it's the is_cancelled method bound to our options
+        assert call_kwargs.kwargs["cancel_check"]() is False
+        cancel_event.set()
+        assert call_kwargs.kwargs["cancel_check"]() is True
+
+    def test_cancel_check_passed_to_items(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancel_check is passed to generate_items_with_quality."""
+        import threading
+
+        cancel_event = threading.Event()
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.story.generate_relationships.return_value = []
+
+        options = WorldBuildOptions.full(cancellation_event=cancel_event)
+
+        world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            options,
+        )
+
+        mock_services.world_quality.generate_items_with_quality.assert_called_once()
+        call_kwargs = mock_services.world_quality.generate_items_with_quality.call_args
+        assert call_kwargs.kwargs["cancel_check"] is not None
+
+    def test_cancel_check_passed_to_concepts(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancel_check is passed to generate_concepts_with_quality."""
+        import threading
+
+        cancel_event = threading.Event()
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.story.generate_relationships.return_value = []
+
+        options = WorldBuildOptions.full(cancellation_event=cancel_event)
+
+        world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            options,
+        )
+
+        mock_services.world_quality.generate_concepts_with_quality.assert_called_once()
+        call_kwargs = mock_services.world_quality.generate_concepts_with_quality.call_args
+        assert call_kwargs.kwargs["cancel_check"] is not None
+
+    def test_location_cancel_check_stops_processing(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancel_check in location processing stops adding entities."""
+        from src.memory.world_quality import LocationQualityScores
+
+        call_count = 0
+
+        def cancel_after_first():
+            """Cancel after being called once (first location processed)."""
+            nonlocal call_count
+            call_count += 1
+            return call_count > 1
+
+        mock_scores = LocationQualityScores(
+            atmosphere=8.0,
+            significance=7.5,
+            story_relevance=8.0,
+            distinctiveness=7.0,
+            feedback="Good",
+        )
+        mock_services.world_quality.generate_locations_with_quality.return_value = [
+            ({"name": "Loc1", "description": "Place 1", "significance": "Important"}, mock_scores),
+            ({"name": "Loc2", "description": "Place 2", "significance": "Minor"}, mock_scores),
+            ({"name": "Loc3", "description": "Place 3", "significance": "Key"}, mock_scores),
+        ]
+
+        count = world_service._generate_locations(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            cancel_check=cancel_after_first,
+        )
+
+        # Should have processed only the first location before cancel kicked in
+        assert count == 1
+        locations = mock_world_db.list_entities(entity_type="location")
+        assert len(locations) == 1
+        assert locations[0].name == "Loc1"
+
+    def test_relationship_cancel_check_stops_processing(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that cancel_check in relationship processing stops adding entities."""
+        mock_world_db.add_entity("character", "Hero", "The hero")
+        mock_world_db.add_entity("character", "Villain", "The villain")
+        mock_world_db.add_entity("character", "Mentor", "The mentor")
+
+        mock_services.story.generate_relationships.return_value = [
+            {"source": "Hero", "target": "Villain", "relation_type": "enemies"},
+            {"source": "Hero", "target": "Mentor", "relation_type": "allies"},
+        ]
+
+        # Cancel immediately
+        count = world_service._generate_relationships(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            cancel_check=lambda: True,
+        )
+
+        assert count == 0
+
+
+class TestPerTypeNameFiltering:
+    """Tests for Issue 3: per-type entity name filtering in build functions."""
+
+    def test_generate_factions_passes_faction_names_only(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test _generate_factions passes only faction names, not all entity names."""
+        # Add entities of different types
+        mock_world_db.add_entity("location", "Dark Forest", "A dark forest")
+        mock_world_db.add_entity("character", "Hero", "The hero")
+        mock_world_db.add_entity("faction", "Knights", "A faction")
+
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+
+        world_service._generate_factions(sample_story_state, mock_world_db, mock_services)
+
+        call_args = mock_services.world_quality.generate_factions_with_quality.call_args
+        faction_names_arg = call_args[0][1]  # Second positional arg = existing_names
+        # Should only contain faction names, not location or character names
+        assert "Knights" in faction_names_arg
+        assert "Dark Forest" not in faction_names_arg
+        assert "Hero" not in faction_names_arg
+
+    def test_generate_items_passes_item_names_only(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test _generate_items passes only item names, not all entity names."""
+        mock_world_db.add_entity("location", "Castle", "A castle")
+        mock_world_db.add_entity("item", "Magic Sword", "A sword")
+        mock_world_db.add_entity("concept", "Honor", "A concept")
+
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+
+        world_service._generate_items(sample_story_state, mock_world_db, mock_services)
+
+        call_args = mock_services.world_quality.generate_items_with_quality.call_args
+        item_names_arg = call_args[0][1]  # Second positional arg
+        assert "Magic Sword" in item_names_arg
+        assert "Castle" not in item_names_arg
+        assert "Honor" not in item_names_arg
+
+    def test_generate_concepts_passes_concept_names_only(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test _generate_concepts passes only concept names, not all entity names."""
+        mock_world_db.add_entity("character", "Wizard", "A wizard")
+        mock_world_db.add_entity("concept", "The Echo", "A concept about echoes")
+        mock_world_db.add_entity("faction", "Mages Guild", "A faction")
+
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+
+        world_service._generate_concepts(sample_story_state, mock_world_db, mock_services)
+
+        call_args = mock_services.world_quality.generate_concepts_with_quality.call_args
+        concept_names_arg = call_args[0][1]  # Second positional arg
+        assert "The Echo" in concept_names_arg
+        assert "Wizard" not in concept_names_arg
+        assert "Mages Guild" not in concept_names_arg
+
+    def test_generate_locations_passes_location_names_only(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test _generate_locations passes only location names, not all entity names."""
+        mock_world_db.add_entity("location", "Dark Forest", "A dark forest")
+        mock_world_db.add_entity("character", "Hero", "The hero")
+        mock_world_db.add_entity("item", "Magic Ring", "A ring")
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+
+        world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
+
+        call_args = mock_services.world_quality.generate_locations_with_quality.call_args
+        location_names_arg = call_args[0][1]  # Second positional arg
+        assert "Dark Forest" in location_names_arg
+        assert "Hero" not in location_names_arg
+        assert "Magic Ring" not in location_names_arg
+
+
+class TestLocationQualityRefinement:
+    """Tests for Issue 6: locations use quality refinement in world build."""
+
+    def test_generate_locations_calls_quality_service(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test _generate_locations uses world_quality service, not story service."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+
+        world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
+
+        mock_services.world_quality.generate_locations_with_quality.assert_called_once()
+
+    def test_generate_locations_stores_quality_scores(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test _generate_locations stores quality scores in entity attributes."""
+        from src.memory.world_quality import LocationQualityScores
+
+        mock_scores = LocationQualityScores(
+            atmosphere=8.0,
+            significance=7.5,
+            story_relevance=8.0,
+            distinctiveness=7.0,
+            feedback="Good location",
+        )
+        mock_services.world_quality.generate_locations_with_quality.return_value = [
+            (
+                {"name": "Castle", "description": "A grand castle", "significance": "Key"},
+                mock_scores,
+            ),
+        ]
+
+        count = world_service._generate_locations(sample_story_state, mock_world_db, mock_services)
+
+        assert count == 1
+        locations = mock_world_db.list_entities(entity_type="location")
+        assert len(locations) == 1
+        assert locations[0].name == "Castle"
+
+    def test_generate_locations_passes_cancel_check(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test _generate_locations passes cancel_check to quality service."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+
+        def my_cancel_check():
+            """Stub cancel check that never cancels."""
+            return False
+
+        world_service._generate_locations(
+            sample_story_state, mock_world_db, mock_services, cancel_check=my_cancel_check
+        )
+
+        call_kwargs = mock_services.world_quality.generate_locations_with_quality.call_args
+        assert call_kwargs.kwargs["cancel_check"] is my_cancel_check
+
+
+class TestFuzzyEntityNameMatching:
+    """Tests for fuzzy entity name matching in relationship generation."""
+
+    def test_exact_match(self, world_service, sample_story_state, mock_world_db, mock_services):
+        """Test exact name match still works."""
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+        mock_world_db.add_entity("concept", "Echoes of the Network", "A concept")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "Kai Chen",
+                "target": "Echoes of the Network",
+                "relation_type": "explores",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+
+    def test_fuzzy_match_the_prefix(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles 'The' prefix added by LLM."""
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+        mock_world_db.add_entity("concept", "Echoes of the Network", "A concept")
+
+        # LLM added "The" prefix that doesn't exist in the actual entity name
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "The Echoes of the Network",
+                "target": "Kai Chen",
+                "relation_type": "influences",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+        rels = mock_world_db.list_relationships()
+        assert len(rels) == 1
+
+    def test_fuzzy_match_case_insensitive(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles case differences."""
+        mock_world_db.add_entity("faction", "The Synchroflux", "A faction")
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "the synchroflux",
+                "target": "Kai Chen",
+                "relation_type": "recruits",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+
+    def test_no_match_still_warns(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that completely wrong names still produce a warning."""
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "Nonexistent Entity",
+                "target": "Kai Chen",
+                "relation_type": "knows",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 0
+
+    def test_fuzzy_match_a_prefix(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles 'A' prefix added by LLM."""
+        mock_world_db.add_entity("item", "Cursed Blade", "A sword")
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "A Cursed Blade",
+                "target": "Kai Chen",
+                "relation_type": "wields",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+
+    def test_fuzzy_match_an_prefix(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles 'An' prefix added by LLM."""
+        mock_world_db.add_entity("concept", "Ancient Promise", "A concept")
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "An Ancient Promise",
+                "target": "Kai Chen",
+                "relation_type": "binds",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+
+    def test_fuzzy_match_whitespace_normalization(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test fuzzy match handles extra whitespace in LLM-generated names."""
+        mock_world_db.add_entity("location", "Dark Forest", "A forest")
+        mock_world_db.add_entity("character", "Kai Chen", "A hacker")
+
+        mock_services.story.generate_relationships.return_value = [
+            {
+                "source": "  Dark   Forest  ",
+                "target": "Kai Chen",
+                "relation_type": "explores",
+            },
+        ]
+
+        count = world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services
+        )
+        assert count == 1
+
+
+class TestFindEntityByNameAmbiguity:
+    """Tests for _find_entity_by_name ambiguity guard."""
+
+    def test_exact_match_returns_entity(self):
+        """Exact name match should return the entity directly."""
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "Dark Forest"
+        result = _find_entity_by_name([e1], "Dark Forest")
+        assert result is e1
+
+    def test_single_fuzzy_match_returns_entity(self):
+        """Single fuzzy match (e.g. article difference) should return the entity."""
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "The Dark Forest"
+        result = _find_entity_by_name([e1], "Dark Forest")
+        assert result is e1
+
+    def test_no_match_returns_none(self):
+        """No match should return None."""
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "Bright Meadow"
+        result = _find_entity_by_name([e1], "Dark Forest")
+        assert result is None
+
+    def test_ambiguous_fuzzy_match_returns_none(self, caplog):
+        """Multiple fuzzy matches should return None and log a warning."""
+        import logging
+
+        from src.services.world_service._build import _find_entity_by_name
+
+        e1 = MagicMock()
+        e1.name = "The Guild"
+        e2 = MagicMock()
+        e2.name = "A Guild"
+
+        with caplog.at_level(logging.WARNING):
+            result = _find_entity_by_name([e1, e2], "Guild")
+
+        assert result is None
+        assert "Ambiguous fuzzy match" in caplog.text
