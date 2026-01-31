@@ -6,7 +6,11 @@ from typing import Any
 from src.memory.story_state import Location, StoryState
 from src.memory.world_quality import LocationQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
-from src.services.world_quality_service._common import retry_temperature
+from src.services.world_quality_service._common import (
+    JUDGE_CALIBRATION_BLOCK,
+    judge_with_averaging,
+    retry_temperature,
+)
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -277,6 +281,8 @@ def _judge_location_quality(
 ) -> LocationQualityScores:
     """Judge location quality using the validator model.
 
+    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
+
     Raises:
         WorldGenerationError: If quality judgment fails or returns invalid data.
     """
@@ -290,14 +296,7 @@ Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
 
-SCORING CALIBRATION - BE STRICT:
-- 1-3: Poor quality, generic or incoherent
-- 4-5: Below average, lacks depth or originality
-- 6-7: Average, functional but unremarkable (most first drafts land here)
-- 8-9: Good, well-crafted with clear strengths
-- 10: Exceptional, publication-ready
-Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
-Do NOT default to high scores — a 7 is already a good score.
+{JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
 - atmosphere: Sensory richness, mood, immersion
@@ -312,20 +311,27 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
-    try:
-        model = svc._get_judge_model(entity_type="location")
-        return generate_structured(
-            settings=svc.settings,
-            model=model,
-            prompt=prompt,
-            response_model=LocationQualityScores,
-            temperature=temperature,
-        )
-    except Exception as e:
-        logger.exception(
-            "Location quality judgment failed for '%s': %s", location.get("name", "Unknown"), e
-        )
-        raise WorldGenerationError(f"Location quality judgment failed: {e}") from e
+    def _single_judge_call() -> LocationQualityScores:
+        """Execute a single judge call for location quality."""
+        try:
+            model = svc._get_judge_model(entity_type="location")
+            return generate_structured(
+                settings=svc.settings,
+                model=model,
+                prompt=prompt,
+                response_model=LocationQualityScores,
+                temperature=temperature,
+            )
+        except Exception as e:
+            logger.exception(
+                "Location quality judgment failed for '%s': %s",
+                location.get("name", "Unknown"),
+                e,
+            )
+            raise WorldGenerationError(f"Location quality judgment failed: {e}") from e
+
+    judge_config = svc.get_judge_config()
+    return judge_with_averaging(_single_judge_call, LocationQualityScores, judge_config)
 
 
 def _refine_location(

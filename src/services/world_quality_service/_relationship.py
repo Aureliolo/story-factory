@@ -8,6 +8,10 @@ import ollama
 from src.memory.story_state import StoryState
 from src.memory.world_quality import RefinementHistory, RelationshipQualityScores
 from src.services.llm_client import generate_structured
+from src.services.world_quality_service._common import (
+    JUDGE_CALIBRATION_BLOCK,
+    judge_with_averaging,
+)
 from src.utils.exceptions import WorldGenerationError
 from src.utils.json_parser import extract_json
 
@@ -341,6 +345,8 @@ def _judge_relationship_quality(
 ) -> RelationshipQualityScores:
     """Judge relationship quality using the validator model.
 
+    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
+
     Args:
         svc: WorldQualityService instance.
         relationship: Relationship dict to evaluate.
@@ -364,14 +370,7 @@ Target: {relationship.get("target", "Unknown")}
 Type: {relationship.get("relation_type", "unknown")}
 Description: {relationship.get("description", "")}
 
-SCORING CALIBRATION - BE STRICT:
-- 1-3: Poor quality, generic or incoherent
-- 4-5: Below average, lacks depth or originality
-- 6-7: Average, functional but unremarkable (most first drafts land here)
-- 8-9: Good, well-crafted with clear strengths
-- 10: Exceptional, publication-ready
-Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
-Do NOT default to high scores — a 7 is already a good score.
+{JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
 - tension: Conflict potential
@@ -386,23 +385,28 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
-    try:
-        model = svc._get_judge_model(entity_type="relationship")
-        return generate_structured(
-            settings=svc.settings,
-            model=model,
-            prompt=prompt,
-            response_model=RelationshipQualityScores,
-            temperature=temperature,
-        )
-    except Exception as e:
-        logger.exception(
-            "Relationship quality judgment failed for %s->%s: %s",
-            relationship.get("source") or "Unknown",
-            relationship.get("target") or "Unknown",
-            e,
-        )
-        raise WorldGenerationError(f"Relationship quality judgment failed: {e}") from e
+    def _single_judge_call() -> RelationshipQualityScores:
+        """Execute a single judge call for relationship quality."""
+        try:
+            model = svc._get_judge_model(entity_type="relationship")
+            return generate_structured(
+                settings=svc.settings,
+                model=model,
+                prompt=prompt,
+                response_model=RelationshipQualityScores,
+                temperature=temperature,
+            )
+        except Exception as e:
+            logger.exception(
+                "Relationship quality judgment failed for %s->%s: %s",
+                relationship.get("source") or "Unknown",
+                relationship.get("target") or "Unknown",
+                e,
+            )
+            raise WorldGenerationError(f"Relationship quality judgment failed: {e}") from e
+
+    judge_config = svc.get_judge_config()
+    return judge_with_averaging(_single_judge_call, RelationshipQualityScores, judge_config)
 
 
 def _refine_relationship(

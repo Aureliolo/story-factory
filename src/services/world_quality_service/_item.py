@@ -6,7 +6,11 @@ from typing import Any
 from src.memory.story_state import Item, StoryState
 from src.memory.world_quality import ItemQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
-from src.services.world_quality_service._common import retry_temperature
+from src.services.world_quality_service._common import (
+    JUDGE_CALIBRATION_BLOCK,
+    judge_with_averaging,
+    retry_temperature,
+)
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -277,6 +281,8 @@ def _judge_item_quality(
 ) -> ItemQualityScores:
     """Judge item quality using the validator model.
 
+    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
+
     Args:
         svc: WorldQualityService instance.
         item: Item dict to evaluate.
@@ -292,22 +298,18 @@ def _judge_item_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
+    # Pre-format properties outside the judge call to avoid repeated work
+    formatted_properties = svc._format_properties(item.get("properties", []))
+
     prompt = f"""You are evaluating an item for a {genre} story.
 
 ITEM TO EVALUATE:
 Name: {item.get("name", "Unknown")}
 Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
-Properties: {svc._format_properties(item.get("properties", []))}
+Properties: {formatted_properties}
 
-SCORING CALIBRATION - BE STRICT:
-- 1-3: Poor quality, generic or incoherent
-- 4-5: Below average, lacks depth or originality
-- 6-7: Average, functional but unremarkable (most first drafts land here)
-- 8-9: Good, well-crafted with clear strengths
-- 10: Exceptional, publication-ready
-Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
-Do NOT default to high scores — a 7 is already a good score.
+{JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
 - significance: Story importance, plot relevance
@@ -322,20 +324,27 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
-    try:
-        model = svc._get_judge_model(entity_type="item")
-        return generate_structured(
-            settings=svc.settings,
-            model=model,
-            prompt=prompt,
-            response_model=ItemQualityScores,
-            temperature=temperature,
-        )
-    except Exception as e:
-        logger.exception(
-            "Item quality judgment failed for '%s': %s", item.get("name") or "Unknown", e
-        )
-        raise WorldGenerationError(f"Item quality judgment failed: {e}") from e
+    def _single_judge_call() -> ItemQualityScores:
+        """Execute a single judge call for item quality."""
+        try:
+            model = svc._get_judge_model(entity_type="item")
+            return generate_structured(
+                settings=svc.settings,
+                model=model,
+                prompt=prompt,
+                response_model=ItemQualityScores,
+                temperature=temperature,
+            )
+        except Exception as e:
+            logger.exception(
+                "Item quality judgment failed for '%s': %s",
+                item.get("name") or "Unknown",
+                e,
+            )
+            raise WorldGenerationError(f"Item quality judgment failed: {e}") from e
+
+    judge_config = svc.get_judge_config()
+    return judge_with_averaging(_single_judge_call, ItemQualityScores, judge_config)
 
 
 def _refine_item(
