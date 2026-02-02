@@ -142,7 +142,7 @@ class WorldQualityService:
     # Map entity types to specialized agent roles for model selection.
     # Creator roles: Characters/locations/items need descriptive writing (writer),
     # factions/concepts need reasoning (architect), relationships need dynamics (editor).
-    # Judge roles: All entities use validator for consistent quality assessment.
+    # Judge roles: All entities use judge for quality evaluation (needs reasoning capability).
     ENTITY_CREATOR_ROLES: ClassVar[dict[str, str]] = {
         "character": "writer",  # Strong character development
         "faction": "architect",  # Political/organizational reasoning
@@ -153,12 +153,12 @@ class WorldQualityService:
     }
 
     ENTITY_JUDGE_ROLES: ClassVar[dict[str, str]] = {
-        "character": "validator",  # Character consistency checking
-        "faction": "validator",  # Faction coherence checking
-        "location": "validator",  # Location plausibility checking
-        "item": "validator",  # Item consistency checking
-        "concept": "validator",  # Concept coherence checking
-        "relationship": "validator",  # Relationship validity checking
+        "character": "judge",  # Character quality evaluation
+        "faction": "judge",  # Faction quality evaluation
+        "location": "judge",  # Location quality evaluation
+        "item": "judge",  # Item quality evaluation
+        "concept": "judge",  # Concept quality evaluation
+        "relationship": "judge",  # Relationship quality evaluation
     }
 
     # Faction diversity hints (exposed as class vars for backward compat)
@@ -441,11 +441,9 @@ class WorldQualityService:
         Returns:
             Model ID to use for judgment.
         """
-        agent_role = (
-            self.ENTITY_JUDGE_ROLES.get(entity_type, "validator") if entity_type else "validator"
-        )
+        agent_role = self.ENTITY_JUDGE_ROLES.get(entity_type, "judge") if entity_type else "judge"
         model = self._resolve_model_for_role(agent_role)
-        logger.debug(
+        logger.info(
             "Selected judge model '%s' for entity_type=%s (role=%s)",
             model,
             entity_type,

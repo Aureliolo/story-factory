@@ -61,6 +61,10 @@ AGENT_ROLES: dict[str, AgentRoleInfo] = {
         "name": "Validator",
         "description": "Validates AI responses",
     },
+    "judge": {
+        "name": "Judge",
+        "description": "Evaluates entity quality for refinement",
+    },
     "suggestion": {
         "name": "Suggestion Assistant",
         "description": "Generates writing prompts and suggestions",

@@ -50,6 +50,7 @@ class Settings:
             "continuity": "auto",
             "validator": "auto",  # Small, fast model for validation
             "suggestion": "auto",  # Creative model for writing suggestions
+            "judge": "auto",  # Capable model for quality judging (needs reasoning)
         }
     )
 
@@ -68,6 +69,7 @@ class Settings:
             "continuity": 0.3,
             "validator": 0.1,  # Very low for consistent validation
             "suggestion": 0.8,  # Creative for writing prompts
+            "judge": 0.1,  # Very low for consistent quality judgments
             "embedding": 0.0,  # Not used for generation — embeddings are deterministic
         }
     )

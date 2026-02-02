@@ -507,7 +507,7 @@ class TestWorldQualityServiceInit:
     def test_get_judge_model(self, service, mock_mode_service):
         """Test getting judge model."""
         model = service._get_judge_model()
-        mock_mode_service.get_model_for_agent.assert_called_with("validator")
+        mock_mode_service.get_model_for_agent.assert_called_with("judge")
         assert model == "test-model"
 
 

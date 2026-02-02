@@ -29,6 +29,18 @@ class TestSettings:
         assert settings.interaction_mode == "checkpoint"
         assert settings.world_quality_threshold == 7.5
 
+    def test_default_agent_models_includes_judge(self):
+        """Default agent_models should include 'judge' role set to 'auto'."""
+        settings = Settings()
+        assert "judge" in settings.agent_models
+        assert settings.agent_models["judge"] == "auto"
+
+    def test_default_agent_temperatures_includes_judge(self):
+        """Default agent_temperatures should include 'judge' role."""
+        settings = Settings()
+        assert "judge" in settings.agent_temperatures
+        assert settings.agent_temperatures["judge"] == 0.1
+
     def test_embedding_model_defaults_to_empty(self):
         """Embedding model should default to empty string (no hardcoded model)."""
         settings = Settings()

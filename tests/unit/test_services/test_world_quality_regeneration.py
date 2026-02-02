@@ -32,7 +32,12 @@ def mock_settings():
     # _resolve_model_for_role() required attributes
     settings.use_per_agent_models = True
     settings.default_model = "auto"
-    settings.agent_models = {"writer": "auto", "validator": "auto", "architect": "auto"}
+    settings.agent_models = {
+        "writer": "auto",
+        "validator": "auto",
+        "architect": "auto",
+        "judge": "auto",
+    }
     return settings
 
 

@@ -36,6 +36,9 @@ class RefinementHistory(BaseModel):
     consecutive_degradations: int = Field(
         default=0, description="Count of consecutive score degradations since peak"
     )
+    consecutive_plateaus: int = Field(
+        default=0, description="Count of consecutive iterations with same score as peak"
+    )
 
     def add_iteration(
         self,
@@ -72,10 +75,13 @@ class RefinementHistory(BaseModel):
             self.peak_score = average_score
             self.best_iteration = iteration
             self.consecutive_degradations = 0  # Reset on new peak
+            self.consecutive_plateaus = 0  # Reset on new peak
         elif average_score < self.peak_score:
             # Score degraded from peak
             self.consecutive_degradations += 1
-        # Note: if score equals peak, don't reset counter (plateauing after peak)
+        else:
+            # Score equals peak — plateau
+            self.consecutive_plateaus += 1
 
     def get_best_entity(self) -> dict[str, Any] | None:
         """Return entity data from the best-scoring iteration."""
@@ -120,6 +126,17 @@ class RefinementHistory(BaseModel):
         if self.best_iteration == 0:
             logger.debug("Early stop check: no peak established yet")
             return False
+
+        # Check plateau: flat scores never improve, stop early
+        if self.consecutive_plateaus >= patience:
+            logger.debug(
+                "Early stop triggered: %d consecutive plateaus at peak=%.2f "
+                "(patience=%d), no improvement possible",
+                self.consecutive_plateaus,
+                self.peak_score,
+                patience,
+            )
+            return True
 
         # Must have enough consecutive degradations
         if self.consecutive_degradations < patience:

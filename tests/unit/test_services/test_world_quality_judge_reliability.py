@@ -126,11 +126,11 @@ class TestResolveModelForRole:
     def test_missing_agent_model_raises_error(self, settings, mock_mode_service):
         """When use_per_agent_models=True but role not in agent_models, raise ValueError."""
         settings.use_per_agent_models = True
-        settings.agent_models = {"writer": "some-writer-model:8b"}  # No validator entry
+        settings.agent_models = {"writer": "some-writer-model:8b"}  # No judge entry
 
         service = WorldQualityService(settings, mock_mode_service)
-        with pytest.raises(ValueError, match="Unknown agent role 'validator'"):
-            service._resolve_model_for_role("validator")
+        with pytest.raises(ValueError, match="Unknown agent role 'judge'"):
+            service._resolve_model_for_role("judge")
 
     def test_get_creator_model_uses_resolve(self, settings, mock_mode_service):
         """_get_creator_model() delegates to _resolve_model_for_role()."""
@@ -154,12 +154,12 @@ class TestResolveModelForRole:
         assert model == "global-model:30b"
         mock_mode_service.get_model_for_agent.assert_not_called()
 
-    def test_per_agent_writer_vs_validator_different_models(self, settings, mock_mode_service):
+    def test_per_agent_writer_vs_judge_different_models(self, settings, mock_mode_service):
         """Per-agent can set different models for creator vs judge roles."""
         settings.use_per_agent_models = True
         settings.agent_models = {
             "writer": "creative-model:30b",
-            "validator": "strict-model:8b",
+            "judge": "strict-model:8b",
         }
 
         service = WorldQualityService(settings, mock_mode_service)
@@ -904,3 +904,37 @@ class TestJudgeWithAveragingEdgeCases:
 
         assert judge_fn.call_count == 5
         assert result.significance == 7.0
+
+
+class TestEntityJudgeRoles:
+    """Test that ENTITY_JUDGE_ROLES maps to 'judge' role, not 'validator'."""
+
+    def test_entity_judge_roles_use_judge_not_validator(self):
+        """All entity types in ENTITY_JUDGE_ROLES should map to 'judge'."""
+        for entity_type, role in WorldQualityService.ENTITY_JUDGE_ROLES.items():
+            assert role == "judge", (
+                f"Entity type '{entity_type}' maps to '{role}' instead of 'judge'"
+            )
+
+    def test_judge_tag_only_on_capable_models(self):
+        """No model below quality 7 should have the 'judge' tag."""
+        from src.settings._model_registry import RECOMMENDED_MODELS
+
+        for model_id, info in RECOMMENDED_MODELS.items():
+            tags = info.get("tags", [])
+            if "judge" in tags:
+                assert info["quality"] >= 7, (
+                    f"Model '{model_id}' (quality={info['quality']}) has 'judge' tag "
+                    f"but quality is below 7"
+                )
+
+    def test_small_models_lack_judge_tag(self):
+        """Small/fast models (smollm2, qwen3:0.6b, qwen3:4b) must NOT have 'judge' tag."""
+        from src.settings._model_registry import RECOMMENDED_MODELS
+
+        small_models = ["smollm2:1.7b", "qwen3:0.6b", "qwen3:4b"]
+        for model_id in small_models:
+            info = RECOMMENDED_MODELS.get(model_id)
+            if info is not None:
+                tags = info.get("tags", [])
+                assert "judge" not in tags, f"Small model '{model_id}' should not have 'judge' tag"

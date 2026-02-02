@@ -122,9 +122,13 @@ def generate_character_with_quality(
                 min_iterations=config.early_stopping_min_iterations,
                 variance_tolerance=config.early_stopping_variance_tolerance,
             ):
+                reason = (
+                    f"plateaued for {history.consecutive_plateaus} consecutive iterations"
+                    if history.consecutive_plateaus >= config.early_stopping_patience
+                    else f"degraded for {history.consecutive_degradations} consecutive iterations"
+                )
                 logger.info(
-                    f"Early stopping: Character '{character.name}' quality degraded "
-                    f"for {history.consecutive_degradations} consecutive iterations "
+                    f"Early stopping: Character '{character.name}' quality {reason} "
                     f"(patience: {config.early_stopping_patience}). "
                     f"Stopping at iteration {iteration + 1}."
                 )

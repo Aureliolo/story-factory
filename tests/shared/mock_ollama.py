@@ -41,6 +41,7 @@ ALL_ROLE_TAGS = [
     "validator",
     "suggestion",
     "quality",
+    "judge",
 ]
 
 # Valid Ollama hosts that the mock accepts (default Ollama endpoints)
