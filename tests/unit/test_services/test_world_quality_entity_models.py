@@ -289,7 +289,8 @@ class TestJudgeModelSelection:
 
         model = service._get_judge_model(entity_type="character")
 
-        mock_mode_service.get_model_for_agent.assert_called_once_with("judge")
+        # First call should be for judge role; second call is the conflict check
+        mock_mode_service.get_model_for_agent.assert_any_call("judge")
         assert model == "test-judge-model"
 
     def test_judge_model_uses_judge_for_all_entity_types(self, settings):
@@ -304,7 +305,8 @@ class TestJudgeModelSelection:
             mock_mode_service.reset_mock()
             model = service._get_judge_model(entity_type=entity_type)
 
-            mock_mode_service.get_model_for_agent.assert_called_once_with("judge")
+            # First call should be for judge role; second call is the conflict check
+            mock_mode_service.get_model_for_agent.assert_any_call("judge")
             assert model == "test-judge-model"
 
     def test_judge_model_without_entity_type_uses_judge(self, settings):
