@@ -938,3 +938,58 @@ class TestEntityJudgeRoles:
             if info is not None:
                 tags = info.get("tags", [])
                 assert "judge" not in tags, f"Small model '{model_id}' should not have 'judge' tag"
+
+
+class TestJudgeCreatorConflict:
+    """Test that judge warns when using the same model as creator."""
+
+    def test_same_model_for_judge_and_creator_logs_warning(
+        self, settings, mock_mode_service, caplog
+    ):
+        """When judge and creator resolve to same model, a warning is logged."""
+        import logging
+
+        # Both writer and judge resolve to same model via auto-selection
+        settings.use_per_agent_models = True
+        settings.agent_models = {"writer": "same-model:8b", "judge": "same-model:8b"}
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with caplog.at_level(logging.WARNING):
+            service._get_judge_model(entity_type="character")
+
+        assert any("same as creator model" in record.message for record in caplog.records), (
+            "Expected warning about judge being same as creator model"
+        )
+
+    def test_different_models_no_warning(self, settings, mock_mode_service, caplog):
+        """When judge and creator resolve to different models, no warning."""
+        import logging
+
+        settings.use_per_agent_models = True
+        settings.agent_models = {"writer": "creative-model:30b", "judge": "strict-model:8b"}
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with caplog.at_level(logging.WARNING):
+            service._get_judge_model(entity_type="character")
+
+        assert not any("same as creator model" in record.message for record in caplog.records), (
+            "Should not warn when judge and creator are different models"
+        )
+
+    def test_no_entity_type_skips_conflict_check(self, settings, mock_mode_service, caplog):
+        """When entity_type is None, conflict check is skipped."""
+        import logging
+
+        settings.use_per_agent_models = True
+        settings.agent_models = {"writer": "same-model:8b", "judge": "same-model:8b"}
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with caplog.at_level(logging.WARNING):
+            service._get_judge_model(entity_type=None)
+
+        assert not any("same as creator model" in record.message for record in caplog.records), (
+            "Should not check conflict when entity_type is None"
+        )

@@ -434,15 +434,32 @@ class WorldQualityService:
         Respects the Settings hierarchy: explicit default_model or per-agent model
         takes priority over ModelModeService auto-selection.
 
+        If the resolved judge model is the same as the creator model for the
+        same entity type, logs a warning. A model judging its own output
+        produces unreliable scores — users should configure distinct models.
+
         Args:
-            entity_type: Type of entity being judged. Currently all use validator,
-                        but allows future differentiation per entity type.
+            entity_type: Type of entity being judged. If provided, checks that
+                        the judge model differs from the creator model.
 
         Returns:
             Model ID to use for judgment.
         """
         agent_role = self.ENTITY_JUDGE_ROLES.get(entity_type, "judge") if entity_type else "judge"
         model = self._resolve_model_for_role(agent_role)
+
+        # Warn if judge and creator resolve to the same model
+        if entity_type:
+            creator_model = self._get_creator_model(entity_type)
+            if model == creator_model:
+                logger.warning(
+                    "Judge model '%s' is the same as creator model for entity_type=%s. "
+                    "A model judging its own output produces unreliable scores. "
+                    "Configure a different model for the 'judge' role in Settings > Models.",
+                    model,
+                    entity_type,
+                )
+
         logger.info(
             "Selected judge model '%s' for entity_type=%s (role=%s)",
             model,
