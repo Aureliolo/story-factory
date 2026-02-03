@@ -186,6 +186,7 @@ async def _generate_calendar(page: WorldPage) -> None:
     page.generate_calendar_btn.props("loading")  # type: ignore[attr-defined]
     page.generate_calendar_btn.disable()  # type: ignore[attr-defined]
 
+    page.state.begin_background_task("generate_calendar")
     try:
         # Generate calendar using service - run off event loop to avoid blocking
         calendar = await run.io_bound(page.services.calendar.generate_calendar, story_state.brief)
@@ -213,5 +214,6 @@ async def _generate_calendar(page: WorldPage) -> None:
         ui.notify(f"Failed to generate calendar: {e}", type="negative")
 
     finally:
+        page.state.end_background_task("generate_calendar")
         page.generate_calendar_btn.props(remove="loading")  # type: ignore[attr-defined]
         page.generate_calendar_btn.enable()  # type: ignore[attr-defined]

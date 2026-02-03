@@ -575,28 +575,31 @@ def make_update_progress(
 
     def update_progress(progress: EntityGenerationProgress) -> None:
         """Update dialog with generation progress."""
-        if progress_label:
-            if progress.entity_name:
-                progress_label.text = f"Generated: {progress.entity_name}"
-            else:
-                progress_label.text = (
-                    f"Generating {progress.entity_type} {progress.current}/{progress.total}..."
-                )
-
-        if progress_bar:
-            progress_bar.value = progress.progress_fraction
-
-        if eta_label:
-            if progress.estimated_remaining_seconds is not None:
-                total_secs = int(progress.estimated_remaining_seconds)
-                if total_secs >= 3600:
-                    hours, remainder = divmod(total_secs, 3600)
-                    mins, secs = divmod(remainder, 60)
-                    eta_label.text = f"~{hours}:{mins:02d}:{secs:02d} remaining"
+        try:
+            if progress_label:
+                if progress.entity_name:
+                    progress_label.text = f"Generated: {progress.entity_name}"
                 else:
-                    mins, secs = divmod(total_secs, 60)
-                    eta_label.text = f"~{mins}:{secs:02d} remaining"
-            elif progress.current > 1:
-                eta_label.text = "Calculating..."
+                    progress_label.text = (
+                        f"Generating {progress.entity_type} {progress.current}/{progress.total}..."
+                    )
+
+            if progress_bar:
+                progress_bar.value = progress.progress_fraction
+
+            if eta_label:
+                if progress.estimated_remaining_seconds is not None:
+                    total_secs = int(progress.estimated_remaining_seconds)
+                    if total_secs >= 3600:
+                        hours, remainder = divmod(total_secs, 3600)
+                        mins, secs = divmod(remainder, 60)
+                        eta_label.text = f"~{hours}:{mins:02d}:{secs:02d} remaining"
+                    else:
+                        mins, secs = divmod(total_secs, 60)
+                        eta_label.text = f"~{mins}:{secs:02d} remaining"
+                elif progress.current > 1:
+                    eta_label.text = "Calculating..."
+        except RuntimeError:
+            logger.debug("Progress update skipped: UI element destroyed")
 
     return update_progress

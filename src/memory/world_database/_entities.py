@@ -71,6 +71,7 @@ def add_entity(
     attrs_json = json.dumps(attrs)
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute(
             """
@@ -104,6 +105,7 @@ def get_entity(db: WorldDatabase, entity_id: str) -> Entity | None:
         Entity or None if not found
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
         row = cursor.fetchone()
@@ -126,6 +128,7 @@ def get_entity_by_name(
         Entity or None if not found
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         if entity_type:
             cursor.execute(
@@ -223,6 +226,7 @@ def update_entity(db: WorldDatabase, entity_id: str, **updates: Any) -> bool:
     values.append(entity_id)
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute(
             f"UPDATE entities SET {set_clause} WHERE id = ?",
@@ -265,6 +269,7 @@ def delete_entity(db: WorldDatabase, entity_id: str) -> bool:
     """
     logger.debug("delete_entity called: entity_id=%s", entity_id)
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
         db.conn.commit()
@@ -287,6 +292,7 @@ def list_entities(db: WorldDatabase, entity_type: str | None = None) -> list[Ent
         List of entities
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         if entity_type:
             cursor.execute(
@@ -309,6 +315,7 @@ def count_entities(db: WorldDatabase, entity_type: str | None = None) -> int:
         Count of entities
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         if entity_type:
             cursor.execute("SELECT COUNT(*) FROM entities WHERE type = ?", (entity_type,))
@@ -330,6 +337,7 @@ def search_entities(db: WorldDatabase, query: str, entity_type: str | None = Non
         List of matching entities
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         search_pattern = f"%{query}%"
         if entity_type:

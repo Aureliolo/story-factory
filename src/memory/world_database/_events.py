@@ -36,6 +36,7 @@ def add_event(
     consequences_json = json.dumps(consequences or [])
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute(
             """
@@ -70,6 +71,7 @@ def get_events_for_entity(db, entity_id: str) -> list[WorldEvent]:
         List of events
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute(
             """
@@ -94,6 +96,7 @@ def get_events_for_chapter(db, chapter_number: int) -> list[WorldEvent]:
         List of events
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute(
             "SELECT * FROM events WHERE chapter_number = ? ORDER BY created_at",
@@ -113,6 +116,7 @@ def get_event_participants(db, event_id: str) -> list[EventParticipant]:
         List of event participants
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute("SELECT * FROM event_participants WHERE event_id = ?", (event_id,))
         return [
@@ -141,6 +145,7 @@ def list_events(db, limit: int | None = None) -> list[WorldEvent]:
         return []
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         if limit is not None:
             cursor.execute(

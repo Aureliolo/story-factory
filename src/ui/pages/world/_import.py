@@ -103,6 +103,7 @@ async def do_import(page, dialog: ui.dialog, text: str) -> None:
         timeout=None,
     )
 
+    page.state.begin_background_task("import_entities")
     try:
         from nicegui import run
 
@@ -150,6 +151,8 @@ async def do_import(page, dialog: ui.dialog, text: str) -> None:
         notification.dismiss()
         logger.exception(f"Import failed: {e}")
         ui.notify(f"Import failed: {e}", type="negative", close_button=True, timeout=10)
+    finally:
+        page.state.end_background_task("import_entities")
 
 
 async def show_import_review_dialog(page, extraction_result: dict[str, Any]) -> None:

@@ -18,6 +18,7 @@ def export_to_json(db) -> dict[str, Any]:
         Dict with all data
     """
     with db._lock:
+        db._ensure_open()
         return {
             "entities": [e.model_dump(mode="json") for e in db.list_entities()],
             "relationships": [r.model_dump(mode="json") for r in db.list_relationships()],
@@ -42,6 +43,7 @@ def import_from_json(db, data: dict[str, Any]) -> None:
         data: Previously exported data
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
 
         # Clear existing data
