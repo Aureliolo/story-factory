@@ -137,6 +137,14 @@ class TestSettings:
         settings.validate()
         assert settings.agent_models == original_models
 
+    def test_validate_removes_embedding_from_agent_models(self):
+        """Should silently remove 'embedding' from agent_models (uses separate config)."""
+        settings = Settings()
+        settings.agent_models["embedding"] = "some-embedding-model:latest"
+        changed = settings.validate()
+        assert changed is True
+        assert "embedding" not in settings.agent_models
+
     def test_validate_passes_for_valid_settings(self):
         """Should not raise for valid default settings."""
         settings = Settings()

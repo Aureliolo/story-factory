@@ -30,7 +30,7 @@ def validate(settings: Settings) -> bool:
     _validate_interaction_mode(settings)
     _validate_vram_strategy(settings)
     changed = _validate_temperatures(settings)
-    _validate_agent_models(settings)
+    changed = _validate_agent_models(settings) or changed
     _validate_task_temperatures(settings)
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
@@ -155,15 +155,16 @@ def _validate_temperatures(settings: Settings) -> bool:
     return changed
 
 
-def _validate_agent_models(settings: Settings) -> None:
+def _validate_agent_models(settings: Settings) -> bool:
     """Validate agent_models dict — all expected roles must be present.
 
-    Raises on unknown roles and on missing roles (per "No default fallbacks"
-    rule).  Users must add new roles to their settings file explicitly.
+    Raises on truly unknown roles and on missing roles (per "No default
+    fallbacks" rule).  Roles that use separate config fields (e.g.
+    "embedding") are silently removed if found — older UI/settings files
+    may have written them here by mistake.
 
-    Note: Only roles present in the default agent_models are validated.
-    Some AGENT_ROLES (e.g. "embedding") use separate config fields and are
-    intentionally excluded from agent_models.
+    Returns:
+        True if stale entries were removed, False otherwise.
 
     Raises:
         ValueError: If unknown or missing agent roles are found.
@@ -173,7 +174,18 @@ def _validate_agent_models(settings: Settings) -> None:
     default_models = _Settings().agent_models
     expected_agents = set(default_models)
 
-    unknown_model_agents = set(settings.agent_models) - expected_agents
+    # Roles that legitimately exist in AGENT_ROLES but belong in separate
+    # config fields — not an error, just a stale entry to clean up.
+    separate_config_roles = {"embedding"}
+
+    current_agents = set(settings.agent_models)
+    stale_roles = current_agents & separate_config_roles
+    changed = bool(stale_roles)
+    for role in stale_roles:
+        del settings.agent_models[role]
+        logger.warning("Removed '%s' from agent_models — it uses a separate config field", role)
+
+    unknown_model_agents = set(settings.agent_models) - expected_agents - separate_config_roles
     if unknown_model_agents:
         raise ValueError(
             f"Unknown agent(s) in agent_models: {sorted(unknown_model_agents)}; "
@@ -186,6 +198,8 @@ def _validate_agent_models(settings: Settings) -> None:
             f"Missing agent(s) in agent_models: {sorted(missing_agents)}; "
             f"expected: {sorted(expected_agents)}"
         )
+
+    return changed
 
 
 def _validate_task_temperatures(settings: Settings) -> None:

@@ -61,9 +61,14 @@ def build_model_section(page: SettingsPage) -> None:
         ):
             ui.label("Per-Agent Model Overrides").classes("font-medium text-sm text-gray-400 mb-3")
 
+            # Roles that use separate config fields (not agent_models)
+            ROLES_WITHOUT_AGENT_MODEL = {"embedding"}
+
             page._agent_model_selects = {}
             with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-3"):
                 for role, info in AGENT_ROLES.items():
+                    if role in ROLES_WITHOUT_AGENT_MODEL:
+                        continue
                     # Fall back to "auto" if saved model not installed
                     agent_model_value = page.settings.agent_models.get(role, "auto")
                     if agent_model_value not in model_options:
