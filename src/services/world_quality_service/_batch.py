@@ -175,9 +175,6 @@ def _review_batch(
     Returns:
         List of ``(entity, scores)`` tuples.  On failure the *original*
         entity is kept with zero scores.
-
-    Raises:
-        WorldGenerationError: If **no** entities could be reviewed.
     """
     from src.services.world_quality_service import EntityGenerationProgress
 
@@ -248,11 +245,6 @@ def _review_batch(
             logger.error("Failed to review %s '%s': %s", entity_type, entity_name, e)
             results.append((entity, zero_scores_fn(f"Review failed: {e}")))
 
-    if not results and errors:  # pragma: no cover
-        raise WorldGenerationError(
-            f"Failed to review any {entity_type}s. Errors: {'; '.join(errors)}"
-        )
-
     if errors:
         logger.warning(
             "Reviewed %d/%d %ss. %d failed: %s",
@@ -306,7 +298,7 @@ def generate_factions_with_quality(
             story_state, names, existing_locations
         ),
         get_name=lambda f: f.get("name", "Unknown"),
-        on_success=lambda f: names.append(f.get("name", "Unknown")),
+        on_success=lambda f: names.append(f["name"]) if "name" in f else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -343,7 +335,7 @@ def generate_items_with_quality(
         entity_type="item",
         generate_fn=lambda _i: svc.generate_item_with_quality(story_state, names),
         get_name=lambda item: item.get("name", "Unknown"),
-        on_success=lambda item: names.append(item.get("name", "Unknown")),
+        on_success=lambda item: names.append(item["name"]) if "name" in item else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -380,7 +372,7 @@ def generate_concepts_with_quality(
         entity_type="concept",
         generate_fn=lambda _i: svc.generate_concept_with_quality(story_state, names),
         get_name=lambda c: c.get("name", "Unknown"),
-        on_success=lambda c: names.append(c.get("name", "Unknown")),
+        on_success=lambda c: names.append(c["name"]) if "name" in c else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -458,7 +450,7 @@ def generate_locations_with_quality(
         entity_type="location",
         generate_fn=lambda _i: svc.generate_location_with_quality(story_state, names),
         get_name=lambda loc: loc.get("name", "Unknown"),
-        on_success=lambda loc: names.append(loc.get("name", "Unknown")),
+        on_success=lambda loc: names.append(loc["name"]) if "name" in loc else None,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -498,8 +490,8 @@ def generate_relationships_with_quality(
         generate_fn=lambda _i: svc.generate_relationship_with_quality(
             story_state, entity_names, rels
         ),
-        get_name=lambda r: f"{r.get('source', '')} -> {r.get('target', '')}",
-        on_success=lambda r: rels.append((r.get("source", ""), r.get("target", ""))),
+        get_name=lambda r: f"{r['source']} -> {r['target']}",
+        on_success=lambda r: rels.append((r["source"], r["target"])),
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
