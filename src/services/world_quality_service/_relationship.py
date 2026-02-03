@@ -389,8 +389,10 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
-    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    # Resolve judge model and config once to avoid repeated resolution
     judge_model = svc._get_judge_model(entity_type="relationship")
+    judge_config = svc.get_judge_config()
+    multi_call = judge_config.enabled and judge_config.multi_call_enabled
 
     def _single_judge_call() -> RelationshipQualityScores:
         """Execute a single judge call for relationship quality."""
@@ -403,15 +405,22 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
-            logger.exception(
-                "Relationship quality judgment failed for %s->%s: %s",
-                relationship.get("source") or "Unknown",
-                relationship.get("target") or "Unknown",
-                e,
-            )
+            if multi_call:
+                logger.warning(
+                    "Relationship quality judgment failed for %s->%s: %s",
+                    relationship.get("source") or "Unknown",
+                    relationship.get("target") or "Unknown",
+                    e,
+                )
+            else:
+                logger.exception(
+                    "Relationship quality judgment failed for %s->%s: %s",
+                    relationship.get("source") or "Unknown",
+                    relationship.get("target") or "Unknown",
+                    e,
+                )
             raise WorldGenerationError(f"Relationship quality judgment failed: {e}") from e
 
-    judge_config = svc.get_judge_config()
     return judge_with_averaging(_single_judge_call, RelationshipQualityScores, judge_config)
 
 

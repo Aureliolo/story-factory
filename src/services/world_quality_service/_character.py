@@ -311,8 +311,10 @@ def _judge_character_quality(
 
     prompt = _build_character_judge_prompt(character, genre)
 
-    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    # Resolve judge model and config once to avoid repeated resolution
     judge_model = svc._get_judge_model(entity_type="character")
+    judge_config = svc.get_judge_config()
+    multi_call = judge_config.enabled and judge_config.multi_call_enabled
 
     def _single_judge_call() -> CharacterQualityScores:
         """Execute a single judge call for character quality."""
@@ -325,10 +327,14 @@ def _judge_character_quality(
                 temperature=temperature,
             )
         except Exception as e:
-            logger.exception("Character quality judgment failed for '%s': %s", character.name, e)
+            if multi_call:
+                logger.warning("Character quality judgment failed for '%s': %s", character.name, e)
+            else:
+                logger.exception(
+                    "Character quality judgment failed for '%s': %s", character.name, e
+                )
             raise WorldGenerationError(f"Character quality judgment failed: {e}") from e
 
-    judge_config = svc.get_judge_config()
     return judge_with_averaging(_single_judge_call, CharacterQualityScores, judge_config)
 
 

@@ -977,3 +977,83 @@ class TestJudgeCreatorConflict:
         assert not any("same as creator model" in record.message for record in caplog.records), (
             "Should not check conflict when entity_type is None"
         )
+
+
+class TestJudgeCallLogLevel:
+    """Test that judge call failures use correct log level based on multi-call mode."""
+
+    def test_single_call_uses_exception_logging(self, settings, mock_mode_service, caplog):
+        """When multi-call is disabled, judge failures log at ERROR with traceback."""
+        import logging
+        from unittest.mock import patch
+
+        settings.judge_consistency_enabled = True
+        settings.judge_multi_call_enabled = False
+
+        service = WorldQualityService(settings, mock_mode_service)
+        story_state = MagicMock()
+        story_state.brief.genre = "fantasy"
+        story_state.brief.language = "English"
+        character = MagicMock()
+        character.name = "TestHero"
+        character.role = "protagonist"
+        character.description = "A test character"
+        character.personality_traits = ["brave"]
+        character.goals = ["survive"]
+        character.arc_notes = "grows"
+
+        with (
+            patch(
+                "src.services.world_quality_service._character.generate_structured",
+                side_effect=Exception("LLM error"),
+            ),
+            caplog.at_level(logging.DEBUG),
+            pytest.raises(WorldGenerationError, match="judgment failed"),
+        ):
+            service._judge_character_quality(character, story_state, 0.1)
+
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any("judgment failed" in r.message for r in error_records), (
+            "Single-call mode should use logger.exception (ERROR level)"
+        )
+
+    def test_multi_call_uses_warning_logging(self, settings, mock_mode_service, caplog):
+        """When multi-call is enabled, judge failures log at WARNING (not ERROR)."""
+        import logging
+        from unittest.mock import patch
+
+        settings.judge_consistency_enabled = True
+        settings.judge_multi_call_enabled = True
+
+        service = WorldQualityService(settings, mock_mode_service)
+        story_state = MagicMock()
+        story_state.brief.genre = "fantasy"
+        story_state.brief.language = "English"
+        character = MagicMock()
+        character.name = "TestHero"
+        character.role = "protagonist"
+        character.description = "A test character"
+        character.personality_traits = ["brave"]
+        character.goals = ["survive"]
+        character.arc_notes = "grows"
+
+        with (
+            patch(
+                "src.services.world_quality_service._character.generate_structured",
+                side_effect=Exception("LLM error"),
+            ),
+            caplog.at_level(logging.DEBUG),
+            pytest.raises(WorldGenerationError, match="judgment failed"),
+        ):
+            service._judge_character_quality(character, story_state, 0.1)
+
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        warning_records = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "judgment failed" in r.message
+        ]
+        assert warning_records, "Multi-call mode should use logger.warning for judge failures"
+        assert not any("judgment failed" in r.message for r in error_records), (
+            "Multi-call mode should NOT use logger.exception (ERROR level)"
+        )

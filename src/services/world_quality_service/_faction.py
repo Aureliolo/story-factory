@@ -420,8 +420,10 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
-    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    # Resolve judge model and config once to avoid repeated resolution
     judge_model = svc._get_judge_model(entity_type="faction")
+    judge_config = svc.get_judge_config()
+    multi_call = judge_config.enabled and judge_config.multi_call_enabled
 
     def _single_judge_call() -> FactionQualityScores:
         """Execute a single judge call for faction quality."""
@@ -434,14 +436,20 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
-            logger.exception(
-                "Faction quality judgment failed for '%s': %s",
-                faction.get("name") or "Unknown",
-                e,
-            )
+            if multi_call:
+                logger.warning(
+                    "Faction quality judgment failed for '%s': %s",
+                    faction.get("name") or "Unknown",
+                    e,
+                )
+            else:
+                logger.exception(
+                    "Faction quality judgment failed for '%s': %s",
+                    faction.get("name") or "Unknown",
+                    e,
+                )
             raise WorldGenerationError(f"Faction quality judgment failed: {e}") from e
 
-    judge_config = svc.get_judge_config()
     return judge_with_averaging(_single_judge_call, FactionQualityScores, judge_config)
 
 
