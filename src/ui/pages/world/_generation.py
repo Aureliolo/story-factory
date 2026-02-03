@@ -335,26 +335,30 @@ async def generate_mini_descriptions(page) -> None:
     if not page.state.world_db:
         return
 
-    all_entities = page.state.world_db.list_entities()
-    entity_data = [
-        {"name": e.name, "type": e.type, "description": e.description} for e in all_entities
-    ]
-    mini_descs = await run.io_bound(
-        page.services.world_quality.generate_mini_descriptions_batch,
-        entity_data,
-    )
-    logger.info(f"Generated {len(mini_descs)} mini descriptions")
+    page.state.begin_background_task("generate_mini_descriptions")
+    try:
+        all_entities = page.state.world_db.list_entities()
+        entity_data = [
+            {"name": e.name, "type": e.type, "description": e.description} for e in all_entities
+        ]
+        mini_descs = await run.io_bound(
+            page.services.world_quality.generate_mini_descriptions_batch,
+            entity_data,
+        )
+        logger.info(f"Generated {len(mini_descs)} mini descriptions")
 
-    # Update entities with mini descriptions
-    for entity in all_entities:
-        if entity.name in mini_descs:
-            attrs = dict(entity.attributes) if entity.attributes else {}
-            attrs["mini_description"] = mini_descs[entity.name]
-            page.state.world_db.update_entity(
-                entity_id=entity.id,
-                attributes=attrs,
-            )
-    logger.info("Updated entities with mini descriptions")
+        # Update entities with mini descriptions
+        for entity in all_entities:
+            if entity.name in mini_descs:
+                attrs = dict(entity.attributes) if entity.attributes else {}
+                attrs["mini_description"] = mini_descs[entity.name]
+                page.state.world_db.update_entity(
+                    entity_id=entity.id,
+                    attributes=attrs,
+                )
+        logger.info("Updated entities with mini descriptions")
 
-    # Invalidate graph cache to ensure fresh tooltips
-    page.state.world_db.invalidate_graph_cache()
+        # Invalidate graph cache to ensure fresh tooltips
+        page.state.world_db.invalidate_graph_cache()
+    finally:
+        page.state.end_background_task("generate_mini_descriptions")

@@ -243,6 +243,7 @@ def get_graph(db: WorldDatabase) -> DiGraph[Any]:
     """
     if db._graph is None:
         with db._lock:
+            db._ensure_open()
             # Double-checked locking: re-check after acquiring the lock
             if db._graph is None:
                 rebuild_graph(db)
@@ -420,6 +421,7 @@ def find_orphans(db: WorldDatabase, entity_type: str | None = None) -> list[Enti
     logger.debug(f"find_orphans called: entity_type={entity_type}")
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
 
         # Query for entities that are not in any relationship

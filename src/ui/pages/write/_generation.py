@@ -36,6 +36,7 @@ async def write_current_chapter(page: WritePage) -> None:
     project = page.state.project
     chapter_num = page.state.current_chapter
 
+    page.state.begin_background_task("write_current_chapter")
     try:
         # Reset generation flags
         page.state.reset_generation_flags()
@@ -111,6 +112,7 @@ async def write_current_chapter(page: WritePage) -> None:
     finally:
         page.state.is_writing = False
         page.state.reset_generation_flags()
+        page.state.end_background_task("write_current_chapter")
         if page._generation_status and page._client:
             try:
                 with page._client:
@@ -138,6 +140,7 @@ async def write_all_chapters(page: WritePage) -> None:
     # Capture for closure type narrowing
     project = page.state.project
 
+    page.state.begin_background_task("write_all_chapters")
     try:
         # Reset generation flags
         page.state.reset_generation_flags()
@@ -207,6 +210,7 @@ async def write_all_chapters(page: WritePage) -> None:
     finally:
         page.state.is_writing = False
         page.state.reset_generation_flags()
+        page.state.end_background_task("write_all_chapters")
         if page._generation_status and page._client:
             try:
                 with page._client:
@@ -377,6 +381,7 @@ async def regenerate_with_feedback(page: WritePage) -> None:
     # Record regeneration as implicit negative signal for learning
     _record_regeneration_signal(page, project.id, chapter_num)
 
+    page.state.begin_background_task("regenerate_with_feedback")
     try:
         # Reset generation flags
         page.state.reset_generation_flags()
@@ -449,6 +454,7 @@ async def regenerate_with_feedback(page: WritePage) -> None:
     finally:
         page.state.is_writing = False
         page.state.reset_generation_flags()
+        page.state.end_background_task("regenerate_with_feedback")
         if page._generation_status and page._client:
             try:
                 with page._client:

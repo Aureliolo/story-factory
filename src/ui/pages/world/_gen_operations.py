@@ -95,6 +95,7 @@ async def generate_more(
         update_progress = None
         progress_label = None
 
+    page.state.begin_background_task(f"generate_{entity_type}")
     try:
         if entity_type == "characters":
             await _generate_characters(
@@ -194,6 +195,8 @@ async def generate_more(
             notification.dismiss()
         logger.exception(f"Unexpected error generating {entity_type}: {e}")
         ui.notify(f"Error: {e}", type="negative")
+    finally:
+        page.state.end_background_task(f"generate_{entity_type}")
 
 
 async def _generate_characters(

@@ -1,6 +1,7 @@
 """Centralized UI state management."""
 
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -8,6 +9,7 @@ from typing import Any
 
 from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
+from src.utils.exceptions import BackgroundTaskActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +106,10 @@ class AppState:
     _redo_stack: list[UndoAction] = field(default_factory=list)
     _max_undo_history: int = 50
 
+    # ========== Background Task Tracking ==========
+    _background_task_count: int = 0
+    _background_task_lock: threading.Lock = field(default_factory=threading.Lock)
+
     # ========== Callbacks ==========
     # These are called when certain state changes occur
     _on_project_change: Callable[[], None] | None = None
@@ -111,6 +117,40 @@ class AppState:
     _on_chapter_change: Callable[[int], None] | None = None
     _on_undo: Callable[[], None] | None = None  # Called when undo is requested
     _on_redo: Callable[[], None] | None = None  # Called when redo is requested
+
+    def begin_background_task(self, task_name: str) -> None:
+        """Register a background task as active.
+
+        Args:
+            task_name: Human-readable name for logging.
+        """
+        with self._background_task_lock:
+            self._background_task_count += 1
+            logger.debug(
+                "Background task started: %s (active: %d)",
+                task_name,
+                self._background_task_count,
+            )
+
+    def end_background_task(self, task_name: str) -> None:
+        """Mark a background task as finished.
+
+        Args:
+            task_name: Human-readable name for logging.
+        """
+        with self._background_task_lock:
+            self._background_task_count = max(0, self._background_task_count - 1)
+            logger.debug(
+                "Background task ended: %s (active: %d)",
+                task_name,
+                self._background_task_count,
+            )
+
+    @property
+    def is_busy(self) -> bool:
+        """Check if any background tasks are currently running."""
+        with self._background_task_lock:
+            return self._background_task_count > 0
 
     def set_project(
         self,
@@ -124,7 +164,16 @@ class AppState:
             project_id: Project UUID.
             project: StoryState instance.
             world_db: WorldDatabase instance.
+
+        Raises:
+            BackgroundTaskActiveError: If background tasks are still running.
         """
+        if self.is_busy:
+            raise BackgroundTaskActiveError(
+                "Cannot switch projects while background tasks are running. "
+                "Wait for builds/generation to finish."
+            )
+
         # Close existing database connection before switching
         if self.world_db is not None:
             self.world_db.close()
@@ -145,7 +194,17 @@ class AppState:
             self._on_project_change()
 
     def clear_project(self) -> None:
-        """Clear the current project."""
+        """Clear the current project.
+
+        Raises:
+            BackgroundTaskActiveError: If background tasks are still running.
+        """
+        if self.is_busy:
+            raise BackgroundTaskActiveError(
+                "Cannot clear project while background tasks are running. "
+                "Wait for builds/generation to finish."
+            )
+
         # Close database connection before clearing
         if self.world_db is not None:
             self.world_db.close()

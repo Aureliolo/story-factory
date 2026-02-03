@@ -62,6 +62,7 @@ def add_relationship(
 
     # Use lock for entire operation (validation + insert) to prevent TOCTOU race condition
     with db._lock:
+        db._ensure_open()
         # Validation logic - must be inside lock to prevent entity deletion between check and insert
         if validate:
             # Check for self-loop (no lock needed for this check)
@@ -140,6 +141,7 @@ def get_relationships(
         List of relationships
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
 
         if direction == "outgoing":
@@ -169,6 +171,7 @@ def get_relationship_between(
         Relationship or None
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute(
             """
@@ -195,6 +198,7 @@ def delete_relationship(db: WorldDatabase, rel_id: str) -> bool:
         True if deleted, False if not found
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         # Get relationship info before deletion for graph update
         cursor.execute("SELECT * FROM relationships WHERE id = ?", (rel_id,))
@@ -238,6 +242,7 @@ def update_relationship(
         True if updated, False if not found.
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
 
         # Get current relationship
@@ -303,6 +308,7 @@ def list_relationships(db: WorldDatabase) -> list[Relationship]:
         List of all relationships
     """
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         cursor.execute("SELECT * FROM relationships ORDER BY created_at")
         return [row_to_relationship(row) for row in cursor.fetchall()]

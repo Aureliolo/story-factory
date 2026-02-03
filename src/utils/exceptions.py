@@ -11,6 +11,8 @@ Exception Hierarchy:
     │   └── ResponseValidationError (AI response validation)
     ├── ConfigError (configuration parsing/validation failures)
     ├── ExportError (export/file related errors)
+    ├── DatabaseClosedError (database accessed after close)
+    ├── BackgroundTaskActiveError (project switch while tasks running)
     ├── WorldGenerationError (world entity generation failures)
     │   ├── EmptyGenerationError (empty/invalid entity content)
     │   └── DuplicateNameError (duplicate entity name detected)
@@ -128,6 +130,26 @@ class ExportError(StoryFactoryError):
 
     This covers failures in exporting stories to various formats
     (EPUB, PDF, etc.) or file I/O errors during export.
+    """
+
+    pass
+
+
+class DatabaseClosedError(StoryFactoryError):
+    """Raised when a database operation is attempted on a closed connection.
+
+    This indicates a background thread tried to use a WorldDatabase
+    after it was closed by a project switch or cleanup.
+    """
+
+    pass
+
+
+class BackgroundTaskActiveError(StoryFactoryError):
+    """Raised when a project switch is attempted while background tasks are running.
+
+    This prevents data loss from closing a database that background
+    threads (build, generation, write) are still using.
     """
 
     pass

@@ -118,6 +118,7 @@ def save_entity_version(
     )
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         version_id = save_entity_version_internal(
             cursor, db, entity_id, change_type, change_reason, quality_score
@@ -143,6 +144,7 @@ def get_entity_versions(db, entity_id: str, limit: int | None = None) -> list[En
         return []
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
         if limit is not None:
             cursor.execute(
@@ -186,6 +188,7 @@ def revert_entity_to_version(db, entity_id: str, version_number: int) -> bool:
     logger.info(f"Reverting entity {entity_id} to version {version_number}")
 
     with db._lock:
+        db._ensure_open()
         cursor = db.conn.cursor()
 
         # Get the target version

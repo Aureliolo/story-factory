@@ -571,6 +571,7 @@ async def generate_relationships_for_entities(
         )
         update_progress = None
 
+    page.state.begin_background_task("generate_relationships_for_entities")
     try:
         from nicegui import run
 
@@ -661,3 +662,5 @@ async def generate_relationships_for_entities(
             notification.dismiss()
         logger.exception(f"Error generating relationships: {e}")
         ui.notify(f"Error: {e}", type="negative")
+    finally:
+        page.state.end_background_task("generate_relationships_for_entities")

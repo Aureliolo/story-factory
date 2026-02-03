@@ -87,6 +87,7 @@ async def _start_interview(page: WritePage) -> None:
     if not page.state.project or not page._chat:
         return
 
+    page.state.begin_background_task("start_interview")
     try:
         page._chat.show_typing(True)
         # Run LLM call in thread pool to avoid blocking event loop
@@ -98,6 +99,8 @@ async def _start_interview(page: WritePage) -> None:
         logger.exception("Failed to start interview")
         page._chat.show_typing(False)
         page._notify(f"Error starting interview: {e}", type="negative")
+    finally:
+        page.state.end_background_task("start_interview")
 
 
 async def _handle_interview_message(page: WritePage, message: str) -> None:
@@ -110,6 +113,7 @@ async def _handle_interview_message(page: WritePage, message: str) -> None:
     if not page.state.project or not page._chat:
         return
 
+    page.state.begin_background_task("handle_interview_message")
     try:
         page._chat.show_typing(True)
         page.state.add_interview_message("user", message)
@@ -138,6 +142,8 @@ async def _handle_interview_message(page: WritePage, message: str) -> None:
         logger.exception("Failed to process interview message")
         page._chat.show_typing(False)
         page._notify(f"Error: {e}", type="negative")
+    finally:
+        page.state.end_background_task("handle_interview_message")
 
 
 def update_interview_buttons(page: WritePage) -> None:
@@ -171,6 +177,7 @@ async def _finalize_interview(page: WritePage) -> None:
         dialog.close()
         if not page.state.project:
             return
+        page.state.begin_background_task("finalize_interview")
         try:
             page._notify("Finalizing interview...", type="info")
             brief = await run.io_bound(page.services.story.finalize_interview, page.state.project)
@@ -191,6 +198,8 @@ async def _finalize_interview(page: WritePage) -> None:
         except Exception as e:
             logger.exception("Failed to finalize interview")
             page._notify(f"Error: {e}", type="negative")
+        finally:
+            page.state.end_background_task("finalize_interview")
 
     with dialog, ui.card().classes("w-96").style("background-color: #1f2937"):
         ui.label("Finalize Interview?").classes("text-xl font-bold mb-2")

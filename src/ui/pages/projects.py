@@ -12,6 +12,7 @@ from src.services import ServiceContainer
 from src.services.project_service import ProjectSummary
 from src.ui.state import AppState
 from src.ui.theme import get_status_color
+from src.utils.exceptions import BackgroundTaskActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +252,8 @@ class ProjectsPage:
             dialog.close()
             # Reload to update header dropdown
             ui.navigate.reload()
+        except BackgroundTaskActiveError:
+            ui.notify("Cannot create project while tasks are running", type="warning")
         except Exception as e:
             logger.exception("Failed to create project")
             ui.notify(f"Error: {e}", type="negative")
@@ -264,6 +267,8 @@ class ProjectsPage:
             self.services.settings.save()
             ui.notify(f"Opened: {project.project_name}", type="positive")
             self._refresh_project_list()
+        except BackgroundTaskActiveError:
+            ui.notify("Cannot switch projects while tasks are running", type="warning")
         except Exception as e:
             logger.exception(f"Failed to open project {project_id}")
             ui.notify(f"Error: {e}", type="negative")
@@ -306,6 +311,8 @@ class ProjectsPage:
             self.services.project.delete_project(project_id)
             self._refresh_project_list()
             ui.notify("Project deleted", type="positive")
+        except BackgroundTaskActiveError:
+            ui.notify("Cannot delete project while tasks are running", type="warning")
         except Exception as e:
             logger.exception(f"Failed to delete project {project_id}")
             ui.notify(f"Error: {e}", type="negative")
@@ -654,6 +661,10 @@ class ProjectsPage:
                             restore_dialog.close()
                             parent_dialog.close()
                             self._refresh_project_list()
+                        except BackgroundTaskActiveError:
+                            ui.notify(
+                                "Cannot overwrite project while tasks are running", type="warning"
+                            )
                         except Exception as e:
                             logger.exception(f"Failed to overwrite project {existing_project_id}")
                             ui.notify(f"Error: {e}", type="negative")

@@ -9,6 +9,7 @@ from src.memory.templates import StoryTemplate, StructurePreset
 from src.services import ServiceContainer
 from src.ui.state import AppState
 from src.ui.theme import COLORS
+from src.utils.exceptions import BackgroundTaskActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +340,8 @@ class TemplatesPage:
 
             ui.notify(f"Created project from template: {template.name}", type="positive")
             ui.navigate.to("/")  # Navigate to write page (root)
+        except BackgroundTaskActiveError:
+            ui.notify("Cannot create project while tasks are running", type="warning")
         except Exception as e:
             logger.exception("Failed to create project from template")
             ui.notify(f"Error: {e}", type="negative")

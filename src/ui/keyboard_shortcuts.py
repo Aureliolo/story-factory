@@ -6,6 +6,7 @@ from nicegui import ui
 
 from src.services import ServiceContainer
 from src.ui.state import AppState
+from src.utils.exceptions import BackgroundTaskActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,8 @@ class KeyboardShortcuts:
             self.services.settings.last_project_id = project.id
             self.services.settings.save()
             ui.notify("New project created! (Ctrl+N)", type="positive")
+        except BackgroundTaskActiveError:
+            ui.notify("Cannot create project while tasks are running", type="warning")
         except Exception as e:
             logger.exception("Failed to create project via shortcut")
             ui.notify(f"Error: {e}", type="negative")

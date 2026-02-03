@@ -101,12 +101,16 @@ async def show_build_structure_dialog(
 
         logger.info(f"Starting structure {mode} for project {state.project.id}")
 
+        state.begin_background_task(f"build_structure_{mode}")
         try:
             # Progress callback to update dialog
             def on_progress(progress) -> None:
                 """Update the dialog label and progress bar with current build progress."""
-                progress_label.text = progress.message
-                progress_bar.value = progress.step / progress.total_steps
+                try:
+                    progress_label.text = progress.message
+                    progress_bar.value = progress.step / progress.total_steps
+                except RuntimeError:
+                    logger.debug("Progress update skipped: UI element destroyed")
 
             # Use the appropriate build options based on rebuild flag
             if rebuild:
@@ -132,14 +136,20 @@ async def show_build_structure_dialog(
             logger.info(f"Structure {mode} counts: {counts}")
 
             # Save the project
-            progress_label.text = "Saving project..."
-            progress_bar.value = 0.95
+            try:
+                progress_label.text = "Saving project..."
+                progress_bar.value = 0.95
+            except RuntimeError:
+                logger.debug("Post-build progress update skipped: UI element destroyed")
             if state.project:
                 logger.info(f"Saving project {state.project.id}...")
                 services.project.save_project(state.project)
                 logger.info("Project saved successfully")
 
-            progress_bar.value = 1.0
+            try:
+                progress_bar.value = 1.0
+            except RuntimeError:
+                logger.debug("Final progress update skipped: UI element destroyed")
             dialog.close()
 
             # Log final stats
@@ -175,6 +185,8 @@ async def show_build_structure_dialog(
             logger.exception(f"Error during structure {mode}: {e}")
             ui.notify(f"Error: {e}", type="negative")
             dialog.close()
+        finally:
+            state.end_background_task(f"build_structure_{mode}")
 
     card_bg = "#1f2937"
     inner_card_bg = "#374151"

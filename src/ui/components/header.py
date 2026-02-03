@@ -9,6 +9,7 @@ from nicegui.elements.select import Select
 
 from src.services import ServiceContainer
 from src.ui.state import AppState
+from src.utils.exceptions import BackgroundTaskActiveError
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,10 @@ class Header:
         # Validate that current project_id still exists, clear if not
         current_value = self.state.project_id
         if current_value and current_value not in options:
-            self.state.clear_project()
+            try:
+                self.state.clear_project()
+            except BackgroundTaskActiveError:
+                logger.warning("Cannot clear stale project reference: background tasks are active")
             current_value = None
 
         self._project_select = (
@@ -115,7 +119,11 @@ class Header:
         """Handle project selection change."""
         project_id = e.value
         if not project_id:
-            self.state.clear_project()
+            try:
+                self.state.clear_project()
+            except BackgroundTaskActiveError:
+                ui.notify("Cannot switch projects while tasks are running", type="warning")
+                return
             self.services.settings.last_project_id = None
             self.services.settings.save()
             return
@@ -126,6 +134,8 @@ class Header:
             self.services.settings.last_project_id = project_id
             self.services.settings.save()
             ui.notify(f"Loaded: {project.project_name}", type="positive")
+        except BackgroundTaskActiveError:
+            ui.notify("Cannot switch projects while tasks are running", type="warning")
         except FileNotFoundError:
             logger.warning(f"Project not found: {project_id}")
             ui.notify("Project not found", type="negative")
@@ -142,6 +152,8 @@ class Header:
             self.services.settings.save()
             ui.notify("New project created!", type="positive")
             self._refresh_project_list()
+        except BackgroundTaskActiveError:
+            ui.notify("Cannot create project while tasks are running", type="warning")
         except Exception as ex:
             logger.exception("Failed to create project")
             ui.notify(f"Error: {ex}", type="negative")

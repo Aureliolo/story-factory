@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from src.memory.world_settings import WorldSettings
 
 from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
-from src.utils.exceptions import RelationshipValidationError
+from src.utils.exceptions import DatabaseClosedError, RelationshipValidationError
 
 from . import _entities, _events, _graph, _io, _relationships, _versions
 
@@ -361,6 +361,15 @@ class WorldDatabase:
 
         logger.info("Database migration complete")
 
+    def _ensure_open(self) -> None:
+        """Check that the database connection is still open.
+
+        Raises:
+            DatabaseClosedError: If the database has been closed.
+        """
+        if self._closed:
+            raise DatabaseClosedError(f"Database connection is closed: {self.db_path}")
+
     def close(self) -> None:
         """Close database connection."""
         with self._lock:
@@ -601,6 +610,7 @@ class WorldDatabase:
 
         logger.debug("Loading world settings from database")
         with self._lock:
+            self._ensure_open()
             cursor = self.conn.cursor()
             cursor.execute(
                 """
@@ -644,6 +654,7 @@ class WorldDatabase:
         now = datetime.now().isoformat()
 
         with self._lock:
+            self._ensure_open()
             cursor = self.conn.cursor()
             cursor.execute(
                 """
