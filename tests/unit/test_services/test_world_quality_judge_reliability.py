@@ -1047,13 +1047,101 @@ class TestJudgeCallLogLevel:
         ):
             service._judge_character_quality(character, story_state, 0.1)
 
-        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
-        warning_records = [
+        # Filter to only the _character module's records (not _common.py which legitimately
+        # logs ERROR when all calls fail)
+        char_module = "src.services.world_quality_service._character"
+        char_errors = [
+            r for r in caplog.records if r.name == char_module and r.levelno >= logging.ERROR
+        ]
+        char_warnings = [
             r
             for r in caplog.records
-            if r.levelno == logging.WARNING and "judgment failed" in r.message
+            if r.name == char_module
+            and r.levelno == logging.WARNING
+            and "judgment failed" in r.message
         ]
-        assert warning_records, "Multi-call mode should use logger.warning for judge failures"
-        assert not any("judgment failed" in r.message for r in error_records), (
-            "Multi-call mode should NOT use logger.exception (ERROR level)"
+        assert char_warnings, "Multi-call mode should use logger.warning for judge failures"
+        assert not char_errors, (
+            "Multi-call mode should NOT use logger.exception (ERROR level) in _single_judge_call"
         )
+
+    @pytest.mark.parametrize(
+        "entity_type,judge_method,patch_target,call_args",
+        [
+            (
+                "location",
+                "_judge_location_quality",
+                "src.services.world_quality_service._location.generate_structured",
+                lambda ss: ({"name": "Tavern", "description": "A pub"}, ss, 0.1),
+            ),
+            (
+                "faction",
+                "_judge_faction_quality",
+                "src.services.world_quality_service._faction.generate_structured",
+                lambda ss: ({"name": "Guild", "description": "A guild"}, ss, 0.1),
+            ),
+            (
+                "item",
+                "_judge_item_quality",
+                "src.services.world_quality_service._item.generate_structured",
+                lambda ss: ({"name": "Sword", "description": "A blade"}, ss, 0.1),
+            ),
+            (
+                "concept",
+                "_judge_concept_quality",
+                "src.services.world_quality_service._concept.generate_structured",
+                lambda ss: ({"name": "Honor", "description": "A theme"}, ss, 0.1),
+            ),
+            (
+                "relationship",
+                "_judge_relationship_quality",
+                "src.services.world_quality_service._relationship.generate_structured",
+                lambda ss: (
+                    {
+                        "source": "A",
+                        "target": "B",
+                        "relation_type": "knows",
+                        "description": "Friends",
+                    },
+                    ss,
+                    0.1,
+                ),
+            ),
+        ],
+        ids=["location", "faction", "item", "concept", "relationship"],
+    )
+    def test_single_call_exception_logging_all_entities(
+        self,
+        settings,
+        mock_mode_service,
+        caplog,
+        entity_type,
+        judge_method,
+        patch_target,
+        call_args,
+    ):
+        """Single-call mode uses logger.exception for all entity types."""
+        import logging
+        from unittest.mock import patch
+
+        settings.judge_consistency_enabled = True
+        settings.judge_multi_call_enabled = False
+
+        service = WorldQualityService(settings, mock_mode_service)
+        story_state = MagicMock()
+        story_state.brief.genre = "fantasy"
+        story_state.brief.language = "English"
+
+        args = call_args(story_state)
+        with (
+            patch(patch_target, side_effect=Exception("LLM error")),
+            caplog.at_level(logging.DEBUG),
+            pytest.raises(WorldGenerationError, match="judgment failed"),
+        ):
+            getattr(service, judge_method)(*args)
+
+        module_name = f"src.services.world_quality_service._{entity_type}"
+        error_records = [
+            r for r in caplog.records if r.name == module_name and r.levelno >= logging.ERROR
+        ]
+        assert error_records, f"Single-call mode should use logger.exception for {entity_type}"
