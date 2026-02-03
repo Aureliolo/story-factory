@@ -69,8 +69,14 @@ class TestFullStartupSequence:
                     "default_model": "uninstalled-model:latest",
                     "use_per_agent_models": True,
                     "agent_models": {
+                        "interviewer": "auto",
+                        "architect": "auto",
                         "writer": "also-uninstalled:7b",
                         "editor": "model-a:latest",
+                        "continuity": "auto",
+                        "validator": "auto",
+                        "suggestion": "auto",
+                        "judge": "auto",
                     },
                 }
             )
