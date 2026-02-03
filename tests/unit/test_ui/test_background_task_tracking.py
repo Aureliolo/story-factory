@@ -1,6 +1,7 @@
 """Tests for background task tracking in AppState."""
 
 import threading
+from collections.abc import Generator
 
 import pytest
 
@@ -13,6 +14,31 @@ from src.utils.exceptions import BackgroundTaskActiveError
 def _is_busy(state: AppState) -> bool:
     """Check if state is busy (wrapper to prevent mypy narrowing)."""
     return state.is_busy
+
+
+def _make_project() -> StoryState:
+    """Create a minimal StoryState for testing."""
+    return StoryState(
+        id="test-project",
+        brief=StoryBrief(
+            genre="fantasy",
+            tone="epic",
+            premise="A test story",
+            target_length="novella",
+            setting_time="Medieval era",
+            setting_place="A kingdom",
+            content_rating="none",
+        ),
+    )
+
+
+@pytest.fixture
+def world_db(tmp_path) -> Generator[WorldDatabase]:
+    """Create a WorldDatabase that auto-closes after the test."""
+    db = WorldDatabase(tmp_path / "test.db")
+    yield db
+    if not db._closed:
+        db.close()
 
 
 class TestBackgroundTaskCounter:
@@ -75,77 +101,38 @@ class TestBackgroundTaskCounter:
 class TestSetProjectGuard:
     """Tests for set_project raising when busy."""
 
-    def test_set_project_raises_when_busy(self, tmp_path):
+    def test_set_project_raises_when_busy(self, world_db):
         """Test that set_project raises BackgroundTaskActiveError when tasks are active."""
         state = AppState()
         state.begin_background_task("build")
 
-        db = WorldDatabase(tmp_path / "test.db")
-        project = StoryState(
-            id="test-project",
-            brief=StoryBrief(
-                genre="fantasy",
-                tone="epic",
-                premise="A hero's journey",
-                target_length="novella",
-                setting_time="Medieval era",
-                setting_place="A magical kingdom",
-                content_rating="none",
-            ),
-        )
+        project = _make_project()
 
         with pytest.raises(BackgroundTaskActiveError):
-            state.set_project("proj-1", project, db)
+            state.set_project("proj-1", project, world_db)
 
         state.end_background_task("build")
-        db.close()
 
-    def test_set_project_succeeds_when_idle(self, tmp_path):
+    def test_set_project_succeeds_when_idle(self, world_db):
         """Test that set_project works normally when no tasks are active."""
         state = AppState()
-        db = WorldDatabase(tmp_path / "test.db")
-        project = StoryState(
-            id="test-project",
-            brief=StoryBrief(
-                genre="sci-fi",
-                tone="dark",
-                premise="Space exploration",
-                target_length="novel",
-                setting_time="Far future",
-                setting_place="Deep space",
-                content_rating="mild",
-            ),
-        )
+        project = _make_project()
 
-        state.set_project("proj-1", project, db)
+        state.set_project("proj-1", project, world_db)
 
         assert state.project_id == "proj-1"
         assert state.project is project
-        assert state.world_db is db
-
-        db.close()
+        assert state.world_db is world_db
 
 
 class TestClearProjectGuard:
     """Tests for clear_project raising when busy."""
 
-    def test_clear_project_raises_when_busy(self, tmp_path):
+    def test_clear_project_raises_when_busy(self, world_db):
         """Test that clear_project raises BackgroundTaskActiveError when tasks are active."""
         state = AppState()
-        db = WorldDatabase(tmp_path / "test.db")
-        project = StoryState(
-            id="test-project",
-            brief=StoryBrief(
-                genre="mystery",
-                tone="noir",
-                premise="A detective story",
-                target_length="short_story",
-                setting_time="1940s",
-                setting_place="Los Angeles",
-                content_rating="moderate",
-            ),
-        )
-        state.set_project("proj-1", project, db)
+        project = _make_project()
+        state.set_project("proj-1", project, world_db)
 
         state.begin_background_task("generation")
 
@@ -159,23 +146,11 @@ class TestClearProjectGuard:
         state.clear_project()
         assert state.project_id is None
 
-    def test_clear_project_succeeds_when_idle(self, tmp_path):
+    def test_clear_project_succeeds_when_idle(self, world_db):
         """Test that clear_project works normally when no tasks are active."""
         state = AppState()
-        db = WorldDatabase(tmp_path / "test.db")
-        project = StoryState(
-            id="test-project",
-            brief=StoryBrief(
-                genre="romance",
-                tone="light",
-                premise="A love story",
-                target_length="novella",
-                setting_time="Present day",
-                setting_place="Paris",
-                content_rating="mild",
-            ),
-        )
-        state.set_project("proj-1", project, db)
+        project = _make_project()
+        state.set_project("proj-1", project, world_db)
         assert state.project_id == "proj-1"
 
         state.clear_project()
