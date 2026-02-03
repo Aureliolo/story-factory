@@ -280,22 +280,23 @@ class TestAnalyticsRecording:
 class TestJudgeModelSelection:
     """Test that judge model selection works correctly for entity types."""
 
-    def test_judge_model_uses_validator_for_character(self, settings):
-        """Test that character judgment uses validator model."""
+    def test_judge_model_uses_judge_for_character(self, settings):
+        """Test that character judgment uses judge model."""
         mock_mode_service = MagicMock()
-        mock_mode_service.get_model_for_agent.return_value = "test-validator-model"
+        mock_mode_service.get_model_for_agent.return_value = "test-judge-model"
 
         service = WorldQualityService(settings, mock_mode_service)
 
         model = service._get_judge_model(entity_type="character")
 
-        mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
-        assert model == "test-validator-model"
+        # First call should be for judge role; second call is the conflict check
+        mock_mode_service.get_model_for_agent.assert_any_call("judge")
+        assert model == "test-judge-model"
 
-    def test_judge_model_uses_validator_for_all_entity_types(self, settings):
-        """Test that all entity types use validator for judgment."""
+    def test_judge_model_uses_judge_for_all_entity_types(self, settings):
+        """Test that all entity types use judge for quality evaluation."""
         mock_mode_service = MagicMock()
-        mock_mode_service.get_model_for_agent.return_value = "test-validator-model"
+        mock_mode_service.get_model_for_agent.return_value = "test-judge-model"
 
         service = WorldQualityService(settings, mock_mode_service)
 
@@ -304,20 +305,21 @@ class TestJudgeModelSelection:
             mock_mode_service.reset_mock()
             model = service._get_judge_model(entity_type=entity_type)
 
-            mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
-            assert model == "test-validator-model"
+            # First call should be for judge role; second call is the conflict check
+            mock_mode_service.get_model_for_agent.assert_any_call("judge")
+            assert model == "test-judge-model"
 
-    def test_judge_model_without_entity_type_uses_validator(self, settings):
-        """Test that no entity type defaults to validator for judgment."""
+    def test_judge_model_without_entity_type_uses_judge(self, settings):
+        """Test that no entity type defaults to judge for quality evaluation."""
         mock_mode_service = MagicMock()
-        mock_mode_service.get_model_for_agent.return_value = "test-validator-model"
+        mock_mode_service.get_model_for_agent.return_value = "test-judge-model"
 
         service = WorldQualityService(settings, mock_mode_service)
 
         model = service._get_judge_model()
 
-        mock_mode_service.get_model_for_agent.assert_called_once_with("validator")
-        assert model == "test-validator-model"
+        mock_mode_service.get_model_for_agent.assert_called_once_with("judge")
+        assert model == "test-judge-model"
 
 
 class TestClassConstants:
@@ -338,6 +340,6 @@ class TestClassConstants:
         """Test that ENTITY_JUDGE_ROLES constant is defined."""
         assert hasattr(WorldQualityService, "ENTITY_JUDGE_ROLES")
         roles = WorldQualityService.ENTITY_JUDGE_ROLES
-        # All entity types should use validator for judgment
+        # All entity types should use judge for quality evaluation
         for entity_type in ["character", "faction", "location", "item", "concept", "relationship"]:
-            assert roles[entity_type] == "validator"
+            assert roles[entity_type] == "judge"

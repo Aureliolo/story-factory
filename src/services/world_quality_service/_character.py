@@ -6,6 +6,10 @@ import random
 from src.memory.story_state import Character, StoryState
 from src.memory.world_quality import CharacterQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
+from src.services.world_quality_service._common import (
+    JUDGE_CALIBRATION_BLOCK,
+    judge_with_averaging,
+)
 from src.utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
@@ -118,9 +122,13 @@ def generate_character_with_quality(
                 min_iterations=config.early_stopping_min_iterations,
                 variance_tolerance=config.early_stopping_variance_tolerance,
             ):
+                reason = (
+                    f"plateaued for {history.consecutive_plateaus} consecutive iterations"
+                    if history.consecutive_plateaus >= config.early_stopping_patience
+                    else f"degraded for {history.consecutive_degradations} consecutive iterations"
+                )
                 logger.info(
-                    f"Early stopping: Character '{character.name}' quality degraded "
-                    f"for {history.consecutive_degradations} consecutive iterations "
+                    f"Early stopping: Character '{character.name}' quality {reason} "
                     f"(patience: {config.early_stopping_patience}). "
                     f"Stopping at iteration {iteration + 1}."
                 )
@@ -281,7 +289,10 @@ def _judge_character_quality(
     story_state: StoryState,
     temperature: float,
 ) -> CharacterQualityScores:
-    """Judge character quality using the validator model.
+    """Judge character quality using the judge model.
+
+    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
+    Multiple judge calls are aggregated using ScoreStatistics with outlier detection.
 
     Args:
         svc: WorldQualityService instance.
@@ -298,7 +309,47 @@ def _judge_character_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
-    prompt = f"""You are a literary critic evaluating character quality for a {genre} story.
+    prompt = _build_character_judge_prompt(character, genre)
+
+    # Resolve judge model and config once to avoid repeated resolution
+    judge_model = svc._get_judge_model(entity_type="character")
+    judge_config = svc.get_judge_config()
+    multi_call = judge_config.enabled and judge_config.multi_call_enabled
+
+    def _single_judge_call() -> CharacterQualityScores:
+        """Execute a single judge call for character quality."""
+        try:
+            return generate_structured(
+                settings=svc.settings,
+                model=judge_model,
+                prompt=prompt,
+                response_model=CharacterQualityScores,
+                temperature=temperature,
+            )
+        except Exception as e:
+            if multi_call:
+                logger.warning("Character quality judgment failed for '%s': %s", character.name, e)
+            else:
+                logger.exception(
+                    "Character quality judgment failed for '%s': %s", character.name, e
+                )
+            raise WorldGenerationError(f"Character quality judgment failed: {e}") from e
+
+    return judge_with_averaging(_single_judge_call, CharacterQualityScores, judge_config)
+
+
+def _build_character_judge_prompt(character: Character, genre: str) -> str:
+    """Build the judge prompt for character quality evaluation.
+
+    Args:
+        character: Character to evaluate.
+        genre: Story genre for context.
+
+    Returns:
+        Formatted prompt string.
+    """
+    logger.debug("Building character judge prompt for '%s'", character.name)
+    return f"""You are a literary critic evaluating character quality for a {genre} story.
 
 CHARACTER TO EVALUATE:
 Name: {character.name}
@@ -308,14 +359,7 @@ Traits: {", ".join(character.personality_traits)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
 
-SCORING CALIBRATION - BE STRICT:
-- 1-3: Poor quality, generic or incoherent
-- 4-5: Below average, lacks depth or originality
-- 6-7: Average, functional but unremarkable (most first drafts land here)
-- 8-9: Good, well-crafted with clear strengths
-- 10: Exceptional, publication-ready
-Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
-Do NOT default to high scores — a 7 is already a good score.
+{JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
 - depth: Psychological complexity, internal contradictions, layers
@@ -330,19 +374,6 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 {{"depth": <number>, "goals": <number>, "flaws": <number>, "uniqueness": <number>, "arc_potential": <number>, "feedback": "<string>"}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
-
-    try:
-        model = svc._get_judge_model(entity_type="character")
-        return generate_structured(
-            settings=svc.settings,
-            model=model,
-            prompt=prompt,
-            response_model=CharacterQualityScores,
-            temperature=temperature,
-        )
-    except Exception as e:
-        logger.exception("Character quality judgment failed for '%s': %s", character.name, e)
-        raise WorldGenerationError(f"Character quality judgment failed: {e}") from e
 
 
 def _refine_character(

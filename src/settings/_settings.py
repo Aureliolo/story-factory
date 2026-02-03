@@ -50,6 +50,7 @@ class Settings:
             "continuity": "auto",
             "validator": "auto",  # Small, fast model for validation
             "suggestion": "auto",  # Creative model for writing suggestions
+            "judge": "auto",  # Capable model for quality judging (needs reasoning)
         }
     )
 
@@ -68,6 +69,7 @@ class Settings:
             "continuity": 0.3,
             "validator": 0.1,  # Very low for consistent validation
             "suggestion": 0.8,  # Creative for writing prompts
+            "judge": 0.1,  # Very low for consistent quality judgments
             "embedding": 0.0,  # Not used for generation — embeddings are deterministic
         }
     )
@@ -164,13 +166,13 @@ class Settings:
     content_check_use_llm: bool = False  # Use LLM for more accurate checking (slower)
 
     # Judge consistency settings (for more reliable quality judgments)
-    judge_consistency_enabled: bool = False  # Opt-in: enable judge consistency features
-    judge_multi_call_enabled: bool = False  # Make multiple judge calls and average (expensive)
+    judge_consistency_enabled: bool = True  # Enable judge consistency features
+    judge_multi_call_enabled: bool = True  # Make multiple judge calls and average
     judge_multi_call_count: int = 3  # Number of judge calls if multi_call_enabled
     judge_confidence_threshold: float = 0.7  # Min confidence for reliable decisions
     judge_outlier_detection: bool = True  # Detect and handle outlier scores
     judge_outlier_std_threshold: float = 2.0  # Std devs from mean to consider outlier
-    judge_outlier_strategy: str = "median"  # How to handle outliers: median, mean, retry
+    judge_outlier_strategy: str = "median"  # How to handle outliers: median or mean
 
     # World generation counts (randomized within range for variety)
     world_gen_characters_min: int = 4

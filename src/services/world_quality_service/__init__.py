@@ -25,6 +25,7 @@ from src.memory.world_quality import (
     ConceptQualityScores,
     FactionQualityScores,
     ItemQualityScores,
+    JudgeConsistencyConfig,
     LocationQualityScores,
     RefinementConfig,
     RefinementHistory,
@@ -141,7 +142,7 @@ class WorldQualityService:
     # Map entity types to specialized agent roles for model selection.
     # Creator roles: Characters/locations/items need descriptive writing (writer),
     # factions/concepts need reasoning (architect), relationships need dynamics (editor).
-    # Judge roles: All entities use validator for consistent quality assessment.
+    # Judge roles: All entities use judge for quality evaluation (needs reasoning capability).
     ENTITY_CREATOR_ROLES: ClassVar[dict[str, str]] = {
         "character": "writer",  # Strong character development
         "faction": "architect",  # Political/organizational reasoning
@@ -152,12 +153,12 @@ class WorldQualityService:
     }
 
     ENTITY_JUDGE_ROLES: ClassVar[dict[str, str]] = {
-        "character": "validator",  # Character consistency checking
-        "faction": "validator",  # Faction coherence checking
-        "location": "validator",  # Location plausibility checking
-        "item": "validator",  # Item consistency checking
-        "concept": "validator",  # Concept coherence checking
-        "relationship": "validator",  # Relationship validity checking
+        "character": "judge",  # Character quality evaluation
+        "faction": "judge",  # Faction quality evaluation
+        "location": "judge",  # Location quality evaluation
+        "item": "judge",  # Item quality evaluation
+        "concept": "judge",  # Concept quality evaluation
+        "relationship": "judge",  # Relationship quality evaluation
     }
 
     # Faction diversity hints (exposed as class vars for backward compat)
@@ -346,8 +347,67 @@ class WorldQualityService:
         """Get refinement configuration from src.settings."""
         return RefinementConfig.from_settings(self.settings)
 
+    def get_judge_config(self) -> JudgeConsistencyConfig:
+        """Get judge consistency configuration from settings."""
+        return JudgeConsistencyConfig.from_settings(self.settings)
+
+    def _resolve_model_for_role(self, agent_role: str) -> str:
+        """Resolve the model for an agent role, respecting Settings hierarchy.
+
+        The resolution order is:
+        1. If use_per_agent_models is False and default_model is set → use default_model
+        2. If use_per_agent_models is True and agent_models has an explicit model → use it
+        3. Otherwise → delegate to ModelModeService auto-selection
+
+        This ensures that Settings-level configuration (UI-visible) takes priority
+        over the mode system's automatic selection, which was previously bypassed.
+
+        Args:
+            agent_role: The agent role to resolve (writer, validator, etc.).
+
+        Returns:
+            Model ID to use for this role.
+        """
+        # 1. Per-agent disabled + explicit default → use default for everything
+        if not self.settings.use_per_agent_models:
+            if self.settings.default_model != "auto":
+                logger.debug(
+                    "Using default_model '%s' for role '%s' (use_per_agent_models=False)",
+                    self.settings.default_model,
+                    agent_role,
+                )
+                return self.settings.default_model
+
+        # 2. Per-agent enabled + explicit model for this role → use it
+        if self.settings.use_per_agent_models:
+            if agent_role not in self.settings.agent_models:
+                raise ValueError(
+                    f"Unknown agent role '{agent_role}'. "
+                    f"Configured roles: {sorted(self.settings.agent_models.keys())}"
+                )
+            model_setting = self.settings.agent_models[agent_role]
+            if model_setting != "auto":
+                logger.debug(
+                    "Using explicit agent model '%s' for role '%s'",
+                    model_setting,
+                    agent_role,
+                )
+                return model_setting
+
+        # 3. Fall through to mode service auto-selection
+        model = self.mode_service.get_model_for_agent(agent_role)
+        logger.debug(
+            "Auto-selected model '%s' for role '%s' via mode service",
+            model,
+            agent_role,
+        )
+        return model
+
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """Get the model to use for creative generation.
+
+        Respects the Settings hierarchy: explicit default_model or per-agent model
+        takes priority over ModelModeService auto-selection.
 
         Args:
             entity_type: Type of entity being created (character, faction, location, etc.).
@@ -359,28 +419,52 @@ class WorldQualityService:
         agent_role = (
             self.ENTITY_CREATOR_ROLES.get(entity_type, "writer") if entity_type else "writer"
         )
-        model = self.mode_service.get_model_for_agent(agent_role)
+        model = self._resolve_model_for_role(agent_role)
         logger.debug(
-            f"Selected creator model '{model}' for entity_type={entity_type} (role={agent_role})"
+            "Selected creator model '%s' for entity_type=%s (role=%s)",
+            model,
+            entity_type,
+            agent_role,
         )
         return model
 
     def _get_judge_model(self, entity_type: str | None = None) -> str:
         """Get the model to use for quality judgment.
 
+        Respects the Settings hierarchy: explicit default_model or per-agent model
+        takes priority over ModelModeService auto-selection.
+
+        If the resolved judge model is the same as the creator model for the
+        same entity type, logs a warning. A model judging its own output
+        produces unreliable scores — users should configure distinct models.
+
         Args:
-            entity_type: Type of entity being judged. Currently all use validator,
-                        but allows future differentiation per entity type.
+            entity_type: Type of entity being judged. If provided, checks that
+                        the judge model differs from the creator model.
 
         Returns:
             Model ID to use for judgment.
         """
-        agent_role = (
-            self.ENTITY_JUDGE_ROLES.get(entity_type, "validator") if entity_type else "validator"
-        )
-        model = self.mode_service.get_model_for_agent(agent_role)
-        logger.debug(
-            f"Selected judge model '{model}' for entity_type={entity_type} (role={agent_role})"
+        agent_role = self.ENTITY_JUDGE_ROLES.get(entity_type, "judge") if entity_type else "judge"
+        model = self._resolve_model_for_role(agent_role)
+
+        # Warn if judge and creator resolve to the same model
+        if entity_type:
+            creator_model = self._get_creator_model(entity_type)
+            if model == creator_model:
+                logger.warning(
+                    "Judge model '%s' is the same as creator model for entity_type=%s. "
+                    "A model judging its own output produces unreliable scores. "
+                    "Configure a different model for the 'judge' role in Settings > Models.",
+                    model,
+                    entity_type,
+                )
+
+        logger.info(
+            "Selected judge model '%s' for entity_type=%s (role=%s)",
+            model,
+            entity_type,
+            agent_role,
         )
         return model
 

@@ -29,6 +29,18 @@ class TestSettings:
         assert settings.interaction_mode == "checkpoint"
         assert settings.world_quality_threshold == 7.5
 
+    def test_default_agent_models_includes_judge(self):
+        """Default agent_models should include 'judge' role set to 'auto'."""
+        settings = Settings()
+        assert "judge" in settings.agent_models
+        assert settings.agent_models["judge"] == "auto"
+
+    def test_default_agent_temperatures_includes_judge(self):
+        """Default agent_temperatures should include 'judge' role."""
+        settings = Settings()
+        assert "judge" in settings.agent_temperatures
+        assert settings.agent_temperatures["judge"] == 0.1
+
     def test_embedding_model_defaults_to_empty(self):
         """Embedding model should default to empty string (no hardcoded model)."""
         settings = Settings()
@@ -103,6 +115,35 @@ class TestSettings:
         settings.agent_temperatures["unknown_agent"] = 0.7
         with pytest.raises(ValueError, match="Unknown agent\\(s\\) in agent_temperatures"):
             settings.validate()
+
+    def test_validate_raises_on_unknown_agent_in_models(self):
+        """Should raise ValueError for unknown agent in agent_models."""
+        settings = Settings()
+        settings.agent_models["unknown_agent"] = "some-model:8b"
+        with pytest.raises(ValueError, match="Unknown agent\\(s\\) in agent_models"):
+            settings.validate()
+
+    def test_validate_raises_on_missing_agent_models(self):
+        """Should raise ValueError when agent_models is missing expected roles."""
+        settings = Settings()
+        del settings.agent_models["judge"]  # Simulate old settings file
+        with pytest.raises(ValueError, match=r"Missing agent.*judge"):
+            settings.validate()
+
+    def test_validate_agent_models_no_change_when_complete(self):
+        """Should not modify agent_models when all expected roles are present."""
+        settings = Settings()
+        original_models = dict(settings.agent_models)
+        settings.validate()
+        assert settings.agent_models == original_models
+
+    def test_validate_removes_embedding_from_agent_models(self):
+        """Should silently remove 'embedding' from agent_models (uses separate config)."""
+        settings = Settings()
+        settings.agent_models["embedding"] = "some-embedding-model:latest"
+        changed = settings.validate()
+        assert changed is True
+        assert "embedding" not in settings.agent_models
 
     def test_validate_passes_for_valid_settings(self):
         """Should not raise for valid default settings."""
@@ -1669,6 +1710,13 @@ class TestMissingValidationCoverage:
         """Should raise ValueError for invalid judge_outlier_strategy."""
         settings = Settings()
         settings.judge_outlier_strategy = "invalid"  # Not in valid list
+        with pytest.raises(ValueError, match="judge_outlier_strategy must be one of"):
+            settings.validate()
+
+    def test_validate_raises_on_retry_judge_outlier_strategy(self):
+        """Should raise ValueError for 'retry' outlier strategy (not implemented)."""
+        settings = Settings()
+        settings.judge_outlier_strategy = "retry"
         with pytest.raises(ValueError, match="judge_outlier_strategy must be one of"):
             settings.validate()
 

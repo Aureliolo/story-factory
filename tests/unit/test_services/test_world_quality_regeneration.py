@@ -29,6 +29,15 @@ def mock_settings():
     settings.world_quality_refinement_temp_decay = "linear"
     settings.world_quality_early_stopping_min_iterations = 2
     settings.world_quality_early_stopping_variance_tolerance = 0.5
+    # _resolve_model_for_role() required attributes
+    settings.use_per_agent_models = True
+    settings.default_model = "auto"
+    settings.agent_models = {
+        "writer": "auto",
+        "validator": "auto",
+        "architect": "auto",
+        "judge": "auto",
+    }
     return settings
 
 

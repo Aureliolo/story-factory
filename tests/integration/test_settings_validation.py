@@ -55,8 +55,14 @@ class TestModelSelectionFallback:
                     {
                         "use_per_agent_models": True,
                         "agent_models": {
+                            "interviewer": "auto",
+                            "architect": "auto",
                             "writer": "uninstalled-writer-model:7b",
                             "editor": "installed-model:latest",
+                            "continuity": "auto",
+                            "validator": "auto",
+                            "suggestion": "auto",
+                            "judge": "auto",
                         },
                     }
                 )
@@ -95,7 +101,16 @@ class TestModelSelectionFallback:
                 json.dumps(
                     {
                         "default_model": "some-model:latest",
-                        "agent_models": {"writer": "another-model:7b"},
+                        "agent_models": {
+                            "interviewer": "auto",
+                            "architect": "auto",
+                            "writer": "another-model:7b",
+                            "editor": "auto",
+                            "continuity": "auto",
+                            "validator": "auto",
+                            "suggestion": "auto",
+                            "judge": "auto",
+                        },
                     }
                 )
             )
@@ -166,6 +181,9 @@ class TestSettingsPageConstruction:
                             "writer": "removed-writer-model:13b",
                             "editor": "only-model:latest",
                             "continuity": "auto",
+                            "validator": "auto",
+                            "suggestion": "auto",
+                            "judge": "auto",
                         },
                     }
                 )

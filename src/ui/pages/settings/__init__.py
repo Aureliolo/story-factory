@@ -22,6 +22,7 @@ from src.ui.pages.settings._advanced import (
     build_circular_types_section,
     build_data_integrity_section,
     build_duplicate_detection_section,
+    build_judge_consistency_section,
     build_refinement_stopping_section,
     build_relationship_minimums_section,
     build_retry_strategy_section,
@@ -181,6 +182,7 @@ class SettingsPage:
                         self._build_retry_strategy_section,
                         self._build_duplicate_detection_section,
                         self._build_refinement_stopping_section,
+                        self._build_judge_consistency_section,
                     ],
                 ),
             ]
@@ -409,6 +411,10 @@ class SettingsPage:
     def _build_refinement_stopping_section(self) -> None:
         """Build refinement and stopping settings."""
         build_refinement_stopping_section(self)
+
+    def _build_judge_consistency_section(self) -> None:
+        """Build judge consistency settings (multi-call averaging, outlier detection)."""
+        build_judge_consistency_section(self)
 
     def _build_validation_rules_section(self) -> None:
         """Build validation rules settings."""

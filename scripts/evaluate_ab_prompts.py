@@ -54,7 +54,6 @@ from src.services import ServiceContainer
 from src.services.llm_client import generate_structured
 from src.services.world_quality_service import WorldQualityService
 from src.settings import Settings
-from src.utils.exceptions import StoryFactoryError
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +125,21 @@ def improved_refine_character(
             f"with specific catalysts for change"
         )
 
+    logger.debug(
+        "Improved refine character %s: threshold=%.2f avg=%.2f rels=%d",
+        character.name,
+        threshold,
+        scores.average,
+        len(character.relationships) if character.relationships else 0,
+    )
+
+    # Format relationships as "Name: description" lines
+    rel_lines = (
+        "\n".join(f"  {name}: {desc}" for name, desc in character.relationships.items())
+        if character.relationships
+        else "  (none yet)"
+    )
+
     prompt = f"""TASK: Improve this character to meet quality threshold {threshold}/10 average.
 
 ORIGINAL CHARACTER:
@@ -134,6 +148,8 @@ Role: {character.role}
 Description: {character.description}
 Traits: {", ".join(character.personality_traits)}
 Goals: {", ".join(character.goals)}
+Relationships:
+{rel_lines}
 Arc Notes: {character.arc_notes}
 
 CURRENT SCORES (target: {threshold}+ average, currently {scores.average:.1f}):
@@ -153,7 +169,8 @@ REQUIREMENTS:
 1. Keep the name "{character.name}" and role "{character.role}"
 2. Make SUBSTANTIAL changes to description, traits, goals, and arc_notes
 3. Do NOT just rephrase existing content - add NEW details and complexity
-4. Write all text in {brief.language if brief else "English"}"""
+4. The "relationships" field must be a flat dict mapping character names to relationship descriptions (e.g. {{"Sera": "Trusted mentor"}}) - NOT lists, NOT "Allies"/"Enemies" categories
+5. Write all text in {brief.language if brief else "English"}"""
 
     model = svc._get_creator_model(entity_type="character")
     return generate_structured(
@@ -722,9 +739,9 @@ def run_ab_test(
         else:
             result["error"] = f"No improved refiner for {entity_type}"
 
-    except StoryFactoryError as e:
-        result["error"] = str(e)
-        logger.error("A/B test error for %s #%d: %s", entity_type, entity_index, e)
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+        logger.exception("A/B test error for %s #%d: %s", entity_type, entity_index, e)
 
     return result
 

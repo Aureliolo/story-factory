@@ -7,7 +7,11 @@ from typing import Any
 from src.memory.story_state import Faction, StoryState
 from src.memory.world_quality import FactionQualityScores, RefinementHistory
 from src.services.llm_client import generate_structured
-from src.services.world_quality_service._common import retry_temperature
+from src.services.world_quality_service._common import (
+    JUDGE_CALIBRATION_BLOCK,
+    judge_with_averaging,
+    retry_temperature,
+)
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -153,9 +157,13 @@ def generate_faction_with_quality(
                 min_iterations=config.early_stopping_min_iterations,
                 variance_tolerance=config.early_stopping_variance_tolerance,
             ):
+                reason = (
+                    f"plateaued for {history.consecutive_plateaus} consecutive iterations"
+                    if history.consecutive_plateaus >= config.early_stopping_patience
+                    else f"degraded for {history.consecutive_degradations} consecutive iterations"
+                )
                 logger.info(
-                    f"Early stopping: Faction '{faction.get('name')}' quality degraded "
-                    f"for {history.consecutive_degradations} consecutive iterations "
+                    f"Early stopping: Faction '{faction.get('name')}' quality {reason} "
                     f"(patience: {config.early_stopping_patience}). "
                     f"Stopping at iteration {iteration + 1}."
                 )
@@ -369,7 +377,9 @@ def _judge_faction_quality(
     story_state: StoryState,
     temperature: float,
 ) -> FactionQualityScores:
-    """Judge faction quality using the validator model.
+    """Judge faction quality using the judge model.
+
+    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
 
     Args:
         svc: WorldQualityService instance.
@@ -395,14 +405,7 @@ Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
 
-SCORING CALIBRATION - BE STRICT:
-- 1-3: Poor quality, generic or incoherent
-- 4-5: Below average, lacks depth or originality
-- 6-7: Average, functional but unremarkable (most first drafts land here)
-- 8-9: Good, well-crafted with clear strengths
-- 10: Exceptional, publication-ready
-Most entities should score 5-7 on first attempt. Only give 8+ if genuinely impressive.
-Do NOT default to high scores — a 7 is already a good score.
+{JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
 - coherence: Internal consistency, clear structure
@@ -417,22 +420,37 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
-    try:
-        model = svc._get_judge_model(entity_type="faction")
-        return generate_structured(
-            settings=svc.settings,
-            model=model,
-            prompt=prompt,
-            response_model=FactionQualityScores,
-            temperature=temperature,
-        )
-    except Exception as e:
-        logger.exception(
-            "Faction quality judgment failed for '%s': %s",
-            faction.get("name") or "Unknown",
-            e,
-        )
-        raise WorldGenerationError(f"Faction quality judgment failed: {e}") from e
+    # Resolve judge model and config once to avoid repeated resolution
+    judge_model = svc._get_judge_model(entity_type="faction")
+    judge_config = svc.get_judge_config()
+    multi_call = judge_config.enabled and judge_config.multi_call_enabled
+
+    def _single_judge_call() -> FactionQualityScores:
+        """Execute a single judge call for faction quality."""
+        try:
+            return generate_structured(
+                settings=svc.settings,
+                model=judge_model,
+                prompt=prompt,
+                response_model=FactionQualityScores,
+                temperature=temperature,
+            )
+        except Exception as e:
+            if multi_call:
+                logger.warning(
+                    "Faction quality judgment failed for '%s': %s",
+                    faction.get("name") or "Unknown",
+                    e,
+                )
+            else:
+                logger.exception(
+                    "Faction quality judgment failed for '%s': %s",
+                    faction.get("name") or "Unknown",
+                    e,
+                )
+            raise WorldGenerationError(f"Faction quality judgment failed: {e}") from e
+
+    return judge_with_averaging(_single_judge_call, FactionQualityScores, judge_config)
 
 
 def _refine_faction(

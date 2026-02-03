@@ -39,7 +39,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Fast, compliant, no Chinese output - great all-rounder",
-        "tags": ["continuity", "interviewer", "suggestion"],
+        "tags": ["continuity", "interviewer", "suggestion", "judge"],
     },
     # Quality 8: All roles except writer (editing-focused, not prose creation).
     "CognitiveComputations/dolphin-mistral-nemo:12b": {
@@ -50,7 +50,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 8,
         "uncensored": True,
         "description": "128K context, excellent for editing and refinement",
-        "tags": ["editor", "architect", "continuity", "interviewer", "suggestion"],
+        "tags": ["editor", "architect", "continuity", "interviewer", "suggestion", "judge"],
     },
     # === REASONING SPECIALISTS ===
     # Reasoning-optimized: architect, continuity, interviewer, suggestion. NOT writer/editor.
@@ -62,7 +62,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 7,
         "uncensored": True,
         "description": "MoE (30B/3B active), strong reasoning - excellent for architect",
-        "tags": ["architect", "continuity", "interviewer", "suggestion"],
+        "tags": ["architect", "continuity", "interviewer", "suggestion", "judge"],
     },
     # Quality 7 reasoning: architect, continuity, interviewer, validator. No suggestion.
     "huihui_ai/qwen3-abliterated:8b": {
@@ -73,7 +73,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Good reasoning at smaller size",
-        "tags": ["architect", "continuity", "interviewer", "validator"],
+        "tags": ["architect", "continuity", "interviewer", "validator", "judge"],
     },
     # === HIGH-END ===
     # 70B+ models: Large enough to excel at everything
@@ -85,7 +85,15 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 5,
         "uncensored": True,
         "description": "Premium reasoning, excellent for complex story architecture",
-        "tags": ["writer", "editor", "architect", "continuity", "interviewer", "suggestion"],
+        "tags": [
+            "writer",
+            "editor",
+            "architect",
+            "continuity",
+            "interviewer",
+            "suggestion",
+            "judge",
+        ],
     },
     "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M": {
         "name": "Llama 3.3 70B Q4_K_M",
@@ -95,7 +103,15 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 4,
         "uncensored": True,
         "description": "Quantized 70B, fits 24GB VRAM",
-        "tags": ["writer", "editor", "architect", "continuity", "interviewer", "suggestion"],
+        "tags": [
+            "writer",
+            "editor",
+            "architect",
+            "continuity",
+            "interviewer",
+            "suggestion",
+            "judge",
+        ],
     },
     # Creative 70B: Best at prose, good at everything due to size
     "vanilj/midnight-miqu-70b-v1.5": {
@@ -106,7 +122,15 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 4,
         "uncensored": True,
         "description": "Premium creative writer - writes like a novelist",
-        "tags": ["writer", "editor", "architect", "continuity", "interviewer", "suggestion"],
+        "tags": [
+            "writer",
+            "editor",
+            "architect",
+            "continuity",
+            "interviewer",
+            "suggestion",
+            "judge",
+        ],
     },
     # === SMALL / FAST ===
     # Quality 3-5: Validator only, maybe basic interviewer
