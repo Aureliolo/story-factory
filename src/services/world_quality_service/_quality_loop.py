@@ -190,6 +190,10 @@ def quality_refinement_loop(
                 iteration + 1,
                 e,
             )
+            # Reset scores to prevent refining with stale feedback from a
+            # previous iteration.  With scores=None the next iteration will
+            # re-judge the current entity instead of blindly refining.
+            scores = None
 
         iteration += 1
 

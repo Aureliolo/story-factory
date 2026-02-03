@@ -495,3 +495,48 @@ class TestQualityLoopErrorHandling:
         # retried creation as Hero v2 -> judged high -> returned
         assert result_scores.average == 9.0
         assert create_count >= 2  # At least initial create + retry after empty refine
+
+    def test_judge_error_resets_scores_prevents_stale_refinement(self, mock_svc, config):
+        """After a judge error, scores are reset so next iteration re-judges instead of refining."""
+        config.max_iterations = 4
+        config.early_stopping_patience = 10  # Disable early stopping
+
+        judge_count = 0
+        refine_calls = []
+
+        def judge_fn(entity):
+            """Succeed, then fail, then succeed above threshold."""
+            nonlocal judge_count
+            judge_count += 1
+            if judge_count == 1:
+                return _make_scores(5.0, feedback="Needs work")
+            if judge_count == 2:
+                raise WorldGenerationError("Judge temporarily unavailable")
+            return _make_scores(9.0, feedback="Great")
+
+        def refine_fn(entity, scores, iteration):
+            """Track which scores are used for refinement."""
+            refine_calls.append(scores.feedback)
+            return {"name": "Refined Hero"}
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_scores.average == 9.0
+        # Iteration 0: create → judge OK (5.0) → scores set
+        # Iteration 1: refine with scores → judge FAILS → scores reset to None
+        # Iteration 2: scores is None → skip refinement → re-judge same entity → OK (9.0)
+        # Refine should only be called once (iteration 1), not on iteration 2
+        assert len(refine_calls) == 1
+        assert refine_calls[0] == "Needs work"
