@@ -6,12 +6,13 @@ from typing import Any
 import ollama
 
 from src.memory.story_state import StoryState
-from src.memory.world_quality import RefinementHistory, RelationshipQualityScores
+from src.memory.world_quality import RelationshipQualityScores
 from src.services.llm_client import generate_structured
 from src.services.world_quality_service._common import (
     JUDGE_CALIBRATION_BLOCK,
     judge_with_averaging,
 )
+from src.services.world_quality_service._quality_loop import quality_refinement_loop
 from src.utils.exceptions import WorldGenerationError
 from src.utils.json_parser import extract_json
 
@@ -24,7 +25,10 @@ def generate_relationship_with_quality(
     entity_names: list[str],
     existing_rels: list[tuple[str, str]],
 ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
-    """Generate a relationship with quality refinement loop.
+    """Generate a relationship with iterative quality refinement.
+
+    Uses the generic quality refinement loop to create, judge, and refine
+    relationships until the quality threshold is met or stopping criteria is reached.
 
     Args:
         svc: WorldQualityService instance.
@@ -33,7 +37,7 @@ def generate_relationship_with_quality(
         existing_rels: Existing (source, target) pairs to avoid.
 
     Returns:
-        Tuple of (relationship_dict, QualityScores, iterations_used)
+        Tuple of (relationship_dict, quality_scores, iterations_used).
 
     Raises:
         WorldGenerationError: If relationship generation fails after all retries.
@@ -46,185 +50,55 @@ def generate_relationship_with_quality(
     if len(entity_names) < 2:
         raise ValueError("Need at least 2 entities for relationship generation")
 
-    logger.info(f"Generating relationship with quality threshold {config.quality_threshold}")
+    # Track rejected duplicate pairs across loop iterations via mutable closure
+    rejected_pairs: list[tuple[str, str]] = []
 
-    # Track all iterations for best-selection using RefinementHistory
-    history = RefinementHistory(entity_type="relationship", entity_name="")
-    iteration = 0
-    relationship: dict[str, Any] = {}
-    scores: RelationshipQualityScores | None = None
-    last_error: str = ""
-    needs_fresh_creation = True  # Track whether we need fresh creation vs refinement
-    rejected_pairs: list[tuple[str, str]] = []  # Track rejected duplicates for retry
-
-    while iteration < config.max_iterations:
-        try:
-            # Create new relationship on first iteration OR if previous was invalid/duplicate
-            if needs_fresh_creation:
-                combined_rels = existing_rels + rejected_pairs
-                relationship = svc._create_relationship(
-                    story_state, entity_names, combined_rels, config.creator_temperature
-                )
-            else:
-                if relationship and scores:
-                    # Use dynamic temperature that decreases over iterations
-                    dynamic_temp = config.get_refinement_temperature(iteration + 1)
-                    relationship = svc._refine_relationship(
-                        relationship,
-                        scores,
-                        story_state,
-                        dynamic_temp,
-                    )
-
-            if not relationship.get("source") or not relationship.get("target"):
-                last_error = (
-                    f"Relationship creation returned incomplete on iteration {iteration + 1}"
-                )
-                logger.error(last_error)
-                needs_fresh_creation = True  # Retry with fresh creation
-                iteration += 1
-                continue
-
-            # Check for duplicate relationship (includes previously rejected pairs)
-            source = relationship.get("source", "")
-            target = relationship.get("target", "")
-            rel_type = relationship.get("relation_type", "knows")
-            combined_rels = existing_rels + rejected_pairs
-            if _is_duplicate_relationship(source, target, rel_type, combined_rels):
-                last_error = f"Generated duplicate relationship {source} -> {target}"
-                logger.warning(last_error)
-                rejected_pairs.append((source, target))
-                needs_fresh_creation = True  # Retry with fresh creation
-                iteration += 1
-                continue
-
-            # Got a valid relationship - can proceed to refinement on next iteration
-            needs_fresh_creation = False
-
-            # Update history entity name
-            if not history.entity_name:
-                history.entity_name = f"{source} -> {target}"
-
-            scores = svc._judge_relationship_quality(
-                relationship, story_state, config.judge_temperature
-            )
-
-            # Track this iteration
-            history.add_iteration(
-                entity_data=relationship.copy(),
-                scores=scores.to_dict(),
-                average_score=scores.average,
-                feedback=scores.feedback,
-            )
-
-            current_iter = history.iterations[-1].iteration
-            logger.info(
-                f"Relationship '{source} -> {target}' iteration {current_iter}: "
-                f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
-                f"at iteration {history.best_iteration})"
-            )
-
-            if scores.average >= config.quality_threshold:
-                logger.info("Relationship met quality threshold")
-                history.final_iteration = current_iter
-                history.final_score = scores.average
-                svc._log_refinement_analytics(
-                    history,
-                    story_state.id,
-                    threshold_met=True,
-                    early_stop_triggered=False,
-                    quality_threshold=config.quality_threshold,
-                    max_iterations=config.max_iterations,
-                )
-                return relationship, scores, current_iter
-
-            # Check for early stopping after tracking iteration (enhanced with variance tolerance)
-            if history.should_stop_early(
-                config.early_stopping_patience,
-                min_iterations=config.early_stopping_min_iterations,
-                variance_tolerance=config.early_stopping_variance_tolerance,
-            ):
-                reason = (
-                    f"plateaued for {history.consecutive_plateaus} consecutive iterations"
-                    if history.consecutive_plateaus >= config.early_stopping_patience
-                    else f"degraded for {history.consecutive_degradations} consecutive iterations"
-                )
-                logger.info(
-                    f"Early stopping: Relationship '{source} -> {target}' quality {reason} "
-                    f"(patience: {config.early_stopping_patience}). "
-                    f"Stopping at iteration {iteration + 1}."
-                )
-                break
-
-        except WorldGenerationError as e:
-            last_error = str(e)
-            logger.error(f"Relationship generation error on iteration {iteration + 1}: {e}")
-
-        iteration += 1
-
-    # Didn't meet threshold - return BEST iteration, not last
-    if not history.iterations:
-        raise WorldGenerationError(
-            f"Failed to generate relationship after {config.max_iterations} attempts. "
-            f"Last error: {last_error}"
+    def _create(retries: int) -> dict[str, Any]:
+        """Create a new relationship, passing rejected pairs to avoid duplicates."""
+        combined_rels = existing_rels + rejected_pairs
+        result: dict[str, Any] = svc._create_relationship(
+            story_state,
+            entity_names,
+            combined_rels,
+            config.creator_temperature,
         )
+        return result
 
-    # Pick best iteration (not necessarily the last one)
-    best_entity = history.get_best_entity()
+    def _is_empty(rel: dict[str, Any]) -> bool:
+        if not rel.get("source") or not rel.get("target"):
+            return True
+        # Check for duplicate relationship (includes previously rejected pairs)
+        source = rel.get("source", "")
+        target = rel.get("target", "")
+        rel_type = rel.get("relation_type", "knows")
+        combined_rels = existing_rels + rejected_pairs
+        if _is_duplicate_relationship(source, target, rel_type, combined_rels):
+            logger.warning("Generated duplicate relationship %s -> %s, rejecting", source, target)
+            rejected_pairs.append((source, target))
+            return True
+        return False
 
-    if best_entity and history.iterations[-1].average_score < history.peak_score:
-        logger.warning(
-            f"Relationship '{history.entity_name}' iterations got WORSE after peak. "
-            f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
-            f"Final: iteration {len(history.iterations)} "
-            f"({history.iterations[-1].average_score:.1f}). "
-            f"Returning best iteration."
-        )
-
-    # Return best entity or last one
-    if best_entity:
-        # Reconstruct scores from best iteration
-        best_scores: RelationshipQualityScores | None = None
-        for record in history.iterations:
-            if record.iteration == history.best_iteration:
-                best_scores = RelationshipQualityScores(**record.scores)
-                break
-        if best_scores:
-            history.final_iteration = history.best_iteration
-            history.final_score = history.peak_score
-            was_early_stop = len(history.iterations) < config.max_iterations
-            svc._log_refinement_analytics(
-                history,
-                story_state.id,
-                threshold_met=history.peak_score >= config.quality_threshold,
-                early_stop_triggered=was_early_stop,
-                quality_threshold=config.quality_threshold,
-                max_iterations=config.max_iterations,
-            )
-            return best_entity, best_scores, history.best_iteration
-
-    # Fallback to last iteration
-    if relationship.get("source") and relationship.get("target") and scores:
-        logger.warning(
-            f"Relationship '{relationship.get('source')} -> {relationship.get('target')}' "
-            f"did not meet quality threshold ({scores.average:.1f} < {config.quality_threshold}), "
-            f"returning anyway"
-        )
-        history.final_iteration = len(history.iterations)
-        history.final_score = scores.average
-        svc._log_refinement_analytics(
-            history,
-            story_state.id,
-            threshold_met=False,
-            early_stop_triggered=False,
-            quality_threshold=config.quality_threshold,
-            max_iterations=config.max_iterations,
-        )
-        return relationship, scores, len(history.iterations)
-
-    raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
-        f"Failed to generate relationship after {config.max_iterations} attempts. "
-        f"Last error: {last_error}"
+    return quality_refinement_loop(
+        entity_type="relationship",
+        create_fn=_create,
+        judge_fn=lambda rel: svc._judge_relationship_quality(
+            rel,
+            story_state,
+            config.judge_temperature,
+        ),
+        refine_fn=lambda rel, scores, iteration: svc._refine_relationship(
+            rel,
+            scores,
+            story_state,
+            config.get_refinement_temperature(iteration),
+        ),
+        get_name=lambda rel: f"{rel.get('source', '?')} -> {rel.get('target', '?')}",
+        serialize=lambda rel: rel.copy(),
+        is_empty=_is_empty,
+        score_cls=RelationshipQualityScores,
+        config=config,
+        svc=svc,
+        story_id=story_state.id,
     )
 
 
@@ -308,7 +182,8 @@ Output ONLY valid JSON (all text in {brief.language}):
         raw_response = response["response"]
         data = extract_json(raw_response, strict=False)
         if data and isinstance(data, dict):
-            return data
+            result: dict[str, Any] = data
+            return result
         else:
             # Detect likely truncation: unbalanced braces suggest output was cut off
             open_braces = raw_response.count("{") - raw_response.count("}")
@@ -385,7 +260,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"tension": <number>, "dynamics": <number>, "story_potential": <number>, "authenticity": <number>, "feedback": "<string>"}}
+{{"tension": 8.1, "dynamics": 6.4, "story_potential": 7.2, "authenticity": 5.7, "feedback": "The relationship's..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -476,7 +351,8 @@ Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
 
         data = extract_json(response["response"], strict=False)
         if data and isinstance(data, dict):
-            return data
+            result: dict[str, Any] = data
+            return result
         else:
             logger.error(f"Relationship refinement returned invalid JSON structure: {data}")
             raise WorldGenerationError(f"Invalid relationship refinement JSON structure: {data}")

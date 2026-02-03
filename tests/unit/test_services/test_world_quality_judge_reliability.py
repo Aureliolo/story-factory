@@ -150,7 +150,7 @@ class TestResolveModelForRole:
         settings.default_model = "global-model:30b"
 
         service = WorldQualityService(settings, mock_mode_service)
-        model = service._get_judge_model(entity_type="character")
+        model = service._get_judge_model()
 
         assert model == "global-model:30b"
         mock_mode_service.get_model_for_agent.assert_not_called()
@@ -729,20 +729,34 @@ class TestCalibrationBlock:
 
     def test_calibration_block_contains_scoring_rules(self):
         """JUDGE_CALIBRATION_BLOCK contains the key scoring anchors."""
-        assert "SCORING CALIBRATION" in JUDGE_CALIBRATION_BLOCK
-        assert "5-6" in JUDGE_CALIBRATION_BLOCK  # first draft average
-        assert "CRITICAL RULES" in JUDGE_CALIBRATION_BLOCK
-        assert "score inflation" in JUDGE_CALIBRATION_BLOCK.lower()
+        assert "SCORING GUIDE" in JUDGE_CALIBRATION_BLOCK
+        assert "6-7" in JUDGE_CALIBRATION_BLOCK  # first drafts land here
+        assert "RULES:" in JUDGE_CALIBRATION_BLOCK
+        assert "decimal" in JUDGE_CALIBRATION_BLOCK.lower()
 
-    def test_calibration_block_has_all_score_levels(self):
-        """JUDGE_CALIBRATION_BLOCK defines all score levels 1-10."""
-        assert "1-2:" in JUDGE_CALIBRATION_BLOCK
-        assert "3-4:" in JUDGE_CALIBRATION_BLOCK
-        assert "5:" in JUDGE_CALIBRATION_BLOCK
-        assert "6:" in JUDGE_CALIBRATION_BLOCK
-        assert "7:" in JUDGE_CALIBRATION_BLOCK
-        assert "8:" in JUDGE_CALIBRATION_BLOCK
-        assert "9:" in JUDGE_CALIBRATION_BLOCK
+    def test_calibration_block_requests_decimals(self):
+        """JUDGE_CALIBRATION_BLOCK requires decimal precision in scores."""
+        assert "one decimal place" in JUDGE_CALIBRATION_BLOCK.lower()
+        # Contains example decimal scores
+        assert "5.3" in JUDGE_CALIBRATION_BLOCK
+        assert "7.1" in JUDGE_CALIBRATION_BLOCK
+        assert "8.6" in JUDGE_CALIBRATION_BLOCK
+
+    def test_calibration_block_allows_high_scores(self):
+        """JUDGE_CALIBRATION_BLOCK does NOT suppress 8+ scores."""
+        # The old block had "Do NOT give 8+" which made 7.5 threshold unreachable
+        assert "Do NOT give 8" not in JUDGE_CALIBRATION_BLOCK
+        # 8-9 range should be described as "Excellent" (achievable)
+        assert "8-9" in JUDGE_CALIBRATION_BLOCK
+        assert "Excellent" in JUDGE_CALIBRATION_BLOCK
+
+    def test_calibration_block_has_score_ranges(self):
+        """JUDGE_CALIBRATION_BLOCK defines score ranges covering 1-10."""
+        assert "1-3:" in JUDGE_CALIBRATION_BLOCK
+        assert "4-5:" in JUDGE_CALIBRATION_BLOCK
+        assert "6-7:" in JUDGE_CALIBRATION_BLOCK
+        assert "7-8:" in JUDGE_CALIBRATION_BLOCK
+        assert "8-9:" in JUDGE_CALIBRATION_BLOCK
         assert "10:" in JUDGE_CALIBRATION_BLOCK
 
     def test_character_judge_uses_calibration_block(self):
@@ -930,8 +944,9 @@ class TestJudgeCreatorConflict:
     def test_same_model_for_judge_and_creator_logs_warning(
         self, settings, mock_mode_service, caplog
     ):
-        """When judge and creator resolve to same model, a warning is logged."""
+        """When judge and creator resolve to same model and no alternative exists, warning logged."""
         import logging
+        from unittest.mock import patch
 
         # Both writer and judge resolve to same model via auto-selection
         settings.use_per_agent_models = True
@@ -939,7 +954,11 @@ class TestJudgeCreatorConflict:
 
         service = WorldQualityService(settings, mock_mode_service)
 
-        with caplog.at_level(logging.WARNING):
+        # No alternatives available — only the same model is returned
+        with (
+            patch.object(settings, "get_models_for_role", return_value=["same-model:8b"]),
+            caplog.at_level(logging.WARNING),
+        ):
             service._get_judge_model(entity_type="character")
 
         assert any("same as creator model" in record.message for record in caplog.records), (
@@ -1145,3 +1164,161 @@ class TestJudgeCallLogLevel:
             r for r in caplog.records if r.name == module_name and r.levelno >= logging.ERROR
         ]
         assert error_records, f"Single-call mode should use logger.exception for {entity_type}"
+
+
+class TestJudgePrefersAlternativeModel:
+    """Test that _get_judge_model() prefers a different model from the creator."""
+
+    def test_swaps_to_alternative_judge_model(self, settings, mock_mode_service, caplog):
+        """When judge == creator, swaps to an alternative judge-tagged model."""
+        import logging
+        from unittest.mock import patch
+
+        # Both writer and judge auto-select the same model
+        settings.use_per_agent_models = False
+        settings.default_model = "auto"
+        mock_mode_service.get_model_for_agent.return_value = "same-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        # Provide an alternative judge model via get_models_for_role
+        with (
+            patch.object(
+                settings,
+                "get_models_for_role",
+                return_value=["different-judge:8b", "same-model:8b"],
+            ),
+            caplog.at_level(logging.INFO),
+        ):
+            model = service._get_judge_model(entity_type="character")
+
+        assert model == "different-judge:8b"
+        assert any("Swapping judge model" in r.message for r in caplog.records)
+
+    def test_falls_back_when_no_alternative(self, settings, mock_mode_service, caplog):
+        """When no alternative judge model exists, keeps same model with warning."""
+        import logging
+        from unittest.mock import patch
+
+        settings.use_per_agent_models = False
+        settings.default_model = "auto"
+        mock_mode_service.get_model_for_agent.return_value = "only-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        # Only model available is the same as creator
+        with (
+            patch.object(
+                settings,
+                "get_models_for_role",
+                return_value=["only-model:8b"],
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            model = service._get_judge_model(entity_type="character")
+
+        assert model == "only-model:8b"
+        assert any("same as creator model" in r.message for r in caplog.records)
+
+
+class TestConflictWarningThrottle:
+    """Test that conflict warnings are throttled (once per entity_type:model)."""
+
+    def test_conflict_warning_fires_only_once(self, settings, mock_mode_service, caplog):
+        """Same conflict key only produces one warning."""
+        import logging
+        from unittest.mock import patch
+
+        settings.use_per_agent_models = False
+        settings.default_model = "auto"
+        mock_mode_service.get_model_for_agent.return_value = "same-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with (
+            patch.object(settings, "get_models_for_role", return_value=["same-model:8b"]),
+            caplog.at_level(logging.WARNING),
+        ):
+            service._get_judge_model(entity_type="character")
+            service._get_judge_model(entity_type="character")
+            service._get_judge_model(entity_type="character")
+
+        conflict_warnings = [
+            r
+            for r in caplog.records
+            if "same as creator model" in r.message and r.levelno == logging.WARNING
+        ]
+        assert len(conflict_warnings) == 1, (
+            f"Expected exactly 1 conflict warning, got {len(conflict_warnings)}"
+        )
+
+    def test_different_entity_types_get_separate_warnings(
+        self, settings, mock_mode_service, caplog
+    ):
+        """Different entity_type keys produce separate warnings."""
+        import logging
+        from unittest.mock import patch
+
+        settings.use_per_agent_models = False
+        settings.default_model = "auto"
+        mock_mode_service.get_model_for_agent.return_value = "same-model:8b"
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with (
+            patch.object(settings, "get_models_for_role", return_value=["same-model:8b"]),
+            caplog.at_level(logging.WARNING),
+        ):
+            service._get_judge_model(entity_type="character")
+            service._get_judge_model(entity_type="location")
+
+        conflict_warnings = [
+            r
+            for r in caplog.records
+            if "same as creator model" in r.message and r.levelno == logging.WARNING
+        ]
+        assert len(conflict_warnings) == 2
+
+
+class TestJudgePromptOutputFormatDecimals:
+    """Test that all entity judge prompts show decimal examples in OUTPUT FORMAT."""
+
+    def test_character_prompt_has_decimal_examples(self):
+        """Character judge prompt OUTPUT FORMAT uses decimal scores."""
+        from src.memory.story_state import Character
+        from src.services.world_quality_service._character import _build_character_judge_prompt
+
+        character = Character(
+            name="Test Hero",
+            role="protagonist",
+            description="A warrior",
+            personality_traits=["brave"],
+            goals=["survive"],
+            arc_notes="Grows",
+        )
+        prompt = _build_character_judge_prompt(character, "fantasy")
+        # Check for decimal example scores (not whole numbers)
+        assert "6.3" in prompt or "7.8" in prompt or "5.1" in prompt
+
+    def test_plot_prompt_has_decimal_examples(self):
+        """Plot judge prompt OUTPUT FORMAT uses decimal scores."""
+        from src.memory.story_state import PlotOutline, PlotPoint
+        from src.services.world_quality_service._plot import _build_plot_judge_prompt
+
+        plot = PlotOutline(
+            plot_summary="A test plot",
+            plot_points=[PlotPoint(description="Event 1")],
+        )
+        prompt = _build_plot_judge_prompt(plot, "fantasy", ["courage"])
+        assert "7.4" in prompt or "5.8" in prompt or "8.1" in prompt
+
+    def test_chapter_prompt_has_decimal_examples(self):
+        """Chapter judge prompt OUTPUT FORMAT uses decimal scores."""
+        from src.memory.story_state import Chapter
+        from src.services.world_quality_service._chapter_quality import (
+            _build_chapter_judge_prompt,
+        )
+
+        chapter = Chapter(number=1, title="Test", outline="Test outline")
+        prompt = _build_chapter_judge_prompt(chapter, "fantasy", "A story about heroes")
+        assert "6.9" in prompt or "7.3" in prompt or "5.4" in prompt

@@ -131,7 +131,7 @@ class Settings:
     # World quality refinement settings
     world_quality_enabled: bool = True  # Enable quality refinement for world generation
     world_quality_max_iterations: int = 3  # Maximum refinement iterations per entity
-    world_quality_threshold: float = 7.5  # Min score (0-10) - entities plateau at 7.5-7.8
+    world_quality_threshold: float = 8.0  # Min score (0-10) to pass quality review
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
     world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
@@ -591,6 +591,41 @@ class Settings:
             f"Installed models: [{installed_list}]. "
             f"Configure model tags in Settings > Models tab, or download a recommended model."
         )
+
+    def get_models_for_role(self, role: str) -> list[str]:
+        """Return all installed models tagged for the given role, sorted by quality descending.
+
+        Args:
+            role: The agent role tag to search for (e.g., "judge", "writer").
+
+        Returns:
+            List of model IDs that have the requested role tag, sorted by
+            quality score descending. Returns empty list if none found.
+        """
+        installed_models = get_installed_models_with_sizes()
+        if not installed_models:
+            logger.debug("get_models_for_role: no installed models found")
+            return []
+
+        tagged: list[tuple[str, float]] = []  # (model_id, quality)
+        for model_id in installed_models:
+            tags = self.get_model_tags(model_id)
+            if role in tags:
+                # Embedding models only generate vectors — skip for chat roles
+                if role != "embedding" and "embedding" in tags:
+                    continue
+                quality = 5.0
+                for rec_id, info in RECOMMENDED_MODELS.items():
+                    if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
+                        quality = info.get("quality", 5.0)
+                        break
+                tagged.append((model_id, quality))
+
+        # Sort by quality descending
+        tagged.sort(key=lambda x: x[1], reverse=True)
+        result = [model_id for model_id, _ in tagged]
+        logger.debug("get_models_for_role(%s): found %d models: %s", role, len(result), result)
+        return result
 
     def get_temperature_for_agent(self, agent_role: str) -> float:
         """Get temperature setting for an agent.

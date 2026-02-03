@@ -27,7 +27,7 @@ class TestSettings:
         assert settings.max_tokens == 8192
         assert settings.use_per_agent_models is True
         assert settings.interaction_mode == "checkpoint"
-        assert settings.world_quality_threshold == 7.5
+        assert settings.world_quality_threshold == 8.0
 
     def test_default_agent_models_includes_judge(self):
         """Default agent_models should include 'judge' role set to 'auto'."""
@@ -2430,3 +2430,101 @@ class TestEmbeddingModelMigration:
         settings.embedding_model = "some-old-model"
         changed = settings.validate()
         assert changed is False
+
+
+class TestGetModelsForRole:
+    """Tests for Settings.get_models_for_role() method."""
+
+    def test_returns_models_with_matching_role_tag(self, monkeypatch):
+        """Returns models that have the requested role tag."""
+        fake_registry = {
+            "judge-model:8b": {"quality": 8, "tags": ["judge", "writer"]},
+            "writer-model:30b": {"quality": 9, "tags": ["writer"]},
+            "judge-small:4b": {"quality": 6, "tags": ["judge"]},
+        }
+        # Patch both the source module and the local binding in _settings.py
+        monkeypatch.setattr("src.settings._model_registry.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr("src.settings._settings.RECOMMENDED_MODELS", fake_registry)
+
+        # Mock installed models to include all registry models
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: dict.fromkeys(fake_registry, 4.0),
+        )
+
+        settings = Settings()
+        result = settings.get_models_for_role("judge")
+
+        assert "judge-model:8b" in result
+        assert "judge-small:4b" in result
+        assert "writer-model:30b" not in result
+
+    def test_returns_sorted_by_quality_descending(self, monkeypatch):
+        """Models are sorted by quality score descending."""
+        fake_registry = {
+            "low-quality:4b": {"quality": 4, "tags": ["judge"]},
+            "high-quality:30b": {"quality": 9, "tags": ["judge"]},
+            "mid-quality:8b": {"quality": 7, "tags": ["judge"]},
+        }
+        monkeypatch.setattr("src.settings._model_registry.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr("src.settings._settings.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: dict.fromkeys(fake_registry, 4.0),
+        )
+
+        settings = Settings()
+        result = settings.get_models_for_role("judge")
+
+        assert result[0] == "high-quality:30b"
+        assert result[1] == "mid-quality:8b"
+        assert result[2] == "low-quality:4b"
+
+    def test_returns_empty_when_no_models_found(self, monkeypatch):
+        """Returns empty list when no installed models have the role tag."""
+        fake_registry = {
+            "writer-only:8b": {"quality": 7, "tags": ["writer"]},
+        }
+        monkeypatch.setattr("src.settings._model_registry.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr("src.settings._settings.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: dict.fromkeys(fake_registry, 4.0),
+        )
+
+        settings = Settings()
+        result = settings.get_models_for_role("judge")
+
+        assert result == []
+
+    def test_returns_empty_when_no_installed_models(self, monkeypatch):
+        """Returns empty list when no models are installed."""
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: {},
+        )
+
+        settings = Settings()
+        result = settings.get_models_for_role("judge")
+
+        assert result == []
+
+    def test_skips_embedding_models_for_chat_roles(self, monkeypatch):
+        """Embedding models are excluded when searching for non-embedding roles."""
+        fake_registry = {
+            "embed-model:8b": {"quality": 9, "tags": ["writer", "embedding"]},
+            "pure-writer:8b": {"quality": 7, "tags": ["writer"]},
+        }
+        monkeypatch.setattr("src.settings._model_registry.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr("src.settings._settings.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: dict.fromkeys(fake_registry, 4.0),
+        )
+
+        settings = Settings()
+        result = settings.get_models_for_role("writer")
+
+        # embed-model should be skipped because it has "embedding" tag
+        assert "pure-writer:8b" in result
+        assert "embed-model:8b" not in result

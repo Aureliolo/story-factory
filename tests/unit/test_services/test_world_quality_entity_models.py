@@ -1,6 +1,6 @@
 """Tests for entity-type-specific model selection in WorldQualityService."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -287,7 +287,9 @@ class TestJudgeModelSelection:
 
         service = WorldQualityService(settings, mock_mode_service)
 
-        model = service._get_judge_model(entity_type="character")
+        # Mock get_models_for_role to return only the judge model (no swap candidate)
+        with patch.object(settings, "get_models_for_role", return_value=["test-judge-model"]):
+            model = service._get_judge_model(entity_type="character")
 
         # First call should be for judge role; second call is the conflict check
         mock_mode_service.get_model_for_agent.assert_any_call("judge")
@@ -303,7 +305,9 @@ class TestJudgeModelSelection:
         entity_types = ["character", "faction", "location", "item", "concept", "relationship"]
         for entity_type in entity_types:
             mock_mode_service.reset_mock()
-            model = service._get_judge_model(entity_type=entity_type)
+            # Mock get_models_for_role to return only the judge model (no swap candidate)
+            with patch.object(settings, "get_models_for_role", return_value=["test-judge-model"]):
+                model = service._get_judge_model(entity_type=entity_type)
 
             # First call should be for judge role; second call is the conflict check
             mock_mode_service.get_model_for_agent.assert_any_call("judge")

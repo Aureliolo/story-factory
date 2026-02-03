@@ -4,7 +4,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.memory.story_state import Chapter, Character, StoryBrief, StoryState
+from src.memory.story_state import (
+    Chapter,
+    Character,
+    PlotOutline,
+    PlotPoint,
+    StoryBrief,
+    StoryState,
+)
 from src.memory.templates import WorldTemplate
 from src.memory.world_database import WorldDatabase
 from src.services.world_service import (
@@ -183,6 +190,18 @@ def mock_services():
     services.world_quality.generate_factions_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_items_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_concepts_with_quality = MagicMock(return_value=[])
+
+    # Quality review pass-through: return characters/chapters unchanged with mock scores
+    def _review_characters(characters, state, cancel_check=None):
+        """Pass characters through review unchanged."""
+        return [(char, MagicMock()) for char in characters]
+
+    def _review_chapters(chapters, state, cancel_check=None):
+        """Pass chapters through review unchanged."""
+        return [(ch, MagicMock()) for ch in chapters]
+
+    services.world_quality.review_characters_batch = MagicMock(side_effect=_review_characters)
+    services.world_quality.review_chapters_batch = MagicMock(side_effect=_review_chapters)
     return services
 
 
@@ -193,17 +212,19 @@ class TestCalculateTotalSteps:
         """Test step count for full options."""
         options = WorldBuildOptions.full()
         # Base (2: character extraction + completion)
-        # + structure (1) + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) = 8
-        assert world_service._calculate_total_steps(options) == 8
+        # + structure (1) + quality review (3: characters, plot, chapters)
+        # + locations (1) + factions (1)
+        # + items (1) + concepts (1) + relationships (1) = 11
+        assert world_service._calculate_total_steps(options) == 11
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
         options = WorldBuildOptions.full_rebuild()
         # Base (2: character extraction + completion)
-        # + clear (1) + structure (1) + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) = 9
-        assert world_service._calculate_total_steps(options) == 9
+        # + clear (1) + structure (1) + quality review (3: characters, plot, chapters)
+        # + locations (1) + factions (1)
+        # + items (1) + concepts (1) + relationships (1) = 12
+        assert world_service._calculate_total_steps(options) == 12
 
     def test_custom_options(self, world_service):
         """Test step count for custom options."""
@@ -793,6 +814,41 @@ class TestBuildWorld:
 
         # After build, world_template_id should be set
         assert sample_story_state.world_template_id == "test_fantasy"
+
+    def test_plot_quality_review_runs_when_plot_summary_exists(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that plot quality review updates the story state when plot_summary is present."""
+        sample_story_state.plot_summary = "A hero's journey"
+        sample_story_state.plot_points = [PlotPoint(description="The call", chapter=1)]
+
+        refined_plot = PlotOutline(
+            plot_summary="Refined journey",
+            plot_points=[PlotPoint(description="The refined call", chapter=1)],
+        )
+        mock_plot_scores = MagicMock()
+        mock_plot_scores.average = 8.5
+
+        mock_services.world_quality.review_plot_quality = MagicMock(
+            return_value=(refined_plot, mock_plot_scores, 2)
+        )
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.story.generate_relationships.return_value = []
+
+        world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert sample_story_state.plot_summary == "Refined journey"
+        assert len(sample_story_state.plot_points) == 1
+        assert sample_story_state.plot_points[0].description == "The refined call"
+        mock_services.world_quality.review_plot_quality.assert_called_once()
 
 
 class TestWorldBuildCancellation:

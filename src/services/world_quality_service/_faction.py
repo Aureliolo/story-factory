@@ -5,13 +5,14 @@ import random
 from typing import Any
 
 from src.memory.story_state import Faction, StoryState
-from src.memory.world_quality import FactionQualityScores, RefinementHistory
+from src.memory.world_quality import FactionQualityScores
 from src.services.llm_client import generate_structured
 from src.services.world_quality_service._common import (
     JUDGE_CALIBRATION_BLOCK,
     judge_with_averaging,
     retry_temperature,
 )
+from src.services.world_quality_service._quality_loop import quality_refinement_loop
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -52,204 +53,55 @@ def generate_faction_with_quality(
     existing_names: list[str],
     existing_locations: list[str] | None = None,
 ) -> tuple[dict[str, Any], FactionQualityScores, int]:
-    """
-    Generate a faction using an iterative create-refine-judge loop and return the best iteration.
+    """Generate a faction with iterative quality refinement.
+
+    Uses the generic quality refinement loop to create, judge, and refine
+    factions until the quality threshold is met or stopping criteria is reached.
 
     Parameters:
         svc: WorldQualityService instance.
-        story_state (StoryState): Current story state containing the brief and context.
-        existing_names (list[str]): Existing faction names to avoid duplicates.
-        existing_locations (list[str] | None): Optional list of location names for spatial grounding.
+        story_state: Current story state with brief.
+        existing_names: Existing faction names to avoid duplicates.
+        existing_locations: Optional list of location names for spatial grounding.
 
     Returns:
-        tuple[dict[str, Any], FactionQualityScores, int]: (faction_dict, quality_scores, iterations_used)
+        Tuple of (faction_dict, quality_scores, iterations_used).
 
     Raises:
-        WorldGenerationError: If faction generation fails to produce any valid iterations.
+        WorldGenerationError: If faction generation fails after all attempts.
     """
     config = svc.get_config()
     brief = story_state.brief
     if not brief:
         raise ValueError("Story must have a brief for faction generation")
 
-    logger.info(f"Generating faction with quality threshold {config.quality_threshold}")
-
-    # Track all iterations for best-selection
-    history = RefinementHistory(entity_type="faction", entity_name="")
-    iteration = 0
-    faction: dict[str, Any] = {}
-    scores: FactionQualityScores | None = None
-    last_error: str = ""
-    creation_retries = 0  # Track duplicate-name retries for temperature escalation
-
-    while iteration < config.max_iterations:
-        try:
-            # Create new faction on first iteration OR if previous returned empty
-            # (e.g., duplicate name detection returns {} to force retry)
-            if iteration == 0 or not faction.get("name"):
-                # Increase temperature on retries to avoid regenerating the same name
-                retry_temp = retry_temperature(config, creation_retries)
-                faction = svc._create_faction(
-                    story_state, existing_names, retry_temp, existing_locations
-                )
-            else:
-                if faction and scores:
-                    # Use dynamic temperature that decreases over iterations
-                    dynamic_temp = config.get_refinement_temperature(iteration + 1)
-                    faction = svc._refine_faction(
-                        faction,
-                        scores,
-                        story_state,
-                        dynamic_temp,
-                    )
-
-            if not faction.get("name"):
-                creation_retries += 1
-                last_error = f"Faction creation returned empty on iteration {iteration + 1}"
-                logger.warning(
-                    "%s (retry %d, next temp=%.2f)",
-                    last_error,
-                    creation_retries,
-                    retry_temperature(config, creation_retries),
-                )
-                iteration += 1
-                continue
-
-            # Update history entity name
-            if not history.entity_name:
-                history.entity_name = faction.get("name", "Unknown")
-
-            scores = svc._judge_faction_quality(faction, story_state, config.judge_temperature)
-
-            # Track this iteration
-            history.add_iteration(
-                entity_data=faction.copy(),
-                scores=scores.to_dict(),
-                average_score=scores.average,
-                feedback=scores.feedback,
-            )
-
-            current_iter = history.iterations[-1].iteration
-            logger.info(
-                f"Faction '{faction.get('name')}' iteration {current_iter}: "
-                f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
-                f"at iteration {history.best_iteration})"
-            )
-
-            if scores.average >= config.quality_threshold:
-                logger.info(f"Faction '{faction.get('name')}' met quality threshold")
-                history.final_iteration = current_iter
-                history.final_score = scores.average
-                # Log analytics
-                svc._log_refinement_analytics(
-                    history,
-                    story_state.id,
-                    threshold_met=True,
-                    early_stop_triggered=False,
-                    quality_threshold=config.quality_threshold,
-                    max_iterations=config.max_iterations,
-                )
-                return faction, scores, current_iter
-
-            # Check for early stopping after tracking iteration (enhanced with variance tolerance)
-            if history.should_stop_early(
-                config.early_stopping_patience,
-                min_iterations=config.early_stopping_min_iterations,
-                variance_tolerance=config.early_stopping_variance_tolerance,
-            ):
-                reason = (
-                    f"plateaued for {history.consecutive_plateaus} consecutive iterations"
-                    if history.consecutive_plateaus >= config.early_stopping_patience
-                    else f"degraded for {history.consecutive_degradations} consecutive iterations"
-                )
-                logger.info(
-                    f"Early stopping: Faction '{faction.get('name')}' quality {reason} "
-                    f"(patience: {config.early_stopping_patience}). "
-                    f"Stopping at iteration {iteration + 1}."
-                )
-                break  # Exit loop early
-
-        except WorldGenerationError as e:
-            last_error = str(e)
-            logger.error(f"Faction generation error on iteration {iteration + 1}: {e}")
-
-        iteration += 1
-
-    # Didn't meet threshold - return BEST iteration, not last
-    if not history.iterations:
-        raise WorldGenerationError(
-            f"Failed to generate faction after {config.max_iterations} attempts. "
-            f"Last error: {last_error}"
-        )
-
-    # Pick best iteration (not necessarily the last one)
-    best_entity = history.get_best_entity()
-
-    if best_entity and history.iterations[-1].average_score < history.peak_score:
-        logger.warning(
-            f"Faction '{history.entity_name}' iterations got WORSE after peak. "
-            f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
-            f"Final: iteration {len(history.iterations)} ({history.iterations[-1].average_score:.1f}). "
-            f"Returning best iteration."
-        )
-        faction = best_entity
-        # Find best iteration record by iteration number (not index)
-        # This handles cases where some iterations failed and weren't added to the list
-        best_record = next(
-            (r for r in history.iterations if r.iteration == history.best_iteration),
-            None,
-        )
-        if best_record is None:  # pragma: no cover
-            logger.error(
-                f"Best iteration {history.best_iteration} not found in history. "
-                f"Available iterations: {[r.iteration for r in history.iterations]}"
-            )
-            # Fall back to last iteration
-            best_record = history.iterations[-1]
-        scores = FactionQualityScores(
-            coherence=best_record.scores.get("coherence", 0),
-            influence=best_record.scores.get("influence", 0),
-            conflict_potential=best_record.scores.get("conflict_potential", 0),
-            distinctiveness=best_record.scores.get("distinctiveness", 0),
-            feedback=best_record.feedback,
-        )
-        history.final_iteration = history.best_iteration
-        history.final_score = history.peak_score
-    else:
-        history.final_iteration = len(history.iterations)
-        # Reconstruct scores from last iteration if not available
-        # Note: In practice, scores should always be set if we have iterations,
-        # since add_iteration is called after _judge_faction_quality succeeds.
-        # This is defensive code for edge cases that may not occur in practice.
-        if scores is None:  # pragma: no cover
-            last_record = history.iterations[-1]
-            scores = FactionQualityScores(
-                coherence=last_record.scores.get("coherence", 0),
-                influence=last_record.scores.get("influence", 0),
-                conflict_potential=last_record.scores.get("conflict_potential", 0),
-                distinctiveness=last_record.scores.get("distinctiveness", 0),
-                feedback=last_record.feedback,
-            )
-        history.final_score = scores.average
-
-    logger.warning(
-        f"Faction '{history.entity_name}' did not meet quality threshold "
-        f"({history.final_score:.1f} < {config.quality_threshold}), "
-        f"returning iteration {history.final_iteration}"
+    return quality_refinement_loop(
+        entity_type="faction",
+        create_fn=lambda retries: svc._create_faction(
+            story_state,
+            existing_names,
+            retry_temperature(config, retries),
+            existing_locations,
+        ),
+        judge_fn=lambda fac: svc._judge_faction_quality(
+            fac,
+            story_state,
+            config.judge_temperature,
+        ),
+        refine_fn=lambda fac, scores, iteration: svc._refine_faction(
+            fac,
+            scores,
+            story_state,
+            config.get_refinement_temperature(iteration),
+        ),
+        get_name=lambda fac: fac.get("name", "Unknown"),
+        serialize=lambda fac: fac.copy(),
+        is_empty=lambda fac: not fac.get("name"),
+        score_cls=FactionQualityScores,
+        config=config,
+        svc=svc,
+        story_id=story_state.id,
     )
-
-    # Log analytics
-    was_early_stop = len(history.iterations) < config.max_iterations
-    svc._log_refinement_analytics(
-        history,
-        story_state.id,
-        threshold_met=history.final_score >= config.quality_threshold,
-        early_stop_triggered=was_early_stop,
-        quality_threshold=config.quality_threshold,
-        max_iterations=config.max_iterations,
-    )
-
-    return faction, scores, history.final_iteration
 
 
 def _create_faction(
@@ -259,18 +111,17 @@ def _create_faction(
     temperature: float,
     existing_locations: list[str] | None = None,
 ) -> dict[str, Any]:
-    """
-    Generate a unique faction definition for the given story using the configured creator model.
+    """Generate a unique faction definition for the given story using the configured creator model.
 
     Parameters:
         svc: WorldQualityService instance.
-        story_state (StoryState): Story context and brief.
-        existing_names (list[str]): Existing faction names to avoid.
-        temperature (float): Sampling temperature for the creator model.
-        existing_locations (list[str] | None): Optional list of world locations.
+        story_state: Story context and brief.
+        existing_names: Existing faction names to avoid.
+        temperature: Sampling temperature for the creator model.
+        existing_locations: Optional list of world locations.
 
     Returns:
-        dict[str, Any]: A faction dictionary. Returns empty dict when retry needed.
+        A faction dictionary. Returns empty dict when retry needed.
 
     Raises:
         WorldGenerationError: If faction generation fails due to unrecoverable errors.
@@ -416,7 +267,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"coherence": <number>, "influence": <number>, "conflict_potential": <number>, "distinctiveness": <number>, "feedback": "<string>"}}
+{{"coherence": 6.7, "influence": 5.3, "conflict_potential": 8.1, "distinctiveness": 7.4, "feedback": "The faction's..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -526,14 +377,13 @@ Return ONLY the improved faction."""
 
 
 def _format_existing_names(existing_names: list[str]) -> str:
-    """
-    Format a list of existing faction names into a prompt-ready string.
+    """Format a list of existing faction names into a prompt-ready string.
 
     Parameters:
-        existing_names (list[str]): Existing faction names to include in the prompt.
+        existing_names: Existing faction names to include in the prompt.
 
     Returns:
-        str: Newline-separated names each prefixed with "-".
+        Newline-separated names each prefixed with "-".
     """
     if not existing_names:
         logger.debug("Formatting existing faction names: none provided")

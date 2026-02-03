@@ -457,7 +457,7 @@ class TestRefinementConfig:
         """Test default config values."""
         config = RefinementConfig()
         assert config.max_iterations == 3
-        assert config.quality_threshold == 7.5
+        assert config.quality_threshold == 8.0
 
     def test_validation(self):
         """Test validation constraints."""

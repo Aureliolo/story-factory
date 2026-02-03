@@ -5,6 +5,7 @@ iterative improvement of characters, locations, and relationships.
 """
 
 import logging
+from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -214,7 +215,31 @@ class RefinementHistory(BaseModel):
         }
 
 
-class CharacterQualityScores(BaseModel):
+class BaseQualityScores(BaseModel, ABC):
+    """Abstract base class for all quality score models.
+
+    Provides the common interface (feedback, average, to_dict, weak_dimensions)
+    that the generic quality refinement loop requires. Each subclass defines
+    its own dimension-specific fields and implements these methods.
+    """
+
+    feedback: str = ""
+
+    @property
+    @abstractmethod
+    def average(self) -> float:
+        """Calculate average score across all dimensions."""
+
+    @abstractmethod
+    def to_dict(self) -> dict[str, float | str]:
+        """Convert to dictionary for storage in entity attributes."""
+
+    @abstractmethod
+    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        """Return list of dimensions below threshold."""
+
+
+class CharacterQualityScores(BaseQualityScores):
     """Quality scores for a character (0-10 scale).
 
     All score fields are required - no defaults. This ensures that the LLM
@@ -227,7 +252,6 @@ class CharacterQualityScores(BaseModel):
     flaws: float = Field(ge=0.0, le=10.0, description="Meaningful vulnerabilities")
     uniqueness: float = Field(ge=0.0, le=10.0, description="Distinctiveness")
     arc_potential: float = Field(ge=0.0, le=10.0, description="Room for transformation")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -262,7 +286,7 @@ class CharacterQualityScores(BaseModel):
         return weak
 
 
-class LocationQualityScores(BaseModel):
+class LocationQualityScores(BaseQualityScores):
     """Quality scores for a location (0-10 scale).
 
     All score fields are required - no defaults.
@@ -272,7 +296,6 @@ class LocationQualityScores(BaseModel):
     significance: float = Field(ge=0.0, le=10.0, description="Plot/symbolic meaning")
     story_relevance: float = Field(ge=0.0, le=10.0, description="Theme/character links")
     distinctiveness: float = Field(ge=0.0, le=10.0, description="Memorable qualities")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -306,7 +329,7 @@ class LocationQualityScores(BaseModel):
         return weak
 
 
-class RelationshipQualityScores(BaseModel):
+class RelationshipQualityScores(BaseQualityScores):
     """Quality scores for a relationship (0-10 scale).
 
     All score fields are required - no defaults.
@@ -316,7 +339,6 @@ class RelationshipQualityScores(BaseModel):
     dynamics: float = Field(ge=0.0, le=10.0, description="Complexity, power balance")
     story_potential: float = Field(ge=0.0, le=10.0, description="Scene opportunities")
     authenticity: float = Field(ge=0.0, le=10.0, description="Believability")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -348,7 +370,7 @@ class RelationshipQualityScores(BaseModel):
         return weak
 
 
-class FactionQualityScores(BaseModel):
+class FactionQualityScores(BaseQualityScores):
     """Quality scores for a faction (0-10 scale).
 
     All score fields are required - no defaults.
@@ -358,7 +380,6 @@ class FactionQualityScores(BaseModel):
     influence: float = Field(ge=0.0, le=10.0, description="World impact")
     conflict_potential: float = Field(ge=0.0, le=10.0, description="Story conflict potential")
     distinctiveness: float = Field(ge=0.0, le=10.0, description="Memorable qualities")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -392,7 +413,7 @@ class FactionQualityScores(BaseModel):
         return weak
 
 
-class ItemQualityScores(BaseModel):
+class ItemQualityScores(BaseQualityScores):
     """Quality scores for an item (0-10 scale).
 
     All score fields are required - no defaults.
@@ -402,7 +423,6 @@ class ItemQualityScores(BaseModel):
     uniqueness: float = Field(ge=0.0, le=10.0, description="Distinctive qualities")
     narrative_potential: float = Field(ge=0.0, le=10.0, description="Plot opportunities")
     integration: float = Field(ge=0.0, le=10.0, description="Fits world")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -436,7 +456,7 @@ class ItemQualityScores(BaseModel):
         return weak
 
 
-class ConceptQualityScores(BaseModel):
+class ConceptQualityScores(BaseQualityScores):
     """Quality scores for a concept (0-10 scale).
 
     All score fields are required - no defaults.
@@ -446,7 +466,6 @@ class ConceptQualityScores(BaseModel):
     depth: float = Field(ge=0.0, le=10.0, description="Philosophical richness")
     manifestation: float = Field(ge=0.0, le=10.0, description="How it appears in story")
     resonance: float = Field(ge=0.0, le=10.0, description="Emotional impact")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -478,12 +497,96 @@ class ConceptQualityScores(BaseModel):
         return weak
 
 
+class PlotQualityScores(BaseQualityScores):
+    """Quality scores for a plot outline (0-10 scale).
+
+    All score fields are required - no defaults.
+    """
+
+    coherence: float = Field(ge=0.0, le=10.0, description="Logical progression")
+    tension_arc: float = Field(ge=0.0, le=10.0, description="Stakes and tension")
+    character_integration: float = Field(ge=0.0, le=10.0, description="Character arc advancement")
+    originality: float = Field(ge=0.0, le=10.0, description="Avoids cliches")
+
+    @property
+    def average(self) -> float:
+        """Calculate average score across all dimensions."""
+        return (
+            self.coherence + self.tension_arc + self.character_integration + self.originality
+        ) / 4.0
+
+    def to_dict(self) -> dict[str, float | str]:
+        """Convert to dictionary for storage in entity attributes."""
+        return {
+            "coherence": self.coherence,
+            "tension_arc": self.tension_arc,
+            "character_integration": self.character_integration,
+            "originality": self.originality,
+            "average": self.average,
+            "feedback": self.feedback,
+        }
+
+    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        """Return list of dimensions below threshold."""
+        weak = []
+        if self.coherence < threshold:
+            weak.append("coherence")
+        if self.tension_arc < threshold:
+            weak.append("tension_arc")
+        if self.character_integration < threshold:
+            weak.append("character_integration")
+        if self.originality < threshold:
+            weak.append("originality")
+        return weak
+
+
+class ChapterQualityScores(BaseQualityScores):
+    """Quality scores for a chapter outline (0-10 scale).
+
+    All score fields are required - no defaults.
+    """
+
+    purpose: float = Field(ge=0.0, le=10.0, description="Plot/character advancement")
+    pacing: float = Field(ge=0.0, le=10.0, description="Action/dialogue/reflection balance")
+    hook: float = Field(ge=0.0, le=10.0, description="Opening grab and ending compulsion")
+    coherence: float = Field(ge=0.0, le=10.0, description="Internal consistency and flow")
+
+    @property
+    def average(self) -> float:
+        """Calculate average score across all dimensions."""
+        return (self.purpose + self.pacing + self.hook + self.coherence) / 4.0
+
+    def to_dict(self) -> dict[str, float | str]:
+        """Convert to dictionary for storage in entity attributes."""
+        return {
+            "purpose": self.purpose,
+            "pacing": self.pacing,
+            "hook": self.hook,
+            "coherence": self.coherence,
+            "average": self.average,
+            "feedback": self.feedback,
+        }
+
+    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        """Return list of dimensions below threshold."""
+        weak = []
+        if self.purpose < threshold:
+            weak.append("purpose")
+        if self.pacing < threshold:
+            weak.append("pacing")
+        if self.hook < threshold:
+            weak.append("hook")
+        if self.coherence < threshold:
+            weak.append("coherence")
+        return weak
+
+
 class RefinementConfig(BaseModel):
     """Configuration for the quality refinement loop."""
 
     max_iterations: int = Field(default=3, ge=1, le=10, description="Max refinement iterations")
     quality_threshold: float = Field(
-        default=7.5, ge=0.0, le=10.0, description="Minimum average score"
+        default=8.0, ge=0.0, le=10.0, description="Minimum average score"
     )
     creator_temperature: float = Field(
         default=0.9, ge=0.0, le=2.0, description="Temperature for creation"

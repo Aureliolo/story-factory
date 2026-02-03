@@ -4,13 +4,14 @@ import logging
 from typing import Any
 
 from src.memory.story_state import Item, StoryState
-from src.memory.world_quality import ItemQualityScores, RefinementHistory
+from src.memory.world_quality import ItemQualityScores
 from src.services.llm_client import generate_structured
 from src.services.world_quality_service._common import (
     JUDGE_CALIBRATION_BLOCK,
     judge_with_averaging,
     retry_temperature,
 )
+from src.services.world_quality_service._quality_loop import quality_refinement_loop
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -22,16 +23,18 @@ def generate_item_with_quality(
     story_state: StoryState,
     existing_names: list[str],
 ) -> tuple[dict[str, Any], ItemQualityScores, int]:
-    """
-    Generate an item using iterative creation and refinement until it meets quality criteria or retries are exhausted.
+    """Generate an item with iterative quality refinement.
+
+    Uses the generic quality refinement loop to create, judge, and refine
+    items until the quality threshold is met or stopping criteria is reached.
 
     Parameters:
         svc: WorldQualityService instance.
-        story_state (StoryState): Current story state.
-        existing_names (list[str]): Existing item names to avoid duplicate naming.
+        story_state: Current story state with brief.
+        existing_names: Existing item names to avoid duplicates.
 
     Returns:
-        tuple[dict[str, Any], ItemQualityScores, int]: The chosen item dictionary, its quality scores, and the number of iterations used.
+        Tuple of (item_dict, quality_scores, iterations_used).
 
     Raises:
         WorldGenerationError: If item generation fails after all attempts.
@@ -41,167 +44,31 @@ def generate_item_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for item generation")
 
-    logger.info(f"Generating item with quality threshold {config.quality_threshold}")
-
-    # Track all iterations for best-selection using RefinementHistory
-    history = RefinementHistory(entity_type="item", entity_name="")
-    iteration = 0
-    item: dict[str, Any] = {}
-    scores: ItemQualityScores | None = None
-    last_error: str = ""
-    creation_retries = 0  # Track duplicate-name retries for temperature escalation
-
-    while iteration < config.max_iterations:
-        try:
-            # Create new item on first iteration OR if previous returned empty
-            # (e.g., duplicate name detection returns {} to force retry)
-            if iteration == 0 or not item.get("name"):
-                # Increase temperature on retries to avoid regenerating the same name
-                retry_temp = retry_temperature(config, creation_retries)
-                item = svc._create_item(story_state, existing_names, retry_temp)
-            else:
-                if item and scores:
-                    # Use dynamic temperature that decreases over iterations
-                    dynamic_temp = config.get_refinement_temperature(iteration + 1)
-                    item = svc._refine_item(
-                        item,
-                        scores,
-                        story_state,
-                        dynamic_temp,
-                    )
-
-            if not item.get("name"):
-                creation_retries += 1
-                last_error = f"Item creation returned empty on iteration {iteration + 1}"
-                logger.warning(
-                    "%s (retry %d, next temp=%.2f)",
-                    last_error,
-                    creation_retries,
-                    retry_temperature(config, creation_retries),
-                )
-                iteration += 1
-                continue
-
-            # Update history entity name
-            if not history.entity_name:
-                history.entity_name = item.get("name", "Unknown")
-
-            scores = svc._judge_item_quality(item, story_state, config.judge_temperature)
-
-            # Track this iteration
-            history.add_iteration(
-                entity_data=item.copy(),
-                scores=scores.to_dict(),
-                average_score=scores.average,
-                feedback=scores.feedback,
-            )
-
-            current_iter = history.iterations[-1].iteration
-            logger.info(
-                f"Item '{item.get('name')}' iteration {current_iter}: "
-                f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
-                f"at iteration {history.best_iteration})"
-            )
-
-            if scores.average >= config.quality_threshold:
-                logger.info(f"Item '{item.get('name')}' met quality threshold")
-                history.final_iteration = current_iter
-                history.final_score = scores.average
-                svc._log_refinement_analytics(
-                    history,
-                    story_state.id,
-                    threshold_met=True,
-                    early_stop_triggered=False,
-                    quality_threshold=config.quality_threshold,
-                    max_iterations=config.max_iterations,
-                )
-                return item, scores, current_iter
-
-            # Check for early stopping after tracking iteration (enhanced with variance tolerance)
-            if history.should_stop_early(
-                config.early_stopping_patience,
-                min_iterations=config.early_stopping_min_iterations,
-                variance_tolerance=config.early_stopping_variance_tolerance,
-            ):
-                reason = (
-                    f"plateaued for {history.consecutive_plateaus} consecutive iterations"
-                    if history.consecutive_plateaus >= config.early_stopping_patience
-                    else f"degraded for {history.consecutive_degradations} consecutive iterations"
-                )
-                logger.info(
-                    f"Early stopping: Item '{item.get('name')}' quality {reason} "
-                    f"(patience: {config.early_stopping_patience}). "
-                    f"Stopping at iteration {iteration + 1}."
-                )
-                break
-
-        except WorldGenerationError as e:
-            last_error = str(e)
-            logger.error(f"Item generation error on iteration {iteration + 1}: {e}")
-
-        iteration += 1
-
-    # Didn't meet threshold - return BEST iteration, not last
-    if not history.iterations:
-        raise WorldGenerationError(
-            f"Failed to generate item after {config.max_iterations} attempts. "
-            f"Last error: {last_error}"
-        )
-
-    # Pick best iteration (not necessarily the last one)
-    best_entity = history.get_best_entity()
-
-    if best_entity and history.iterations[-1].average_score < history.peak_score:
-        logger.warning(
-            f"Item '{history.entity_name}' iterations got WORSE after peak. "
-            f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
-            f"Final: iteration {len(history.iterations)} "
-            f"({history.iterations[-1].average_score:.1f}). "
-            f"Returning best iteration."
-        )
-
-    # Return best entity or last one
-    if best_entity:
-        # Reconstruct scores from best iteration
-        best_scores: ItemQualityScores | None = None
-        for record in history.iterations:
-            if record.iteration == history.best_iteration:
-                best_scores = ItemQualityScores(**record.scores)
-                break
-        if best_scores:
-            history.final_iteration = history.best_iteration
-            history.final_score = history.peak_score
-            was_early_stop = len(history.iterations) < config.max_iterations
-            svc._log_refinement_analytics(
-                history,
-                story_state.id,
-                threshold_met=history.peak_score >= config.quality_threshold,
-                early_stop_triggered=was_early_stop,
-                quality_threshold=config.quality_threshold,
-                max_iterations=config.max_iterations,
-            )
-            return best_entity, best_scores, history.best_iteration
-
-    # Fallback to last iteration
-    if item.get("name") and scores:
-        logger.warning(
-            f"Item '{item.get('name')}' did not meet quality threshold "
-            f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
-        )
-        history.final_iteration = len(history.iterations)
-        history.final_score = scores.average
-        svc._log_refinement_analytics(
-            history,
-            story_state.id,
-            threshold_met=False,
-            early_stop_triggered=False,
-            quality_threshold=config.quality_threshold,
-            max_iterations=config.max_iterations,
-        )
-        return item, scores, len(history.iterations)
-
-    raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
-        f"Failed to generate item after {config.max_iterations} attempts. Last error: {last_error}"
+    return quality_refinement_loop(
+        entity_type="item",
+        create_fn=lambda retries: svc._create_item(
+            story_state,
+            existing_names,
+            retry_temperature(config, retries),
+        ),
+        judge_fn=lambda item: svc._judge_item_quality(
+            item,
+            story_state,
+            config.judge_temperature,
+        ),
+        refine_fn=lambda item, scores, iteration: svc._refine_item(
+            item,
+            scores,
+            story_state,
+            config.get_refinement_temperature(iteration),
+        ),
+        get_name=lambda item: item.get("name", "Unknown"),
+        serialize=lambda item: item.copy(),
+        is_empty=lambda item: not item.get("name"),
+        score_cls=ItemQualityScores,
+        config=config,
+        svc=svc,
+        story_id=story_state.id,
     )
 
 
@@ -323,7 +190,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"significance": <number>, "uniqueness": <number>, "narrative_potential": <number>, "integration": <number>, "feedback": "<string>"}}
+{{"significance": 5.9, "uniqueness": 7.3, "narrative_potential": 6.1, "integration": 8.4, "feedback": "The item's..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

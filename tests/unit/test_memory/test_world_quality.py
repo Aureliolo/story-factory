@@ -3,8 +3,10 @@
 import pytest
 
 from src.memory.world_quality import (
+    ChapterQualityScores,
     FactionQualityScores,
     JudgeConsistencyConfig,
+    PlotQualityScores,
     RefinementHistory,
     ScoreStatistics,
 )
@@ -661,3 +663,155 @@ class TestScoreStatisticsEdgeCases:
         # Exclude all indices
         filtered_mean = stats.get_filtered_mean(exclude_indices=[0, 1, 2])
         assert filtered_mean == stats.mean  # Falls back to regular mean
+
+
+class TestPlotQualityScores:
+    """Tests for PlotQualityScores model."""
+
+    def test_average_calculation(self):
+        """Test average score calculation for plot quality."""
+        scores = PlotQualityScores(
+            coherence=8.0,
+            tension_arc=6.0,
+            character_integration=7.0,
+            originality=9.0,
+        )
+        assert scores.average == 7.5
+
+    def test_to_dict(self):
+        """Test conversion to dictionary."""
+        scores = PlotQualityScores(
+            coherence=8.0,
+            tension_arc=6.0,
+            character_integration=7.0,
+            originality=9.0,
+            feedback="Good plot",
+        )
+        result = scores.to_dict()
+        assert result["coherence"] == 8.0
+        assert result["tension_arc"] == 6.0
+        assert result["character_integration"] == 7.0
+        assert result["originality"] == 9.0
+        assert result["average"] == 7.5
+        assert result["feedback"] == "Good plot"
+
+    def test_weak_dimensions_identifies_low_scores(self):
+        """Test weak_dimensions identifies dimensions below threshold."""
+        scores = PlotQualityScores(
+            coherence=8.0,
+            tension_arc=5.0,
+            character_integration=8.0,
+            originality=4.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "tension_arc" in weak
+        assert "originality" in weak
+        assert "coherence" not in weak
+        assert "character_integration" not in weak
+
+    def test_weak_dimensions_returns_empty_when_all_above(self):
+        """Test weak_dimensions returns empty list when all scores high."""
+        scores = PlotQualityScores(
+            coherence=8.0,
+            tension_arc=8.0,
+            character_integration=8.0,
+            originality=8.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert weak == []
+
+    def test_score_validation_bounds(self):
+        """Test that scores are bounded 0-10."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            PlotQualityScores(
+                coherence=11.0,
+                tension_arc=5.0,
+                character_integration=5.0,
+                originality=5.0,
+            )
+
+        with pytest.raises(ValidationError):
+            PlotQualityScores(
+                coherence=5.0,
+                tension_arc=-1.0,
+                character_integration=5.0,
+                originality=5.0,
+            )
+
+
+class TestChapterQualityScores:
+    """Tests for ChapterQualityScores model."""
+
+    def test_average_calculation(self):
+        """Test average score calculation for chapter quality."""
+        scores = ChapterQualityScores(
+            purpose=8.0,
+            pacing=6.0,
+            hook=7.0,
+            coherence=9.0,
+        )
+        assert scores.average == 7.5
+
+    def test_to_dict(self):
+        """Test conversion to dictionary."""
+        scores = ChapterQualityScores(
+            purpose=8.0,
+            pacing=6.0,
+            hook=7.0,
+            coherence=9.0,
+            feedback="Good chapter",
+        )
+        result = scores.to_dict()
+        assert result["purpose"] == 8.0
+        assert result["pacing"] == 6.0
+        assert result["hook"] == 7.0
+        assert result["coherence"] == 9.0
+        assert result["average"] == 7.5
+        assert result["feedback"] == "Good chapter"
+
+    def test_weak_dimensions_identifies_low_scores(self):
+        """Test weak_dimensions identifies dimensions below threshold."""
+        scores = ChapterQualityScores(
+            purpose=8.0,
+            pacing=5.0,
+            hook=4.0,
+            coherence=8.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "pacing" in weak
+        assert "hook" in weak
+        assert "purpose" not in weak
+        assert "coherence" not in weak
+
+    def test_weak_dimensions_returns_empty_when_all_above(self):
+        """Test weak_dimensions returns empty list when all scores high."""
+        scores = ChapterQualityScores(
+            purpose=8.0,
+            pacing=8.0,
+            hook=8.0,
+            coherence=8.0,
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert weak == []
+
+    def test_score_validation_bounds(self):
+        """Test that scores are bounded 0-10."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChapterQualityScores(
+                purpose=11.0,
+                pacing=5.0,
+                hook=5.0,
+                coherence=5.0,
+            )
+
+        with pytest.raises(ValidationError):
+            ChapterQualityScores(
+                purpose=5.0,
+                pacing=-1.0,
+                hook=5.0,
+                coherence=5.0,
+            )
