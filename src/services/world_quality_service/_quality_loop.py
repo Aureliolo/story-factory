@@ -236,7 +236,10 @@ def quality_refinement_loop(
             # Reconstruct the entity from stored data
             # entity is guaranteed non-None here: we only reach this point
             # after at least one successful iteration recorded in history
-            assert entity is not None
+            if entity is None:  # pragma: no cover — defensive
+                raise WorldGenerationError(
+                    f"Internal error: best entity data exists but entity is None for {entity_type}"
+                )
             return (
                 _reconstruct_entity(best_entity_data, entity, entity_type),
                 best_scores,

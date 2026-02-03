@@ -149,11 +149,7 @@ def _build_chapter_judge_prompt(
     if chapter.scenes:
         scene_lines = []
         for scene in chapter.scenes:
-            scene_lines.append(
-                f"  - {scene.goal}"
-                if hasattr(scene, "goal") and scene.goal
-                else f"  - Scene {scene.order}"
-            )
+            scene_lines.append(f"  - {scene.goal}" if scene.goal else f"  - Scene {scene.order}")
         scenes_text = "\nScenes:\n" + "\n".join(scene_lines)
 
     logger.debug(

@@ -5,6 +5,7 @@ iterative improvement of characters, locations, and relationships.
 """
 
 import logging
+from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -214,8 +215,8 @@ class RefinementHistory(BaseModel):
         }
 
 
-class BaseQualityScores(BaseModel):
-    """Base class for all quality score models.
+class BaseQualityScores(BaseModel, ABC):
+    """Abstract base class for all quality score models.
 
     Provides the common interface (feedback, average, to_dict, weak_dimensions)
     that the generic quality refinement loop requires. Each subclass defines
@@ -225,17 +226,17 @@ class BaseQualityScores(BaseModel):
     feedback: str = ""
 
     @property
+    @abstractmethod
     def average(self) -> float:
         """Calculate average score across all dimensions."""
-        raise NotImplementedError  # pragma: no cover
 
+    @abstractmethod
     def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
-        raise NotImplementedError  # pragma: no cover
 
+    @abstractmethod
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
         """Return list of dimensions below threshold."""
-        raise NotImplementedError  # pragma: no cover
 
 
 class CharacterQualityScores(BaseQualityScores):
@@ -251,7 +252,6 @@ class CharacterQualityScores(BaseQualityScores):
     flaws: float = Field(ge=0.0, le=10.0, description="Meaningful vulnerabilities")
     uniqueness: float = Field(ge=0.0, le=10.0, description="Distinctiveness")
     arc_potential: float = Field(ge=0.0, le=10.0, description="Room for transformation")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -296,7 +296,6 @@ class LocationQualityScores(BaseQualityScores):
     significance: float = Field(ge=0.0, le=10.0, description="Plot/symbolic meaning")
     story_relevance: float = Field(ge=0.0, le=10.0, description="Theme/character links")
     distinctiveness: float = Field(ge=0.0, le=10.0, description="Memorable qualities")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -340,7 +339,6 @@ class RelationshipQualityScores(BaseQualityScores):
     dynamics: float = Field(ge=0.0, le=10.0, description="Complexity, power balance")
     story_potential: float = Field(ge=0.0, le=10.0, description="Scene opportunities")
     authenticity: float = Field(ge=0.0, le=10.0, description="Believability")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -382,7 +380,6 @@ class FactionQualityScores(BaseQualityScores):
     influence: float = Field(ge=0.0, le=10.0, description="World impact")
     conflict_potential: float = Field(ge=0.0, le=10.0, description="Story conflict potential")
     distinctiveness: float = Field(ge=0.0, le=10.0, description="Memorable qualities")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -426,7 +423,6 @@ class ItemQualityScores(BaseQualityScores):
     uniqueness: float = Field(ge=0.0, le=10.0, description="Distinctive qualities")
     narrative_potential: float = Field(ge=0.0, le=10.0, description="Plot opportunities")
     integration: float = Field(ge=0.0, le=10.0, description="Fits world")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -470,7 +466,6 @@ class ConceptQualityScores(BaseQualityScores):
     depth: float = Field(ge=0.0, le=10.0, description="Philosophical richness")
     manifestation: float = Field(ge=0.0, le=10.0, description="How it appears in story")
     resonance: float = Field(ge=0.0, le=10.0, description="Emotional impact")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -512,7 +507,6 @@ class PlotQualityScores(BaseQualityScores):
     tension_arc: float = Field(ge=0.0, le=10.0, description="Stakes and tension")
     character_integration: float = Field(ge=0.0, le=10.0, description="Character arc advancement")
     originality: float = Field(ge=0.0, le=10.0, description="Avoids cliches")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
@@ -556,7 +550,6 @@ class ChapterQualityScores(BaseQualityScores):
     pacing: float = Field(ge=0.0, le=10.0, description="Action/dialogue/reflection balance")
     hook: float = Field(ge=0.0, le=10.0, description="Opening grab and ending compulsion")
     coherence: float = Field(ge=0.0, le=10.0, description="Internal consistency and flow")
-    feedback: str = ""
 
     @property
     def average(self) -> float:
