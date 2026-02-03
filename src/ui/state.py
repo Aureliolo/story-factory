@@ -139,7 +139,13 @@ class AppState:
             task_name: Human-readable name for logging.
         """
         with self._background_task_lock:
-            self._background_task_count = max(0, self._background_task_count - 1)
+            if self._background_task_count == 0:
+                logger.warning(
+                    "end_background_task called with no active tasks: %s",
+                    task_name,
+                )
+            else:
+                self._background_task_count -= 1
             logger.debug(
                 "Background task ended: %s (active: %d)",
                 task_name,

@@ -19,6 +19,22 @@ from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 logger = logging.getLogger(__name__)
 
 
+def safe_progress_update(progress_label, progress_bar, message: str, fraction: float) -> None:
+    """Update progress UI elements, catching RuntimeError if they are destroyed.
+
+    Args:
+        progress_label: NiceGUI label element for progress text.
+        progress_bar: NiceGUI linear_progress element.
+        message: Progress message to display.
+        fraction: Progress fraction (0.0 to 1.0).
+    """
+    try:
+        progress_label.text = message
+        progress_bar.value = fraction
+    except RuntimeError:
+        logger.debug("Progress update skipped: UI element destroyed")
+
+
 async def show_build_structure_dialog(
     state: AppState,
     services: ServiceContainer,
@@ -106,11 +122,12 @@ async def show_build_structure_dialog(
             # Progress callback to update dialog
             def on_progress(progress) -> None:
                 """Update the dialog label and progress bar with current build progress."""
-                try:
-                    progress_label.text = progress.message
-                    progress_bar.value = progress.step / progress.total_steps
-                except RuntimeError:
-                    logger.debug("Progress update skipped: UI element destroyed")
+                safe_progress_update(
+                    progress_label,
+                    progress_bar,
+                    progress.message,
+                    progress.step / progress.total_steps,
+                )
 
             # Use the appropriate build options based on rebuild flag
             if rebuild:
@@ -136,20 +153,13 @@ async def show_build_structure_dialog(
             logger.info(f"Structure {mode} counts: {counts}")
 
             # Save the project
-            try:
-                progress_label.text = "Saving project..."
-                progress_bar.value = 0.95
-            except RuntimeError:
-                logger.debug("Post-build progress update skipped: UI element destroyed")
+            safe_progress_update(progress_label, progress_bar, "Saving project...", 0.95)
             if state.project:
                 logger.info(f"Saving project {state.project.id}...")
                 services.project.save_project(state.project)
                 logger.info("Project saved successfully")
 
-            try:
-                progress_bar.value = 1.0
-            except RuntimeError:
-                logger.debug("Final progress update skipped: UI element destroyed")
+            safe_progress_update(progress_label, progress_bar, "Complete", 1.0)
             dialog.close()
 
             # Log final stats

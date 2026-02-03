@@ -88,9 +88,9 @@ class Header:
         if current_value and current_value not in options:
             try:
                 self.state.clear_project()
+                current_value = None
             except BackgroundTaskActiveError:
                 logger.warning("Cannot clear stale project reference: background tasks are active")
-            current_value = None
 
         self._project_select = (
             ui.select(

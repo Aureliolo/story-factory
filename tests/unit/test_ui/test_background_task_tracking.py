@@ -54,11 +54,16 @@ class TestBackgroundTaskCounter:
         state.end_background_task("generate")
         assert not _is_busy(state)
 
-    def test_end_without_begin_clamps_to_zero(self):
-        """Test that ending a task without begin does not go negative."""
+    def test_end_without_begin_logs_warning_and_stays_at_zero(self, caplog):
+        """Test that ending a task without begin logs a warning and does not go negative."""
+        import logging
+
         state = AppState()
-        state.end_background_task("phantom_task")
+        with caplog.at_level(logging.WARNING, logger="src.ui.state"):
+            state.end_background_task("phantom_task")
+
         assert not _is_busy(state)
+        assert "end_background_task called with no active tasks" in caplog.text
 
         # Counter should still work normally after a spurious end
         state.begin_background_task("real_task")

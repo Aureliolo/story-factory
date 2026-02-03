@@ -3,19 +3,19 @@
 import logging
 from unittest.mock import MagicMock, PropertyMock
 
+from src.ui.components.build_dialog import safe_progress_update
 
-class TestProgressCallbackGuard:
-    """Tests for progress callback handling when UI elements are destroyed."""
 
-    def test_progress_callback_handles_destroyed_element(self):
-        """Test that progress callback catches RuntimeError from destroyed UI elements.
+class TestSafeProgressUpdate:
+    """Tests for the safe_progress_update helper that guards against destroyed UI elements."""
+
+    def test_swallows_runtime_error_from_destroyed_elements(self, caplog):
+        """Test that safe_progress_update catches RuntimeError from destroyed UI elements.
 
         Simulates the scenario where a dialog is closed while a background build
-        is still running. The progress callback should catch RuntimeError and
-        continue without crashing.
+        is still running. The function should catch RuntimeError and log a debug
+        message without re-raising.
         """
-        # Create mock UI elements that raise RuntimeError when .text is set
-        # (simulating a destroyed NiceGUI element)
         progress_label = MagicMock()
         type(progress_label).text = PropertyMock(
             side_effect=RuntimeError("The parent slot of the element has been deleted")
@@ -26,40 +26,31 @@ class TestProgressCallbackGuard:
             side_effect=RuntimeError("The parent slot of the element has been deleted")
         )
 
-        # Simulate the guarded progress callback pattern from build_dialog.py
-        progress = MagicMock()
-        progress.message = "Building characters..."
-        progress.step = 3
-        progress.total_steps = 10
+        with caplog.at_level(logging.DEBUG, logger="src.ui.components.build_dialog"):
+            # Should NOT raise
+            safe_progress_update(progress_label, progress_bar, "Building...", 0.5)
 
-        # This should NOT raise — the RuntimeError should be caught internally
-        try:
-            progress_label.text = progress.message
-            progress_bar.value = progress.step / progress.total_steps
-        except RuntimeError:
-            # This is the expected behavior: caught and logged
-            logging.getLogger(__name__).debug("Progress update skipped: UI element destroyed")
+        assert "Progress update skipped: UI element destroyed" in caplog.text
 
-        # Verify: no unhandled exception reached us
-        # (If we get here, the guard pattern works correctly)
-
-    def test_progress_callback_works_with_live_elements(self):
-        """Test that progress callback works normally with live UI elements."""
+    def test_updates_live_elements_normally(self):
+        """Test that safe_progress_update sets values on live UI elements."""
         progress_label = MagicMock()
         progress_bar = MagicMock()
 
-        progress = MagicMock()
-        progress.message = "Building locations..."
-        progress.step = 5
-        progress.total_steps = 10
+        safe_progress_update(progress_label, progress_bar, "Building locations...", 0.5)
 
-        # With live elements, no exception should occur
-        try:
-            progress_label.text = progress.message
-            progress_bar.value = progress.step / progress.total_steps
-        except RuntimeError:
-            logging.getLogger(__name__).debug("Progress update skipped: UI element destroyed")
-
-        # Verify the values were set
-        assert progress_label.text == progress.message
+        assert progress_label.text == "Building locations..."
         assert progress_bar.value == 0.5
+
+    def test_partial_failure_still_catches(self, caplog):
+        """Test that if only the bar raises, the error is still caught."""
+        progress_label = MagicMock()
+        progress_bar = MagicMock()
+        type(progress_bar).value = PropertyMock(side_effect=RuntimeError("Element destroyed"))
+
+        with caplog.at_level(logging.DEBUG, logger="src.ui.components.build_dialog"):
+            safe_progress_update(progress_label, progress_bar, "Step 3/10", 0.3)
+
+        # Label was set before bar raised
+        assert progress_label.text == "Step 3/10"
+        assert "Progress update skipped: UI element destroyed" in caplog.text
