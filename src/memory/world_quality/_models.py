@@ -8,7 +8,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +221,13 @@ class BaseQualityScores(BaseModel, ABC):
     Provides the common interface (feedback, average, to_dict, weak_dimensions)
     that the generic quality refinement loop requires. Each subclass defines
     its own dimension-specific fields and implements these methods.
+
+    populate_by_name=True allows constructing with either the Python field name
+    or the alias, so existing code using field names keeps working while the
+    LLM JSON schema uses aliases to avoid field name collisions with entity models.
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     feedback: str = ""
 
@@ -248,7 +254,9 @@ class CharacterQualityScores(BaseQualityScores):
     """
 
     depth: float = Field(ge=0.0, le=10.0, description="Psychological complexity")
-    goals: float = Field(ge=0.0, le=10.0, description="Clarity and story relevance")
+    goals: float = Field(
+        alias="goal_clarity", ge=0.0, le=10.0, description="Clarity and story relevance"
+    )
     flaws: float = Field(ge=0.0, le=10.0, description="Meaningful vulnerabilities")
     uniqueness: float = Field(ge=0.0, le=10.0, description="Distinctiveness")
     arc_potential: float = Field(ge=0.0, le=10.0, description="Room for transformation")
@@ -262,7 +270,7 @@ class CharacterQualityScores(BaseQualityScores):
         """Convert to dictionary for storage in entity attributes."""
         return {
             "depth": self.depth,
-            "goals": self.goals,
+            "goal_clarity": self.goals,
             "flaws": self.flaws,
             "uniqueness": self.uniqueness,
             "arc_potential": self.arc_potential,
@@ -276,7 +284,7 @@ class CharacterQualityScores(BaseQualityScores):
         if self.depth < threshold:
             weak.append("depth")
         if self.goals < threshold:
-            weak.append("goals")
+            weak.append("goal_clarity")
         if self.flaws < threshold:
             weak.append("flaws")
         if self.uniqueness < threshold:
@@ -293,7 +301,9 @@ class LocationQualityScores(BaseQualityScores):
     """
 
     atmosphere: float = Field(ge=0.0, le=10.0, description="Sensory richness, mood")
-    significance: float = Field(ge=0.0, le=10.0, description="Plot/symbolic meaning")
+    significance: float = Field(
+        alias="narrative_significance", ge=0.0, le=10.0, description="Plot/symbolic meaning"
+    )
     story_relevance: float = Field(ge=0.0, le=10.0, description="Theme/character links")
     distinctiveness: float = Field(ge=0.0, le=10.0, description="Memorable qualities")
 
@@ -308,7 +318,7 @@ class LocationQualityScores(BaseQualityScores):
         """Convert to dictionary for storage in entity attributes."""
         return {
             "atmosphere": self.atmosphere,
-            "significance": self.significance,
+            "narrative_significance": self.significance,
             "story_relevance": self.story_relevance,
             "distinctiveness": self.distinctiveness,
             "average": self.average,
@@ -321,7 +331,7 @@ class LocationQualityScores(BaseQualityScores):
         if self.atmosphere < threshold:
             weak.append("atmosphere")
         if self.significance < threshold:
-            weak.append("significance")
+            weak.append("narrative_significance")
         if self.story_relevance < threshold:
             weak.append("story_relevance")
         if self.distinctiveness < threshold:
@@ -419,7 +429,9 @@ class ItemQualityScores(BaseQualityScores):
     All score fields are required - no defaults.
     """
 
-    significance: float = Field(ge=0.0, le=10.0, description="Story importance")
+    significance: float = Field(
+        alias="story_significance", ge=0.0, le=10.0, description="Story importance"
+    )
     uniqueness: float = Field(ge=0.0, le=10.0, description="Distinctive qualities")
     narrative_potential: float = Field(ge=0.0, le=10.0, description="Plot opportunities")
     integration: float = Field(ge=0.0, le=10.0, description="Fits world")
@@ -434,7 +446,7 @@ class ItemQualityScores(BaseQualityScores):
     def to_dict(self) -> dict[str, float | str]:
         """Convert to dictionary for storage in entity attributes."""
         return {
-            "significance": self.significance,
+            "story_significance": self.significance,
             "uniqueness": self.uniqueness,
             "narrative_potential": self.narrative_potential,
             "integration": self.integration,
@@ -446,7 +458,7 @@ class ItemQualityScores(BaseQualityScores):
         """Return list of dimensions below threshold."""
         weak = []
         if self.significance < threshold:
-            weak.append("significance")
+            weak.append("story_significance")
         if self.uniqueness < threshold:
             weak.append("uniqueness")
         if self.narrative_potential < threshold:

@@ -119,6 +119,7 @@ ignore = [
 # Mypy configuration
 [tool.mypy]
 python_version = "3.14"
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true
 # Strict mode disabled until all functions have type annotations
