@@ -166,15 +166,8 @@ def _aggregate_scores(
         if judge_config.outlier_detection:
             stats.detect_outliers(judge_config.outlier_std_threshold)
 
-        # Choose final value based on strategy
+        # Choose final value based on strategy (Literal["median", "mean"])
         strategy = judge_config.outlier_strategy
-        if strategy == "retry":
-            logger.warning(
-                "outlier_strategy='retry' not implemented in _aggregate_scores; "
-                "falling back to median"
-            )
-            strategy = "median"
-
         if strategy == "median":
             final_scores[dim] = stats.get_median()
         else:

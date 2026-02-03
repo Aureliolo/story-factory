@@ -384,7 +384,7 @@ class TestJudgeConsistencyConfig:
             confidence_threshold=0.8,
             outlier_detection=False,
             outlier_std_threshold=3.0,
-            outlier_strategy="retry",
+            outlier_strategy="mean",
         )
         assert config.enabled is False
         assert config.multi_call_enabled is True
@@ -392,7 +392,7 @@ class TestJudgeConsistencyConfig:
         assert config.confidence_threshold == 0.8
         assert config.outlier_detection is False
         assert config.outlier_std_threshold == 3.0
-        assert config.outlier_strategy == "retry"
+        assert config.outlier_strategy == "mean"
 
     def test_multi_call_count_validation(self) -> None:
         """Test that multi_call_count has valid bounds."""
@@ -435,7 +435,7 @@ class TestJudgeConsistencyConfig:
         mock_settings.judge_confidence_threshold = 0.8
         mock_settings.judge_outlier_detection = False
         mock_settings.judge_outlier_std_threshold = 2.5
-        mock_settings.judge_outlier_strategy = "retry"
+        mock_settings.judge_outlier_strategy = "mean"
 
         config = JudgeConsistencyConfig.from_settings(mock_settings)
 
@@ -445,7 +445,7 @@ class TestJudgeConsistencyConfig:
         assert config.confidence_threshold == 0.8
         assert config.outlier_detection is False
         assert config.outlier_std_threshold == 2.5
-        assert config.outlier_strategy == "retry"
+        assert config.outlier_strategy == "mean"
 
 
 class TestScoreStatisticsEdgeCases:

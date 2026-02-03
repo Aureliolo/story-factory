@@ -347,7 +347,7 @@ def _judge_relationship_quality(
     story_state: StoryState,
     temperature: float,
 ) -> RelationshipQualityScores:
-    """Judge relationship quality using the validator model.
+    """Judge relationship quality using the judge model.
 
     Supports multi-call averaging when judge_multi_call_enabled is True in settings.
 
@@ -389,13 +389,15 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
+    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    judge_model = svc._get_judge_model(entity_type="relationship")
+
     def _single_judge_call() -> RelationshipQualityScores:
         """Execute a single judge call for relationship quality."""
         try:
-            model = svc._get_judge_model(entity_type="relationship")
             return generate_structured(
                 settings=svc.settings,
-                model=model,
+                model=judge_model,
                 prompt=prompt,
                 response_model=RelationshipQualityScores,
                 temperature=temperature,

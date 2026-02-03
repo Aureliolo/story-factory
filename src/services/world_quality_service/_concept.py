@@ -283,7 +283,7 @@ def _judge_concept_quality(
     story_state: StoryState,
     temperature: float,
 ) -> ConceptQualityScores:
-    """Judge concept quality using the validator model.
+    """Judge concept quality using the judge model.
 
     Supports multi-call averaging when judge_multi_call_enabled is True in settings.
 
@@ -324,13 +324,15 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
+    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    judge_model = svc._get_judge_model(entity_type="concept")
+
     def _single_judge_call() -> ConceptQualityScores:
         """Execute a single judge call for concept quality."""
         try:
-            model = svc._get_judge_model(entity_type="concept")
             return generate_structured(
                 settings=svc.settings,
-                model=model,
+                model=judge_model,
                 prompt=prompt,
                 response_model=ConceptQualityScores,
                 temperature=temperature,

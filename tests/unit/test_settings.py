@@ -116,6 +116,29 @@ class TestSettings:
         with pytest.raises(ValueError, match="Unknown agent\\(s\\) in agent_temperatures"):
             settings.validate()
 
+    def test_validate_raises_on_unknown_agent_in_models(self):
+        """Should raise ValueError for unknown agent in agent_models."""
+        settings = Settings()
+        settings.agent_models["unknown_agent"] = "some-model:8b"
+        with pytest.raises(ValueError, match="Unknown agent\\(s\\) in agent_models"):
+            settings.validate()
+
+    def test_validate_backfills_missing_agent_models(self):
+        """Should backfill missing roles in agent_models from defaults."""
+        settings = Settings()
+        del settings.agent_models["judge"]  # Simulate old settings file
+        changed = settings.validate()
+        assert changed is True
+        assert "judge" in settings.agent_models
+        assert settings.agent_models["judge"] == "auto"
+
+    def test_validate_agent_models_no_change_when_complete(self):
+        """Should not modify agent_models when all expected roles are present."""
+        settings = Settings()
+        original_models = dict(settings.agent_models)
+        settings.validate()
+        assert settings.agent_models == original_models
+
     def test_validate_passes_for_valid_settings(self):
         """Should not raise for valid default settings."""
         settings = Settings()
@@ -1681,6 +1704,13 @@ class TestMissingValidationCoverage:
         """Should raise ValueError for invalid judge_outlier_strategy."""
         settings = Settings()
         settings.judge_outlier_strategy = "invalid"  # Not in valid list
+        with pytest.raises(ValueError, match="judge_outlier_strategy must be one of"):
+            settings.validate()
+
+    def test_validate_raises_on_retry_judge_outlier_strategy(self):
+        """Should raise ValueError for 'retry' outlier strategy (not implemented)."""
+        settings = Settings()
+        settings.judge_outlier_strategy = "retry"
         with pytest.raises(ValueError, match="judge_outlier_strategy must be one of"):
             settings.validate()
 

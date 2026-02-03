@@ -77,11 +77,13 @@ class RefinementHistory(BaseModel):
             self.consecutive_degradations = 0  # Reset on new peak
             self.consecutive_plateaus = 0  # Reset on new peak
         elif average_score < self.peak_score:
-            # Score degraded from peak
+            # Score degraded from peak — reset plateau streak
             self.consecutive_degradations += 1
+            self.consecutive_plateaus = 0
         else:
-            # Score equals peak — plateau
+            # Score equals peak — plateau, reset degradation streak
             self.consecutive_plateaus += 1
+            self.consecutive_degradations = 0
 
     def get_best_entity(self) -> dict[str, Any] | None:
         """Return entity data from the best-scoring iteration."""
@@ -662,9 +664,9 @@ class JudgeConsistencyConfig(BaseModel):
         le=4.0,
         description="Standard deviations from mean to consider outlier",
     )
-    outlier_strategy: Literal["median", "mean", "retry"] = Field(
+    outlier_strategy: Literal["median", "mean"] = Field(
         default="median",
-        description="How to handle outliers: 'median', 'mean', or 'retry'",
+        description="How to handle outliers: 'median' or 'mean'",
     )
 
     @classmethod

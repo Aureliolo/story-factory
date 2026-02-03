@@ -991,8 +991,6 @@ class TestRetryTemperatureHelper:
 
     def test_entity_modules_use_shared_retry_temperature(self):
         """All entity modules with retry logic should import from _common, not duplicate."""
-        import inspect
-
         from src.services.world_quality_service import (
             _concept as concept_mod,
         )
@@ -1005,6 +1003,7 @@ class TestRetryTemperatureHelper:
         from src.services.world_quality_service import (
             _location as location_mod,
         )
+        from src.services.world_quality_service._common import retry_temperature
 
         for name, mod in [
             ("item", item_mod),
@@ -1012,11 +1011,14 @@ class TestRetryTemperatureHelper:
             ("faction", faction_mod),
             ("concept", concept_mod),
         ]:
-            source = inspect.getsource(mod)
-            assert (
-                "retry_temperature" in source
-                and "from src.services.world_quality_service._common import" in source
-            ), f"{name} module should import retry_temperature from _common"
+            # Verify retry_temperature is actually imported from _common, not just
+            # mentioned in a comment or string literal
+            assert hasattr(mod, "retry_temperature"), (
+                f"{name} module should import retry_temperature from _common"
+            )
+            assert mod.retry_temperature is retry_temperature, (
+                f"{name} module's retry_temperature should be the same function from _common"
+            )
 
 
 class TestIterationCountAlignment:

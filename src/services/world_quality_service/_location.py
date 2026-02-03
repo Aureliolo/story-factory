@@ -283,7 +283,7 @@ def _judge_location_quality(
     story_state: StoryState,
     temperature: float,
 ) -> LocationQualityScores:
-    """Judge location quality using the validator model.
+    """Judge location quality using the judge model.
 
     Supports multi-call averaging when judge_multi_call_enabled is True in settings.
 
@@ -315,13 +315,15 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
+    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    judge_model = svc._get_judge_model(entity_type="location")
+
     def _single_judge_call() -> LocationQualityScores:
         """Execute a single judge call for location quality."""
         try:
-            model = svc._get_judge_model(entity_type="location")
             return generate_structured(
                 settings=svc.settings,
-                model=model,
+                model=judge_model,
                 prompt=prompt,
                 response_model=LocationQualityScores,
                 temperature=temperature,

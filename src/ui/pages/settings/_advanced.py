@@ -573,7 +573,6 @@ def build_judge_consistency_section(page: SettingsPage) -> None:
                                 options={
                                     "median": "Median",
                                     "mean": "Mean",
-                                    "retry": "Retry",
                                 },
                                 value=page.settings.judge_outlier_strategy,
                             )
@@ -852,10 +851,6 @@ def save_to_settings(page: SettingsPage) -> None:
             if type_conv:
                 value = type_conv(value)
             setattr(settings, setting_attr, value)
-
-    # Keep judge_consistency_enabled in sync with judge_multi_call_enabled
-    if hasattr(page, "_judge_multi_call_switch"):
-        settings.judge_consistency_enabled = page._judge_multi_call_switch.value
 
     # Relationship validation settings
     if hasattr(page, "_relationship_validation_switch"):

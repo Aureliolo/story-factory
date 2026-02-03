@@ -289,7 +289,7 @@ def _judge_character_quality(
     story_state: StoryState,
     temperature: float,
 ) -> CharacterQualityScores:
-    """Judge character quality using the validator model.
+    """Judge character quality using the judge model.
 
     Supports multi-call averaging when judge_multi_call_enabled is True in settings.
     Multiple judge calls are aggregated using ScoreStatistics with outlier detection.
@@ -311,13 +311,15 @@ def _judge_character_quality(
 
     prompt = _build_character_judge_prompt(character, genre)
 
+    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    judge_model = svc._get_judge_model(entity_type="character")
+
     def _single_judge_call() -> CharacterQualityScores:
         """Execute a single judge call for character quality."""
         try:
-            model = svc._get_judge_model(entity_type="character")
             return generate_structured(
                 settings=svc.settings,
-                model=model,
+                model=judge_model,
                 prompt=prompt,
                 response_model=CharacterQualityScores,
                 temperature=temperature,

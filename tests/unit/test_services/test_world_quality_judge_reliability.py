@@ -11,6 +11,7 @@ Tests cover:
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from src.memory.world_quality import (
     CharacterQualityScores,
@@ -717,38 +718,10 @@ class TestAggregateScores:
                 f"Failed for {model_class.__name__}: average={result.average}"
             )
 
-    def test_retry_strategy_falls_back_to_median(self):
-        """Retry strategy is not implemented and falls back to median with a warning."""
-        results = [
-            FactionQualityScores(
-                coherence=5.0,
-                influence=5.0,
-                conflict_potential=5.0,
-                distinctiveness=5.0,
-                feedback="Low",
-            ),
-            FactionQualityScores(
-                coherence=9.0,
-                influence=9.0,
-                conflict_potential=9.0,
-                distinctiveness=9.0,
-                feedback="High",
-            ),
-            FactionQualityScores(
-                coherence=7.0,
-                influence=7.0,
-                conflict_potential=7.0,
-                distinctiveness=7.0,
-                feedback="Mid",
-            ),
-        ]
-        config = self._make_config(strategy="retry")
-
-        result = _aggregate_scores(results, FactionQualityScores, config)
-
-        # Should use median (fallback from retry) — median of [5, 7, 9] = 7
-        assert result.coherence == 7.0
-        assert result.influence == 7.0
+    def test_retry_strategy_rejected_by_pydantic(self):
+        """Retry strategy is not a valid option and Pydantic rejects it."""
+        with pytest.raises(ValidationError):
+            JudgeConsistencyConfig(outlier_strategy="retry")  # type: ignore[arg-type]
 
 
 class TestCalibrationBlock:
@@ -916,28 +889,39 @@ class TestEntityJudgeRoles:
                 f"Entity type '{entity_type}' maps to '{role}' instead of 'judge'"
             )
 
-    def test_judge_tag_only_on_capable_models(self):
+    def test_judge_tag_only_on_capable_models(self, monkeypatch):
         """No model below quality 7 should have the 'judge' tag."""
-        from src.settings._model_registry import RECOMMENDED_MODELS
+        from src.settings import _model_registry
 
-        for model_id, info in RECOMMENDED_MODELS.items():
-            tags = info.get("tags", [])
+        fake_registry: dict[str, dict[str, object]] = {
+            "test-judge:8b": {"quality": 8, "tags": ["judge", "writer"]},
+            "test-fast:4b": {"quality": 4, "tags": ["writer"]},
+            "test-capable:30b": {"quality": 9, "tags": ["judge", "writer"]},
+        }
+        monkeypatch.setattr(_model_registry, "RECOMMENDED_MODELS", fake_registry)
+
+        for model_id, info in fake_registry.items():
+            tags: list[str] = info["tags"]  # type: ignore[assignment]
+            quality: int = info["quality"]  # type: ignore[assignment]
             if "judge" in tags:
-                assert info["quality"] >= 7, (
-                    f"Model '{model_id}' (quality={info['quality']}) has 'judge' tag "
-                    f"but quality is below 7"
+                assert quality >= 7, (
+                    f"Model '{model_id}' (quality={quality}) has 'judge' tag but quality is below 7"
                 )
 
-    def test_small_models_lack_judge_tag(self):
-        """Small/fast models (smollm2, qwen3:0.6b, qwen3:4b) must NOT have 'judge' tag."""
-        from src.settings._model_registry import RECOMMENDED_MODELS
+    def test_small_models_lack_judge_tag(self, monkeypatch):
+        """Small/fast models must NOT have 'judge' tag."""
+        from src.settings import _model_registry
 
-        small_models = ["smollm2:1.7b", "qwen3:0.6b", "qwen3:4b"]
-        for model_id in small_models:
-            info = RECOMMENDED_MODELS.get(model_id)
-            if info is not None:
-                tags = info.get("tags", [])
-                assert "judge" not in tags, f"Small model '{model_id}' should not have 'judge' tag"
+        fake_registry: dict[str, dict[str, object]] = {
+            "test-tiny:1.7b": {"quality": 3, "tags": ["validator"]},
+            "test-small:0.6b": {"quality": 2, "tags": []},
+            "test-medium:4b": {"quality": 5, "tags": ["writer"]},
+        }
+        monkeypatch.setattr(_model_registry, "RECOMMENDED_MODELS", fake_registry)
+
+        for model_id, info in fake_registry.items():
+            tags: list[str] = info["tags"]  # type: ignore[assignment]
+            assert "judge" not in tags, f"Small model '{model_id}' should not have 'judge' tag"
 
 
 class TestJudgeCreatorConflict:

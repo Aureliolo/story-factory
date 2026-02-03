@@ -172,7 +172,7 @@ class Settings:
     judge_confidence_threshold: float = 0.7  # Min confidence for reliable decisions
     judge_outlier_detection: bool = True  # Detect and handle outlier scores
     judge_outlier_std_threshold: float = 2.0  # Std devs from mean to consider outlier
-    judge_outlier_strategy: str = "median"  # How to handle outliers: median, mean, retry
+    judge_outlier_strategy: str = "median"  # How to handle outliers: median or mean
 
     # World generation counts (randomized within range for variety)
     world_gen_characters_min: int = 4

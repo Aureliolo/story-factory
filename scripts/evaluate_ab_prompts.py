@@ -125,6 +125,14 @@ def improved_refine_character(
             f"with specific catalysts for change"
         )
 
+    logger.debug(
+        "Improved refine character %s: threshold=%.2f avg=%.2f rels=%d",
+        character.name,
+        threshold,
+        scores.average,
+        len(character.relationships) if character.relationships else 0,
+    )
+
     # Format relationships as "Name: description" lines
     rel_lines = (
         "\n".join(f"  {name}: {desc}" for name, desc in character.relationships.items())
@@ -733,7 +741,7 @@ def run_ab_test(
 
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}"
-        logger.error("A/B test error for %s #%d: %s", entity_type, entity_index, e)
+        logger.exception("A/B test error for %s #%d: %s", entity_type, entity_index, e)
 
     return result
 

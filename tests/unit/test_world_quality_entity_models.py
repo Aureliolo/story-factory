@@ -83,13 +83,13 @@ class TestConsecutivePlateaus:
         )
         assert history.consecutive_plateaus == 1
 
-        # Degradation — plateaus should not change
+        # Degradation — resets plateau streak (counters are mutually exclusive)
         history.add_iteration(
             entity_data={"name": "Sword"},
             scores={"significance": 5.0},
             average_score=5.0,
         )
-        assert history.consecutive_plateaus == 1
+        assert history.consecutive_plateaus == 0
         assert history.consecutive_degradations == 1
 
 

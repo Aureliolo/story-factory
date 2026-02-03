@@ -283,7 +283,7 @@ def _judge_item_quality(
     story_state: StoryState,
     temperature: float,
 ) -> ItemQualityScores:
-    """Judge item quality using the validator model.
+    """Judge item quality using the judge model.
 
     Supports multi-call averaging when judge_multi_call_enabled is True in settings.
 
@@ -302,7 +302,6 @@ def _judge_item_quality(
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
 
-    # Pre-format properties outside the judge call to avoid repeated work
     formatted_properties = svc._format_properties(item.get("properties", []))
 
     prompt = f"""You are evaluating an item for a {genre} story.
@@ -328,13 +327,15 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
+    # Resolve judge model once to avoid repeated resolution and duplicate conflict warnings
+    judge_model = svc._get_judge_model(entity_type="item")
+
     def _single_judge_call() -> ItemQualityScores:
         """Execute a single judge call for item quality."""
         try:
-            model = svc._get_judge_model(entity_type="item")
             return generate_structured(
                 settings=svc.settings,
-                model=model,
+                model=judge_model,
                 prompt=prompt,
                 response_model=ItemQualityScores,
                 temperature=temperature,
