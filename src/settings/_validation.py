@@ -30,7 +30,7 @@ def validate(settings: Settings) -> bool:
     _validate_interaction_mode(settings)
     _validate_vram_strategy(settings)
     changed = _validate_temperatures(settings)
-    changed = _validate_agent_models(settings) or changed
+    _validate_agent_models(settings)
     _validate_task_temperatures(settings)
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
@@ -155,20 +155,18 @@ def _validate_temperatures(settings: Settings) -> bool:
     return changed
 
 
-def _validate_agent_models(settings: Settings) -> bool:
-    """Validate agent_models dict, backfilling missing roles from defaults.
+def _validate_agent_models(settings: Settings) -> None:
+    """Validate agent_models dict — all expected roles must be present.
 
-    Older settings files may lack roles added in later versions (e.g. "judge").
-    This mirrors _validate_temperatures: unknown roles raise, missing roles are
-    backfilled from the Settings default so _resolve_model_for_role never hits
-    a KeyError at runtime.
+    Raises on unknown roles and on missing roles (per "No default fallbacks"
+    rule).  Users must add new roles to their settings file explicitly.
 
     Note: Only roles present in the default agent_models are validated.
     Some AGENT_ROLES (e.g. "embedding") use separate config fields and are
     intentionally excluded from agent_models.
 
-    Returns:
-        True if missing agent models were backfilled, False otherwise.
+    Raises:
+        ValueError: If unknown or missing agent roles are found.
     """
     from src.settings._settings import Settings as _Settings
 
@@ -183,12 +181,11 @@ def _validate_agent_models(settings: Settings) -> bool:
         )
 
     missing_agents = expected_agents - set(settings.agent_models)
-    changed = bool(missing_agents)
-    for agent in sorted(missing_agents):
-        settings.agent_models[agent] = default_models[agent]
-        logger.warning("Added missing agent model: %s=%s", agent, default_models[agent])
-
-    return changed
+    if missing_agents:
+        raise ValueError(
+            f"Missing agent(s) in agent_models: {sorted(missing_agents)}; "
+            f"expected: {sorted(expected_agents)}"
+        )
 
 
 def _validate_task_temperatures(settings: Settings) -> None:

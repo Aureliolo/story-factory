@@ -123,14 +123,12 @@ class TestSettings:
         with pytest.raises(ValueError, match="Unknown agent\\(s\\) in agent_models"):
             settings.validate()
 
-    def test_validate_backfills_missing_agent_models(self):
-        """Should backfill missing roles in agent_models from defaults."""
+    def test_validate_raises_on_missing_agent_models(self):
+        """Should raise ValueError when agent_models is missing expected roles."""
         settings = Settings()
         del settings.agent_models["judge"]  # Simulate old settings file
-        changed = settings.validate()
-        assert changed is True
-        assert "judge" in settings.agent_models
-        assert settings.agent_models["judge"] == "auto"
+        with pytest.raises(ValueError, match=r"Missing agent.*judge"):
+            settings.validate()
 
     def test_validate_agent_models_no_change_when_complete(self):
         """Should not modify agent_models when all expected roles are present."""

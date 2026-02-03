@@ -342,6 +342,7 @@ def _build_character_judge_prompt(character: Character, genre: str) -> str:
     Returns:
         Formatted prompt string.
     """
+    logger.debug("Building character judge prompt for '%s'", character.name)
     return f"""You are a literary critic evaluating character quality for a {genre} story.
 
 CHARACTER TO EVALUATE:
