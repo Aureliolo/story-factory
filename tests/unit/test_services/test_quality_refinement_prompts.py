@@ -7,7 +7,6 @@ Covers:
 """
 
 import inspect
-import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -26,8 +25,6 @@ from src.services.world_quality_service import (
     _location,
     _relationship,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class TestScoreFieldAliases:
