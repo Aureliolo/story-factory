@@ -91,7 +91,14 @@ class TestSettingsInitialization:
                 {
                     "default_model": "nonexistent-model:latest",
                     "agent_models": {
+                        "interviewer": "auto",
+                        "architect": "auto",
                         "writer": "also-nonexistent:7b",
+                        "editor": "auto",
+                        "continuity": "auto",
+                        "validator": "auto",
+                        "suggestion": "auto",
+                        "judge": "auto",
                     },
                 }
             )
