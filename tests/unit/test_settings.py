@@ -2508,3 +2508,23 @@ class TestGetModelsForRole:
         result = settings.get_models_for_role("judge")
 
         assert result == []
+
+    def test_skips_embedding_models_for_chat_roles(self, monkeypatch):
+        """Embedding models are excluded when searching for non-embedding roles."""
+        fake_registry = {
+            "embed-model:8b": {"quality": 9, "tags": ["writer", "embedding"]},
+            "pure-writer:8b": {"quality": 7, "tags": ["writer"]},
+        }
+        monkeypatch.setattr("src.settings._model_registry.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr("src.settings._settings.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: dict.fromkeys(fake_registry, 4.0),
+        )
+
+        settings = Settings()
+        result = settings.get_models_for_role("writer")
+
+        # embed-model should be skipped because it has "embedding" tag
+        assert "pure-writer:8b" in result
+        assert "embed-model:8b" not in result

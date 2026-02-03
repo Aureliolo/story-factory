@@ -24,6 +24,7 @@ from src.memory.story_state import (
 from src.memory.world_quality import (
     ChapterQualityScores,
     CharacterQualityScores,
+    JudgeConsistencyConfig,
     PlotQualityScores,
 )
 from src.services.world_quality_service import WorldQualityService
@@ -761,3 +762,79 @@ class TestReviewChaptersBatch:
         assert scores.coherence == 0
         assert "Review failed" in scores.feedback
         assert "LLM error" in scores.feedback
+
+
+class TestNonMultiCallJudgeErrors:
+    """Test judge error paths when multi_call is disabled (logger.exception branch)."""
+
+    def test_plot_judge_error_without_multi_call_logs_exception(
+        self, service, story_state, test_plot_outline
+    ):
+        """Plot judge error uses logger.exception when multi_call is disabled."""
+        # Override get_judge_config to return disabled multi_call
+        disabled_config = JudgeConsistencyConfig(enabled=False, multi_call_enabled=False)
+        with (
+            patch.object(service, "get_judge_config", return_value=disabled_config),
+            patch(
+                "src.services.world_quality_service._plot.generate_structured",
+                side_effect=Exception("LLM error"),
+            ),
+        ):
+            with pytest.raises(WorldGenerationError, match="Plot quality judgment failed"):
+                service._judge_plot_quality(test_plot_outline, story_state, 0.1)
+
+    def test_chapter_judge_error_without_multi_call_logs_exception(
+        self, service, story_state, test_chapter
+    ):
+        """Chapter judge error uses logger.exception when multi_call is disabled."""
+        # Override get_judge_config to return disabled multi_call
+        disabled_config = JudgeConsistencyConfig(enabled=False, multi_call_enabled=False)
+        with (
+            patch.object(service, "get_judge_config", return_value=disabled_config),
+            patch(
+                "src.services.world_quality_service._chapter_quality.generate_structured",
+                side_effect=Exception("LLM error"),
+            ),
+        ):
+            with pytest.raises(WorldGenerationError, match="Chapter quality judgment failed"):
+                service._judge_chapter_quality(test_chapter, story_state, 0.1)
+
+
+class TestRefineErrorPaths:
+    """Test error paths in refinement functions."""
+
+    def test_refine_plot_raises_world_generation_error(
+        self, service, story_state, test_plot_outline
+    ):
+        """Plot refinement raises WorldGenerationError when generate_structured fails."""
+        low_scores = PlotQualityScores(
+            coherence=5.0,
+            tension_arc=5.0,
+            character_integration=5.0,
+            originality=5.0,
+            feedback="Needs work",
+        )
+
+        with patch(
+            "src.services.world_quality_service._plot.generate_structured",
+            side_effect=Exception("Refinement LLM error"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Plot refinement failed"):
+                service._refine_plot(test_plot_outline, low_scores, story_state, 0.7)
+
+    def test_refine_chapter_raises_world_generation_error(self, service, story_state, test_chapter):
+        """Chapter refinement raises WorldGenerationError when generate_structured fails."""
+        low_scores = ChapterQualityScores(
+            purpose=5.0,
+            pacing=5.0,
+            hook=5.0,
+            coherence=5.0,
+            feedback="Needs improvement",
+        )
+
+        with patch(
+            "src.services.world_quality_service._chapter_quality.generate_structured",
+            side_effect=Exception("Refinement LLM error"),
+        ):
+            with pytest.raises(WorldGenerationError, match="Chapter refinement failed"):
+                service._refine_chapter_outline(test_chapter, low_scores, story_state, 0.7)
