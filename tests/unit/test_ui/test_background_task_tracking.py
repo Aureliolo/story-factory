@@ -1,5 +1,6 @@
 """Tests for background task tracking in AppState."""
 
+import logging
 import threading
 from collections.abc import Generator
 
@@ -82,8 +83,6 @@ class TestBackgroundTaskCounter:
 
     def test_end_without_begin_logs_warning_and_stays_at_zero(self, caplog):
         """Test that ending a task without begin logs a warning and does not go negative."""
-        import logging
-
         state = AppState()
         with caplog.at_level(logging.WARNING, logger="src.ui.state"):
             state.end_background_task("phantom_task")

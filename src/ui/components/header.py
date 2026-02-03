@@ -122,6 +122,10 @@ class Header:
             try:
                 self.state.clear_project()
             except BackgroundTaskActiveError:
+                logger.warning("Cannot clear project while background tasks are running")
+                if self._project_select:
+                    self._project_select.value = self.state.project_id
+                    self._project_select.update()
                 ui.notify("Cannot switch projects while tasks are running", type="warning")
                 return
             self.services.settings.last_project_id = None
@@ -135,6 +139,10 @@ class Header:
             self.services.settings.save()
             ui.notify(f"Loaded: {project.project_name}", type="positive")
         except BackgroundTaskActiveError:
+            logger.warning("Cannot switch project while background tasks are running")
+            if self._project_select:
+                self._project_select.value = self.state.project_id
+                self._project_select.update()
             ui.notify("Cannot switch projects while tasks are running", type="warning")
         except FileNotFoundError:
             logger.warning(f"Project not found: {project_id}")
