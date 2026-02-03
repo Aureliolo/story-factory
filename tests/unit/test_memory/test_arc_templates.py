@@ -85,7 +85,7 @@ class TestCharacterArcTemplate:
                 id="invalid",
                 name="Invalid Arc",
                 description="Invalid category",
-                arc_category="sidekick",  # type: ignore
+                arc_category="sidekick",
             )
 
 

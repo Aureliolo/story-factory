@@ -182,7 +182,7 @@ Properties: {formatted_properties}
 {JUDGE_CALIBRATION_BLOCK}
 
 Rate each dimension 0-10:
-- significance: Story importance, plot relevance
+- story_significance: Story importance, plot relevance
 - uniqueness: Distinctive qualities
 - narrative_potential: Opportunities for scenes
 - integration: How well it fits the world
@@ -190,7 +190,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"significance": 5.9, "uniqueness": 7.3, "narrative_potential": 6.1, "integration": 8.4, "feedback": "The item's..."}}
+{{"story_significance": 5.9, "uniqueness": 7.3, "narrative_potential": 6.1, "integration": 8.4, "feedback": "The item's..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -238,14 +238,15 @@ def _refine_item(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
+    threshold = svc.get_config().quality_threshold
     improvement_focus = []
-    if scores.significance < 8:
+    if scores.significance < threshold:
         improvement_focus.append("Increase story importance and plot relevance")
-    if scores.uniqueness < 8:
+    if scores.uniqueness < threshold:
         improvement_focus.append("Make more distinctive with unique qualities")
-    if scores.narrative_potential < 8:
+    if scores.narrative_potential < threshold:
         improvement_focus.append("Add more opportunities for scenes and conflict")
-    if scores.integration < 8:
+    if scores.integration < threshold:
         improvement_focus.append("Improve how naturally it fits into the world")
 
     prompt = f"""TASK: Improve this item to score HIGHER on the weak dimensions.
@@ -256,8 +257,8 @@ Description: {item.get("description", "")}
 Significance: {item.get("significance", "")}
 Properties: {svc._format_properties(item.get("properties", []))}
 
-CURRENT SCORES (need 9+ in all areas):
-- Significance: {scores.significance}/10
+CURRENT SCORES (need {threshold}+ in all areas):
+- Story Significance: {scores.significance}/10
 - Uniqueness: {scores.uniqueness}/10
 - Narrative Potential: {scores.narrative_potential}/10
 - Integration: {scores.integration}/10

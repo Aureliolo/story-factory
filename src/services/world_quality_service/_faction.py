@@ -315,14 +315,15 @@ def _refine_faction(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
+    threshold = svc.get_config().quality_threshold
     improvement_focus = []
-    if scores.coherence < 8:
+    if scores.coherence < threshold:
         improvement_focus.append("Make internal logic more consistent")
-    if scores.influence < 8:
+    if scores.influence < threshold:
         improvement_focus.append("Increase world impact and power level")
-    if scores.conflict_potential < 8:
+    if scores.conflict_potential < threshold:
         improvement_focus.append("Add more story conflict opportunities")
-    if scores.distinctiveness < 8:
+    if scores.distinctiveness < threshold:
         improvement_focus.append("Make more unique and memorable")
 
     prompt = f"""TASK: Improve this faction to score HIGHER on the weak dimensions.
@@ -334,7 +335,7 @@ Leader: {faction.get("leader", "Unknown")}
 Goals: {", ".join(faction.get("goals", []))}
 Values: {", ".join(faction.get("values", []))}
 
-CURRENT SCORES (need 9+ in all areas):
+CURRENT SCORES (need {threshold}+ in all areas):
 - Coherence: {scores.coherence}/10
 - Influence: {scores.influence}/10
 - Conflict Potential: {scores.conflict_potential}/10

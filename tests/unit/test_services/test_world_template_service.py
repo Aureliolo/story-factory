@@ -437,7 +437,7 @@ class TestWorldTemplateValidation:
                 name="Invalid Format",
                 description="Test",
                 genre="test",
-                recommended_counts={"characters": (1, 2, 3)},  # type: ignore[dict-item]
+                recommended_counts={"characters": (1, 2, 3)},
             )
 
 

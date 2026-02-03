@@ -160,6 +160,8 @@ Create a relationship with:
 3. Story potential - opportunities for scenes
 4. Authenticity - believable connection
 
+IMPORTANT: Return exactly ONE relationship as a single JSON object. Do NOT return an array.
+
 Output ONLY valid JSON (all text in {brief.language}):
 {{
     "source": "Entity Name 1",
@@ -181,6 +183,12 @@ Output ONLY valid JSON (all text in {brief.language}):
 
         raw_response = response["response"]
         data = extract_json(raw_response, strict=False)
+        if data and isinstance(data, list):
+            logger.warning(
+                "Relationship creation returned array of %d relationships, taking first",
+                len(data),
+            )
+            data = data[0] if data and isinstance(data[0], dict) else None
         if data and isinstance(data, dict):
             result: dict[str, Any] = data
             return result
@@ -308,9 +316,20 @@ def _refine_relationship(
 ) -> dict[str, Any]:
     """Refine a relationship based on quality feedback."""
     brief = story_state.brief
-    weak = scores.weak_dimensions(svc.get_config().quality_threshold)
+    threshold = svc.get_config().quality_threshold
 
-    prompt = f"""Improve this relationship based on quality feedback.
+    # Build specific improvement instructions from feedback
+    improvement_focus = []
+    if scores.tension < threshold:
+        improvement_focus.append("Add competing interests, unresolved grievances, power imbalances")
+    if scores.dynamics < threshold:
+        improvement_focus.append("Add complexity — history, power shifts, secrets")
+    if scores.story_potential < threshold:
+        improvement_focus.append("Create more scene opportunities — betrayal, alliance, revelation")
+    if scores.authenticity < threshold:
+        improvement_focus.append("Add shared history, believable motivation for the bond")
+
+    prompt = f"""TASK: Improve this relationship to score HIGHER on the weak dimensions.
 
 ORIGINAL RELATIONSHIP:
 Source: {relationship.get("source", "Unknown")}
@@ -318,18 +337,26 @@ Target: {relationship.get("target", "Unknown")}
 Type: {relationship.get("relation_type", "unknown")}
 Description: {relationship.get("description", "")}
 
-QUALITY SCORES (0-10):
-- Tension: {scores.tension}
-- Dynamics: {scores.dynamics}
-- Story Potential: {scores.story_potential}
-- Authenticity: {scores.authenticity}
+CURRENT SCORES (need {threshold}+ in all areas):
+- Tension: {scores.tension}/10
+- Dynamics: {scores.dynamics}/10
+- Story Potential: {scores.story_potential}/10
+- Authenticity: {scores.authenticity}/10
 
-FEEDBACK: {scores.feedback}
-WEAK AREAS: {", ".join(weak) if weak else "None"}
+JUDGE'S FEEDBACK: {scores.feedback}
 
-Keep source/target/type, enhance the description and weak areas.
+SPECIFIC IMPROVEMENTS NEEDED:
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
-Output ONLY valid JSON (all text in {brief.language if brief else "English"}):
+REQUIREMENTS:
+1. Keep source: "{relationship.get("source", "Unknown")}"
+2. Keep target: "{relationship.get("target", "Unknown")}"
+3. Keep type: "{relationship.get("relation_type", "knows")}"
+4. Make SUBSTANTIAL improvements to weak areas
+5. Add concrete details, not vague generalities
+6. Output in {brief.language if brief else "English"}
+
+Output ONLY valid JSON:
 {{
     "source": "{relationship.get("source", "Unknown")}",
     "target": "{relationship.get("target", "Unknown")}",

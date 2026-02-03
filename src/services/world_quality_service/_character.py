@@ -274,7 +274,7 @@ Arc Notes: {character.arc_notes}
 
 Rate each dimension 0-10:
 - depth: Psychological complexity, internal contradictions, layers
-- goals: Clarity, story relevance, want vs need tension
+- goal_clarity: Clarity, story relevance, want vs need tension
 - flaws: Meaningful vulnerabilities that drive conflict
 - uniqueness: Distinctiveness from genre archetypes
 - arc_potential: Room for transformation and growth
@@ -282,7 +282,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"depth": 6.3, "goals": 7.8, "flaws": 5.1, "uniqueness": 8.2, "arc_potential": 6.9, "feedback": "The character's..."}}
+{{"depth": 6.3, "goal_clarity": 7.8, "flaws": 5.1, "uniqueness": 8.2, "arc_potential": 6.9, "feedback": "The character's..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -307,9 +307,24 @@ def _refine_character(
         Refined Character.
     """
     brief = story_state.brief
-    weak = scores.weak_dimensions(svc.get_config().quality_threshold)
+    threshold = svc.get_config().quality_threshold
 
-    prompt = f"""Improve this character based on quality feedback.
+    # Build specific improvement instructions from feedback
+    improvement_focus = []
+    if scores.depth < threshold:
+        improvement_focus.append(
+            "Add deeper psychological complexity — internal contradictions, hidden motivations"
+        )
+    if scores.goals < threshold:
+        improvement_focus.append("Clarify goals with specific want-vs-need tension")
+    if scores.flaws < threshold:
+        improvement_focus.append("Add meaningful flaws that create real conflict")
+    if scores.uniqueness < threshold:
+        improvement_focus.append("Avoid genre archetypes, add surprising traits")
+    if scores.arc_potential < threshold:
+        improvement_focus.append("Expand transformation potential with specific turning points")
+
+    prompt = f"""TASK: Improve this character to score HIGHER on the weak dimensions.
 
 ORIGINAL CHARACTER:
 Name: {character.name}
@@ -319,20 +334,26 @@ Traits: {", ".join(character.personality_traits)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
 
-QUALITY SCORES (0-10):
-- Depth: {scores.depth}
-- Goals: {scores.goals}
-- Flaws: {scores.flaws}
-- Uniqueness: {scores.uniqueness}
-- Arc Potential: {scores.arc_potential}
+CURRENT SCORES (need {threshold}+ in all areas):
+- Depth: {scores.depth}/10
+- Goal Clarity: {scores.goals}/10
+- Flaws: {scores.flaws}/10
+- Uniqueness: {scores.uniqueness}/10
+- Arc Potential: {scores.arc_potential}/10
 
-FEEDBACK: {scores.feedback}
+JUDGE'S FEEDBACK: {scores.feedback}
 
-WEAK AREAS TO IMPROVE: {", ".join(weak) if weak else "None - minor improvements only"}
+SPECIFIC IMPROVEMENTS NEEDED:
+{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
-Keep the name "{character.name}" and role "{character.role}", but enhance the weak areas.
-Make the character more compelling while maintaining consistency.
-Write all text in {brief.language if brief else "English"}."""
+REQUIREMENTS:
+1. Keep the exact name: "{character.name}"
+2. Keep the role: "{character.role}"
+3. Make SUBSTANTIAL improvements to weak areas
+4. Add concrete details, not vague generalities
+5. Output in {brief.language if brief else "English"}
+
+Return ONLY the improved character."""
 
     try:
         model = svc._get_creator_model(entity_type="character")

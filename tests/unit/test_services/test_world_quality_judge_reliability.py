@@ -721,7 +721,7 @@ class TestAggregateScores:
     def test_retry_strategy_rejected_by_pydantic(self):
         """Retry strategy is not a valid option and Pydantic rejects it."""
         with pytest.raises(ValidationError):
-            JudgeConsistencyConfig(outlier_strategy="retry")  # type: ignore[arg-type]
+            JudgeConsistencyConfig(outlier_strategy="retry")
 
 
 class TestCalibrationBlock:

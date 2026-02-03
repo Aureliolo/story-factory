@@ -234,14 +234,15 @@ def _refine_concept(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
+    threshold = svc.get_config().quality_threshold
     improvement_focus = []
-    if scores.relevance < 8:
+    if scores.relevance < threshold:
         improvement_focus.append("Strengthen alignment with story themes")
-    if scores.depth < 8:
+    if scores.depth < threshold:
         improvement_focus.append("Add more philosophical richness and complexity")
-    if scores.manifestation < 8:
+    if scores.manifestation < threshold:
         improvement_focus.append("Provide clearer ways the concept appears in the story")
-    if scores.resonance < 8:
+    if scores.resonance < threshold:
         improvement_focus.append("Increase emotional impact potential")
 
     prompt = f"""TASK: Improve this concept to score HIGHER on the weak dimensions.
@@ -251,7 +252,7 @@ Name: {concept.get("name", "Unknown")}
 Description: {concept.get("description", "")}
 Manifestations: {concept.get("manifestations", "")}
 
-CURRENT SCORES (need 9+ in all areas):
+CURRENT SCORES (need {threshold}+ in all areas):
 - Relevance: {scores.relevance}/10
 - Depth: {scores.depth}/10
 - Manifestation: {scores.manifestation}/10

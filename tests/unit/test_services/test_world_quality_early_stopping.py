@@ -948,13 +948,13 @@ class TestLocationQualityScoresWeakDimensions:
         assert "atmosphere" in weak
         assert len(weak) == 1
 
-    def test_weak_dimensions_identifies_significance(self):
-        """Test weak_dimensions identifies low significance."""
+    def test_weak_dimensions_identifies_narrative_significance(self):
+        """Test weak_dimensions identifies low narrative_significance."""
         scores = LocationQualityScores(
             atmosphere=8.0, significance=5.0, story_relevance=8.0, distinctiveness=8.0
         )
         weak = scores.weak_dimensions(threshold=7.0)
-        assert "significance" in weak
+        assert "narrative_significance" in weak
         assert len(weak) == 1
 
     def test_weak_dimensions_identifies_story_relevance(self):
@@ -979,13 +979,13 @@ class TestLocationQualityScoresWeakDimensions:
 class TestItemQualityScoresWeakDimensions:
     """Tests for ItemQualityScores.weak_dimensions edge cases."""
 
-    def test_weak_dimensions_identifies_significance(self):
-        """Test weak_dimensions identifies low significance."""
+    def test_weak_dimensions_identifies_story_significance(self):
+        """Test weak_dimensions identifies low story_significance."""
         scores = ItemQualityScores(
             significance=5.0, uniqueness=8.0, narrative_potential=8.0, integration=8.0
         )
         weak = scores.weak_dimensions(threshold=7.0)
-        assert "significance" in weak
+        assert "story_significance" in weak
         assert len(weak) == 1
 
     def test_weak_dimensions_identifies_uniqueness(self):

@@ -199,7 +199,7 @@ class TestCharacterQualityScores:
         )
         result = scores.to_dict()
         assert result["depth"] == 8.0
-        assert result["goals"] == 7.0
+        assert result["goal_clarity"] == 7.0
         assert result["average"] == 7.0
         assert result["feedback"] == "Good character, needs more flaws"
 
@@ -213,7 +213,7 @@ class TestCharacterQualityScores:
             arc_potential=6.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
-        assert "goals" in weak
+        assert "goal_clarity" in weak
         assert "flaws" in weak
         assert "arc_potential" in weak
         assert "depth" not in weak
@@ -230,7 +230,7 @@ class TestCharacterQualityScores:
         # Should have errors for all 5 score fields
         errors = exc_info.value.errors()
         missing_fields = {e["loc"][0] for e in errors if e["type"] == "missing"}
-        assert missing_fields == {"depth", "goals", "flaws", "uniqueness", "arc_potential"}
+        assert missing_fields == {"depth", "goal_clarity", "flaws", "uniqueness", "arc_potential"}
 
 
 class TestLocationQualityScores:
@@ -255,7 +255,7 @@ class TestLocationQualityScores:
             distinctiveness=9.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
-        assert "significance" in weak
+        assert "narrative_significance" in weak
         assert "story_relevance" in weak
         assert "atmosphere" not in weak
 
@@ -379,7 +379,7 @@ class TestItemQualityScores:
             integration=9.0,
         )
         weak = scores.weak_dimensions(threshold=7.0)
-        assert "significance" in weak
+        assert "story_significance" in weak
         assert "uniqueness" in weak
         assert "narrative_potential" not in weak
         assert "integration" not in weak
@@ -394,7 +394,7 @@ class TestItemQualityScores:
             feedback="More history needed",
         )
         result = scores.to_dict()
-        assert result["significance"] == 8.0
+        assert result["story_significance"] == 8.0
         assert result["average"] == 7.5
         assert result["feedback"] == "More history needed"
 
@@ -863,7 +863,7 @@ class TestRefineCharacter:
         prompt = call_args.kwargs["prompt"]
         assert "depth" in prompt.lower()
         assert "flaws" in prompt.lower()
-        assert "arc_potential" in prompt.lower()
+        assert "arc potential" in prompt.lower()
 
     @patch("src.services.world_quality_service._character.generate_structured")
     def test_refine_character_error_raises(self, mock_generate_structured, service, story_state):

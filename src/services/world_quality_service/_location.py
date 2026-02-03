@@ -170,14 +170,14 @@ Significance: {location.get("significance", "")}
 
 Rate each dimension 0-10:
 - atmosphere: Sensory richness, mood, immersion
-- significance: Plot or symbolic meaning
+- narrative_significance: Plot or symbolic meaning
 - story_relevance: Connections to themes and characters
 - distinctiveness: Memorable, unique qualities
 
 Provide specific improvement feedback in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"atmosphere": 7.2, "significance": 5.8, "story_relevance": 6.4, "distinctiveness": 8.1, "feedback": "The location's..."}}
+{{"atmosphere": 7.2, "narrative_significance": 5.8, "story_relevance": 6.4, "distinctiveness": 8.1, "feedback": "The location's..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
@@ -225,14 +225,15 @@ def _refine_location(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
+    threshold = svc.get_config().quality_threshold
     improvement_focus = []
-    if scores.atmosphere < 8:
+    if scores.atmosphere < threshold:
         improvement_focus.append("Add richer sensory details and mood")
-    if scores.significance < 8:
+    if scores.significance < threshold:
         improvement_focus.append("Deepen the plot or symbolic meaning")
-    if scores.story_relevance < 8:
+    if scores.story_relevance < threshold:
         improvement_focus.append("Strengthen connections to themes and characters")
-    if scores.distinctiveness < 8:
+    if scores.distinctiveness < threshold:
         improvement_focus.append("Make more memorable with unique qualities")
 
     prompt = f"""TASK: Improve this location to score HIGHER on the weak dimensions.
@@ -242,9 +243,9 @@ Name: {location.get("name", "Unknown")}
 Description: {location.get("description", "")}
 Significance: {location.get("significance", "")}
 
-CURRENT SCORES (need 9+ in all areas):
+CURRENT SCORES (need {threshold}+ in all areas):
 - Atmosphere: {scores.atmosphere}/10
-- Significance: {scores.significance}/10
+- Narrative Significance: {scores.significance}/10
 - Story Relevance: {scores.story_relevance}/10
 - Distinctiveness: {scores.distinctiveness}/10
 
