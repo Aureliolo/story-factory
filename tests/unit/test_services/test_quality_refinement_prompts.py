@@ -8,6 +8,7 @@ Covers:
 
 import inspect
 import logging
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -15,6 +16,7 @@ from src.memory.world_quality import (
     CharacterQualityScores,
     ItemQualityScores,
     LocationQualityScores,
+    RelationshipQualityScores,
 )
 from src.services.world_quality_service import (
     _character,
@@ -229,3 +231,69 @@ class TestDynamicThreshold:
         assert "get_config().quality_threshold" in source or "threshold" in source, (
             f"{module.__name__}.{refine_fn.__name__} does not read threshold from config"
         )
+
+
+class TestWeakDimensionsBranchCoverage:
+    """Ensure every dimension branch in weak_dimensions is exercised."""
+
+    def test_character_depth_and_uniqueness_weak(self):
+        """Cover depth and uniqueness branches in CharacterQualityScores.weak_dimensions."""
+        scores = CharacterQualityScores(
+            depth=3.0, goals=9.0, flaws=9.0, uniqueness=4.0, arc_potential=9.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "depth" in weak
+        assert "uniqueness" in weak
+        assert "goal_clarity" not in weak
+
+    def test_relationship_dynamics_and_authenticity_weak(self):
+        """Cover dynamics and authenticity branches in RelationshipQualityScores."""
+        scores = RelationshipQualityScores(
+            tension=9.0, dynamics=3.0, story_potential=9.0, authenticity=4.0
+        )
+        weak = scores.weak_dimensions(threshold=7.0)
+        assert "dynamics" in weak
+        assert "authenticity" in weak
+        assert "tension" not in weak
+
+
+class TestRelationshipArrayDefense:
+    """Test that relationship creation handles array responses at runtime."""
+
+    @patch("src.services.world_quality_service._relationship.extract_json")
+    def test_array_response_takes_first_element(self, mock_extract):
+        """When LLM returns a JSON array, first dict element is used."""
+        mock_extract.return_value = [
+            {
+                "source": "Alice",
+                "target": "Bob",
+                "relation_type": "allies_with",
+                "description": "D",
+            },
+            {"source": "X", "target": "Y", "relation_type": "knows", "description": "E"},
+        ]
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_create = 512
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {"response": "[]"}
+
+        from src.memory.story_state import StoryBrief, StoryState
+
+        brief = StoryBrief(
+            premise="Test",
+            genre="fantasy",
+            tone="dark",
+            themes=["power"],
+            setting_place="Kingdom",
+            setting_time="Medieval",
+            target_length="short_story",
+            content_rating="none",
+            language="English",
+        )
+        state = StoryState(id="test-story", brief=brief)
+
+        result = _relationship._create_relationship(
+            svc, state, ["Alice", "Bob"], [], temperature=0.7
+        )
+        assert result["source"] == "Alice"
+        assert result["target"] == "Bob"
