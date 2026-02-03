@@ -14,24 +14,22 @@ _RETRY_TEMP_INCREMENT = 0.15
 _RETRY_TEMP_MAX = 1.5
 
 # Shared calibration block for all judge prompts.
-# Stronger than the original — uses explicit anchoring, concrete examples of each
-# score level, and a prohibition on score inflation. Local models (dolphin3:8b,
-# qwen3) were observed to routinely give 8-10 on first attempts with the old text.
-JUDGE_CALIBRATION_BLOCK = """SCORING CALIBRATION — YOU MUST BE STRICT:
-- 1-2: Broken — incoherent, contradicts itself, unusable
-- 3-4: Poor — generic, cliched, no original thought
-- 5: Mediocre — functional but bland and forgettable
-- 6: Decent — has one or two strengths but nothing stands out
-- 7: Good — solid work with clear strengths (this is where most first drafts should land)
-- 8: Very good — multiple strong dimensions, well-crafted
-- 9: Excellent — genuinely impressive, would enhance a published work
-- 10: Masterwork — virtually flawless, publishable as-is
+# Encourages use of the full 0-10 range with decimal precision and variation
+# between dimensions. Previous calibration suppressed 8+ scores and forced
+# integer-only outputs, making the 7.5 threshold unreachable.
+JUDGE_CALIBRATION_BLOCK = """SCORING GUIDE — USE THE FULL 0-10 RANGE WITH DECIMALS:
+- 1-3: Fundamentally broken or generic (contradictory, cliched, no thought)
+- 4-5: Below average (functional but bland, forgettable, one-dimensional)
+- 6-7: Competent (clear strengths, some areas need work — most first drafts land here)
+- 7-8: Strong (well-crafted, multiple strong dimensions — refined work reaches here)
+- 8-9: Excellent (genuinely impressive, few weaknesses — justify in feedback)
+- 10: Virtually flawless (publishable as-is — almost never appropriate)
 
-CRITICAL RULES:
-1. Your AVERAGE score for a first-draft entity should be 5-6. If you are averaging 7+ on first drafts, you are scoring too high.
-2. Do NOT give 8+ on ANY dimension unless it is genuinely exceptional and you can explain why in your feedback.
-3. A score of 7 already means GOOD. Reserve 8-10 for truly outstanding work.
-4. Score inflation makes the refinement loop useless — if everything scores 8+ the system cannot improve entities."""
+RULES:
+1. Score to one decimal place (e.g., 5.3, 7.1, 8.6). Do NOT round to whole numbers.
+2. Differentiate between dimensions — an entity can have 8.2 in one area but 5.4 in another.
+3. If you give 8+ on a dimension, your feedback MUST explain what makes it exceptional.
+4. If all your scores are within 1 point of each other, you are not differentiating enough."""
 
 T = TypeVar("T", bound=BaseModel)
 

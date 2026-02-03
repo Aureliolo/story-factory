@@ -5,7 +5,7 @@ import random
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from src.memory.story_state import StoryState
+from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_database import WorldDatabase
 from src.utils.exceptions import GenerationCancelledError
 from src.utils.validation import validate_not_none, validate_type
@@ -121,9 +121,61 @@ def build_world(
             services.story._sync_state(orchestrator, state)
         counts["characters"] = len(state.characters)
         logger.info(
-            f"Story structure built: {len(state.characters)} characters, "
-            f"{len(state.chapters)} chapters"
+            "Story structure built: %d characters, %d chapters",
+            len(state.characters),
+            len(state.chapters),
         )
+
+        # Step 2a: Review character quality from Architect output
+        if state.characters:
+            check_cancelled()
+            report_progress("Reviewing character quality...", "character")
+            reviewed_chars = services.world_quality.review_characters_batch(
+                state.characters,
+                state,
+                cancel_check=options.is_cancelled,
+            )
+            # Update state with refined characters
+            state.characters = [char for char, _scores in reviewed_chars]
+            logger.info(
+                "Character quality review complete: %d characters reviewed",
+                len(reviewed_chars),
+            )
+
+        # Step 2b: Review plot quality from Architect output
+        if state.plot_summary:
+            check_cancelled()
+            report_progress("Reviewing plot quality...", "plot")
+            plot_outline = PlotOutline(
+                plot_summary=state.plot_summary,
+                plot_points=state.plot_points,
+            )
+            reviewed_plot, plot_scores, plot_iterations = (
+                services.world_quality.review_plot_quality(plot_outline, state)
+            )
+            state.plot_summary = reviewed_plot.plot_summary
+            state.plot_points = reviewed_plot.plot_points
+            logger.info(
+                "Plot quality review complete after %d iteration(s), quality: %.1f",
+                plot_iterations,
+                plot_scores.average,
+            )
+
+        # Step 2c: Review chapter quality from Architect output
+        if state.chapters:
+            check_cancelled()
+            report_progress("Reviewing chapter quality...", "chapter")
+            reviewed_chapters = services.world_quality.review_chapters_batch(
+                state.chapters,
+                state,
+                cancel_check=options.is_cancelled,
+            )
+            # Update state with refined chapters
+            state.chapters = [ch for ch, _scores in reviewed_chapters]
+            logger.info(
+                "Chapter quality review complete: %d chapters reviewed",
+                len(reviewed_chapters),
+            )
 
     # Step 3: Extract characters to world database
     check_cancelled()
@@ -214,6 +266,8 @@ def _calculate_total_steps(options: WorldBuildOptions) -> int:
         steps += 1
     if options.generate_structure:
         steps += 1
+        # Quality review steps for Architect output (characters, plot, chapters)
+        steps += 3
     if options.generate_locations:
         steps += 1
     if options.generate_factions:

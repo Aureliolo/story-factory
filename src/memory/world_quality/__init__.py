@@ -5,6 +5,8 @@ iterative improvement of characters, locations, and relationships.
 """
 
 from src.memory.world_quality._models import (
+    BaseQualityScores,
+    ChapterQualityScores,
     CharacterQualityScores,
     ConceptQualityScores,
     FactionQualityScores,
@@ -12,6 +14,7 @@ from src.memory.world_quality._models import (
     IterationRecord,
     JudgeConsistencyConfig,
     LocationQualityScores,
+    PlotQualityScores,
     RefinementConfig,
     RefinementHistory,
     RelationshipQualityScores,
@@ -19,6 +22,8 @@ from src.memory.world_quality._models import (
 from src.memory.world_quality._scoring import ScoreStatistics
 
 __all__ = [
+    "BaseQualityScores",
+    "ChapterQualityScores",
     "CharacterQualityScores",
     "ConceptQualityScores",
     "FactionQualityScores",
@@ -26,6 +31,7 @@ __all__ = [
     "IterationRecord",
     "JudgeConsistencyConfig",
     "LocationQualityScores",
+    "PlotQualityScores",
     "RefinementConfig",
     "RefinementHistory",
     "RelationshipQualityScores",

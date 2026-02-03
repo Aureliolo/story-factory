@@ -16,28 +16,34 @@ import ollama
 from src.memory.entities import Entity
 from src.memory.mode_database import ModeDatabase
 from src.memory.story_state import (
+    Chapter,
     Character,
+    PlotOutline,
     StoryBrief,
     StoryState,
 )
 from src.memory.world_quality import (
+    ChapterQualityScores,
     CharacterQualityScores,
     ConceptQualityScores,
     FactionQualityScores,
     ItemQualityScores,
     JudgeConsistencyConfig,
     LocationQualityScores,
+    PlotQualityScores,
     RefinementConfig,
     RefinementHistory,
     RelationshipQualityScores,
 )
 from src.services.model_mode_service import ModelModeService
 from src.services.world_quality_service import (
+    _chapter_quality,
     _character,
     _concept,
     _faction,
     _item,
     _location,
+    _plot,
     _relationship,
 )
 from src.services.world_quality_service._batch import (
@@ -58,8 +64,20 @@ from src.services.world_quality_service._batch import (
 from src.services.world_quality_service._batch import (
     generate_relationships_with_quality as _generate_relationships_with_quality,
 )
+from src.services.world_quality_service._batch import (
+    review_chapters_batch as _review_chapters_batch,
+)
+from src.services.world_quality_service._batch import (
+    review_characters_batch as _review_characters_batch,
+)
+from src.services.world_quality_service._chapter_quality import (
+    review_chapter_quality as _review_chapter_quality,
+)
 from src.services.world_quality_service._character import (
     generate_character_with_quality as _generate_character_with_quality,
+)
+from src.services.world_quality_service._character import (
+    review_character_quality as _review_character_quality,
 )
 from src.services.world_quality_service._concept import (
     generate_concept_with_quality as _generate_concept_with_quality,
@@ -77,6 +95,9 @@ from src.services.world_quality_service._item import (
 )
 from src.services.world_quality_service._location import (
     generate_location_with_quality as _generate_location_with_quality,
+)
+from src.services.world_quality_service._plot import (
+    review_plot_quality as _review_plot_quality,
 )
 from src.services.world_quality_service._relationship import (
     generate_relationship_with_quality as _generate_relationship_with_quality,
@@ -150,6 +171,8 @@ class WorldQualityService:
         "item": "writer",  # Creative descriptions
         "concept": "architect",  # Abstract thinking
         "relationship": "editor",  # Understanding dynamics
+        "plot": "architect",  # Plot structure reasoning
+        "chapter": "architect",  # Chapter outline structure
     }
 
     ENTITY_JUDGE_ROLES: ClassVar[dict[str, str]] = {
@@ -159,6 +182,8 @@ class WorldQualityService:
         "item": "judge",  # Item quality evaluation
         "concept": "judge",  # Concept quality evaluation
         "relationship": "judge",  # Relationship quality evaluation
+        "plot": "judge",  # Plot quality evaluation
+        "chapter": "judge",  # Chapter quality evaluation
     }
 
     # Faction diversity hints (exposed as class vars for backward compat)
@@ -246,6 +271,7 @@ class WorldQualityService:
         self.mode_service = mode_service
         self._client: ollama.Client | None = None
         self._analytics_db: ModeDatabase | None = None
+        self._warned_conflicts: set[str] = set()
         logger.debug("WorldQualityService initialized successfully")
 
     @property
@@ -420,7 +446,7 @@ class WorldQualityService:
             self.ENTITY_CREATOR_ROLES.get(entity_type, "writer") if entity_type else "writer"
         )
         model = self._resolve_model_for_role(agent_role)
-        logger.debug(
+        logger.info(
             "Selected creator model '%s' for entity_type=%s (role=%s)",
             model,
             entity_type,
@@ -435,8 +461,9 @@ class WorldQualityService:
         takes priority over ModelModeService auto-selection.
 
         If the resolved judge model is the same as the creator model for the
-        same entity type, logs a warning. A model judging its own output
-        produces unreliable scores — users should configure distinct models.
+        same entity type, attempts to pick a different model from the available
+        judge-tagged models. Falls back to the same model with a throttled warning
+        if no alternative is available.
 
         Args:
             entity_type: Type of entity being judged. If provided, checks that
@@ -448,17 +475,40 @@ class WorldQualityService:
         agent_role = self.ENTITY_JUDGE_ROLES.get(entity_type, "judge") if entity_type else "judge"
         model = self._resolve_model_for_role(agent_role)
 
-        # Warn if judge and creator resolve to the same model
+        # Prefer a different model from the creator to avoid self-judging bias
         if entity_type:
             creator_model = self._get_creator_model(entity_type)
             if model == creator_model:
-                logger.warning(
-                    "Judge model '%s' is the same as creator model for entity_type=%s. "
-                    "A model judging its own output produces unreliable scores. "
-                    "Configure a different model for the 'judge' role in Settings > Models.",
-                    model,
-                    entity_type,
-                )
+                # Try to find an alternative judge model
+                alternatives = self.settings.get_models_for_role("judge")
+                alternative_found = False
+                for alt_model in alternatives:
+                    if alt_model != creator_model:
+                        logger.info(
+                            "Swapping judge model from '%s' to '%s' for entity_type=%s "
+                            "to avoid self-judging bias (creator model is '%s')",
+                            model,
+                            alt_model,
+                            entity_type,
+                            creator_model,
+                        )
+                        model = alt_model
+                        alternative_found = True
+                        break
+
+                if not alternative_found:
+                    # Throttle warning: only warn once per entity_type:model combination
+                    conflict_key = f"{entity_type}:{model}"
+                    if conflict_key not in self._warned_conflicts:
+                        self._warned_conflicts.add(conflict_key)
+                        logger.warning(
+                            "Judge model '%s' is the same as creator model for entity_type=%s "
+                            "and no alternative judge model is available. "
+                            "A model judging its own output produces unreliable scores. "
+                            "Configure a different model for the 'judge' role in Settings > Models.",
+                            model,
+                            entity_type,
+                        )
 
         logger.info(
             "Selected judge model '%s' for entity_type=%s (role=%s)",
@@ -577,6 +627,29 @@ Create a COMPLETELY DIFFERENT {entity_type} name."""
         return _generate_character_with_quality(
             self, story_state, existing_names, custom_instructions
         )
+
+    def review_character_quality(
+        self,
+        character: Character,
+        story_state: StoryState,
+    ) -> tuple[Character, CharacterQualityScores, int]:
+        return _review_character_quality(self, character, story_state)
+
+    # -- Plot --
+    def review_plot_quality(
+        self,
+        plot_outline: PlotOutline,
+        story_state: StoryState,
+    ) -> tuple[PlotOutline, PlotQualityScores, int]:
+        return _review_plot_quality(self, plot_outline, story_state)
+
+    # -- Chapter --
+    def review_chapter_quality(
+        self,
+        chapter: Chapter,
+        story_state: StoryState,
+    ) -> tuple[Chapter, ChapterQualityScores, int]:
+        return _review_chapter_quality(self, chapter, story_state)
 
     # -- Location --
     def generate_location_with_quality(
@@ -708,6 +781,27 @@ Create a COMPLETELY DIFFERENT {entity_type} name."""
             self, story_state, entity_names, existing_rels, count, cancel_check, progress_callback
         )
 
+    # -- Batch review operations (Architect output quality review) --
+    def review_characters_batch(
+        self,
+        characters: list[Character],
+        story_state: StoryState,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
+    ) -> list[tuple[Character, CharacterQualityScores]]:
+        return _review_characters_batch(
+            self, characters, story_state, cancel_check, progress_callback
+        )
+
+    def review_chapters_batch(
+        self,
+        chapters: list[Chapter],
+        story_state: StoryState,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
+    ) -> list[tuple[Chapter, ChapterQualityScores]]:
+        return _review_chapters_batch(self, chapters, story_state, cancel_check, progress_callback)
+
     # -- Private: Character helpers --
     def _create_character(self, story_state, existing_names, temperature, custom_instructions=None):
         return _character._create_character(
@@ -782,6 +876,22 @@ Create a COMPLETELY DIFFERENT {entity_type} name."""
     def _refine_relationship(self, relationship, scores, story_state, temperature):
         return _relationship._refine_relationship(
             self, relationship, scores, story_state, temperature
+        )
+
+    # -- Private: Plot helpers --
+    def _judge_plot_quality(self, plot_outline, story_state, temperature):
+        return _plot._judge_plot_quality(self, plot_outline, story_state, temperature)
+
+    def _refine_plot(self, plot_outline, scores, story_state, temperature):
+        return _plot._refine_plot(self, plot_outline, scores, story_state, temperature)
+
+    # -- Private: Chapter helpers --
+    def _judge_chapter_quality(self, chapter, story_state, temperature):
+        return _chapter_quality._judge_chapter_quality(self, chapter, story_state, temperature)
+
+    def _refine_chapter_outline(self, chapter, scores, story_state, temperature):
+        return _chapter_quality._refine_chapter_outline(
+            self, chapter, scores, story_state, temperature
         )
 
     # -- Validation / Mini descriptions --

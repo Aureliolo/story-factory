@@ -939,24 +939,23 @@ class TestItemRetryLogLevel:
     """Tests for Issue 4: item/location retry uses WARNING not ERROR."""
 
     def test_item_empty_creation_uses_warning_log(self):
-        """Test that _item module uses logger.warning for empty creation retries."""
+        """Test that the quality loop uses logger.warning for empty creation retries."""
         import inspect
 
-        from src.services.world_quality_service import _item as item_mod
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
 
-        source = inspect.getsource(item_mod.generate_item_with_quality)
+        source = inspect.getsource(quality_refinement_loop)
         # Should use warning for empty creation retries, not error
         assert "logger.warning(" in source
         assert "creation_retries" in source
-        assert "retry_temp" in source
 
     def test_location_empty_creation_uses_warning_log(self):
-        """Test that _location module uses logger.warning for empty creation retries."""
+        """Test that the quality loop uses logger.warning for empty creation retries."""
         import inspect
 
-        from src.services.world_quality_service import _location as loc_mod
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
 
-        source = inspect.getsource(loc_mod.generate_location_with_quality)
+        source = inspect.getsource(quality_refinement_loop)
         assert "logger.warning(" in source
         assert "creation_retries" in source
 
@@ -1024,49 +1023,22 @@ class TestRetryTemperatureHelper:
 class TestIterationCountAlignment:
     """Tests for iteration count alignment: use history iteration, not loop counter."""
 
-    def test_entity_modules_use_history_iteration(self):
-        """All entity modules should use history.iterations[-1].iteration, not iteration + 1."""
+    def test_quality_loop_uses_history_iteration(self):
+        """Generic quality loop should use history.iterations[-1].iteration, not iteration + 1."""
         import inspect
 
-        from src.services.world_quality_service import (
-            _character as char_mod,
-        )
-        from src.services.world_quality_service import (
-            _concept as concept_mod,
-        )
-        from src.services.world_quality_service import (
-            _faction as faction_mod,
-        )
-        from src.services.world_quality_service import (
-            _item as item_mod,
-        )
-        from src.services.world_quality_service import (
-            _location as location_mod,
-        )
-        from src.services.world_quality_service import (
-            _relationship as rel_mod,
-        )
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
 
-        modules = {
-            "character": char_mod.generate_character_with_quality,
-            "faction": faction_mod.generate_faction_with_quality,
-            "item": item_mod.generate_item_with_quality,
-            "location": location_mod.generate_location_with_quality,
-            "concept": concept_mod.generate_concept_with_quality,
-            "relationship": rel_mod.generate_relationship_with_quality,
-        }
-
-        for name, func in modules.items():
-            source = inspect.getsource(func)  # type: ignore[arg-type]
-            assert "current_iter = history.iterations[-1].iteration" in source, (
-                f"{name}: should use history iteration, not loop counter"
-            )
-            assert "history.final_iteration = current_iter" in source, (
-                f"{name}: final_iteration should use current_iter"
-            )
-            assert "return " in source and "current_iter" in source, (
-                f"{name}: return should use current_iter"
-            )
+        source = inspect.getsource(quality_refinement_loop)
+        assert "current_iter = history.iterations[-1].iteration" in source, (
+            "quality_loop: should use history iteration, not loop counter"
+        )
+        assert "history.final_iteration = current_iter" in source, (
+            "quality_loop: final_iteration should use current_iter"
+        )
+        assert "return " in source and "current_iter" in source, (
+            "quality_loop: return should use current_iter"
+        )
 
 
 class TestModelSelectionLogLevel:
@@ -1101,44 +1073,17 @@ class TestPlateauWarningFix:
     """Tests for plateau warning: only warn when score actually drops, not on plateaus."""
 
     def test_worsened_warning_uses_score_comparison(self):
-        """Test all entity modules use score comparison, not iteration number comparison."""
+        """Test generic quality loop uses score comparison, not iteration number comparison."""
         import inspect
 
-        from src.services.world_quality_service import (
-            _character as char_mod,
-        )
-        from src.services.world_quality_service import (
-            _concept as concept_mod,
-        )
-        from src.services.world_quality_service import (
-            _faction as faction_mod,
-        )
-        from src.services.world_quality_service import (
-            _item as item_mod,
-        )
-        from src.services.world_quality_service import (
-            _location as location_mod,
-        )
-        from src.services.world_quality_service import (
-            _relationship as rel_mod,
-        )
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
 
-        modules = {
-            "character": char_mod.generate_character_with_quality,
-            "faction": faction_mod.generate_faction_with_quality,
-            "item": item_mod.generate_item_with_quality,
-            "location": location_mod.generate_location_with_quality,
-            "concept": concept_mod.generate_concept_with_quality,
-            "relationship": rel_mod.generate_relationship_with_quality,
-        }
-
-        for name, func in modules.items():
-            source = inspect.getsource(func)  # type: ignore[arg-type]
-            # Should use actual score comparison, not iteration number comparison
-            assert "average_score < history.peak_score" in source, (
-                f"{name}: should compare scores, not iteration numbers"
-            )
-            # Should NOT use the old broken condition
-            assert "best_iteration != len(history.iterations)" not in source, (
-                f"{name}: still uses old broken iteration number comparison"
-            )
+        source = inspect.getsource(quality_refinement_loop)
+        # Should use actual score comparison, not iteration number comparison
+        assert "average_score < history.peak_score" in source, (
+            "quality_loop: should compare scores, not iteration numbers"
+        )
+        # Should NOT use the old broken condition
+        assert "best_iteration != len(history.iterations)" not in source, (
+            "quality_loop: still uses old broken iteration number comparison"
+        )

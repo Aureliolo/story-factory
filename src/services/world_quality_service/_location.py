@@ -4,13 +4,14 @@ import logging
 from typing import Any
 
 from src.memory.story_state import Location, StoryState
-from src.memory.world_quality import LocationQualityScores, RefinementHistory
+from src.memory.world_quality import LocationQualityScores
 from src.services.llm_client import generate_structured
 from src.services.world_quality_service._common import (
     JUDGE_CALIBRATION_BLOCK,
     judge_with_averaging,
     retry_temperature,
 )
+from src.services.world_quality_service._quality_loop import quality_refinement_loop
 from src.utils.exceptions import WorldGenerationError
 from src.utils.validation import validate_unique_name
 
@@ -22,16 +23,18 @@ def generate_location_with_quality(
     story_state: StoryState,
     existing_names: list[str],
 ) -> tuple[dict[str, Any], LocationQualityScores, int]:
-    """
-    Generate a location and iteratively refine it until it meets the configured quality threshold or retries are exhausted.
+    """Generate a location with iterative quality refinement.
+
+    Uses the generic quality refinement loop to create, judge, and refine
+    locations until the quality threshold is met or stopping criteria is reached.
 
     Parameters:
         svc: WorldQualityService instance.
-        story_state (StoryState): Current story state containing the brief and project id used for prompts and analytics.
-        existing_names (list[str]): Names of existing locations to avoid producing duplicates.
+        story_state: Current story state with brief.
+        existing_names: Names of existing locations to avoid duplicates.
 
     Returns:
-        tuple: (location_dict, scores, iterations_used)
+        Tuple of (location_dict, quality_scores, iterations_used).
 
     Raises:
         WorldGenerationError: If no valid location could be produced after all attempts.
@@ -41,168 +44,31 @@ def generate_location_with_quality(
     if not brief:
         raise ValueError("Story must have a brief for location generation")
 
-    logger.info(f"Generating location with quality threshold {config.quality_threshold}")
-
-    # Track all iterations for best-selection using RefinementHistory
-    history = RefinementHistory(entity_type="location", entity_name="")
-    iteration = 0
-    location: dict[str, Any] = {}
-    scores: LocationQualityScores | None = None
-    last_error: str = ""
-    creation_retries = 0  # Track duplicate-name retries for temperature escalation
-
-    while iteration < config.max_iterations:
-        try:
-            # Create new location on first iteration OR if previous returned empty
-            # (e.g., duplicate name detection returns {} to force retry)
-            if iteration == 0 or not location.get("name"):
-                # Increase temperature on retries to avoid regenerating the same name
-                retry_temp = retry_temperature(config, creation_retries)
-                location = svc._create_location(story_state, existing_names, retry_temp)
-            else:
-                if location and scores:
-                    # Use dynamic temperature that decreases over iterations
-                    dynamic_temp = config.get_refinement_temperature(iteration + 1)
-                    location = svc._refine_location(
-                        location,
-                        scores,
-                        story_state,
-                        dynamic_temp,
-                    )
-
-            if not location.get("name"):
-                creation_retries += 1
-                last_error = f"Location creation returned empty on iteration {iteration + 1}"
-                logger.warning(
-                    "%s (retry %d, next temp=%.2f)",
-                    last_error,
-                    creation_retries,
-                    retry_temperature(config, creation_retries),
-                )
-                iteration += 1
-                continue
-
-            # Update history entity name
-            if not history.entity_name:
-                history.entity_name = location.get("name", "Unknown")
-
-            scores = svc._judge_location_quality(location, story_state, config.judge_temperature)
-
-            # Track this iteration
-            history.add_iteration(
-                entity_data=location.copy(),
-                scores=scores.to_dict(),
-                average_score=scores.average,
-                feedback=scores.feedback,
-            )
-
-            current_iter = history.iterations[-1].iteration
-            logger.info(
-                f"Location '{location.get('name')}' iteration {current_iter}: "
-                f"score {scores.average:.1f} (best so far: {history.peak_score:.1f} "
-                f"at iteration {history.best_iteration})"
-            )
-
-            if scores.average >= config.quality_threshold:
-                logger.info(f"Location '{location.get('name')}' met quality threshold")
-                history.final_iteration = current_iter
-                history.final_score = scores.average
-                svc._log_refinement_analytics(
-                    history,
-                    story_state.id,
-                    threshold_met=True,
-                    early_stop_triggered=False,
-                    quality_threshold=config.quality_threshold,
-                    max_iterations=config.max_iterations,
-                )
-                return location, scores, current_iter
-
-            # Check for early stopping after tracking iteration (enhanced with variance tolerance)
-            if history.should_stop_early(
-                config.early_stopping_patience,
-                min_iterations=config.early_stopping_min_iterations,
-                variance_tolerance=config.early_stopping_variance_tolerance,
-            ):
-                reason = (
-                    f"plateaued for {history.consecutive_plateaus} consecutive iterations"
-                    if history.consecutive_plateaus >= config.early_stopping_patience
-                    else f"degraded for {history.consecutive_degradations} consecutive iterations"
-                )
-                logger.info(
-                    f"Early stopping: Location '{location.get('name')}' quality {reason} "
-                    f"(patience: {config.early_stopping_patience}). "
-                    f"Stopping at iteration {iteration + 1}."
-                )
-                break
-
-        except WorldGenerationError as e:
-            last_error = str(e)
-            logger.error(f"Location generation error on iteration {iteration + 1}: {e}")
-
-        iteration += 1
-
-    # Didn't meet threshold - return BEST iteration, not last
-    if not history.iterations:
-        raise WorldGenerationError(
-            f"Failed to generate location after {config.max_iterations} attempts. "
-            f"Last error: {last_error}"
-        )
-
-    # Pick best iteration (not necessarily the last one)
-    best_entity = history.get_best_entity()
-
-    if best_entity and history.iterations[-1].average_score < history.peak_score:
-        logger.warning(
-            f"Location '{history.entity_name}' iterations got WORSE after peak. "
-            f"Best: iteration {history.best_iteration} ({history.peak_score:.1f}), "
-            f"Final: iteration {len(history.iterations)} "
-            f"({history.iterations[-1].average_score:.1f}). "
-            f"Returning best iteration."
-        )
-
-    # Return best entity or last one
-    if best_entity:
-        # Reconstruct scores from best iteration
-        best_scores: LocationQualityScores | None = None
-        for record in history.iterations:
-            if record.iteration == history.best_iteration:
-                best_scores = LocationQualityScores(**record.scores)
-                break
-        if best_scores:
-            history.final_iteration = history.best_iteration
-            history.final_score = history.peak_score
-            was_early_stop = len(history.iterations) < config.max_iterations
-            svc._log_refinement_analytics(
-                history,
-                story_state.id,
-                threshold_met=history.peak_score >= config.quality_threshold,
-                early_stop_triggered=was_early_stop,
-                quality_threshold=config.quality_threshold,
-                max_iterations=config.max_iterations,
-            )
-            return best_entity, best_scores, history.best_iteration
-
-    # Fallback to last iteration
-    if location.get("name") and scores:
-        logger.warning(
-            f"Location '{location.get('name')}' did not meet quality threshold "
-            f"({scores.average:.1f} < {config.quality_threshold}), returning anyway"
-        )
-        history.final_iteration = len(history.iterations)
-        history.final_score = scores.average
-        svc._log_refinement_analytics(
-            history,
-            story_state.id,
-            threshold_met=False,
-            early_stop_triggered=False,
-            quality_threshold=config.quality_threshold,
-            max_iterations=config.max_iterations,
-        )
-        return location, scores, len(history.iterations)
-
-    raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
-        f"Failed to generate location after {config.max_iterations} attempts. "
-        f"Last error: {last_error}"
+    return quality_refinement_loop(
+        entity_type="location",
+        create_fn=lambda retries: svc._create_location(
+            story_state,
+            existing_names,
+            retry_temperature(config, retries),
+        ),
+        judge_fn=lambda loc: svc._judge_location_quality(
+            loc,
+            story_state,
+            config.judge_temperature,
+        ),
+        refine_fn=lambda loc, scores, iteration: svc._refine_location(
+            loc,
+            scores,
+            story_state,
+            config.get_refinement_temperature(iteration),
+        ),
+        get_name=lambda loc: loc.get("name", "Unknown"),
+        serialize=lambda loc: loc.copy(),
+        is_empty=lambda loc: not loc.get("name"),
+        score_cls=LocationQualityScores,
+        config=config,
+        svc=svc,
+        story_id=story_state.id,
     )
 
 
@@ -311,7 +177,7 @@ Rate each dimension 0-10:
 Provide specific improvement feedback in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"atmosphere": <number>, "significance": <number>, "story_relevance": <number>, "distinctiveness": <number>, "feedback": "<string>"}}
+{{"atmosphere": 7.2, "significance": 5.8, "story_relevance": 6.4, "distinctiveness": 8.1, "feedback": "The location's..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

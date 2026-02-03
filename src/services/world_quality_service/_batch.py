@@ -5,8 +5,9 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from src.memory.story_state import Character, StoryState
+from src.memory.story_state import Chapter, Character, StoryState
 from src.memory.world_quality import (
+    ChapterQualityScores,
     CharacterQualityScores,
     ConceptQualityScores,
     FactionQualityScores,
@@ -608,6 +609,232 @@ def generate_relationships_with_quality(
         logger.warning(
             f"Generated {len(results)}/{count} relationships. "
             f"{len(errors)} failed: {'; '.join(errors)}"
+        )
+
+    return results
+
+
+def review_characters_batch(
+    svc,
+    characters: list[Character],
+    story_state: StoryState,
+    cancel_check: Callable[[], bool] | None = None,
+    progress_callback: Callable | None = None,
+) -> list[tuple[Character, CharacterQualityScores]]:
+    """Review multiple characters from the Architect with quality refinement.
+
+    Each character is judged and refined if below the quality threshold.
+
+    Args:
+        svc: WorldQualityService instance.
+        characters: List of Character objects to review.
+        story_state: Current story state.
+        cancel_check: Optional callable that returns True to cancel.
+        progress_callback: Optional callback to receive progress updates.
+
+    Returns:
+        List of (reviewed_character, quality_scores) tuples.
+
+    Raises:
+        WorldGenerationError: If no characters could be reviewed.
+    """
+    from src.services.world_quality_service import EntityGenerationProgress
+
+    results: list[tuple[Character, CharacterQualityScores]] = []
+    errors: list[str] = []
+    batch_start_time = time.time()
+    completed_times: list[float] = []
+    count = len(characters)
+
+    for i, character in enumerate(characters):
+        if cancel_check and cancel_check():
+            logger.info("Character review cancelled after %d/%d", len(results), count)
+            break
+
+        if progress_callback:
+            progress_callback(
+                EntityGenerationProgress(
+                    current=i + 1,
+                    total=count,
+                    entity_type="character",
+                    entity_name=character.name,
+                    phase="reviewing",
+                    elapsed_seconds=time.time() - batch_start_time,
+                    estimated_remaining_seconds=svc._calculate_eta(completed_times, count - i),
+                )
+            )
+
+        entity_start = time.time()
+        try:
+            logger.info("Reviewing character %d/%d '%s' quality", i + 1, count, character.name)
+            reviewed_char, scores, iterations = svc.review_character_quality(character, story_state)
+            entity_elapsed = time.time() - entity_start
+            completed_times.append(entity_elapsed)
+            results.append((reviewed_char, scores))
+            logger.info(
+                "Character '%s' review complete after %d iteration(s), "
+                "quality: %.1f, review_time: %.2fs",
+                reviewed_char.name,
+                iterations,
+                scores.average,
+                entity_elapsed,
+            )
+
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="character",
+                        entity_name=reviewed_char.name,
+                        phase="complete",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=svc._calculate_eta(
+                            completed_times, count - i - 1
+                        ),
+                    )
+                )
+        except WorldGenerationError as e:
+            errors.append(str(e))
+            logger.error("Failed to review character '%s': %s", character.name, e)
+            # Keep the original character on review failure
+            results.append(
+                (
+                    character,
+                    CharacterQualityScores(
+                        depth=0,
+                        goals=0,
+                        flaws=0,
+                        uniqueness=0,
+                        arc_potential=0,
+                        feedback=f"Review failed: {e}",
+                    ),
+                )
+            )
+
+    if not results and errors:  # pragma: no cover
+        raise WorldGenerationError(f"Failed to review any characters. Errors: {'; '.join(errors)}")
+
+    if errors:
+        logger.warning(
+            "Reviewed %d/%d characters. %d failed: %s",
+            len(results),
+            count,
+            len(errors),
+            "; ".join(errors),
+        )
+
+    return results
+
+
+def review_chapters_batch(
+    svc,
+    chapters: list[Chapter],
+    story_state: StoryState,
+    cancel_check: Callable[[], bool] | None = None,
+    progress_callback: Callable | None = None,
+) -> list[tuple[Chapter, ChapterQualityScores]]:
+    """Review multiple chapters from the Architect with quality refinement.
+
+    Each chapter is judged and refined if below the quality threshold.
+
+    Args:
+        svc: WorldQualityService instance.
+        chapters: List of Chapter objects to review.
+        story_state: Current story state.
+        cancel_check: Optional callable that returns True to cancel.
+        progress_callback: Optional callback to receive progress updates.
+
+    Returns:
+        List of (reviewed_chapter, quality_scores) tuples.
+
+    Raises:
+        WorldGenerationError: If no chapters could be reviewed.
+    """
+    from src.services.world_quality_service import EntityGenerationProgress
+
+    results: list[tuple[Chapter, ChapterQualityScores]] = []
+    errors: list[str] = []
+    batch_start_time = time.time()
+    completed_times: list[float] = []
+    count = len(chapters)
+
+    for i, chapter in enumerate(chapters):
+        if cancel_check and cancel_check():
+            logger.info("Chapter review cancelled after %d/%d", len(results), count)
+            break
+
+        chapter_label = f"Ch{chapter.number}: {chapter.title}"
+        if progress_callback:
+            progress_callback(
+                EntityGenerationProgress(
+                    current=i + 1,
+                    total=count,
+                    entity_type="chapter",
+                    entity_name=chapter_label,
+                    phase="reviewing",
+                    elapsed_seconds=time.time() - batch_start_time,
+                    estimated_remaining_seconds=svc._calculate_eta(completed_times, count - i),
+                )
+            )
+
+        entity_start = time.time()
+        try:
+            logger.info("Reviewing chapter %d/%d '%s' quality", i + 1, count, chapter_label)
+            reviewed_ch, scores, iterations = svc.review_chapter_quality(chapter, story_state)
+            entity_elapsed = time.time() - entity_start
+            completed_times.append(entity_elapsed)
+            results.append((reviewed_ch, scores))
+            logger.info(
+                "Chapter '%s' review complete after %d iteration(s), "
+                "quality: %.1f, review_time: %.2fs",
+                chapter_label,
+                iterations,
+                scores.average,
+                entity_elapsed,
+            )
+
+            if progress_callback:
+                progress_callback(
+                    EntityGenerationProgress(
+                        current=i + 1,
+                        total=count,
+                        entity_type="chapter",
+                        entity_name=chapter_label,
+                        phase="complete",
+                        elapsed_seconds=time.time() - batch_start_time,
+                        estimated_remaining_seconds=svc._calculate_eta(
+                            completed_times, count - i - 1
+                        ),
+                    )
+                )
+        except WorldGenerationError as e:
+            errors.append(str(e))
+            logger.error("Failed to review chapter '%s': %s", chapter_label, e)
+            # Keep the original chapter on review failure
+            results.append(
+                (
+                    chapter,
+                    ChapterQualityScores(
+                        purpose=0,
+                        pacing=0,
+                        hook=0,
+                        coherence=0,
+                        feedback=f"Review failed: {e}",
+                    ),
+                )
+            )
+
+    if not results and errors:  # pragma: no cover
+        raise WorldGenerationError(f"Failed to review any chapters. Errors: {'; '.join(errors)}")
+
+    if errors:
+        logger.warning(
+            "Reviewed %d/%d chapters. %d failed: %s",
+            len(results),
+            count,
+            len(errors),
+            "; ".join(errors),
         )
 
     return results
