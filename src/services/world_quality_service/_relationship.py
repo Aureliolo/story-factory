@@ -268,7 +268,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"tension": 8.1, "dynamics": 6.4, "story_potential": 7.2, "authenticity": 5.7, "feedback": "The relationship's..."}}
+{{"tension": <float 0-10>, "dynamics": <float 0-10>, "story_potential": <float 0-10>, "authenticity": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

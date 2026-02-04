@@ -150,21 +150,21 @@ def _judge_item_quality(
     story_state: StoryState,
     temperature: float,
 ) -> ItemQualityScores:
-    """Judge item quality using the judge model.
+    """
+    Evaluate an item's quality along several story-relevant dimensions and return numeric scores plus actionable feedback.
 
-    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
+    Supports multi-call averaging when judge multi-call is enabled in the judge configuration.
 
-    Args:
-        svc: WorldQualityService instance.
-        item: Item dict to evaluate.
-        story_state: Current story state for context.
-        temperature: Judge temperature (low for consistency).
+    Parameters:
+        item (dict): The item to evaluate (expects keys like "name", "description", "significance", "properties").
+        story_state (StoryState): Current story context used to determine genre and evaluation framing.
+        temperature (float): Sampling temperature for the judge model (lower values favor consistency).
 
     Returns:
-        ItemQualityScores with ratings and feedback.
+        ItemQualityScores: Scores for `story_significance`, `uniqueness`, `narrative_potential`, `integration`, and a `feedback` field.
 
     Raises:
-        WorldGenerationError: If quality judgment fails or returns invalid data.
+        WorldGenerationError: If judgment fails or returns invalid data.
     """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
@@ -190,7 +190,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"story_significance": 5.9, "uniqueness": 7.3, "narrative_potential": 6.1, "integration": 8.4, "feedback": "The item's..."}}
+{{"story_significance": <float 0-10>, "uniqueness": <float 0-10>, "narrative_potential": <float 0-10>, "integration": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

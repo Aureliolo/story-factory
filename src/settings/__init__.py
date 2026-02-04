@@ -9,9 +9,11 @@ from src.settings._paths import BACKUPS_DIR, SETTINGS_FILE, STORIES_DIR, WORLDS_
 from src.settings._settings import AgentSettings, Settings
 from src.settings._types import (
     AGENT_ROLES,
+    MINIMUM_ROLE_QUALITY,
     REFINEMENT_TEMP_DECAY_CURVES,
     AgentRoleInfo,
     ModelInfo,
+    check_minimum_quality,
 )
 from src.settings._utils import (
     get_available_vram,
@@ -23,6 +25,7 @@ from src.settings._utils import (
 __all__ = [
     "AGENT_ROLES",
     "BACKUPS_DIR",
+    "MINIMUM_ROLE_QUALITY",
     "RECOMMENDED_MODELS",
     "REFINEMENT_TEMP_DECAY_CURVES",
     "SETTINGS_FILE",
@@ -32,6 +35,7 @@ __all__ = [
     "AgentSettings",
     "ModelInfo",
     "Settings",
+    "check_minimum_quality",
     "get_available_vram",
     "get_installed_models",
     "get_installed_models_with_sizes",

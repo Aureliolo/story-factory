@@ -1280,11 +1280,16 @@ class TestConflictWarningThrottle:
         assert len(conflict_warnings) == 2
 
 
-class TestJudgePromptOutputFormatDecimals:
-    """Test that all entity judge prompts show decimal examples in OUTPUT FORMAT."""
+class TestJudgePromptOutputFormatParametric:
+    """Test that all entity judge prompts use parametric placeholders in OUTPUT FORMAT.
 
-    def test_character_prompt_has_decimal_examples(self):
-        """Character judge prompt OUTPUT FORMAT uses decimal scores."""
+    Hardcoded example scores (e.g. 6.7) cause models to copy them verbatim instead
+    of evaluating independently.  All prompts now use ``<float 0-10>`` placeholders.
+    See docs/MODELS.md "Judge Role: Example Score Copying" for details.
+    """
+
+    def test_character_prompt_has_parametric_placeholders(self):
+        """Character judge prompt OUTPUT FORMAT uses <float 0-10> placeholders."""
         from src.memory.story_state import Character
         from src.services.world_quality_service._character import _build_character_judge_prompt
 
@@ -1297,11 +1302,10 @@ class TestJudgePromptOutputFormatDecimals:
             arc_notes="Grows",
         )
         prompt = _build_character_judge_prompt(character, "fantasy")
-        # Check for decimal example scores (not whole numbers)
-        assert "6.3" in prompt or "7.8" in prompt or "5.1" in prompt
+        assert "<float 0-10>" in prompt
 
-    def test_plot_prompt_has_decimal_examples(self):
-        """Plot judge prompt OUTPUT FORMAT uses decimal scores."""
+    def test_plot_prompt_has_parametric_placeholders(self):
+        """Plot judge prompt OUTPUT FORMAT uses <float 0-10> placeholders."""
         from src.memory.story_state import PlotOutline, PlotPoint
         from src.services.world_quality_service._plot import _build_plot_judge_prompt
 
@@ -1310,10 +1314,10 @@ class TestJudgePromptOutputFormatDecimals:
             plot_points=[PlotPoint(description="Event 1")],
         )
         prompt = _build_plot_judge_prompt(plot, "fantasy", ["courage"])
-        assert "7.4" in prompt or "5.8" in prompt or "8.1" in prompt
+        assert "<float 0-10>" in prompt
 
-    def test_chapter_prompt_has_decimal_examples(self):
-        """Chapter judge prompt OUTPUT FORMAT uses decimal scores."""
+    def test_chapter_prompt_has_parametric_placeholders(self):
+        """Chapter judge prompt OUTPUT FORMAT uses <float 0-10> placeholders."""
         from src.memory.story_state import Chapter
         from src.services.world_quality_service._chapter_quality import (
             _build_chapter_judge_prompt,
@@ -1321,4 +1325,4 @@ class TestJudgePromptOutputFormatDecimals:
 
         chapter = Chapter(number=1, title="Test", outline="Test outline")
         prompt = _build_chapter_judge_prompt(chapter, "fantasy", "A story about heroes")
-        assert "6.9" in prompt or "7.3" in prompt or "5.4" in prompt
+        assert "<float 0-10>" in prompt

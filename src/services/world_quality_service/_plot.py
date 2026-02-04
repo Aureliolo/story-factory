@@ -121,15 +121,18 @@ def _build_plot_judge_prompt(
     genre: str,
     themes: list[str],
 ) -> str:
-    """Build the judge prompt for plot outline quality evaluation.
+    """
+    Constructs the prompt text used by the judge model to evaluate a plot outline's quality.
 
-    Args:
-        plot_outline: PlotOutline to evaluate.
-        genre: Story genre for context.
-        themes: Story themes for context.
+    The prompt includes the outline summary, formatted plot points with optional chapter annotations, themes, a calibration block, rating criteria for coherence, tension arc, character integration, and originality, and explicit instructions for the judge's JSON-only output format.
+
+    Parameters:
+        plot_outline (PlotOutline): The plot outline to evaluate.
+        genre (str): Story genre to provide contextual framing.
+        themes (list[str]): Story themes to include in the prompt.
 
     Returns:
-        Formatted prompt string.
+        prompt (str): A formatted prompt string ready to be sent to the judge model.
     """
     # Format plot points with chapter assignments
     plot_points_text = []
@@ -166,7 +169,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"coherence": 7.4, "tension_arc": 5.8, "character_integration": 8.1, "originality": 6.3, "feedback": "The plot's..."}}
+{{"coherence": <float 0-10>, "tension_arc": <float 0-10>, "character_integration": <float 0-10>, "originality": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

@@ -12,6 +12,7 @@ from src.memory.mode_models import LearningTrigger
 from src.settings import _validation as _validation_mod
 from src.settings._model_registry import RECOMMENDED_MODELS
 from src.settings._paths import BACKUPS_DIR, SETTINGS_FILE
+from src.settings._types import check_minimum_quality
 from src.settings._utils import get_installed_models_with_sizes
 
 # Configure module logger
@@ -500,20 +501,20 @@ class Settings:
         logger.info(f"Updated tags for {model_id}: {tags}")
 
     def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
-        """Get the appropriate model for an agent role using tag-based selection.
+        """
+        Selects the model ID to use for a given agent role based on configured tags and available VRAM.
 
-        ONLY models tagged for the specified role will be selected.
-        No fallback to untagged models - users must configure tags.
+        Respects per-agent model settings and the global default model; when a role's setting is "auto" the method selects from installed models that are tagged for the role, preferring models that fit within the provided available_vram. Embedding-tagged models are excluded for non-"embedding" roles. If no models are installed, a recommended default model ID is returned.
 
-        Args:
-            agent_role: The agent role (writer, architect, etc.)
-            available_vram: Available VRAM in GB
+        Parameters:
+            agent_role (str): Agent role to select a model for (for example, "writer" or "embedding").
+            available_vram (int): Available VRAM in GB used to prefer models that fit the system.
 
         Returns:
-            Model ID to use for this agent role.
+            str: Model ID to use for the specified agent role.
 
         Raises:
-            ValueError: If no tagged model is available for the role.
+            ValueError: If no installed model is tagged for the requested role.
         """
 
         if not self.use_per_agent_models:
@@ -572,6 +573,7 @@ class Settings:
                 f"Auto-selected {best[0]} ({best[1]:.1f}GB, quality={best[2]}) "
                 f"for {agent_role} (tagged model)"
             )
+            check_minimum_quality(best[0], best[2], agent_role)
             return best[0]
 
         if tagged_models_all:
@@ -582,6 +584,7 @@ class Settings:
                 f"No tagged model fits VRAM ({available_vram}GB) for {agent_role}. "
                 f"Selecting smallest tagged model: {smallest[0]} ({smallest[1]:.1f}GB)"
             )
+            check_minimum_quality(smallest[0], smallest[2], agent_role)
             return smallest[0]
 
         # No tagged model available - raise error with helpful message

@@ -149,12 +149,22 @@ def _judge_location_quality(
     story_state: StoryState,
     temperature: float,
 ) -> LocationQualityScores:
-    """Judge location quality using the judge model.
+    """
+    Evaluate a generated location's quality across the defined dimensions.
 
-    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
+    Uses the configured judge model to produce numeric scores for atmosphere, narrative_significance, story_relevance, and distinctiveness, and returns targeted improvement feedback. Honors multi-call averaging when enabled in the judge configuration.
+
+    Parameters:
+        svc: Service client providing model resolution and settings.
+        location (dict): Location data (expects keys like `name`, `description`, `significance`).
+        story_state (StoryState): Story context used to determine genre and language.
+        temperature (float): Sampling temperature to use with the judge model.
+
+    Returns:
+        LocationQualityScores: Numeric scores for each dimension and a `feedback` string.
 
     Raises:
-        WorldGenerationError: If quality judgment fails or returns invalid data.
+        WorldGenerationError: If the judge model call fails or returns invalid data.
     """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
@@ -177,7 +187,7 @@ Rate each dimension 0-10:
 Provide specific improvement feedback in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"atmosphere": 7.2, "narrative_significance": 5.8, "story_relevance": 6.4, "distinctiveness": 8.1, "feedback": "The location's..."}}
+{{"atmosphere": <float 0-10>, "narrative_significance": <float 0-10>, "story_relevance": <float 0-10>, "distinctiveness": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

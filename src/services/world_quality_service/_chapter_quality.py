@@ -134,15 +134,18 @@ def _build_chapter_judge_prompt(
     genre: str,
     plot_summary: str,
 ) -> str:
-    """Build the judge prompt for chapter outline quality evaluation.
+    """
+    Constructs the text prompt used by the judge model to evaluate a chapter outline's quality.
 
-    Args:
-        chapter: Chapter to evaluate.
-        genre: Story genre for context.
-        plot_summary: Overall plot summary for arc context.
+    The prompt includes story-arc context, chapter metadata (number, title, outline), an optional scenes list, a calibration block, evaluation dimensions, and explicit output-format instructions required for the judge model.
+
+    Parameters:
+        chapter (Chapter): The chapter instance to evaluate (number, title, outline, optional scenes).
+        genre (str): Story genre to provide contextual framing for the evaluation.
+        plot_summary (str): Overall plot/arc summary to include as additional context; may be empty.
 
     Returns:
-        Formatted prompt string.
+        str: A formatted prompt string ready to send to the judge model.
     """
     # Format scenes if present
     scenes_text = ""
@@ -180,7 +183,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"purpose": 6.9, "pacing": 7.3, "hook": 5.4, "coherence": 8.2, "feedback": "The chapter's..."}}
+{{"purpose": <float 0-10>, "pacing": <float 0-10>, "hook": <float 0-10>, "coherence": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
