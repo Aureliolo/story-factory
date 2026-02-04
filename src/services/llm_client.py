@@ -38,10 +38,19 @@ def get_instructor_client(settings: Settings) -> instructor.Instructor:
             api_key="ollama",  # Required but not used by Ollama
             timeout=float(settings.ollama_timeout),
         )
-        _instructor_clients[settings_key] = instructor.from_openai(
+        client = instructor.from_openai(
             openai_client,
             mode=instructor.Mode.JSON,
         )
+        client.on(
+            "parse:error",
+            lambda e: logger.warning("Structured output validation failed (will retry): %s", e),
+        )
+        client.on(
+            "completion:error",
+            lambda e: logger.warning("LLM API error during structured output (will retry): %s", e),
+        )
+        _instructor_clients[settings_key] = client
         logger.debug(f"Created instructor client for {settings.ollama_url}")
 
     return _instructor_clients[settings_key]
@@ -88,7 +97,8 @@ def generate_structured[T: BaseModel](
     messages.append({"role": "user", "content": prompt})
 
     logger.debug(
-        f"Generating structured output: model={model}, response_model={response_model.__name__}"
+        f"Generating structured output: model={model}, response_model={response_model.__name__}, "
+        f"temperature={temperature}, max_retries={max_retries}"
     )
 
     result = client.chat.completions.create(

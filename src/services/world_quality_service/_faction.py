@@ -126,6 +126,9 @@ def _create_faction(
     Raises:
         WorldGenerationError: If faction generation fails due to unrecoverable errors.
     """
+    logger.debug(
+        "Creating faction for story %s (existing: %d)", story_state.id, len(existing_names)
+    )
     brief = story_state.brief
     if not brief:
         return {}
@@ -312,6 +315,9 @@ def _refine_faction(
     temperature: float,
 ) -> dict[str, Any]:
     """Refine a faction based on quality feedback."""
+    logger.debug(
+        "Refining faction '%s' for story %s", faction.get("name", "Unknown"), story_state.id
+    )
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback

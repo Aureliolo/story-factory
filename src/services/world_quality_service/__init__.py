@@ -446,7 +446,7 @@ class WorldQualityService:
             self.ENTITY_CREATOR_ROLES.get(entity_type, "writer") if entity_type else "writer"
         )
         model = self._resolve_model_for_role(agent_role)
-        logger.info(
+        logger.debug(
             "Selected creator model '%s' for entity_type=%s (role=%s)",
             model,
             entity_type,
@@ -484,7 +484,7 @@ class WorldQualityService:
                 alternative_found = False
                 for alt_model in alternatives:
                     if alt_model != creator_model:
-                        logger.info(
+                        logger.debug(
                             "Swapping judge model from '%s' to '%s' for entity_type=%s "
                             "to avoid self-judging bias (creator model is '%s')",
                             model,
@@ -510,7 +510,7 @@ class WorldQualityService:
                             entity_type,
                         )
 
-        logger.info(
+        logger.debug(
             "Selected judge model '%s' for entity_type=%s (role=%s)",
             model,
             entity_type,

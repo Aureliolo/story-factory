@@ -137,6 +137,11 @@ def _create_relationship(
     temperature: float,
 ) -> dict[str, Any]:
     """Create a new relationship using the creator model."""
+    logger.debug(
+        "Creating relationship for story %s (%d entities available)",
+        story_state.id,
+        len(entity_names),
+    )
     brief = story_state.brief
     if not brief:
         return {}
@@ -315,6 +320,12 @@ def _refine_relationship(
     temperature: float,
 ) -> dict[str, Any]:
     """Refine a relationship based on quality feedback."""
+    logger.debug(
+        "Refining relationship '%s' <-> '%s' for story %s",
+        relationship.get("source", "?"),
+        relationship.get("target", "?"),
+        story_state.id,
+    )
     brief = story_state.brief
     threshold = svc.get_config().quality_threshold
 

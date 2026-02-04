@@ -49,6 +49,12 @@ SUMMARY:"""
 
     try:
         model = svc._get_judge_model(entity_type=entity_type)  # Use fast validator model
+        logger.debug(
+            "Generating mini description for %s '%s' (model=%s)",
+            entity_type,
+            name,
+            model,
+        )
         response = svc.client.generate(
             model=model,
             prompt=prompt,
@@ -177,6 +183,12 @@ Return a JSON object with:
         model_id = svc._get_creator_model(entity_type)
         config = RefinementConfig.from_settings(svc.settings)
 
+        logger.debug(
+            "Refining entity '%s' via LLM (model=%s, temp=%.1f)",
+            entity.name,
+            model_id,
+            config.refinement_temperature,
+        )
         response = await asyncio.to_thread(
             svc.client.generate,
             model=model_id,
@@ -195,7 +207,11 @@ Return a JSON object with:
         # Parse response
         result = extract_json(response_text)
         if not result or not isinstance(result, dict):
-            logger.warning(f"Failed to parse refinement response for {entity.name}")
+            logger.warning(
+                "Failed to parse refinement response for %s: %s",
+                entity.name,
+                response_text[:200],
+            )
             return None
 
         logger.info(f"Successfully refined {entity_type}: {entity.name}")
@@ -261,6 +277,12 @@ Return a JSON object with:
         model_id = svc._get_creator_model(entity_type)
         config = RefinementConfig.from_settings(svc.settings)
 
+        logger.debug(
+            "Regenerating entity '%s' via LLM (model=%s, temp=%.1f)",
+            entity.name,
+            model_id,
+            config.creator_temperature,
+        )
         response = await asyncio.to_thread(
             svc.client.generate,
             model=model_id,
@@ -279,7 +301,11 @@ Return a JSON object with:
         # Parse response
         result = extract_json(response_text)
         if not result or not isinstance(result, dict):
-            logger.warning(f"Failed to parse regeneration response for {entity.name}")
+            logger.warning(
+                "Failed to parse regeneration response for %s: %s",
+                entity.name,
+                response_text[:200],
+            )
             return None
 
         logger.info(
@@ -416,6 +442,11 @@ IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no 
         model_id = svc._get_creator_model(entity_type="relationship")
         config = RefinementConfig.from_settings(svc.settings)
 
+        logger.debug(
+            "Suggesting relationships for '%s' via LLM (model=%s)",
+            entity.name,
+            model_id,
+        )
         response = await asyncio.to_thread(
             svc.client.generate,
             model=model_id,
@@ -433,7 +464,11 @@ IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no 
 
         result = extract_json(response_text)
         if not result or not isinstance(result, dict):
-            logger.warning(f"Failed to parse relationship suggestions for {entity.name}")
+            logger.warning(
+                "Failed to parse relationship suggestions for %s: %s",
+                entity.name,
+                response_text[:200],
+            )
             return []
 
         suggestions = result.get("suggestions", [])
@@ -559,6 +594,11 @@ Return JSON:
     try:
         model_id = svc._get_judge_model(entity_type=entity.type.lower())
 
+        logger.debug(
+            "Extracting claims for '%s' via LLM (model=%s)",
+            entity.name,
+            model_id,
+        )
         response = await asyncio.to_thread(
             svc.client.generate,
             model=model_id,
@@ -573,6 +613,11 @@ Return JSON:
         result = extract_json(response_text)
 
         if not result or not isinstance(result, dict):
+            logger.warning(
+                "Failed to parse claims JSON for '%s': %s",
+                entity.name,
+                response_text[:200],
+            )
             return []
 
         claims_list = result.get("claims", [])
@@ -646,6 +691,7 @@ Return JSON:
     try:
         model_id = svc._get_judge_model(entity_type="validator")
 
+        logger.debug("Checking contradiction via LLM (model=%s)", model_id)
         response = await asyncio.to_thread(
             svc.client.generate,
             model=model_id,
@@ -660,6 +706,7 @@ Return JSON:
         result = extract_json(response_text)
 
         if not result or not isinstance(result, dict):
+            logger.warning("Failed to parse contradiction JSON: %s", response_text[:200])
             return None
 
         # Properly coerce is_contradiction to boolean (string "false" is truthy!)

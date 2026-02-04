@@ -138,6 +138,13 @@ def quality_refinement_loop(
                 history.peak_score,
                 history.best_iteration,
             )
+            logger.debug(
+                "%s '%s' iteration %d dimension scores: %s",
+                entity_type.capitalize(),
+                get_name(entity),
+                current_iter,
+                {k: f"{v:.1f}" for k, v in scores.to_dict().items() if isinstance(v, float)},
+            )
 
             # Threshold check
             if scores.average >= config.quality_threshold:

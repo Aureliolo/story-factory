@@ -1188,7 +1188,7 @@ class TestJudgePrefersAlternativeModel:
                 "get_models_for_role",
                 return_value=["different-judge:8b", "same-model:8b"],
             ),
-            caplog.at_level(logging.INFO),
+            caplog.at_level(logging.DEBUG),
         ):
             model = service._get_judge_model(entity_type="character")
 
