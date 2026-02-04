@@ -9,6 +9,7 @@ from src.settings._paths import BACKUPS_DIR, SETTINGS_FILE, STORIES_DIR, WORLDS_
 from src.settings._settings import AgentSettings, Settings
 from src.settings._types import (
     AGENT_ROLES,
+    LOG_LEVELS,
     MINIMUM_ROLE_QUALITY,
     REFINEMENT_TEMP_DECAY_CURVES,
     AgentRoleInfo,
@@ -25,6 +26,7 @@ from src.settings._utils import (
 __all__ = [
     "AGENT_ROLES",
     "BACKUPS_DIR",
+    "LOG_LEVELS",
     "MINIMUM_ROLE_QUALITY",
     "RECOMMENDED_MODELS",
     "REFINEMENT_TEMP_DECAY_CURVES",

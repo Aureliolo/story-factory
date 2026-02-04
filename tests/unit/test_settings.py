@@ -28,6 +28,7 @@ class TestSettings:
         assert settings.use_per_agent_models is True
         assert settings.interaction_mode == "checkpoint"
         assert settings.world_quality_threshold == 8.0
+        assert settings.log_level == "INFO"
 
     def test_default_agent_models_includes_judge(self):
         """Default agent_models should include 'judge' role set to 'auto'."""
@@ -2652,3 +2653,40 @@ class TestMinimumRoleQuality:
     def test_registry_qwen3_4b_no_interviewer_tag(self):
         """Qwen3 4B (Quality 5) should not have interviewer tag."""
         assert "interviewer" not in RECOMMENDED_MODELS["qwen3:4b"]["tags"]
+
+
+class TestLogLevelValidation:
+    """Tests for log_level setting and validation."""
+
+    def test_log_level_default_is_info(self):
+        """Default log_level should be INFO."""
+        settings = Settings()
+        assert settings.log_level == "INFO"
+
+    def test_validate_accepts_all_valid_log_levels(self):
+        """Validation should accept all valid log levels."""
+        for level in ("DEBUG", "INFO", "WARNING", "ERROR"):
+            settings = Settings()
+            settings.log_level = level
+            settings.validate()  # Should not raise
+
+    def test_validate_rejects_invalid_log_level(self):
+        """Validation should reject invalid log levels like TRACE."""
+        settings = Settings()
+        settings.log_level = "TRACE"
+        with pytest.raises(ValueError, match="log_level must be one of"):
+            settings.validate()
+
+    def test_validate_rejects_lowercase_log_level(self):
+        """Validation should reject lowercase log level strings."""
+        settings = Settings()
+        settings.log_level = "debug"
+        with pytest.raises(ValueError, match="log_level must be one of"):
+            settings.validate()
+
+    def test_validate_rejects_critical_log_level(self):
+        """Validation should reject CRITICAL (not in allowed set)."""
+        settings = Settings()
+        settings.log_level = "CRITICAL"
+        with pytest.raises(ValueError, match="log_level must be one of"):
+            settings.validate()

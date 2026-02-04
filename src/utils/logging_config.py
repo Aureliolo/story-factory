@@ -12,6 +12,8 @@ from pathlib import Path
 # Default log file location (go up from utils/ to src/ to project root, then into output/logs/)
 DEFAULT_LOG_FILE = Path(__file__).parent.parent.parent / "output" / "logs" / "story_factory.log"
 
+logger = logging.getLogger(__name__)
+
 
 class ContextFilter(logging.Filter):
     """Add context information to log records."""
@@ -113,6 +115,27 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("nicegui").setLevel(logging.WARNING)
+
+
+def set_log_level(level: str) -> None:
+    """Change the application log level at runtime.
+
+    Updates the root logger and all its handlers, then re-suppresses noisy
+    third-party loggers so they stay at WARNING regardless of the app level.
+
+    Args:
+        level: Log level name (DEBUG, INFO, WARNING, ERROR).
+    """
+    log_level = getattr(logging, level.upper(), logging.INFO)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    for handler in root_logger.handlers:
+        handler.setLevel(log_level)
+    # Re-suppress noisy third-party loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("nicegui").setLevel(logging.WARNING)
+    logger.info("Log level changed to %s", level)
 
 
 @contextmanager

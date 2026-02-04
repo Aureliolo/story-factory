@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 import time
 
 from src.utils.environment import check_environment
@@ -252,6 +253,19 @@ def main() -> None:
     # Configure logging
     log_file = None if args.log_file.lower() == "none" else args.log_file
     setup_logging(level=args.log_level, log_file=log_file)
+
+    # If no explicit --log-level on CLI, respect the persisted setting
+    if "--log-level" not in sys.argv:
+        from src.settings import Settings
+
+        try:
+            settings = Settings.load()
+            if settings.log_level != args.log_level:
+                from src.utils.logging_config import set_log_level
+
+                set_log_level(settings.log_level)
+        except Exception:
+            pass  # Settings file may not exist yet
 
     if args.cli or args.list_stories or args.load:
         run_cli(load_story=args.load, list_stories=args.list_stories)
