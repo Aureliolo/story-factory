@@ -85,7 +85,7 @@ def judge_with_averaging(
         return judge_fn()
 
     call_count = judge_config.multi_call_count
-    logger.info(
+    logger.debug(
         "Multi-call judge averaging enabled: making %d judge calls",
         call_count,
     )
@@ -196,7 +196,7 @@ def _aggregate_scores(
     # Construct the final score model
     final_scores["feedback"] = combined_feedback
     averaged = score_model_class(**final_scores)
-    logger.info(
+    logger.debug(
         "Averaged %d judge calls: %s (avg=%.2f)",
         len(results),
         {k: f"{v:.1f}" for k, v in final_scores.items() if isinstance(v, float)},

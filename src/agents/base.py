@@ -174,6 +174,16 @@ class BaseAgent:
                 openai_client,
                 mode=instructor.Mode.JSON,
             )
+            self._instructor_client.on(
+                "parse:error",
+                lambda e: logger.warning("Structured output validation failed (will retry): %s", e),
+            )
+            self._instructor_client.on(
+                "completion:error",
+                lambda e: logger.warning(
+                    "LLM API error during structured output (will retry): %s", e
+                ),
+            )
             logger.debug(f"Created instructor client for {self.name}")
         return self._instructor_client
 
@@ -251,9 +261,10 @@ class BaseAgent:
         with _get_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} structured generation"):
                 try:
-                    logger.info(
+                    logger.debug(
                         f"{self.name}: Calling LLM ({use_model}) for structured output "
-                        f"(model={response_model.__name__}, max_retries={max_retries})"
+                        f"(model={response_model.__name__}, temp={use_temp}, "
+                        f"max_retries={max_retries})"
                     )
 
                     start_time = time.time()

@@ -140,6 +140,9 @@ def _create_character(
     Returns:
         New Character or None on failure.
     """
+    logger.debug(
+        "Creating character for story %s (existing: %d)", story_state.id, len(existing_names)
+    )
     brief = story_state.brief
     if not brief:
         return None
@@ -307,6 +310,7 @@ def _refine_character(
     Returns:
         Refined Character.
     """
+    logger.debug("Refining character '%s' for story %s", character.name, story_state.id)
     brief = story_state.brief
     threshold = svc.get_config().quality_threshold
 

@@ -36,6 +36,7 @@ def review_chapter_quality(
     Raises:
         WorldGenerationError: If refinement fails after all attempts.
     """
+    logger.debug("Reviewing chapter quality for 'Ch%d: %s'", chapter.number, chapter.title)
     config = svc.get_config()
 
     return quality_refinement_loop(
@@ -96,6 +97,12 @@ def _judge_chapter_quality(
     prompt = _build_chapter_judge_prompt(chapter, genre, plot_summary)
 
     judge_model = svc._get_judge_model(entity_type="chapter")
+    logger.debug(
+        "Judging chapter quality for 'Ch%d: %s' (model=%s)",
+        chapter.number,
+        chapter.title,
+        judge_model,
+    )
     judge_config = svc.get_judge_config()
     multi_call = judge_config.enabled and judge_config.multi_call_enabled
 
@@ -207,6 +214,7 @@ def _refine_chapter_outline(
     Returns:
         Refined Chapter.
     """
+    logger.debug("Refining chapter outline 'Ch%d: %s'", chapter.number, chapter.title)
     brief = story_state.brief
     weak = scores.weak_dimensions(svc.get_config().quality_threshold)
 

@@ -79,6 +79,9 @@ def _create_concept(
     temperature: float,
 ) -> dict[str, Any]:
     """Create a new concept using the creator model with structured generation."""
+    logger.debug(
+        "Creating concept for story %s (existing: %d)", story_state.id, len(existing_names)
+    )
     brief = story_state.brief
     if not brief:
         return {}
@@ -231,6 +234,9 @@ def _refine_concept(
     temperature: float,
 ) -> dict[str, Any]:
     """Refine a concept based on quality feedback using structured generation."""
+    logger.debug(
+        "Refining concept '%s' for story %s", concept.get("name", "Unknown"), story_state.id
+    )
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback

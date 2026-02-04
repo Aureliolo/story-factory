@@ -36,6 +36,7 @@ def review_plot_quality(
     Raises:
         WorldGenerationError: If refinement fails after all attempts.
     """
+    logger.debug("Reviewing plot quality for story %s", story_state.id)
     config = svc.get_config()
 
     return quality_refinement_loop(
@@ -93,6 +94,7 @@ def _judge_plot_quality(
     prompt = _build_plot_judge_prompt(plot_outline, genre, brief.themes if brief else [])
 
     judge_model = svc._get_judge_model(entity_type="plot")
+    logger.debug("Judging plot quality for story %s (model=%s)", story_state.id, judge_model)
     judge_config = svc.get_judge_config()
     multi_call = judge_config.enabled and judge_config.multi_call_enabled
 
@@ -193,6 +195,7 @@ def _refine_plot(
     Returns:
         Refined PlotOutline.
     """
+    logger.debug("Refining plot outline for story %s", story_state.id)
     brief = story_state.brief
     weak = scores.weak_dimensions(svc.get_config().quality_threshold)
 
