@@ -299,7 +299,6 @@ def select_model_with_size_preference(
 
     Raises:
         ValueError: If no installed model is tagged for the given agent_role.
-        ValueError: If the chosen model fails the minimum quality check (propagated from the quality check).
     """
     from src.settings import RECOMMENDED_MODELS, get_installed_models_with_sizes, get_model_info
 

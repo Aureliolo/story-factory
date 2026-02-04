@@ -109,7 +109,7 @@ def check_minimum_quality(model_id: str, quality: float, agent_role: str) -> Non
     min_quality = MINIMUM_ROLE_QUALITY.get(agent_role)
     if min_quality is not None and quality < min_quality:
         logger.warning(
-            "Auto-selected model '%s' (quality=%.0f) is below minimum quality %d "
+            "Auto-selected model '%s' (quality=%.1f) is below minimum quality %d "
             "for role '%s'. Structured output may be unreliable. "
             "Consider installing a higher-quality model tagged for '%s'.",
             model_id,

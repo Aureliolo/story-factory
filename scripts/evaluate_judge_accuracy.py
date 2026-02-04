@@ -35,6 +35,10 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger(__name__)
+# Suppress noisy HTTP library debug logs at module level so they apply
+# even when this script is imported rather than run via main().
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Ollama endpoint
 OLLAMA_BASE = "http://localhost:11434"
@@ -876,7 +880,7 @@ def compute_copying_rate(
     """
     Calculate the fraction of predicted dimension scores that match the prompt example scores.
 
-    A predicted score is counted as matching if it is within 0.05 of the example value for the corresponding entity type.
+    A predicted score is counted as matching if its absolute difference from the example value is less than 0.05.
 
     Parameters:
         all_scores (list[dict[str, Any] | None]): Parallel list of per-sample score mappings (or None for failed/missing responses).
@@ -976,19 +980,33 @@ def compute_rank_correlation(
     # Rank both lists
     def _rank(values: list[float]) -> list[float]:
         """
-        Assigns 1-based ordinal ranks to the input values, where the smallest value receives rank 1.
+        Assigns 1-based ranks to the input values with proper tie averaging.
+
+        Equal values receive the mean of the ranks they would occupy.
+        For example, values ``[5, 5, 3]`` produce ranks ``[2.5, 2.5, 1.0]``.
 
         Parameters:
             values (list[float]): Numeric values to rank.
 
         Returns:
-            list[float]: Ranks for each input value (same length as `values`); each rank is a 1-based ordinal.
-            If values are equal, ranks are assigned based on their relative order (no tie averaging).
+            list[float]: Ranks for each input value (same length as *values*).
         """
         sorted_indices = sorted(range(len(values)), key=lambda i: values[i])
         ranks = [0.0] * len(values)
-        for rank_pos, idx in enumerate(sorted_indices):
-            ranks[idx] = float(rank_pos + 1)
+        i = 0
+        while i < len(sorted_indices):
+            j = i
+            # Find the end of the tie group
+            while (
+                j < len(sorted_indices) - 1
+                and values[sorted_indices[j]] == values[sorted_indices[j + 1]]
+            ):
+                j += 1
+            # Assign average rank to all tied values (1-based)
+            avg_rank = (i + j) / 2 + 1
+            for k in range(i, j + 1):
+                ranks[sorted_indices[k]] = avg_rank
+            i = j + 1
         return ranks
 
     gt_vals = [p[0] for p in pairs]
@@ -1195,10 +1213,6 @@ def main() -> None:
         level=log_level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    # Silence httpcore/httpx debug noise even in verbose mode
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-
     # Determine models to test
     if args.models:
         models = [m.strip() for m in args.models.split(",")]

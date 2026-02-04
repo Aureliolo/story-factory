@@ -263,8 +263,8 @@ copying rate, and score spread.
 | VRAM | Model | Why |
 |------|-------|-----|
 | 24GB | Gemma 3 12B | Best accuracy, near-perfect ranking |
-| 16GB | Phi-4 14B | Perfect rank correlation (0.99) |
-| 8GB | Qwen3 30B MoE | MoE architecture keeps it fast |
+| 16GB | Qwen3 30B MoE or Phi-4 14B | MoE fast inference; Phi-4 perfect rank correlation (0.99) |
+| 8GB | Dolphin 3 8B or Qwen3 8B | Quality 7, good structured output |
 | 4GB | Gemma 3 4B or Phi-4 Mini | Both achieve rank > 0.89 |
 
 ### Tiny Models (Validator Role)
