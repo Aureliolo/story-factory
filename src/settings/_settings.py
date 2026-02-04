@@ -503,16 +503,16 @@ class Settings:
     def get_model_for_agent(self, agent_role: str, available_vram: int = 24) -> str:
         """
         Selects the model ID to use for a given agent role based on configured tags and available VRAM.
-        
+
         Respects per-agent model settings and the global default model; when a role's setting is "auto" the method selects from installed models that are tagged for the role, preferring models that fit within the provided available_vram. Embedding-tagged models are excluded for non-"embedding" roles. If no models are installed, a recommended default model ID is returned.
-        
+
         Parameters:
             agent_role (str): Agent role to select a model for (for example, "writer" or "embedding").
             available_vram (int): Available VRAM in GB used to prefer models that fit the system.
-        
+
         Returns:
             str: Model ID to use for the specified agent role.
-        
+
         Raises:
             ValueError: If no installed model is tagged for the requested role.
         """

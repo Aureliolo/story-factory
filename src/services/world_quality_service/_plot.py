@@ -123,14 +123,14 @@ def _build_plot_judge_prompt(
 ) -> str:
     """
     Constructs the prompt text used by the judge model to evaluate a plot outline's quality.
-    
+
     The prompt includes the outline summary, formatted plot points with optional chapter annotations, themes, a calibration block, rating criteria for coherence, tension arc, character integration, and originality, and explicit instructions for the judge's JSON-only output format.
-    
+
     Parameters:
         plot_outline (PlotOutline): The plot outline to evaluate.
         genre (str): Story genre to provide contextual framing.
         themes (list[str]): Story themes to include in the prompt.
-    
+
     Returns:
         prompt (str): A formatted prompt string ready to be sent to the judge model.
     """

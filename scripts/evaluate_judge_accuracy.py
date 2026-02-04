@@ -549,7 +549,7 @@ ENTITY_DIMENSIONS: dict[str, dict[str, str]] = {
 def _format_faction_entity(data: dict[str, Any]) -> str:
     """
     Builds a prompt-ready text block describing a faction for judge evaluation.
-    
+
     Parameters:
         data (dict): Faction fields used to populate the block. Expected keys:
             - 'name' (str): faction name.
@@ -557,7 +557,7 @@ def _format_faction_entity(data: dict[str, Any]) -> str:
             - 'leader' (str, optional): leader name; defaults to 'Unknown' if missing.
             - 'goals' (list[str], optional): list of goals; rendered as a comma-separated string.
             - 'values' (list[str], optional): list of values; rendered as a comma-separated string.
-    
+
     Returns:
         str: A labeled multi-line string with fields "FACTION TO EVALUATE", "Name", "Description",
         "Leader", "Goals", and "Values", suitable for inclusion in the judge prompt.
@@ -575,7 +575,7 @@ def _format_faction_entity(data: dict[str, Any]) -> str:
 def _format_character_entity(data: dict[str, Any]) -> str:
     """
     Format a character entity into a prompt-ready text block for the judge.
-    
+
     Parameters:
         data (dict): Character fields used to build the block. Expected keys:
             - 'name' (str): character name
@@ -584,7 +584,7 @@ def _format_character_entity(data: dict[str, Any]) -> str:
             - 'personality_traits' (list[str], optional): traits to join with commas
             - 'goals' (list[str], optional): goals to join with commas
             - 'arc_notes' (str, optional): arc or development notes
-    
+
     Returns:
         str: A labeled, multiline string containing the character block with fields
         "CHARACTER TO EVALUATE", "Name", "Role", "Description", "Traits", "Goals",
@@ -604,13 +604,13 @@ def _format_character_entity(data: dict[str, Any]) -> str:
 def _format_concept_entity(data: dict[str, Any]) -> str:
     """
     Format a concept entity into a prompt-ready text block.
-    
+
     Parameters:
         data (dict): Concept data with keys:
             - 'name' (str): Concept name.
             - 'description' (str): Short description of the concept.
             - 'manifestations' (str | list | optional): Optional manifestations rendered after description; empty if missing.
-    
+
     Returns:
         str: A multiline string with "CONCEPT TO EVALUATE" header and fields for Name, Description, and Manifestations.
     """
@@ -625,17 +625,17 @@ def _format_concept_entity(data: dict[str, Any]) -> str:
 def _format_location_entity(data: dict[str, Any]) -> str:
     """
     Format a location entity into a prompt-ready block for the judge.
-    
+
     Parameters:
-    	data (dict[str, Any]): Location data expected to contain:
-    		- 'name' (str): The location's name.
-    		- 'description' (str): A short description of the location.
-    		- 'features' (list[str] | str, optional): Key features or traits; lists are joined with commas.
-    		- 'history' (str, optional): Historical context or background.
-    		- 'significance' (str, optional): Notes on the location's importance or role.
-    
+        data (dict[str, Any]): Location data expected to contain:
+                - 'name' (str): The location's name.
+                - 'description' (str): A short description of the location.
+                - 'features' (list[str] | str, optional): Key features or traits; lists are joined with commas.
+                - 'history' (str, optional): Historical context or background.
+                - 'significance' (str, optional): Notes on the location's importance or role.
+
     Returns:
-    	formatted (str): A multi-line string with labeled sections: Name, Description, Features, History, and Significance.
+        formatted (str): A multi-line string with labeled sections: Name, Description, Features, History, and Significance.
     """
     features = data.get("features", [])
     if isinstance(features, list):
@@ -670,11 +670,11 @@ ENTITY_JUDGE_ROLES = {
 def build_output_format(entity_type: str, variant: str) -> str:
     """
     Constructs the "OUTPUT FORMAT" section of the judge prompt for a specific entity type and prompt variant.
-    
+
     Parameters:
         entity_type (str): One of "faction", "character", "concept", or "location".
         variant (str): Prompt variant: "with_examples" to include hardcoded example scores, or "parametric" to use `<float 0-10>` placeholders.
-    
+
     Returns:
         str: The OUTPUT FORMAT prompt section — a directive instructing the judge to return only a flat JSON object with the exact score fields and a `feedback` field.
     """
@@ -705,13 +705,13 @@ def build_output_format(entity_type: str, variant: str) -> str:
 def build_judge_prompt(sample: dict[str, Any], variant: str) -> str:
     """
     Assemble the full judge prompt for a ground-truth sample and prompt variant.
-    
+
     Constructs a prompt that combines the judge role text, the formatted entity block, the calibration rubric, the dimension list, a feedback instruction, and the variant-specific output format.
-    
+
     Parameters:
         sample (dict): Ground-truth sample with keys including "entity_type" and "data".
         variant (str): Prompt variant, either "with_examples" or "parametric", which selects the output format.
-    
+
     Returns:
         prompt (str): The complete prompt string ready to be sent to the judge model.
     """
@@ -743,7 +743,7 @@ def build_judge_prompt(sample: dict[str, Any], variant: str) -> str:
 def get_installed_models() -> list[str]:
     """
     Retrieve the installed Ollama model tags, excluding known embedding models.
-    
+
     Returns:
         list[str]: Sorted list of model `name:tag` strings present on the Ollama host.
         Returns an empty list if the API request or response parsing fails.
@@ -771,10 +771,10 @@ def get_installed_models() -> list[str]:
 def unload_model(model: str) -> None:
     """
     Request Ollama to unload a model from VRAM.
-    
+
     Parameters:
         model (str): Name or tag of the model to unload.
-    
+
     Notes:
         Logs a debug message on success and a warning on HTTP errors; does not raise exceptions.
     """
@@ -847,11 +847,11 @@ def call_judge(model: str, prompt: str, timeout: int) -> dict[str, Any] | None:
 def compute_mae(predicted: dict[str, float], ground_truth: dict[str, float]) -> float:
     """
     Calculate the mean absolute error between model-predicted and ground-truth dimension scores.
-    
+
     Parameters:
         predicted: Mapping from dimension name to predicted numeric score.
         ground_truth: Mapping from dimension name to ground-truth numeric score.
-    
+
     Returns:
         Mean absolute error across dimensions present in both inputs, rounded to 3 decimals; `-1.0` if no dimensions overlap.
     """
@@ -875,13 +875,13 @@ def compute_copying_rate(
 ) -> float:
     """
     Calculate the fraction of predicted dimension scores that match the prompt example scores.
-    
+
     A predicted score is counted as matching if it is within 0.05 of the example value for the corresponding entity type.
-    
+
     Parameters:
         all_scores (list[dict[str, Any] | None]): Parallel list of per-sample score mappings (or None for failed/missing responses).
         entity_types (list[str]): Parallel list of entity type keys used to look up example scores for each sample.
-    
+
     Returns:
         float: Fraction of compared dimension scores that match example scores, between 0.0 and 1.0, rounded to 3 decimals.
     """
@@ -913,11 +913,11 @@ def compute_score_spread(
 ) -> float:
     """
     Compute the average per-dimension score spread (max - min) across samples grouped by entity type.
-    
+
     Parameters:
         all_scores (list[dict[str, Any] | None]): Parallel list of per-sample score dictionaries (or None for missing responses).
         entity_types (list[str]): Parallel list of entity types corresponding to each entry in `all_scores`.
-    
+
     Returns:
         float: Average of (max - min) across all dimensions that have at least two numeric values for their entity type, rounded to 2 decimals. Returns 0.0 if no valid spreads are found.
     """
@@ -954,11 +954,11 @@ def compute_rank_correlation(
 ) -> float:
     """
     Compute the Spearman rank correlation between ground-truth and predicted sample averages.
-    
+
     Parameters:
         sample_results (list[dict[str, Any]]): List of result dicts; each dict should contain
             numeric "gt_average" and "predicted_average" entries for a sample.
-    
+
     Returns:
         float: Spearman rho in the range [-1, 1], rounded to three decimals. Returns 0.0 if fewer
         than three samples contain both averages.
@@ -977,10 +977,10 @@ def compute_rank_correlation(
     def _rank(values: list[float]) -> list[float]:
         """
         Assigns 1-based ordinal ranks to the input values, where the smallest value receives rank 1.
-        
+
         Parameters:
             values (list[float]): Numeric values to rank.
-        
+
         Returns:
             list[float]: Ranks for each input value (same length as `values`); each rank is a 1-based ordinal.
             If values are equal, ranks are assigned based on their relative order (no tie averaging).
@@ -1016,14 +1016,14 @@ def evaluate_model(
 ) -> dict[str, Any]:
     """
     Run each ground-truth sample through a single Ollama model for the specified prompt variants and compute per-sample and aggregate evaluation metrics.
-    
+
     Parameters:
         model (str): Ollama model tag to evaluate.
         samples (list[dict[str, Any]]): Ground-truth samples; each dict must include keys "id", "entity_type", "tier", and "ground_truth".
         variants (list[str]): Prompt variants to run (e.g., "with_examples", "parametric").
         timeout (int): Per-call timeout in seconds for judge API requests.
         verbose (bool): If true, print per-sample progress and brief results.
-    
+
     Returns:
         dict[str, Any]: Result object containing:
             - "model": model name.
@@ -1154,7 +1154,7 @@ def evaluate_model(
 def main() -> None:
     """
     Run the judge accuracy benchmark using command-line arguments.
-    
+
     Parses CLI flags (--models, --timeout, --output, --skip-variant, --verbose), discovers or uses the provided Ollama models, runs the evaluation across ground-truth samples and the selected prompt variants, writes a JSON results file to disk, and prints per-model summaries and decision guidance to stdout.
     """
     parser = argparse.ArgumentParser(

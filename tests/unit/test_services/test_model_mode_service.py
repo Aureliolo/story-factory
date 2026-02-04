@@ -1176,7 +1176,7 @@ class TestModelModeServiceAdditional:
     def test_judge_quality_with_direct_json_decode_error(self, service: ModelModeService) -> None:
         """
         Verifies that judge_quality returns neutral scores when structured scoring raises a Pydantic ValidationError.
-        
+
         Patches the internal structured-scoring call to raise a ValidationError and asserts the returned quality scores are the neutral defaults (prose_quality and instruction_following equal to 5.0).
         """
         from unittest.mock import patch
@@ -1216,10 +1216,10 @@ class TestSelectModelQualityWarning:
     def _make_svc(self, model_tags: dict[str, list[str]]):
         """
         Construct a minimal MagicMock service that exposes get_model_tags for tests.
-        
+
         Parameters:
             model_tags (dict[str, list[str]]): Mapping from model identifier to a list of tag strings to be returned by the mock.
-        
+
         Returns:
             MagicMock: A mock service whose `settings.get_model_tags(model)` returns the corresponding list from `model_tags` (or an empty list if missing).
         """

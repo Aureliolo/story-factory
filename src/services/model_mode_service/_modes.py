@@ -285,18 +285,18 @@ def select_model_with_size_preference(
 ) -> str:
     """
     Select the best installed model ID for an agent role based on size preference and available VRAM.
-    
+
     Filters installed models by the given agent_role tag, scores candidates by how well their size matches size_pref plus reported quality, prefers models that fit within available_vram, and enforces a minimum quality check before returning.
-    
+
     Parameters:
         svc: ModelModeService instance used to access settings and helpers.
         agent_role: Agent role tag used to filter models (e.g., "assistant", "summarizer").
         size_pref: Desired model size preference (SizePreference).
         available_vram: Available VRAM in gigabytes used to prefer models that fit.
-    
+
     Returns:
         The selected model ID as a string.
-    
+
     Raises:
         ValueError: If no installed model is tagged for the given agent_role.
         ValueError: If the chosen model fails the minimum quality check (propagated from the quality check).

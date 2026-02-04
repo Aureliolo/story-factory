@@ -98,9 +98,9 @@ MINIMUM_ROLE_QUALITY: dict[str, int] = {
 def check_minimum_quality(model_id: str, quality: float, agent_role: str) -> None:
     """
     Warns when an auto-selected model's quality is below the minimum required for the specified agent role.
-    
+
     Called during auto-selection only — not when the user explicitly sets a model.
-    
+
     Parameters:
         model_id (str): The Ollama model identifier.
         quality (float): The model's quality rating from the registry.
