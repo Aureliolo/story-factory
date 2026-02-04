@@ -112,6 +112,15 @@ def setup_logging(level: str = "INFO", log_file: str | None = "default") -> None
         root_logger.info(f"Logging to file: {log_path} (max 10MB, 5 backups)")
 
     # Set third-party loggers to WARNING to reduce noise
+    _suppress_noisy_loggers()
+
+
+def _suppress_noisy_loggers() -> None:
+    """Suppress noisy third-party loggers to WARNING level.
+
+    Called by both setup_logging() and set_log_level() to keep httpx, httpcore,
+    and nicegui loggers at WARNING regardless of the application log level.
+    """
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("nicegui").setLevel(logging.WARNING)
@@ -125,17 +134,19 @@ def set_log_level(level: str) -> None:
 
     Args:
         level: Log level name (DEBUG, INFO, WARNING, ERROR).
+
+    Raises:
+        ValueError: If level is not a valid logging level name.
     """
-    log_level = getattr(logging, level.upper(), logging.INFO)
+    log_level = getattr(logging, level.upper(), None)
+    if log_level is None:
+        raise ValueError(f"Invalid log level: {level}")
+    logger.info("Log level changed to %s", level)
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     for handler in root_logger.handlers:
         handler.setLevel(log_level)
-    # Re-suppress noisy third-party loggers
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("nicegui").setLevel(logging.WARNING)
-    logger.info("Log level changed to %s", level)
+    _suppress_noisy_loggers()
 
 
 @contextmanager

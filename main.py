@@ -255,7 +255,7 @@ def main() -> None:
     setup_logging(level=args.log_level, log_file=log_file)
 
     # If no explicit --log-level on CLI, respect the persisted setting
-    if "--log-level" not in sys.argv:
+    if not any(arg.startswith("--log-level") for arg in sys.argv):
         from src.settings import Settings
 
         try:
@@ -264,8 +264,8 @@ def main() -> None:
                 from src.utils.logging_config import set_log_level
 
                 set_log_level(settings.log_level)
-        except Exception:
-            pass  # Settings file may not exist yet
+        except (FileNotFoundError, ValueError) as e:
+            logger.debug("Could not apply persisted log level: %s", e)
 
     if args.cli or args.list_stories or args.load:
         run_cli(load_story=args.load, list_stories=args.list_stories)

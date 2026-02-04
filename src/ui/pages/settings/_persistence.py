@@ -296,6 +296,11 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
     # Save changes
     settings.save()
 
+    # Apply the log level at runtime
+    from src.utils.logging_config import set_log_level
+
+    set_log_level(settings.log_level)
+
     # Update UI elements to reflect restored values
     refresh_ui_from_settings(page)
 

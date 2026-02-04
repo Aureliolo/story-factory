@@ -263,71 +263,58 @@ class TestLogPerformance:
 class TestSetLogLevel:
     """Tests for set_log_level() runtime level change."""
 
-    def test_set_log_level_changes_root_logger(self):
-        """set_log_level should change the root logger level."""
+    @pytest.fixture(autouse=True)
+    def _managed_logging(self):
+        """Save and restore root logger state around each test."""
         root_logger = logging.getLogger()
         original_level = root_logger.level
         original_handlers = root_logger.handlers[:]
-
         try:
-            # Set up with a known handler
-            setup_logging(level="INFO", log_file=None)
-            assert root_logger.level == logging.INFO
-
-            set_log_level("DEBUG")
-            assert root_logger.level == logging.DEBUG
-
-            set_log_level("WARNING")
-            assert root_logger.level == logging.WARNING
+            yield
         finally:
             root_logger.handlers = original_handlers
             root_logger.setLevel(original_level)
+
+    def test_set_log_level_changes_root_logger(self):
+        """set_log_level should change the root logger level."""
+        root_logger = logging.getLogger()
+        setup_logging(level="INFO", log_file=None)
+        assert root_logger.level == logging.INFO
+
+        set_log_level("DEBUG")
+        assert root_logger.level == logging.DEBUG
+
+        set_log_level("WARNING")
+        assert root_logger.level == logging.WARNING
 
     def test_set_log_level_changes_handler_levels(self):
         """set_log_level should update all handler levels."""
         root_logger = logging.getLogger()
-        original_level = root_logger.level
-        original_handlers = root_logger.handlers[:]
+        setup_logging(level="INFO", log_file=None)
+        set_log_level("DEBUG")
 
-        try:
-            setup_logging(level="INFO", log_file=None)
-            set_log_level("DEBUG")
-
-            for handler in root_logger.handlers:
-                assert handler.level == logging.DEBUG
-        finally:
-            root_logger.handlers = original_handlers
-            root_logger.setLevel(original_level)
+        for handler in root_logger.handlers:
+            assert handler.level == logging.DEBUG
 
     def test_set_log_level_suppresses_third_party(self):
         """Third-party loggers should stay at WARNING after set_log_level('DEBUG')."""
-        root_logger = logging.getLogger()
-        original_level = root_logger.level
-        original_handlers = root_logger.handlers[:]
+        setup_logging(level="INFO", log_file=None)
+        set_log_level("DEBUG")
 
-        try:
-            setup_logging(level="INFO", log_file=None)
-            set_log_level("DEBUG")
-
-            assert logging.getLogger("httpx").level == logging.WARNING
-            assert logging.getLogger("httpcore").level == logging.WARNING
-            assert logging.getLogger("nicegui").level == logging.WARNING
-        finally:
-            root_logger.handlers = original_handlers
-            root_logger.setLevel(original_level)
+        assert logging.getLogger("httpx").level == logging.WARNING
+        assert logging.getLogger("httpcore").level == logging.WARNING
+        assert logging.getLogger("nicegui").level == logging.WARNING
 
     def test_set_log_level_logs_change(self, caplog):
         """set_log_level should log the level change."""
-        root_logger = logging.getLogger()
-        original_level = root_logger.level
-        original_handlers = root_logger.handlers[:]
+        setup_logging(level="INFO", log_file=None)
+        with caplog.at_level(logging.INFO):
+            set_log_level("WARNING")
 
-        try:
-            setup_logging(level="INFO", log_file=None)
-            with caplog.at_level(logging.INFO):
-                set_log_level("WARNING")
+        assert "Log level changed to WARNING" in caplog.text
 
-            assert "Log level changed to WARNING" in caplog.text
-        finally:
-            root_logger.handlers = original_handlers
-            root_logger.setLevel(original_level)
+    def test_set_log_level_invalid_raises_value_error(self):
+        """set_log_level should raise ValueError for invalid level names."""
+        setup_logging(level="INFO", log_file=None)
+        with pytest.raises(ValueError, match="Invalid log level"):
+            set_log_level("INVALID_LEVEL")
