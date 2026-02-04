@@ -149,12 +149,22 @@ def _judge_location_quality(
     story_state: StoryState,
     temperature: float,
 ) -> LocationQualityScores:
-    """Judge location quality using the judge model.
-
-    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
-
+    """
+    Evaluate a generated location's quality across the defined dimensions.
+    
+    Uses the configured judge model to produce numeric scores for atmosphere, narrative_significance, story_relevance, and distinctiveness, and returns targeted improvement feedback. Honors multi-call averaging when enabled in the judge configuration.
+    
+    Parameters:
+        svc: Service client providing model resolution and settings.
+        location (dict): Location data (expects keys like `name`, `description`, `significance`).
+        story_state (StoryState): Story context used to determine genre and language.
+        temperature (float): Sampling temperature to use with the judge model.
+    
+    Returns:
+        LocationQualityScores: Numeric scores for each dimension and a `feedback` string.
+    
     Raises:
-        WorldGenerationError: If quality judgment fails or returns invalid data.
+        WorldGenerationError: If the judge model call fails or returns invalid data.
     """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"

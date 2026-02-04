@@ -1174,7 +1174,11 @@ class TestModelModeServiceAdditional:
             service.calculate_consistency_score(issues)
 
     def test_judge_quality_with_direct_json_decode_error(self, service: ModelModeService) -> None:
-        """Test judge_quality catches json.JSONDecodeError directly."""
+        """
+        Verifies that judge_quality returns neutral scores when structured scoring raises a Pydantic ValidationError.
+        
+        Patches the internal structured-scoring call to raise a ValidationError and asserts the returned quality scores are the neutral defaults (prose_quality and instruction_following equal to 5.0).
+        """
         from unittest.mock import patch
 
         from pydantic import ValidationError
@@ -1210,7 +1214,15 @@ class TestSelectModelQualityWarning:
     """Tests for check_minimum_quality integration in select_model_with_size_preference."""
 
     def _make_svc(self, model_tags: dict[str, list[str]]):
-        """Create a minimal mock service for select_model_with_size_preference."""
+        """
+        Construct a minimal MagicMock service that exposes get_model_tags for tests.
+        
+        Parameters:
+            model_tags (dict[str, list[str]]): Mapping from model identifier to a list of tag strings to be returned by the mock.
+        
+        Returns:
+            MagicMock: A mock service whose `settings.get_model_tags(model)` returns the corresponding list from `model_tags` (or an empty list if missing).
+        """
         svc = MagicMock()
         svc.settings.get_model_tags.side_effect = lambda m: model_tags.get(m, [])
         return svc
