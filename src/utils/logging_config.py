@@ -121,6 +121,7 @@ def _suppress_noisy_loggers() -> None:
     Called by both setup_logging() and set_log_level() to keep httpx, httpcore,
     and nicegui loggers at WARNING regardless of the application log level.
     """
+    logger.debug("Suppressing noisy third-party loggers (httpx/httpcore/nicegui)")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("nicegui").setLevel(logging.WARNING)

@@ -180,8 +180,7 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
 
     # Connection
     settings.ollama_url = snapshot["ollama_url"]
-    if "log_level" in snapshot:
-        settings.log_level = snapshot["log_level"]
+    settings.log_level = snapshot["log_level"]
 
     # Models
     settings.default_model = snapshot["default_model"]

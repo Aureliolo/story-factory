@@ -307,7 +307,8 @@ class TestSetLogLevel:
 
     def test_set_log_level_logs_change(self, caplog):
         """set_log_level should log the level change."""
-        setup_logging(level="INFO", log_file=None)
+        # Don't call setup_logging() here — it removes all root handlers
+        # including pytest's caplog handler, preventing log capture.
         with caplog.at_level(logging.INFO):
             set_log_level("WARNING")
 
