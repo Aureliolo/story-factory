@@ -134,15 +134,18 @@ def _build_chapter_judge_prompt(
     genre: str,
     plot_summary: str,
 ) -> str:
-    """Build the judge prompt for chapter outline quality evaluation.
+    """
+    Constructs the text prompt used by the judge model to evaluate a chapter outline's quality.
 
-    Args:
-        chapter: Chapter to evaluate.
-        genre: Story genre for context.
-        plot_summary: Overall plot summary for arc context.
+    The prompt includes story-arc context, chapter metadata (number, title, outline), an optional scenes list, a calibration block, evaluation dimensions, and explicit output-format instructions required for the judge model.
+
+    Parameters:
+        chapter (Chapter): The chapter instance to evaluate (number, title, outline, optional scenes).
+        genre (str): Story genre to provide contextual framing for the evaluation.
+        plot_summary (str): Overall plot/arc summary to include as additional context; may be empty.
 
     Returns:
-        Formatted prompt string.
+        str: A formatted prompt string ready to send to the judge model.
     """
     # Format scenes if present
     scenes_text = ""

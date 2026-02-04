@@ -250,14 +250,15 @@ def _judge_character_quality(
 
 
 def _build_character_judge_prompt(character: Character, genre: str) -> str:
-    """Build the judge prompt for character quality evaluation.
+    """
+    Constructs the textual prompt used by the judge model to evaluate a character's quality within a genre context.
 
-    Args:
-        character: Character to evaluate.
-        genre: Story genre for context.
+    Parameters:
+        character (Character): The character to be evaluated; the prompt will include name, role, description, traits, goals, and arc notes.
+        genre (str): The story genre used to frame evaluation criteria and tone.
 
     Returns:
-        Formatted prompt string.
+        str: A formatted prompt string instructing the judge model to rate multiple quality dimensions and return a flat JSON object with numeric scores and feedback.
     """
     logger.debug("Building character judge prompt for '%s'", character.name)
     return f"""You are a literary critic evaluating character quality for a {genre} story.

@@ -150,21 +150,21 @@ def _judge_item_quality(
     story_state: StoryState,
     temperature: float,
 ) -> ItemQualityScores:
-    """Judge item quality using the judge model.
+    """
+    Evaluate an item's quality along several story-relevant dimensions and return numeric scores plus actionable feedback.
 
-    Supports multi-call averaging when judge_multi_call_enabled is True in settings.
+    Supports multi-call averaging when judge multi-call is enabled in the judge configuration.
 
-    Args:
-        svc: WorldQualityService instance.
-        item: Item dict to evaluate.
-        story_state: Current story state for context.
-        temperature: Judge temperature (low for consistency).
+    Parameters:
+        item (dict): The item to evaluate (expects keys like "name", "description", "significance", "properties").
+        story_state (StoryState): Current story context used to determine genre and evaluation framing.
+        temperature (float): Sampling temperature for the judge model (lower values favor consistency).
 
     Returns:
-        ItemQualityScores with ratings and feedback.
+        ItemQualityScores: Scores for `story_significance`, `uniqueness`, `narrative_potential`, `integration`, and a `feedback` field.
 
     Raises:
-        WorldGenerationError: If quality judgment fails or returns invalid data.
+        WorldGenerationError: If judgment fails or returns invalid data.
     """
     brief = story_state.brief
     genre = brief.genre if brief else "fiction"
