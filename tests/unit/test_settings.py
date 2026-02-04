@@ -2528,3 +2528,127 @@ class TestGetModelsForRole:
         # embed-model should be skipped because it has "embedding" tag
         assert "pure-writer:8b" in result
         assert "embed-model:8b" not in result
+
+
+class TestMinimumRoleQuality:
+    """Tests for MINIMUM_ROLE_QUALITY and check_minimum_quality (Issue #228)."""
+
+    def test_minimum_role_quality_has_judge(self):
+        """MINIMUM_ROLE_QUALITY must include judge with threshold >= 7."""
+        from src.settings._types import MINIMUM_ROLE_QUALITY
+
+        assert "judge" in MINIMUM_ROLE_QUALITY
+        assert MINIMUM_ROLE_QUALITY["judge"] >= 7
+
+    def test_minimum_role_quality_excludes_validator(self):
+        """Validator has no minimum quality — any small model works."""
+        from src.settings._types import MINIMUM_ROLE_QUALITY
+
+        assert "validator" not in MINIMUM_ROLE_QUALITY
+
+    def test_minimum_role_quality_excludes_embedding(self):
+        """Embedding has no minimum quality — separate selection path."""
+        from src.settings._types import MINIMUM_ROLE_QUALITY
+
+        assert "embedding" not in MINIMUM_ROLE_QUALITY
+
+    def test_check_minimum_quality_warns_low_quality_judge(self, caplog):
+        """Low-quality model auto-selected for judge should log a warning."""
+        import logging
+
+        from src.settings._types import check_minimum_quality
+
+        with caplog.at_level(logging.WARNING, logger="src.settings._types"):
+            check_minimum_quality("tiny-model:1b", 4.0, "judge")
+
+        assert any("below minimum quality" in r.message for r in caplog.records)
+        assert any("judge" in r.message for r in caplog.records)
+
+    def test_check_minimum_quality_no_warn_adequate_judge(self, caplog):
+        """Quality 8 model should not trigger a warning for judge role."""
+        import logging
+
+        from src.settings._types import check_minimum_quality
+
+        with caplog.at_level(logging.WARNING, logger="src.settings._types"):
+            check_minimum_quality("good-model:12b", 8.0, "judge")
+
+        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        assert not any("below minimum quality" in m for m in warning_messages)
+
+    def test_check_minimum_quality_no_warn_validator(self, caplog):
+        """Validator role has no minimum — should never warn."""
+        import logging
+
+        from src.settings._types import check_minimum_quality
+
+        with caplog.at_level(logging.WARNING, logger="src.settings._types"):
+            check_minimum_quality("tiny-model:0.5b", 2.0, "validator")
+
+        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        assert not any("below minimum quality" in m for m in warning_messages)
+
+    def test_auto_selection_calls_check_minimum_quality(self, monkeypatch):
+        """get_model_for_agent should call check_minimum_quality on auto-selection."""
+        from unittest.mock import MagicMock
+
+        fake_registry = {
+            "low-judge:4b": {
+                "quality": 4,
+                "tags": ["judge"],
+                "size_gb": 3.0,
+                "vram_required": 4,
+            },
+        }
+        monkeypatch.setattr("src.settings._settings.RECOMMENDED_MODELS", fake_registry)
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: {"low-judge:4b": 3.0},
+        )
+        monkeypatch.setattr("src.settings._utils.get_available_vram", lambda: 24)
+
+        mock_check = MagicMock()
+        monkeypatch.setattr("src.settings._settings.check_minimum_quality", mock_check)
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"judge": "auto"}
+        settings.get_model_for_agent("judge")
+
+        mock_check.assert_called_once_with("low-judge:4b", 4, "judge")
+
+    def test_explicit_model_skips_check(self, monkeypatch):
+        """Explicitly set model should NOT call check_minimum_quality."""
+        from unittest.mock import MagicMock
+
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda: {"my-model:8b": 5.0},
+        )
+
+        mock_check = MagicMock()
+        monkeypatch.setattr("src.settings._settings.check_minimum_quality", mock_check)
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"judge": "my-model:8b"}
+        result = settings.get_model_for_agent("judge")
+
+        assert result == "my-model:8b"
+        mock_check.assert_not_called()
+
+    def test_registry_gemma3_12b_has_judge_tag(self):
+        """Gemma 3 12B should have judge tag (best empirical judge, Issue #228)."""
+        assert "judge" in RECOMMENDED_MODELS["gemma3:12b"]["tags"]
+
+    def test_registry_phi4_14b_has_judge_tag(self):
+        """Phi-4 14B should have judge tag (rank=0.99, Issue #228)."""
+        assert "judge" in RECOMMENDED_MODELS["phi4:14b"]["tags"]
+
+    def test_registry_gemma3_4b_has_judge_tag(self):
+        """Gemma 3 4B should have judge tag (rank=0.94, Issue #228)."""
+        assert "judge" in RECOMMENDED_MODELS["gemma3:4b"]["tags"]
+
+    def test_registry_qwen3_4b_no_interviewer_tag(self):
+        """Qwen3 4B (Quality 5) should not have interviewer tag."""
+        assert "interviewer" not in RECOMMENDED_MODELS["qwen3:4b"]["tags"]

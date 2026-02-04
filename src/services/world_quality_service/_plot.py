@@ -166,7 +166,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"coherence": 7.4, "tension_arc": 5.8, "character_integration": 8.1, "originality": 6.3, "feedback": "The plot's..."}}
+{{"coherence": <float 0-10>, "tension_arc": <float 0-10>, "character_integration": <float 0-10>, "originality": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

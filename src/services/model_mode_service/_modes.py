@@ -12,6 +12,7 @@ from src.memory.mode_models import (
     get_size_tier,
     list_preset_modes,
 )
+from src.settings._types import check_minimum_quality
 from src.utils.validation import validate_not_empty, validate_not_none
 
 if TYPE_CHECKING:
@@ -369,6 +370,7 @@ def select_model_with_size_preference(
             f"Selected {best['model_id']} ({best['size_gb']:.1f}GB) anyway."
         )
 
+    check_minimum_quality(str(best["model_id"]), best["quality"], agent_role)
     return str(best["model_id"])
 
 

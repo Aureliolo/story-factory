@@ -1204,3 +1204,70 @@ class TestModelModeServiceAdditional:
             # Should return neutral scores
             assert scores.prose_quality == 5.0
             assert scores.instruction_following == 5.0
+
+
+class TestSelectModelQualityWarning:
+    """Tests for check_minimum_quality integration in select_model_with_size_preference."""
+
+    def _make_svc(self, model_tags: dict[str, list[str]]):
+        """Create a minimal mock service for select_model_with_size_preference."""
+        svc = MagicMock()
+        svc.settings.get_model_tags.side_effect = lambda m: model_tags.get(m, [])
+        return svc
+
+    def test_select_model_warns_below_minimum_quality(self, caplog, monkeypatch):
+        """select_model_with_size_preference should warn when best model is below threshold."""
+        import logging
+
+        from src.memory.mode_models import SizePreference
+        from src.services.model_mode_service._modes import select_model_with_size_preference
+
+        svc = self._make_svc({"weak-judge:4b": ["judge"]})
+        monkeypatch.setattr(
+            "src.settings.get_installed_models_with_sizes",
+            lambda: {"weak-judge:4b": 3.0},
+        )
+        monkeypatch.setattr(
+            "src.settings.get_model_info",
+            lambda m: {"quality": 4, "speed": 8, "vram_required": 4},
+        )
+
+        with caplog.at_level(logging.WARNING, logger="src.settings._types"):
+            result = select_model_with_size_preference(
+                svc,
+                "judge",
+                SizePreference.SMALLEST,
+                24,
+            )
+
+        assert result == "weak-judge:4b"
+        assert any("below minimum quality" in r.message for r in caplog.records)
+
+    def test_select_model_no_warn_adequate_quality(self, caplog, monkeypatch):
+        """select_model_with_size_preference should not warn for adequate quality."""
+        import logging
+
+        from src.memory.mode_models import SizePreference
+        from src.services.model_mode_service._modes import select_model_with_size_preference
+
+        svc = self._make_svc({"good-judge:12b": ["judge"]})
+        monkeypatch.setattr(
+            "src.settings.get_installed_models_with_sizes",
+            lambda: {"good-judge:12b": 8.0},
+        )
+        monkeypatch.setattr(
+            "src.settings.get_model_info",
+            lambda m: {"quality": 8, "speed": 7, "vram_required": 10},
+        )
+
+        with caplog.at_level(logging.WARNING, logger="src.settings._types"):
+            result = select_model_with_size_preference(
+                svc,
+                "judge",
+                SizePreference.SMALLEST,
+                24,
+            )
+
+        assert result == "good-judge:12b"
+        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        assert not any("below minimum quality" in m for m in warning_messages)

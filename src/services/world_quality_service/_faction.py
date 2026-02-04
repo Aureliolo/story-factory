@@ -267,7 +267,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"coherence": 6.7, "influence": 5.3, "conflict_potential": 8.1, "distinctiveness": 7.4, "feedback": "The faction's..."}}
+{{"coherence": <float 0-10>, "influence": <float 0-10>, "conflict_potential": <float 0-10>, "distinctiveness": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

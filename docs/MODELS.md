@@ -2,7 +2,7 @@
 
 This document provides comprehensive guidance on selecting the best LLM models for Story Factory's multi-agent story generation system.
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 **Hardware Reference:** RTX 4090 (24GB VRAM)
 
 ## Quick Navigation
@@ -98,6 +98,7 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 | **Editor** | Polish, refine, improve prose | Precision, consistency, instruction-following | Balance |
 | **Continuity** | Check plot holes, consistency | Strong reasoning, contradiction detection | Reasoning critical |
 | **Interviewer** | Gather story requirements from user | Conversational, compliant, fast | Speed > Quality |
+| **Judge** | Score entity quality | Independent numeric assessment, JSON output | Accuracy > Speed |
 | **Validator** | Basic output validation | Minimal capability needed | Any small model |
 
 ---
@@ -209,6 +210,62 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 #### Dolphin Mistral Nemo 12B
 - **Strengths:** 128K context window, good for editing and refinement
 - **Ollama:** `CognitiveComputations/dolphin-mistral-nemo:12b`
+
+### Judge Models (Quality Scoring Role)
+
+The judge role evaluates entity quality during world generation, producing calibrated
+numeric scores in JSON. This requires models that can independently assess content
+rather than copy patterns from the prompt.
+
+**Critical finding (Issue #228, Feb 2026):** Hardcoded example scores in judge prompts
+(e.g. `"coherence": 6.7`) caused most models to copy those exact values verbatim
+instead of evaluating independently. Switching to parametric placeholders
+(`"coherence": <float 0-10>`) eliminated copying across all tested models and
+dramatically improved accuracy.
+
+#### Benchmark Results
+
+Tested 16 models via `scripts/evaluate_judge_accuracy.py` — 10 hand-crafted samples
+at 3 quality tiers (terrible ~2-3, mediocre ~5, excellent ~8-9) with ground-truth
+scores, measuring MAE (Mean Absolute Error), Spearman rank correlation, example
+copying rate, and score spread.
+
+**Parametric variant (production format, no example scores):**
+
+| Rank | Model | Params | MAE | Rank Corr | Spread | Verdict |
+|------|-------|--------|-----|-----------|--------|---------|
+| 1 | **Gemma 3 12B** | 12B | **1.58** | **0.98** | 3.5 | Best judge |
+| 2 | **Phi-4 14B** | 14B | **2.00** | **0.99** | 2.5 | Near-perfect ranking |
+| 3 | Phi-4 Mini 3.8B | 3.8B | 2.04 | 0.89 | 2.6 | Best small judge |
+| 4 | Gemma 3 4B | 4B | 2.04 | 0.94 | 2.2 | Good for size |
+| 5 | Qwen3 30B Ablit (MoE) | 30B | 2.08 | 0.98 | 1.8 | Excellent |
+| 6 | Celeste 12B | 12B | 2.19 | 0.78 | 1.8 | Usable |
+| 7 | Qwen3 8B Ablit | 8B | 2.36 | 0.90 | 1.8 | Marginal |
+| 8 | Dolphin3 8B Ablit | 8B | 2.38 | 0.90 | 1.8 | Marginal |
+| 9 | Dolphin Mistral Nemo 12B | 12B | 2.46 | 0.69 | 1.9 | Marginal |
+| 10 | Gemma 3 1B | 1B | 2.55 | 0.09 | 1.4 | Not viable |
+| 11 | Dark Champion MoE 18B | 18B | 2.65 | 0.61 | 1.2 | Not viable |
+| 12 | Qwen3 4B | 4B | 2.67 | 0.50 | 0.0 | Not viable (timeouts) |
+| 13 | SmolLM2 1.7B | 1.7B | 2.95 | 0.26 | 1.0 | Not viable |
+| 14 | Qwen3 0.6B | 0.6B | 3.04 | 0.28 | 0.6 | Not viable |
+| - | Llama 3.3 70B (both) | 70B | FAIL | - | - | Too slow for 24GB |
+
+**Key takeaways:**
+- **Removing example scores from prompts is critical** — copy rates dropped from 65-100% to 0-8% for every model
+- **All models overrate bad content** — even Gemma 12B scores terrible entities ~2.4 points too high (LLM positivity bias)
+- **Excellent content is scored accurately** — top models achieve MAE < 0.6 for high-quality entities
+- **Minimum viable judge is ~4B** — Gemma 3 4B and Phi-4 Mini (3.8B) both achieve rank correlation > 0.89
+- **Size alone doesn't determine judge quality** — Dark Champion 18B MoE and Dolphin Mistral Nemo 12B are worse judges than Gemma 3 4B
+- **70B models are impractical** as judges on 24GB VRAM — can't respond within 30s timeout
+
+#### Recommended Judge Setup
+
+| VRAM | Model | Why |
+|------|-------|-----|
+| 24GB | Gemma 3 12B | Best accuracy, near-perfect ranking |
+| 16GB | Phi-4 14B | Perfect rank correlation (0.99) |
+| 8GB | Qwen3 30B MoE | MoE architecture keeps it fast |
+| 4GB | Gemma 3 4B or Phi-4 Mini | Both achieve rank > 0.89 |
 
 ### Tiny Models (Validator Role)
 
@@ -404,6 +461,26 @@ From [FlawedFictions benchmark](https://arxiv.org/html/2504.11900v2):
 > "LLM story generation introduces 100%+ more plot holes than human writing."
 
 **Finding:** This is genuinely difficult. Use your strongest reasoning model, consider multiple passes, and process stories in chunks rather than full-length.
+
+### Judge Role: Example Score Copying (Issue #228)
+
+Empirical testing of 16 local models revealed that **hardcoded numeric examples in
+JSON output format instructions cause models to copy those exact values** instead of
+independently evaluating content. This affects all model sizes from 0.6B to 18B.
+
+The solution: replace example values like `"coherence": 6.7` with parametric
+placeholders `"coherence": <float 0-10>`. This single change:
+- Eliminated copying (65-100% copy rate → 0-8%) across all models
+- Improved MAE by 0.1-1.0 points for most models
+- Increased rank correlation from 0.36-0.64 to 0.78-0.99 for capable models
+- Increased score spread (variety across quality tiers) by 3-7x
+
+**Implication for LLM prompt design:** Never put concrete numeric values in JSON
+output format examples when you want the model to produce its own assessment.
+Use type placeholders instead.
+
+Full benchmark data: `scripts/evaluate_judge_accuracy.py`, results in
+`output/diagnostics/judge_accuracy_*.json`.
 
 ### Editor Role: Voice Consistency
 

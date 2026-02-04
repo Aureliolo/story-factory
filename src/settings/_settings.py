@@ -12,6 +12,7 @@ from src.memory.mode_models import LearningTrigger
 from src.settings import _validation as _validation_mod
 from src.settings._model_registry import RECOMMENDED_MODELS
 from src.settings._paths import BACKUPS_DIR, SETTINGS_FILE
+from src.settings._types import check_minimum_quality
 from src.settings._utils import get_installed_models_with_sizes
 
 # Configure module logger
@@ -572,6 +573,7 @@ class Settings:
                 f"Auto-selected {best[0]} ({best[1]:.1f}GB, quality={best[2]}) "
                 f"for {agent_role} (tagged model)"
             )
+            check_minimum_quality(best[0], best[2], agent_role)
             return best[0]
 
         if tagged_models_all:
@@ -582,6 +584,7 @@ class Settings:
                 f"No tagged model fits VRAM ({available_vram}GB) for {agent_role}. "
                 f"Selecting smallest tagged model: {smallest[0]} ({smallest[1]:.1f}GB)"
             )
+            check_minimum_quality(smallest[0], smallest[2], agent_role)
             return smallest[0]
 
         # No tagged model available - raise error with helpful message

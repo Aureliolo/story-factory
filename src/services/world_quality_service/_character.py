@@ -282,7 +282,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"depth": 6.3, "goal_clarity": 7.8, "flaws": 5.1, "uniqueness": 8.2, "arc_potential": 6.9, "feedback": "The character's..."}}
+{{"depth": <float 0-10>, "goal_clarity": <float 0-10>, "flaws": <float 0-10>, "uniqueness": <float 0-10>, "arc_potential": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

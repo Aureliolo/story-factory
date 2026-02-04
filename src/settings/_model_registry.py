@@ -2,6 +2,12 @@
 
 This is a curated list for the UI - auto-selection works with ANY installed model.
 Tags indicate which roles the model is particularly good for.
+
+Judge tag policy (Issue #228, Feb 2026):
+  Models with the ``judge`` tag have been empirically validated via
+  ``scripts/evaluate_judge_accuracy.py``.  Only models that achieve MAE < 2.5
+  and Spearman rank correlation > 0.85 on the parametric prompt variant
+  (no example scores) earn the tag.  See ``docs/MODELS.md`` for full results.
 """
 
 from src.settings._types import ModelInfo
@@ -39,7 +45,8 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Fast, compliant, no Chinese output - great all-rounder",
-        "tags": ["continuity", "interviewer", "suggestion", "judge"],
+        # No judge tag: empirically copies prompt example scores on faction/concept (Issue #228).
+        "tags": ["continuity", "interviewer", "suggestion"],
     },
     # Quality 8: All roles except writer (editing-focused, not prose creation).
     "CognitiveComputations/dolphin-mistral-nemo:12b": {
@@ -62,7 +69,44 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 7,
         "uncensored": True,
         "description": "MoE (30B/3B active), strong reasoning - excellent for architect",
+        # Judge: MAE=2.08, rank=0.98 parametric (Issue #228).
         "tags": ["architect", "continuity", "interviewer", "suggestion", "judge"],
+    },
+    # === GOOGLE GEMMA ===
+    # Gemma3 12B: best empirical judge model (Issue #228).
+    "gemma3:12b": {
+        "name": "Gemma 3 12B",
+        "size_gb": 8,
+        "vram_required": 10,
+        "quality": 8,
+        "speed": 8,
+        "uncensored": False,
+        "description": "Best empirical judge — MAE 1.58, rank 0.98, zero copying",
+        # Judge: MAE=1.58, rank=0.98 parametric, best tested (Issue #228).
+        "tags": ["continuity", "judge"],
+    },
+    "gemma3:4b": {
+        "name": "Gemma 3 4B",
+        "size_gb": 3,
+        "vram_required": 4,
+        "quality": 6,
+        "speed": 9,
+        "uncensored": False,
+        "description": "Strong judge for its size, good structured output",
+        # Judge: MAE=2.04, rank=0.94 parametric (Issue #228).
+        "tags": ["validator", "judge"],
+    },
+    # === MICROSOFT PHI ===
+    "phi4:14b": {
+        "name": "Phi-4 14B",
+        "size_gb": 9,
+        "vram_required": 12,
+        "quality": 8,
+        "speed": 7,
+        "uncensored": False,
+        "description": "Near-perfect rank correlation as judge, strong reasoning",
+        # Judge: MAE=2.00, rank=0.99 parametric (Issue #228).
+        "tags": ["architect", "continuity", "judge"],
     },
     # Quality 7 reasoning: architect, continuity, interviewer, validator. No suggestion.
     "huihui_ai/qwen3-abliterated:8b": {
@@ -73,7 +117,8 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Good reasoning at smaller size",
-        "tags": ["architect", "continuity", "interviewer", "validator", "judge"],
+        # No judge tag: empirically copies prompt example scores verbatim (Issue #228).
+        "tags": ["architect", "continuity", "interviewer", "validator"],
     },
     # === HIGH-END ===
     # 70B+ models: Large enough to excel at everything
@@ -162,7 +207,19 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Fast inference, good for quick tasks",
-        "tags": ["validator", "interviewer"],
+        # No interviewer tag: Quality 5 too low for structured interview output.
+        "tags": ["validator"],
+    },
+    # Quality 6: Strong structured output for its size, best small-model judge (Issue #228).
+    "phi4-mini": {
+        "name": "Phi-4 Mini 3.8B",
+        "size_gb": 2.3,
+        "vram_required": 4,
+        "quality": 6,
+        "speed": 9,
+        "uncensored": False,
+        "description": "Microsoft reasoning model, best small-model judge — produces independent scores",
+        "tags": ["validator", "judge"],
     },
     # === EMBEDDING MODELS ===
     # Used for semantic duplicate detection during world generation.

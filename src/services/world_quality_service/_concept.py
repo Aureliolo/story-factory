@@ -186,7 +186,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"relevance": 7.6, "depth": 5.2, "manifestation": 8.3, "resonance": 6.1, "feedback": "The concept's..."}}
+{{"relevance": <float 0-10>, "depth": <float 0-10>, "manifestation": <float 0-10>, "resonance": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 

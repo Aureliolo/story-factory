@@ -180,7 +180,7 @@ Rate each dimension 0-10:
 Provide specific, actionable feedback for improvement in the feedback field.
 
 OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
-{{"purpose": 6.9, "pacing": 7.3, "hook": 5.4, "coherence": 8.2, "feedback": "The chapter's..."}}
+{{"purpose": <float 0-10>, "pacing": <float 0-10>, "hook": <float 0-10>, "coherence": <float 0-10>, "feedback": "Your assessment..."}}
 
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
