@@ -700,7 +700,7 @@ Return JSON:
 }}"""
 
     try:
-        model_id = svc._get_judge_model(entity_type="validator")
+        model_id = svc._get_judge_model()  # Use default judge for validation
 
         logger.debug("Checking contradiction via LLM (model=%s)", model_id)
         response = await asyncio.to_thread(
