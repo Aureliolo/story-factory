@@ -107,13 +107,18 @@ def file_path_to_module(file_path: str) -> str:
     """Convert a file path to a Python module name.
 
     Args:
-        file_path: Path like 'src/agents/base.py' or 'src/settings/_settings.py'
+        file_path: Path like 'src/agents/base.py', './src/settings/_settings.py',
+                   or '.\\src\\agents\\base.py'
 
     Returns:
         Module name like 'src.agents.base' or 'src.settings._settings'
     """
+    # Strip leading ./ or .\ before converting
+    path = file_path.lstrip("./").lstrip(".\\")
+    if path.startswith("."):
+        path = path[1:]
     # Remove .py extension and convert slashes to dots
-    module = file_path.replace("/", ".").replace("\\", ".")
+    module = path.replace("/", ".").replace("\\", ".")
     if module.endswith(".py"):
         module = module[:-3]
     return module

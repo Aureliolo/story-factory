@@ -376,7 +376,8 @@ class BaseAgent:
             min_response_length (int | None): Minimum cleaned response length to accept. Defaults to MIN_RESPONSE_LENGTH; set to 1 for very short expected outputs.
 
         Returns:
-            str: The raw text content returned by the LLM.
+            str: The cleaned text content returned by the LLM, with think tags
+                 and other artifacts stripped via clean_llm_text().
 
         Raises:
             CircuitOpenError: If the circuit breaker is open.
@@ -495,9 +496,9 @@ class BaseAgent:
                                 circuit_breaker.record_failure(LLMGenerationError(error_msg))
                                 raise LLMGenerationError(error_msg)
 
-                        # Success - record it and return
+                        # Success - record it and return cleaned content (think tags removed)
                         circuit_breaker.record_success()
-                        return content
+                        return cleaned_content
 
                     except ConnectionError as e:
                         last_error = e

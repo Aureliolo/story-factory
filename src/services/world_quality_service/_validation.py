@@ -8,7 +8,7 @@ from typing import Any
 from src.memory.entities import Entity
 from src.memory.story_state import StoryBrief
 from src.memory.world_quality import RefinementConfig
-from src.utils.json_parser import extract_json
+from src.utils.json_parser import clean_llm_text, extract_json
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,17 @@ SUMMARY:"""
             },
         )
         summary: str = str(response["response"]).strip()
+        # Clean think tags and LLM artifacts
+        summary = clean_llm_text(summary)
+        # Guard against empty summaries after cleaning (e.g., LLM returned only think tags)
+        if not summary:
+            logger.warning(
+                "Mini description cleaned to empty for %s '%s'; falling back to truncation",
+                entity_type,
+                name,
+            )
+            words = full_description.split()[:max_words]
+            return " ".join(words) + ("..." if len(full_description.split()) > max_words else "")
         # Clean up any quotes or formatting
         summary = summary.strip("\"'").strip()
         # Ensure it's not too long
