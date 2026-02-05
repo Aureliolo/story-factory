@@ -1,0 +1,123 @@
+id: fantasy-epic
+name: Epic Fantasy
+description: Grand fantasy adventure with magic, quests, and world-changing stakes
+
+genre: Fantasy
+subgenres:
+  - Epic Fantasy
+  - High Fantasy
+tone: Epic and mythic with moments of wonder
+themes:
+  - Good vs Evil
+  - Power and Corruption
+  - Destiny
+  - Sacrifice
+setting_time: Medieval-inspired fantasy world
+setting_place: Multiple kingdoms and mystical lands
+target_length: novel
+structure_preset_id: heros-journey
+
+world_description: >-
+  A richly detailed fantasy realm with diverse kingdoms, ancient magic systems,
+  mythical creatures, and looming darkness threatening the land.
+
+world_rules:
+  - Magic follows established rules and has costs
+  - Ancient prophecies shape events
+  - Different races have unique abilities and cultures
+  - Balance between light and darkness is crucial
+
+characters:
+  - name: The Chosen One
+    role: protagonist
+    description: Unlikely hero destined for greatness
+    personality_traits:
+      - Humble origins
+      - Brave despite fear
+      - Questions destiny
+      - Compassionate
+    goals:
+      - Master their powers
+      - Defeat the darkness
+      - Save loved ones
+    arc_notes: Accepts destiny and becomes the leader needed
+
+  - name: The Wise Mentor
+    role: supporting
+    description: Experienced magic user or warrior who guides the hero
+    personality_traits:
+      - Wise
+      - Secretive past
+      - Patient teacher
+    goals:
+      - Prepare hero for coming trials
+      - Atone for past failures
+    arc_notes: May sacrifice themselves for hero's growth
+
+  - name: The Loyal Companion
+    role: supporting
+    description: Friend who stands by hero through everything
+    personality_traits:
+      - Loyal
+      - Courageous
+      - Provides balance
+    goals:
+      - Support the hero
+      - Prove their worth
+    arc_notes: Discovers own inner strength
+
+  - name: The Dark Lord
+    role: antagonist
+    description: Ancient evil seeking to conquer or destroy the world
+    personality_traits:
+      - Powerful
+      - Corrupted by dark magic
+      - Patient and cunning
+    goals:
+      - Conquer all kingdoms
+      - Destroy the chosen one
+    arc_notes: Tragic backstory may be revealed
+
+plot_points:
+  - description: Discovery of hero's special nature or destiny
+    act: 1
+    percentage: 15
+
+  - description: Mentor appears with call to adventure
+    act: 1
+    percentage: 20
+
+  - description: Leaving home after tragedy or threat
+    act: 1
+    percentage: 25
+
+  - description: Training montage and skill development
+    act: 2
+    percentage: 35
+
+  - description: First major victory against evil forces
+    act: 2
+    percentage: 45
+
+  - description: Revelation about true scope of darkness
+    act: 2
+    percentage: 55
+
+  - description: Mentor's death or great loss
+    act: 2
+    percentage: 70
+
+  - description: Hero discovers final power or truth
+    act: 3
+    percentage: 85
+
+  - description: Epic final battle with Dark Lord
+    act: 3
+    percentage: 95
+
+tags:
+  - fantasy
+  - epic
+  - magic
+  - quest
+  - medieval

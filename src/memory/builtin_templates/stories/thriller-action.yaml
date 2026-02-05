@@ -1,0 +1,124 @@
+id: thriller-action
+name: Action Thriller
+description: Fast-paced thriller with high stakes and relentless tension
+
+genre: Thriller
+subgenres:
+  - Action
+  - Suspense
+tone: Tense and urgent with explosive moments
+themes:
+  - Survival
+  - Justice
+  - Corruption
+  - Redemption
+setting_time: Contemporary
+setting_place: Multiple urban and remote locations
+target_length: novel
+structure_preset_id: save-the-cat
+
+world_description: >-
+  A dangerous contemporary world where conspiracies lurk beneath the surface
+  and protagonists must rely on skills and wits to survive against powerful enemies.
+
+world_rules:
+  - Ticking clock creates urgency
+  - Trust no one completely
+  - Resources are limited
+  - Escalation is constant
+
+characters:
+  - name: The Operative/Agent
+    role: protagonist
+    description: Highly skilled individual with combat and tactical expertise
+    personality_traits:
+      - Resourceful
+      - Haunted by past
+      - Determined
+      - Lone wolf
+    goals:
+      - Stop the threat
+      - Protect innocents
+      - Clear their name
+    arc_notes: Learns to trust others and accept help
+
+  - name: The Civilian
+    role: supporting
+    description: Ordinary person caught up in events who must adapt quickly
+    personality_traits:
+      - Resilient
+      - Quick learner
+      - Moral compass
+    goals:
+      - Survive
+      - Help protagonist
+      - Protect loved ones
+    arc_notes: Discovers inner strength and courage
+
+  - name: The Handler/Ally
+    role: supporting
+    description: Contact who provides information and resources
+    personality_traits:
+      - Connected
+      - Mysterious
+      - Loyal (possibly)
+    goals:
+      - Support mission
+      - May have hidden agenda
+    arc_notes: True loyalties tested
+
+  - name: The Mastermind
+    role: antagonist
+    description: Powerful villain orchestrating events from shadows
+    personality_traits:
+      - Intelligent
+      - Ruthless
+      - Always one step ahead
+    goals:
+      - Execute conspiracy
+      - Eliminate protagonist
+    arc_notes: Revealed in layers throughout story
+
+plot_points:
+  - description: Explosive opening action sequence
+    act: 1
+    percentage: 1
+
+  - description: Protagonist targeted or framed
+    act: 1
+    percentage: 15
+
+  - description: On the run, must go dark
+    act: 1
+    percentage: 25
+
+  - description: Uncover first layer of conspiracy
+    act: 2
+    percentage: 40
+
+  - description: Major action setpiece and narrow escape
+    act: 2
+    percentage: 50
+
+  - description: Betrayal or unexpected twist
+    act: 2
+    percentage: 65
+
+  - description: Seemingly defeated, all assets lost
+    act: 2
+    percentage: 75
+
+  - description: Final confrontation setup
+    act: 3
+    percentage: 85
+
+  - description: Climactic showdown with mastermind
+    act: 3
+    percentage: 95
+
+tags:
+  - thriller
+  - action
+  - suspense
+  - conspiracy
+  - espionage

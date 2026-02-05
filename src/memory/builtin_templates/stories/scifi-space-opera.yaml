@@ -1,0 +1,119 @@
+id: scifi-space-opera
+name: Science Fiction / Space Opera
+description: Epic space adventure with advanced technology and interstellar stakes
+
+genre: Science Fiction
+subgenres:
+  - Space Opera
+  - Adventure
+tone: Epic and adventurous with philosophical undertones
+themes:
+  - Exploration
+  - Technology vs Humanity
+  - Unity
+  - Survival
+setting_time: Far future
+setting_place: Multiple planets and space stations
+target_length: novel
+structure_preset_id: heros-journey
+
+world_description: >-
+  A vast galaxy with multiple alien species, advanced technology, and interstellar
+  politics. Faster-than-light travel connects distant worlds.
+
+world_rules:
+  - Technology follows consistent scientific principles
+  - Different species have unique cultures and biology
+  - Actions have consequences across star systems
+  - Ancient mysteries hint at precursor civilizations
+
+characters:
+  - name: The Captain/Pilot
+    role: protagonist
+    description: Skilled but reluctant leader thrust into galactic events
+    personality_traits:
+      - Resourceful
+      - Independent
+      - Skeptical of authority
+      - Natural leader
+    goals:
+      - Complete the mission
+      - Keep crew safe
+      - Uncover the truth
+    arc_notes: Grows from lone wolf to inspirational leader
+
+  - name: The Alien Ally
+    role: supporting
+    description: Non-human companion with unique perspective and abilities
+    personality_traits:
+      - Logical or emotional
+      - Loyal
+      - Different worldview
+    goals:
+      - Bridge species divide
+      - Protect protagonist
+    arc_notes: Learns to understand humanity
+
+  - name: The Scientist/Engineer
+    role: supporting
+    description: Brilliant mind who solves technical challenges
+    personality_traits:
+      - Intelligent
+      - Curious
+      - Awkward socially
+    goals:
+      - Understand alien technology
+      - Make discoveries
+    arc_notes: Gains confidence and courage
+
+  - name: The Admiral/Antagonist
+    role: antagonist
+    description: Powerful figure representing opposing ideology or faction
+    personality_traits:
+      - Authoritarian
+      - Believes end justifies means
+      - Charismatic
+    goals:
+      - Control the galaxy
+      - Eliminate threats
+    arc_notes: May have sympathetic motivation
+
+plot_points:
+  - description: Discovery of alien artifact or distress signal
+    act: 1
+    percentage: 10
+
+  - description: Departure from known space
+    act: 1
+    percentage: 25
+
+  - description: First contact with alien species
+    act: 2
+    percentage: 35
+
+  - description: Revelation about true nature of threat
+    act: 2
+    percentage: 50
+
+  - description: Major space battle or confrontation
+    act: 2
+    percentage: 65
+
+  - description: Crew scattered or ship destroyed
+    act: 2
+    percentage: 75
+
+  - description: Rally allies for final assault
+    act: 3
+    percentage: 85
+
+  - description: Climactic battle for galaxy's fate
+    act: 3
+    percentage: 95
+
+tags:
+  - sci-fi
+  - space opera
+  - adventure
+  - aliens
+  - technology

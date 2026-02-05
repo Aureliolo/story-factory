@@ -1,0 +1,71 @@
+id: heros-journey
+name: Hero's Journey
+description: Joseph Campbell's monomyth - the classic hero's adventure structure
+
+acts:
+  - Departure
+  - Initiation
+  - Return
+
+plot_points:
+  - description: "Ordinary World - Hero in their normal environment"
+    act: 1
+    percentage: 0
+
+  - description: "Call to Adventure - Challenge or quest presented"
+    act: 1
+    percentage: 10
+
+  - description: "Refusal of the Call - Hero hesitates"
+    act: 1
+    percentage: 15
+
+  - description: "Meeting the Mentor - Guidance received"
+    act: 1
+    percentage: 20
+
+  - description: "Crossing the Threshold - Entering the special world"
+    act: 1
+    percentage: 25
+
+  - description: "Tests, Allies, and Enemies - Learning the new world"
+    act: 2
+    percentage: 40
+
+  - description: "Approach to the Inmost Cave - Preparing for the ordeal"
+    act: 2
+    percentage: 55
+
+  - description: "The Ordeal - Greatest fear confronted"
+    act: 2
+    percentage: 65
+
+  - description: "Reward - Prize obtained after ordeal"
+    act: 2
+    percentage: 70
+
+  - description: "The Road Back - Return journey begins"
+    act: 3
+    percentage: 80
+
+  - description: "Resurrection - Final test, hero reborn"
+    act: 3
+    percentage: 90
+
+  - description: "Return with Elixir - Hero brings wisdom home"
+    act: 3
+    percentage: 100
+
+beats:
+  - Show ordinary world
+  - Present the call to adventure
+  - Hero refuses or hesitates
+  - Mentor appears with guidance
+  - Cross into special world
+  - Face tests and make allies
+  - Approach greatest challenge
+  - Survive the ordeal
+  - Claim the reward
+  - Journey homeward
+  - Final transformation
+  - Return changed with knowledge
