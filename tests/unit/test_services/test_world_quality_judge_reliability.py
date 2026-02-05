@@ -1255,7 +1255,7 @@ class TestConflictWarningThrottle:
     def test_different_entity_types_get_separate_warnings(
         self, settings, mock_mode_service, caplog
     ):
-        """Different entity_type keys produce separate warnings."""
+        """Different entity_type keys produce separate warnings when cache is invalidated."""
         import logging
         from unittest.mock import patch
 
@@ -1270,6 +1270,8 @@ class TestConflictWarningThrottle:
             caplog.at_level(logging.WARNING),
         ):
             service._get_judge_model(entity_type="character")
+            # Invalidate cache to force re-resolution for next entity type
+            service.invalidate_model_cache()
             service._get_judge_model(entity_type="location")
 
         conflict_warnings = [
