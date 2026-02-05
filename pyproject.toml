@@ -61,6 +61,7 @@ test = [
     "pytest-cov==7.0.0",
     "pytest-asyncio==1.3.0",
     "pytest-xdist==3.8.0",
+    "pytest-testmon==2.2.0",
     "playwright==1.58.0",
     "pytest-playwright==0.7.2",
 ]
@@ -221,6 +222,7 @@ omit = [
     "src/ui/*",
     # Standalone utility scripts (not part of main application)
     "scripts/audit_exceptions.py",
+    "scripts/check_coverage_changed.py",
     "scripts/check_deps.py",
     "scripts/check_file_size.py",
     "scripts/evaluate_ab_prompts.py",
