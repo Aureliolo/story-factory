@@ -269,10 +269,13 @@ class TestSetLogLevel:
         root_logger = logging.getLogger()
         original_level = root_logger.level
         original_handlers = root_logger.handlers[:]
+        original_handler_levels = {h: h.level for h in original_handlers}
         try:
             yield
         finally:
             root_logger.handlers = original_handlers
+            for handler, level in original_handler_levels.items():
+                handler.setLevel(level)
             root_logger.setLevel(original_level)
 
     def test_set_log_level_changes_root_logger(self):
