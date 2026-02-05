@@ -90,16 +90,24 @@ repos:
         always_run: true
         stages: [pre-commit]
 
-  # Run tests with coverage enforcement
-  # NOTE: Skipped by default in CI (pre-commit.ci) due to time constraints
-  # Run locally: pre-commit run pytest-coverage --hook-stage push
-  # Full enforcement is in GitHub Actions CI workflow
+  # Two-stage pre-push testing:
+  # 1. Fast affected-tests check with testmon (2-30 sec)
+  # 2. Coverage check on changed files (ensures new code has tests)
+  # Full test suite with 100% coverage runs in GitHub Actions CI
   - repo: local
     hooks:
-      - id: pytest-coverage
-        name: pytest with coverage (parallel)
-        entry: python -m pytest tests/unit/ tests/smoke/ tests/integration/ -n auto --cov=. --cov-fail-under=100 --cov-report=term -q
+      - id: pytest-testmon
+        name: pytest affected tests (testmon)
+        entry: python -m pytest --testmon -q
         language: system
         pass_filenames: false
         always_run: true
-        stages: [pre-push]  # Run on push, not on every commit
+        stages: [pre-push]
+
+      - id: pytest-coverage-changed
+        name: pytest coverage on changed files
+        entry: python scripts/check_coverage_changed.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

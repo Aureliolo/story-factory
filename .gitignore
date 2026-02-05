@@ -71,6 +71,9 @@ nul
 coverage.json
 coverage.xml
 htmlcov/
+.testmondata
+.testmondata-shm
+.testmondata-wal
 
 # Claude Code
 .claude/
