@@ -67,15 +67,18 @@ def format_properties(properties: list[Any] | Any | None) -> str:
             # Coerce to string to handle non-string values (e.g., None, int)
             if "name" in prop:
                 value = prop["name"]
-                result.append("" if value is None else str(value))
+                if value is not None:
+                    result.append(str(value))
             elif "description" in prop:
                 value = prop["description"]
-                result.append("" if value is None else str(value))
+                if value is not None:
+                    result.append(str(value))
             else:
                 result.append(str(prop))
         else:
             result.append(str(prop))
-    return ", ".join(result)
+    # Filter empty strings to avoid ", , " in output
+    return ", ".join(s for s in result if s)
 
 
 def format_existing_names_warning(existing_names: list[str], entity_type: str) -> str:

@@ -84,6 +84,11 @@ class TestFormatProperties:
         result = format_properties([{"name": None}])
         assert result == ""
 
+    def test_handles_mixed_none_and_valid_values(self):
+        """Test handling mix of None and valid values without leading comma."""
+        result = format_properties([{"name": None}, {"name": "Test"}])
+        assert result == "Test"
+
     def test_handles_non_string_values_in_dict(self):
         """Test handling non-string values like integers."""
         result = format_properties([{"name": 42}])

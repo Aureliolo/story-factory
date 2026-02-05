@@ -181,7 +181,9 @@ class ChapterVersionManager:
         Returns:
             Number of versions stored.
         """
-        return len(self._chapter.versions)
+        count = len(self._chapter.versions)
+        logger.debug("Chapter %d has %d versions", self._chapter.number, count)
+        return count
 
     @property
     def all_versions(self) -> list[ChapterVersion]:
@@ -190,4 +192,9 @@ class ChapterVersionManager:
         Returns:
             List of all chapter versions.
         """
+        logger.debug(
+            "Retrieving all %d versions for chapter %d",
+            len(self._chapter.versions),
+            self._chapter.number,
+        )
         return self._chapter.versions
