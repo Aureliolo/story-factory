@@ -103,6 +103,22 @@ def filter_coverable_files(files: list[str]) -> list[str]:
     return filtered
 
 
+def file_path_to_module(file_path: str) -> str:
+    """Convert a file path to a Python module name.
+
+    Args:
+        file_path: Path like 'src/agents/base.py' or 'src/settings/_settings.py'
+
+    Returns:
+        Module name like 'src.agents.base' or 'src.settings._settings'
+    """
+    # Remove .py extension and convert slashes to dots
+    module = file_path.replace("/", ".").replace("\\", ".")
+    if module.endswith(".py"):
+        module = module[:-3]
+    return module
+
+
 def run_coverage_check(files: list[str]) -> int:
     """Run pytest coverage on specific files.
 
@@ -120,8 +136,12 @@ def run_coverage_check(files: list[str]) -> int:
     for f in files:
         logger.info("  - %s", f)
 
-    # Build --cov arguments for each file
-    cov_args = [arg for f in files for arg in ("--cov", f)]
+    # Convert file paths to module names for coverage.py
+    # coverage.py --cov expects module names (dot notation), not file paths
+    modules = [file_path_to_module(f) for f in files]
+
+    # Build --cov arguments for each module
+    cov_args = [arg for m in modules for arg in ("--cov", m)]
 
     cmd = [
         sys.executable,
