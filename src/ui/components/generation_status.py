@@ -69,9 +69,12 @@ class GenerationStatus:
             self._phase_label.text = f"Phase: {phase_name}"
             self._update_phase_icons(event.phase)
 
-        # Update progress bar
+        # Update progress bar (validate range)
         if self._progress_bar and event.progress is not None:
-            self.set_progress(event.progress)
+            if 0.0 <= event.progress <= 1.0:
+                self.set_progress(event.progress)
+            else:
+                logger.warning("Invalid progress value: %s", event.progress)
 
         # Update chapter indicator
         if self._chapter_label and event.chapter_number:

@@ -70,7 +70,7 @@ class ProjectsPage:
             return
 
         self._project_list.clear()
-        projects = self.services.project.list_projects()
+        projects = self.state.get_cached_projects(self.services.project.list_projects)
 
         if not projects:
             with self._project_list:
@@ -248,6 +248,7 @@ class ProjectsPage:
                 if template:
                     template_msg = f" from template: {template.name}"
 
+            self.state.invalidate_project_cache()
             ui.notify(f"Project created{template_msg}!", type="positive")
             dialog.close()
             # Reload to update header dropdown
@@ -277,6 +278,7 @@ class ProjectsPage:
         """Duplicate a project."""
         try:
             project, _world_db = self.services.project.duplicate_project(project_id)
+            self.state.invalidate_project_cache()
             ui.notify(f"Duplicated as: {project.project_name}", type="positive")
             self._refresh_project_list()
         except Exception as e:
@@ -309,6 +311,7 @@ class ProjectsPage:
                 self.services.settings.save()
 
             self.services.project.delete_project(project_id)
+            self.state.invalidate_project_cache()
             self._refresh_project_list()
             ui.notify("Project deleted", type="positive")
         except BackgroundTaskActiveError:
@@ -423,6 +426,7 @@ class ProjectsPage:
                             if self.state.project_id == project_id and self.state.project:
                                 self.state.project.project_name = new_name
 
+                            self.state.invalidate_project_cache()
                             ui.notify(f"Renamed to: {new_name}", type="positive")
                             dialog.close()
                             self._refresh_project_list()
@@ -588,6 +592,7 @@ class ProjectsPage:
                             # No duplicate, proceed with restore
                             try:
                                 self.services.backup.restore_backup(backup_filename, project_name)
+                                self.state.invalidate_project_cache()
                                 ui.notify(f"Backup restored as: {project_name}", type="positive")
                                 dialog.close()
                                 parent_dialog.close()
@@ -653,6 +658,7 @@ class ProjectsPage:
 
                             # Restore backup with same name
                             self.services.backup.restore_backup(backup_filename, project_name)
+                            self.state.invalidate_project_cache()
                             ui.notify(
                                 f"Backup restored (overwritten): {project_name}",
                                 type="positive",

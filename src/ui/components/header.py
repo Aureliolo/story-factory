@@ -77,7 +77,7 @@ class Header:
 
     def _build_project_selector(self) -> None:
         """Build the project dropdown selector."""
-        projects = self.services.project.list_projects()
+        projects = self.state.get_cached_projects(self.services.project.list_projects)
 
         options = {p.id: p.name for p in projects}
         if not options:
@@ -169,7 +169,7 @@ class Header:
     def _refresh_project_list(self) -> None:
         """Refresh the project dropdown options."""
         if self._project_select:
-            projects = self.services.project.list_projects()
+            projects = self.state.get_cached_projects(self.services.project.list_projects)
             options = {p.id: p.name for p in projects}
             if not options:
                 options = {"": "No projects yet"}

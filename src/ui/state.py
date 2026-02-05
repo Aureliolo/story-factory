@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -109,6 +110,10 @@ class AppState:
     # ========== Background Task Tracking ==========
     _background_task_count: int = 0
     _background_task_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    # ========== Project List Cache ==========
+    _project_list_cache: list[Any] | None = field(default=None, repr=False)
+    _project_list_cache_time: float = 0.0
 
     # ========== Callbacks ==========
     # These are called when certain state changes occur
@@ -446,3 +451,31 @@ class AppState:
         self.generation_is_paused = False
         self.generation_can_resume = False
         logger.debug("Generation flags reset")
+
+    # ========== Project List Cache Methods ==========
+
+    def get_cached_projects(self, fetch_fn: Callable[[], list]) -> list:
+        """Get projects from cache or fetch if stale (>2s).
+
+        Args:
+            fetch_fn: Function to call to fetch fresh project list.
+
+        Returns:
+            List of projects (cached or freshly fetched).
+        """
+        now = time.time()
+        if self._project_list_cache is not None and (now - self._project_list_cache_time) < 2.0:
+            logger.debug(
+                "Returning cached project list (%d projects)", len(self._project_list_cache)
+            )
+            return self._project_list_cache
+
+        self._project_list_cache = fetch_fn()
+        self._project_list_cache_time = now
+        logger.debug("Refreshed project list cache with %d projects", len(self._project_list_cache))
+        return self._project_list_cache
+
+    def invalidate_project_cache(self) -> None:
+        """Invalidate project list cache after mutations."""
+        self._project_list_cache = None
+        logger.debug("Project list cache invalidated")

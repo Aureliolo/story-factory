@@ -145,7 +145,9 @@ def refresh_entity_list(page) -> None:
 
     page._entity_list.clear()
 
-    entities = page.services.world.list_entities(page.state.world_db)
+    # Fetch all entities ONCE and cache for empty-state check
+    all_entities = page.services.world.list_entities(page.state.world_db)
+    entities = list(all_entities)  # Work on a copy for filtering
 
     # Filter by type
     if page.state.entity_filter_types:
@@ -177,8 +179,7 @@ def refresh_entity_list(page) -> None:
 
     with page._entity_list:
         if not entities:
-            # Check if there are entities at all or just filtered out
-            all_entities = page.services.world.list_entities(page.state.world_db)
+            # Use already-fetched all_entities instead of second DB call
             if not all_entities:
                 # No entities exist at all - show guidance
                 with ui.column().classes("items-center gap-2 py-4"):
