@@ -2690,3 +2690,137 @@ class TestLogLevelValidation:
         settings.log_level = "CRITICAL"
         with pytest.raises(ValueError, match="log_level must be one of"):
             settings.validate()
+
+
+class TestGetScaledTimeout:
+    """Tests for Settings.get_scaled_timeout() method."""
+
+    def test_small_model_scales_moderately(self):
+        """Small model (~5GB) should get ~150s timeout with 120s base."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="small-model:5b",
+            size_gb=5.0,
+            vram_required=6,
+            quality=5,
+            speed=7,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("small-model:5b")
+
+        # Formula: 120 * (1 + 5/20) = 120 * 1.25 = 150
+        assert timeout == 150.0
+
+    def test_large_model_scales_significantly(self):
+        """Large model (~40GB) should get ~360s timeout with 120s base."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="large-model:70b",
+            size_gb=40.0,
+            vram_required=48,
+            quality=9,
+            speed=3,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("large-model:70b")
+
+        # Formula: 120 * (1 + 40/20) = 120 * 3 = 360
+        assert timeout == 360.0
+
+    def test_medium_model_scales_appropriately(self):
+        """Medium model (~20GB) should get ~240s timeout with 120s base."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="medium-model:20b",
+            size_gb=20.0,
+            vram_required=24,
+            quality=7,
+            speed=5,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("medium-model:20b")
+
+        # Formula: 120 * (1 + 20/20) = 120 * 2 = 240
+        assert timeout == 240.0
+
+    def test_unknown_model_returns_base_timeout(self):
+        """Unknown model that raises exception should return base timeout."""
+        from unittest.mock import patch
+
+        with patch("src.settings._utils.get_model_info", side_effect=ValueError("Model not found")):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("unknown-model:xyz")
+
+        assert timeout == 120.0
+
+    def test_zero_size_returns_base_timeout(self):
+        """Model with zero size should return base timeout."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="zero-model:0b",
+            size_gb=0.0,
+            vram_required=0,
+            quality=5,
+            speed=5,
+            uncensored=True,
+            description="Test model",
+            tags=[],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 120
+            timeout = settings.get_scaled_timeout("zero-model:0b")
+
+        assert timeout == 120.0
+
+    def test_respects_custom_base_timeout(self):
+        """Should scale from custom base timeout, not hardcoded value."""
+        from unittest.mock import patch
+
+        from src.settings._types import ModelInfo
+
+        mock_info = ModelInfo(
+            name="test-model:8b",
+            size_gb=10.0,
+            vram_required=12,
+            quality=6,
+            speed=6,
+            uncensored=True,
+            description="Test model",
+            tags=["writer"],
+        )
+        with patch("src.settings._utils.get_model_info", return_value=mock_info):
+            settings = Settings()
+            settings.ollama_timeout = 60  # Custom lower timeout
+            timeout = settings.get_scaled_timeout("test-model:8b")
+
+        # Formula: 60 * (1 + 10/20) = 60 * 1.5 = 90
+        assert timeout == 90.0

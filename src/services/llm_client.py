@@ -18,25 +18,30 @@ logger = logging.getLogger(__name__)
 _instructor_clients: dict[int, instructor.Instructor] = {}
 
 
-def get_instructor_client(settings: Settings) -> instructor.Instructor:
+def get_instructor_client(settings: Settings, model_id: str | None = None) -> instructor.Instructor:
     """Get or create an Instructor client for the given settings.
 
-    The client is cached based on settings to avoid recreating it for each call.
+    The client is cached based on settings and model to avoid recreating it for each call.
+    Timeout is scaled based on model size when model_id is provided.
 
     Args:
         settings: Application settings with ollama_url and ollama_timeout.
+        model_id: Optional model ID for timeout scaling. If None, uses base timeout.
 
     Returns:
         Instructor client configured for Ollama's OpenAI-compatible endpoint.
     """
-    # Create a simple hash based on relevant settings
-    settings_key = hash((settings.ollama_url, settings.ollama_timeout))
+    # Get timeout (scaled by model size if model_id provided)
+    timeout = settings.get_scaled_timeout(model_id) if model_id else float(settings.ollama_timeout)
+
+    # Create a simple hash based on relevant settings and timeout
+    settings_key = hash((settings.ollama_url, timeout))
 
     if settings_key not in _instructor_clients:
         openai_client = OpenAI(
             base_url=f"{settings.ollama_url}/v1",
             api_key="ollama",  # Required but not used by Ollama
-            timeout=float(settings.ollama_timeout),
+            timeout=timeout,
         )
         client = instructor.from_openai(
             openai_client,
@@ -51,7 +56,9 @@ def get_instructor_client(settings: Settings) -> instructor.Instructor:
             lambda e: logger.warning("LLM API error during structured output (will retry): %s", e),
         )
         _instructor_clients[settings_key] = client
-        logger.debug(f"Created instructor client for {settings.ollama_url}")
+        logger.debug(
+            f"Created instructor client for {settings.ollama_url} (timeout={timeout:.0f}s)"
+        )
 
     return _instructor_clients[settings_key]
 
@@ -85,7 +92,7 @@ def generate_structured[T: BaseModel](
     Raises:
         Exception: If generation fails after all retries.
     """
-    client = get_instructor_client(settings)
+    client = get_instructor_client(settings, model_id=model)
 
     # Add /no_think prefix for Qwen models
     if system_prompt and "qwen" in model.lower():

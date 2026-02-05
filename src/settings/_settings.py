@@ -643,3 +643,37 @@ class Settings:
                 f"{sorted(self.agent_temperatures.keys())}"
             )
         return float(self.agent_temperatures[agent_role])
+
+    def get_scaled_timeout(self, model_id: str) -> float:
+        """Get timeout scaled by model size. Larger models need more time.
+
+        Scaling formula: base_timeout * (1 + size_gb / 20)
+        Examples with 120s base timeout:
+        - 5GB model: 150s
+        - 20GB model: 240s
+        - 40GB model: 360s
+
+        Args:
+            model_id: The model identifier to get scaled timeout for.
+
+        Returns:
+            Scaled timeout in seconds.
+        """
+        from src.settings._utils import get_model_info
+
+        base_timeout = float(self.ollama_timeout)
+        try:
+            info = get_model_info(model_id)
+            size_gb = info["size_gb"]
+        except Exception:
+            logger.debug(f"Could not get model info for {model_id}, using base timeout")
+            return base_timeout
+
+        if size_gb <= 0:
+            return base_timeout
+
+        # Scale: base * (1 + size_gb/20)
+        scale_factor = 1 + (size_gb / 20)
+        scaled = base_timeout * scale_factor
+        logger.debug(f"Timeout for {model_id}: {scaled:.0f}s (size={size_gb:.1f}GB)")
+        return scaled
