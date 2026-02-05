@@ -761,7 +761,7 @@ class JudgeConsistencyConfig(BaseModel):
         description="Whether to make multiple judge calls and average (expensive)",
     )
     multi_call_count: int = Field(
-        default=3,
+        default=2,
         ge=2,
         le=5,
         description="Number of judge calls to make if multi_call_enabled",

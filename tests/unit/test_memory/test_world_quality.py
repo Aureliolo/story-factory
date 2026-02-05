@@ -567,7 +567,7 @@ class TestJudgeConsistencyConfig:
         config = JudgeConsistencyConfig()
         assert config.enabled is False  # Opt-in: disabled by default
         assert config.multi_call_enabled is False
-        assert config.multi_call_count == 3
+        assert config.multi_call_count == 2
         assert config.confidence_threshold == 0.7
         assert config.outlier_detection is True
         assert config.outlier_std_threshold == 2.0
