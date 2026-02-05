@@ -218,6 +218,66 @@ class TestTemplateRegistryErrorHandling:
         assert len(registry.structure_presets) == 1
         assert "valid-preset" in registry.structure_presets
 
+    def test_non_dict_yaml_logs_error(self, tmp_path, caplog):
+        """Test that YAML files containing non-dict data log an error."""
+        structures_dir = tmp_path / "structures"
+        stories_dir = tmp_path / "stories"
+        structures_dir.mkdir()
+        stories_dir.mkdir()
+
+        # Create YAML file with a list instead of dict
+        (structures_dir / "list.yaml").write_text("- item1\n- item2", encoding="utf-8")
+
+        with caplog.at_level(logging.ERROR):
+            registry = TemplateRegistry(tmp_path)
+
+        assert "Failed to load structure preset" in caplog.text
+        assert len(registry.structure_presets) == 0
+
+    def test_unreadable_file_logs_error(self, tmp_path, caplog, monkeypatch):
+        """Test that unreadable files log an error."""
+        structures_dir = tmp_path / "structures"
+        stories_dir = tmp_path / "stories"
+        structures_dir.mkdir()
+        stories_dir.mkdir()
+
+        # Create a valid file
+        valid_data = {"id": "test", "name": "Test", "description": "Test"}
+        yaml_file = structures_dir / "test.yaml"
+        yaml_file.write_text(yaml.dump(valid_data), encoding="utf-8")
+
+        # Patch open to raise OSError
+        original_open = open
+
+        def mock_open(path, *args, **kwargs):
+            if "test.yaml" in str(path):
+                raise OSError("Permission denied")
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.open", mock_open)
+
+        with caplog.at_level(logging.ERROR):
+            registry = TemplateRegistry(tmp_path)
+
+        assert "Failed to load structure preset" in caplog.text
+        assert len(registry.structure_presets) == 0
+
+    def test_invalid_story_template_logs_error(self, tmp_path, caplog):
+        """Test that invalid story templates log an error."""
+        structures_dir = tmp_path / "structures"
+        stories_dir = tmp_path / "stories"
+        structures_dir.mkdir()
+        stories_dir.mkdir()
+
+        # Create invalid story template YAML
+        (stories_dir / "invalid.yaml").write_text("{invalid yaml", encoding="utf-8")
+
+        with caplog.at_level(logging.ERROR):
+            registry = TemplateRegistry(tmp_path)
+
+        assert "Failed to load story template" in caplog.text
+        assert len(registry.story_templates) == 0
+
 
 class TestTemplateDataIntegrity:
     """Tests for the integrity of the template data itself."""
