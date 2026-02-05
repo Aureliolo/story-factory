@@ -303,17 +303,18 @@ class TestProjectListCache:
             # First call at time 1000.0
             mock_time.time.return_value = 1000.0
             result1 = state.get_cached_projects(fetch_projects)
-            assert call_count == 1
+            initial_call_count = call_count
+            assert initial_call_count == 1
             assert result1[0]["id"] == "1"
 
             # Second call at 1.5s (within 2s TTL) - should return cached
             mock_time.time.return_value = 1001.5
             result2 = state.get_cached_projects(fetch_projects)
-            assert call_count == 1  # Still 1, cache hit
+            assert call_count == initial_call_count  # Same count, cache hit
             assert result2 is result1
 
             # Third call at 2.5s (beyond 2s TTL) - should refresh
             mock_time.time.return_value = 1002.5
             result3 = state.get_cached_projects(fetch_projects)
-            assert call_count == 2  # Incremented, cache miss
+            assert call_count == initial_call_count + 1  # Incremented, cache miss
             assert result3[0]["id"] == "2"

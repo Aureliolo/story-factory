@@ -483,7 +483,8 @@ class AppState:
                 return self._project_list_cache
 
             self._project_list_cache = fetch_fn()
-            self._project_list_cache_time = now
+            # Set timestamp AFTER fetch completes to avoid immediate expiration on slow fetches
+            self._project_list_cache_time = time.time()
             logger.debug(
                 "Refreshed project list cache with %d projects", len(self._project_list_cache)
             )

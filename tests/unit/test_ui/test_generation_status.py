@@ -62,7 +62,7 @@ class TestProgressValidation:
         status_component._progress_bar.update.assert_called()
 
     def test_invalid_progress_negative(self, status_component, caplog):
-        """Test that negative progress values are rejected with warning."""
+        """Test that negative progress values are clamped to 0 with warning."""
         event = MagicMock()
         event.message = "Error"
         event.phase = None
@@ -73,12 +73,13 @@ class TestProgressValidation:
         with caplog.at_level(logging.WARNING):
             status_component.update_from_event(event)
 
-        assert "Invalid progress value" in caplog.text
-        # Progress bar should not be updated with invalid value
-        status_component._progress_bar.update.assert_not_called()
+        assert "clamped" in caplog.text
+        # Progress bar should be updated with clamped value (0.0)
+        assert status_component._progress_bar.value == 0.0
+        status_component._progress_bar.update.assert_called()
 
     def test_invalid_progress_greater_than_one(self, status_component, caplog):
-        """Test that progress > 1.0 is rejected with warning."""
+        """Test that progress > 1.0 is clamped to 1 with warning."""
         event = MagicMock()
         event.message = "Error"
         event.phase = None
@@ -89,8 +90,10 @@ class TestProgressValidation:
         with caplog.at_level(logging.WARNING):
             status_component.update_from_event(event)
 
-        assert "Invalid progress value" in caplog.text
-        status_component._progress_bar.update.assert_not_called()
+        assert "clamped" in caplog.text
+        # Progress bar should be updated with clamped value (1.0)
+        assert status_component._progress_bar.value == 1.0
+        status_component._progress_bar.update.assert_called()
 
     def test_none_progress_no_update(self, status_component):
         """Test that None progress doesn't trigger update."""

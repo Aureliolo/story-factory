@@ -81,7 +81,7 @@ class Header:
 
         options = {p.id: p.name for p in projects}
         if not options:
-            options = {"": "No projects"}
+            options = {"": "No projects yet"}
 
         # Validate that current project_id still exists, clear if not
         current_value = self.state.project_id
