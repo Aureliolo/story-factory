@@ -663,15 +663,24 @@ async def check_contradiction(
     claim_a: dict[str, str],
     claim_b: dict[str, str],
 ) -> dict[str, Any] | None:
-    """Check if two claims contradict each other.
-
-    Args:
-        svc: WorldQualityService instance.
-        claim_a: First claim dict.
-        claim_b: Second claim dict.
-
+    """
+    Determine whether two extracted entity claims contradict each other.
+    
+    Analyzes Claim A and Claim B across logical, temporal, attribute, location, and relationship dimensions and returns a structured contradiction result when a contradiction is detected.
+    
+    Parameters:
+        claim_a (dict): Claim dictionary for the first entity. Expected keys: "entity_id" (optional), "entity_name", "entity_type", "claim".
+        claim_b (dict): Claim dictionary for the second entity. Expected keys: "entity_id" (optional), "entity_name", "entity_type", "claim".
+    
     Returns:
-        Contradiction dict if found, None otherwise.
+        dict | None: If a contradiction is detected, returns a dictionary with keys:
+            - "claim_a": original claim_a dict
+            - "claim_b": original claim_b dict
+            - "severity": severity level ("low", "medium", "high", or "critical")
+            - "explanation": textual explanation of the contradiction
+            - "resolution_suggestion": suggested way to resolve the contradiction
+            - "confidence": float between 0.0 and 1.0 indicating confidence level
+        Returns None if no contradiction is found or if analysis cannot be parsed.
     """
     prompt = f"""Analyze whether these two claims contradict each other.
 

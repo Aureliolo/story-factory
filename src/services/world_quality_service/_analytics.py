@@ -105,16 +105,16 @@ def log_refinement_analytics(
     quality_threshold: float | None = None,
     max_iterations: int | None = None,
 ) -> None:
-    """Log and persist refinement iteration analytics for a completed refinement history.
-
+    """
+    Record refinement iteration analytics for a completed RefinementHistory, log an informational summary, and persist extended scores and refinement metrics to the analytics database.
+    
     Parameters:
-        service: The WorldQualityService instance.
-        history: The refinement history for the entity being reported.
+        history: The RefinementHistory for the entity being reported.
         project_id: Project identifier under which analytics should be recorded.
         early_stop_triggered: True if the refinement loop stopped early.
         threshold_met: True if the configured quality threshold was reached.
-        quality_threshold: The numeric quality threshold used.
-        max_iterations: The configured maximum number of refinement iterations.
+        quality_threshold: The numeric quality threshold used, if any.
+        max_iterations: The configured maximum number of refinement iterations, if any.
     """
     analysis = history.analyze_improvement()
 

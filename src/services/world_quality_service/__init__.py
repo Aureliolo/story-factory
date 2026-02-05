@@ -220,11 +220,12 @@ class WorldQualityService:
     _format_properties = staticmethod(_format_properties)
 
     def __init__(self, settings: Settings, mode_service: ModelModeService):
-        """Initialize WorldQualityService.
-
-        Args:
-            settings: Application settings.
-            mode_service: Model mode service for model selection.
+        """
+        Create a WorldQualityService configured with application settings and a model mode service used for model resolution.
+        
+        Parameters:
+            settings (Settings): Application configuration and feature settings used by the service.
+            mode_service (ModelModeService): Service responsible for selecting and managing model modes.
         """
         logger.debug("Initializing WorldQualityService")
         self.settings = settings
@@ -261,7 +262,30 @@ class WorldQualityService:
         quality_threshold: float | None = None,
         max_iterations: int | None = None,
     ) -> None:
-        """Persist entity quality scores and refinement metrics to the analytics database."""
+        """
+        Persist entity quality scores and refinement metrics to the analytics database for later analysis.
+        
+        Parameters:
+            project_id (str): Project identifier associated with the entity.
+            entity_type (str): Type of the entity (e.g., "character", "faction").
+            entity_name (str): Name or unique identifier of the entity instance.
+            scores (dict[str, Any]): Raw quality scores or structured score breakdown for the entity.
+            iterations (int): Number of refinement iterations performed.
+            generation_time (float): Total generation/refinement time in seconds.
+            model_id (str | None): Identifier of the model used for generation or refinement, if available.
+            early_stop_triggered (bool): Whether the refinement loop stopped early due to a stopping condition.
+            threshold_met (bool): Whether a configured quality threshold was reached.
+            peak_score (float | None): Highest score observed during refinement.
+            final_score (float | None): Score observed at the final iteration.
+            score_progression (list[float] | None): Sequence of scores recorded across iterations.
+            consecutive_degradations (int): Number of consecutive iterations where score decreased.
+            best_iteration (int): Index of the iteration that produced the best score.
+            quality_threshold (float | None): Configured quality threshold used to determine success.
+            max_iterations (int | None): Maximum allowed iterations for the refinement loop.
+        
+        Notes:
+            This method records metrics for analytics and does not return a value.
+        """
         _record_entity_quality(
             self,
             project_id,
@@ -284,7 +308,12 @@ class WorldQualityService:
 
     @property
     def client(self) -> ollama.Client:
-        """Get or create Ollama client with scaled timeout based on model size."""
+        """
+        Provide an Ollama client configured with a timeout scaled to the writer model's size; creates and caches the client on first access.
+        
+        Returns:
+            ollama.Client: The cached or newly created Ollama client configured with the service host and a timeout derived from the writer model.
+        """
         if self._client is None:
             # Use writer model for timeout scaling since it's typically the largest
             writer_model = self.settings.get_model_for_agent("writer")
@@ -299,27 +328,69 @@ class WorldQualityService:
         return RefinementConfig.from_settings(self.settings)
 
     def get_judge_config(self) -> JudgeConsistencyConfig:
-        """Get judge consistency configuration from settings."""
+        """
+        Provide the judge consistency configuration derived from the service settings.
+        
+        Returns:
+            JudgeConsistencyConfig: Configuration for judge consistency constructed from the current settings.
+        """
         return JudgeConsistencyConfig.from_settings(self.settings)
 
     def _resolve_model_for_role(self, agent_role: str) -> str:
-        """Resolve the model for an agent role, respecting Settings hierarchy."""
+        """
+        Resolve which model should be used for the given agent role, honoring the Settings hierarchy.
+        
+        Parameters:
+            agent_role (str): Agent role name (e.g., "writer", "judge") to resolve a model for.
+        
+        Returns:
+            model (str): Identifier of the model to use for the specified role.
+        """
         return _resolve_model_for_role(self, agent_role)
 
     def invalidate_model_cache(self) -> None:
-        """Invalidate resolved model storage."""
+        """
+        Clear cached model resolution mappings.
+        
+        Forces subsequent model-resolution calls to recompute models instead of using cached results.
+        """
         self._model_cache.invalidate()
 
     def _get_creator_model(self, entity_type: str | None = None) -> str:
-        """Get the model to use for creative generation."""
+        """
+        Resolve the creator model identifier to use for a given entity type.
+        
+        Parameters:
+            entity_type (str | None): Optional entity type (e.g., "character", "faction", "location") used to select a specialized creator model. If None, the default creator model is returned.
+        
+        Returns:
+            str: The model name or identifier to use for creative generation.
+        """
         return _get_creator_model(self, entity_type)
 
     def _get_judge_model(self, entity_type: str | None = None) -> str:
-        """Get the model to use for quality judgment."""
+        """
+        Resolve the judge model name to use for a given entity type.
+        
+        Parameters:
+            entity_type (str | None): Optional entity type to select a specialized judge model; if None a default judge model is chosen.
+        
+        Returns:
+            model_name (str): The resolved judge model identifier.
+        """
         return _get_judge_model(self, entity_type)
 
     def _format_existing_names_warning(self, existing_names: list[str], entity_type: str) -> str:
-        """Format existing names with explicit DO NOT examples for duplicate prevention."""
+        """
+        Produce a warning string listing existing names and explicit "DO NOT" examples to discourage duplicate names for the given entity type.
+        
+        Parameters:
+        	existing_names (list[str]): Names already present for the entity type.
+        	entity_type (str): Human-readable entity type label (e.g., "character", "location") used in the warning text.
+        
+        Returns:
+        	warning (str): A formatted warning message that enumerates existing names and includes clear "DO NOT" duplicate examples.
+        """
         return _format_existing_names_warning(existing_names, entity_type)
 
     def _log_refinement_analytics(
@@ -332,7 +403,17 @@ class WorldQualityService:
         quality_threshold: float | None = None,
         max_iterations: int | None = None,
     ) -> None:
-        """Log and persist refinement iteration analytics for a completed refinement history."""
+        """
+        Log and persist analytics about a completed refinement history.
+        
+        Parameters:
+            history (RefinementHistory): The refinement history containing iteration records and metrics.
+            project_id (str): Identifier of the project or story associated with the refinement.
+            early_stop_triggered (bool, optional): Whether the refinement stopped early due to a stopping condition.
+            threshold_met (bool, optional): Whether the target quality threshold was reached during refinement.
+            quality_threshold (float | None, optional): The quality threshold that was used, if any.
+            max_iterations (int | None, optional): The maximum number of refinement iterations allowed, if configured.
+        """
         _log_refinement_analytics(
             self,
             history,

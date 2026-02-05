@@ -242,7 +242,15 @@ class BaseQualityScores(BaseModel, ABC):
 
     @abstractmethod
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        List dimension names whose scores are below the given threshold.
+        
+        Parameters:
+            threshold (float): Score cutoff; dimensions with values less than `threshold` are considered weak.
+        
+        Returns:
+            list[str]: Names of dimensions with scores below `threshold`.
+        """
 
 
 class RefinementConfig(BaseModel):

@@ -255,7 +255,11 @@ class Chapter(BaseModel):
         return None
 
     def update_chapter_word_count(self) -> None:
-        """Update chapter word count from scenes or direct content."""
+        """
+        Update the chapter's word_count based on available data.
+        
+        If the chapter has scenes, sets word_count to the sum of their word_count values. If there are no scenes but content is present, sets word_count to the number of words in the content. If neither scenes nor content are present, sets word_count to 0.
+        """
         if self.scenes:
             # Calculate from scenes
             total = sum(scene.word_count for scene in self.scenes)
@@ -268,10 +272,11 @@ class Chapter(BaseModel):
 
     @property
     def version_manager(self) -> ChapterVersionManager:
-        """Get the version manager for this chapter.
-
+        """
+        Lazily create and return a ChapterVersionManager bound to this chapter.
+        
         Returns:
-            ChapterVersionManager instance for version operations (cached).
+            ChapterVersionManager: The cached manager instance used for chapter version operations.
         """
         # Cache the manager to avoid creating new instances on every access
         cache_key = "_version_manager_cache"
@@ -283,24 +288,26 @@ class Chapter(BaseModel):
         return manager
 
     def save_current_as_version(self, feedback: str = "") -> str:
-        """Save the current chapter content as a new version.
-
-        Args:
-            feedback: Optional feedback that prompted this version.
-
+        """
+        Save the chapter's current content as a new version.
+        
+        Parameters:
+            feedback (str): Optional feedback associated with this version.
+        
         Returns:
-            The ID of the newly created version.
+            str: The ID of the newly created version.
         """
         return self.version_manager.save_version(feedback)
 
     def rollback_to_version(self, version_id: str) -> bool:
-        """Rollback to a previous version.
-
-        Args:
-            version_id: The ID of the version to rollback to.
-
+        """
+        Restore the chapter to the specified saved version.
+        
+        Parameters:
+            version_id (str): ID of the saved version to restore.
+        
         Returns:
-            True if successful, False if version not found.
+            bool: `True` if the rollback succeeded, `False` if the specified version was not found.
         """
         return self.version_manager.rollback(version_id)
 
@@ -316,22 +323,24 @@ class Chapter(BaseModel):
         return self.version_manager.get_version(version_id)
 
     def get_current_version(self) -> ChapterVersion | None:
-        """Get the current version.
-
+        """
+        Retrieve the chapter's currently active version.
+        
         Returns:
-            The current version if it exists, None otherwise.
+            The active ChapterVersion if present, otherwise None.
         """
         return self.version_manager.get_current()
 
     def compare_versions(self, version_id_a: str, version_id_b: str) -> dict[str, Any]:
-        """Compare two versions.
-
-        Args:
-            version_id_a: First version ID.
-            version_id_b: Second version ID.
-
+        """
+        Produce a comparison report between two saved chapter versions.
+        
+        Parameters:
+            version_id_a (str): ID of the first version to compare.
+            version_id_b (str): ID of the second version to compare.
+        
         Returns:
-            Dictionary with comparison data including word count differences.
+            comparison (dict[str, Any]): Mapping containing comparison details such as 'word_count_a', 'word_count_b', 'word_count_diff', and any content or metadata diffs.
         """
         return self.version_manager.compare(version_id_a, version_id_b)
 

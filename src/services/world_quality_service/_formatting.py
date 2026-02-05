@@ -14,17 +14,15 @@ def calculate_eta(
     completed_times: list[float],
     remaining_count: int,
 ) -> float | None:
-    """Calculate ETA using exponential moving average.
-
-    Uses EMA with alpha=0.3 to weight recent entity generation times more heavily,
-    providing more accurate estimates as we learn the actual generation speed.
-
-    Args:
-        completed_times: List of completion times for previous entities (in seconds).
-        remaining_count: Number of entities remaining to generate.
-
+    """
+    Estimate remaining time for remaining entities using an exponential moving average of past completion times.
+    
+    Parameters:
+        completed_times (list[float]): Sequence of past completion times in seconds (ordered from earliest to latest).
+        remaining_count (int): Number of entities still to generate.
+    
     Returns:
-        Estimated remaining time in seconds, or None if no data available.
+        float | None: Estimated remaining time in seconds, or `None` if `completed_times` is empty or `remaining_count` is not greater than zero.
     """
     if not completed_times or remaining_count <= 0:
         logger.debug(
@@ -94,14 +92,15 @@ def format_properties(properties: list[Any] | Any | None) -> str:
 
 
 def format_existing_names_warning(existing_names: list[str], entity_type: str) -> str:
-    """Format existing names with explicit DO NOT examples for consistent duplicate prevention.
-
+    """
+    Constructs a prompt-friendly warning block that lists existing names for an entity type and provides explicit "DO NOT" example variations.
+    
     Parameters:
-        existing_names: Existing entity names to avoid.
-        entity_type: Type of entity (concept, item, location, faction) for context.
-
+        existing_names (list[str]): Existing names to include in the warning; if empty, the returned string indicates this is the first entity of the given type.
+        entity_type (str): Noun describing the entity kind (e.g., "concept", "item", "location", "faction") used in headings and directive text.
+    
     Returns:
-        Formatted warning string with examples of what NOT to use.
+        str: A multi-line string containing a structured prompt block with the existing names and example names to avoid, or a short message indicating no existing names.
     """
     if not existing_names:
         logger.debug("Formatting existing %s names: none provided", entity_type)

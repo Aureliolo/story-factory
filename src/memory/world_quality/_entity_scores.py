@@ -27,11 +27,28 @@ class CharacterQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Mean of the character's five quality dimensions.
+        
+        Returns:
+            average (float): Mean of `depth`, `goal_clarity` (alias `goals`), `flaws`, `uniqueness`, and `arc_potential`.
+        """
         return (self.depth + self.goals + self.flaws + self.uniqueness + self.arc_potential) / 5.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Serialize the character quality scores into a dictionary formatted for storage in entity attributes.
+        
+        Returns:
+            dict[str, float | str]: Mapping with keys:
+                - "depth": float score for depth
+                - "goal_clarity": float score for goals
+                - "flaws": float score for flaws
+                - "uniqueness": float score for uniqueness
+                - "arc_potential": float score for arc potential
+                - "average": float mean of the scored dimensions
+                - "feedback": string feedback associated with the scores
+        """
         return {
             "depth": self.depth,
             "goal_clarity": self.goals,
@@ -43,7 +60,15 @@ class CharacterQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        Identify character quality dimensions whose scores are below the given threshold.
+        
+        Parameters:
+        	threshold (float): Score threshold; dimensions with values less than this are considered weak. Defaults to 7.0.
+        
+        Returns:
+        	weak_dimensions (list[str]): List of dimension names among "depth", "goal_clarity", "flaws", "uniqueness", and "arc_potential" whose scores are below the threshold.
+        """
         weak = []
         if self.depth < threshold:
             weak.append("depth")
@@ -73,13 +98,23 @@ class LocationQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Compute the mean of the location's quality dimensions.
+        
+        Returns:
+            average (float): Mean of `atmosphere`, `significance`, `story_relevance`, and `distinctiveness`.
+        """
         return (
             self.atmosphere + self.significance + self.story_relevance + self.distinctiveness
         ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Produce a dictionary of location quality dimensions and associated metadata keyed for storage.
+        
+        Returns:
+            dict[str, float | str]: Dictionary containing 'atmosphere', 'narrative_significance' (alias for significance), 'story_relevance', 'distinctiveness', 'average', and 'feedback'.
+        """
         return {
             "atmosphere": self.atmosphere,
             "narrative_significance": self.significance,
@@ -90,7 +125,15 @@ class LocationQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        Identify location quality dimensions whose scores are below the given threshold.
+        
+        Parameters:
+            threshold (float): The cutoff value; a dimension is considered weak if its score is less than this threshold.
+        
+        Returns:
+            list[str]: Names of dimensions with scores below `threshold`. Possible names: "atmosphere", "narrative_significance", "story_relevance", "distinctiveness".
+        """
         weak = []
         if self.atmosphere < threshold:
             weak.append("atmosphere")
@@ -116,13 +159,29 @@ class FactionQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Compute the mean of the faction's four quality dimensions.
+        
+        Returns:
+            average (float): Mean of coherence, influence, conflict_potential, and distinctiveness.
+        """
         return (
             self.coherence + self.influence + self.conflict_potential + self.distinctiveness
         ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Return a mapping of this faction's quality dimensions, computed average, and feedback suitable for storage.
+        
+        Returns:
+            dict[str, float | str]: Dictionary with keys:
+                - "coherence": coherence score (0–10)
+                - "influence": influence score (0–10)
+                - "conflict_potential": conflict potential score (0–10)
+                - "distinctiveness": distinctiveness score (0–10)
+                - "average": mean of the four dimension scores
+                - "feedback": human-readable feedback string
+        """
         return {
             "coherence": self.coherence,
             "influence": self.influence,
@@ -133,7 +192,15 @@ class FactionQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        Identify which faction quality dimensions score below a given threshold.
+        
+        Parameters:
+            threshold (float): Numeric cutoff (0-10) used to classify a dimension as weak. Defaults to 7.0.
+        
+        Returns:
+            list[str]: Names of dimensions whose values are less than `threshold`.
+        """
         weak = []
         if self.coherence < threshold:
             weak.append("coherence")
@@ -161,13 +228,24 @@ class ItemQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Compute the mean quality score across the item's four dimensions.
+        
+        Returns:
+            float: Mean of `significance`, `uniqueness`, `narrative_potential`, and `integration`.
+        """
         return (
             self.significance + self.uniqueness + self.narrative_potential + self.integration
         ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Serialize the item's quality scores into a dictionary formatted for storing on an entity.
+        
+        Returns:
+            dict[str, float | str]: Mapping with keys "story_significance", "uniqueness", "narrative_potential",
+            "integration", "average", and "feedback" containing the corresponding score values.
+        """
         return {
             "story_significance": self.significance,
             "uniqueness": self.uniqueness,
@@ -178,7 +256,15 @@ class ItemQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        List which item quality dimensions fall below a threshold.
+        
+        Parameters:
+        	threshold (float): Cutoff value; any dimension with a score less than this is considered weak. Defaults to 7.0.
+        
+        Returns:
+        	weak (list[str]): Names of dimensions whose scores are below `threshold`. Possible names: "story_significance", "uniqueness", "narrative_potential", "integration".
+        """
         weak = []
         if self.significance < threshold:
             weak.append("story_significance")
@@ -204,11 +290,21 @@ class ConceptQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Return the mean of the concept's relevance, depth, manifestation, and resonance scores.
+        
+        Returns:
+            The average score (0 to 10) across relevance, depth, manifestation, and resonance.
+        """
         return (self.relevance + self.depth + self.manifestation + self.resonance) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Return a mapping of concept quality dimensions and metadata suitable for storing on an entity.
+        
+        Returns:
+            dict[str, float | str]: Dictionary with keys 'relevance', 'depth', 'manifestation', 'resonance', 'average', and 'feedback' mapping to their corresponding values.
+        """
         return {
             "relevance": self.relevance,
             "depth": self.depth,
@@ -219,7 +315,15 @@ class ConceptQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        Identify concept quality dimensions whose scores are below the given threshold.
+        
+        Parameters:
+            threshold (float): Cutoff value; any dimension with a score less than this is considered weak. Defaults to 7.0.
+        
+        Returns:
+            weak_dimensions (list[str]): List of dimension names ("relevance", "depth", "manifestation", "resonance") whose values are below `threshold`.
+        """
         weak = []
         if self.relevance < threshold:
             weak.append("relevance")

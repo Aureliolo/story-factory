@@ -22,11 +22,21 @@ class RelationshipQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Compute the arithmetic mean of the relationship quality dimensions.
+        
+        Returns:
+            float: The average of `tension`, `dynamics`, `story_potential`, and `authenticity`.
+        """
         return (self.tension + self.dynamics + self.story_potential + self.authenticity) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Serialize relationship quality scores and feedback into a dictionary for storage.
+        
+        Returns:
+            dict: Mapping with keys "tension", "dynamics", "story_potential", "authenticity" (float scores), "average" (float mean), and "feedback" (str).
+        """
         return {
             "tension": self.tension,
             "dynamics": self.dynamics,
@@ -37,7 +47,15 @@ class RelationshipQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        Identify score dimensions with values less than the given threshold.
+        
+        Parameters:
+            threshold (float): Cutoff value; any dimension with a score less than this value is considered weak. Defaults to 7.0.
+        
+        Returns:
+            list[str]: Names of the dimensions whose scores are less than the threshold.
+        """
         weak = []
         if self.tension < threshold:
             weak.append("tension")
@@ -63,13 +81,23 @@ class PlotQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Compute the mean of the plot quality dimensions.
+        
+        Returns:
+            average (float): The average of coherence, tension_arc, character_integration, and originality.
+        """
         return (
             self.coherence + self.tension_arc + self.character_integration + self.originality
         ) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Serialize the plot quality scores and metadata into a dictionary for storage.
+        
+        Returns:
+            dict[str, float | str]: Dictionary containing `coherence`, `tension_arc`, `character_integration`, `originality`, and `average` as floats, and `feedback` as a string.
+        """
         return {
             "coherence": self.coherence,
             "tension_arc": self.tension_arc,
@@ -80,7 +108,15 @@ class PlotQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        Identify plot quality dimensions with scores below a given threshold.
+        
+        Parameters:
+            threshold (float): Score cutoff; any dimension with a value less than this threshold is considered weak.
+        
+        Returns:
+            list[str]: Names of dimensions (from 'coherence', 'tension_arc', 'character_integration', 'originality') whose scores are less than `threshold`.
+        """
         weak = []
         if self.coherence < threshold:
             weak.append("coherence")
@@ -106,11 +142,24 @@ class ChapterQualityScores(BaseQualityScores):
 
     @property
     def average(self) -> float:
-        """Calculate average score across all dimensions."""
+        """
+        Compute the mean score across the chapter's four quality dimensions.
+        
+        Returns:
+            float: Arithmetic mean of `purpose`, `pacing`, `hook`, and `coherence`.
+        """
         return (self.purpose + self.pacing + self.hook + self.coherence) / 4.0
 
     def to_dict(self) -> dict[str, float | str]:
-        """Convert to dictionary for storage in entity attributes."""
+        """
+        Serialize the quality scores and feedback into a dictionary suitable for storage.
+        
+        Returns:
+            dict[str, float | str]: Mapping with keys:
+                - "purpose", "pacing", "hook", "coherence": individual dimension scores (float)
+                - "average": mean score of the dimensions (float)
+                - "feedback": textual feedback (str)
+        """
         return {
             "purpose": self.purpose,
             "pacing": self.pacing,
@@ -121,7 +170,15 @@ class ChapterQualityScores(BaseQualityScores):
         }
 
     def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
-        """Return list of dimensions below threshold."""
+        """
+        Identify score dimensions with values below a given threshold.
+        
+        Parameters:
+        	threshold (float): Cutoff value; any dimension with a score less than this value is considered weak. Defaults to 7.0.
+        
+        Returns:
+        	weak_dimensions (list[str]): Names of dimensions whose scores are less than `threshold`.
+        """
         weak = []
         if self.purpose < threshold:
             weak.append("purpose")

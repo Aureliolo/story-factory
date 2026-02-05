@@ -35,13 +35,14 @@ class ChapterVersionManager:
         self._chapter = chapter
 
     def save_version(self, feedback: str = "") -> str:
-        """Save the current chapter content as a new version.
-
-        Args:
-            feedback: Optional feedback that prompted this version.
-
+        """
+        Create and store a new ChapterVersion capturing the chapter's current content and word count.
+        
+        Parameters:
+            feedback (str): Optional feedback to record on the new version.
+        
         Returns:
-            The ID of the newly created version.
+            version_id (str): The ID of the newly created version.
         """
         # Import here to avoid circular imports
         from src.memory.story_state import ChapterVersion
@@ -76,13 +77,14 @@ class ChapterVersionManager:
         return version_id
 
     def rollback(self, version_id: str) -> bool:
-        """Rollback to a previous version.
-
-        Args:
-            version_id: The ID of the version to rollback to.
-
+        """
+        Rollback the chapter to a specified version.
+        
+        Parameters:
+            version_id (str): ID of the version to restore.
+        
         Returns:
-            True if successful, False if version not found.
+            bool: True if the rollback was performed, False if the version was not found.
         """
         # Find the version
         target_version = self.get_version(version_id)
@@ -114,13 +116,14 @@ class ChapterVersionManager:
         return True
 
     def get_version(self, version_id: str) -> ChapterVersion | None:
-        """Get a version by its ID.
-
-        Args:
-            version_id: The version ID to find.
-
+        """
+        Retrieve a chapter version by its id.
+        
+        Parameters:
+            version_id (str): The unique identifier of the version to retrieve.
+        
         Returns:
-            The version if found, None otherwise.
+            ChapterVersion | None: `ChapterVersion` if found, `None` otherwise.
         """
         return next(
             (v for v in self._chapter.versions if v.id == version_id),
@@ -138,15 +141,19 @@ class ChapterVersionManager:
         return None
 
     def compare(self, version_id_a: str, version_id_b: str) -> dict[str, Any]:
-        """Compare two versions.
-
-        Args:
-            version_id_a: First version ID.
-            version_id_b: Second version ID.
-
+        """
+        Produce a structured comparison of two chapter versions identified by their IDs.
+        
+        Parameters:
+            version_id_a (str): ID of the first version to compare.
+            version_id_b (str): ID of the second version to compare.
+        
         Returns:
-            Dictionary with comparison data including word count differences.
-            If either version is not found, returns {"error": "..."} instead.
+            dict: If both versions are found, a dictionary containing:
+                - version_a: dict with keys `id`, `version_number`, `content`, `word_count`, `created_at` (ISO string), and `feedback`.
+                - version_b: dict with the same keys for the second version.
+                - word_count_diff: integer equal to `version_b.word_count - version_a.word_count`.
+            If either version is not found, returns {"error": "One or both versions not found"}.
         """
         version_a = self.get_version(version_id_a)
         version_b = self.get_version(version_id_b)
@@ -187,10 +194,11 @@ class ChapterVersionManager:
 
     @property
     def all_versions(self) -> list[ChapterVersion]:
-        """Get all versions.
-
+        """
+        Return all saved versions for the chapter.
+        
         Returns:
-            List of all chapter versions.
+            list[ChapterVersion]: The list of ChapterVersion instances stored on the chapter (newest appended last).
         """
         logger.debug(
             "Retrieving all %d versions for chapter %d",

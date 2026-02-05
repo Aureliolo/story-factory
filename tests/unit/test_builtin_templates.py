@@ -27,7 +27,11 @@ class TestBuiltinTemplatesExports:
         assert "save-the-cat" in BUILTIN_STRUCTURE_PRESETS
 
     def test_builtin_story_templates_loaded(self):
-        """Test that built-in story templates are loaded."""
+        """
+        Verify the module exposes the expected built-in story template IDs.
+        
+        Asserts that exactly 5 built-in story templates are loaded and that the IDs "mystery-detective", "romance-contemporary", "scifi-space-opera", "fantasy-epic", and "thriller-action" are present.
+        """
         assert len(BUILTIN_STORY_TEMPLATES) == 5
         assert "mystery-detective" in BUILTIN_STORY_TEMPLATES
         assert "romance-contemporary" in BUILTIN_STORY_TEMPLATES
@@ -111,7 +115,9 @@ class TestTemplateRegistry:
         assert template.genre == "Mystery"
 
     def test_get_story_template_not_found(self):
-        """Test getting a non-existent story template returns None."""
+        """
+        Verify that requesting a story template with a nonexistent ID yields no template.
+        """
         registry = TemplateRegistry()
         template = registry.get_story_template("non-existent")
         assert template is None
@@ -182,7 +188,11 @@ class TestTemplateRegistryErrorHandling:
             TemplateRegistry(tmp_path)
 
     def test_invalid_model_data_raises_error(self, tmp_path):
-        """Test that valid YAML with invalid model data raises an error."""
+        """
+        Ensures a TemplateRegistryError is raised when a YAML file is syntactically valid but omits required model fields.
+        
+        Creates a structures directory with a YAML file missing required fields and asserts that initializing TemplateRegistry reports a failure to load the invalid template.
+        """
         structures_dir = tmp_path / "structures"
         stories_dir = tmp_path / "stories"
         structures_dir.mkdir()
@@ -238,6 +248,20 @@ class TestTemplateRegistryErrorHandling:
         original_open = open
 
         def mock_open(path, *args, **kwargs):
+            """
+            A patched file opener that simulates an unreadable file for paths containing "test.yaml".
+            
+            Parameters:
+                path (str | os.PathLike): File path to open; if the path string contains "test.yaml" an OSError is raised.
+                *args: Positional arguments forwarded to the real open.
+                **kwargs: Keyword arguments forwarded to the real open.
+            
+            Returns:
+                file object: The result of calling the original open for the given path and arguments.
+            
+            Raises:
+                OSError: Always raised with message "Permission denied" when `path` contains "test.yaml".
+            """
             if "test.yaml" in str(path):
                 raise OSError("Permission denied")
             return original_open(path, *args, **kwargs)
