@@ -1,6 +1,6 @@
 """Tests for WorldQualityService model resolution caching.
 
-Verifies that model selections are stored to avoid redundant tier score calculations
+Verifies that model selections are cached to avoid redundant tier score calculations
 during world building operations.
 """
 
@@ -62,14 +62,6 @@ def service(settings, mock_mode_service):
     # Mock analytics_db to prevent tests from writing to real database
     svc._analytics_db = MagicMock()
     return svc
-
-
-def _patch_cache_deps():
-    """Create patches for cache dependencies (VRAM and installed models)."""
-    return [
-        patch("src.settings.get_available_vram", return_value=16),
-        patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 8.0}),
-    ]
 
 
 class TestCreatorModelCaching:
@@ -231,6 +223,8 @@ class TestCacheInvalidation:
 
         # Simulate VRAM change (e.g., GPU load changed)
         mock_vram.return_value = 8
+        # Clear env context cache to force refresh (simulating TTL expiration)
+        service._model_cache._env_context_cache = None
 
         # Next access should detect context change
         service._get_creator_model("character")
@@ -386,6 +380,9 @@ class TestCacheInvalidation:
             service._get_creator_model("character")
             original_context = service._model_cache._resolution_context
 
+        # Clear env context cache to force refresh (simulating TTL expiration)
+        service._model_cache._env_context_cache = None
+
         # Simulate new model installed
         with patch(
             "src.settings.get_installed_models_with_sizes",
@@ -521,3 +518,61 @@ class TestThreadSafety:
         assert len(errors) == 0
         # All threads should have gotten results
         assert len(results) == len(entity_types)
+        # Verify all threads for same entity type got same model (cache consistency)
+        by_type: dict[str, str] = {}
+        for entity_type, model in results:
+            if entity_type not in by_type:
+                by_type[entity_type] = model
+            else:
+                assert by_type[entity_type] == model, f"Inconsistent model for {entity_type}"
+
+
+class TestEnvironmentContextCaching:
+    """Tests for TTL-based environment context caching."""
+
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 8.0})
+    @patch("src.settings.get_available_vram", return_value=16)
+    def test_env_context_cached_within_ttl(self, mock_vram, mock_models, service):
+        """Environment context is cached and not re-fetched within TTL."""
+        # First access - should fetch environment context
+        service._get_creator_model("character")
+        initial_vram_calls = mock_vram.call_count
+        initial_models_calls = mock_models.call_count
+
+        # Second access within TTL - should use cached environment context
+        service._get_creator_model("faction")
+
+        # Subprocess mocks should NOT be called again (cached)
+        assert mock_vram.call_count == initial_vram_calls
+        assert mock_models.call_count == initial_models_calls
+
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 8.0})
+    @patch("src.settings.get_available_vram", return_value=16)
+    @patch("src.services.world_quality_service._model_cache._ENV_CONTEXT_TTL_SECONDS", 0)
+    def test_env_context_refreshed_after_ttl(self, mock_vram, mock_models, service):
+        """Environment context is refreshed after TTL expires."""
+        # First access - should fetch environment context
+        service._get_creator_model("character")
+        initial_vram_calls = mock_vram.call_count
+        initial_models_calls = mock_models.call_count
+
+        # With TTL=0, next access should refresh environment context
+        service._get_creator_model("faction")
+
+        # Subprocess mocks should be called again (TTL expired)
+        assert mock_vram.call_count > initial_vram_calls
+        assert mock_models.call_count > initial_models_calls
+
+    @patch("src.settings.get_installed_models_with_sizes", return_value={"test-model:8b": 8.0})
+    @patch("src.settings.get_available_vram", return_value=16)
+    def test_explicit_invalidation_clears_env_context_cache(self, mock_vram, mock_models, service):
+        """Explicit invalidation clears environment context cache too."""
+        # First access - should fetch and cache environment context
+        service._get_creator_model("character")
+
+        # Explicitly invalidate
+        service.invalidate_model_cache()
+
+        # Verify env context cache was cleared
+        assert service._model_cache._env_context_cache is None
+        assert service._model_cache._env_context_timestamp == 0.0

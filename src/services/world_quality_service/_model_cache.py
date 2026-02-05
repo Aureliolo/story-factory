@@ -7,11 +7,17 @@ installed models change.
 
 import logging
 import threading
+import time
 
 from src.services.model_mode_service import ModelModeService
 from src.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+# Time-to-live for environment context cache (VRAM and installed models)
+# These checks involve subprocess calls (nvidia-smi, ollama list), so we
+# cache them briefly to avoid overhead on every cache access.
+_ENV_CONTEXT_TTL_SECONDS = 1.0
 
 
 class ModelResolutionCache:
@@ -38,6 +44,39 @@ class ModelResolutionCache:
         self._resolution_context: tuple | None = None
         self._warned_conflicts: set[str] = set()
         self._lock = threading.RLock()
+        # Environment context cache (VRAM + installed models) with TTL
+        self._env_context_cache: tuple[int, tuple] | None = None
+        self._env_context_timestamp: float = 0.0
+
+    def _get_env_context(self) -> tuple[int, tuple]:
+        """Get environment context (VRAM and installed models) with caching.
+
+        Subprocess calls to nvidia-smi and ollama are expensive, so we cache
+        the results for a short duration to avoid overhead on every cache access.
+
+        Returns:
+            Tuple of (available_vram, installed_models_key).
+
+        Note: This method assumes the caller holds the lock.
+        """
+        from src.settings import get_available_vram, get_installed_models_with_sizes
+
+        now = time.monotonic()
+        if (
+            self._env_context_cache is None
+            or (now - self._env_context_timestamp) > _ENV_CONTEXT_TTL_SECONDS
+        ):
+            current_vram = get_available_vram()
+            installed_models_key = tuple(sorted(get_installed_models_with_sizes().items()))
+            self._env_context_cache = (current_vram, installed_models_key)
+            self._env_context_timestamp = now
+            logger.debug(
+                "Refreshed environment context (vram=%s, models=%d)",
+                current_vram,
+                len(installed_models_key),
+            )
+
+        return self._env_context_cache
 
     def _check_context(self) -> None:
         """Invalidate cache if mode/VRAM/settings/models context changed.
@@ -49,10 +88,10 @@ class ModelResolutionCache:
 
         Note: This method assumes the caller holds the lock.
         """
-        from src.settings import get_available_vram, get_installed_models_with_sizes
-
         current_mode = self._mode_service.get_current_mode()
-        current_vram = get_available_vram()
+
+        # Get environment context with TTL caching to avoid subprocess overhead
+        current_vram, installed_models_key = self._get_env_context()
 
         # Include model settings in context to detect user configuration changes
         settings_key = (
@@ -61,9 +100,6 @@ class ModelResolutionCache:
             tuple(sorted(self._settings.agent_models.items())),
             tuple(sorted((k, tuple(v)) for k, v in self._settings.custom_model_tags.items())),
         )
-
-        # Include installed models to detect when models are added/removed
-        installed_models_key = tuple(sorted(get_installed_models_with_sizes().items()))
 
         current_context = (
             current_mode.id,
@@ -98,9 +134,12 @@ class ModelResolutionCache:
             self._resolved_judge_models.clear()
             self._warned_conflicts.clear()
             self._resolution_context = None
+            # Also clear environment context cache to force fresh check
+            self._env_context_cache = None
+            self._env_context_timestamp = 0.0
 
     def get_creator_model(self, role: str) -> str | None:
-        """Get stored creator model for a role, if cached.
+        """Get cached creator model for a role, if available.
 
         Args:
             role: The agent role (writer, architect, etc.).
@@ -123,13 +162,17 @@ class ModelResolutionCache:
         Args:
             role: The agent role.
             model: The resolved model ID.
+
+        Note: _check_context is not called here intentionally. If context changed
+        between get (cache miss) and store, the entry may be stale, but the next
+        get call will detect the context change and clear the cache.
         """
         with self._lock:
             self._resolved_creator_models[role] = model
             logger.debug("Stored creator model '%s' for role=%s", model, role)
 
     def get_judge_model(self, role: str) -> str | None:
-        """Get stored judge model for a role, if cached.
+        """Get cached judge model for a role, if available.
 
         Args:
             role: The agent role (judge, etc.).
@@ -152,6 +195,10 @@ class ModelResolutionCache:
         Args:
             role: The agent role.
             model: The resolved model ID.
+
+        Note: _check_context is not called here intentionally. If context changed
+        between get (cache miss) and store, the entry may be stale, but the next
+        get call will detect the context change and clear the cache.
         """
         with self._lock:
             self._resolved_judge_models[role] = model
