@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 def _subsection_header(title: str, icon: str) -> None:
-    """Build a compact subsection header with icon."""
+    """Build a compact subsection header with icon.
+
+    Args:
+        title: Text label for the subsection header.
+        icon: Name of the Material icon to display.
+    """
     with ui.row().classes("items-center gap-2 mb-2"):
         ui.icon(icon, size="xs").classes("text-gray-500")
         ui.label(title).classes("text-sm font-medium")
@@ -601,10 +606,8 @@ def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
     Returns:
         Dictionary mapping relationship type to display label.
     """
-    # Start with known relationship types from RELATION_CONFLICT_MAPPING
-    all_types = set(RELATION_CONFLICT_MAPPING.keys())
-    # Include any existing user-configured types (prevents data loss)
-    all_types.update(current_types)
+    # Merge known types from RELATION_CONFLICT_MAPPING with user-configured types
+    all_types = set(RELATION_CONFLICT_MAPPING.keys()) | set(current_types)
     return {rel_type: rel_type.replace("_", " ").title() for rel_type in sorted(all_types)}
 
 
