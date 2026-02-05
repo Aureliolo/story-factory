@@ -175,10 +175,10 @@ class FactionQualityScores(BaseQualityScores):
 
         Returns:
             dict[str, float | str]: Dictionary with keys:
-                - "coherence": coherence score (0–10)
-                - "influence": influence score (0–10)
-                - "conflict_potential": conflict potential score (0–10)
-                - "distinctiveness": distinctiveness score (0–10)
+                - "coherence": coherence score (0-10)
+                - "influence": influence score (0-10)
+                - "conflict_potential": conflict potential score (0-10)
+                - "distinctiveness": distinctiveness score (0-10)
                 - "average": mean of the four dimension scores
                 - "feedback": human-readable feedback string
         """
