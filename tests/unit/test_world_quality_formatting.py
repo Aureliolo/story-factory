@@ -131,3 +131,9 @@ class TestFormatExistingNamesWarning:
         for entity_type in ["faction", "item", "concept"]:
             result = format_existing_names_warning(["Test"], entity_type)
             assert entity_type.upper() in result
+
+    def test_xml_tags_wrap_content(self):
+        """Test that XML tags are added for prompt injection protection."""
+        result = format_existing_names_warning(["Alice"], "character")
+        assert result.startswith("<existing-characters>")
+        assert result.endswith("</existing-characters>")

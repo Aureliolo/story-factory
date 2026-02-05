@@ -27,13 +27,25 @@ def calculate_eta(
         Estimated remaining time in seconds, or None if no data available.
     """
     if not completed_times or remaining_count <= 0:
+        logger.debug(
+            "calculate_eta: no estimate (completed_times=%d, remaining=%d)",
+            len(completed_times),
+            remaining_count,
+        )
         return None
     # EMA with alpha=0.3 to weight recent times more heavily
     alpha = 0.3
     avg = completed_times[0]
     for t in completed_times[1:]:
         avg = alpha * t + (1 - alpha) * avg
-    return avg * remaining_count
+    eta = avg * remaining_count
+    logger.debug(
+        "calculate_eta: avg=%.2fs, remaining=%d, eta=%.2fs",
+        avg,
+        remaining_count,
+        eta,
+    )
+    return eta
 
 
 def format_properties(properties: list[Any] | Any | None) -> str:
@@ -110,10 +122,12 @@ def format_existing_names_warning(existing_names: list[str], entity_type: str) -
 
     logger.debug("Formatted %d existing %s names for prompt", len(existing_names), entity_type)
 
-    return f"""EXISTING {entity_type.upper()}S (DO NOT DUPLICATE OR CREATE SIMILAR NAMES):
+    return f"""<existing-{entity_type}s>
+EXISTING {entity_type.upper()}S (DO NOT DUPLICATE OR CREATE SIMILAR NAMES):
 {formatted_names}
 
 DO NOT USE names like:
 {chr(10).join(f"  - {ex}" for ex in do_not_examples)}
 
-Create a COMPLETELY DIFFERENT {entity_type} name."""
+Create a COMPLETELY DIFFERENT {entity_type} name.
+</existing-{entity_type}s>"""

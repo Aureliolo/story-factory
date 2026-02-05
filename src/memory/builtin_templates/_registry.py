@@ -52,8 +52,14 @@ class TemplateRegistry:
         Args:
             templates_dir: Directory containing template YAML files.
                           Defaults to src/memory/builtin_templates.
+
+        Raises:
+            TemplateRegistryError: If templates_dir does not exist.
         """
         self.templates_dir = Path(templates_dir) if templates_dir else _TEMPLATES_DIR
+        if not self.templates_dir.exists():
+            raise TemplateRegistryError(f"Templates directory does not exist: {self.templates_dir}")
+        logger.info("Initializing TemplateRegistry from %s", self.templates_dir)
         self._structure_presets: dict[str, StructurePreset] = {}
         self._story_templates: dict[str, StoryTemplate] = {}
         self._load_all_templates()
@@ -130,9 +136,14 @@ class TemplateRegistry:
         logger.debug("Loaded story template: %s", template.id)
 
     def _load_all_templates(self) -> None:
-        """Load all templates from the templates directory."""
+        """Load all templates from the templates directory.
+
+        Raises:
+            TemplateRegistryError: If any template fails to load.
+        """
         structures_dir = self.templates_dir / "structures"
         stories_dir = self.templates_dir / "stories"
+        errors: list[str] = []
 
         # Load structure presets
         if structures_dir.exists():
@@ -143,7 +154,7 @@ class TemplateRegistry:
                 try:
                     self._load_structure_preset(yaml_file)
                 except (TemplateRegistryError, ValueError) as e:
-                    logger.error("Failed to load structure preset %s: %s", yaml_file, e)
+                    errors.append(f"structure preset {yaml_file.name}: {e}")
         else:
             logger.warning("Structures directory not found: %s", structures_dir)
 
@@ -156,9 +167,17 @@ class TemplateRegistry:
                 try:
                     self._load_story_template(yaml_file)
                 except (TemplateRegistryError, ValueError) as e:
-                    logger.error("Failed to load story template %s: %s", yaml_file, e)
+                    errors.append(f"story template {yaml_file.name}: {e}")
         else:
             logger.warning("Stories directory not found: %s", stories_dir)
+
+        # Fail fast if any templates failed to load
+        if errors:
+            error_msg = f"Failed to load {len(errors)} template(s):\n" + "\n".join(
+                f"  - {e}" for e in errors
+            )
+            logger.error(error_msg)
+            raise TemplateRegistryError(error_msg)
 
         logger.info(
             "Loaded %d structure presets and %d story templates",
@@ -219,15 +238,12 @@ class TemplateRegistry:
         )
 
 
-# Module-level singleton instance - loaded once at import time
-_registry: TemplateRegistry | None = None
+# Module-level singleton instance - initialized eagerly at import time for thread safety
+_registry: TemplateRegistry = TemplateRegistry()
 
 
 def _get_registry() -> TemplateRegistry:
-    """Get or create the singleton registry instance."""
-    global _registry
-    if _registry is None:
-        _registry = TemplateRegistry()
+    """Get the singleton registry instance."""
     return _registry
 
 

@@ -84,9 +84,15 @@ def get_creator_model(service: WorldQualityService, entity_type: str | None = No
     Returns:
         Model ID to use for generation.
     """
-    agent_role = (
-        service.ENTITY_CREATOR_ROLES.get(entity_type, "writer") if entity_type else "writer"
-    )
+    if entity_type:
+        if entity_type not in service.ENTITY_CREATOR_ROLES:
+            raise ValueError(
+                f"Unknown entity_type '{entity_type}'. "
+                f"Valid types: {sorted(service.ENTITY_CREATOR_ROLES.keys())}"
+            )
+        agent_role = service.ENTITY_CREATOR_ROLES[entity_type]
+    else:
+        agent_role = "writer"
 
     # Check cache (validates context automatically)
     cached = service._model_cache.get_creator_model(agent_role)
@@ -128,7 +134,15 @@ def get_judge_model(service: WorldQualityService, entity_type: str | None = None
     Returns:
         Model ID to use for judgment.
     """
-    agent_role = service.ENTITY_JUDGE_ROLES.get(entity_type, "judge") if entity_type else "judge"
+    if entity_type:
+        if entity_type not in service.ENTITY_JUDGE_ROLES:
+            raise ValueError(
+                f"Unknown entity_type '{entity_type}'. "
+                f"Valid types: {sorted(service.ENTITY_JUDGE_ROLES.keys())}"
+            )
+        agent_role = service.ENTITY_JUDGE_ROLES[entity_type]
+    else:
+        agent_role = "judge"
 
     # Check cache (validates context automatically)
     cached = service._model_cache.get_judge_model(agent_role)

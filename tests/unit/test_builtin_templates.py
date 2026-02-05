@@ -2,12 +2,14 @@
 
 import logging
 
+import pytest
 import yaml
 
 from src.memory.builtin_templates import (
     BUILTIN_STORY_TEMPLATES,
     BUILTIN_STRUCTURE_PRESETS,
     TemplateRegistry,
+    TemplateRegistryError,
     get_builtin_story_templates,
     get_builtin_structure_presets,
 )
@@ -137,6 +139,13 @@ class TestTemplateRegistry:
 class TestTemplateRegistryErrorHandling:
     """Tests for error handling in TemplateRegistry."""
 
+    def test_missing_templates_directory_raises_error(self, tmp_path):
+        """Test that non-existent templates directory raises an error."""
+        non_existent = tmp_path / "non_existent"
+
+        with pytest.raises(TemplateRegistryError, match="does not exist"):
+            TemplateRegistry(non_existent)
+
     def test_missing_structures_directory_logs_warning(self, tmp_path, caplog):
         """Test that missing structures directory logs a warning."""
         # Only create stories directory
@@ -159,8 +168,8 @@ class TestTemplateRegistryErrorHandling:
         assert "Stories directory not found" in caplog.text
         assert len(registry.story_templates) == 0
 
-    def test_invalid_yaml_logs_error(self, tmp_path, caplog):
-        """Test that invalid YAML files log an error."""
+    def test_invalid_yaml_raises_error(self, tmp_path):
+        """Test that invalid YAML files raise an error."""
         structures_dir = tmp_path / "structures"
         stories_dir = tmp_path / "stories"
         structures_dir.mkdir()
@@ -169,14 +178,11 @@ class TestTemplateRegistryErrorHandling:
         # Create invalid YAML file
         (structures_dir / "invalid.yaml").write_text("{invalid yaml", encoding="utf-8")
 
-        with caplog.at_level(logging.ERROR):
-            registry = TemplateRegistry(tmp_path)
+        with pytest.raises(TemplateRegistryError, match="Failed to load 1 template"):
+            TemplateRegistry(tmp_path)
 
-        assert "Failed to load structure preset" in caplog.text
-        assert len(registry.structure_presets) == 0
-
-    def test_invalid_model_data_logs_error(self, tmp_path, caplog):
-        """Test that valid YAML with invalid model data logs an error."""
+    def test_invalid_model_data_raises_error(self, tmp_path):
+        """Test that valid YAML with invalid model data raises an error."""
         structures_dir = tmp_path / "structures"
         stories_dir = tmp_path / "stories"
         structures_dir.mkdir()
@@ -186,40 +192,25 @@ class TestTemplateRegistryErrorHandling:
         invalid_data = {"name": "Test", "description": "Test"}  # Missing 'id'
         (structures_dir / "invalid.yaml").write_text(yaml.dump(invalid_data), encoding="utf-8")
 
-        with caplog.at_level(logging.ERROR):
-            registry = TemplateRegistry(tmp_path)
+        with pytest.raises(TemplateRegistryError, match="Failed to load 1 template"):
+            TemplateRegistry(tmp_path)
 
-        assert "Failed to load structure preset" in caplog.text
-        assert len(registry.structure_presets) == 0
-
-    def test_loads_valid_files_despite_invalid_ones(self, tmp_path, caplog):
-        """Test that valid files are loaded even when some are invalid."""
+    def test_multiple_invalid_files_collects_all_errors(self, tmp_path):
+        """Test that multiple invalid files are all reported in the error."""
         structures_dir = tmp_path / "structures"
         stories_dir = tmp_path / "stories"
         structures_dir.mkdir()
         stories_dir.mkdir()
 
-        # Create one invalid and one valid file
-        (structures_dir / "invalid.yaml").write_text("{invalid yaml", encoding="utf-8")
-        valid_data = {
-            "id": "valid-preset",
-            "name": "Valid Preset",
-            "description": "A valid preset",
-            "acts": ["Act 1"],
-            "plot_points": [],
-            "beats": [],
-        }
-        (structures_dir / "valid.yaml").write_text(yaml.dump(valid_data), encoding="utf-8")
+        # Create two invalid files
+        (structures_dir / "invalid1.yaml").write_text("{invalid yaml", encoding="utf-8")
+        (structures_dir / "invalid2.yaml").write_text("- list\n- instead", encoding="utf-8")
 
-        with caplog.at_level(logging.ERROR):
-            registry = TemplateRegistry(tmp_path)
+        with pytest.raises(TemplateRegistryError, match="Failed to load 2 template"):
+            TemplateRegistry(tmp_path)
 
-        # Valid file should still load
-        assert len(registry.structure_presets) == 1
-        assert "valid-preset" in registry.structure_presets
-
-    def test_non_dict_yaml_logs_error(self, tmp_path, caplog):
-        """Test that YAML files containing non-dict data log an error."""
+    def test_non_dict_yaml_raises_error(self, tmp_path):
+        """Test that YAML files containing non-dict data raise an error."""
         structures_dir = tmp_path / "structures"
         stories_dir = tmp_path / "stories"
         structures_dir.mkdir()
@@ -228,14 +219,11 @@ class TestTemplateRegistryErrorHandling:
         # Create YAML file with a list instead of dict
         (structures_dir / "list.yaml").write_text("- item1\n- item2", encoding="utf-8")
 
-        with caplog.at_level(logging.ERROR):
-            registry = TemplateRegistry(tmp_path)
+        with pytest.raises(TemplateRegistryError, match="Failed to load 1 template"):
+            TemplateRegistry(tmp_path)
 
-        assert "Failed to load structure preset" in caplog.text
-        assert len(registry.structure_presets) == 0
-
-    def test_unreadable_file_logs_error(self, tmp_path, caplog, monkeypatch):
-        """Test that unreadable files log an error."""
+    def test_unreadable_file_raises_error(self, tmp_path, monkeypatch):
+        """Test that unreadable files raise an error."""
         structures_dir = tmp_path / "structures"
         stories_dir = tmp_path / "stories"
         structures_dir.mkdir()
@@ -256,14 +244,11 @@ class TestTemplateRegistryErrorHandling:
 
         monkeypatch.setattr("builtins.open", mock_open)
 
-        with caplog.at_level(logging.ERROR):
-            registry = TemplateRegistry(tmp_path)
+        with pytest.raises(TemplateRegistryError, match="Failed to load 1 template"):
+            TemplateRegistry(tmp_path)
 
-        assert "Failed to load structure preset" in caplog.text
-        assert len(registry.structure_presets) == 0
-
-    def test_invalid_story_template_logs_error(self, tmp_path, caplog):
-        """Test that invalid story templates log an error."""
+    def test_invalid_story_template_raises_error(self, tmp_path):
+        """Test that invalid story templates raise an error."""
         structures_dir = tmp_path / "structures"
         stories_dir = tmp_path / "stories"
         structures_dir.mkdir()
@@ -272,11 +257,8 @@ class TestTemplateRegistryErrorHandling:
         # Create invalid story template YAML
         (stories_dir / "invalid.yaml").write_text("{invalid yaml", encoding="utf-8")
 
-        with caplog.at_level(logging.ERROR):
-            registry = TemplateRegistry(tmp_path)
-
-        assert "Failed to load story template" in caplog.text
-        assert len(registry.story_templates) == 0
+        with pytest.raises(TemplateRegistryError, match="Failed to load 1 template"):
+            TemplateRegistry(tmp_path)
 
 
 class TestTemplateDataIntegrity:
@@ -310,6 +292,12 @@ class TestTemplateDataIntegrity:
         assert any("Opening Image" in d for d in descriptions)
         assert any("Fun and Games" in d for d in descriptions)
         assert any("Final Image" in d for d in descriptions)
+
+    def test_save_the_cat_has_4_acts(self):
+        """Test Save the Cat has 4 acts (Act 1, 2A, 2B, 3) for backward compatibility."""
+        preset = BUILTIN_STRUCTURE_PRESETS["save-the-cat"]
+        assert len(preset.acts) == 4
+        assert preset.acts == ["Act 1", "Act 2A", "Act 2B", "Act 3"]
 
     def test_mystery_template_has_detective_protagonist(self):
         """Test mystery template has a detective protagonist."""
