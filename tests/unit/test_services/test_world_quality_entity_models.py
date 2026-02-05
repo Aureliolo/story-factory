@@ -305,6 +305,8 @@ class TestJudgeModelSelection:
         entity_types = ["character", "faction", "location", "item", "concept", "relationship"]
         for entity_type in entity_types:
             mock_mode_service.reset_mock()
+            # Invalidate cache to force re-resolution for each entity type
+            service.invalidate_model_cache()
             # Mock get_models_for_role to return only the judge model (no swap candidate)
             with patch.object(settings, "get_models_for_role", return_value=["test-judge-model"]):
                 model = service._get_judge_model(entity_type=entity_type)
