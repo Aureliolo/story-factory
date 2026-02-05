@@ -50,11 +50,12 @@ jobs:
           echo "vis_version=$VIS_VERSION" >> $GITHUB_OUTPUT
           echo "Found vis-network version: $VIS_VERSION"
 
-      # Only checkout PR branch after validating the version is safe
-      - name: Checkout PR branch
-        uses: actions/checkout@v6
+      # Checkout the exact validated commit SHA to prevent TOCTOU attacks
+      # (new commits pushed between validation and checkout won't affect this)
+      - name: Checkout validated PR commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update CDN URL in graph.py
@@ -88,9 +89,12 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         env:
           VIS_VERSION: ${{ steps.extract.outputs.vis_version }}
+          # Pass branch name via env to prevent script injection
+          PR_HEAD_REF: ${{ github.head_ref }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add src/ui/components/graph.py
           git commit -m "chore: sync vis-network CDN URL to ${VIS_VERSION}"
-          git push
+          # Push to the PR branch explicitly (we checked out a detached SHA)
+          git push origin "HEAD:${PR_HEAD_REF}"
