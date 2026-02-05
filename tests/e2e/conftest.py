@@ -78,14 +78,18 @@ def app_server():
 
     process.terminate()
     try:
-        process.wait(timeout=5)
+        # communicate() closes pipes and waits for process to exit
+        process.communicate(timeout=5)
     except subprocess.TimeoutExpired:
         process.kill()
         try:
-            process.wait(timeout=5)
+            process.communicate(timeout=5)
         except subprocess.TimeoutExpired:
-            # Give up on waiting; avoid hanging the test suite if the process is unkillable.
-            pass
+            # Give up on waiting; close pipes manually to avoid ResourceWarning
+            if process.stdout:
+                process.stdout.close()
+            if process.stderr:
+                process.stderr.close()
 
 
 @pytest.fixture(scope="session")

@@ -40,8 +40,9 @@ class TestNavigation:
         nav_items = ["Write", "World", "Projects", "Settings", "Models"]
 
         for nav_name in nav_items:
-            # Navigation links are in the header
-            link = page.get_by_role("link", name=nav_name)
+            # Navigation links are in the header; use exact=True to avoid partial matches
+            # (e.g., "World" would also match "World Timeline" without exact)
+            link = page.get_by_role("link", name=nav_name, exact=True)
             expect(link).to_be_visible()
 
     def test_settings_page_loads(self, page: Page, base_url: str):
