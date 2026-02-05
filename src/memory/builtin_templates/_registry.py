@@ -49,10 +49,10 @@ class TemplateRegistry:
     def __init__(self, templates_dir: Path | str | None = None):
         """
         Create a TemplateRegistry and load built-in templates from the given directory.
-        
+
         Parameters:
             templates_dir (Path | str | None): Directory containing template YAML files. If omitted, uses the package's built-in templates directory.
-        
+
         Raises:
             TemplateRegistryError: If the resolved templates directory does not exist.
         """
@@ -67,13 +67,13 @@ class TemplateRegistry:
     def _load_yaml_file(self, filepath: Path) -> dict[str, Any]:
         """
         Load and parse a YAML file into a dictionary.
-        
+
         Parameters:
             filepath (Path): Path to the YAML file to read.
-        
+
         Returns:
             dict[str, Any]: Parsed YAML content as a dictionary.
-        
+
         Raises:
             TemplateRegistryError: If the file cannot be read, the YAML is invalid, or the parsed content is not a mapping.
         """
@@ -93,9 +93,9 @@ class TemplateRegistry:
     def _convert_plot_points(self, data: dict[str, Any]) -> None:
         """
         Convert any dict entries in the `plot_points` list into `PlotPointTemplate` instances.
-        
+
         If `data` contains a "plot_points" key, each entry that is a dict will be replaced by `PlotPointTemplate(**entry)`; entries that are already objects are left unchanged. The transformation modifies `data` in place.
-        
+
         Parameters:
             data (dict[str, Any]): Template data that may include a "plot_points" list.
         """
@@ -108,10 +108,10 @@ class TemplateRegistry:
     def _load_structure_preset(self, filepath: Path) -> None:
         """
         Load and validate a structure preset from a YAML file and register it in the registry under its `id`.
-        
+
         Parameters:
             filepath (Path): Path to the structure preset YAML file to load.
-        
+
         Raises:
             TemplateRegistryError: If the YAML cannot be read/parsed or if validation of the preset fails.
         """
@@ -125,7 +125,7 @@ class TemplateRegistry:
     def _load_story_template(self, filepath: Path) -> None:
         """
         Load and validate a story template from a YAML file and store it in the registry's template cache.
-        
+
         Parameters:
             filepath (Path): Path to the YAML file containing the story template. The validated template is stored in the registry keyed by its `id`.
         """
@@ -147,9 +147,9 @@ class TemplateRegistry:
     def _load_all_templates(self) -> None:
         """
         Load and validate all built-in templates from the registry's templates directory and populate internal caches.
-        
+
         Searches for YAML files under "<templates_dir>/structures" and "<templates_dir>/stories", validates each file as a StructurePreset or StoryTemplate respectively, and stores successful results in the registry's in-memory caches. If a subdirectory is missing, a warning is logged. If any file fails to load or validate, a TemplateRegistryError is raised listing the failing files.
-        
+
         Raises:
             TemplateRegistryError: If one or more templates fail to load or validate.
         """
@@ -201,7 +201,7 @@ class TemplateRegistry:
     def structure_presets(self) -> dict[str, StructurePreset]:
         """
         Provide access to built-in structure presets keyed by preset ID.
-        
+
         Returns:
             dict[str, StructurePreset]: Mapping from preset ID to its StructurePreset instance.
         """
@@ -211,7 +211,7 @@ class TemplateRegistry:
     def story_templates(self) -> dict[str, StoryTemplate]:
         """
         Return the mapping of all loaded story templates by ID.
-        
+
         Returns:
             dict[str, StoryTemplate]: Mapping from template ID to its validated StoryTemplate.
         """
@@ -220,10 +220,10 @@ class TemplateRegistry:
     def get_structure_preset(self, preset_id: str) -> StructurePreset | None:
         """
         Retrieve a structure preset by its identifier.
-        
+
         Parameters:
             preset_id (str): The structure preset identifier to look up.
-        
+
         Returns:
             StructurePreset | None: The matching StructurePreset, or None if no preset exists with that ID.
         """
@@ -249,7 +249,7 @@ class TemplateRegistry:
     def reload(self) -> None:
         """
         Reload the registry by clearing cached templates and repopulating them from disk.
-        
+
         This clears the in-memory structure preset and story template caches and then loads all templates found in the configured templates directory.
         """
         logger.info("Reloading all templates")
@@ -260,7 +260,7 @@ class TemplateRegistry:
     def __repr__(self) -> str:
         """
         Represent the registry with counts of loaded structure presets and story templates and the templates directory.
-        
+
         Returns:
             A string containing the number of loaded structure presets, the number of loaded story templates, and the templates directory path.
         """
@@ -277,7 +277,7 @@ _registry: TemplateRegistry = TemplateRegistry()
 def _get_registry() -> TemplateRegistry:
     """
     Return the module-level singleton registry instance.
-    
+
     Returns:
         The singleton TemplateRegistry instance.
     """
@@ -287,7 +287,7 @@ def _get_registry() -> TemplateRegistry:
 def get_builtin_structure_presets() -> dict[str, StructurePreset]:
     """
     Retrieve the mapping of built-in structure presets keyed by preset ID.
-    
+
     Returns:
         dict[str, StructurePreset]: Mapping from preset ID to its StructurePreset instance.
     """
@@ -297,7 +297,7 @@ def get_builtin_structure_presets() -> dict[str, StructurePreset]:
 def get_builtin_story_templates() -> dict[str, StoryTemplate]:
     """
     Get built-in story templates indexed by their IDs.
-    
+
     Returns:
         dict[str, StoryTemplate]: Mapping from template ID to the corresponding StoryTemplate instance.
     """

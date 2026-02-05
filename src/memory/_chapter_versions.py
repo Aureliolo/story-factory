@@ -37,10 +37,10 @@ class ChapterVersionManager:
     def save_version(self, feedback: str = "") -> str:
         """
         Create and store a new ChapterVersion capturing the chapter's current content and word count.
-        
+
         Parameters:
             feedback (str): Optional feedback to record on the new version.
-        
+
         Returns:
             version_id (str): The ID of the newly created version.
         """
@@ -79,10 +79,10 @@ class ChapterVersionManager:
     def rollback(self, version_id: str) -> bool:
         """
         Rollback the chapter to a specified version.
-        
+
         Parameters:
             version_id (str): ID of the version to restore.
-        
+
         Returns:
             bool: True if the rollback was performed, False if the version was not found.
         """
@@ -118,10 +118,10 @@ class ChapterVersionManager:
     def get_version(self, version_id: str) -> ChapterVersion | None:
         """
         Retrieve a chapter version by its id.
-        
+
         Parameters:
             version_id (str): The unique identifier of the version to retrieve.
-        
+
         Returns:
             ChapterVersion | None: `ChapterVersion` if found, `None` otherwise.
         """
@@ -143,11 +143,11 @@ class ChapterVersionManager:
     def compare(self, version_id_a: str, version_id_b: str) -> dict[str, Any]:
         """
         Produce a structured comparison of two chapter versions identified by their IDs.
-        
+
         Parameters:
             version_id_a (str): ID of the first version to compare.
             version_id_b (str): ID of the second version to compare.
-        
+
         Returns:
             dict: If both versions are found, a dictionary containing:
                 - version_a: dict with keys `id`, `version_number`, `content`, `word_count`, `created_at` (ISO string), and `feedback`.
@@ -196,7 +196,7 @@ class ChapterVersionManager:
     def all_versions(self) -> list[ChapterVersion]:
         """
         Return all saved versions for the chapter.
-        
+
         Returns:
             list[ChapterVersion]: The list of ChapterVersion instances stored on the chapter (newest appended last).
         """

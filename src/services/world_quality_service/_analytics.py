@@ -107,7 +107,7 @@ def log_refinement_analytics(
 ) -> None:
     """
     Record refinement iteration analytics for a completed RefinementHistory, log an informational summary, and persist extended scores and refinement metrics to the analytics database.
-    
+
     Parameters:
         history: The RefinementHistory for the entity being reported.
         project_id: Project identifier under which analytics should be recorded.

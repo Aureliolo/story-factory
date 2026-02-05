@@ -222,7 +222,7 @@ class WorldQualityService:
     def __init__(self, settings: Settings, mode_service: ModelModeService):
         """
         Create a WorldQualityService configured with application settings and a model mode service used for model resolution.
-        
+
         Parameters:
             settings (Settings): Application configuration and feature settings used by the service.
             mode_service (ModelModeService): Service responsible for selecting and managing model modes.
@@ -264,7 +264,7 @@ class WorldQualityService:
     ) -> None:
         """
         Persist entity quality scores and refinement metrics to the analytics database for later analysis.
-        
+
         Parameters:
             project_id (str): Project identifier associated with the entity.
             entity_type (str): Type of the entity (e.g., "character", "faction").
@@ -282,7 +282,7 @@ class WorldQualityService:
             best_iteration (int): Index of the iteration that produced the best score.
             quality_threshold (float | None): Configured quality threshold used to determine success.
             max_iterations (int | None): Maximum allowed iterations for the refinement loop.
-        
+
         Notes:
             This method records metrics for analytics and does not return a value.
         """
@@ -310,7 +310,7 @@ class WorldQualityService:
     def client(self) -> ollama.Client:
         """
         Provide an Ollama client configured with a timeout scaled to the writer model's size; creates and caches the client on first access.
-        
+
         Returns:
             ollama.Client: The cached or newly created Ollama client configured with the service host and a timeout derived from the writer model.
         """
@@ -330,7 +330,7 @@ class WorldQualityService:
     def get_judge_config(self) -> JudgeConsistencyConfig:
         """
         Provide the judge consistency configuration derived from the service settings.
-        
+
         Returns:
             JudgeConsistencyConfig: Configuration for judge consistency constructed from the current settings.
         """
@@ -339,10 +339,10 @@ class WorldQualityService:
     def _resolve_model_for_role(self, agent_role: str) -> str:
         """
         Resolve which model should be used for the given agent role, honoring the Settings hierarchy.
-        
+
         Parameters:
             agent_role (str): Agent role name (e.g., "writer", "judge") to resolve a model for.
-        
+
         Returns:
             model (str): Identifier of the model to use for the specified role.
         """
@@ -351,7 +351,7 @@ class WorldQualityService:
     def invalidate_model_cache(self) -> None:
         """
         Clear cached model resolution mappings.
-        
+
         Forces subsequent model-resolution calls to recompute models instead of using cached results.
         """
         self._model_cache.invalidate()
@@ -359,10 +359,10 @@ class WorldQualityService:
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """
         Resolve the creator model identifier to use for a given entity type.
-        
+
         Parameters:
             entity_type (str | None): Optional entity type (e.g., "character", "faction", "location") used to select a specialized creator model. If None, the default creator model is returned.
-        
+
         Returns:
             str: The model name or identifier to use for creative generation.
         """
@@ -371,10 +371,10 @@ class WorldQualityService:
     def _get_judge_model(self, entity_type: str | None = None) -> str:
         """
         Resolve the judge model name to use for a given entity type.
-        
+
         Parameters:
             entity_type (str | None): Optional entity type to select a specialized judge model; if None a default judge model is chosen.
-        
+
         Returns:
             model_name (str): The resolved judge model identifier.
         """
@@ -383,13 +383,13 @@ class WorldQualityService:
     def _format_existing_names_warning(self, existing_names: list[str], entity_type: str) -> str:
         """
         Produce a warning string listing existing names and explicit "DO NOT" examples to discourage duplicate names for the given entity type.
-        
+
         Parameters:
-        	existing_names (list[str]): Names already present for the entity type.
-        	entity_type (str): Human-readable entity type label (e.g., "character", "location") used in the warning text.
-        
+                existing_names (list[str]): Names already present for the entity type.
+                entity_type (str): Human-readable entity type label (e.g., "character", "location") used in the warning text.
+
         Returns:
-        	warning (str): A formatted warning message that enumerates existing names and includes clear "DO NOT" duplicate examples.
+                warning (str): A formatted warning message that enumerates existing names and includes clear "DO NOT" duplicate examples.
         """
         return _format_existing_names_warning(existing_names, entity_type)
 
@@ -405,7 +405,7 @@ class WorldQualityService:
     ) -> None:
         """
         Log and persist analytics about a completed refinement history.
-        
+
         Parameters:
             history (RefinementHistory): The refinement history containing iteration records and metrics.
             project_id (str): Identifier of the project or story associated with the refinement.

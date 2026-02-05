@@ -16,19 +16,19 @@ logger = logging.getLogger(__name__)
 def resolve_model_for_role(service: WorldQualityService, agent_role: str) -> str:
     """
     Determine the model ID to use for a given agent role following settings precedence.
-    
+
     Resolves in this order:
     1) If settings.use_per_agent_models is False and settings.default_model != "auto", return settings.default_model.
     2) If settings.use_per_agent_models is True and settings.agent_models[agent_role] is set to a value other than "auto", return that explicit model.
     3) Otherwise, delegate to the mode service's auto-selection.
-    
+
     Args:
         service: WorldQualityService instance whose settings and mode_service are consulted.
         agent_role: Agent role to resolve (e.g., "writer", "judge", "validator").
-    
+
     Returns:
         The resolved model ID for the specified agent_role.
-    
+
     """
     # 1. Per-agent disabled + explicit default → use default for everything
     if not service.settings.use_per_agent_models:
@@ -69,10 +69,10 @@ def resolve_model_for_role(service: WorldQualityService, agent_role: str) -> str
 def get_creator_model(service: WorldQualityService, entity_type: str | None = None) -> str:
     """
     Determine the model ID to use for creative generation for a given entity type or the default writer role.
-    
+
     Parameters:
         entity_type (str | None): Optional entity type (e.g., 'character', 'faction'). When provided, it must be a key in `ENTITY_CREATOR_ROLES` and the corresponding agent role will be used.
-    
+
     Returns:
         str: Model ID to use for generation.
     """
@@ -107,12 +107,12 @@ def get_creator_model(service: WorldQualityService, entity_type: str | None = No
 def get_judge_model(service: WorldQualityService, entity_type: str | None = None) -> str:
     """
     Determine the model ID to use for judging quality for a given entity type or the default judge role.
-    
+
     If an entity_type is provided it is mapped to a judge agent role via ENTITY_JUDGE_ROLES and validated. The selected model honors Settings precedence (explicit per-agent or default model) and falls back to automatic mode selection when appropriate. To avoid self-judging bias, when an entity_type is provided the function prefers a judge model different from the creator model for the same entity; if no alternative judge model is available it emits a single throttled warning for that entity_type:model combination. Resolved models are cached per judge role to avoid repeated resolution.
-    
+
     Parameters:
         entity_type (str | None): Optional entity type to map to a judge agent role; if omitted the generic "judge" role is used.
-    
+
     Returns:
         str: Model ID to use for judgment.
     """

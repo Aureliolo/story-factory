@@ -257,7 +257,7 @@ class Chapter(BaseModel):
     def update_chapter_word_count(self) -> None:
         """
         Update the chapter's word_count based on available data.
-        
+
         If the chapter has scenes, sets word_count to the sum of their word_count values. If there are no scenes but content is present, sets word_count to the number of words in the content. If neither scenes nor content are present, sets word_count to 0.
         """
         if self.scenes:
@@ -274,7 +274,7 @@ class Chapter(BaseModel):
     def version_manager(self) -> ChapterVersionManager:
         """
         Lazily create and return a ChapterVersionManager bound to this chapter.
-        
+
         Returns:
             ChapterVersionManager: The cached manager instance used for chapter version operations.
         """
@@ -290,10 +290,10 @@ class Chapter(BaseModel):
     def save_current_as_version(self, feedback: str = "") -> str:
         """
         Save the chapter's current content as a new version.
-        
+
         Parameters:
             feedback (str): Optional feedback associated with this version.
-        
+
         Returns:
             str: The ID of the newly created version.
         """
@@ -302,10 +302,10 @@ class Chapter(BaseModel):
     def rollback_to_version(self, version_id: str) -> bool:
         """
         Restore the chapter to the specified saved version.
-        
+
         Parameters:
             version_id (str): ID of the saved version to restore.
-        
+
         Returns:
             bool: `True` if the rollback succeeded, `False` if the specified version was not found.
         """
@@ -325,7 +325,7 @@ class Chapter(BaseModel):
     def get_current_version(self) -> ChapterVersion | None:
         """
         Retrieve the chapter's currently active version.
-        
+
         Returns:
             The active ChapterVersion if present, otherwise None.
         """
@@ -334,11 +334,11 @@ class Chapter(BaseModel):
     def compare_versions(self, version_id_a: str, version_id_b: str) -> dict[str, Any]:
         """
         Produce a comparison report between two saved chapter versions.
-        
+
         Parameters:
             version_id_a (str): ID of the first version to compare.
             version_id_b (str): ID of the second version to compare.
-        
+
         Returns:
             comparison (dict[str, Any]): Mapping containing comparison details such as 'word_count_a', 'word_count_b', 'word_count_diff', and any content or metadata diffs.
         """

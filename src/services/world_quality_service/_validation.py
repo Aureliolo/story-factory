@@ -665,13 +665,13 @@ async def check_contradiction(
 ) -> dict[str, Any] | None:
     """
     Determine whether two extracted entity claims contradict each other.
-    
+
     Analyzes Claim A and Claim B across logical, temporal, attribute, location, and relationship dimensions and returns a structured contradiction result when a contradiction is detected.
-    
+
     Parameters:
         claim_a (dict): Claim dictionary for the first entity. Expected keys: "entity_id" (optional), "entity_name", "entity_type", "claim".
         claim_b (dict): Claim dictionary for the second entity. Expected keys: "entity_id" (optional), "entity_name", "entity_type", "claim".
-    
+
     Returns:
         dict | None: If a contradiction is detected, returns a dictionary with keys:
             - "claim_a": original claim_a dict

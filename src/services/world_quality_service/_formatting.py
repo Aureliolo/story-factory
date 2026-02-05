@@ -16,11 +16,11 @@ def calculate_eta(
 ) -> float | None:
     """
     Estimate remaining time for remaining entities using an exponential moving average of past completion times.
-    
+
     Parameters:
         completed_times (list[float]): Sequence of past completion times in seconds (ordered from earliest to latest).
         remaining_count (int): Number of entities still to generate.
-    
+
     Returns:
         float | None: Estimated remaining time in seconds, or `None` if `completed_times` is empty or `remaining_count` is not greater than zero.
     """
@@ -94,11 +94,11 @@ def format_properties(properties: list[Any] | Any | None) -> str:
 def format_existing_names_warning(existing_names: list[str], entity_type: str) -> str:
     """
     Constructs a prompt-friendly warning block that lists existing names for an entity type and provides explicit "DO NOT" example variations.
-    
+
     Parameters:
         existing_names (list[str]): Existing names to include in the warning; if empty, the returned string indicates this is the first entity of the given type.
         entity_type (str): Noun describing the entity kind (e.g., "concept", "item", "location", "faction") used in headings and directive text.
-    
+
     Returns:
         str: A multi-line string containing a structured prompt block with the existing names and example names to avoid, or a short message indicating no existing names.
     """
