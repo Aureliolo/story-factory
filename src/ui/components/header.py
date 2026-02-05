@@ -77,11 +77,11 @@ class Header:
 
     def _build_project_selector(self) -> None:
         """Build the project dropdown selector."""
-        projects = self.services.project.list_projects()
+        projects = self.state.get_cached_projects(self.services.project.list_projects)
 
         options = {p.id: p.name for p in projects}
         if not options:
-            options = {"": "No projects"}
+            options = {"": "No projects yet"}
 
         # Validate that current project_id still exists, clear if not
         current_value = self.state.project_id
@@ -158,6 +158,7 @@ class Header:
             self.state.set_project(project.id, project, world_db)
             self.services.settings.last_project_id = project.id
             self.services.settings.save()
+            self.state.invalidate_project_cache()
             ui.notify("New project created!", type="positive")
             self._refresh_project_list()
         except BackgroundTaskActiveError:
@@ -169,7 +170,7 @@ class Header:
     def _refresh_project_list(self) -> None:
         """Refresh the project dropdown options."""
         if self._project_select:
-            projects = self.services.project.list_projects()
+            projects = self.state.get_cached_projects(self.services.project.list_projects)
             options = {p.id: p.name for p in projects}
             if not options:
                 options = {"": "No projects yet"}

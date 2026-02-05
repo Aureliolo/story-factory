@@ -248,7 +248,8 @@ class SettingsPage:
 
     def _init_masonry(self) -> None:
         """Initialize Masonry.js on all containers and set up resize handling."""
-        ui.run_javascript("""
+        try:
+            ui.run_javascript("""
             try {
                 if (typeof Masonry === 'undefined') {
                     console.error('[Settings] Masonry.js not loaded');
@@ -314,7 +315,9 @@ class SettingsPage:
                 console.error('[Settings] Masonry setup failed:', err);
             }
         """)
-        logger.debug("Masonry.js initialized on all containers")
+            logger.debug("Masonry.js initialized on all containers")
+        except RuntimeError:
+            logger.debug("Masonry init skipped: UI element destroyed")
 
     # ── UI utilities ──────────────────────────────────────────────────────
 

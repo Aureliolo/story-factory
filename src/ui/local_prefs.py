@@ -124,8 +124,11 @@ def load_prefs_deferred(page_key: str, callback: Callable[[dict], None]) -> None
 
     async def _deferred() -> None:
         """Load preferences from localStorage and deliver to callback."""
-        prefs = await _load_prefs(page_key)
-        callback(prefs)
+        try:
+            prefs = await _load_prefs(page_key)
+            callback(prefs)
+        except RuntimeError:
+            logger.debug("Pref load skipped: UI element destroyed for %s", page_key)
 
     ui.timer(0.1, _deferred, once=True)
     logger.debug("Scheduled deferred pref load for %s", page_key)

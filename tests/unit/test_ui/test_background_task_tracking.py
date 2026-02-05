@@ -181,3 +181,140 @@ class TestThreadSafety:
 
         # After all threads complete, counter should be back to zero
         assert not _is_busy(state)
+
+
+class TestProjectListCache:
+    """Tests for project list caching in AppState."""
+
+    def test_cache_returns_cached_value_within_ttl(self):
+        """Test that cached value is returned within the 2-second TTL."""
+        state = AppState()
+        call_count = 0
+
+        def fetch_projects():
+            """Fetch mock projects and track call count."""
+            nonlocal call_count
+            call_count += 1
+            return [{"id": "1", "name": "Project 1"}]
+
+        # First call should fetch
+        result1 = state.get_cached_projects(fetch_projects)
+        assert call_count == 1
+        assert len(result1) == 1
+
+        # Second call within TTL should return cached value
+        result2 = state.get_cached_projects(fetch_projects)
+        assert call_count == 1  # Still 1, not 2
+        assert result2 is result1  # Same object
+
+    def test_cache_invalidation(self):
+        """Test that invalidate_project_cache clears the cache."""
+        state = AppState()
+        call_count = 0
+
+        def fetch_projects():
+            """Fetch mock projects with incrementing ID."""
+            nonlocal call_count
+            call_count += 1
+            return [{"id": str(call_count)}]
+
+        # First call
+        state.get_cached_projects(fetch_projects)
+        assert call_count == 1
+
+        # Invalidate
+        state.invalidate_project_cache()
+
+        # Next call should fetch again
+        result2 = state.get_cached_projects(fetch_projects)
+        assert call_count == 2
+        assert result2[0]["id"] == "2"
+
+    def test_cache_returns_empty_list_correctly(self):
+        """Test that empty project list is cached correctly."""
+        state = AppState()
+        call_count = 0
+
+        def fetch_empty():
+            """Fetch empty list and track call count."""
+            nonlocal call_count
+            call_count += 1
+            return []
+
+        result1 = state.get_cached_projects(fetch_empty)
+        assert call_count == 1
+        assert result1 == []
+
+        # Empty list should still be cached
+        state.get_cached_projects(fetch_empty)
+        assert call_count == 1  # Still 1
+
+    def test_cache_logs_on_hit(self, caplog):
+        """Test that cache hit is logged at debug level."""
+        state = AppState()
+
+        def fetch():
+            """Return mock project list."""
+            return [{"id": "1"}]
+
+        with caplog.at_level(logging.DEBUG, logger="src.ui.state"):
+            state.get_cached_projects(fetch)
+            state.get_cached_projects(fetch)
+
+        assert "Returning cached project list" in caplog.text
+
+    def test_cache_logs_on_refresh(self, caplog):
+        """Test that cache refresh is logged at debug level."""
+        state = AppState()
+
+        def fetch():
+            """Return mock project list with 2 items."""
+            return [{"id": "1"}, {"id": "2"}]
+
+        with caplog.at_level(logging.DEBUG, logger="src.ui.state"):
+            state.get_cached_projects(fetch)
+
+        assert "Refreshed project list cache with 2 projects" in caplog.text
+
+    def test_cache_logs_on_invalidate(self, caplog):
+        """Test that cache invalidation is logged at debug level."""
+        state = AppState()
+        state._project_list_cache = [{"id": "1"}]
+
+        with caplog.at_level(logging.DEBUG, logger="src.ui.state"):
+            state.invalidate_project_cache()
+
+        assert "Project list cache invalidated" in caplog.text
+
+    def test_cache_expires_after_ttl(self):
+        """Test that cache expires after TTL and triggers refresh."""
+        from unittest.mock import patch
+
+        state = AppState()
+        call_count = 0
+
+        def fetch_projects():
+            """Fetch mock projects with incrementing ID."""
+            nonlocal call_count
+            call_count += 1
+            return [{"id": str(call_count)}]
+
+        with patch("src.ui.state.time") as mock_time:
+            # First call at time 1000.0
+            mock_time.time.return_value = 1000.0
+            result1 = state.get_cached_projects(fetch_projects)
+            initial_call_count = call_count
+            assert initial_call_count == 1
+            assert result1[0]["id"] == "1"
+
+            # Second call at 1.5s (within 2s TTL) - should return cached
+            mock_time.time.return_value = 1001.5
+            result2 = state.get_cached_projects(fetch_projects)
+            assert call_count == initial_call_count  # Same count, cache hit
+            assert result2 is result1
+
+            # Third call at 2.5s (beyond 2s TTL) - should refresh
+            mock_time.time.return_value = 1002.5
+            result3 = state.get_cached_projects(fetch_projects)
+            assert call_count == initial_call_count + 1  # Incremented, cache miss
+            assert result3[0]["id"] == "2"

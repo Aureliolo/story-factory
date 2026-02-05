@@ -69,7 +69,7 @@ class GenerationStatus:
             self._phase_label.text = f"Phase: {phase_name}"
             self._update_phase_icons(event.phase)
 
-        # Update progress bar
+        # Update progress bar (set_progress handles validation and clamping)
         if self._progress_bar and event.progress is not None:
             self.set_progress(event.progress)
 
@@ -247,11 +247,15 @@ class GenerationStatus:
     def set_progress(self, value: float) -> None:
         """Set progress bar value (0.0 to 1.0).
 
+        Values outside the valid range are clamped with a warning logged.
+
         Args:
             value: Progress value between 0 and 1.
         """
         if self._progress_bar:
-            # Clamp value between 0 and 1
-            value = max(0.0, min(1.0, value))
+            # Validate and clamp value between 0 and 1
+            if value < 0.0 or value > 1.0:
+                logger.warning("Progress value %s clamped to [0.0, 1.0]", value)
+                value = max(0.0, min(1.0, value))
             self._progress_bar.value = value
             self._progress_bar.update()
