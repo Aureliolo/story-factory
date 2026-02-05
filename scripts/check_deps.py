@@ -16,6 +16,8 @@ import re
 import subprocess
 import sys
 import tomllib
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as installed_version
 from pathlib import Path
 
 from packaging.version import Version
@@ -65,6 +67,9 @@ def get_installed_version(package: str) -> str | None:
     """
     Return the installed version string for the given package.
 
+    Uses importlib.metadata for fast in-process lookups instead of spawning
+    pip subprocesses (which are ~15s each on Windows).
+
     Parameters:
         package (str): Package name to query (will be normalized for lookup).
 
@@ -75,32 +80,18 @@ def get_installed_version(package: str) -> str | None:
     normalized = _normalize_name(package)
 
     try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "show", normalized],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            # Try with original name in case pip prefers it
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "show", package],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if result.returncode != 0:
-                logger.debug("Package %s not found", package)
-                return None
-        for line in result.stdout.splitlines():
-            if line.startswith("Version:"):
-                version = line.split(":", 1)[1].strip()
-                logger.debug("Found %s version: %s", package, version)
-                return version
-        return None
-    except (subprocess.SubprocessError, OSError):
-        logger.error("Error checking package %s", package, exc_info=True)
-        return None
+        version = installed_version(normalized)
+        logger.debug("Found %s version: %s", package, version)
+        return version
+    except PackageNotFoundError:
+        # Try original name in case metadata uses a different normalization
+        try:
+            version = installed_version(package)
+            logger.debug("Found %s version: %s (original name)", package, version)
+            return version
+        except PackageNotFoundError:
+            logger.debug("Package %s not found", package)
+            return None
 
 
 def load_required_deps(pyproject_path: Path) -> dict[str, str]:

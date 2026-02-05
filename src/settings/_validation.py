@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.memory.mode_models import VramStrategy
-from src.settings._types import AGENT_ROLES, REFINEMENT_TEMP_DECAY_CURVES
+from src.settings._types import AGENT_ROLES, LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
 
 if TYPE_CHECKING:
     from src.settings._settings import Settings
@@ -25,6 +25,7 @@ def validate(settings: Settings) -> bool:
     Raises:
         ValueError: If any field contains an invalid value.
     """
+    _validate_log_level(settings)
     _validate_url(settings)
     _validate_numeric_ranges(settings)
     _validate_interaction_mode(settings)
@@ -66,6 +67,14 @@ def validate(settings: Settings) -> bool:
     _validate_world_health(settings)
     changed = _validate_embedding_model(settings) or changed
     return changed
+
+
+def _validate_log_level(settings: Settings) -> None:
+    """Validate log_level is a known logging level."""
+    if settings.log_level not in LOG_LEVELS:
+        raise ValueError(
+            f"log_level must be one of {list(LOG_LEVELS.keys())}, got {settings.log_level}"
+        )
 
 
 def _validate_url(settings: Settings) -> None:

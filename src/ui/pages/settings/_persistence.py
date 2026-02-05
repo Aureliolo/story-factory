@@ -44,6 +44,11 @@ def save_settings(page: SettingsPage) -> None:
         page.settings.validate()
         page.settings.save()
 
+        # Apply the log level at runtime
+        from src.utils.logging_config import set_log_level
+
+        set_log_level(page.settings.log_level)
+
         # Capture new state for redo AFTER successful save
         new_snapshot = capture_settings_snapshot(page)
 
@@ -80,6 +85,7 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
     snapshot = {
         # Connection
         "ollama_url": settings.ollama_url,
+        "log_level": settings.log_level,
         # Models
         "default_model": settings.default_model,
         "use_per_agent_models": settings.use_per_agent_models,
@@ -174,6 +180,7 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
 
     # Connection
     settings.ollama_url = snapshot["ollama_url"]
+    settings.log_level = snapshot["log_level"]
 
     # Models
     settings.default_model = snapshot["default_model"]
@@ -287,6 +294,11 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
 
     # Save changes
     settings.save()
+
+    # Apply the log level at runtime
+    from src.utils.logging_config import set_log_level
+
+    set_log_level(settings.log_level)
 
     # Update UI elements to reflect restored values
     refresh_ui_from_settings(page)

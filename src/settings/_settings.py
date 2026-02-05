@@ -35,6 +35,7 @@ class Settings:
     ollama_url: str = "http://localhost:11434"
     context_size: int = 32768
     max_tokens: int = 8192  # Increased to support longer chapters (2000+ words)
+    log_level: str = "INFO"
 
     # Default model for all agents - "auto" means select automatically
     # If set to a specific model, that model will be used as fallback

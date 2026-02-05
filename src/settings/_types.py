@@ -37,6 +37,14 @@ REFINEMENT_TEMP_DECAY_CURVES: dict[str, str] = {
     "step": "Step",
 }
 
+# Log level options for settings UI
+LOG_LEVELS: dict[str, str] = {
+    "DEBUG": "Debug",
+    "INFO": "Info",
+    "WARNING": "Warning",
+    "ERROR": "Error",
+}
+
 
 # Agent role definitions
 AGENT_ROLES: dict[str, AgentRoleInfo] = {

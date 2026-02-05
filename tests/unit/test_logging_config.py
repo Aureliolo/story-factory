@@ -9,6 +9,7 @@ from src.utils.logging_config import (
     _context_filter,
     log_context,
     log_performance,
+    set_log_level,
     setup_logging,
 )
 
@@ -257,3 +258,67 @@ class TestLogPerformance:
 
         # Check duration is logged
         assert "Completed in" in caplog.text
+
+
+class TestSetLogLevel:
+    """Tests for set_log_level() runtime level change."""
+
+    @pytest.fixture(autouse=True)
+    def _managed_logging(self):
+        """Save and restore root logger state around each test."""
+        root_logger = logging.getLogger()
+        original_level = root_logger.level
+        original_handlers = root_logger.handlers[:]
+        original_handler_levels = {h: h.level for h in original_handlers}
+        try:
+            yield
+        finally:
+            root_logger.handlers = original_handlers
+            for handler, level in original_handler_levels.items():
+                handler.setLevel(level)
+            root_logger.setLevel(original_level)
+
+    def test_set_log_level_changes_root_logger(self):
+        """set_log_level should change the root logger level."""
+        root_logger = logging.getLogger()
+        setup_logging(level="INFO", log_file=None)
+        assert root_logger.level == logging.INFO
+
+        set_log_level("DEBUG")
+        assert root_logger.level == logging.DEBUG
+
+        set_log_level("WARNING")
+        assert root_logger.level == logging.WARNING
+
+    def test_set_log_level_changes_handler_levels(self):
+        """set_log_level should update all handler levels."""
+        root_logger = logging.getLogger()
+        setup_logging(level="INFO", log_file=None)
+        set_log_level("DEBUG")
+
+        for handler in root_logger.handlers:
+            assert handler.level == logging.DEBUG
+
+    def test_set_log_level_suppresses_third_party(self):
+        """Third-party loggers should stay at WARNING after set_log_level('DEBUG')."""
+        setup_logging(level="INFO", log_file=None)
+        set_log_level("DEBUG")
+
+        assert logging.getLogger("httpx").level == logging.WARNING
+        assert logging.getLogger("httpcore").level == logging.WARNING
+        assert logging.getLogger("nicegui").level == logging.WARNING
+
+    def test_set_log_level_logs_change(self, caplog):
+        """set_log_level should log the level change."""
+        # Don't call setup_logging() here — it removes all root handlers
+        # including pytest's caplog handler, preventing log capture.
+        with caplog.at_level(logging.INFO):
+            set_log_level("WARNING")
+
+        assert "Log level changed to WARNING" in caplog.text
+
+    def test_set_log_level_invalid_raises_value_error(self):
+        """set_log_level should raise ValueError for invalid level names."""
+        setup_logging(level="INFO", log_file=None)
+        with pytest.raises(ValueError, match="Invalid log level"):
+            set_log_level("INVALID_LEVEL")

@@ -52,6 +52,17 @@ def build_connection_section(page: SettingsPage) -> None:
                     ui.icon("error", size="sm").classes("text-red-500")
                     ui.label("Offline").classes("text-sm text-red-400").tooltip(health.message)
 
+    with ui.card().classes("w-full"):
+        page._section_header("Logging", "terminal", "Control log verbosity")
+        from src.settings import LOG_LEVELS
+
+        page._log_level_select = (
+            ui.select(options=LOG_LEVELS, value=page.settings.log_level)
+            .props("outlined dense")
+            .classes("w-32")
+            .tooltip("DEBUG shows all detail, INFO is normal, WARNING/ERROR reduce noise")
+        )
+
     logger.debug("Connection section built")
 
 
@@ -83,6 +94,7 @@ def save_to_settings(page: SettingsPage) -> None:
         page: The SettingsPage instance.
     """
     page.settings.ollama_url = page._ollama_url_input.value
+    page.settings.log_level = page._log_level_select.value
     logger.debug("Connection settings saved")
 
 
@@ -94,4 +106,6 @@ def refresh_from_settings(page: SettingsPage) -> None:
     """
     if hasattr(page, "_ollama_url_input"):
         page._ollama_url_input.value = page.settings.ollama_url
+    if hasattr(page, "_log_level_select"):
+        page._log_level_select.value = page.settings.log_level
     logger.debug("Connection UI refreshed from settings")
