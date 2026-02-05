@@ -485,6 +485,33 @@ class TestWorldQualityServiceInit:
         # Second access returns same client
         assert service.client is client
 
+    def test_client_uses_scaled_timeout(self, settings, mock_mode_service):
+        """Test that client uses scaled timeout based on writer model size."""
+        # Create fresh service without cached client
+        svc = WorldQualityService(settings, mock_mode_service)
+        assert svc._client is None
+
+        with (
+            patch("ollama.Client") as mock_client_class,
+            patch.object(settings, "get_model_for_agent", return_value="test-writer:40b"),
+            patch.object(settings, "get_scaled_timeout", return_value=360.0),
+        ):
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+
+            client = svc.client
+
+            # Verify get_model_for_agent was called with "writer"
+            settings.get_model_for_agent.assert_called_once_with("writer")
+            # Verify get_scaled_timeout was called with the writer model
+            settings.get_scaled_timeout.assert_called_once_with("test-writer:40b")
+            # Verify Client was created with scaled timeout
+            mock_client_class.assert_called_once_with(
+                host=settings.ollama_url,
+                timeout=360.0,
+            )
+            assert client is mock_client
+
     def test_analytics_db_creation(self, settings, mock_mode_service):
         """Test lazy analytics database creation."""
         # Create service without the fixture's analytics_db mock
