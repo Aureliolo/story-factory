@@ -36,9 +36,15 @@ def get_changed_files(base_branch: str) -> list[str]:
 
     Returns:
         List of changed .py file paths relative to repo root.
+
+    Raises:
+        SystemExit: If git diff fails against all attempted refs.
     """
+    logger.debug("Determining changed files against base branch: %s", base_branch)
+
     # Try with origin/ prefix first, fall back to local branch
     for ref in [f"origin/{base_branch}", base_branch]:
+        logger.debug("Trying git diff against ref: %s", ref)
         result = subprocess.run(
             ["git", "diff", "--name-only", "--diff-filter=ACMR", f"{ref}...HEAD"],
             capture_output=True,
@@ -46,13 +52,23 @@ def get_changed_files(base_branch: str) -> list[str]:
             check=False,
         )
         if result.returncode == 0:
+            logger.debug("Successfully got diff against %s", ref)
             break
     else:
-        logger.warning("Could not determine changed files, running full coverage check")
-        return []
+        # Fatal error - cannot determine changed files, so cannot enforce coverage
+        logger.error(
+            "Could not determine changed files against 'origin/%s' or '%s'. "
+            "Git error: %s\n"
+            "Hint: Run 'git fetch origin' to update remote refs.",
+            base_branch,
+            base_branch,
+            result.stderr.strip() or "(no error message)",
+        )
+        sys.exit(1)
 
     files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
     python_files = [f for f in files if f.endswith(".py")]
+    logger.debug("Found %d changed Python files", len(python_files))
     return python_files
 
 
@@ -65,12 +81,11 @@ def filter_coverable_files(files: list[str]) -> list[str]:
     Returns:
         List of files that should have coverage enforced.
     """
-    coverable = []
-    for f in files:
-        excluded = any(f.startswith(exc) for exc in COVERAGE_EXCLUDES)
-        if not excluded and Path(f).exists():
-            coverable.append(f)
-    return coverable
+    return [
+        f
+        for f in files
+        if not any(f.startswith(exc) for exc in COVERAGE_EXCLUDES) and Path(f).exists()
+    ]
 
 
 def run_coverage_check(files: list[str]) -> int:
@@ -86,14 +101,12 @@ def run_coverage_check(files: list[str]) -> int:
         logger.info("No coverable files changed, skipping coverage check")
         return 0
 
-    logger.info(f"Checking coverage for {len(files)} changed file(s):")
+    logger.info("Checking coverage for %d changed file(s):", len(files))
     for f in files:
-        logger.info(f"  - {f}")
+        logger.info("  - %s", f)
 
     # Build --cov arguments for each file
-    cov_args = []
-    for f in files:
-        cov_args.extend(["--cov", f])
+    cov_args = [arg for f in files for arg in ("--cov", f)]
 
     cmd = [
         sys.executable,
@@ -109,6 +122,7 @@ def run_coverage_check(files: list[str]) -> int:
     ]
 
     logger.info("Running coverage check...")
+    logger.debug("Command: %s", " ".join(cmd))
     result = subprocess.run(cmd, check=False)
     return result.returncode
 
