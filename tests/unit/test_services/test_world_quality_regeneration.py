@@ -1,14 +1,28 @@
 """Tests for world quality service entity regeneration methods."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.memory.entities import Entity
+from src.memory.mode_models import GenerationMode, SizePreference, VramStrategy
 from src.memory.story_state import StoryBrief
 from src.services.model_mode_service import ModelModeService
 from src.services.world_quality_service import WorldQualityService
 from src.settings import Settings
+
+
+@pytest.fixture(autouse=True)
+def mock_cache_deps():
+    """Mock cache dependencies for all tests in this module."""
+    with (
+        patch("src.settings.get_available_vram", return_value=16),
+        patch(
+            "src.settings.get_installed_models_with_sizes",
+            return_value={"test-model:latest": 8.0},
+        ),
+    ):
+        yield
 
 
 @pytest.fixture
@@ -38,6 +52,9 @@ def mock_settings():
         "architect": "auto",
         "judge": "auto",
     }
+    # ModelResolutionCache._check_context() required attributes
+    settings.vram_strategy = "adaptive"
+    settings.custom_model_tags = {}
     return settings
 
 
@@ -46,6 +63,14 @@ def mock_mode_service():
     """Create mock mode service."""
     service = MagicMock(spec=ModelModeService)
     service.get_model_for_agent.return_value = "test-model:latest"
+    # _check_context() needs get_current_mode to return a mode with an id
+    mode = GenerationMode(
+        id="test-mode",
+        name="Test Mode",
+        size_preference=SizePreference.MEDIUM,
+        vram_strategy=VramStrategy.ADAPTIVE,
+    )
+    service.get_current_mode.return_value = mode
     return service
 
 

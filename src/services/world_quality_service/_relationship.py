@@ -65,6 +65,11 @@ def generate_relationship_with_quality(
         return result
 
     def _is_empty(rel: dict[str, Any]) -> bool:
+        """Check if relationship is empty or a duplicate that should be rejected.
+
+        Returns True if source/target missing or if the pair already exists,
+        tracking rejected pairs to avoid regenerating them.
+        """
         if not rel.get("source") or not rel.get("target"):
             return True
         # Check for duplicate relationship (includes previously rejected pairs)

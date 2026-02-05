@@ -170,7 +170,7 @@ class Settings:
     # Judge consistency settings (for more reliable quality judgments)
     judge_consistency_enabled: bool = True  # Enable judge consistency features
     judge_multi_call_enabled: bool = True  # Make multiple judge calls and average
-    judge_multi_call_count: int = 3  # Number of judge calls if multi_call_enabled
+    judge_multi_call_count: int = 2  # Number of judge calls if multi_call_enabled
     judge_confidence_threshold: float = 0.7  # Min confidence for reliable decisions
     judge_outlier_detection: bool = True  # Detect and handle outlier scores
     judge_outlier_std_threshold: float = 2.0  # Std devs from mean to consider outlier
