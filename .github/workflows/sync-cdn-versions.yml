@@ -16,25 +16,59 @@ jobs:
     if: github.actor == 'dependabot[bot]'
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract vis-network version from package.json
+      # First, fetch and validate the version from PR without checking out untrusted code
+      - name: Fetch and validate version from PR
         id: extract
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use immutable commit SHA to ensure consistency with checkout
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          VIS_VERSION=$(jq -r '.dependencies["vis-network"]' .github/package.json)
+          # Fetch package.json content from PR via API using immutable SHA
+          API_RESPONSE=$(gh api "repos/${{ github.repository }}/contents/.github/package.json?ref=${PR_HEAD_SHA}" \
+            --jq '.content' 2>/dev/null) || {
+            echo "::error::Failed to fetch package.json from PR commit"
+            exit 1
+          }
+
+          VIS_VERSION=$(echo "$API_RESPONSE" | base64 -d 2>/dev/null | jq -r '.dependencies["vis-network"]' 2>/dev/null)
+
+          # Check if version extraction succeeded
+          if [ -z "$VIS_VERSION" ] || [ "$VIS_VERSION" = "null" ]; then
+            echo "::error::Failed to extract vis-network version from package.json"
+            exit 1
+          fi
+
+          # Validate version format (simple semver: major.minor.patch)
+          # Note: vis-network uses simple semver without pre-release/build metadata
+          if ! echo "$VIS_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format: $VIS_VERSION (expected X.Y.Z)"
+            exit 1
+          fi
+
           echo "vis_version=$VIS_VERSION" >> $GITHUB_OUTPUT
           echo "Found vis-network version: $VIS_VERSION"
 
+      # Checkout the exact validated commit SHA to prevent TOCTOU attacks
+      # (new commits pushed between validation and checkout won't affect this)
+      - name: Checkout validated PR commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Update CDN URL in graph.py
+        env:
+          VIS_VERSION: ${{ steps.extract.outputs.vis_version }}
         run: |
-          VIS_VERSION="${{ steps.extract.outputs.vis_version }}"
+          # Defense-in-depth: re-validate version before use in sed
+          if ! echo "$VIS_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version validation failed"
+            exit 1
+          fi
 
           # Update the CDN URL in src/ui/components/graph.py
-          sed -i "s|unpkg.com/vis-network@[0-9.]*|unpkg.com/vis-network@${VIS_VERSION}|g" src/ui/components/graph.py
+          sed -i -E "s|unpkg.com/vis-network@[0-9]+\.[0-9]+\.[0-9]+|unpkg.com/vis-network@${VIS_VERSION}|g" src/ui/components/graph.py
 
           echo "Updated CDN URL to vis-network@${VIS_VERSION}"
 
@@ -52,9 +86,14 @@ jobs:
 
       - name: Commit changes
         if: steps.check.outputs.changed == 'true'
+        env:
+          VIS_VERSION: ${{ steps.extract.outputs.vis_version }}
+          # Pass branch name via env to prevent script injection
+          PR_HEAD_REF: ${{ github.head_ref }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add src/ui/components/graph.py
-          git commit -m "chore: sync vis-network CDN URL to ${{ steps.extract.outputs.vis_version }}"
-          git push
+          git commit -m "chore: sync vis-network CDN URL to ${VIS_VERSION}"
+          # Push to the PR branch explicitly (we checked out a detached SHA)
+          git push origin "HEAD:${PR_HEAD_REF}"

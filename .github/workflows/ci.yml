@@ -38,13 +38,13 @@ jobs:
           pytest -n auto --cov=. --cov-report=term --cov-report=xml --cov-fail-under=100 --junitxml=junit.xml -o junit_family=legacy tests/unit tests/smoke tests/integration
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3  # v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
