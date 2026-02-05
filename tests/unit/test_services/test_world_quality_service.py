@@ -2573,6 +2573,30 @@ class TestMiniDescriptions:
         assert result == "A cunning warrior"
         assert "<think>" not in result
 
+    def test_generate_mini_description_empty_after_cleaning_fallback(
+        self, service, settings, mock_ollama_client, caplog
+    ):
+        """Test fallback to truncation when LLM returns only think tags."""
+        # LLM returns only think tags, which clean_llm_text() will strip to empty
+        mock_ollama_client.generate.return_value = {
+            "response": "<think>I'm just thinking here...</think>"
+        }
+        service._client = mock_ollama_client
+
+        # Set max_words to 5 for predictable output
+        settings.mini_description_words_max = 5
+
+        long_description = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10"
+        result = service.generate_mini_description(
+            name="Test Entity",
+            entity_type="character",
+            full_description=long_description,
+        )
+
+        # Should fall back to truncated description
+        assert result == "word1 word2 word3 word4 word5..."
+        assert "cleaned to empty" in caplog.text
+
     def test_generate_mini_description_truncates_long_response(
         self, service, settings, mock_ollama_client
     ):

@@ -659,15 +659,15 @@ class RefinementConfig(BaseModel):
 
         # First iteration uses start temperature
         if iteration <= 1:
-            return self.refinement_temp_start
+            return round(self.refinement_temp_start, 3)
 
         # Guard against max_iter <= 1 to avoid division by zero
         if max_iter <= 1:
-            return self.refinement_temp_end
+            return round(self.refinement_temp_end, 3)
 
         # Last iteration uses end temperature
         if iteration >= max_iter:
-            return self.refinement_temp_end
+            return round(self.refinement_temp_end, 3)
 
         # Calculate progress (0.0 to 1.0)
         progress = (iteration - 1) / (max_iter - 1)

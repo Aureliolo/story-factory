@@ -66,6 +66,15 @@ SUMMARY:"""
         summary: str = str(response["response"]).strip()
         # Clean think tags and LLM artifacts
         summary = clean_llm_text(summary)
+        # Guard against empty summaries after cleaning (e.g., LLM returned only think tags)
+        if not summary:
+            logger.warning(
+                "Mini description cleaned to empty for %s '%s'; falling back to truncation",
+                entity_type,
+                name,
+            )
+            words = full_description.split()[:max_words]
+            return " ".join(words) + ("..." if len(full_description.split()) > max_words else "")
         # Clean up any quotes or formatting
         summary = summary.strip("\"'").strip()
         # Ensure it's not too long
