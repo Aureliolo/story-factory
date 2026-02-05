@@ -46,9 +46,10 @@ class ChapterVersionManager:
         # Import here to avoid circular imports
         from src.memory.story_state import ChapterVersion
 
-        # Mark all existing versions as not current
-        for version in self._chapter.versions:
-            version.is_current = False
+        # Mark current version as not current (more efficient than looping all)
+        current = self.get_current()
+        if current:
+            current.is_current = False
 
         # Create new version
         version_id = str(uuid.uuid4())
@@ -94,9 +95,10 @@ class ChapterVersionManager:
             )
             return False
 
-        # Mark all versions as not current
-        for version in self._chapter.versions:
-            version.is_current = False
+        # Mark current version as not current (more efficient than looping all)
+        current = self.get_current()
+        if current:
+            current.is_current = False
 
         # Restore content from target version
         self._chapter.content = target_version.content
@@ -120,10 +122,10 @@ class ChapterVersionManager:
         Returns:
             The version if found, None otherwise.
         """
-        for version in self._chapter.versions:
-            if version.id == version_id:
-                return version
-        return None
+        return next(
+            (v for v in self._chapter.versions if v.id == version_id),
+            None,
+        )
 
     def get_current(self) -> ChapterVersion | None:
         """Get the current version.
@@ -144,6 +146,7 @@ class ChapterVersionManager:
 
         Returns:
             Dictionary with comparison data including word count differences.
+            If either version is not found, returns {"error": "..."} instead.
         """
         version_a = self.get_version(version_id_a)
         version_b = self.get_version(version_id_b)

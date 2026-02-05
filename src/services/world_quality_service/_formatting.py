@@ -97,7 +97,8 @@ def format_existing_names_warning(existing_names: list[str], entity_type: str) -
     formatted_names = "\n".join(f"  - {name}" for name in existing_names)
 
     # Generate example DO NOT variations from the first name
-    example_name = existing_names[0] if existing_names else "Example"
+    # (existing_names is guaranteed non-empty here due to early return above)
+    example_name = existing_names[0]
     do_not_examples = [
         f'"{example_name}" (exact match)',
         f'"{example_name.upper()}" (case variation)',

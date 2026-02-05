@@ -12,6 +12,7 @@ from src.memory.templates import (
     StoryTemplate,
     StructurePreset,
 )
+from src.utils.exceptions import StoryFactoryError
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 _TEMPLATES_DIR = Path(__file__).parent
 
 
-class TemplateRegistryError(Exception):
+class TemplateRegistryError(StoryFactoryError):
     """Raised when template loading fails."""
 
 
@@ -82,6 +83,18 @@ class TemplateRegistry:
         except OSError as e:
             raise TemplateRegistryError(f"Failed to read {filepath}: {e}") from e
 
+    def _convert_plot_points(self, data: dict[str, Any]) -> None:
+        """Convert plot_points from dicts to PlotPointTemplate in place.
+
+        Args:
+            data: Template data dict that may contain plot_points.
+        """
+        if "plot_points" in data:
+            data["plot_points"] = [
+                PlotPointTemplate(**pp) if isinstance(pp, dict) else pp
+                for pp in data["plot_points"]
+            ]
+
     def _load_structure_preset(self, filepath: Path) -> None:
         """Load a structure preset from YAML.
 
@@ -89,13 +102,7 @@ class TemplateRegistry:
             filepath: Path to the structure preset YAML file.
         """
         data = self._load_yaml_file(filepath)
-
-        # Convert plot_points from dicts to PlotPointTemplate
-        if "plot_points" in data:
-            data["plot_points"] = [
-                PlotPointTemplate(**pp) if isinstance(pp, dict) else pp
-                for pp in data["plot_points"]
-            ]
+        self._convert_plot_points(data)
 
         preset = StructurePreset.model_validate(data)
         self._structure_presets[preset.id] = preset
@@ -116,12 +123,7 @@ class TemplateRegistry:
                 for char in data["characters"]
             ]
 
-        # Convert plot_points from dicts to PlotPointTemplate
-        if "plot_points" in data:
-            data["plot_points"] = [
-                PlotPointTemplate(**pp) if isinstance(pp, dict) else pp
-                for pp in data["plot_points"]
-            ]
+        self._convert_plot_points(data)
 
         template = StoryTemplate.model_validate(data)
         self._story_templates[template.id] = template
@@ -183,7 +185,10 @@ class TemplateRegistry:
         Returns:
             StructurePreset if found, None otherwise.
         """
-        return self._structure_presets.get(preset_id)
+        preset = self._structure_presets.get(preset_id)
+        if preset is None:
+            logger.debug("Structure preset not found: %s", preset_id)
+        return preset
 
     def get_story_template(self, template_id: str) -> StoryTemplate | None:
         """Get a story template by ID.
@@ -194,7 +199,10 @@ class TemplateRegistry:
         Returns:
             StoryTemplate if found, None otherwise.
         """
-        return self._story_templates.get(template_id)
+        template = self._story_templates.get(template_id)
+        if template is None:
+            logger.debug("Story template not found: %s", template_id)
+        return template
 
     def reload(self) -> None:
         """Reload all templates from disk."""

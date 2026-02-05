@@ -1,7 +1,7 @@
 """Analytics recording logic for WorldQualityService.
 
 Handles the recording of entity quality scores and refinement analytics
-to the mode database.
+to the analytics database.
 """
 
 import logging

@@ -271,11 +271,16 @@ class Chapter(BaseModel):
         """Get the version manager for this chapter.
 
         Returns:
-            ChapterVersionManager instance for version operations.
+            ChapterVersionManager instance for version operations (cached).
         """
-        from src.memory._chapter_versions import ChapterVersionManager
+        # Cache the manager to avoid creating new instances on every access
+        cache_key = "_version_manager_cache"
+        if cache_key not in self.__dict__:
+            from src.memory._chapter_versions import ChapterVersionManager
 
-        return ChapterVersionManager(self)
+            self.__dict__[cache_key] = ChapterVersionManager(self)
+        manager: ChapterVersionManager = self.__dict__[cache_key]
+        return manager
 
     def save_current_as_version(self, feedback: str = "") -> str:
         """Save the current chapter content as a new version.

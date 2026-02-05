@@ -14,7 +14,7 @@ from src.memory.builtin_templates._registry import (
     get_builtin_structure_presets,
 )
 
-# Backward-compatible exports - these are properties that return the loaded data
+# Backward-compatible exports - eagerly loaded at import time
 BUILTIN_STRUCTURE_PRESETS = get_builtin_structure_presets()
 BUILTIN_STORY_TEMPLATES = get_builtin_story_templates()
 
