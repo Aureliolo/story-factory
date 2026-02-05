@@ -96,6 +96,7 @@ from src.services.world_quality_service._item import (
 from src.services.world_quality_service._location import (
     generate_location_with_quality as _generate_location_with_quality,
 )
+from src.services.world_quality_service._model_cache import ModelResolutionCache
 from src.services.world_quality_service._plot import (
     review_plot_quality as _review_plot_quality,
 )
@@ -271,7 +272,7 @@ class WorldQualityService:
         self.mode_service = mode_service
         self._client: ollama.Client | None = None
         self._analytics_db: ModeDatabase | None = None
-        self._warned_conflicts: set[str] = set()
+        self._model_cache = ModelResolutionCache(settings, mode_service)
         logger.debug("WorldQualityService initialized successfully")
 
     @property
@@ -431,11 +432,22 @@ class WorldQualityService:
         )
         return model
 
+    def invalidate_model_cache(self) -> None:
+        """Invalidate resolved model storage.
+
+        Call this when settings change (e.g., user changes model configuration)
+        to force re-resolution of models on next access.
+        """
+        self._model_cache.invalidate()
+
     def _get_creator_model(self, entity_type: str | None = None) -> str:
         """Get the model to use for creative generation.
 
         Respects the Settings hierarchy: explicit default_model or per-agent model
         takes priority over ModelModeService auto-selection.
+
+        Uses resolved model storage to avoid redundant tier score calculations
+        when the same role is requested multiple times.
 
         Args:
             entity_type: Type of entity being created (character, faction, location, etc.).
@@ -447,9 +459,18 @@ class WorldQualityService:
         agent_role = (
             self.ENTITY_CREATOR_ROLES.get(entity_type, "writer") if entity_type else "writer"
         )
+
+        # Check cache (validates context automatically)
+        cached = self._model_cache.get_creator_model(agent_role)
+        if cached is not None:
+            logger.debug("Using cached creator model '%s' for role=%s", cached, agent_role)
+            return cached
+
+        # Resolve and store the model
         model = self._resolve_model_for_role(agent_role)
+        self._model_cache.store_creator_model(agent_role, model)
         logger.debug(
-            "Selected creator model '%s' for entity_type=%s (role=%s)",
+            "Resolved and cached creator model '%s' for entity_type=%s (role=%s)",
             model,
             entity_type,
             agent_role,
@@ -461,6 +482,9 @@ class WorldQualityService:
 
         Respects the Settings hierarchy: explicit default_model or per-agent model
         takes priority over ModelModeService auto-selection.
+
+        Uses resolved model storage to avoid redundant tier score calculations
+        when the same role is requested multiple times.
 
         If the resolved judge model is the same as the creator model for the
         same entity type, attempts to pick a different model from the available
@@ -475,6 +499,14 @@ class WorldQualityService:
             Model ID to use for judgment.
         """
         agent_role = self.ENTITY_JUDGE_ROLES.get(entity_type, "judge") if entity_type else "judge"
+
+        # Check cache (validates context automatically)
+        cached = self._model_cache.get_judge_model(agent_role)
+        if cached is not None:
+            logger.debug("Using cached judge model '%s' for role=%s", cached, agent_role)
+            return cached
+
+        # Resolve the model
         model = self._resolve_model_for_role(agent_role)
 
         # Prefer a different model from the creator to avoid self-judging bias
@@ -501,8 +533,8 @@ class WorldQualityService:
                 if not alternative_found:
                     # Throttle warning: only warn once per entity_type:model combination
                     conflict_key = f"{entity_type}:{model}"
-                    if conflict_key not in self._warned_conflicts:
-                        self._warned_conflicts.add(conflict_key)
+                    if not self._model_cache.has_warned_conflict(conflict_key):
+                        self._model_cache.mark_conflict_warned(conflict_key)
                         logger.warning(
                             "Judge model '%s' is the same as creator model for entity_type=%s "
                             "and no alternative judge model is available. "
@@ -512,8 +544,10 @@ class WorldQualityService:
                             entity_type,
                         )
 
+        # Store the resolved model (including any swapped alternative)
+        self._model_cache.store_judge_model(agent_role, model)
         logger.debug(
-            "Selected judge model '%s' for entity_type=%s (role=%s)",
+            "Resolved and cached judge model '%s' for entity_type=%s (role=%s)",
             model,
             entity_type,
             agent_role,
