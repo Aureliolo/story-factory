@@ -3,12 +3,15 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.memory.content_guidelines import ContentProfile
 from src.memory.templates import TargetLength
+
+if TYPE_CHECKING:
+    from src.memory._chapter_versions import ChapterVersionManager
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +255,11 @@ class Chapter(BaseModel):
         return None
 
     def update_chapter_word_count(self) -> None:
-        """Update chapter word count from scenes or direct content."""
+        """
+        Update the chapter's word_count based on available data.
+
+        If the chapter has scenes, sets word_count to the sum of their word_count values. If there are no scenes but content is present, sets word_count to the number of words in the content. If neither scenes nor content are present, sets word_count to 0.
+        """
         if self.scenes:
             # Calculate from scenes
             total = sum(scene.word_count for scene in self.scenes)
@@ -263,70 +270,46 @@ class Chapter(BaseModel):
         else:
             self.word_count = 0
 
-    def save_current_as_version(self, feedback: str = "") -> str:
-        """Save the current chapter content as a new version.
-
-        Args:
-            feedback: Optional feedback that prompted this version.
+    @property
+    def version_manager(self) -> ChapterVersionManager:
+        """
+        Lazily create and return a ChapterVersionManager bound to this chapter.
 
         Returns:
-            The ID of the newly created version.
+            ChapterVersionManager: The cached manager instance used for chapter version operations.
         """
-        # Mark all existing versions as not current
-        for version in self.versions:
-            version.is_current = False
+        # Cache the manager to avoid creating new instances on every access
+        cache_key = "_version_manager_cache"
+        if cache_key not in self.__dict__:
+            from src.memory._chapter_versions import ChapterVersionManager
 
-        # Create new version
-        version_id = str(uuid.uuid4())
-        version_number = len(self.versions) + 1
+            self.__dict__[cache_key] = ChapterVersionManager(self)
+        manager: ChapterVersionManager = self.__dict__[cache_key]
+        return manager
 
-        new_version = ChapterVersion(
-            id=version_id,
-            content=self.content,
-            word_count=self.word_count,
-            feedback=feedback,
-            version_number=version_number,
-            is_current=True,
-        )
+    def save_current_as_version(self, feedback: str = "") -> str:
+        """
+        Save the chapter's current content as a new version.
 
-        self.versions.append(new_version)
-        self.current_version_id = version_id
+        Parameters:
+            feedback (str): Optional feedback associated with this version.
 
-        logger.debug(f"Saved chapter {self.number} version {version_number} (id={version_id})")
-        return version_id
+        Returns:
+            str: The ID of the newly created version.
+        """
+        return self.version_manager.save_version(feedback)
 
     def rollback_to_version(self, version_id: str) -> bool:
-        """Rollback to a previous version.
+        """
+        Restore the chapter to the specified saved version.
 
-        Args:
-            version_id: The ID of the version to rollback to.
+        Parameters:
+            version_id (str): ID of the saved version to restore.
 
         Returns:
-            True if successful, False if version not found.
+            bool: `True` if the rollback succeeded, `False` if the specified version was not found.
         """
-        # Find the version
-        target_version = None
-        for version in self.versions:
-            if version.id == version_id:
-                target_version = version
-                break
-
-        if not target_version:
-            logger.warning(f"Version {version_id} not found for chapter {self.number}")
-            return False
-
-        # Mark all versions as not current
-        for version in self.versions:
-            version.is_current = False
-
-        # Restore content from target version
-        self.content = target_version.content
-        self.word_count = target_version.word_count
-        target_version.is_current = True
-        self.current_version_id = version_id
-
-        logger.info(f"Rolled back chapter {self.number} to version {target_version.version_number}")
-        return True
+        return self.version_manager.rollback(version_id)
 
     def get_version_by_id(self, version_id: str) -> ChapterVersion | None:
         """Get a version by its ID.
@@ -337,56 +320,29 @@ class Chapter(BaseModel):
         Returns:
             The version if found, None otherwise.
         """
-        for version in self.versions:
-            if version.id == version_id:
-                return version
-        return None
+        return self.version_manager.get_version(version_id)
 
     def get_current_version(self) -> ChapterVersion | None:
-        """Get the current version.
+        """
+        Retrieve the chapter's currently active version.
 
         Returns:
-            The current version if it exists, None otherwise.
+            The active ChapterVersion if present, otherwise None.
         """
-        if self.current_version_id:
-            return self.get_version_by_id(self.current_version_id)
-        return None
+        return self.version_manager.get_current()
 
     def compare_versions(self, version_id_a: str, version_id_b: str) -> dict[str, Any]:
-        """Compare two versions.
+        """
+        Produce a comparison report between two saved chapter versions.
 
-        Args:
-            version_id_a: First version ID.
-            version_id_b: Second version ID.
+        Parameters:
+            version_id_a (str): ID of the first version to compare.
+            version_id_b (str): ID of the second version to compare.
 
         Returns:
-            Dictionary with comparison data including word count differences.
+            comparison (dict[str, Any]): Mapping containing comparison details such as 'word_count_a', 'word_count_b', 'word_count_diff', and any content or metadata diffs.
         """
-        version_a = self.get_version_by_id(version_id_a)
-        version_b = self.get_version_by_id(version_id_b)
-
-        if not version_a or not version_b:
-            return {"error": "One or both versions not found"}
-
-        return {
-            "version_a": {
-                "id": version_a.id,
-                "version_number": version_a.version_number,
-                "content": version_a.content,
-                "word_count": version_a.word_count,
-                "created_at": version_a.created_at.isoformat(),
-                "feedback": version_a.feedback,
-            },
-            "version_b": {
-                "id": version_b.id,
-                "version_number": version_b.version_number,
-                "content": version_b.content,
-                "word_count": version_b.word_count,
-                "created_at": version_b.created_at.isoformat(),
-                "feedback": version_b.feedback,
-            },
-            "word_count_diff": version_b.word_count - version_a.word_count,
-        }
+        return self.version_manager.compare(version_id_a, version_id_b)
 
 
 class StoryBrief(BaseModel):

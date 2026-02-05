@@ -151,8 +151,8 @@ class TestFormatProperties:
             pytest.param("single property", "single property", id="single_value"),
             # Empty string name (key exists)
             pytest.param([{"name": "", "description": "fallback"}], "", id="empty_string_name"),
-            # None name/description values
-            pytest.param([{"name": None}, {"description": None}], ", ", id="none_name"),
+            # None name/description values - filtered out to avoid empty strings
+            pytest.param([{"name": None}, {"description": None}], "", id="none_name"),
             # Non-string dict values
             pytest.param(
                 [{"name": 123}, {"description": True}], "123, True", id="non_string_values"

@@ -1,0 +1,127 @@
+id: romance-contemporary
+name: Contemporary Romance
+description: Modern love story with emotional depth and satisfying happily-ever-after
+
+genre: Romance
+subgenres:
+  - Contemporary
+tone: Warm, emotional, with moments of humor and tension
+themes:
+  - Love
+  - Self-discovery
+  - Vulnerability
+  - Trust
+setting_time: Modern day
+setting_place: Contemporary city or small town
+target_length: novel
+structure_preset_id: three-act
+
+world_description: >-
+  A realistic contemporary setting where two people navigate the complexities
+  of modern relationships, careers, and personal growth.
+
+world_rules:
+  - Emotional honesty drives the narrative
+  - Both protagonists must grow and change
+  - External conflicts serve internal character development
+  - Happy ending or happy-for-now is essential
+
+characters:
+  - name: First Protagonist
+    role: protagonist
+    description: Compelling lead with relatable flaws and dreams
+    personality_traits:
+      - Passionate about something
+      - Wounded from past
+      - Guarded emotionally
+      - Capable of growth
+    goals:
+      - Achieve professional/personal goal
+      - Protect heart from hurt
+      - "Eventually: open up to love"
+    arc_notes: Learns to trust and be vulnerable, heals from past wounds
+
+  - name: Second Protagonist
+    role: protagonist
+    description: Equally compelling lead who complements first protagonist
+    personality_traits:
+      - Different but compatible
+      - Has own goals and life
+      - Patient or challenging as needed
+      - Emotionally available (or learns to be)
+    goals:
+      - Pursue own dreams
+      - Break through partner's walls
+      - Build genuine connection
+    arc_notes: Also grows and changes through relationship
+
+  - name: Best Friend/Confidant
+    role: supporting
+    description: Trusted friend who provides advice and comic relief
+    personality_traits:
+      - Supportive
+      - Honest
+      - Perceptive
+      - Funny
+    goals:
+      - See protagonist happy
+      - Offer wisdom
+    arc_notes: May have own subplot
+
+  - name: The Ex or Rival
+    role: antagonist
+    description: Past relationship or rival for affection that creates tension
+    personality_traits:
+      - Represents past
+      - Attractive but wrong fit
+    goals:
+      - Win protagonist back
+      - Create obstacles
+    arc_notes: Eventually exits gracefully or reveals true nature
+
+plot_points:
+  - description: Meet cute - protagonists first encounter
+    act: 1
+    percentage: 10
+
+  - description: Initial attraction despite resistance
+    act: 1
+    percentage: 20
+
+  - description: Forced proximity or reason to interact
+    act: 1
+    percentage: 25
+
+  - description: Growing connection and chemistry
+    act: 2
+    percentage: 40
+
+  - description: First kiss or declaration of feelings
+    act: 2
+    percentage: 50
+
+  - description: Relationship deepens, walls come down
+    act: 2
+    percentage: 60
+
+  - description: Black moment - big fight or separation
+    act: 2
+    percentage: 75
+
+  - description: Protagonist realization and growth
+    act: 3
+    percentage: 85
+
+  - description: Grand gesture or reconciliation
+    act: 3
+    percentage: 95
+
+  - description: Happily ever after confirmed
+    act: 3
+    percentage: 100
+
+tags:
+  - romance
+  - love story
+  - contemporary
+  - relationship

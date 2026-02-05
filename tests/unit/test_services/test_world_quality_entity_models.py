@@ -150,19 +150,15 @@ class TestEntityTypeModelMapping:
         mock_mode_service.get_model_for_agent.assert_called_once_with("editor")
         assert model == "test-editor-model"
 
-    def test_default_uses_writer_model(self, settings):
-        """Test that unknown entity types default to writer model."""
+    def test_unknown_entity_type_raises_error(self, settings):
+        """Test that unknown entity types raise ValueError."""
         mock_mode_service = MagicMock()
-        mock_mode_service.get_model_for_agent.return_value = "test-writer-model"
 
         service = WorldQualityService(settings, mock_mode_service)
 
-        # Get model for unknown entity type
-        model = service._get_creator_model(entity_type="unknown_type")
-
-        # Should call get_model_for_agent with "writer" (default)
-        mock_mode_service.get_model_for_agent.assert_called_once_with("writer")
-        assert model == "test-writer-model"
+        # Get model for unknown entity type should raise
+        with pytest.raises(ValueError, match="Unknown entity_type 'unknown_type'"):
+            service._get_creator_model(entity_type="unknown_type")
 
     def test_no_entity_type_uses_writer_model(self, settings):
         """Test that no entity type defaults to writer model."""
@@ -326,6 +322,15 @@ class TestJudgeModelSelection:
 
         mock_mode_service.get_model_for_agent.assert_called_once_with("judge")
         assert model == "test-judge-model"
+
+    def test_unknown_entity_type_raises_error(self, settings):
+        """Test that unknown entity types raise ValueError for judge model."""
+        mock_mode_service = MagicMock()
+
+        service = WorldQualityService(settings, mock_mode_service)
+
+        with pytest.raises(ValueError, match="Unknown entity_type 'unknown_type'"):
+            service._get_judge_model(entity_type="unknown_type")
 
 
 class TestClassConstants:

@@ -1,0 +1,48 @@
+id: three-act
+name: Three-Act Structure
+description: Classic three-act narrative structure with setup, confrontation, and resolution
+
+acts:
+  - "Act 1: Setup"
+  - "Act 2: Confrontation"
+  - "Act 3: Resolution"
+
+plot_points:
+  - description: "Opening Image - Establish the world and protagonist"
+    act: 1
+    percentage: 0
+
+  - description: "Inciting Incident - Event that sets the story in motion"
+    act: 1
+    percentage: 12
+
+  - description: "First Plot Point - Protagonist commits to the journey"
+    act: 1
+    percentage: 25
+
+  - description: "Midpoint - Major revelation or shift in the story"
+    act: 2
+    percentage: 50
+
+  - description: "Second Plot Point - All is lost moment"
+    act: 2
+    percentage: 75
+
+  - description: "Climax - Final confrontation"
+    act: 3
+    percentage: 90
+
+  - description: "Resolution - New equilibrium established"
+    act: 3
+    percentage: 100
+
+beats:
+  - Hook the reader
+  - Establish normal world
+  - Inciting incident
+  - Rising action
+  - Midpoint twist
+  - Complications escalate
+  - Dark night of the soul
+  - Climactic confrontation
+  - Resolution and epilogue

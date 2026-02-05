@@ -1,0 +1,122 @@
+id: mystery-detective
+name: Mystery / Detective
+description: Classic whodunit with clues, red herrings, and a satisfying resolution
+
+genre: Mystery
+subgenres:
+  - Detective
+  - Crime
+tone: Suspenseful with moments of intrigue
+themes:
+  - Justice
+  - Truth
+  - Deception
+  - Morality
+setting_time: Contemporary
+setting_place: Urban city
+target_length: novel
+structure_preset_id: three-act
+
+world_description: >-
+  A gritty urban environment where crime lurks beneath the surface of normalcy.
+  Law enforcement and criminals engage in a constant game of cat and mouse.
+
+world_rules:
+  - Every mystery has a logical solution
+  - Fair play with readers - all clues are presented
+  - Red herrings misdirect but don't cheat
+  - The detective cannot be the culprit
+
+characters:
+  - name: Detective/Investigator
+    role: protagonist
+    description: Sharp-minded investigator with keen observation skills and troubled past
+    personality_traits:
+      - Analytical
+      - Perceptive
+      - Determined
+      - Flawed but capable
+    goals:
+      - Solve the central mystery
+      - Find justice for victims
+      - Overcome personal demons
+    arc_notes: Grows from skeptical loner to someone who trusts others and themselves
+
+  - name: The Victim
+    role: supporting
+    description: The person whose death or misfortune triggers the investigation
+    personality_traits:
+      - Complex
+      - Had secrets
+      - Connected to many
+    goals:
+      - Justice (posthumously)
+    arc_notes: Revealed through investigation
+
+  - name: Primary Suspect
+    role: antagonist
+    description: The most obvious culprit with motive and opportunity
+    personality_traits:
+      - Defensive
+      - Hiding something
+      - Morally gray
+    goals:
+      - Protect their secret
+      - Avoid blame
+    arc_notes: May or may not be the true culprit
+
+  - name: The Partner
+    role: supporting
+    description: Fellow investigator or assistant who provides contrast and support
+    personality_traits:
+      - Loyal
+      - Different approach
+      - Grounding influence
+    goals:
+      - Support protagonist
+      - Solve the case
+    arc_notes: Learns to trust protagonist's instincts
+
+plot_points:
+  - description: Discovery of the crime/mystery
+    act: 1
+    percentage: 5
+
+  - description: Detective takes the case
+    act: 1
+    percentage: 15
+
+  - description: First major clue discovered
+    act: 1
+    percentage: 25
+
+  - description: Interview key witnesses/suspects
+    act: 2
+    percentage: 35
+
+  - description: False solution or red herring exposed
+    act: 2
+    percentage: 50
+
+  - description: Major revelation changes everything
+    act: 2
+    percentage: 65
+
+  - description: Detective in danger/threatened
+    act: 2
+    percentage: 75
+
+  - description: Final piece of puzzle falls into place
+    act: 3
+    percentage: 85
+
+  - description: Confrontation with culprit and reveal
+    act: 3
+    percentage: 95
+
+tags:
+  - mystery
+  - detective
+  - crime
+  - thriller
+  - investigation

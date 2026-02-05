@@ -1,0 +1,87 @@
+id: save-the-cat
+name: Save The Cat
+description: Blake Snyder's beat sheet - proven structure for commercial storytelling
+
+acts:
+  - Act 1
+  - Act 2A
+  - Act 2B
+  - Act 3
+
+plot_points:
+  - description: "Opening Image - Snapshot of hero before journey"
+    act: 1
+    percentage: 1
+
+  - description: "Theme Stated - What the story is about"
+    act: 1
+    percentage: 5
+
+  - description: "Setup - Establish stakes and world"
+    act: 1
+    percentage: 10
+
+  - description: "Catalyst - Event that changes everything"
+    act: 1
+    percentage: 12
+
+  - description: "Debate - Hero hesitates, weighs options"
+    act: 1
+    percentage: 20
+
+  - description: "Break into Two - Hero commits to new path"
+    act: 1
+    percentage: 25
+
+  - description: "B Story - Secondary plot/relationship begins"
+    act: 2
+    percentage: 30
+
+  - description: "Fun and Games - Promise of the premise"
+    act: 2
+    percentage: 40
+
+  - description: "Midpoint - False victory or defeat"
+    act: 2
+    percentage: 50
+
+  - description: "Bad Guys Close In - Pressure increases"
+    act: 2
+    percentage: 60
+
+  - description: "All Is Lost - Lowest point"
+    act: 2
+    percentage: 75
+
+  - description: "Dark Night of the Soul - Hero processes loss"
+    act: 2
+    percentage: 80
+
+  - description: "Break into Three - Hero finds solution"
+    act: 3
+    percentage: 85
+
+  - description: "Finale - Execute plan and triumph"
+    act: 3
+    percentage: 95
+
+  - description: "Final Image - Opposite of opening image"
+    act: 3
+    percentage: 100
+
+beats:
+  - Opening snapshot
+  - State the theme
+  - Set up the world
+  - Catalyst strikes
+  - Hero debates
+  - Commit to change
+  - B story develops
+  - Fun and games
+  - Midpoint twist
+  - Opposition intensifies
+  - Lowest moment
+  - Dark reflection
+  - Discovery and decision
+  - Finale triumph
+  - New world snapshot

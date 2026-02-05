@@ -2,6 +2,7 @@
 
 import pytest
 
+from src.memory._chapter_versions import ChapterVersionManager
 from src.memory.story_state import Chapter, ChapterVersion
 
 
@@ -193,3 +194,130 @@ class TestChapterVersionManagement:
         version = sample_chapter.get_version_by_id(v_id)
         assert version is not None
         assert version.feedback == ""
+
+
+class TestChapterVersionManager:
+    """Tests for ChapterVersionManager using composition pattern."""
+
+    def test_manager_created_from_chapter(self):
+        """Test that a version manager can be created from a chapter."""
+        chapter = Chapter(number=1, title="Test Chapter", outline="Test outline")
+        manager = ChapterVersionManager(chapter)
+        assert manager is not None
+        assert manager._chapter is chapter
+
+    def test_chapter_version_manager_property(self):
+        """Test that Chapter.version_manager returns a ChapterVersionManager."""
+        chapter = Chapter(number=1, title="Test Chapter", outline="Test outline")
+        manager = chapter.version_manager
+        assert isinstance(manager, ChapterVersionManager)
+
+    def test_save_version_via_manager(self):
+        """Test saving a version through the manager directly."""
+        chapter = Chapter(
+            number=1,
+            title="Test Chapter",
+            outline="Test outline",
+            content="Original content",
+            word_count=2,
+        )
+        manager = chapter.version_manager
+
+        version_id = manager.save_version()
+
+        assert version_id is not None
+        assert len(chapter.versions) == 1
+        assert chapter.versions[0].content == "Original content"
+        assert chapter.versions[0].is_current is True
+        assert chapter.current_version_id == version_id
+
+    def test_count_property(self):
+        """Test count returns the number of versions."""
+        chapter = Chapter(number=1, title="Test Chapter", outline="Test outline", content="Content")
+        manager = chapter.version_manager
+
+        assert manager.count == 0
+
+        manager.save_version()
+        assert manager.count == 1
+
+        chapter.content = "V2"
+        manager.save_version()
+        assert manager.count == 2
+
+    def test_all_versions_property(self):
+        """Test all_versions returns the version list."""
+        chapter = Chapter(number=1, title="Test Chapter", outline="Test outline", content="Content")
+        manager = chapter.version_manager
+        manager.save_version()
+        chapter.content = "V2"
+        manager.save_version()
+
+        versions = manager.all_versions
+
+        assert len(versions) == 2
+        assert versions is chapter.versions  # Should be the same list
+
+    def test_rollback_via_manager(self):
+        """Test rollback through the manager directly."""
+        chapter = Chapter(
+            number=1, title="Test Chapter", outline="Test outline", content="Original"
+        )
+        manager = chapter.version_manager
+
+        v1_id = manager.save_version()
+        chapter.content = "Modified"
+        chapter.word_count = 1
+        manager.save_version()
+
+        result = manager.rollback(v1_id)
+
+        assert result is True
+        assert chapter.content == "Original"
+        assert chapter.current_version_id == v1_id
+
+    def test_get_version_via_manager(self):
+        """Test get_version through the manager directly."""
+        chapter = Chapter(number=1, title="Test Chapter", outline="Test outline", content="Content")
+        manager = chapter.version_manager
+        version_id = manager.save_version()
+
+        version = manager.get_version(version_id)
+
+        assert version is not None
+        assert version.id == version_id
+
+    def test_get_current_via_manager(self):
+        """Test get_current through the manager directly."""
+        chapter = Chapter(number=1, title="Test Chapter", outline="Test outline", content="Content")
+        manager = chapter.version_manager
+        manager.save_version()
+
+        current = manager.get_current()
+
+        assert current is not None
+        assert current.is_current is True
+
+    def test_compare_via_manager(self):
+        """Test compare through the manager directly."""
+        chapter = Chapter(
+            number=1,
+            title="Test Chapter",
+            outline="Test outline",
+            content="Short",
+            word_count=1,
+        )
+        manager = chapter.version_manager
+        v1_id = manager.save_version()
+
+        chapter.content = "Longer content here"
+        chapter.word_count = 3
+        v2_id = manager.save_version()
+
+        result = manager.compare(v1_id, v2_id)
+
+        assert "version_a" in result
+        assert "version_b" in result
+        assert result["version_a"]["word_count"] == 1
+        assert result["version_b"]["word_count"] == 3
+        assert result["word_count_diff"] == 2

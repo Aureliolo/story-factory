@@ -7,7 +7,7 @@ from pathlib import Path
 from src.memory.builtin_templates import (
     BUILTIN_STORY_TEMPLATES,
     BUILTIN_STRUCTURE_PRESETS,
-)
+)  # Now loaded from YAML files
 from src.memory.story_state import Character, PlotPoint, StoryBrief, StoryState
 from src.memory.templates import StoryTemplate, StructurePreset
 from src.memory.world_database import WorldDatabase
