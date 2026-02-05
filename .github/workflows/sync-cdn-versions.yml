@@ -21,14 +21,29 @@ jobs:
         id: extract
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pass untrusted input via env to prevent script injection
+          PR_HEAD_REF: ${{ github.head_ref }}
         run: |
           # Fetch package.json content from PR via API (no code checkout)
-          VIS_VERSION=$(gh api "repos/${{ github.repository }}/contents/.github/package.json?ref=${{ github.head_ref }}" \
-            --jq '.content' | base64 -d | jq -r '.dependencies["vis-network"]')
+          # Using env variable for head_ref to prevent expression injection
+          API_RESPONSE=$(gh api "repos/${{ github.repository }}/contents/.github/package.json?ref=${PR_HEAD_REF}" \
+            --jq '.content' 2>/dev/null) || {
+            echo "::error::Failed to fetch package.json from PR branch"
+            exit 1
+          }
 
-          # Validate version format (semver-like: digits and dots only)
+          VIS_VERSION=$(echo "$API_RESPONSE" | base64 -d 2>/dev/null | jq -r '.dependencies["vis-network"]' 2>/dev/null)
+
+          # Check if version extraction succeeded
+          if [ -z "$VIS_VERSION" ] || [ "$VIS_VERSION" = "null" ]; then
+            echo "::error::Failed to extract vis-network version from package.json"
+            exit 1
+          fi
+
+          # Validate version format (simple semver: major.minor.patch)
+          # Note: vis-network uses simple semver without pre-release/build metadata
           if ! echo "$VIS_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Invalid version format: $VIS_VERSION"
+            echo "::error::Invalid version format: $VIS_VERSION (expected X.Y.Z)"
             exit 1
           fi
 
@@ -43,8 +58,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update CDN URL in graph.py
+        env:
+          VIS_VERSION: ${{ steps.extract.outputs.vis_version }}
         run: |
-          VIS_VERSION="${{ steps.extract.outputs.vis_version }}"
+          # Defense-in-depth: re-validate version before use in sed
+          if ! echo "$VIS_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version validation failed"
+            exit 1
+          fi
 
           # Update the CDN URL in src/ui/components/graph.py
           sed -i "s|unpkg.com/vis-network@[0-9.]*|unpkg.com/vis-network@${VIS_VERSION}|g" src/ui/components/graph.py
@@ -65,9 +86,11 @@ jobs:
 
       - name: Commit changes
         if: steps.check.outputs.changed == 'true'
+        env:
+          VIS_VERSION: ${{ steps.extract.outputs.vis_version }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add src/ui/components/graph.py
-          git commit -m "chore: sync vis-network CDN URL to ${{ steps.extract.outputs.vis_version }}"
+          git commit -m "chore: sync vis-network CDN URL to ${VIS_VERSION}"
           git push
