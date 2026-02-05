@@ -692,6 +692,9 @@ class RefinementConfig(BaseModel):
             else:
                 temp = self.refinement_temp_end
 
+        # Round to 3 decimal places to avoid float precision artifacts like 0.5249999999999999
+        temp = round(temp, 3)
+
         logger.debug(
             "Dynamic temperature for iteration %d/%d: %.3f (decay=%s, progress=%.2f)",
             iteration,

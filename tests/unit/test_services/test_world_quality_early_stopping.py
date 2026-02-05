@@ -935,6 +935,29 @@ class TestDynamicTemperature:
         temp = config.get_refinement_temperature(iteration=2, max_iterations=1)
         assert temp == 0.3
 
+    def test_temperature_rounded_to_3_decimal_places(self):
+        """Test that temperatures are rounded to avoid float precision artifacts (#248).
+
+        Float arithmetic can produce values like 0.5249999999999999 instead of 0.525.
+        The rounding ensures clean log output and consistent behavior.
+        """
+        config = RefinementConfig(
+            refinement_temp_start=0.7,
+            refinement_temp_end=0.35,
+            refinement_temp_decay="linear",
+            max_iterations=3,
+        )
+
+        # Iteration 2 of 3: progress = (2-1)/(3-1) = 0.5
+        # Expected: 0.7 + 0.5 * (0.35 - 0.7) = 0.7 - 0.175 = 0.525
+        # Without rounding, this could be 0.5249999999999999
+        temp = config.get_refinement_temperature(iteration=2, max_iterations=3)
+
+        # The temperature should be exactly 0.525, not 0.5249999999999999
+        assert temp == 0.525
+        # Also verify it's a clean float representation
+        assert str(temp) == "0.525"
+
 
 class TestLocationQualityScoresWeakDimensions:
     """Tests for LocationQualityScores.weak_dimensions edge cases."""

@@ -393,6 +393,25 @@ class TestBaseAgentShortResponseValidation:
 
         assert agent.client.chat.call_count == 3  # max_retries default
 
+    def test_generate_returns_cleaned_content_without_think_tags(self):
+        """Test generate returns content with think tags removed (#248).
+
+        LLM responses may contain <think>...</think> tags from training data
+        contamination. These should be stripped before returning to callers.
+        """
+        agent = create_mock_agent()
+        agent.client.chat.return_value = {
+            "message": {
+                "content": "<think>Let me think about this carefully...</think>The actual response"
+            }
+        }
+
+        result = agent.generate("Prompt")
+
+        assert result == "The actual response"
+        assert "<think>" not in result
+        assert "</think>" not in result
+
 
 class TestBaseAgentRateLimiting:
     """Tests for rate limiting in generate method."""

@@ -2529,6 +2529,23 @@ class TestMiniDescriptions:
 
         assert result == "A quoted summary"
 
+    def test_generate_mini_description_strips_think_tags(self, service, mock_ollama_client):
+        """Test that think tags are stripped from response (#248)."""
+        mock_ollama_client.generate.return_value = {
+            "response": "<think>Let me think about this...</think>A cunning warrior"
+        }
+        service._client = mock_ollama_client
+
+        long_description = " ".join(["word"] * 50)
+        result = service.generate_mini_description(
+            name="Test",
+            entity_type="character",
+            full_description=long_description,
+        )
+
+        assert result == "A cunning warrior"
+        assert "<think>" not in result
+
     def test_generate_mini_description_truncates_long_response(
         self, service, settings, mock_ollama_client
     ):
