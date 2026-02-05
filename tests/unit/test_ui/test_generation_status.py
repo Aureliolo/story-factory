@@ -9,17 +9,18 @@ from src.ui.components.generation_status import GenerationStatus
 from src.ui.state import AppState
 
 
+@pytest.fixture
+def status_component():
+    """Create GenerationStatus with mocked UI elements."""
+    state = AppState()
+    status = GenerationStatus(state)
+    # Mock the progress bar
+    status._progress_bar = MagicMock()
+    return status
+
+
 class TestProgressValidation:
     """Tests for progress value validation in GenerationStatus."""
-
-    @pytest.fixture
-    def status_component(self):
-        """Create GenerationStatus with mocked UI elements."""
-        state = AppState()
-        status = GenerationStatus(state)
-        # Mock the progress bar
-        status._progress_bar = MagicMock()
-        return status
 
     def test_valid_progress_zero(self, status_component):
         """Test that 0.0 is accepted as valid progress."""
@@ -109,28 +110,24 @@ class TestProgressValidation:
 class TestSetProgressClamping:
     """Tests for the set_progress method's clamping behavior."""
 
-    @pytest.fixture
-    def status_component(self):
-        """Create GenerationStatus with mocked progress bar."""
-        state = AppState()
-        status = GenerationStatus(state)
-        status._progress_bar = MagicMock()
-        return status
-
-    def test_set_progress_clamps_negative_to_zero(self, status_component):
-        """Test that set_progress clamps negative values to 0."""
-        status_component.set_progress(-0.5)
+    def test_set_progress_clamps_negative_to_zero(self, status_component, caplog):
+        """Test that set_progress clamps negative values to 0 with warning."""
+        with caplog.at_level(logging.WARNING):
+            status_component.set_progress(-0.5)
 
         assert status_component._progress_bar.value == 0.0
+        assert "clamped" in caplog.text
 
-    def test_set_progress_clamps_high_to_one(self, status_component):
-        """Test that set_progress clamps values > 1 to 1."""
-        status_component.set_progress(2.0)
+    def test_set_progress_clamps_high_to_one(self, status_component, caplog):
+        """Test that set_progress clamps values > 1 to 1 with warning."""
+        with caplog.at_level(logging.WARNING):
+            status_component.set_progress(2.0)
 
         assert status_component._progress_bar.value == 1.0
+        assert "clamped" in caplog.text
 
     def test_set_progress_accepts_valid_value(self, status_component):
-        """Test that set_progress accepts valid values."""
+        """Test that set_progress accepts valid values without warning."""
         status_component.set_progress(0.75)
 
         assert status_component._progress_bar.value == 0.75

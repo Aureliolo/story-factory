@@ -285,3 +285,35 @@ class TestProjectListCache:
             state.invalidate_project_cache()
 
         assert "Project list cache invalidated" in caplog.text
+
+    def test_cache_expires_after_ttl(self):
+        """Test that cache expires after TTL and triggers refresh."""
+        from unittest.mock import patch
+
+        state = AppState()
+        call_count = 0
+
+        def fetch_projects():
+            """Fetch mock projects with incrementing ID."""
+            nonlocal call_count
+            call_count += 1
+            return [{"id": str(call_count)}]
+
+        with patch("src.ui.state.time") as mock_time:
+            # First call at time 1000.0
+            mock_time.time.return_value = 1000.0
+            result1 = state.get_cached_projects(fetch_projects)
+            assert call_count == 1
+            assert result1[0]["id"] == "1"
+
+            # Second call at 1.5s (within 2s TTL) - should return cached
+            mock_time.time.return_value = 1001.5
+            result2 = state.get_cached_projects(fetch_projects)
+            assert call_count == 1  # Still 1, cache hit
+            assert result2 is result1
+
+            # Third call at 2.5s (beyond 2s TTL) - should refresh
+            mock_time.time.return_value = 1002.5
+            result3 = state.get_cached_projects(fetch_projects)
+            assert call_count == 2  # Incremented, cache miss
+            assert result3[0]["id"] == "2"

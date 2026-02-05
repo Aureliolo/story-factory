@@ -14,6 +14,9 @@ from src.utils.exceptions import BackgroundTaskActiveError
 
 logger = logging.getLogger(__name__)
 
+# Cache TTL in seconds for project list (avoids magic number)
+_PROJECT_LIST_CACHE_TTL = 2.0
+
 
 class ActionType(Enum):
     """Types of undoable actions."""
@@ -112,8 +115,10 @@ class AppState:
     _background_task_lock: threading.Lock = field(default_factory=threading.Lock)
 
     # ========== Project List Cache ==========
+    # Cache stores ProjectSummary objects from ProjectService.list_projects()
     _project_list_cache: list[Any] | None = field(default=None, repr=False)
     _project_list_cache_time: float = 0.0
+    _project_list_cache_lock: threading.Lock = field(default_factory=threading.Lock)
 
     # ========== Callbacks ==========
     # These are called when certain state changes occur
@@ -454,8 +459,11 @@ class AppState:
 
     # ========== Project List Cache Methods ==========
 
-    def get_cached_projects(self, fetch_fn: Callable[[], list]) -> list:
-        """Get projects from cache or fetch if stale (>2s).
+    def get_cached_projects(self, fetch_fn: Callable[[], list[Any]]) -> list[Any]:
+        """Get projects from cache or fetch if stale.
+
+        Uses a lock to ensure thread-safe cache access. The cache is typically
+        used for ProjectSummary objects from ProjectService.list_projects().
 
         Args:
             fetch_fn: Function to call to fetch fresh project list.
@@ -463,19 +471,29 @@ class AppState:
         Returns:
             List of projects (cached or freshly fetched).
         """
-        now = time.time()
-        if self._project_list_cache is not None and (now - self._project_list_cache_time) < 2.0:
+        with self._project_list_cache_lock:
+            now = time.time()
+            if (
+                self._project_list_cache is not None
+                and (now - self._project_list_cache_time) < _PROJECT_LIST_CACHE_TTL
+            ):
+                logger.debug(
+                    "Returning cached project list (%d projects)", len(self._project_list_cache)
+                )
+                return self._project_list_cache
+
+            self._project_list_cache = fetch_fn()
+            self._project_list_cache_time = now
             logger.debug(
-                "Returning cached project list (%d projects)", len(self._project_list_cache)
+                "Refreshed project list cache with %d projects", len(self._project_list_cache)
             )
             return self._project_list_cache
 
-        self._project_list_cache = fetch_fn()
-        self._project_list_cache_time = now
-        logger.debug("Refreshed project list cache with %d projects", len(self._project_list_cache))
-        return self._project_list_cache
-
     def invalidate_project_cache(self) -> None:
-        """Invalidate project list cache after mutations."""
-        self._project_list_cache = None
-        logger.debug("Project list cache invalidated")
+        """Invalidate project list cache after mutations.
+
+        Uses a lock to ensure thread-safe cache access.
+        """
+        with self._project_list_cache_lock:
+            self._project_list_cache = None
+            logger.debug("Project list cache invalidated")

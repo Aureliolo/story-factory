@@ -181,41 +181,55 @@ class TestDeferredRuntimeErrorHandling:
 
     @pytest.mark.asyncio
     @patch("src.ui.local_prefs.ui")
-    async def test_runtime_error_handled_gracefully(self, mock_ui, caplog):
-        """Timer callback handles RuntimeError when UI element is destroyed."""
-        # Simulate the _deferred function being created and RuntimeError on callback
-        callback = MagicMock(side_effect=RuntimeError("UI element destroyed"))
-        mock_ui.run_javascript = AsyncMock(return_value='{"key": "value"}')
+    async def test_deferred_catches_runtime_error_in_callback(self, mock_ui, caplog):
+        """Verify _deferred actually catches RuntimeError from callback."""
+        import logging
 
-        # Import and run the internal deferred function logic
-        from src.ui.local_prefs import _load_prefs
+        # Capture the timer callback
+        captured_callback = None
 
-        # Simulate what _deferred does - load prefs and call callback
-        try:
-            prefs = await _load_prefs("test_page")
-            callback(prefs)
-        except RuntimeError:
-            pass  # This is what _deferred now does
+        def capture_timer(delay, func, once):
+            """Capture the timer callback for later invocation."""
+            nonlocal captured_callback
+            captured_callback = func
 
-        # Verify callback was called (and raised RuntimeError)
-        callback.assert_called_once()
+        mock_ui.timer = MagicMock(side_effect=capture_timer)
+        mock_ui.run_javascript = AsyncMock(return_value="{}")
+
+        callback = MagicMock(side_effect=RuntimeError("UI destroyed"))
+        load_prefs_deferred("test_page", callback)
+
+        # Invoke the captured _deferred function - should not raise
+        assert captured_callback is not None, "Timer callback was not captured"
+        with caplog.at_level(logging.DEBUG, logger="src.ui.local_prefs"):
+            await captured_callback()
+
+        assert "Pref load skipped" in caplog.text
 
     @pytest.mark.asyncio
     @patch("src.ui.local_prefs.ui")
-    async def test_deferred_callback_with_runtime_error_logs_debug(self, mock_ui, caplog):
-        """RuntimeError in deferred callback is logged at debug level."""
+    async def test_deferred_catches_runtime_error_in_load_prefs(self, mock_ui, caplog):
+        """Verify _deferred catches RuntimeError from _load_prefs itself."""
         import logging
 
-        # This test verifies the pattern works - actual logging happens in the try/except
+        # Capture the timer callback
+        captured_callback = None
+
+        def capture_timer(delay, func, once):
+            """Capture the timer callback for later invocation."""
+            nonlocal captured_callback
+            captured_callback = func
+
+        mock_ui.timer = MagicMock(side_effect=capture_timer)
         mock_ui.run_javascript = AsyncMock(side_effect=RuntimeError("Parent slot deleted"))
 
-        with caplog.at_level(logging.DEBUG):
-            try:
-                await _load_prefs("destroyed_page")
-            except RuntimeError:
-                # This simulates what _deferred now catches
-                logging.getLogger("src.ui.local_prefs").debug(
-                    "Pref load skipped: UI element destroyed for %s", "destroyed_page"
-                )
+        callback = MagicMock()
+        load_prefs_deferred("destroyed_page", callback)
+
+        # Invoke the captured _deferred function - should not raise
+        assert captured_callback is not None, "Timer callback was not captured"
+        with caplog.at_level(logging.DEBUG, logger="src.ui.local_prefs"):
+            await captured_callback()
 
         assert "Pref load skipped" in caplog.text
+        callback.assert_not_called()  # Callback never reached due to RuntimeError
