@@ -361,11 +361,13 @@ class WorldQualityService:
 
     @property
     def client(self) -> ollama.Client:
-        """Get or create Ollama client."""
+        """Get or create Ollama client with scaled timeout based on model size."""
         if self._client is None:
+            # Use writer model for timeout scaling since it's typically the largest
+            writer_model = self.settings.get_model_for_agent("writer")
             self._client = ollama.Client(
                 host=self.settings.ollama_url,
-                timeout=float(self.settings.ollama_timeout),
+                timeout=self.settings.get_scaled_timeout(writer_model),
             )
         return self._client
 

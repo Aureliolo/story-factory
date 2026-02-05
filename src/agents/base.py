@@ -132,9 +132,9 @@ class BaseAgent:
         else:
             self.temperature = self.settings.get_temperature_for_agent(self.agent_role)
 
-        # Create Ollama client with configurable timeout to prevent hanging
+        # Create Ollama client with scaled timeout based on model size
         self.client = ollama.Client(
-            host=self.settings.ollama_url, timeout=float(self.settings.ollama_timeout)
+            host=self.settings.ollama_url, timeout=self.settings.get_scaled_timeout(self.model)
         )
 
         # Instructor client for structured outputs (lazily initialized)
@@ -168,7 +168,7 @@ class BaseAgent:
             openai_client = OpenAI(
                 base_url=f"{self.settings.ollama_url}/v1",
                 api_key="ollama",  # Required but not used by Ollama
-                timeout=float(self.settings.ollama_timeout),
+                timeout=self.settings.get_scaled_timeout(self.model),
             )
             self._instructor_client = instructor.from_openai(
                 openai_client,
