@@ -185,6 +185,7 @@ def make_synthetic_entity(entity_type: str) -> tuple[dict[str, Any] | None, str]
                     "A secret society of former archivists and scholars who preserve "
                     "forbidden memories in hidden vaults beneath the empire's libraries."
                 ),
+                "leader": "Archivist Matron Lys",
                 "goals": ["Preserve erased memories", "Undermine the council's grip on history"],
                 "values": ["Truth", "Knowledge preservation", "Academic freedom"],
                 "resources": ["Hidden memory vaults", "Network of sympathetic librarians"],
@@ -212,6 +213,13 @@ def make_synthetic_entity(entity_type: str) -> tuple[dict[str, Any] | None, str]
                     "erased memories lingering in places and objects. Prolonged use causes "
                     "the wearer's own memories to blur."
                 ),
+                "significance": (
+                    "Key to recovering erased memories hidden in the empire's archives."
+                ),
+                "properties": [
+                    "Reveals erased memory traces",
+                    "Decodes memory crystal recordings",
+                ],
                 "powers": ["Reveals erased memory traces", "Decodes memory crystal recordings"],
                 "drawbacks": ["Gradual memory erosion in the user"],
             },
@@ -224,6 +232,10 @@ def make_synthetic_entity(entity_type: str) -> tuple[dict[str, Any] | None, str]
                     "The council's systematic program of removing dangerous or inconvenient "
                     "memories from the collective consciousness. Performed through ritual "
                     "magic that draws on the empire's ley lines."
+                ),
+                "manifestations": (
+                    "Citizens lose shared history; archives fracture as public rituals "
+                    "blur memory and communal identity erodes."
                 ),
                 "themes": ["Censorship", "Collective trauma", "Historical revisionism"],
                 "implications": ["Weakens the empire's magical foundation over time"],
@@ -708,17 +720,20 @@ def main() -> None:
     # Initialize services
     print("Loading settings and initializing services...")
     settings = Settings.load()
-    svc = ServiceContainer(settings)
-    config = svc.world_quality.get_config()
 
-    # Override judge model if specified.
-    # Monkey-patches WorldQualityService._get_judge_model(entity_type=None) -> str.
-    # Call chain: judge_entity -> wqs._judge_X_quality -> _get_judge_model.
-    # If _get_judge_model's name or signature changes, this override will break.
+    # Override judge model if specified via the settings agent_models config.
+    # This flows through the normal model resolution: _get_judge_model reads
+    # settings.agent_models["judge"], so setting it before ServiceContainer
+    # creation ensures all judge calls use the override.
     judge_model_override = args.judge_model
     if judge_model_override:
-        svc.world_quality._get_judge_model = lambda entity_type=None: judge_model_override  # type: ignore[method-assign]
         logger.info("Overriding judge model to: %s", judge_model_override)
+        settings.agent_models["judge"] = judge_model_override
+        if not settings.use_per_agent_models:
+            settings.use_per_agent_models = True
+
+    svc = ServiceContainer(settings)
+    config = svc.world_quality.get_config()
 
     # Parse temperatures
     is_sweep = args.temperatures is not None

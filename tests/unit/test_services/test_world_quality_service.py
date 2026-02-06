@@ -8,11 +8,13 @@ import ollama
 import pytest
 
 from src.memory.story_state import (
+    Chapter,
     Character,
     Concept,
     Faction,
     Item,
     Location,
+    PlotOutline,
     StoryBrief,
     StoryState,
 )
@@ -3044,6 +3046,141 @@ class TestExceptionHandlingPaths:
             r for r in caplog.records if r.levelno == logging.ERROR and "_relationship" in r.name
         ]
         assert len(rel_errors) == 0
+
+    # ========== Multi-Call Warning Paths (other entity types) ==========
+
+    @patch("src.services.world_quality_service._character.generate_structured")
+    def test_judge_character_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state, caplog
+    ):
+        """Test character judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        character = Character(name="Test", role="supporting", description="Test")
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Character quality judgment failed"):
+                service._judge_character_quality(character, story_state, temperature=0.1)
+
+        char_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_character" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in char_warnings)
+
+    @patch("src.services.world_quality_service._location.generate_structured")
+    def test_judge_location_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state, caplog
+    ):
+        """Test location judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        location = {"name": "Test", "description": "Test"}
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Location quality judgment failed"):
+                service._judge_location_quality(location, story_state, temperature=0.1)
+
+        loc_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_location" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in loc_warnings)
+
+    @patch("src.services.world_quality_service._faction.generate_structured")
+    def test_judge_faction_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state, caplog
+    ):
+        """Test faction judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        faction = {"name": "Test", "description": "Test"}
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Faction quality judgment failed"):
+                service._judge_faction_quality(faction, story_state, temperature=0.1)
+
+        fac_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_faction" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in fac_warnings)
+
+    @patch("src.services.world_quality_service._item.generate_structured")
+    def test_judge_item_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state, caplog
+    ):
+        """Test item judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        item = {"name": "Test", "description": "Test"}
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Item quality judgment failed"):
+                service._judge_item_quality(item, story_state, temperature=0.1)
+
+        item_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_item" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in item_warnings)
+
+    @patch("src.services.world_quality_service._concept.generate_structured")
+    def test_judge_concept_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state, caplog
+    ):
+        """Test concept judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        concept = {"name": "Test", "description": "Test"}
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Concept quality judgment failed"):
+                service._judge_concept_quality(concept, story_state, temperature=0.1)
+
+        con_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_concept" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in con_warnings)
+
+    @patch("src.services.world_quality_service._plot.generate_structured")
+    def test_judge_plot_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state, caplog
+    ):
+        """Test plot judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        plot_outline = PlotOutline(plot_summary="A mystery unfolds", plot_points=[])
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Plot quality judgment failed"):
+                service._judge_plot_quality(plot_outline, story_state, temperature=0.1)
+
+        plot_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_plot" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in plot_warnings)
+
+    @patch("src.services.world_quality_service._chapter_quality.generate_structured")
+    def test_judge_chapter_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state, caplog
+    ):
+        """Test chapter judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        chapter = Chapter(number=1, title="The Beginning", outline="A mystery begins")
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Chapter quality judgment failed"):
+                service._judge_chapter_quality(chapter, story_state, temperature=0.1)
+
+        ch_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_chapter" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in ch_warnings)
 
     # ========== Relationship Refinement Exception Paths ==========
 
