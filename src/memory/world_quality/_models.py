@@ -40,6 +40,10 @@ class RefinementHistory(BaseModel):
     consecutive_plateaus: int = Field(
         default=0, description="Count of consecutive iterations with same score as peak"
     )
+    failed_refinements: int = Field(
+        default=0,
+        description="Count of refinement attempts that raised WorldGenerationError",
+    )
 
     def add_iteration(
         self,
@@ -289,7 +293,7 @@ class RefinementConfig(BaseModel):
 
     # Enhanced early stopping settings
     early_stopping_min_iterations: int = Field(
-        default=1, ge=1, le=10, description="Minimum iterations before early stop can trigger"
+        default=2, ge=1, le=10, description="Minimum scoring rounds before early stop can trigger"
     )
     early_stopping_variance_tolerance: float = Field(
         default=0.3, ge=0.0, le=2.0, description="Score variance tolerance for early stopping"

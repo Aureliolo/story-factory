@@ -702,3 +702,235 @@ class TestQualityLoopUnchangedOutput:
             )
 
         assert any("refinement produced unchanged output" in msg for msg in caplog.messages)
+
+
+class TestQualityLoopB10SkipRedundantJudge:
+    """Tests for B10: skip redundant judge calls after refinement errors (#266)."""
+
+    def test_refinement_error_skips_judge_on_unchanged_entity(self, mock_svc, config):
+        """After WorldGenerationError during refinement, judge is NOT called on unchanged entity."""
+        config.max_iterations = 4
+        config.early_stopping_patience = 10
+
+        judge_calls = 0
+        refine_calls = 0
+
+        def judge_fn(e):
+            """Track judge calls and return low scores."""
+            nonlocal judge_calls
+            judge_calls += 1
+            return _make_scores(5.0)
+
+        def refine_fn(e, s, i):
+            """Fail on first refinement, succeed on subsequent with unique entities."""
+            nonlocal refine_calls
+            refine_calls += 1
+            if refine_calls == 1:
+                raise WorldGenerationError("Refinement LLM error")
+            return {"name": f"Refined Hero v{refine_calls}"}
+
+        _result_entity, _result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Iteration 0: create → judge (5.0) → judge_calls=1
+        # Iteration 1: refine raises → scores preserved, no judge → refine_calls=1
+        # Iteration 2: refine succeeds (v2) → judge (5.0) → judge_calls=2, refine_calls=2
+        # Iteration 3: refine succeeds (v3) → judge (5.0) → judge_calls=3, refine_calls=3
+        # judge should NOT have been called after iteration 1's refinement error
+        assert judge_calls == 3  # Not 4 (would be 4 if re-judged unchanged entity)
+        assert refine_calls == 3
+        assert scoring_rounds == 3
+
+    def test_judge_error_allows_re_judge_on_next_iteration(self, mock_svc, config):
+        """After judge error, the same entity IS re-judged (not skipped)."""
+        config.max_iterations = 3
+
+        judge_calls = 0
+
+        def judge_fn(e):
+            """Fail on first call, succeed on second."""
+            nonlocal judge_calls
+            judge_calls += 1
+            if judge_calls == 1:
+                raise WorldGenerationError("Judge LLM error")
+            return _make_scores(9.0)
+
+        _result_entity, result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Iteration 0: create → judge raises → needs_judging stays True
+        # Iteration 1: needs_judging=True → re-judge → succeeds (9.0) → threshold met
+        assert judge_calls == 2
+        assert result_scores.average == 9.0
+        assert scoring_rounds == 1
+
+    def test_failed_refinements_counter_incremented(self, mock_svc, config):
+        """RefinementHistory.failed_refinements tracks error count."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 10
+
+        refine_count = 0
+
+        def refine_fn(e, s, i):
+            """Always fail refinement."""
+            nonlocal refine_count
+            refine_count += 1
+            raise WorldGenerationError("Refinement failed")
+
+        _result_entity, _result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=lambda e: _make_scores(5.0),
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Iteration 0: create → judge (5.0) → scoring_rounds=1
+        # Iteration 1: refine raises → failed_refinements=1, scores preserved
+        # Iteration 2: refine raises → failed_refinements=2, scores preserved
+        # Post-loop: return best from history
+        assert scoring_rounds == 1
+        # Verify analytics was called with the history tracking failed refinements
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        history = analytics_call[0][0]
+        assert history.failed_refinements == 2
+
+
+class TestQualityLoopC3ScoringRounds:
+    """Tests for C3: scoring_rounds separates actual judge calls from loop iterations (#266)."""
+
+    def test_scoring_rounds_excludes_failed_iterations(self, mock_svc, config):
+        """scoring_rounds only counts successful judge calls, not total loop iterations."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10
+
+        judge_calls = 0
+
+        def judge_fn(e):
+            """Return low scores."""
+            nonlocal judge_calls
+            judge_calls += 1
+            return _make_scores(5.0)
+
+        refine_count = 0
+
+        def refine_fn(e, s, i):
+            """Fail first, succeed after."""
+            nonlocal refine_count
+            refine_count += 1
+            if refine_count == 1:
+                raise WorldGenerationError("Temp error")
+            return {"name": "Refined"}
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # scoring_rounds should equal actual judge_calls
+        assert scoring_rounds == judge_calls
+        # Loop ran 5 iterations but scoring_rounds < 5 because of failed refinement
+        assert scoring_rounds < 5
+
+    def test_scoring_rounds_returned_on_threshold_met(self, mock_svc, config):
+        """When threshold is met, scoring_rounds (not iteration count) is returned."""
+        config.max_iterations = 5
+
+        # First creation fails (empty), second succeeds, judge passes threshold
+        create_count = 0
+
+        def create_fn(retries):
+            """Return empty first, valid second."""
+            nonlocal create_count
+            create_count += 1
+            if create_count == 1:
+                return {"name": ""}  # Empty
+            return {"name": "Valid"}
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=lambda e: _make_scores(9.0),
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Loop iteration 0: empty creation (no judge)
+        # Loop iteration 1: valid creation → judge (9.0) → threshold met
+        # scoring_rounds = 1 (only 1 actual judge call)
+        assert scoring_rounds == 1
+
+    def test_early_stopping_uses_scoring_rounds_in_log(self, mock_svc, config, caplog):
+        """Early stopping log message includes scoring_rounds count."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 2
+        config.early_stopping_min_iterations = 2
+
+        entities = [{"name": f"v{i}"} for i in range(5)]
+        iter_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return next entity."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[iter_idx]
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entities[0],
+                judge_fn=lambda e: _make_scores(6.0),
+                refine_fn=refine_fn,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("scoring round" in msg for msg in caplog.messages)

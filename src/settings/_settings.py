@@ -145,7 +145,7 @@ class Settings:
     world_quality_refinement_temp_decay: str = "linear"  # Decay curve: linear, exponential, step
 
     # Enhanced early stopping settings (#167)
-    world_quality_early_stopping_min_iterations: int = 1  # Min iterations before early stop
+    world_quality_early_stopping_min_iterations: int = 2  # Min scoring rounds before early stop
     world_quality_early_stopping_variance_tolerance: float = 0.3  # Score variance tolerance
 
     # Circuit breaker settings (#175)
