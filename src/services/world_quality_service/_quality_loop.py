@@ -56,7 +56,8 @@ def quality_refinement_loop(
         initial_entity: If provided, skip creation and start with this entity (review mode).
 
     Returns:
-        Tuple of (best_entity, best_scores, total_iterations).
+        Tuple of (best_entity, best_scores, scoring_rounds) where scoring_rounds
+        is the number of successful judge calls.
 
     Raises:
         WorldGenerationError: If no valid entity could be produced after all attempts.
@@ -79,6 +80,7 @@ def quality_refinement_loop(
     early_stopped = False
     needs_judging = False
     scoring_rounds = 0
+    stage = ""  # Tracks current phase: "create", "judge", or "refine"
 
     while iteration < config.max_iterations:
         try:
@@ -87,6 +89,7 @@ def quality_refinement_loop(
                 # Entity already exists and needs judging (e.g. judge failed
                 # on previous iteration). Skip creation/refinement and go
                 # straight to judging.
+                stage = "judge"
                 logger.debug(
                     "%s '%s' re-judging after previous judge error on iteration %d",
                     entity_type.capitalize(),
@@ -95,10 +98,12 @@ def quality_refinement_loop(
                 )
             elif iteration == 0 and initial_entity is not None:
                 # Review mode: use the provided entity directly
+                stage = "create"
                 entity = initial_entity
                 needs_judging = True
             elif entity is None or (iteration == 0) or is_empty(entity):
                 # Need fresh creation
+                stage = "create"
                 entity = create_fn(creation_retries)
                 if entity is None or is_empty(entity):
                     creation_retries += 1
@@ -116,6 +121,7 @@ def quality_refinement_loop(
             else:
                 # Refinement based on previous feedback
                 if scores is not None:
+                    stage = "refine"
                     dynamic_temp_iter = iteration + 1
                     entity = refine_fn(entity, scores, dynamic_temp_iter)
                     if entity is None or is_empty(entity):
@@ -169,6 +175,7 @@ def quality_refinement_loop(
             # continue/break out of this iteration.
             assert entity is not None  # nosec — invariant, not runtime check
 
+            stage = "judge"
             scores = judge_fn(entity)
             scoring_rounds += 1
             needs_judging = False
@@ -246,14 +253,14 @@ def quality_refinement_loop(
 
         except WorldGenerationError as e:
             last_error = str(e)[:200]
-            history.failed_refinements += 1
             logger.warning(
-                "%s generation error on iteration %d (already logged upstream): %s",
+                "%s %s error on iteration %d (already logged upstream): %s",
                 entity_type.capitalize(),
+                stage,
                 iteration + 1,
                 last_error,
             )
-            if needs_judging:
+            if stage == "judge":
                 # Error occurred during judging — entity was successfully
                 # created/refined but the judge call failed. Keep
                 # needs_judging=True so the next iteration re-judges the
@@ -264,15 +271,26 @@ def quality_refinement_loop(
                     entity_type.capitalize(),
                     get_name(entity) if entity is not None else "unknown",
                 )
-            else:
+            elif stage == "refine":
                 # Error occurred during refinement — entity is unchanged
                 # from before this iteration. Don't re-judge an unchanged
                 # entity (#266 B10). Keep existing scores (still valid for
                 # the current entity) so refinement can be retried.
+                history.failed_refinements += 1
                 logger.debug(
                     "%s '%s' refinement failed, entity unchanged, skipping redundant re-judge",
                     entity_type.capitalize(),
                     get_name(entity) if entity is not None else "unknown",
+                )
+            else:
+                # Error occurred during creation — no entity exists yet,
+                # increment creation_retries so next iteration retries
+                # with escalated temperature.
+                creation_retries += 1
+                logger.debug(
+                    "%s creation failed (retry %d), will retry",
+                    entity_type.capitalize(),
+                    creation_retries,
                 )
 
         iteration += 1

@@ -824,6 +824,162 @@ class TestQualityLoopB10SkipRedundantJudge:
         assert history.failed_refinements == 2
 
 
+class TestQualityLoopStageTracking:
+    """Tests for stage-based error classification (create vs judge vs refine)."""
+
+    def test_create_fn_error_not_counted_as_failed_refinement(self, mock_svc, config):
+        """WorldGenerationError during create_fn is NOT counted as failed_refinements."""
+        config.max_iterations = 4
+
+        create_count = 0
+
+        def create_fn(retries):
+            """Fail on first call, succeed on second."""
+            nonlocal create_count
+            create_count += 1
+            if create_count == 1:
+                raise WorldGenerationError("Create LLM error")
+            return {"name": "Hero"}
+
+        _result_entity, _result_scores, _scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=lambda e: _make_scores(9.0),
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Create error should NOT increment failed_refinements
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        history = analytics_call[0][0]
+        assert history.failed_refinements == 0
+
+    def test_judge_error_not_counted_as_failed_refinement(self, mock_svc, config):
+        """WorldGenerationError during judge_fn is NOT counted as failed_refinements."""
+        config.max_iterations = 4
+
+        judge_count = 0
+
+        def judge_fn(e):
+            """Fail on first call, succeed on second."""
+            nonlocal judge_count
+            judge_count += 1
+            if judge_count == 1:
+                raise WorldGenerationError("Judge LLM error")
+            return _make_scores(9.0)
+
+        _result_entity, _result_scores, _scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Judge error should NOT increment failed_refinements
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        history = analytics_call[0][0]
+        assert history.failed_refinements == 0
+
+    def test_refine_error_counted_as_failed_refinement(self, mock_svc, config):
+        """WorldGenerationError during refine_fn IS counted as failed_refinements."""
+        config.max_iterations = 4
+        config.early_stopping_patience = 10
+
+        refine_count = 0
+
+        def refine_fn(e, s, i):
+            """Fail on first refinement, succeed on second."""
+            nonlocal refine_count
+            refine_count += 1
+            if refine_count == 1:
+                raise WorldGenerationError("Refinement LLM error")
+            return {"name": "Refined Hero"}
+
+        _result_entity, _result_scores, _scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=lambda e: _make_scores(5.0),
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Exactly 1 refinement error should be counted
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        history = analytics_call[0][0]
+        assert history.failed_refinements == 1
+
+    def test_mixed_errors_only_counts_refine_failures(self, mock_svc, config):
+        """Only refinement errors are counted in failed_refinements, not create or judge errors."""
+        config.max_iterations = 6
+        config.early_stopping_patience = 10
+
+        create_count = 0
+        judge_count = 0
+        refine_count = 0
+
+        def create_fn(retries):
+            """Fail on first call, succeed after."""
+            nonlocal create_count
+            create_count += 1
+            if create_count == 1:
+                raise WorldGenerationError("Create error")
+            return {"name": "Hero"}
+
+        def judge_fn(e):
+            """Fail on second call (after first successful judge + refine attempt)."""
+            nonlocal judge_count
+            judge_count += 1
+            if judge_count == 2:
+                raise WorldGenerationError("Judge error")
+            return _make_scores(5.0)
+
+        def refine_fn(e, s, i):
+            """Fail on second refinement attempt."""
+            nonlocal refine_count
+            refine_count += 1
+            if refine_count == 2:
+                raise WorldGenerationError("Refine error")
+            return {"name": f"Refined v{refine_count}"}
+
+        _result_entity, _result_scores, _scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # 1 create error + 1 judge error + 1 refine error, but only refine counts
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        history = analytics_call[0][0]
+        assert history.failed_refinements == 1
+
+
 class TestQualityLoopC3ScoringRounds:
     """Tests for C3: scoring_rounds separates actual judge calls from loop iterations (#266)."""
 
