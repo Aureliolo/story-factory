@@ -180,7 +180,7 @@ def quality_refinement_loop(
                     quality_threshold=config.quality_threshold,
                     max_iterations=config.max_iterations,
                 )
-                return entity, scores, current_iter
+                return entity, scores, len(history.iterations)
 
             # Early stopping check
             if history.should_stop_early(

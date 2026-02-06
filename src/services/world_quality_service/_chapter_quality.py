@@ -117,23 +117,22 @@ def _judge_chapter_quality(
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
                 logger.warning(
                     "Chapter quality judgment failed for 'Ch%d: %s': %s",
                     chapter.number,
                     chapter.title,
-                    e,
+                    summary,
                 )
             else:
                 logger.error(
                     "Chapter quality judgment failed for 'Ch%d: %s': %s",
                     chapter.number,
                     chapter.title,
-                    summarize_llm_error(e),
+                    summary,
                 )
-            raise WorldGenerationError(
-                f"Chapter quality judgment failed: {summarize_llm_error(e)}"
-            ) from e
+            raise WorldGenerationError(f"Chapter quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, ChapterQualityScores, judge_config)
 

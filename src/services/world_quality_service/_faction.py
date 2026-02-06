@@ -291,21 +291,20 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
                 logger.warning(
                     "Faction quality judgment failed for '%s': %s",
                     faction.get("name") or "Unknown",
-                    e,
+                    summary,
                 )
             else:
                 logger.error(
                     "Faction quality judgment failed for '%s': %s",
                     faction.get("name") or "Unknown",
-                    summarize_llm_error(e),
+                    summary,
                 )
-            raise WorldGenerationError(
-                f"Faction quality judgment failed: {summarize_llm_error(e)}"
-            ) from e
+            raise WorldGenerationError(f"Faction quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, FactionQualityScores, judge_config)
 

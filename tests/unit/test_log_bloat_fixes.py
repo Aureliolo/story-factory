@@ -277,27 +277,128 @@ class TestEntityColorNoDebugLog:
 class TestQualityLoopErrorPropagation:
     """Tests for C6: quality loop uses WARNING for already-logged errors."""
 
-    def test_quality_loop_uses_warning_for_caught_errors(self):
-        """Quality loop should use logger.warning for WorldGenerationError (already logged upstream)."""
-        import inspect
-
+    def test_quality_loop_logs_warning_not_error_for_world_generation_error(self, caplog):
+        """WorldGenerationError caught in quality loop is logged at WARNING, not ERROR."""
+        from src.memory.world_quality import CharacterQualityScores, RefinementConfig
         from src.services.world_quality_service._quality_loop import quality_refinement_loop
+        from src.utils.exceptions import WorldGenerationError
 
-        source = inspect.getsource(quality_refinement_loop)
-        # The WorldGenerationError catch block should use warning, not error
-        assert "already logged upstream" in source
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            max_iterations=3,
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+            early_stopping_patience=5,
+            early_stopping_min_iterations=2,
+            early_stopping_variance_tolerance=0.3,
+        )
+        svc = MagicMock()
+        svc._log_refinement_analytics = MagicMock()
+
+        judge_count = 0
+
+        def judge_fn(entity):
+            """Fail on first call, succeed on second."""
+            nonlocal judge_count
+            judge_count += 1
+            if judge_count == 1:
+                raise WorldGenerationError("Already logged upstream error")
+            return CharacterQualityScores(
+                depth=9.0, goals=9.0, flaws=9.0, uniqueness=9.0, arc_potential=9.0, feedback="OK"
+            )
+
+        with caplog.at_level(logging.DEBUG):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: {"name": "Hero"},
+                judge_fn=judge_fn,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=svc,
+                story_id="test-story",
+            )
+
+        # The WorldGenerationError should be logged at WARNING (not ERROR) in quality loop
+        loop_logger = "src.services.world_quality_service._quality_loop"
+        loop_records = [r for r in caplog.records if r.name == loop_logger]
+        error_records = [r for r in loop_records if r.levelno >= logging.ERROR]
+        warning_records = [
+            r
+            for r in loop_records
+            if r.levelno == logging.WARNING and "already logged upstream" in r.message
+        ]
+        assert len(warning_records) >= 1, "Expected WARNING with 'already logged upstream'"
+        assert len(error_records) == 0, "Quality loop should not log ERROR for caught errors"
 
 
 class TestIterationCountReporting:
     """Tests for B14: iteration count returns total, not best index."""
 
-    def test_quality_loop_returns_total_iterations(self):
-        """quality_refinement_loop returns total iterations in docstring."""
-        import inspect
-
+    def test_quality_loop_returns_total_iteration_count(self):
+        """quality_refinement_loop returns total iterations, not best iteration index."""
+        from src.memory.world_quality import CharacterQualityScores, RefinementConfig
         from src.services.world_quality_service._quality_loop import quality_refinement_loop
 
-        source = inspect.getsource(quality_refinement_loop)
-        assert "total_iterations" in source
-        # The return comment should mention total iteration count
-        assert "total iteration count" in source
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            max_iterations=3,
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+            early_stopping_patience=5,
+            early_stopping_min_iterations=2,
+            early_stopping_variance_tolerance=0.3,
+        )
+        svc = MagicMock()
+        svc._log_refinement_analytics = MagicMock()
+
+        # 3 iterations: 6.0, 7.5, 5.0 → best is iteration 2, but total is 3
+        scores_list = [6.0, 7.5, 5.0]
+        judge_idx = 0
+
+        def judge_fn(entity):
+            """Return scores in sequence: 6.0, 7.5, 5.0."""
+            nonlocal judge_idx
+            score = scores_list[judge_idx]
+            judge_idx += 1
+            return CharacterQualityScores(
+                depth=score,
+                goals=score,
+                flaws=score,
+                uniqueness=score,
+                arc_potential=score,
+                feedback="Test",
+            )
+
+        refine_idx = 0
+        entities = [{"name": "v1"}, {"name": "v2"}, {"name": "v3"}]
+
+        def refine_fn(entity, scores, iteration):
+            """Return the next entity version."""
+            nonlocal refine_idx
+            refine_idx += 1
+            return entities[refine_idx]
+
+        _entity, _scores, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entities[0],
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=svc,
+            story_id="test-story",
+        )
+
+        # Best iteration was 2 (score 7.5), but returned count should be 3 (total)
+        assert iterations == 3, f"Expected total iterations=3, got {iterations}"
+        # Best entity should still be from iteration 2
+        assert _entity == {"name": "v2"}

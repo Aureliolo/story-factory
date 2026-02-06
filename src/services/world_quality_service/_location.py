@@ -211,21 +211,20 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
                 logger.warning(
                     "Location quality judgment failed for '%s': %s",
                     location.get("name", "Unknown"),
-                    e,
+                    summary,
                 )
             else:
                 logger.error(
                     "Location quality judgment failed for '%s': %s",
                     location.get("name", "Unknown"),
-                    summarize_llm_error(e),
+                    summary,
                 )
-            raise WorldGenerationError(
-                f"Location quality judgment failed: {summarize_llm_error(e)}"
-            ) from e
+            raise WorldGenerationError(f"Location quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, LocationQualityScores, judge_config)
 

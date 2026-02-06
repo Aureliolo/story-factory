@@ -299,23 +299,22 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
                 logger.warning(
                     "Relationship quality judgment failed for %s->%s: %s",
                     relationship.get("source") or "Unknown",
                     relationship.get("target") or "Unknown",
-                    e,
+                    summary,
                 )
             else:
                 logger.error(
                     "Relationship quality judgment failed for %s->%s: %s",
                     relationship.get("source") or "Unknown",
                     relationship.get("target") or "Unknown",
-                    summarize_llm_error(e),
+                    summary,
                 )
-            raise WorldGenerationError(
-                f"Relationship quality judgment failed: {summarize_llm_error(e)}"
-            ) from e
+            raise WorldGenerationError(f"Relationship quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, RelationshipQualityScores, judge_config)
 

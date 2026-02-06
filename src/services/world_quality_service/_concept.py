@@ -210,21 +210,20 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
                 logger.warning(
                     "Concept quality judgment failed for '%s': %s",
                     concept.get("name") or "Unknown",
-                    e,
+                    summary,
                 )
             else:
                 logger.error(
                     "Concept quality judgment failed for '%s': %s",
                     concept.get("name") or "Unknown",
-                    summarize_llm_error(e),
+                    summary,
                 )
-            raise WorldGenerationError(
-                f"Concept quality judgment failed: {summarize_llm_error(e)}"
-            ) from e
+            raise WorldGenerationError(f"Concept quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, ConceptQualityScores, judge_config)
 
