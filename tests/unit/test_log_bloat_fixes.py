@@ -142,8 +142,9 @@ class TestJsTimeoutDoublelog:
     """Tests for B3: JS localStorage timeout handling."""
 
     @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
     @patch("src.ui.local_prefs.ui")
-    async def test_load_prefs_returns_empty_on_timeout(self, mock_ui):
+    async def test_load_prefs_returns_empty_on_timeout(self, mock_ui, mock_sleep):
         """_load_prefs returns {} when localStorage read times out."""
         from src.ui.local_prefs import _load_prefs
 
@@ -152,9 +153,10 @@ class TestJsTimeoutDoublelog:
         assert result == {}
 
     @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
     @patch("src.ui.local_prefs.ui")
-    async def test_load_prefs_timeout_logs_debug(self, mock_ui, caplog):
-        """TimeoutError in _load_prefs is logged at DEBUG."""
+    async def test_load_prefs_timeout_logs_debug(self, mock_ui, mock_sleep, caplog):
+        """TimeoutError in _load_prefs is logged at DEBUG on first attempt."""
         from src.ui.local_prefs import _load_prefs
 
         mock_ui.run_javascript = AsyncMock(side_effect=TimeoutError("JS timeout"))
@@ -164,8 +166,9 @@ class TestJsTimeoutDoublelog:
         assert "cold_start_page" in caplog.text
 
     @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
     @patch("src.ui.local_prefs.ui")
-    async def test_deferred_catches_timeout_error(self, mock_ui, caplog):
+    async def test_deferred_catches_timeout_error(self, mock_ui, mock_sleep, caplog):
         """_deferred catches TimeoutError without propagating."""
         from src.ui.local_prefs import load_prefs_deferred
 
