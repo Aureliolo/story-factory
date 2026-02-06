@@ -810,7 +810,7 @@ A: Plan for:
 A: The UI supports one active generation at a time to avoid VRAM conflicts. You can manage multiple projects but only generate one story at a time.
 
 **Q: What's the recommended VRAM for different story lengths?**
-A: 
+A:
 - **8GB VRAM**: Short stories (1-3 chapters), single model
 - **16GB VRAM**: Novellas (5-10 chapters), 2-3 models
 - **24GB VRAM**: Full novels (20+ chapters), multi-model setup with MoE models
@@ -846,7 +846,7 @@ A: Yes! The Templates tab allows:
 - Sharing templates with others
 
 **Q: How do I update to the latest version?**
-A: 
+A:
 ```bash
 git pull origin main
 pip install --upgrade .
