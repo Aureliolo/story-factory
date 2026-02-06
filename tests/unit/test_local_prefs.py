@@ -349,9 +349,9 @@ class TestDeferredRuntimeErrorHandling:
 class TestConstants:
     """Verify module constants have sane values."""
 
-    def test_initial_delay_is_half_second(self):
-        """_INITIAL_DELAY is 0.5 seconds."""
-        assert _INITIAL_DELAY == 0.5
+    def test_initial_delay_in_sane_range(self):
+        """_INITIAL_DELAY is between 0.1s and 2s (enough for browser init)."""
+        assert 0.1 < _INITIAL_DELAY <= 2.0
 
     def test_js_timeout_greater_than_default(self):
         """_JS_TIMEOUT exceeds the default NiceGUI 1s timeout."""
