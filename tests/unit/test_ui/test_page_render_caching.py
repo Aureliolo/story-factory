@@ -6,10 +6,7 @@ Verifies that:
 - Cached data is consistent across child components
 """
 
-import logging
 from unittest.mock import MagicMock, patch
-
-logger = logging.getLogger(__name__)
 
 
 class TestSettingsPageCaching:
@@ -212,6 +209,7 @@ class TestWorldPageCaching:
 
         @contextmanager
         def patches():
+            """Patch all child build methods and ui module."""
             with (
                 patch.object(page, "_build_generation_toolbar"),
                 patch.object(page, "_build_entity_browser"),
@@ -237,12 +235,30 @@ class TestWorldPageCaching:
         assert services.world.list_entities.call_count == 1
 
     def test_cached_entity_options_populated_during_build(self):
-        """_cached_entity_options should be populated with entity id->name mapping."""
+        """_cached_entity_options should be populated with entity id->name mapping during build."""
         page, _services, _entities = self._make_world_page()
 
-        with self._patch_world_page_build_children(page):
+        # Track the cache value observed during child builds via a side-effect
+        observed_cache = {}
+
+        def capture_cache(*args, **kwargs):
+            """Record the current cache value when a child build method is called."""
+            observed_cache["value"] = page._cached_entity_options
+
+        with (
+            patch.object(page, "_build_generation_toolbar", side_effect=capture_cache),
+            patch.object(page, "_build_entity_browser"),
+            patch.object(page, "_build_graph_section"),
+            patch.object(page, "_build_entity_editor"),
+            patch.object(page, "_build_health_section"),
+            patch.object(page, "_build_relationships_section"),
+            patch.object(page, "_build_analysis_section"),
+            patch("src.ui.pages.world.ui"),
+        ):
             page.build()
 
+        # During build, the cache should have been populated with entity id->name mapping
+        assert observed_cache["value"] == {"e1": "Alice", "e2": "Castle"}
         # After build completes, cache should be cleared for freshness
         assert page._cached_entity_options is None
 
