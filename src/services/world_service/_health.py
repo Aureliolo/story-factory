@@ -178,6 +178,8 @@ def get_world_health_metrics(
                         "quality_score": score_float,
                     }
                 )
+        elif isinstance(quality_score, bool):
+            logger.debug(f"Entity {entity.name} has bool quality score: {quality_score}, skipping")
 
     average_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
 

@@ -1105,18 +1105,23 @@ class TestWorldHealthMethods:
         # score = 100 * 0.6 + 40 * 0.4 = 76.0
         assert metrics.health_score == pytest.approx(76.0, abs=0.1)
 
-    def test_health_score_bool_quality_ignored(self, world_service, world_db):
+    def test_health_score_bool_quality_ignored(self, world_service, world_db, caplog):
         """Test that boolean quality scores are excluded from quality average."""
+        import logging
+
         # Create entity with bool quality_score (corrupt data)
         alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": True})
         bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
-        metrics = world_service.get_world_health_metrics(world_db)
+        with caplog.at_level(logging.DEBUG, logger="src.services.world_service._health"):
+            metrics = world_service.get_world_health_metrics(world_db)
 
         # Alice's bool score is excluded, only Bob's 8.0 counts
         # average_quality = 8.0 (only one valid score)
         assert metrics.average_quality == pytest.approx(8.0, abs=0.1)
+        # Verify debug log for bool quality score
+        assert any("bool quality score" in r.message for r in caplog.records)
 
     def test_health_score_negative_quality_clamped(self, world_service, world_db):
         """Test that negative quality scores are clamped to 0."""
