@@ -117,6 +117,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 
 - `subprocess.CREATE_NO_WINDOW` is Windows-only - use `getattr(subprocess, "CREATE_NO_WINDOW", 0)` for cross-platform code
 - Pre-commit hooks run only on staged files locally, but pre-commit.ci runs on full repo - use `pass_filenames: false` for tools that should check entire directories
+- **Never create a file called `nul`** (or `NUL`, `con`, `prn`, `aux`, etc.) on Windows — these are reserved device names. A `nul` file in the repo root causes testmon (and other path-resolution tools) to crash with `ValueError: path is on mount '\\\\.\\NUL'`. If this happens, delete the file (`rm nul`) and the error resolves immediately.
 
 ## After Making Changes
 

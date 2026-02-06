@@ -113,6 +113,21 @@ def quality_refinement_loop(
                         iteration += 1
                         continue
 
+                    # Detect unchanged refinement output (#246 RC5)
+                    if history.iterations:
+                        prev_data = history.iterations[-1].entity_data
+                        curr_data = serialize(entity)
+                        if prev_data == curr_data:
+                            logger.info(
+                                "%s '%s' refinement produced unchanged output on "
+                                "iteration %d, skipping further iterations",
+                                entity_type.capitalize(),
+                                get_name(entity),
+                                iteration + 1,
+                            )
+                            early_stopped = True
+                            break
+
             # Update history entity name on first successful entity
             if not history.entity_name:
                 history.entity_name = get_name(entity)

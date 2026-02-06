@@ -1,5 +1,7 @@
 """Tests for early stopping in quality refinement loops."""
 
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,6 +20,29 @@ from src.memory.world_quality import (
 from src.services.world_quality_service import WorldQualityService
 from src.settings import Settings
 from tests.shared.mock_ollama import TEST_MODEL
+
+
+def _make_unique_refine(factory: Callable[[int], Any]) -> Callable[..., Any]:
+    """Create a refine side_effect that produces unique entities per call.
+
+    Wraps a factory callable, passing an incrementing counter so each call
+    returns a distinct entity. This prevents unchanged-output detection
+    from triggering during tests.
+
+    Args:
+        factory: Callable that takes a version number and returns an entity.
+
+    Returns:
+        Side-effect function suitable for mock_refine.side_effect.
+    """
+    counter = {"n": 0}
+
+    def _refine(*args: Any, **kwargs: Any) -> Any:
+        """Return entity with unique version number."""
+        counter["n"] += 1
+        return factory(counter["n"])
+
+    return _refine
 
 
 @pytest.fixture
@@ -149,7 +174,7 @@ class TestRefinementHistoryEarlyStopping:
     def test_should_stop_early_returns_false_initially(self):
         """Test that should_stop_early returns False initially."""
         history = RefinementHistory(entity_type="faction", entity_name="Test")
-        assert not history.should_stop_early(patience=2)
+        assert not history.should_stop_early(patience=2, min_iterations=1)
 
     def test_should_stop_early_returns_false_before_patience(self):
         """Test that should_stop_early returns False before patience threshold."""
@@ -162,7 +187,7 @@ class TestRefinementHistoryEarlyStopping:
             entity_data={"name": "Test"}, scores={"score": 7.5}, average_score=7.5
         )
         assert history.consecutive_degradations == 1
-        assert not history.should_stop_early(patience=2)
+        assert not history.should_stop_early(patience=2, min_iterations=1)
 
     def test_should_stop_early_returns_true_at_patience(self):
         """Test that should_stop_early returns True when patience reached."""
@@ -178,7 +203,7 @@ class TestRefinementHistoryEarlyStopping:
             entity_data={"name": "Test"}, scores={"score": 7.0}, average_score=7.0
         )
         assert history.consecutive_degradations == 2
-        assert history.should_stop_early(patience=2)
+        assert history.should_stop_early(patience=2, min_iterations=1)
 
     def test_should_stop_early_returns_true_after_patience(self):
         """Test that should_stop_early returns True when exceeding patience."""
@@ -197,7 +222,7 @@ class TestRefinementHistoryEarlyStopping:
             entity_data={"name": "Test"}, scores={"score": 6.5}, average_score=6.5
         )
         assert history.consecutive_degradations == 3
-        assert history.should_stop_early(patience=2)
+        assert history.should_stop_early(patience=2, min_iterations=1)
 
     def test_plateau_after_peak_does_not_increment_degradation_counter(self):
         """Test that plateauing (equal score) doesn't reset counter but doesn't increment."""
@@ -278,7 +303,9 @@ class TestFactionGenerationEarlyStopping:
         # Create faction that degrades after initial peak
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
-        mock_refine.return_value = test_faction
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "TestFaction", "description": f"A test faction v{n}"}
+        )
 
         # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
         scores = [
@@ -318,7 +345,9 @@ class TestFactionGenerationEarlyStopping:
         """
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
-        mock_refine.return_value = test_faction
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "TestFaction", "description": f"A test faction v{n}"}
+        )
 
         # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
         scores = [
@@ -357,7 +386,9 @@ class TestFactionGenerationEarlyStopping:
         """
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
-        mock_refine.return_value = test_faction
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "TestFaction", "description": f"A test faction v{n}"}
+        )
 
         # Scores degrade consistently after peak
         scores = [
@@ -404,7 +435,11 @@ class TestCharacterGenerationEarlyStopping:
         """
         test_char = Character(name="ZeroChar", role="protagonist", description="Zero scores")
         mock_create.return_value = test_char
-        mock_refine.return_value = test_char
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: Character(
+                name="ZeroChar", role="protagonist", description=f"Zero scores v{n}"
+            )
+        )
 
         # All zero scores - peak_score (0.0) is never exceeded
         zero_scores = CharacterQualityScores(
@@ -431,7 +466,11 @@ class TestCharacterGenerationEarlyStopping:
         """Test that character generation stops early after consecutive degradations."""
         test_char = Character(name="TestChar", role="protagonist", description="A test character")
         mock_create.return_value = test_char
-        mock_refine.return_value = test_char
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: Character(
+                name="TestChar", role="protagonist", description=f"A test character v{n}"
+            )
+        )
 
         # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
         scores = [
@@ -466,7 +505,11 @@ class TestCharacterGenerationEarlyStopping:
         """Test that improvement resets degradation counter and allows threshold exit."""
         test_char = Character(name="TestChar", role="protagonist", description="A test character")
         mock_create.return_value = test_char
-        mock_refine.return_value = test_char
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: Character(
+                name="TestChar", role="protagonist", description=f"A test character v{n}"
+            )
+        )
 
         # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
         scores = [
@@ -505,7 +548,9 @@ class TestLocationGenerationEarlyStopping:
         """Test location generation with zero scores falls back to last iteration."""
         test_loc = {"name": "ZeroLoc", "description": "Zero scores"}
         mock_create.return_value = test_loc
-        mock_refine.return_value = test_loc
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "ZeroLoc", "description": f"Zero scores v{n}"}
+        )
 
         zero_scores = LocationQualityScores(
             atmosphere=0, significance=0, story_relevance=0, distinctiveness=0
@@ -529,7 +574,9 @@ class TestLocationGenerationEarlyStopping:
         """Test that location generation stops early after consecutive degradations."""
         test_loc = {"name": "TestLocation", "description": "A test location"}
         mock_create.return_value = test_loc
-        mock_refine.return_value = test_loc
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "TestLocation", "description": f"A test location v{n}"}
+        )
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
@@ -573,7 +620,14 @@ class TestRelationshipGenerationEarlyStopping:
             "description": "Zero",
         }
         mock_create.return_value = test_rel
-        mock_refine.return_value = test_rel
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {
+                "source": "Alice",
+                "target": "Bob",
+                "relation_type": "knows",
+                "description": f"Zero v{n}",
+            }
+        )
 
         zero_scores = RelationshipQualityScores(
             tension=0, dynamics=0, story_potential=0, authenticity=0
@@ -602,7 +656,14 @@ class TestRelationshipGenerationEarlyStopping:
             "description": "They work together",
         }
         mock_create.return_value = test_rel
-        mock_refine.return_value = test_rel
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {
+                "source": "Alice",
+                "target": "Bob",
+                "relation_type": "allies",
+                "description": f"They work together v{n}",
+            }
+        )
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
@@ -641,7 +702,9 @@ class TestItemGenerationEarlyStopping:
         """Test item generation with zero scores falls back to last iteration."""
         test_item = {"name": "ZeroItem", "description": "Zero scores"}
         mock_create.return_value = test_item
-        mock_refine.return_value = test_item
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "ZeroItem", "description": f"Zero scores v{n}"}
+        )
 
         zero_scores = ItemQualityScores(
             significance=0, uniqueness=0, narrative_potential=0, integration=0
@@ -665,7 +728,9 @@ class TestItemGenerationEarlyStopping:
         """Test that item generation stops early after consecutive degradations."""
         test_item = {"name": "TestItem", "description": "A test item"}
         mock_create.return_value = test_item
-        mock_refine.return_value = test_item
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "TestItem", "description": f"A test item v{n}"}
+        )
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
@@ -704,7 +769,9 @@ class TestConceptGenerationEarlyStopping:
         """Test concept generation with zero scores falls back to last iteration."""
         test_concept = {"name": "ZeroConcept", "description": "Zero scores"}
         mock_create.return_value = test_concept
-        mock_refine.return_value = test_concept
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "ZeroConcept", "description": f"Zero scores v{n}"}
+        )
 
         zero_scores = ConceptQualityScores(relevance=0, depth=0, manifestation=0, resonance=0)
         mock_judge.return_value = zero_scores
@@ -726,7 +793,9 @@ class TestConceptGenerationEarlyStopping:
         """Test that concept generation stops early after consecutive degradations."""
         test_concept = {"name": "TestConcept", "description": "A test concept"}
         mock_create.return_value = test_concept
-        mock_refine.return_value = test_concept
+        mock_refine.side_effect = _make_unique_refine(
+            lambda n: {"name": "TestConcept", "description": f"A test concept v{n}"}
+        )
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [

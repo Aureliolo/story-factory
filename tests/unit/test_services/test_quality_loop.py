@@ -7,8 +7,10 @@ Tests cover:
 - Early stopping (plateau and degradation)
 - Review mode (initial_entity provided)
 - Error handling (WorldGenerationError during iterations)
+- Unchanged output detection (#246)
 """
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -540,3 +542,163 @@ class TestQualityLoopErrorHandling:
         # Refine should only be called once (iteration 1), not on iteration 2
         assert len(refine_calls) == 1
         assert refine_calls[0] == "Needs work"
+
+
+class TestQualityLoopUnchangedOutput:
+    """Test unchanged refinement output detection (#246)."""
+
+    def test_unchanged_output_breaks_loop_early(self, mock_svc, config):
+        """When refine returns identical dict, loop breaks and judge is called only once."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10  # Disable normal early stopping
+
+        entity = {"name": "Hero", "trait": "brave"}
+        low_scores = _make_scores(6.0)
+        judge_calls = 0
+
+        def judge_fn(e):
+            """Track judge calls."""
+            nonlocal judge_calls
+            judge_calls += 1
+            return low_scores
+
+        def refine_fn(e, s, i):
+            """Return identical entity (unchanged output)."""
+            return {"name": "Hero", "trait": "brave"}
+
+        _result_entity, result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Judge should only be called once (iteration 0), then refine returns
+        # unchanged output on iteration 1 and loop breaks before re-judging
+        assert judge_calls == 1
+        assert result_scores.average == 6.0
+        # Analytics should record early_stop_triggered=True
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        assert analytics_call.kwargs["early_stop_triggered"] is True
+
+    def test_unchanged_detection_compares_against_previous_refine(self, mock_svc, config):
+        """Unchanged detection triggers when refine echoes its OWN previous output."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10  # Disable normal early stopping
+
+        # Refine produces a new entity once, then echoes it
+        refine_results = [
+            {"name": "Hero", "trait": "brave v2"},  # Different from creation
+            {"name": "Hero", "trait": "brave v2"},  # Same as previous refine
+        ]
+        refine_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return new entity once, then echo it."""
+            nonlocal refine_idx
+            result = refine_results[min(refine_idx, len(refine_results) - 1)]
+            refine_idx += 1
+            return result
+
+        judge_calls = 0
+
+        def judge_fn(e):
+            """Count judge invocations."""
+            nonlocal judge_calls
+            judge_calls += 1
+            return _make_scores(6.0)  # Always below threshold
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero", "trait": "brave v1"},
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Iteration 0: create v1 → judge (6.0, below threshold)
+        # Iteration 1: refine → v2 (different) → judge (6.0)
+        # Iteration 2: refine → v2 (same as iteration 1) → unchanged detection → break
+        assert judge_calls == 2
+
+    def test_unchanged_output_different_entities_continues(self, mock_svc, config):
+        """Different dicts from refine don't trigger unchanged detection."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 10  # Disable normal early stopping
+
+        entities = [{"name": "Hero v1"}, {"name": "Hero v2"}, {"name": "Hero v3"}]
+        scores_list = [_make_scores(6.0), _make_scores(6.5), _make_scores(7.0)]
+        iter_idx = 0
+        judge_idx = 0
+
+        def create_fn(retries):
+            """Return first entity."""
+            return entities[0]
+
+        def judge_fn(e):
+            """Return scores in sequence."""
+            nonlocal judge_idx
+            result = scores_list[min(judge_idx, len(scores_list) - 1)]
+            judge_idx += 1
+            return result
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[min(iter_idx, len(entities) - 1)]
+
+        quality_refinement_loop(
+            entity_type="character",
+            create_fn=create_fn,
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # All 3 iterations should run (no unchanged detection)
+        assert judge_idx == 3
+
+    def test_unchanged_output_logs_info(self, mock_svc, config, caplog):
+        """Verify log message is emitted when unchanged output is detected."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10
+
+        entity = {"name": "Hero", "trait": "brave"}
+        low_scores = _make_scores(6.0)
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=lambda e: low_scores,
+                refine_fn=lambda e, s, i: {"name": "Hero", "trait": "brave"},
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("refinement produced unchanged output" in msg for msg in caplog.messages)
