@@ -1,12 +1,17 @@
 """Tests for src.ui.local_prefs — generic localStorage persistence."""
 
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.ui.local_prefs import (
+    _INITIAL_DELAY,
+    _JS_TIMEOUT,
+    _MAX_RETRIES,
     _PREFIX,
+    _RETRY_DELAY,
     _load_prefs,
     _storage_key,
     load_prefs_deferred,
@@ -100,7 +105,7 @@ class TestSavePrefs:
 
 
 class TestLoadPrefs:
-    """Tests for _load_prefs (async helper)."""
+    """Tests for _load_prefs (async helper with retry logic)."""
 
     @pytest.mark.asyncio
     @patch("src.ui.local_prefs.ui")
@@ -153,19 +158,104 @@ class TestLoadPrefs:
         # Key should be JSON-encoded (double-quoted), not single-quoted
         assert '"sf_prefs_test_page"' in js_call
 
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.ui")
+    async def test_passes_js_timeout(self, mock_ui):
+        """Verify that the timeout parameter is forwarded to run_javascript."""
+        mock_ui.run_javascript = AsyncMock(return_value=None)
+        await _load_prefs("page")
+        _, kwargs = mock_ui.run_javascript.call_args
+        assert kwargs["timeout"] == _JS_TIMEOUT
+
+
+class TestLoadPrefsRetry:
+    """Tests for _load_prefs timeout retry logic."""
+
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
+    @patch("src.ui.local_prefs.ui")
+    async def test_retries_on_timeout_then_succeeds(self, mock_ui, mock_sleep):
+        """First attempt times out, second attempt succeeds."""
+        prefs = {"theme": "dark"}
+        mock_ui.run_javascript = AsyncMock(
+            side_effect=[TimeoutError("JS timed out"), json.dumps(prefs)]
+        )
+
+        result = await _load_prefs("page1")
+
+        assert result == prefs
+        assert mock_ui.run_javascript.await_count == 2
+        mock_sleep.assert_awaited_once_with(_RETRY_DELAY)
+
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
+    @patch("src.ui.local_prefs.ui")
+    async def test_all_retries_exhausted(self, mock_ui, mock_sleep):
+        """All attempts time out — returns empty dict."""
+        mock_ui.run_javascript = AsyncMock(side_effect=TimeoutError("JS timed out"))
+
+        result = await _load_prefs("page1")
+
+        assert result == {}
+        assert mock_ui.run_javascript.await_count == _MAX_RETRIES
+        # Sleep is called between attempts, so (_MAX_RETRIES - 1) times
+        assert mock_sleep.await_count == _MAX_RETRIES - 1
+
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
+    @patch("src.ui.local_prefs.ui")
+    async def test_logs_debug_on_first_timeout(self, mock_ui, mock_sleep, caplog):
+        """First timeout is logged at DEBUG, not WARNING."""
+        prefs = {"ok": True}
+        mock_ui.run_javascript = AsyncMock(
+            side_effect=[TimeoutError("JS timed out"), json.dumps(prefs)]
+        )
+
+        with caplog.at_level(logging.DEBUG, logger="src.ui.local_prefs"):
+            await _load_prefs("test_key")
+
+        debug_messages = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        warning_messages = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("timed out" in m.message and "attempt 1" in m.message for m in debug_messages)
+        assert not any("timed out" in m.message for m in warning_messages)
+
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
+    @patch("src.ui.local_prefs.ui")
+    async def test_logs_warning_on_final_failure(self, mock_ui, mock_sleep, caplog):
+        """Final exhaustion is logged at WARNING."""
+        mock_ui.run_javascript = AsyncMock(side_effect=TimeoutError("JS timed out"))
+
+        with caplog.at_level(logging.DEBUG, logger="src.ui.local_prefs"):
+            await _load_prefs("test_key")
+
+        warning_messages = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("preferences lost" in m.message for m in warning_messages)
+
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs.asyncio.sleep", new_callable=AsyncMock)
+    @patch("src.ui.local_prefs.ui")
+    async def test_returns_empty_on_timeout_then_empty_storage(self, mock_ui, mock_sleep):
+        """First attempt times out, second returns None (no data stored)."""
+        mock_ui.run_javascript = AsyncMock(side_effect=[TimeoutError("JS timed out"), None])
+
+        result = await _load_prefs("page1")
+
+        assert result == {}
+        assert mock_ui.run_javascript.await_count == 2
+
 
 class TestLoadPrefsDeferred:
     """Tests for load_prefs_deferred."""
 
     @patch("src.ui.local_prefs.ui")
-    def test_schedules_timer(self, mock_ui):
-        """load_prefs_deferred creates a one-shot ui.timer."""
+    def test_schedules_timer_with_correct_delay(self, mock_ui):
+        """load_prefs_deferred creates a one-shot ui.timer with _INITIAL_DELAY."""
         callback = MagicMock()
         load_prefs_deferred("page", callback)
         mock_ui.timer.assert_called_once()
-        # First arg is delay, second is the async function, once=True
         args, kwargs = mock_ui.timer.call_args
-        assert args[0] == 0.1
+        assert args[0] == _INITIAL_DELAY
         assert kwargs.get("once") is True
 
     @patch("src.ui.local_prefs.ui")
@@ -183,8 +273,6 @@ class TestDeferredRuntimeErrorHandling:
     @patch("src.ui.local_prefs.ui")
     async def test_deferred_catches_runtime_error_in_callback(self, mock_ui, caplog):
         """Verify _deferred actually catches RuntimeError from callback."""
-        import logging
-
         # Capture the timer callback
         captured_callback = None
 
@@ -210,8 +298,6 @@ class TestDeferredRuntimeErrorHandling:
     @patch("src.ui.local_prefs.ui")
     async def test_deferred_catches_runtime_error_in_load_prefs(self, mock_ui, caplog):
         """Verify _deferred catches RuntimeError from _load_prefs itself."""
-        import logging
-
         # Capture the timer callback
         captured_callback = None
 
@@ -233,3 +319,48 @@ class TestDeferredRuntimeErrorHandling:
 
         assert "Pref load skipped" in caplog.text
         callback.assert_not_called()  # Callback never reached due to RuntimeError
+
+    @pytest.mark.asyncio
+    @patch("src.ui.local_prefs._load_prefs", new_callable=AsyncMock)
+    @patch("src.ui.local_prefs.ui")
+    async def test_deferred_callback_receives_prefs(self, mock_ui, mock_load):
+        """The _deferred coroutine calls callback with loaded prefs."""
+        prefs = {"sort": "desc"}
+        mock_load.return_value = prefs
+
+        captured_callback = None
+
+        def capture_timer(delay, func, once):
+            """Capture the timer callback for later invocation."""
+            nonlocal captured_callback
+            captured_callback = func
+
+        mock_ui.timer = MagicMock(side_effect=capture_timer)
+        callback = MagicMock()
+
+        load_prefs_deferred("page1", callback)
+
+        assert captured_callback is not None
+        await captured_callback()
+
+        callback.assert_called_once_with(prefs)
+
+
+class TestConstants:
+    """Verify module constants have sane values."""
+
+    def test_initial_delay_is_half_second(self):
+        """_INITIAL_DELAY is 0.5 seconds."""
+        assert _INITIAL_DELAY == 0.5
+
+    def test_js_timeout_greater_than_default(self):
+        """_JS_TIMEOUT exceeds the default NiceGUI 1s timeout."""
+        assert _JS_TIMEOUT > 1.0
+
+    def test_max_retries_at_least_two(self):
+        """At least two attempts are made before giving up."""
+        assert _MAX_RETRIES >= 2
+
+    def test_retry_delay_is_positive(self):
+        """_RETRY_DELAY is a positive number of seconds."""
+        assert _RETRY_DELAY > 0
