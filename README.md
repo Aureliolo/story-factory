@@ -3,7 +3,7 @@
 [![CI](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Aureliolo/story-factory/branch/main/graph/badge.svg)](https://codecov.io/gh/Aureliolo/story-factory)
 [![docstring coverage](docs/badges/interrogate_badge.svg)](https://pypi.org/project/interrogate/)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![License: All Rights Reserved](https://img.shields.io/badge/License-All_Rights_Reserved-red.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Aureliolo/story-factory?utm_source=oss&utm_medium=github&utm_campaign=Aureliolo%2Fstory-factory&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
@@ -144,7 +144,7 @@ The application features a comprehensive tabbed interface:
 ## Requirements
 
 ### Minimum Requirements
-- **Python**: 3.12 or higher (3.14+ recommended for optimal performance)
+- **Python**: 3.14 or higher
 - **RAM**: 16GB system RAM
 - **Storage**: 20GB free space for models and outputs
 - **OS**: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+)
@@ -718,7 +718,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture docum
    venv\Scripts\activate     # Windows
    pip install .
    ```
-3. **Check Python version**: Must be 3.12+ (3.14+ recommended)
+3. **Check Python version**: Must be 3.14+
    ```bash
    python --version
    ```
@@ -820,7 +820,6 @@ A:
 **Q: Can I edit generated text?**
 A: Yes! The web UI allows:
 - Chapter regeneration with feedback
-- Manual editing (coming soon)
 - Version control with rollback support
 - Export and edit in external tools
 
@@ -909,15 +908,15 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architectural guidelines.
 
 ## Tech Stack
 
-- **[Python](https://www.python.org/)**: 3.12+ (3.14+ recommended) - Modern async/await support
-- **[NiceGUI](https://nicegui.io/)**: 3.7.0 - Modern Python web UI framework with real-time updates
-- **[Ollama](https://ollama.com/)**: Latest - Local LLM serving with efficient model management
-- **[NetworkX](https://networkx.org/)**: 3.6.1 - Graph analysis for world-building relationships
-- **[SQLite](https://sqlite.org/)**: Built-in - Lightweight entity storage with ACID guarantees
-- **[vis.js](https://visjs.org/)**: Latest - Interactive graph visualization for world explorer
-- **[Pydantic](https://pydantic.dev/)**: 2.12.5 - Runtime data validation and settings management
-- **[Pytest](https://pytest.org/)**: 9.0.2 - Comprehensive testing framework with 2000+ tests
-- **[Ruff](https://github.com/astral-sh/ruff)**: 0.14.14 - Ultra-fast Python linter and formatter
+- **[Python](https://www.python.org/)**: 3.14+ - Modern async/await support
+- **[NiceGUI](https://nicegui.io/)** - Modern Python web UI framework with real-time updates
+- **[Ollama](https://ollama.com/)** - Local LLM serving with efficient model management
+- **[NetworkX](https://networkx.org/)** - Graph analysis for world-building relationships
+- **[SQLite](https://sqlite.org/)** - Lightweight entity storage with ACID guarantees
+- **[vis.js](https://visjs.org/)** - Interactive graph visualization for world explorer
+- **[Pydantic](https://pydantic.dev/)** - Runtime data validation and settings management
+- **[Pytest](https://pytest.org/)** - Comprehensive testing framework with 2000+ tests
+- **[Ruff](https://github.com/astral-sh/ruff)** - Ultra-fast Python linter and formatter
 
 ## License
 
@@ -954,7 +953,7 @@ Copyright (c) 2026 Aurelio Amoroso. All Rights Reserved. See [LICENSE](LICENSE) 
 4. **Verify your setup**:
    - Ollama is running (`curl http://localhost:11434/api/tags`)
    - Models are installed (`ollama list`)
-   - Python version is 3.12+ (`python --version`)
+   - Python version is 3.14+ (`python --version`)
    - GPU is detected (`nvidia-smi`)
 
 ### Reporting Issues

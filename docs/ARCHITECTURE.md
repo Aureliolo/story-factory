@@ -130,7 +130,7 @@ story-factory/
 │   ├── world_quality_service/ # World quality enhancement
 │   ├── project_service.py  # Project CRUD operations
 │   ├── model_service.py    # Ollama model operations
-│   ├── export_service.py   # Export to multiple formats
+│   ├── export_service/     # Export to multiple formats
 │   ├── model_mode_service/ # Model performance tracking
 │   ├── scoring_service.py  # Quality scoring logic
 │   ├── template_service.py # Story template management

@@ -260,7 +260,7 @@ nvidia-smi
 
 4. **Check Python version**:
    ```bash
-   python --version  # Must be 3.12+ (3.14+ recommended)
+   python --version  # Must be 3.14+
    ```
 
 5. **Try installing packages individually**:
@@ -282,7 +282,7 @@ nvidia-smi
 # Check version
 python --version
 
-# Must be 3.12 or higher (3.14+ recommended)
+# Must be 3.14 or higher
 # Update Python or use pyenv/conda to manage versions
 ```
 

@@ -30,8 +30,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.
 
-**Python Version**: This project requires Python 3.12+ (Python 3.14+ is recommended for optimal performance).
-
 ## Common Commands
 
 ```bash
@@ -110,7 +108,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 ## Code Style
 
 - **Line length**: 100 characters (Ruff)
-- **Python**: 3.12+ (3.14+ recommended)
+- **Python**: 3.14+
 - **Type hints**: Encouraged but not enforced (gradual adoption)
 - **Imports**: Auto-sorted by Ruff
 - **Dependency parsing**: Use `packaging.requirements.Requirement` instead of regex - handles all version specifiers (`==`, `>=`, `~=`, etc.) correctly.
