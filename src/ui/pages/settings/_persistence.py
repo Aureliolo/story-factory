@@ -2,7 +2,7 @@
 
 This module coordinates persistence operations by delegating to section-specific
 modules. Each settings section module (_connection, _models, _modes, _interaction,
-_advanced) handles its own save and refresh logic.
+_advanced, _world_validation) handles its own save and refresh logic.
 """
 
 import logging
@@ -26,7 +26,14 @@ def save_settings(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    from src.ui.pages.settings import _advanced, _connection, _interaction, _models, _modes
+    from src.ui.pages.settings import (
+        _advanced,
+        _connection,
+        _interaction,
+        _models,
+        _modes,
+        _world_validation,
+    )
     from src.ui.state import ActionType, UndoAction
 
     try:
@@ -39,6 +46,7 @@ def save_settings(page: SettingsPage) -> None:
         _interaction.save_to_settings(page)
         _modes.save_to_settings(page)
         _advanced.save_to_settings(page)
+        _world_validation.save_to_settings(page)
 
         # Validate and save first - only record undo if successful
         page.settings.validate()
@@ -135,6 +143,7 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "relationship_validation_enabled": settings.relationship_validation_enabled,
         "orphan_detection_enabled": settings.orphan_detection_enabled,
         "circular_detection_enabled": settings.circular_detection_enabled,
+        "circular_check_all_types": settings.circular_check_all_types,
         "fuzzy_match_threshold": settings.fuzzy_match_threshold,
         "max_relationships_per_entity": settings.max_relationships_per_entity,
         "circular_relationship_types": settings.circular_relationship_types.copy(),
@@ -273,6 +282,8 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
         settings.orphan_detection_enabled = snapshot["orphan_detection_enabled"]
     if "circular_detection_enabled" in snapshot:
         settings.circular_detection_enabled = snapshot["circular_detection_enabled"]
+    if "circular_check_all_types" in snapshot:
+        settings.circular_check_all_types = snapshot["circular_check_all_types"]
     if "fuzzy_match_threshold" in snapshot:
         settings.fuzzy_match_threshold = snapshot["fuzzy_match_threshold"]
     if "max_relationships_per_entity" in snapshot:
@@ -315,7 +326,14 @@ def refresh_ui_from_settings(page: SettingsPage) -> None:
     Args:
         page: The SettingsPage instance.
     """
-    from src.ui.pages.settings import _advanced, _connection, _interaction, _models, _modes
+    from src.ui.pages.settings import (
+        _advanced,
+        _connection,
+        _interaction,
+        _models,
+        _modes,
+        _world_validation,
+    )
 
     logger.debug("Refreshing UI elements from settings")
 
@@ -325,5 +343,6 @@ def refresh_ui_from_settings(page: SettingsPage) -> None:
     _interaction.refresh_from_settings(page)
     _modes.refresh_from_settings(page)
     _advanced.refresh_from_settings(page)
+    _world_validation.refresh_from_settings(page)
 
     logger.debug("UI refresh complete")

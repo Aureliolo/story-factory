@@ -115,7 +115,9 @@ def get_world_health_metrics(
     circular_relationships: list[dict] = []
     if svc.settings.circular_detection_enabled:
         circular = world_db.find_circular_relationships(
-            relation_types=svc.settings.circular_relationship_types,
+            relation_types=None
+            if svc.settings.circular_check_all_types
+            else svc.settings.circular_relationship_types,
         )
         for cycle in circular:
             # Include entity names for human-readable display

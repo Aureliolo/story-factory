@@ -178,6 +178,7 @@ module = [
     "src.ui.pages.settings._models",
     "src.ui.pages.settings._modes",
     "src.ui.pages.settings._interaction",
+    "src.ui.pages.settings._world_validation",
     "src.ui.pages.world._editor",
     "src.ui.pages.world._editor_ops",
 ]

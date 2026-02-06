@@ -764,6 +764,13 @@ def _validate_world_health(settings: Settings) -> None:
             f"got {settings.max_relationships_per_entity}"
         )
 
+    # Validate circular_check_all_types
+    if not isinstance(settings.circular_check_all_types, bool):
+        raise ValueError(
+            f"circular_check_all_types must be a boolean, "
+            f"got {type(settings.circular_check_all_types)}"
+        )
+
     # Validate circular_relationship_types
     if not isinstance(settings.circular_relationship_types, list):
         raise ValueError(
