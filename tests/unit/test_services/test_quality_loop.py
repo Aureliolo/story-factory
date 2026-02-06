@@ -640,7 +640,7 @@ class TestQualityLoopUnchangedOutput:
             iter_idx += 1
             return entities[min(iter_idx, len(entities) - 1)]
 
-        _result_entity, _result_scores, _iterations = quality_refinement_loop(
+        quality_refinement_loop(
             entity_type="character",
             create_fn=create_fn,
             judge_fn=judge_fn,

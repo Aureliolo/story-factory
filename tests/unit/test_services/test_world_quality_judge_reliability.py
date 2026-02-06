@@ -729,31 +729,39 @@ class TestCalibrationBlock:
 
     def test_calibration_block_contains_scoring_rules(self):
         """JUDGE_CALIBRATION_BLOCK contains the key scoring anchors."""
-        assert "SCORING GUIDE" in JUDGE_CALIBRATION_BLOCK
         assert "0-10" in JUDGE_CALIBRATION_BLOCK
-        assert "decimal" in JUDGE_CALIBRATION_BLOCK.lower()
+        assert "one decimal place" in JUDGE_CALIBRATION_BLOCK.lower()
         assert "Differentiate" in JUDGE_CALIBRATION_BLOCK
 
-    def test_calibration_block_requests_decimals(self):
-        """JUDGE_CALIBRATION_BLOCK requires decimal precision in scores."""
-        assert "one decimal place" in JUDGE_CALIBRATION_BLOCK.lower()
-        # Contains example decimal scores showing score differentiation
-        assert "8.5" in JUDGE_CALIBRATION_BLOCK
-        assert "6.2" in JUDGE_CALIBRATION_BLOCK
+    def test_calibration_block_is_minimal(self):
+        """JUDGE_CALIBRATION_BLOCK matches the benchmarked D_minimal variant exactly.
+
+        The D_minimal variant was empirically validated (#246): rank correlation 0.94,
+        dimension spread 2.7, no score anchoring. Any additions must be re-benchmarked.
+        """
+        # Must NOT contain elements that caused anchoring in the old production variant
+        assert "SCORING GUIDE" not in JUDGE_CALIBRATION_BLOCK
+        assert "RULES" not in JUDGE_CALIBRATION_BLOCK
+        assert "MUST explain" not in JUDGE_CALIBRATION_BLOCK
+        assert "justify" not in JUDGE_CALIBRATION_BLOCK.lower()
+        # No tier labels (1-3, 4-5, 6-7, 8-9) that compressed scores into safe zones
+        assert "6-7" not in JUDGE_CALIBRATION_BLOCK
+        assert "8-9" not in JUDGE_CALIBRATION_BLOCK
+        # No concrete example scores that anchor perception
+        assert "8.5" not in JUDGE_CALIBRATION_BLOCK
+        assert "6.2" not in JUDGE_CALIBRATION_BLOCK
+        assert "5.3" not in JUDGE_CALIBRATION_BLOCK
 
     def test_calibration_block_allows_high_scores(self):
         """JUDGE_CALIBRATION_BLOCK does NOT suppress 8+ scores."""
-        # The old block had "Do NOT give 8+" which made 7.5 threshold unreachable
         assert "Do NOT give 8" not in JUDGE_CALIBRATION_BLOCK
-        # D_minimal variant: no tier labels that anchor judges into narrow range
-        assert "8.5" in JUDGE_CALIBRATION_BLOCK  # Example high score is present
-        # No "justify" rule for 8+ that discouraged high scores
+        # No "justify 8+" rule that discouraged high scores
         assert "MUST explain" not in JUDGE_CALIBRATION_BLOCK
 
     def test_calibration_block_encourages_differentiation(self):
-        """JUDGE_CALIBRATION_BLOCK requires score differentiation across dimensions."""
+        """JUDGE_CALIBRATION_BLOCK asks for per-dimension differentiation."""
         assert "Differentiate between dimensions" in JUDGE_CALIBRATION_BLOCK
-        assert "1 point" in JUDGE_CALIBRATION_BLOCK  # anti-clustering warning
+        assert "vary" in JUDGE_CALIBRATION_BLOCK.lower()
 
     def test_character_judge_uses_calibration_block(self):
         """Character judge prompt includes JUDGE_CALIBRATION_BLOCK."""

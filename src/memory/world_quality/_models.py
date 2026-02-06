@@ -98,7 +98,7 @@ class RefinementHistory(BaseModel):
     def should_stop_early(
         self,
         patience: int,
-        min_iterations: int = 1,
+        min_iterations: int,
         variance_tolerance: float = 0.3,
     ) -> bool:
         """Check if early stopping criteria is met with enhanced checks.

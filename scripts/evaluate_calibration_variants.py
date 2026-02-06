@@ -14,7 +14,7 @@ Usage:
     python scripts/evaluate_calibration_variants.py [options]
       --variants A,B,C,D,E,F       (default: all)
       --judge-calls 3               (default: 3 per sample per variant)
-      --timeout 60                  (seconds per call, default: 60)
+      --temperature 0.1             (judge temperature, default: 0.1)
       --output results.json         (default: output/diagnostics/<timestamp>_calibration.json)
       --verbose
 """
@@ -22,6 +22,7 @@ Usage:
 import argparse
 import json
 import logging
+import statistics
 import sys
 import time
 from datetime import UTC, datetime
@@ -38,7 +39,6 @@ from src.memory.world_quality import (
 from src.services import ServiceContainer
 from src.services.llm_client import generate_structured
 from src.settings import Settings
-from src.utils.exceptions import StoryFactoryError
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 # Calibration Variants
 # =====================================================================
 
-VARIANT_A_PRODUCTION = """SCORING GUIDE — USE THE FULL 0-10 RANGE WITH DECIMALS:
+# Pre-#246 production calibration block (replaced by D_minimal in PR #261)
+VARIANT_A_LEGACY = """SCORING GUIDE — USE THE FULL 0-10 RANGE WITH DECIMALS:
 - 1-3: Fundamentally broken or generic (contradictory, cliched, no thought)
 - 4-5: Below average (functional but bland, forgettable, one-dimensional)
 - 6-7: Competent (clear strengths, some areas need work — most first drafts land here)
@@ -104,7 +105,7 @@ RULES:
 4. If all your scores are within 1 point of each other, you are not differentiating enough."""
 
 CALIBRATION_VARIANTS: dict[str, str] = {
-    "A_production": VARIANT_A_PRODUCTION,
+    "A_legacy": VARIANT_A_LEGACY,
     "B_softened": VARIANT_B_SOFTENED,
     "C_no_calibration": VARIANT_C_NO_CALIBRATION,
     "D_minimal": VARIANT_D_MINIMAL,
@@ -367,7 +368,7 @@ def judge_sample(
             "average": round(result.average, 2),
             "feedback": result.feedback,
         }
-    except (StoryFactoryError, Exception) as e:
+    except Exception as e:
         logger.warning("Judge call failed for %s: %s", sample["id"], e)
         return None
 
@@ -383,12 +384,8 @@ def compute_statistics(values: list[float]) -> dict[str, float]:
     """
     if not values:
         return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
-    n = len(values)
-    mean = sum(values) / n
-    if n < 2:
-        return {"mean": round(mean, 2), "std": 0.0, "min": round(mean, 2), "max": round(mean, 2)}
-    variance = sum((v - mean) ** 2 for v in values) / (n - 1)
-    std = variance**0.5
+    mean = statistics.mean(values)
+    std = statistics.stdev(values) if len(values) >= 2 else 0.0
     return {
         "mean": round(mean, 2),
         "std": round(std, 2),
@@ -621,10 +618,10 @@ def main() -> None:
         help="Number of judge calls per sample per variant (default: 3)",
     )
     parser.add_argument(
-        "--timeout",
-        type=int,
-        default=60,
-        help="Timeout per call in seconds (default: 60)",
+        "--temperature",
+        type=float,
+        default=0.1,
+        help="Judge temperature (default: 0.1 for reproducibility)",
     )
     parser.add_argument(
         "--output",
@@ -670,7 +667,7 @@ def main() -> None:
     settings = Settings.load()
     svc = ServiceContainer(settings)
     judge_model = svc.world_quality._get_judge_model()
-    judge_temp = 0.1  # Match production
+    judge_temp = args.temperature
 
     print("=" * 80)
     print("CALIBRATION VARIANT BENCHMARK")

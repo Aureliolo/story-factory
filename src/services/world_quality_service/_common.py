@@ -14,13 +14,12 @@ _RETRY_TEMP_INCREMENT = 0.15
 _RETRY_TEMP_MAX = 1.5
 
 # Shared calibration block for all judge prompts.
-# Minimal variant (D_minimal) from #246 benchmarking: removes tier labels,
-# the 8+ justification rule, and example scores that anchored judges into
-# a narrow 7.4-7.5 safe zone. See output/diagnostics/INVESTIGATION_246.md.
-JUDGE_CALIBRATION_BLOCK = """SCORING GUIDE:
-Score each dimension 0-10 with one decimal place.
-Differentiate between dimensions — an entity can score 8.5 in one area but 6.2 in another.
-If all your scores are within 1 point of each other, you are not differentiating enough."""
+# Exact D_minimal variant from #246 benchmarking (rank corr 0.94, dim spread 2.7).
+# Intentionally minimal: removes tier labels, justification rules, and example
+# scores that anchored judges into a narrow 7.4-7.5 safe zone.
+# See output/diagnostics/INVESTIGATION_246.md.
+JUDGE_CALIBRATION_BLOCK = """Score each dimension 0-10 with one decimal place.
+Differentiate between dimensions — scores should vary based on actual quality."""
 
 T = TypeVar("T", bound=BaseModel)
 

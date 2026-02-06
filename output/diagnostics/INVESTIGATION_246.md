@@ -1,7 +1,7 @@
 # Issue #246 Investigation: Refinement Loop Inefficiencies
 
 ## Date: 2026-02-06
-## Status: Phase 2 Complete (Variant Testing), Phase 3 Pending (Implementation)
+## Status: Phase 3 Complete (Implementation) — see PR #261
 
 ---
 
@@ -250,11 +250,7 @@ Wait - F fails at 7.5. Let's reconsider.
 
 ### Recommendation
 
-**Adopt variant F_encouraging calibration with threshold lowered to 7.5.**
-
-Actually, re-examining: F has mediocre=7.5 at threshold=7.5, which means mediocre entities PASS - that's unacceptable.
-
-**Final recommendation: Adopt variant D_minimal calibration + lower threshold to 7.5.**
+**Adopt variant D_minimal calibration + lower threshold to 7.5.**
 
 Rationale:
 - D_minimal excellent=8.3, easily passes 7.5
@@ -274,13 +270,11 @@ Based on Phase 1 + Phase 2 findings, the following changes are needed:
 
 ### Fix 1: Replace Calibration Block (RC2)
 
-Replace the current `JUDGE_CALIBRATION_BLOCK` in `_common.py` with variant D_minimal:
+Replace the current `JUDGE_CALIBRATION_BLOCK` in `_common.py` with the exact benchmarked D_minimal variant:
 
 ```
-SCORING GUIDE:
 Score each dimension 0-10 with one decimal place.
-Differentiate between dimensions - an entity can score 8.5 in one area but 6.2 in another.
-If all your scores are within 1 point of each other, you are not differentiating enough.
+Differentiate between dimensions — scores should vary based on actual quality.
 ```
 
 ### Fix 2: Lower Threshold to 7.5 (RC1)
@@ -293,7 +287,7 @@ In the quality refinement loop (`_quality_loop.py`), add a check: if the refiner
 
 ### Fix 4: Lower Early-Stopping Min Iterations (RC4)
 
-Change `early_stopping_min_iterations` default from 3 to 1. This allows the loop to exit after the first iteration if the entity already passes threshold. Combined with Fix 3, this means:
+Change `early_stopping_min_iterations` default from 2 to 1. This allows the loop to exit after the first iteration if the entity already passes threshold. Combined with Fix 3, this means:
 - Entity passes on create -> 1 judge call, done (instead of 3)
 - Entity stalls (refiner echoes) -> exit immediately (instead of 2 wasted iterations)
 
@@ -317,5 +311,5 @@ The A/B test showed improved prompts with per-dimension scores and actionable in
 1. ~~Write `scripts/evaluate_calibration_variants.py` - tests variants A-F~~ DONE
 2. ~~Run the calibration variant benchmark~~ DONE
 3. ~~Analyze results to pick the best calibration approach~~ DONE -> D_minimal + threshold 7.5
-4. Implement the winning calibration + threshold + early-exit fixes (Fixes 1-5)
+4. ~~Implement the winning calibration + threshold + early-exit fixes (Fixes 1-5)~~ DONE (PR #261)
 5. Re-run `evaluate_refinement.py` to validate improvement
