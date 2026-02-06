@@ -26,8 +26,8 @@ def build_model_section(page: SettingsPage) -> None:
             "Choose which AI models to use. 'Auto' picks the best available model.",
         )
 
-        # Get installed models
-        installed_models = page.services.model.list_installed()
+        # Use cached installed models from parent build()
+        installed_models = page._cached_installed_models
         model_options = {"auto": "Auto-select (recommended)"} | {m: m for m in installed_models}
 
         # Default model (fall back to "auto" if saved model not installed)

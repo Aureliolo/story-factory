@@ -98,6 +98,15 @@ class SettingsPage:
 
     def build(self) -> None:
         """Build the settings page UI with masonry layout in collapsible groups."""
+        # Pre-fetch shared data once for all child sections to avoid duplicate API calls
+        self._cached_health = self.services.model.check_health()
+        self._cached_installed_models = self.services.model.list_installed()
+        logger.debug(
+            "Pre-fetched settings page data: healthy=%s, %d models installed",
+            self._cached_health.is_healthy,
+            len(self._cached_installed_models),
+        )
+
         # Load Masonry.js for true masonry packing (items placed into shortest column)
         ui.add_head_html(
             '<script src="https://unpkg.com/masonry-layout@4.2.2/dist/masonry.pkgd.min.js">'

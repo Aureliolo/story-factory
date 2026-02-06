@@ -134,6 +134,8 @@ class WorldPage:
         # Generation progress dialog state
         self._generation_cancel_event: threading.Event | None = None
         self._generation_dialog: ui.dialog | None = None
+        # Per-render cache for entity options (populated in build(), cleared after)
+        self._cached_entity_options: dict[str, str] | None = None
 
     # ========== Build ==========
 
@@ -148,35 +150,51 @@ class WorldPage:
             self._build_interview_required_message()
             return
 
-        # World generation toolbar
-        self._build_generation_toolbar()
-
-        # Responsive layout: stack on mobile, 3-column on desktop
-        with (
-            ui.row()
-            .classes("w-full gap-4 p-4 flex-wrap lg:flex-nowrap")
-            .style("min-height: calc(100vh - 250px)")
-        ):
-            # Left panel - Entity browser
-            with ui.column().classes("w-full lg:w-1/5 gap-4 min-w-[250px] h-full"):
-                self._build_entity_browser()
-
-            # Center panel - Graph visualization
-            with ui.column().classes("w-full lg:w-3/5 gap-4 min-w-[300px] h-full"):
-                self._build_graph_section()
-
-            # Right panel - Entity editor
-            self._editor_container = ui.column().classes(
-                "w-full lg:w-1/5 gap-4 min-w-[250px] h-full"
+        # Pre-fetch entity options once for all child sections to avoid duplicate API calls
+        if self.state.world_db:
+            entities = self.services.world.list_entities(self.state.world_db)
+            self._cached_entity_options = {e.id: e.name for e in entities}
+            logger.debug(
+                "Pre-fetched %d entity options for world page",
+                len(self._cached_entity_options),
             )
-            with self._editor_container:
-                self._build_entity_editor()
+        else:
+            self._cached_entity_options = {}
 
-        # Bottom sections
-        with ui.column().classes("w-full gap-4 p-4"):
-            self._build_health_section()
-            self._build_relationships_section()
-            self._build_analysis_section()
+        try:
+            # World generation toolbar
+            self._build_generation_toolbar()
+
+            # Responsive layout: stack on mobile, 3-column on desktop
+            with (
+                ui.row()
+                .classes("w-full gap-4 p-4 flex-wrap lg:flex-nowrap")
+                .style("min-height: calc(100vh - 250px)")
+            ):
+                # Left panel - Entity browser
+                with ui.column().classes("w-full lg:w-1/5 gap-4 min-w-[250px] h-full"):
+                    self._build_entity_browser()
+
+                # Center panel - Graph visualization
+                with ui.column().classes("w-full lg:w-3/5 gap-4 min-w-[300px] h-full"):
+                    self._build_graph_section()
+
+                # Right panel - Entity editor
+                self._editor_container = ui.column().classes(
+                    "w-full lg:w-1/5 gap-4 min-w-[250px] h-full"
+                )
+                with self._editor_container:
+                    self._build_entity_editor()
+
+            # Bottom sections
+            with ui.column().classes("w-full gap-4 p-4"):
+                self._build_health_section()
+                self._build_relationships_section()
+                self._build_analysis_section()
+        finally:
+            # Clear cached entity options after build so post-build interactions fetch fresh data
+            self._cached_entity_options = None
+            logger.debug("World page build complete, entity options cache cleared")
 
     # ========== Inline (small) helpers ==========
 
