@@ -399,13 +399,16 @@ def compute_statistics(values: list[float]) -> dict[str, float]:
 def compute_rank_correlation(pairs: list[tuple[float, float]]) -> float:
     """Spearman rank correlation for ground-truth vs predicted averages.
 
+    Computes Pearson correlation on fractional ranks, which is the definition
+    of Spearman's rho and correctly handles tied values.
+
     Args:
         pairs: List of (ground_truth, predicted) tuples.
 
     Returns:
         Spearman rho in [-1, 1], or 0.0 if insufficient data.
     """
-    if len(pairs) < 3:
+    if len(pairs) < 2:
         return 0.0
 
     def _rank(values: list[float]) -> list[float]:
@@ -431,10 +434,7 @@ def compute_rank_correlation(pairs: list[tuple[float, float]]) -> float:
     gt_ranks = _rank(gt_vals)
     pred_ranks = _rank(pred_vals)
 
-    n = len(pairs)
-    d_sq_sum = sum((g - p) ** 2 for g, p in zip(gt_ranks, pred_ranks, strict=True))
-    rho = 1 - (6 * d_sq_sum) / (n * (n**2 - 1))
-    return round(rho, 3)
+    return round(statistics.correlation(gt_ranks, pred_ranks), 3)
 
 
 def run_variant(

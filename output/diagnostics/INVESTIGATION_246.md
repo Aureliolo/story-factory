@@ -2,7 +2,7 @@
 
 ## Date: 2026-02-06
 
-## Status: Phase 3 Complete (Implementation) — see PR #261
+## Status: Phase 3 Complete (Implementation) — see PR #262
 
 ---
 
@@ -106,11 +106,13 @@ We need a standalone script that tests different judge calibration variants agai
 - Whether scores become inflated/meaningless
 
 #### Variant A: Current Production (Baseline)
+
 - Full calibration block with 8+ justification rule
 - `<float 0-10>` parametric output format
 - This is what we already measured: scores cluster at 7.4-7.5
 
 #### Variant B: Softened 8+ Rule
+
 - Same calibration block but change Rule 3 from:
   "If you give 8+ on a dimension, your feedback MUST explain what makes it exceptional."
   To:
@@ -118,16 +120,19 @@ We need a standalone script that tests different judge calibration variants agai
 - Hypothesis: removes the brake, allows scores to spread into 8+ territory
 
 #### Variant C: Removed Calibration Block Entirely
+
 - No SCORING GUIDE, no RULES
 - Just the entity, dimensions, and output format
 - Hypothesis: scores may inflate but will test the natural scoring range
 
 #### Variant D: Simplified Calibration (No Ranges, No Rules)
+
 - Keep dimension descriptions but remove the 1-10 range labels and rules
 - Just: "Score each dimension 0-10 with one decimal place."
 - Hypothesis: less anchoring, more natural spread
 
 #### Variant E: Flattened Calibration (No Tiers)
+
 - Remove the tier labels ("Competent", "Strong", "Excellent") but keep the decimal/differentiation rules
 - Hypothesis: tier labels anchor scores, removing them unblocks 8+
 
@@ -280,7 +285,7 @@ Change default `quality_threshold` from 8.0 to 7.5 in settings.
 
 ### Fix 3: Add Unchanged-Output Detection (RC5)
 
-In the quality refinement loop (`_quality_loop.py`), add a check: if the refiner returns content identical (or near-identical, diff_ratio < 0.05) to the input, skip the re-judge and exit the loop immediately. This saves 2 wasted API calls per stalled entity.
+In the quality refinement loop (`_quality_loop.py`), add a check: if the refiner returns content identical to the previous iteration (strict equality on serialized entity data), skip the re-judge and exit the loop immediately. This saves 2 wasted API calls per stalled entity.
 
 ### Fix 4: Lower Early-Stopping Min Iterations (RC4)
 
@@ -308,5 +313,5 @@ The A/B test showed improved prompts with per-dimension scores and actionable in
 1. ~~Write `scripts/evaluate_calibration_variants.py` - tests variants A-F~~ DONE
 2. ~~Run the calibration variant benchmark~~ DONE
 3. ~~Analyze results to pick the best calibration approach~~ DONE -> D_minimal + threshold 7.5
-4. ~~Implement the winning calibration + threshold + early-exit fixes (Fixes 1-5)~~ DONE (PR #261)
+4. ~~Implement the winning calibration + threshold + early-exit fixes (Fixes 1-5)~~ DONE (PR #262)
 5. Re-run `evaluate_refinement.py` to validate improvement (post-merge)
