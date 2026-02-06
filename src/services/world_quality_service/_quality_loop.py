@@ -56,7 +56,8 @@ def quality_refinement_loop(
         initial_entity: If provided, skip creation and start with this entity (review mode).
 
     Returns:
-        Tuple of (best_entity, best_scores, total_iterations).
+        Tuple of (best_entity, best_scores, scoring_rounds) where scoring_rounds
+        is the number of successful judge calls.
 
     Raises:
         WorldGenerationError: If no valid entity could be produced after all attempts.
@@ -77,15 +78,32 @@ def quality_refinement_loop(
     last_error: str = ""
     creation_retries = 0
     early_stopped = False
+    needs_judging = False
+    scoring_rounds = 0
+    stage = ""  # Tracks current phase: "create", "judge", or "refine"
 
     while iteration < config.max_iterations:
         try:
-            # Creation or refinement
-            if iteration == 0 and initial_entity is not None:
+            # Creation, refinement, or re-judge after previous judge error
+            if needs_judging:
+                # Entity already exists and needs judging (e.g. judge failed
+                # on previous iteration). Skip creation/refinement and go
+                # straight to judging.
+                stage = "judge"
+                logger.debug(
+                    "%s '%s' re-judging after previous judge error on iteration %d",
+                    entity_type.capitalize(),
+                    get_name(entity) if entity is not None else "unknown",
+                    iteration + 1,
+                )
+            elif iteration == 0 and initial_entity is not None:
                 # Review mode: use the provided entity directly
+                stage = "create"
                 entity = initial_entity
+                needs_judging = True
             elif entity is None or (iteration == 0) or is_empty(entity):
                 # Need fresh creation
+                stage = "create"
                 entity = create_fn(creation_retries)
                 if entity is None or is_empty(entity):
                     creation_retries += 1
@@ -99,9 +117,11 @@ def quality_refinement_loop(
                     )
                     iteration += 1
                     continue
+                needs_judging = True
             else:
                 # Refinement based on previous feedback
                 if scores is not None:
+                    stage = "refine"
                     dynamic_temp_iter = iteration + 1
                     entity = refine_fn(entity, scores, dynamic_temp_iter)
                     if entity is None or is_empty(entity):
@@ -128,12 +148,37 @@ def quality_refinement_loop(
                             early_stopped = True
                             break
 
+                    needs_judging = True
+                else:  # pragma: no cover — defensive, unreachable with current error handler
+                    # scores is None and not first iteration: entity is
+                    # unchanged since the last error. Skip this iteration
+                    # to avoid redundant judging (#266 B10). With the
+                    # current error handler this path is unreachable:
+                    # judge errors keep needs_judging=True (handled at
+                    # top of loop), refinement errors preserve scores.
+                    logger.debug(
+                        "%s '%s' unchanged after error on iteration %d, "
+                        "skipping redundant judge call",
+                        entity_type.capitalize(),
+                        get_name(entity) if entity is not None else "unknown",
+                        iteration + 1,
+                    )
+                    iteration += 1
+                    continue
+
             # Update history entity name on first successful entity
-            if not history.entity_name:
+            if not history.entity_name and entity is not None:
                 history.entity_name = get_name(entity)
 
-            # Judge
+            # At this point entity is guaranteed non-None and needs_judging is
+            # True: all code paths above either set needs_judging=True, or
+            # continue/break out of this iteration.
+            assert entity is not None  # nosec — invariant, not runtime check
+
+            stage = "judge"
             scores = judge_fn(entity)
+            scoring_rounds += 1
+            needs_judging = False
 
             # Track in history
             history.add_iteration(
@@ -180,9 +225,9 @@ def quality_refinement_loop(
                     quality_threshold=config.quality_threshold,
                     max_iterations=config.max_iterations,
                 )
-                return entity, scores, len(history.iterations)
+                return entity, scores, scoring_rounds
 
-            # Early stopping check
+            # Early stopping check — use scoring_rounds for min_iterations (#266 C3)
             if history.should_stop_early(
                 config.early_stopping_patience,
                 min_iterations=config.early_stopping_min_iterations,
@@ -195,31 +240,62 @@ def quality_refinement_loop(
                     else (f"degraded for {history.consecutive_degradations} consecutive iterations")
                 )
                 logger.info(
-                    "Early stopping: %s '%s' quality %s (patience: %d). Stopping at iteration %d.",
+                    "Early stopping: %s '%s' quality %s (patience: %d). "
+                    "Stopping at iteration %d (scoring round %d).",
                     entity_type.capitalize(),
                     get_name(entity),
                     reason,
                     config.early_stopping_patience,
                     iteration + 1,
+                    scoring_rounds,
                 )
                 break
 
         except WorldGenerationError as e:
             last_error = str(e)[:200]
             logger.warning(
-                "%s generation error on iteration %d (already logged upstream): %s",
+                "%s %s error on iteration %d (already logged upstream): %s",
                 entity_type.capitalize(),
+                stage,
                 iteration + 1,
                 last_error,
             )
-            # Reset scores to prevent refining with stale feedback from a
-            # previous iteration.  With scores=None the next iteration will
-            # re-judge the current entity instead of blindly refining.
-            scores = None
+            if stage == "judge":
+                # Error occurred during judging — entity was successfully
+                # created/refined but the judge call failed. Keep
+                # needs_judging=True so the next iteration re-judges the
+                # same entity rather than trying to refine without scores.
+                scores = None
+                logger.debug(
+                    "%s '%s' judge failed, will re-judge on next iteration",
+                    entity_type.capitalize(),
+                    get_name(entity) if entity is not None else "unknown",
+                )
+            elif stage == "refine":
+                # Error occurred during refinement — entity is unchanged
+                # from before this iteration. Don't re-judge an unchanged
+                # entity (#266 B10). Keep existing scores (still valid for
+                # the current entity) so refinement can be retried.
+                history.failed_refinements += 1
+                logger.debug(
+                    "%s '%s' refinement failed, entity unchanged, skipping redundant re-judge",
+                    entity_type.capitalize(),
+                    get_name(entity) if entity is not None else "unknown",
+                )
+            else:
+                # Error occurred during creation — no entity exists yet,
+                # increment creation_retries so next iteration retries
+                # with escalated temperature.
+                creation_retries += 1
+                logger.debug(
+                    "%s creation failed (retry %d), will retry",
+                    entity_type.capitalize(),
+                    creation_retries,
+                )
 
         iteration += 1
 
-    # Post-loop: return best iteration
+    # Post-loop: return best iteration using scoring_rounds (#266 C3)
     if not history.iterations:
         raise WorldGenerationError(
             f"Failed to generate {entity_type} after {config.max_iterations} attempts. "
@@ -237,7 +313,7 @@ def quality_refinement_loop(
             history.entity_name,
             history.best_iteration,
             history.peak_score,
-            len(history.iterations),
+            scoring_rounds,
             history.iterations[-1].average_score,
         )
 
@@ -266,12 +342,12 @@ def quality_refinement_loop(
                 raise WorldGenerationError(
                     f"Internal error: best entity data exists but entity is None for {entity_type}"
                 )
-            # Return total iteration count (not best_iteration index) so
-            # callers can log "after N iteration(s)" accurately.
+            # Return scoring_rounds (not loop iteration count) so callers
+            # get an accurate count of actual judge calls (#266 C3).
             return (
                 _reconstruct_entity(best_entity_data, entity, entity_type),
                 best_scores,
-                len(history.iterations),
+                scoring_rounds,
             )
 
     # Fallback to last iteration
@@ -283,7 +359,7 @@ def quality_refinement_loop(
             scores.average,
             config.quality_threshold,
         )
-        history.final_iteration = len(history.iterations)
+        history.final_iteration = scoring_rounds
         history.final_score = scores.average
         svc._log_refinement_analytics(
             history,
@@ -293,7 +369,7 @@ def quality_refinement_loop(
             quality_threshold=config.quality_threshold,
             max_iterations=config.max_iterations,
         )
-        return entity, scores, len(history.iterations)
+        return entity, scores, scoring_rounds
 
     raise WorldGenerationError(  # pragma: no cover - defensive, unreachable
         f"Failed to generate {entity_type} after {config.max_iterations} attempts. "

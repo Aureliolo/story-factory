@@ -3611,8 +3611,9 @@ class TestRefinementLoopEdgeCases:
 
         assert faction["name"] == "Test Guild"
         assert scores.average < 7.0
-        # Returns total iteration count (iteration 1 succeeded, refinement error on 2)
-        assert iterations == 2
+        # Returns scoring rounds count (only 1 successful judge call, refinement
+        # errors don't trigger redundant re-judging of unchanged entities #266)
+        assert iterations == 1
 
     # ========== Item Loop Edge Cases ==========
 
