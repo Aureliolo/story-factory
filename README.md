@@ -488,20 +488,26 @@ story-factory/
 │   │   ├── builtin_templates.py # Built-in story templates
 │   │   └── world_quality.py # World quality tracking
 │   ├── services/           # Business logic layer
-│   │   ├── orchestrator.py # Agent coordination (merged from workflows/)
+│   │   ├── orchestrator/   # Multi-agent coordination
+│   │   │   ├── __init__.py # Main StoryOrchestrator
+│   │   │   ├── _interview.py # Interview phase
+│   │   │   ├── _structure.py # Architecture phase
+│   │   │   ├── _writing.py # Writing phase
+│   │   │   ├── _editing.py # Editing phase
+│   │   │   └── _persistence.py # State management
 │   │   ├── project_service.py # Project CRUD operations
-│   │   ├── story_service.py # Story generation workflow
-│   │   ├── world_service.py # Entity/world management
+│   │   ├── story_service/  # Story generation workflow
+│   │   ├── world_service/  # Entity/world management
 │   │   ├── model_service.py # Ollama model operations
-│   │   ├── export_service.py # Export to multiple formats
-│   │   ├── model_mode_service.py # Model performance tracking
+│   │   ├── export_service/ # Export to multiple formats
+│   │   ├── model_mode_service/ # Model performance tracking
 │   │   ├── scoring_service.py # Quality scoring logic
 │   │   ├── template_service.py # Story template management
 │   │   ├── backup_service.py # Project backup/restore
 │   │   ├── import_service.py # Import entities from text
 │   │   ├── comparison_service.py # Model comparison testing
 │   │   ├── suggestion_service.py # AI-powered suggestions
-│   │   ├── world_quality_service.py # World quality enhancement
+│   │   ├── world_quality_service/ # World quality enhancement
 │   │   └── llm_client.py   # Unified LLM client
 │   ├── ui/                 # NiceGUI web interface
 │   │   ├── app.py          # Main application setup

@@ -14,7 +14,7 @@
 | `agents/` | 506 | 100% |
 | `memory/` | 1005 | 100% |
 | `services/` | 1069 | 100% |
-| `workflows/orchestrator.py` | 543 | 100% |
+| `services/orchestrator` | 543 | 100% |
 | `settings.py` | 233 | 100% |
 | `utils/` | 292 | 100% |
 | **Total** | **3862** | **100%** |

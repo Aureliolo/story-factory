@@ -71,7 +71,7 @@ This document tracks code quality issues identified during comprehensive review 
 
 ### 2.5 Language Mapping Deduplication
 - **Status:** Fixed
-- **Files:** `utils/constants.py`, `workflows/orchestrator.py`, `services/export_service.py`
+- **Files:** `utils/constants.py`, `services/orchestrator`, `services/export_service.py`
 - **Issue:** Identical `lang_map` in two places
 - **Fix:** Moved to shared `utils/constants.py`
 - **Test:** Both usages import from shared location
@@ -108,7 +108,7 @@ This document tracks code quality issues identified during comprehensive review 
 
 ### 3.5 Chapter Validation
 - **Status:** Fixed
-- **File:** `workflows/orchestrator.py`
+- **File:** `services/orchestrator`
 - **Issue:** Unhelpful error for invalid chapter numbers
 - **Fix:** Added bounds check with descriptive error message
 - **Test:** `tests/unit/test_orchestrator.py::test_chapter_bounds_error`
@@ -157,28 +157,28 @@ Previously unused agent methods have been fully integrated into the workflow:
 
 ### Full Story Review (`check_full_story`)
 - **File:** `agents/continuity.py:128`
-- **Integration:** `workflows/orchestrator.py:write_all_chapters()`
+- **Integration:** `services/orchestrator:write_all_chapters()`
 - **Purpose:** Final story-wide continuity check after all chapters complete
 - **Checks:** Unresolved plot threads, incomplete character arcs, foreshadowing payoff, timeline consistency
 - **Service:** `StoryService.review_full_story()`
 
 ### Scene Continuation (`continue_scene`)
 - **File:** `agents/writer.py:134`
-- **Integration:** `workflows/orchestrator.py:continue_chapter()`
+- **Integration:** `services/orchestrator:continue_chapter()`
 - **Purpose:** Continue writing from where text left off
 - **Features:** Optional direction parameter, maintains voice/style, seamless continuation
 - **Service:** `StoryService.continue_chapter()`
 
 ### Passage Editing (`edit_passage`)
 - **File:** `agents/editor.py:83`
-- **Integration:** `workflows/orchestrator.py:edit_passage()`
+- **Integration:** `services/orchestrator:edit_passage()`
 - **Purpose:** Targeted editing of specific text passages
 - **Features:** Optional focus area (dialogue, pacing, description)
 - **Service:** `StoryService.edit_passage()`
 
 ### Edit Suggestions (`get_edit_suggestions`)
 - **File:** `agents/editor.py:102`
-- **Integration:** `workflows/orchestrator.py:get_edit_suggestions()`
+- **Integration:** `services/orchestrator:get_edit_suggestions()`
 - **Purpose:** Review mode - get suggestions without applying changes
 - **Output:** Specific suggestions with quotes and improvements
 - **Service:** `StoryService.get_edit_suggestions()`

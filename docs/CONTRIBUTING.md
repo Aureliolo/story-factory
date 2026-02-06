@@ -245,7 +245,7 @@ logger.error("Error messages for failures")
 
 ### Test Coverage
 
-- **Core modules** require **100% coverage**: `agents/`, `services/`, `workflows/`, `memory/`, `utils/`, `settings.py`
+- **Core modules** require **100% coverage**: `agents/`, `services/`, `services/orchestrator/`, `memory/`, `utils/`, `settings.py`
 - **UI modules** excluded from coverage requirements (until NiceGUI component tests are added)
 
 ### Writing Tests
