@@ -42,6 +42,10 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "works_for": ConflictCategory.ALLIANCE,
     "follows": ConflictCategory.ALLIANCE,
     "leads": ConflictCategory.ALLIANCE,
+    "leader_of": ConflictCategory.ALLIANCE,
+    "admires": ConflictCategory.ALLIANCE,
+    "collaborates_with": ConflictCategory.ALLIANCE,
+    "friends_with": ConflictCategory.ALLIANCE,
     # Rivalry - active opposition, hostility
     "hates": ConflictCategory.RIVALRY,
     "enemy_of": ConflictCategory.RIVALRY,
@@ -80,6 +84,13 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "develops": ConflictCategory.NEUTRAL,
     "interconnected": ConflictCategory.NEUTRAL,
     "consults_with": ConflictCategory.NEUTRAL,
+    "rules": ConflictCategory.NEUTRAL,
+    "enforces": ConflictCategory.NEUTRAL,
+    "controls": ConflictCategory.NEUTRAL,
+    "works_at": ConflictCategory.NEUTRAL,
+    "based_in": ConflictCategory.NEUTRAL,
+    "lives_in": ConflictCategory.NEUTRAL,
+    "located_near": ConflictCategory.NEUTRAL,
     # Romantic / emotional bonds
     "romantic_interest": ConflictCategory.TENSION,
 }
@@ -92,6 +103,9 @@ CONFLICT_COLORS: dict[str, str] = {
     "tension": "#FFC107",  # Yellow/Amber
     "neutral": "#2196F3",  # Blue
 }
+
+
+_warned_types: set[str] = set()
 
 
 def classify_relationship(relation_type: str) -> ConflictCategory:
@@ -131,12 +145,14 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
     category = RELATION_CONFLICT_MAPPING.get(normalized)
 
     if category is None:
-        logger.warning(
-            "Unknown relationship type '%s' (normalized: '%s') - "
-            "defaulting to NEUTRAL. Consider adding to RELATION_CONFLICT_MAPPING.",
-            relation_type,
-            normalized,
-        )
+        if normalized not in _warned_types:
+            logger.warning(
+                "Unknown relationship type '%s' (normalized: '%s') - "
+                "defaulting to NEUTRAL. Consider adding to RELATION_CONFLICT_MAPPING.",
+                relation_type,
+                normalized,
+            )
+            _warned_types.add(normalized)
         category = ConflictCategory.NEUTRAL
     else:
         logger.debug("Classified relationship '%s' as %s", relation_type, category.value)

@@ -1,5 +1,6 @@
 """Tests for the conflict analysis service."""
 
+import logging
 from datetime import datetime
 from unittest.mock import MagicMock
 
@@ -9,6 +10,7 @@ from src.memory.conflict_types import (
     CONFLICT_COLORS,
     ConflictCategory,
     ConflictMetrics,
+    _warned_types,
     classify_relationship,
     get_conflict_color,
 )
@@ -94,8 +96,29 @@ class TestConflictCategory:
         """Pipe-delimited with single valid part still classifies correctly."""
         assert classify_relationship("loves|") == ConflictCategory.ALLIANCE
 
+    def test_classify_llm_generated_alliance_types(self):
+        """Test classification of LLM-generated alliance types from production logs."""
+        llm_alliance_types = ["leader_of", "admires", "collaborates_with", "friends_with"]
+        for rel_type in llm_alliance_types:
+            assert classify_relationship(rel_type) == ConflictCategory.ALLIANCE
+
+    def test_classify_llm_generated_neutral_types(self):
+        """Test classification of LLM-generated neutral types from production logs."""
+        llm_neutral_types = [
+            "rules",
+            "enforces",
+            "controls",
+            "works_at",
+            "based_in",
+            "lives_in",
+            "located_near",
+        ]
+        for rel_type in llm_neutral_types:
+            assert classify_relationship(rel_type) == ConflictCategory.NEUTRAL
+
     def test_classify_unknown_defaults_to_neutral(self):
         """Test unknown relationship types default to neutral."""
+        _warned_types.discard("unknown_type")
         assert classify_relationship("unknown_type") == ConflictCategory.NEUTRAL
 
     def test_classify_handles_case_and_format_variations(self):
@@ -103,6 +126,35 @@ class TestConflictCategory:
         assert classify_relationship("LOVES") == ConflictCategory.ALLIANCE
         assert classify_relationship("Hates") == ConflictCategory.RIVALRY
         assert classify_relationship("competes-with") == ConflictCategory.TENSION
+
+    def test_unknown_type_warning_emitted_only_once(self, caplog):
+        """Test that unknown type warning is only emitted once per type."""
+        unique_type = "test_dedup_unique_type_xyz"
+        _warned_types.discard(unique_type)
+
+        with caplog.at_level(logging.WARNING, logger="src.memory.conflict_types"):
+            classify_relationship(unique_type)
+            classify_relationship(unique_type)
+            classify_relationship(unique_type)
+
+        warning_count = sum(
+            1
+            for record in caplog.records
+            if unique_type in record.message and record.levelno == logging.WARNING
+        )
+        assert warning_count == 1
+
+    def test_warned_types_set_tracks_unknown_types(self):
+        """Test that _warned_types set tracks types that have been warned about."""
+        unique_type = "test_tracking_unique_type_abc"
+        _warned_types.discard(unique_type)
+
+        assert unique_type not in _warned_types
+        classify_relationship(unique_type)
+        assert unique_type in _warned_types
+
+        # Clean up
+        _warned_types.discard(unique_type)
 
 
 class TestConflictColors:

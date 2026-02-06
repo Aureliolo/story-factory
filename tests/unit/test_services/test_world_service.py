@@ -999,6 +999,47 @@ class TestWorldHealthMethods:
         assert metrics.circular_count == 0
         assert metrics.circular_relationships == []
 
+    def test_get_world_health_metrics_circular_check_all_types(self, world_db):
+        """Test health metrics checks all types when circular_check_all_types is True."""
+        settings = Settings()
+        settings.circular_detection_enabled = True
+        settings.circular_check_all_types = True
+        service = WorldService(settings)
+
+        # Create circular chain with a type NOT in the default list
+        a_id = world_db.add_entity("character", "A")
+        b_id = world_db.add_entity("character", "B")
+        c_id = world_db.add_entity("character", "C")
+        world_db.add_relationship(a_id, b_id, "friends_with", validate=False)
+        world_db.add_relationship(b_id, c_id, "friends_with", validate=False)
+        world_db.add_relationship(c_id, a_id, "friends_with", validate=False)
+
+        metrics = service.get_world_health_metrics(world_db)
+
+        # Should detect circular relationships even for non-default types
+        assert metrics.circular_count > 0
+
+    def test_get_world_health_metrics_circular_specific_types_only(self, world_db):
+        """Test health metrics checks only specific types when circular_check_all_types is False."""
+        settings = Settings()
+        settings.circular_detection_enabled = True
+        settings.circular_check_all_types = False
+        settings.circular_relationship_types = ["reports_to"]
+        service = WorldService(settings)
+
+        # Create circular chain with a type NOT in the specific list
+        a_id = world_db.add_entity("character", "A")
+        b_id = world_db.add_entity("character", "B")
+        c_id = world_db.add_entity("character", "C")
+        world_db.add_relationship(a_id, b_id, "friends_with", validate=False)
+        world_db.add_relationship(b_id, c_id, "friends_with", validate=False)
+        world_db.add_relationship(c_id, a_id, "friends_with", validate=False)
+
+        metrics = service.get_world_health_metrics(world_db)
+
+        # Should NOT detect circular relationships (friends_with not in the list)
+        assert metrics.circular_count == 0
+
     def test_get_world_health_metrics_quality_scores_dict_format(self, world_service, world_db):
         """Test health metrics correctly extracts quality_scores in dict format."""
         # Create entity with quality_scores dict (new format)

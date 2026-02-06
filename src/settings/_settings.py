@@ -198,6 +198,7 @@ class Settings:
     # Calendar and temporal validation settings
     generate_calendar_on_world_build: bool = True  # Auto-generate calendar during world build
     validate_temporal_consistency: bool = True  # Validate temporal consistency of entities
+    circular_check_all_types: bool = True  # Check all relationship types for circularity
     circular_relationship_types: list[str] = field(
         default_factory=lambda: ["owns", "reports_to", "parent_of", "located_in", "contains"]
     )

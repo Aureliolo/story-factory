@@ -17,17 +17,13 @@ from nicegui import ui
 
 from src.services import ServiceContainer
 from src.ui.pages.settings._advanced import (
-    build_calendar_temporal_section,
     build_circuit_breaker_section,
-    build_circular_types_section,
     build_data_integrity_section,
     build_duplicate_detection_section,
     build_judge_consistency_section,
     build_refinement_stopping_section,
-    build_relationship_minimums_section,
     build_retry_strategy_section,
     build_story_structure_section,
-    build_validation_rules_section,
     build_world_gen_section,
 )
 from src.ui.pages.settings._connection import (
@@ -51,6 +47,12 @@ from src.ui.pages.settings._persistence import (
     refresh_ui_from_settings,
     restore_settings_snapshot,
     save_settings,
+)
+from src.ui.pages.settings._world_validation import (
+    build_calendar_temporal_section,
+    build_circular_types_section,
+    build_relationship_minimums_section,
+    build_validation_rules_section,
 )
 from src.ui.state import AppState
 

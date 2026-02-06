@@ -449,6 +449,11 @@ class TestSettingsValidation:
         ):
             settings.validate()
 
+    def test_circular_check_all_types_default_true(self):
+        """circular_check_all_types should default to True."""
+        settings = Settings()
+        assert settings.circular_check_all_types is True
+
     def test_validate_raises_on_circular_relationship_types_not_list(self):
         """Should raise ValueError for circular_relationship_types that's not a list."""
         settings = Settings()
