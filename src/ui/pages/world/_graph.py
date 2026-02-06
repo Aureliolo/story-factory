@@ -35,12 +35,20 @@ def build_graph_section(page) -> None:
 def get_entity_options(page) -> dict[str, str]:
     """Get entity options for select dropdowns.
 
+    Uses cached entity options from parent build() when available to avoid
+    redundant list_entities() calls during page render.
+
     Args:
         page: WorldPage instance.
 
     Returns:
         Dictionary mapping entity ID to entity name.
     """
+    # Use cached options from parent build() if available
+    if hasattr(page, "_cached_entity_options") and page._cached_entity_options is not None:
+        logger.debug("Using cached entity options (%d entries)", len(page._cached_entity_options))
+        return dict(page._cached_entity_options)
+
     if not page.state.world_db:
         return {}
 

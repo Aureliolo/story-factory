@@ -390,7 +390,8 @@ def build_duplicate_detection_section(page: SettingsPage) -> None:
 
                 with ui.column().classes("gap-1"):
                     ui.label("Embedding Model").classes("text-xs text-gray-500")
-                    installed_models = page.services.model.list_installed()
+                    # Use cached installed models from parent build()
+                    installed_models = page._cached_installed_models
                     embedding_options: dict[str, str] = {"": "(Select a model)"}
                     embedding_options.update({m: m for m in installed_models})
                     current_value = page.settings.embedding_model

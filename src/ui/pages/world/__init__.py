@@ -148,6 +148,18 @@ class WorldPage:
             self._build_interview_required_message()
             return
 
+        # Pre-fetch entity options once for all child sections to avoid duplicate API calls
+        self._cached_entity_options: dict[str, str] | None = None
+        if self.state.world_db:
+            entities = self.services.world.list_entities(self.state.world_db)
+            self._cached_entity_options = {e.id: e.name for e in entities}
+            logger.debug(
+                "Pre-fetched %d entity options for world page",
+                len(self._cached_entity_options),
+            )
+        else:
+            self._cached_entity_options = {}
+
         # World generation toolbar
         self._build_generation_toolbar()
 
@@ -177,6 +189,10 @@ class WorldPage:
             self._build_health_section()
             self._build_relationships_section()
             self._build_analysis_section()
+
+        # Clear cached entity options after build so post-build interactions fetch fresh data
+        self._cached_entity_options = None
+        logger.debug("World page build complete, entity options cache cleared")
 
     # ========== Inline (small) helpers ==========
 
