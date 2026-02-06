@@ -6,8 +6,9 @@ Package structure:
     _models.py       - Model selection and temperature sections
     _interaction.py  - Interaction mode and context sections
     _modes.py        - Generation mode and adaptive learning sections
-    _advanced.py     - Advanced LLM, world gen, story structure, data integrity, relationships
-    _persistence.py  - Save, snapshot capture, restore, and UI refresh for undo/redo
+    _advanced.py          - Advanced LLM, world gen, story structure, data integrity
+    _world_validation.py  - Validation rules, circular types, calendar, relationship minimums
+    _persistence.py       - Save, snapshot capture, restore, and UI refresh for undo/redo
 """
 
 import logging

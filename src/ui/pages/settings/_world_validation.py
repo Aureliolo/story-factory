@@ -27,6 +27,7 @@ def _get_circular_type_options(current_types: list[str]) -> dict[str, str]:
     """
     # Merge known types from RELATION_CONFLICT_MAPPING with user-configured types
     all_types = set(RELATION_CONFLICT_MAPPING.keys()) | set(current_types)
+    logger.debug("Built circular type options: %d types", len(all_types))
     return {rel_type: rel_type.replace("_", " ").title() for rel_type in sorted(all_types)}
 
 

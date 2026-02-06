@@ -22,6 +22,14 @@ from src.settings import Settings
 class TestConflictCategory:
     """Tests for ConflictCategory enum and classification."""
 
+    @pytest.fixture(autouse=True)
+    def _clean_warned_types(self):
+        """Ensure _warned_types is cleaned up after tests that mutate it."""
+        yield
+        # Remove any test-specific types added during the test
+        test_types = {t for t in _warned_types if t.startswith("test_") or t == "unknown_type"}
+        _warned_types.difference_update(test_types)
+
     def test_classify_alliance_relationships(self):
         """Test classification of alliance relationships."""
         alliance_types = ["loves", "ally_of", "protects", "member_of", "trusts"]
@@ -118,7 +126,6 @@ class TestConflictCategory:
 
     def test_classify_unknown_defaults_to_neutral(self):
         """Test unknown relationship types default to neutral."""
-        _warned_types.discard("unknown_type")
         assert classify_relationship("unknown_type") == ConflictCategory.NEUTRAL
 
     def test_classify_handles_case_and_format_variations(self):
@@ -130,7 +137,6 @@ class TestConflictCategory:
     def test_unknown_type_warning_emitted_only_once(self, caplog):
         """Test that unknown type warning is only emitted once per type."""
         unique_type = "test_dedup_unique_type_xyz"
-        _warned_types.discard(unique_type)
 
         with caplog.at_level(logging.WARNING, logger="src.memory.conflict_types"):
             classify_relationship(unique_type)
@@ -147,14 +153,10 @@ class TestConflictCategory:
     def test_warned_types_set_tracks_unknown_types(self):
         """Test that _warned_types set tracks types that have been warned about."""
         unique_type = "test_tracking_unique_type_abc"
-        _warned_types.discard(unique_type)
 
         assert unique_type not in _warned_types
         classify_relationship(unique_type)
         assert unique_type in _warned_types
-
-        # Clean up
-        _warned_types.discard(unique_type)
 
 
 class TestConflictColors:

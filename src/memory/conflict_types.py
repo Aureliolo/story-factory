@@ -7,6 +7,7 @@ These models define the structure for:
 """
 
 import logging
+import threading
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -106,6 +107,7 @@ CONFLICT_COLORS: dict[str, str] = {
 
 
 _warned_types: set[str] = set()
+_warned_types_lock = threading.Lock()
 
 
 def classify_relationship(relation_type: str) -> ConflictCategory:
@@ -145,14 +147,15 @@ def classify_relationship(relation_type: str) -> ConflictCategory:
     category = RELATION_CONFLICT_MAPPING.get(normalized)
 
     if category is None:
-        if normalized not in _warned_types:
-            logger.warning(
-                "Unknown relationship type '%s' (normalized: '%s') - "
-                "defaulting to NEUTRAL. Consider adding to RELATION_CONFLICT_MAPPING.",
-                relation_type,
-                normalized,
-            )
-            _warned_types.add(normalized)
+        with _warned_types_lock:
+            if normalized not in _warned_types:
+                logger.warning(
+                    "Unknown relationship type '%s' (normalized: '%s') - "
+                    "defaulting to NEUTRAL. Consider adding to RELATION_CONFLICT_MAPPING.",
+                    relation_type,
+                    normalized,
+                )
+                _warned_types.add(normalized)
         category = ConflictCategory.NEUTRAL
     else:
         logger.debug("Classified relationship '%s' as %s", relation_type, category.value)
