@@ -226,6 +226,7 @@ omit = [
     "scripts/check_deps.py",
     "scripts/check_file_size.py",
     "scripts/evaluate_ab_prompts.py",
+    "scripts/evaluate_calibration_variants.py",
     "scripts/evaluate_judge_accuracy.py",
     "scripts/evaluate_judge_consistency.py",
     "scripts/evaluate_refinement.py",
