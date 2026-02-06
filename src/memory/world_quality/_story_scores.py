@@ -18,7 +18,7 @@ class RelationshipQualityScores(BaseQualityScores):
     tension: float = Field(ge=0.0, le=10.0, description="Conflict potential")
     dynamics: float = Field(ge=0.0, le=10.0, description="Complexity, power balance")
     story_potential: float = Field(ge=0.0, le=10.0, description="Scene opportunities")
-    authenticity: float = Field(ge=0.0, le=10.0, description="Believability")
+    authenticity: float = Field(ge=0.0, le=10.0, description="Believability of earned connection")
 
     @property
     def average(self) -> float:
