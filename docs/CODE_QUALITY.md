@@ -71,7 +71,7 @@ This document tracks code quality issues identified during comprehensive review 
 
 ### 2.5 Language Mapping Deduplication
 - **Status:** Fixed
-- **Files:** `utils/constants.py`, `services/orchestrator`, `services/export_service.py`
+- **Files:** `utils/constants.py`, `services/orchestrator`, `services/export_service/`
 - **Issue:** Identical `lang_map` in two places
 - **Fix:** Moved to shared `utils/constants.py`
 - **Test:** Both usages import from shared location

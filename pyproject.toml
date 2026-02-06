@@ -12,7 +12,7 @@ name = "story-factory"
 version = "1.0.0"
 description = "AI-powered multi-agent system for generating stories with local LLMs via Ollama"
 readme = "README.md"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 authors = [
     {name = "Aurelio"}
 ]

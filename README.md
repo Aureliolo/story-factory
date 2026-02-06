@@ -243,6 +243,7 @@ ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0 # Creative writing
 ```
 
 #### For 24GB VRAM (Premium - February 2026 Update)
+
 ```bash
 # Best quality multi-agent setup with MoE efficiency
 ollama pull huihui_ai/dolphin3-abliterated:8b           # Interviewer
@@ -508,6 +509,12 @@ story-factory/
 │   │   ├── comparison_service.py # Model comparison testing
 │   │   ├── suggestion_service.py # AI-powered suggestions
 │   │   ├── world_quality_service/ # World quality enhancement
+│   │   ├── timeline_service.py # Timeline management
+│   │   ├── calendar_service.py # Calendar view
+│   │   ├── conflict_analysis_service.py # Story conflict analysis
+│   │   ├── content_guidelines_service.py # Content guidelines
+│   │   ├── temporal_validation_service.py # Timeline validation
+│   │   ├── world_template_service.py # World templates
 │   │   └── llm_client.py   # Unified LLM client
 │   ├── ui/                 # NiceGUI web interface
 │   │   ├── app.py          # Main application setup
@@ -790,7 +797,7 @@ A: Models vary in:
 - **Size** (parameters): 8B, 14B, 30B, 70B, etc.
 - **Quality**: Reasoning ability, creativity, instruction-following
 - **Speed**: Smaller models are faster but less capable
-- **Specialization**: Some excel at creative writing, others at reasoning
+- **Specialization**: Some excel at creative writing, others at reasoning.
 
 See [docs/MODELS.md](docs/MODELS.md) for detailed comparisons and recommendations.
 
@@ -821,7 +828,7 @@ A:
 A: Yes! The web UI allows:
 - Chapter regeneration with feedback
 - Version control with rollback support
-- Export and edit in external tools
+- Export and edit in external tools.
 
 **Q: Can I save and resume stories?**
 A: Yes, projects are automatically saved and can be resumed at any checkpoint. The system maintains your entire story state including world-building data.
@@ -842,10 +849,12 @@ A: Primarily English. Some models (like Qwen3) support multiple languages, but q
 A: Yes! The Templates tab allows:
 - Importing custom templates from JSON
 - Creating templates from existing projects
-- Sharing templates with others
+- Sharing templates with others.
 
 **Q: How do I update to the latest version?**
+
 A:
+
 ```bash
 git pull origin main
 pip install --upgrade .
@@ -1003,7 +1012,7 @@ Special thanks to all the model creators, AI researchers, and open-source contri
 - **Improved Testing**: 2000+ tests with 100% coverage on core modules
 - **Performance Optimizations**: LRU caching, incremental graph updates, thread-safe operations
 - **Better Error Handling**: Comprehensive exception hierarchy and retry logic
-- **Keyboard Shortcuts**: Power-user navigation (Ctrl+/)
+- **Keyboard Shortcuts**: Power-user navigation (`Ctrl+/`)
 
 ### Known Limitations
 
