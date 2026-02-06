@@ -278,7 +278,17 @@ class TestFactionGenerationEarlyStopping:
         # Create faction that degrades after initial peak
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
-        mock_refine.return_value = test_faction
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {
+                "name": "TestFaction",
+                "description": f"A test faction v{refine_counter['n']}",
+            }
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
         scores = [
@@ -318,7 +328,17 @@ class TestFactionGenerationEarlyStopping:
         """
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
-        mock_refine.return_value = test_faction
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {
+                "name": "TestFaction",
+                "description": f"A test faction v{refine_counter['n']}",
+            }
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
         scores = [
@@ -357,7 +377,17 @@ class TestFactionGenerationEarlyStopping:
         """
         test_faction = {"name": "TestFaction", "description": "A test faction"}
         mock_create.return_value = test_faction
-        mock_refine.return_value = test_faction
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {
+                "name": "TestFaction",
+                "description": f"A test faction v{refine_counter['n']}",
+            }
+
+        mock_refine.side_effect = _unique_refine
 
         # Scores degrade consistently after peak
         scores = [
@@ -404,7 +434,18 @@ class TestCharacterGenerationEarlyStopping:
         """
         test_char = Character(name="ZeroChar", role="protagonist", description="Zero scores")
         mock_create.return_value = test_char
-        mock_refine.return_value = test_char
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return Character(
+                name="ZeroChar",
+                role="protagonist",
+                description=f"Zero scores v{refine_counter['n']}",
+            )
+
+        mock_refine.side_effect = _unique_refine
 
         # All zero scores - peak_score (0.0) is never exceeded
         zero_scores = CharacterQualityScores(
@@ -431,7 +472,18 @@ class TestCharacterGenerationEarlyStopping:
         """Test that character generation stops early after consecutive degradations."""
         test_char = Character(name="TestChar", role="protagonist", description="A test character")
         mock_create.return_value = test_char
-        mock_refine.return_value = test_char
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return Character(
+                name="TestChar",
+                role="protagonist",
+                description=f"A test character v{refine_counter['n']}",
+            )
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.2 -> 7.9 -> 7.6 (should stop here with patience=2)
         scores = [
@@ -466,7 +518,18 @@ class TestCharacterGenerationEarlyStopping:
         """Test that improvement resets degradation counter and allows threshold exit."""
         test_char = Character(name="TestChar", role="protagonist", description="A test character")
         mock_create.return_value = test_char
-        mock_refine.return_value = test_char
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return Character(
+                name="TestChar",
+                role="protagonist",
+                description=f"A test character v{refine_counter['n']}",
+            )
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.0 -> 7.5 -> 9.5 (meets threshold=9.0, stops)
         scores = [
@@ -505,7 +568,14 @@ class TestLocationGenerationEarlyStopping:
         """Test location generation with zero scores falls back to last iteration."""
         test_loc = {"name": "ZeroLoc", "description": "Zero scores"}
         mock_create.return_value = test_loc
-        mock_refine.return_value = test_loc
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {"name": "ZeroLoc", "description": f"Zero scores v{refine_counter['n']}"}
+
+        mock_refine.side_effect = _unique_refine
 
         zero_scores = LocationQualityScores(
             atmosphere=0, significance=0, story_relevance=0, distinctiveness=0
@@ -529,7 +599,17 @@ class TestLocationGenerationEarlyStopping:
         """Test that location generation stops early after consecutive degradations."""
         test_loc = {"name": "TestLocation", "description": "A test location"}
         mock_create.return_value = test_loc
-        mock_refine.return_value = test_loc
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {
+                "name": "TestLocation",
+                "description": f"A test location v{refine_counter['n']}",
+            }
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
@@ -573,7 +653,19 @@ class TestRelationshipGenerationEarlyStopping:
             "description": "Zero",
         }
         mock_create.return_value = test_rel
-        mock_refine.return_value = test_rel
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {
+                "source": "Alice",
+                "target": "Bob",
+                "relation_type": "knows",
+                "description": f"Zero v{refine_counter['n']}",
+            }
+
+        mock_refine.side_effect = _unique_refine
 
         zero_scores = RelationshipQualityScores(
             tension=0, dynamics=0, story_potential=0, authenticity=0
@@ -602,7 +694,19 @@ class TestRelationshipGenerationEarlyStopping:
             "description": "They work together",
         }
         mock_create.return_value = test_rel
-        mock_refine.return_value = test_rel
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {
+                "source": "Alice",
+                "target": "Bob",
+                "relation_type": "allies",
+                "description": f"They work together v{refine_counter['n']}",
+            }
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
@@ -641,7 +745,14 @@ class TestItemGenerationEarlyStopping:
         """Test item generation with zero scores falls back to last iteration."""
         test_item = {"name": "ZeroItem", "description": "Zero scores"}
         mock_create.return_value = test_item
-        mock_refine.return_value = test_item
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {"name": "ZeroItem", "description": f"Zero scores v{refine_counter['n']}"}
+
+        mock_refine.side_effect = _unique_refine
 
         zero_scores = ItemQualityScores(
             significance=0, uniqueness=0, narrative_potential=0, integration=0
@@ -665,7 +776,14 @@ class TestItemGenerationEarlyStopping:
         """Test that item generation stops early after consecutive degradations."""
         test_item = {"name": "TestItem", "description": "A test item"}
         mock_create.return_value = test_item
-        mock_refine.return_value = test_item
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {"name": "TestItem", "description": f"A test item v{refine_counter['n']}"}
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [
@@ -704,7 +822,14 @@ class TestConceptGenerationEarlyStopping:
         """Test concept generation with zero scores falls back to last iteration."""
         test_concept = {"name": "ZeroConcept", "description": "Zero scores"}
         mock_create.return_value = test_concept
-        mock_refine.return_value = test_concept
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {"name": "ZeroConcept", "description": f"Zero scores v{refine_counter['n']}"}
+
+        mock_refine.side_effect = _unique_refine
 
         zero_scores = ConceptQualityScores(relevance=0, depth=0, manifestation=0, resonance=0)
         mock_judge.return_value = zero_scores
@@ -726,7 +851,17 @@ class TestConceptGenerationEarlyStopping:
         """Test that concept generation stops early after consecutive degradations."""
         test_concept = {"name": "TestConcept", "description": "A test concept"}
         mock_create.return_value = test_concept
-        mock_refine.return_value = test_concept
+        refine_counter = {"n": 0}
+
+        def _unique_refine(*args, **kwargs):
+            """Return entity with unique description to avoid unchanged-output detection."""
+            refine_counter["n"] += 1
+            return {
+                "name": "TestConcept",
+                "description": f"A test concept v{refine_counter['n']}",
+            }
+
+        mock_refine.side_effect = _unique_refine
 
         # Score progression: 8.0 -> 7.5 -> 7.0 (should stop here with patience=2)
         scores = [

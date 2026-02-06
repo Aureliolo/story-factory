@@ -98,7 +98,7 @@ class RefinementHistory(BaseModel):
     def should_stop_early(
         self,
         patience: int,
-        min_iterations: int = 2,
+        min_iterations: int = 1,
         variance_tolerance: float = 0.3,
     ) -> bool:
         """Check if early stopping criteria is met with enhanced checks.
@@ -258,7 +258,7 @@ class RefinementConfig(BaseModel):
 
     max_iterations: int = Field(default=3, ge=1, le=10, description="Max refinement iterations")
     quality_threshold: float = Field(
-        default=8.0, ge=0.0, le=10.0, description="Minimum average score"
+        default=7.5, ge=0.0, le=10.0, description="Minimum average score"
     )
     creator_temperature: float = Field(
         default=0.9, ge=0.0, le=2.0, description="Temperature for creation"
@@ -289,7 +289,7 @@ class RefinementConfig(BaseModel):
 
     # Enhanced early stopping settings
     early_stopping_min_iterations: int = Field(
-        default=2, ge=1, le=10, description="Minimum iterations before early stop can trigger"
+        default=1, ge=1, le=10, description="Minimum iterations before early stop can trigger"
     )
     early_stopping_variance_tolerance: float = Field(
         default=0.3, ge=0.0, le=2.0, description="Score variance tolerance for early stopping"

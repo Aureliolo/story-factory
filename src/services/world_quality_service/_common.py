@@ -14,22 +14,13 @@ _RETRY_TEMP_INCREMENT = 0.15
 _RETRY_TEMP_MAX = 1.5
 
 # Shared calibration block for all judge prompts.
-# Encourages use of the full 0-10 range with decimal precision and variation
-# between dimensions. Previous calibration suppressed 8+ scores and forced
-# integer-only outputs, making the 7.5 threshold unreachable.
-JUDGE_CALIBRATION_BLOCK = """SCORING GUIDE — USE THE FULL 0-10 RANGE WITH DECIMALS:
-- 1-3: Fundamentally broken or generic (contradictory, cliched, no thought)
-- 4-5: Below average (functional but bland, forgettable, one-dimensional)
-- 6-7: Competent (clear strengths, some areas need work — most first drafts land here)
-- 7-8: Strong (well-crafted, multiple strong dimensions — refined work reaches here)
-- 8-9: Excellent (genuinely impressive, few weaknesses — justify in feedback)
-- 10: Virtually flawless (publishable as-is — almost never appropriate)
-
-RULES:
-1. Score to one decimal place (e.g., 5.3, 7.1, 8.6). Do NOT round to whole numbers.
-2. Differentiate between dimensions — an entity can have 8.2 in one area but 5.4 in another.
-3. If you give 8+ on a dimension, your feedback MUST explain what makes it exceptional.
-4. If all your scores are within 1 point of each other, you are not differentiating enough."""
+# Minimal variant (D_minimal) from #246 benchmarking: removes tier labels,
+# the 8+ justification rule, and example scores that anchored judges into
+# a narrow 7.4-7.5 safe zone. See output/diagnostics/INVESTIGATION_246.md.
+JUDGE_CALIBRATION_BLOCK = """SCORING GUIDE:
+Score each dimension 0-10 with one decimal place.
+Differentiate between dimensions — an entity can score 8.5 in one area but 6.2 in another.
+If all your scores are within 1 point of each other, you are not differentiating enough."""
 
 T = TypeVar("T", bound=BaseModel)
 

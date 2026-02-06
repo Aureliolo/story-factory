@@ -133,7 +133,7 @@ class Settings:
     # World quality refinement settings
     world_quality_enabled: bool = True  # Enable quality refinement for world generation
     world_quality_max_iterations: int = 3  # Maximum refinement iterations per entity
-    world_quality_threshold: float = 8.0  # Min score (0-10) to pass quality review
+    world_quality_threshold: float = 7.5  # Min score (0-10) to pass quality review
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
     world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes
@@ -145,7 +145,7 @@ class Settings:
     world_quality_refinement_temp_decay: str = "linear"  # Decay curve: linear, exponential, step
 
     # Enhanced early stopping settings (#167)
-    world_quality_early_stopping_min_iterations: int = 2  # Min iterations before early stop
+    world_quality_early_stopping_min_iterations: int = 1  # Min iterations before early stop
     world_quality_early_stopping_variance_tolerance: float = 0.3  # Score variance tolerance
 
     # Circuit breaker settings (#175)

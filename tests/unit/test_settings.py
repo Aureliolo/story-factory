@@ -27,7 +27,7 @@ class TestSettings:
         assert settings.max_tokens == 8192
         assert settings.use_per_agent_models is True
         assert settings.interaction_mode == "checkpoint"
-        assert settings.world_quality_threshold == 8.0
+        assert settings.world_quality_threshold == 7.5
         assert settings.log_level == "INFO"
 
     def test_default_agent_models_includes_judge(self):
