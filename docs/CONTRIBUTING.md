@@ -67,7 +67,7 @@ Areas that need help:
 
 ### Prerequisites
 
-- Python 3.14+
+- Python 3.12+ (3.14+ recommended)
 - Git
 - Ollama installed and running
 - At least one model pulled (e.g., `huihui_ai/dolphin3-abliterated:8b`)
@@ -119,7 +119,7 @@ Areas that need help:
 - **Linter**: Ruff (replaces Flake8, isort, etc.)
 - **Type hints**: Use where appropriate
 - **Line length**: 100 characters
-- **Python version**: 3.14+
+- **Python version**: 3.12+ (3.14+ recommended)
 
 ### Code Organization
 

@@ -3,8 +3,8 @@
 [![CI](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Aureliolo/story-factory/branch/main/graph/badge.svg)](https://codecov.io/gh/Aureliolo/story-factory)
 [![docstring coverage](docs/badges/interrogate_badge.svg)](https://pypi.org/project/interrogate/)
-[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
-[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: All Rights Reserved](https://img.shields.io/badge/License-All_Rights_Reserved-red.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Aureliolo/story-factory?utm_source=oss&utm_medium=github&utm_campaign=Aureliolo%2Fstory-factory&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
@@ -30,6 +30,8 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 - [License](#license)
 
 ## Screenshots
+
+> **Note:** Screenshots show the application interface as of February 2026. The UI may have been updated since these were captured. The actual interface will reflect the latest features and design improvements.
 
 ### Main Interface
 ![Home Screen](https://github.com/user-attachments/assets/9056d5cb-b696-4510-89ba-3fbfd2fe067e)
@@ -142,7 +144,7 @@ The application features a comprehensive tabbed interface:
 ## Requirements
 
 ### Minimum Requirements
-- **Python**: 3.14 or higher
+- **Python**: 3.12 or higher (3.14+ recommended for optimal performance)
 - **RAM**: 16GB system RAM
 - **Storage**: 20GB free space for models and outputs
 - **OS**: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+)
@@ -708,7 +710,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture docum
    venv\Scripts\activate     # Windows
    pip install .
    ```
-3. **Check Python version**: Must be 3.14+
+3. **Check Python version**: Must be 3.12+ (3.14+ recommended)
    ```bash
    python --version
    ```
@@ -760,7 +762,7 @@ A: No, Story Factory runs entirely locally. Internet is only needed to download 
 A: Yes, completely. All processing happens on your machine. No data is sent to external servers.
 
 **Q: Can I use this commercially?**
-A: The software is MIT licensed (free for commercial use), but check the licenses of the LLM models you use.
+A: This software is provided for reference only with all rights reserved. Contact the copyright holder for licensing inquiries. Also check the licenses of the LLM models you use.
 
 **Q: How long does it take to generate a story?**
 A: Depends on length and hardware:
@@ -893,7 +895,7 @@ Copyright (c) 2026 Aurelio Amoroso. All Rights Reserved. See [LICENSE](LICENSE) 
 4. **Verify your setup**:
    - Ollama is running (`curl http://localhost:11434/api/tags`)
    - Models are installed (`ollama list`)
-   - Python version is 3.14+ (`python --version`)
+   - Python version is 3.12+ (`python --version`)
    - GPU is detected (`nvidia-smi`)
 
 ### Reporting Issues
