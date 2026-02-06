@@ -274,7 +274,7 @@ Rate each dimension 0-10:
 - tension: Conflict potential
 - dynamics: Complexity, power balance, history
 - story_potential: Opportunities for scenes and development
-- authenticity: Believability of the connection
+- authenticity: Believability of the connection — do their shared experiences, motivations, and emotional responses feel earned and internally consistent?
 
 Provide specific, actionable feedback for improvement in the feedback field.
 
@@ -345,7 +345,10 @@ def _refine_relationship(
     if scores.story_potential < threshold:
         improvement_focus.append("Create more scene opportunities — betrayal, alliance, revelation")
     if scores.authenticity < threshold:
-        improvement_focus.append("Add shared history, believable motivation for the bond")
+        improvement_focus.append(
+            "Add shared history, believable motivation for the bond — "
+            "ensure emotional responses feel earned and internally consistent"
+        )
 
     prompt = f"""TASK: Improve this relationship to score HIGHER on the weak dimensions.
 

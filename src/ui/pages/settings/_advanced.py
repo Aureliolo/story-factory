@@ -524,7 +524,8 @@ def build_judge_consistency_section(page: SettingsPage) -> None:
                     value=page.settings.judge_multi_call_enabled,
                 ).tooltip(
                     "Call the judge model multiple times per entity and average scores. "
-                    "Reduces variance from noisy local models at the cost of more LLM calls."
+                    "Disabled by default — testing shows near-zero variance at low temperature. "
+                    "Enable only if using a small or highly variable judge model."
                 )
 
             with ui.element("div").bind_visibility_from(page._judge_multi_call_switch, "value"):
