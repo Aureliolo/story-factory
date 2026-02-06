@@ -730,34 +730,30 @@ class TestCalibrationBlock:
     def test_calibration_block_contains_scoring_rules(self):
         """JUDGE_CALIBRATION_BLOCK contains the key scoring anchors."""
         assert "SCORING GUIDE" in JUDGE_CALIBRATION_BLOCK
-        assert "6-7" in JUDGE_CALIBRATION_BLOCK  # first drafts land here
-        assert "RULES:" in JUDGE_CALIBRATION_BLOCK
+        assert "0-10" in JUDGE_CALIBRATION_BLOCK
         assert "decimal" in JUDGE_CALIBRATION_BLOCK.lower()
+        assert "Differentiate" in JUDGE_CALIBRATION_BLOCK
 
     def test_calibration_block_requests_decimals(self):
         """JUDGE_CALIBRATION_BLOCK requires decimal precision in scores."""
         assert "one decimal place" in JUDGE_CALIBRATION_BLOCK.lower()
-        # Contains example decimal scores
-        assert "5.3" in JUDGE_CALIBRATION_BLOCK
-        assert "7.1" in JUDGE_CALIBRATION_BLOCK
-        assert "8.6" in JUDGE_CALIBRATION_BLOCK
+        # Contains example decimal scores showing score differentiation
+        assert "8.5" in JUDGE_CALIBRATION_BLOCK
+        assert "6.2" in JUDGE_CALIBRATION_BLOCK
 
     def test_calibration_block_allows_high_scores(self):
         """JUDGE_CALIBRATION_BLOCK does NOT suppress 8+ scores."""
         # The old block had "Do NOT give 8+" which made 7.5 threshold unreachable
         assert "Do NOT give 8" not in JUDGE_CALIBRATION_BLOCK
-        # 8-9 range should be described as "Excellent" (achievable)
-        assert "8-9" in JUDGE_CALIBRATION_BLOCK
-        assert "Excellent" in JUDGE_CALIBRATION_BLOCK
+        # D_minimal variant: no tier labels that anchor judges into narrow range
+        assert "8.5" in JUDGE_CALIBRATION_BLOCK  # Example high score is present
+        # No "justify" rule for 8+ that discouraged high scores
+        assert "MUST explain" not in JUDGE_CALIBRATION_BLOCK
 
-    def test_calibration_block_has_score_ranges(self):
-        """JUDGE_CALIBRATION_BLOCK defines score ranges covering 1-10."""
-        assert "1-3:" in JUDGE_CALIBRATION_BLOCK
-        assert "4-5:" in JUDGE_CALIBRATION_BLOCK
-        assert "6-7:" in JUDGE_CALIBRATION_BLOCK
-        assert "7-8:" in JUDGE_CALIBRATION_BLOCK
-        assert "8-9:" in JUDGE_CALIBRATION_BLOCK
-        assert "10:" in JUDGE_CALIBRATION_BLOCK
+    def test_calibration_block_encourages_differentiation(self):
+        """JUDGE_CALIBRATION_BLOCK requires score differentiation across dimensions."""
+        assert "Differentiate between dimensions" in JUDGE_CALIBRATION_BLOCK
+        assert "1 point" in JUDGE_CALIBRATION_BLOCK  # anti-clustering warning
 
     def test_character_judge_uses_calibration_block(self):
         """Character judge prompt includes JUDGE_CALIBRATION_BLOCK."""
