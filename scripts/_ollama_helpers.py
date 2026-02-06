@@ -51,7 +51,7 @@ def get_installed_models() -> list[str]:
     return sorted(result)
 
 
-def unload_model(model: str) -> None:
+def unload_model(model: str) -> bool:
     """Request Ollama to unload a model from VRAM via keep_alive=0.
 
     Calls raise_for_status() to detect 4xx/5xx failures that would leave
@@ -59,6 +59,9 @@ def unload_model(model: str) -> None:
 
     Args:
         model: Name or tag of the model to unload.
+
+    Returns:
+        True if unload succeeded, False on any failure.
     """
     try:
         resp = httpx.post(
@@ -68,12 +71,15 @@ def unload_model(model: str) -> None:
         )
         resp.raise_for_status()
         logger.debug("Unloaded model '%s' (status=%s)", model, resp.status_code)
+        return True
     except httpx.HTTPStatusError as e:
-        status_code = e.response.status_code if e.response is not None else "unknown"
-        body = (e.response.text or "")[:200] if e.response is not None else ""
+        status_code = e.response.status_code
+        body = (e.response.text or "")[:200]
         logger.warning("Failed to unload model '%s' (status %s): %s", model, status_code, body)
+        return False
     except httpx.HTTPError as e:
         logger.warning("Failed to unload model '%s': %s", model, e)
+        return False
 
 
 def get_model_info(model: str) -> dict[str, Any]:

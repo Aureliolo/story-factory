@@ -221,8 +221,8 @@ def unload_model_timed(model: str) -> dict[str, Any]:
         return {"unload_time": elapsed, "error": None}
     except httpx.HTTPStatusError as e:
         elapsed = round(time.monotonic() - start, 2)
-        status_code = e.response.status_code if e.response is not None else "unknown"
-        body = (e.response.text or "")[:200] if e.response is not None else ""
+        status_code = e.response.status_code
+        body = (e.response.text or "")[:200]
         logger.warning("Failed to unload model '%s' (status %s): %s", model, status_code, body)
         return {"unload_time": elapsed, "error": f"HTTP {status_code}: {body}"}
     except httpx.HTTPError as e:
@@ -500,7 +500,8 @@ def audit_vram_module() -> dict[str, Any]:
     Returns:
         Dict with audit findings.
     """
-    vram_path = Path("src/services/model_mode_service/_vram.py")
+    project_root = Path(__file__).resolve().parent.parent
+    vram_path = project_root / "src" / "services" / "model_mode_service" / "_vram.py"
     if not vram_path.exists():
         return {"error": f"File not found: {vram_path}", "calls_ollama_unload": "unknown"}
 

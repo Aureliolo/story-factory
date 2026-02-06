@@ -25,6 +25,7 @@ import json
 import logging
 import sys
 import time
+import typing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -268,11 +269,11 @@ def get_schema_complexity(model_class: type[BaseModel]) -> dict[str, Any]:
 
     for field_info in fields.values():
         annotation = field_info.annotation
-        annotation_str = str(annotation)
+        origin = typing.get_origin(annotation)
 
-        if "list" in annotation_str.lower():
+        if origin is list:
             list_fields += 1
-        if "dict" in annotation_str.lower():
+        if origin is dict:
             nested_types += 1
         if field_info.metadata:
             constrained_fields += 1

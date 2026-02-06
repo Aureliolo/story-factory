@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# Production validator thresholds (from src/settings.py defaults)
+# Production validator thresholds (from src/settings/ package defaults)
 DEFAULT_CJK_THRESHOLD = 5
 DEFAULT_PRINTABLE_RATIO = 0.9
 DEFAULT_AI_CHECK_MIN_LENGTH = 200
@@ -636,6 +636,11 @@ def main() -> None:
             reference_model = candidates[0]
         elif installed:
             reference_model = installed[0]
+            logger.warning(
+                "Could not find a different model for reference. Using %s as both "
+                "validator and reference model. Path 2 and 3 results will be identical.",
+                reference_model,
+            )
         else:
             print("ERROR: No models found. Is Ollama running?")
             sys.exit(1)
