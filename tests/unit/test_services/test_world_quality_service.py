@@ -3019,6 +3019,19 @@ class TestExceptionHandlingPaths:
         with pytest.raises(WorldGenerationError, match="Relationship quality judgment failed"):
             service._judge_relationship_quality(relationship, story_state, temperature=0.1)
 
+    @patch("src.services.world_quality_service._relationship.generate_structured")
+    def test_judge_relationship_quality_error_with_multi_call_logs_warning(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test relationship judge logs warning (not error) when multi-call is enabled."""
+        service.settings.judge_multi_call_enabled = True
+        mock_generate_structured.side_effect = Exception("LLM timeout")
+
+        relationship = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
+
+        with pytest.raises(WorldGenerationError, match="Relationship quality judgment failed"):
+            service._judge_relationship_quality(relationship, story_state, temperature=0.1)
+
     # ========== Relationship Refinement Exception Paths ==========
 
     def test_refine_relationship_llm_error(self, service, story_state, mock_ollama_client):
