@@ -68,7 +68,7 @@ def get_gpu_vram_usage() -> dict[str, Any]:
 
     Returns:
         Dict with total_mb, used_mb, free_mb, utilization_pct, error.
-        On non-NVIDIA systems, returns error="not_available".
+        On non-NVIDIA systems, returns error="nvidia-smi not available".
     """
     if not nvidia_smi_available():
         return {
@@ -619,7 +619,9 @@ def main() -> None:
     print(f"Models to test: {len(models)}")
     for m in models:
         size_info = model_sizes[m]
-        print(f"  - {m} ({size_info['parameter_size']}, {size_info['quantization']})")
+        param = size_info.get("parameter_size", "unknown") if size_info else "unknown"
+        quant = size_info.get("quantization", "unknown") if size_info else "unknown"
+        print(f"  - {m} ({param}, {quant})")
     print(f"Timeout per call: {args.timeout}s")
     print(f"Output: {output_path}")
     print("=" * 70)

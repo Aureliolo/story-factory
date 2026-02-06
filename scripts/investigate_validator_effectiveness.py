@@ -32,6 +32,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import httpx
 
 from scripts._ollama_helpers import (
@@ -297,7 +300,8 @@ def call_validator_model(
 ) -> dict[str, Any]:
     """Call a model with the validator prompt and return TRUE/FALSE result.
 
-    Mirrors the logic in ValidatorAgent._ai_validate().
+    Uses the same prompt structure as ValidatorAgent._ai_validate() but
+    prioritizes FALSE detection to reduce false positives in investigation.
 
     Args:
         model: Ollama model name.
@@ -405,6 +409,7 @@ def validate_rule_based(
 
     checks_applied = []
     reasons = []
+    cjk_matches: list[str] = []
 
     # CJK check (only for English)
     if expected_language == "English":
@@ -428,7 +433,7 @@ def validate_rule_based(
         "reason": ", ".join(reasons) if reasons else "passed",
         "checks_applied": checks_applied,
         "response_time": elapsed,
-        "cjk_count": len(cjk_matches) if expected_language == "English" else 0,
+        "cjk_count": len(cjk_matches),
         "printable_ratio": round(actual_ratio, 3),
     }
 
@@ -626,7 +631,7 @@ def main() -> None:
         reference_model = args.reference_model
     else:
         installed = get_installed_models()
-        candidates = [m for m in installed if not m.startswith("smollm")]
+        candidates = [m for m in installed if m != args.validator_model]
         if candidates:
             reference_model = candidates[0]
         elif installed:

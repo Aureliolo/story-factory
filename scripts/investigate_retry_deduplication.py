@@ -36,9 +36,10 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from scripts._ollama_helpers import (
+    CANONICAL_BRIEF,
     OLLAMA_BASE,
     unload_model,
 )
@@ -81,14 +82,6 @@ SCHEMA_CLASS_MAP: dict[str, type[BaseModel]] = {
 }
 
 # Canonical prompts matching Script 1 (reused for consistency)
-CANONICAL_BRIEF = (
-    "In a crumbling empire where magic is fueled by memory, a disgraced archivist "
-    "discovers that the ruling council has been erasing collective memories to maintain "
-    "power. She must navigate rival factions, ancient artifacts, and forbidden knowledge "
-    "to restore what was lost before the empire collapses into civil war. "
-    "Genre: Fantasy with Political Intrigue. Tone: Dark and suspenseful."
-)
-
 SCHEMA_PROMPTS: dict[str, str] = {
     "character": (
         f"Story context: {CANONICAL_BRIEF}\n\n"
@@ -271,14 +264,18 @@ def validate_against_schema(raw_text: str, schema_class: type[BaseModel]) -> dic
         return {"valid": True, "error_count": 0, "error_types": []}
     except json.JSONDecodeError:
         return {"valid": False, "error_count": 1, "error_types": ["json_parse_error"]}
-    except Exception as e:
-        error_types = []
-        if hasattr(e, "errors"):
-            error_types = [err.get("type", "unknown") for err in e.errors()]
+    except ValidationError as e:
+        error_types = [err.get("type", "unknown") for err in e.errors()]
         return {
             "valid": False,
-            "error_count": len(error_types) if error_types else 1,
-            "error_types": error_types if error_types else [type(e).__name__],
+            "error_count": len(error_types),
+            "error_types": error_types,
+        }
+    except Exception as e:
+        return {
+            "valid": False,
+            "error_count": 1,
+            "error_types": [type(e).__name__],
         }
 
 

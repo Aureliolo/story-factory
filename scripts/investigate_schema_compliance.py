@@ -37,6 +37,7 @@ from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
 from scripts._ollama_helpers import (
+    CANONICAL_BRIEF,
     OLLAMA_BASE,
     get_installed_models,
     get_model_info,
@@ -61,15 +62,6 @@ from src.memory.world_quality._entity_scores import (
 logger = logging.getLogger(__name__)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-# Canonical story brief for generating prompts (same as evaluate_refinement.py)
-CANONICAL_BRIEF = (
-    "In a crumbling empire where magic is fueled by memory, a disgraced archivist "
-    "discovers that the ruling council has been erasing collective memories to maintain "
-    "power. She must navigate rival factions, ancient artifacts, and forbidden knowledge "
-    "to restore what was lost before the empire collapses into civil war. "
-    "Genre: Fantasy with Political Intrigue. Tone: Dark and suspenseful."
-)
 
 # All testable schemas mapped to their Pydantic model class and a generation prompt
 SCHEMA_REGISTRY: dict[str, dict[str, Any]] = {
@@ -323,12 +315,12 @@ def test_schema_compliance(
     prompt = schema_info["prompt"]
 
     # Capture raw responses on parse errors
-    raw_error_responses: list[str] = []
+    parse_error_messages: list[str] = []
 
     def on_parse_error(e: Any) -> None:
         """Capture exception message when Pydantic validation fails."""
         error_str = str(e)[:500] if e else ""
-        raw_error_responses.append(error_str)
+        parse_error_messages.append(error_str)
         logger.debug("Parse error captured for %s/%s: %s", model, schema_name, error_str[:100])
 
     # Create a fresh instructor client for this test
@@ -346,7 +338,7 @@ def test_schema_compliance(
         "passed": False,
         "error_type": None,
         "error_detail": None,
-        "raw_error_responses": [],
+        "parse_error_messages": [],
         "validation_errors": [],
         "response_time_seconds": 0.0,
         "parsed_data": None,
@@ -405,7 +397,7 @@ def test_schema_compliance(
                 str(e)[:100],
             )
 
-    result["raw_error_responses"] = raw_error_responses
+    result["parse_error_messages"] = parse_error_messages
     return result
 
 

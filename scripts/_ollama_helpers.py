@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 OLLAMA_BASE = "http://localhost:11434"
 EMBEDDING_MODELS = {"bge-m3", "snowflake-arctic-embed", "mxbai-embed-large"}
 
+# Canonical story brief used for generating test prompts across investigation scripts
+CANONICAL_BRIEF = (
+    "In a crumbling empire where magic is fueled by memory, a disgraced archivist "
+    "discovers that the ruling council has been erasing collective memories to maintain "
+    "power. She must navigate rival factions, ancient artifacts, and forbidden knowledge "
+    "to restore what was lost before the empire collapses into civil war. "
+    "Genre: Fantasy with Political Intrigue. Tone: Dark and suspenseful."
+)
+
 
 def get_installed_models() -> list[str]:
     """Retrieve installed Ollama model tags, excluding known embedding models.
