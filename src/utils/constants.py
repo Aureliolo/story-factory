@@ -35,7 +35,6 @@ def get_entity_color(entity_type: str) -> str:
             f"Valid types: {list(ENTITY_COLORS.keys())}"
         )
         return ENTITY_COLORS["concept"]
-    logger.debug(f"get_entity_color: '{entity_type}' -> {color}")
     return color
 
 

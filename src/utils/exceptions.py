@@ -38,6 +38,45 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def summarize_llm_error(error: Exception, max_length: int = 300) -> str:
+    """Create a concise summary of an LLM-related exception for logging.
+
+    InstructorRetryException's __str__ dumps full ChatCompletion objects
+    including all failed attempts, token counts, and raw model output —
+    producing 300-600 line log entries per failure. This function extracts
+    just the actionable information.
+
+    Args:
+        error: The exception to summarize.
+        max_length: Maximum length of the summary string.
+
+    Returns:
+        A concise error summary suitable for log messages.
+    """
+    error_type = type(error).__name__
+    msg = str(error)
+
+    # Short messages don't need summarization
+    if len(msg) <= max_length:
+        return msg
+
+    # For InstructorRetryException, extract attempt count and last error
+    n_attempts = getattr(error, "n_attempts", None)
+    last_exception = getattr(error, "last_exception", None)
+
+    if n_attempts is not None:
+        parts = [f"{error_type}: {n_attempts} attempt(s) failed"]
+        if last_exception:
+            last_msg = str(last_exception)
+            if len(last_msg) > 150:
+                last_msg = last_msg[:150] + "..."
+            parts.append(f"last error: {last_msg}")
+        return "; ".join(parts)
+
+    # Generic truncation for other long exceptions
+    return f"{msg[:max_length]}... [{len(msg) - max_length} chars truncated]"
+
+
 class StoryFactoryError(Exception):
     """Base exception for all Story Factory errors.
 

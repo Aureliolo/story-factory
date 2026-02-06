@@ -13,7 +13,7 @@ from src.services.world_quality_service._common import (
     retry_temperature,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
@@ -221,8 +221,9 @@ Output ONLY valid JSON (all text in {brief.language}):
         # Convert to dict for compatibility with existing code
         return faction.model_dump()
     except Exception as e:
-        logger.exception("Faction creation failed for story %s: %s", story_state.id, e)
-        raise WorldGenerationError(f"Faction creation failed: {e}") from e
+        summary = summarize_llm_error(e)
+        logger.error("Faction creation failed for story %s: %s", story_state.id, summary)
+        raise WorldGenerationError(f"Faction creation failed: {summary}") from e
 
 
 def _judge_faction_quality(
@@ -290,19 +291,20 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
                 logger.warning(
                     "Faction quality judgment failed for '%s': %s",
                     faction.get("name") or "Unknown",
-                    e,
+                    summary,
                 )
             else:
-                logger.exception(
+                logger.error(
                     "Faction quality judgment failed for '%s': %s",
                     faction.get("name") or "Unknown",
-                    e,
+                    summary,
                 )
-            raise WorldGenerationError(f"Faction quality judgment failed: {e}") from e
+            raise WorldGenerationError(f"Faction quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, FactionQualityScores, judge_config)
 
@@ -377,10 +379,11 @@ Return ONLY the improved faction."""
         result["type"] = "faction"
         return result
     except Exception as e:
-        logger.exception(
-            "Faction refinement failed for '%s': %s", faction.get("name") or "Unknown", e
+        summary = summarize_llm_error(e)
+        logger.error(
+            "Faction refinement failed for '%s': %s", faction.get("name") or "Unknown", summary
         )
-        raise WorldGenerationError(f"Faction refinement failed: {e}") from e
+        raise WorldGenerationError(f"Faction refinement failed: {summary}") from e
 
 
 def _format_existing_names(existing_names: list[str]) -> str:

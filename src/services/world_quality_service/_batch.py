@@ -16,7 +16,7 @@ from src.memory.world_quality import (
     LocationQualityScores,
     RelationshipQualityScores,
 )
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +125,9 @@ def _generate_batch(
                     )
                 )
         except WorldGenerationError as e:
-            errors.append(str(e))
-            logger.error("Failed to generate %s %d/%d: %s", entity_type, i + 1, count, e)
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error("Failed to generate %s %d/%d: %s", entity_type, i + 1, count, error_msg)
 
     if not results and errors:
         raise WorldGenerationError(
@@ -241,8 +242,9 @@ def _review_batch(
                     )
                 )
         except WorldGenerationError as e:
-            errors.append(str(e))
-            logger.error("Failed to review %s '%s': %s", entity_type, entity_name, e)
+            error_msg = summarize_llm_error(e, max_length=200)
+            errors.append(error_msg)
+            logger.error("Failed to review %s '%s': %s", entity_type, entity_name, error_msg)
             results.append((entity, zero_scores_fn(f"Review failed: {e}")))
 
     if errors:

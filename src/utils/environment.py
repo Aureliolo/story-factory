@@ -1,11 +1,15 @@
 """Environment validation utilities.
 
 This module checks that Python version and dependencies meet requirements
-before the rest of the application loads. Import this module early in main.py.
+before the rest of the application loads. Called from main() after logging
+is configured so that failures appear in the log file.
 """
 
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def check_environment() -> None:
@@ -14,14 +18,19 @@ def check_environment() -> None:
     Reads Python version and dependencies from pyproject.toml,
     then validates the current environment meets all requirements.
 
+    Must be called after logging is configured so failures are recorded
+    in the log file (not just printed to stderr).
+
     Raises:
         SystemExit: If Python version or dependencies are insufficient.
     """
+    logger.debug("Running environment validation checks")
     # Go up from utils/ to src/ to project root
     project_root = Path(__file__).parent.parent.parent
 
     _check_python_version(project_root)
     _check_dependencies(project_root)
+    logger.debug("Environment validation passed")
 
 
 def _check_python_version(project_root: Path) -> None:
@@ -48,25 +57,29 @@ def _check_python_version(project_root: Path) -> None:
         current_minor = sys.version_info.minor
 
         if (current_major, current_minor) < (required_major, required_minor):
-            print(
-                f"Error: Python {required_version_str}+ is required, "
-                f"but you are running Python {current_major}.{current_minor}",
-                file=sys.stderr,
+            msg = (
+                f"Python {required_version_str}+ is required, "
+                f"but you are running Python {current_major}.{current_minor}"
             )
+            logger.error(msg)
+            print(f"Error: {msg}", file=sys.stderr)
             print(
-                f"Please upgrade Python or use a virtual environment with Python {required_version_str}+",
+                f"Please upgrade Python or use a virtual environment "
+                f"with Python {required_version_str}+",
                 file=sys.stderr,
             )
             sys.exit(1)
 
     except ImportError:
-        print(
-            f"Error: Python 3.11+ is required to parse pyproject.toml, "
-            f"but you are running Python {sys.version_info.major}.{sys.version_info.minor}",
-            file=sys.stderr,
+        msg = (
+            f"Python 3.11+ is required to parse pyproject.toml, "
+            f"but you are running Python {sys.version_info.major}.{sys.version_info.minor}"
         )
+        logger.error(msg)
+        print(f"Error: {msg}", file=sys.stderr)
         sys.exit(1)
     except (KeyError, ValueError, OSError) as e:
+        logger.warning("Could not parse Python version from pyproject.toml: %s", e)
         print(f"Warning: Could not parse Python version from pyproject.toml: {e}", file=sys.stderr)
 
 
@@ -83,6 +96,7 @@ def _check_dependencies(project_root: Path) -> None:
 
         from packaging.requirements import InvalidRequirement, Requirement
     except ImportError:
+        logger.warning("Cannot check dependencies (packaging not installed)")
         print("Warning: Cannot check dependencies (packaging not installed)", file=sys.stderr)
         return
 
@@ -92,13 +106,16 @@ def _check_dependencies(project_root: Path) -> None:
 
         project_section = config.get("project")
         if project_section is None:
+            logger.warning("No [project] section in pyproject.toml")
             print("Warning: No [project] section in pyproject.toml", file=sys.stderr)
             return
         dependencies = project_section.get("dependencies")
         if dependencies is None:
+            logger.warning("No dependencies in pyproject.toml [project] section")
             print("Warning: No dependencies in pyproject.toml [project] section", file=sys.stderr)
             return
     except (KeyError, ValueError, OSError) as e:
+        logger.warning("Could not parse dependencies from pyproject.toml: %s", e)
         print(f"Warning: Could not parse dependencies from pyproject.toml: {e}", file=sys.stderr)
         return
 
@@ -124,6 +141,13 @@ def _check_dependencies(project_root: Path) -> None:
             missing.append(f"  {package_name}{req.specifier}")
 
     if missing or version_mismatch:
+        parts = ["Missing or outdated dependencies:"]
+        if missing:
+            parts.append("Missing packages: " + ", ".join(m.strip() for m in missing))
+        if version_mismatch:
+            parts.append("Outdated packages: " + ", ".join(v.strip() for v in version_mismatch))
+        logger.error(" ".join(parts))
+
         print("Error: Missing or outdated dependencies:", file=sys.stderr)
         if missing:
             print("\nMissing packages:", file=sys.stderr)

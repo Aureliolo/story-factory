@@ -48,14 +48,6 @@ def add_relationship(
             - source_id or target_id does not exist
             - source_id equals target_id (self-loop)
     """
-    logger.debug(
-        "add_relationship called: source=%s, target=%s, type=%s, validate=%s",
-        source_id,
-        target_id,
-        relation_type,
-        validate,
-    )
-
     rel_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
     attrs_json = json.dumps(attributes or {})

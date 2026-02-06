@@ -162,10 +162,10 @@ class TestQualityLoopBasicFlow:
             story_id="test-story",
         )
 
-        # Best iteration was iteration 2 (score 7.5)
+        # Best iteration was iteration 2 (score 7.5), total iterations = 3
         assert result_entity == {"name": "v2"}
         assert _result_scores.average == 7.5
-        assert iterations == 2
+        assert iterations == 3
 
     def test_returns_best_when_all_scores_equal(self, mock_svc, config):
         """When all scores are equal, returns earliest (best_iteration=1)."""

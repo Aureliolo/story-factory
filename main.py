@@ -18,11 +18,7 @@ import logging
 import sys
 import time
 
-from src.utils.environment import check_environment
 from src.utils.logging_config import setup_logging
-
-# Check Python version and dependencies before running app logic
-check_environment()
 
 logger = logging.getLogger(__name__)
 
@@ -250,9 +246,15 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Configure logging
+    # Configure logging first so environment check failures are logged
     log_file = None if args.log_file.lower() == "none" else args.log_file
     setup_logging(level=args.log_level, log_file=log_file)
+
+    # Check Python version and dependencies after logging is configured
+    # so failures appear in the log file, not just stderr
+    from src.utils.environment import check_environment
+
+    check_environment()
 
     # If no explicit --log-level on CLI, respect the persisted setting
     if not any(arg.startswith("--log-level") for arg in sys.argv):

@@ -10,7 +10,7 @@ from src.services.world_quality_service._common import (
     judge_with_averaging,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -109,11 +109,12 @@ def _judge_plot_quality(
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
-                logger.warning("Plot quality judgment failed: %s", e)
+                logger.warning("Plot quality judgment failed: %s", summary)
             else:
-                logger.exception("Plot quality judgment failed: %s", e)
-            raise WorldGenerationError(f"Plot quality judgment failed: {e}") from e
+                logger.error("Plot quality judgment failed: %s", summary)
+            raise WorldGenerationError(f"Plot quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, PlotQualityScores, judge_config)
 
@@ -240,5 +241,6 @@ Write all text in {brief.language if brief else "English"}."""
             temperature=temperature,
         )
     except Exception as e:
-        logger.exception("Plot refinement failed: %s", e)
-        raise WorldGenerationError(f"Plot refinement failed: {e}") from e
+        summary = summarize_llm_error(e)
+        logger.error("Plot refinement failed: %s", summary)
+        raise WorldGenerationError(f"Plot refinement failed: {summary}") from e

@@ -11,6 +11,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
 from src.settings import Settings
+from src.utils.exceptions import summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +50,17 @@ def get_instructor_client(settings: Settings, model_id: str | None = None) -> in
         )
         client.on(
             "parse:error",
-            lambda e: logger.warning("Structured output validation failed (will retry): %s", e),
+            lambda e: logger.warning(
+                "Structured output validation failed (will retry): %s",
+                summarize_llm_error(e) if isinstance(e, Exception) else str(e)[:300],
+            ),
         )
         client.on(
             "completion:error",
-            lambda e: logger.warning("LLM API error during structured output (will retry): %s", e),
+            lambda e: logger.warning(
+                "LLM API error during structured output (will retry): %s",
+                summarize_llm_error(e) if isinstance(e, Exception) else str(e)[:300],
+            ),
         )
         _instructor_clients[settings_key] = client
         logger.debug(

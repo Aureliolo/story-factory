@@ -1,5 +1,6 @@
 """Tests for the environment validation module."""
 
+import logging
 import sys
 from unittest.mock import patch
 
@@ -247,3 +248,72 @@ class TestCheckDependencies:
 
         # Should not raise - skips invalid, checks valid
         _check_dependencies(tmp_path)
+
+
+class TestEnvironmentLogging:
+    """Tests that environment check failures are logged (not just printed to stderr)."""
+
+    def test_missing_dependency_logs_error(self, tmp_path, caplog):
+        """Test that missing dependency failure is logged at ERROR level."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\ndependencies = ["nonexistent-pkg-99==1.0.0"]\n')
+
+        with caplog.at_level(logging.ERROR, logger="src.utils.environment"):
+            with pytest.raises(SystemExit):
+                _check_dependencies(tmp_path)
+
+        assert any("Missing or outdated dependencies" in r.message for r in caplog.records)
+        assert any("nonexistent-pkg-99" in r.message for r in caplog.records)
+
+    def test_outdated_dependency_logs_error(self, tmp_path, caplog):
+        """Test that outdated dependency failure is logged at ERROR level."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\ndependencies = ["pytest==999.0.0"]\n')
+
+        with caplog.at_level(logging.ERROR, logger="src.utils.environment"):
+            with pytest.raises(SystemExit):
+                _check_dependencies(tmp_path)
+
+        assert any("Missing or outdated dependencies" in r.message for r in caplog.records)
+
+    def test_python_version_failure_logs_error(self, tmp_path, caplog):
+        """Test that Python version failure is logged at ERROR level."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[tool.mypy]\npython_version = "99.0"\n')
+
+        with caplog.at_level(logging.ERROR, logger="src.utils.environment"):
+            with pytest.raises(SystemExit):
+                _check_python_version(tmp_path)
+
+        assert any("Python 99.0+ is required" in r.message for r in caplog.records)
+
+    def test_no_project_section_logs_warning(self, tmp_path, caplog):
+        """Test that missing [project] section is logged at WARNING level."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("[tool.ruff]\nline-length = 100\n")
+
+        with caplog.at_level(logging.WARNING, logger="src.utils.environment"):
+            _check_dependencies(tmp_path)
+
+        assert any("No [project] section" in r.message for r in caplog.records)
+
+    def test_parse_error_logs_warning(self, tmp_path, caplog):
+        """Test that pyproject.toml parse errors are logged at WARNING level."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("invalid toml {{{")
+
+        with caplog.at_level(logging.WARNING, logger="src.utils.environment"):
+            _check_dependencies(tmp_path)
+
+        assert any("Could not parse dependencies" in r.message for r in caplog.records)
+
+    def test_successful_check_logs_debug(self, caplog):
+        """Test that successful environment check logs at DEBUG level."""
+        with caplog.at_level(logging.DEBUG, logger="src.utils.environment"):
+            check_environment()
+
+        assert any(
+            "Environment validation passed" in r.message
+            for r in caplog.records
+            if r.levelno == logging.DEBUG
+        )

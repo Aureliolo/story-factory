@@ -480,10 +480,12 @@ class TestWorldQualityServiceInit:
     def test_client_creation(self, service, settings):
         """Test lazy client creation."""
         assert service._client is None
-        client = service.client
-        assert client is not None
-        # Second access returns same client
-        assert service.client is client
+        with patch("ollama.Client") as mock_client_class:
+            mock_client_class.return_value = MagicMock()
+            client = service.client
+            assert client is not None
+            # Second access returns same client
+            assert service.client is client
 
     def test_client_uses_scaled_timeout(self, settings, mock_mode_service):
         """Test that client uses scaled timeout based on writer model size."""
@@ -3446,9 +3448,8 @@ class TestRefinementLoopEdgeCases:
 
         assert faction["name"] == "Test Guild"
         assert scores.average < 7.0
-        # New behavior: returns BEST iteration number, not total iterations
-        # Only iteration 1 succeeded (refinement errors on 2 and 3)
-        assert iterations == 1
+        # Returns total iteration count (iteration 1 succeeded, refinement error on 2)
+        assert iterations == 2
 
     # ========== Item Loop Edge Cases ==========
 

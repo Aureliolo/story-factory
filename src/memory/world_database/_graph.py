@@ -159,7 +159,6 @@ def add_relationship_to_graph(
             strength=strength,
             is_reverse=True,
         )
-    logger.debug(f"Added relationship to graph: {source_id} -> {target_id}")
 
 
 def remove_relationship_from_graph(

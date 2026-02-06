@@ -56,7 +56,7 @@ def quality_refinement_loop(
         initial_entity: If provided, skip creation and start with this entity (review mode).
 
     Returns:
-        Tuple of (best_entity, best_scores, iteration_number).
+        Tuple of (best_entity, best_scores, total_iterations).
 
     Raises:
         WorldGenerationError: If no valid entity could be produced after all attempts.
@@ -180,7 +180,7 @@ def quality_refinement_loop(
                     quality_threshold=config.quality_threshold,
                     max_iterations=config.max_iterations,
                 )
-                return entity, scores, current_iter
+                return entity, scores, len(history.iterations)
 
             # Early stopping check
             if history.should_stop_early(
@@ -205,12 +205,12 @@ def quality_refinement_loop(
                 break
 
         except WorldGenerationError as e:
-            last_error = str(e)
-            logger.error(
-                "%s generation error on iteration %d: %s",
+            last_error = str(e)[:200]
+            logger.warning(
+                "%s generation error on iteration %d (already logged upstream): %s",
                 entity_type.capitalize(),
                 iteration + 1,
-                e,
+                last_error,
             )
             # Reset scores to prevent refining with stale feedback from a
             # previous iteration.  With scores=None the next iteration will
@@ -266,10 +266,12 @@ def quality_refinement_loop(
                 raise WorldGenerationError(
                     f"Internal error: best entity data exists but entity is None for {entity_type}"
                 )
+            # Return total iteration count (not best_iteration index) so
+            # callers can log "after N iteration(s)" accurately.
             return (
                 _reconstruct_entity(best_entity_data, entity, entity_type),
                 best_scores,
-                history.best_iteration,
+                len(history.iterations),
             )
 
     # Fallback to last iteration

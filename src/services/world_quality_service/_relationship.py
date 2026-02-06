@@ -13,7 +13,7 @@ from src.services.world_quality_service._common import (
     judge_with_averaging,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 from src.utils.json_parser import extract_json
 
 logger = logging.getLogger(__name__)
@@ -228,10 +228,11 @@ Output ONLY valid JSON (all text in {brief.language}):
         # Re-raise domain exceptions as-is
         raise
     except Exception as e:
-        logger.exception(
-            "Unexpected error in relationship creation for story %s: %s", story_state.id, e
+        summary = summarize_llm_error(e)
+        logger.error(
+            "Unexpected error in relationship creation for story %s: %s", story_state.id, summary
         )
-        raise WorldGenerationError(f"Unexpected relationship creation error: {e}") from e
+        raise WorldGenerationError(f"Unexpected relationship creation error: {summary}") from e
 
 
 def _judge_relationship_quality(
@@ -298,21 +299,22 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
                 logger.warning(
                     "Relationship quality judgment failed for %s->%s: %s",
                     relationship.get("source") or "Unknown",
                     relationship.get("target") or "Unknown",
-                    e,
+                    summary,
                 )
             else:
-                logger.exception(
+                logger.error(
                     "Relationship quality judgment failed for %s->%s: %s",
                     relationship.get("source") or "Unknown",
                     relationship.get("target") or "Unknown",
-                    e,
+                    summary,
                 )
-            raise WorldGenerationError(f"Relationship quality judgment failed: {e}") from e
+            raise WorldGenerationError(f"Relationship quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, RelationshipQualityScores, judge_config)
 
@@ -419,10 +421,11 @@ Output ONLY valid JSON:
         # Re-raise domain exceptions as-is
         raise
     except Exception as e:
-        logger.exception(
+        summary = summarize_llm_error(e)
+        logger.error(
             "Unexpected error in relationship refinement for %s->%s: %s",
             relationship.get("source") or "Unknown",
             relationship.get("target") or "Unknown",
-            e,
+            summary,
         )
-        raise WorldGenerationError(f"Unexpected relationship refinement error: {e}") from e
+        raise WorldGenerationError(f"Unexpected relationship refinement error: {summary}") from e
