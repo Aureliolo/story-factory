@@ -242,6 +242,25 @@ class TestWorldHealthMetrics:
         # score = 30 * 0.6 + 0 * 0.4 = 18
         assert score == 18.0
 
+    def test_calculate_health_score_with_temporal_penalties(self):
+        """Test health score calculation with temporal consistency penalties."""
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            orphan_count=0,
+            circular_count=0,
+            temporal_error_count=3,  # -3 per error = -9
+            temporal_warning_count=2,  # -1 per warning = -2
+            average_quality=10.0,
+            relationship_density=0.5,
+        )
+
+        score = metrics.calculate_health_score()
+
+        # structural = 100 - 9 - 2 = 89
+        # quality = 100
+        # score = 89 * 0.6 + 100 * 0.4 = 53.4 + 40 = 93.4
+        assert score == 93.4
+
     def test_calculate_health_score_density_bonus(self):
         """Test density bonus in health score calculation."""
         # High density gets +10

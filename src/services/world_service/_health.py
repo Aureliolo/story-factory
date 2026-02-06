@@ -1,6 +1,7 @@
 """World health detection functions for WorldService."""
 
 import logging
+import math
 from typing import TYPE_CHECKING
 
 from src.memory.entities import Entity
@@ -158,15 +159,23 @@ def get_world_health_metrics(
         elif "quality_score" in attrs:
             quality_score = attrs.get("quality_score", 0.0)
 
-        if isinstance(quality_score, (int, float)):
-            quality_scores.append(float(quality_score))
-            if quality_score < quality_threshold:
+        if isinstance(quality_score, (int, float)) and not isinstance(quality_score, bool):
+            score_float = float(quality_score)
+            if not math.isfinite(score_float):
+                logger.warning(
+                    f"Entity {entity.name} has non-finite quality score: {score_float}, "
+                    "treating as 0.0"
+                )
+                score_float = 0.0
+            score_float = max(0.0, min(10.0, score_float))
+            quality_scores.append(score_float)
+            if score_float < quality_threshold:
                 low_quality_entities.append(
                     {
                         "id": entity.id,
                         "name": entity.name,
                         "type": entity.type,
-                        "quality_score": quality_score,
+                        "quality_score": score_float,
                     }
                 )
 

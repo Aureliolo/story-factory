@@ -1104,3 +1104,54 @@ class TestWorldHealthMethods:
         # structural = 100, quality = 4.0 * 10 = 40
         # score = 100 * 0.6 + 40 * 0.4 = 76.0
         assert metrics.health_score == pytest.approx(76.0, abs=0.1)
+
+    def test_health_score_bool_quality_ignored(self, world_service, world_db):
+        """Test that boolean quality scores are excluded from quality average."""
+        # Create entity with bool quality_score (corrupt data)
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": True})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's bool score is excluded, only Bob's 8.0 counts
+        # average_quality = 8.0 (only one valid score)
+        assert metrics.average_quality == pytest.approx(8.0, abs=0.1)
+
+    def test_health_score_negative_quality_clamped(self, world_service, world_db):
+        """Test that negative quality scores are clamped to 0."""
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": -5.0})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's -5.0 clamped to 0.0, Bob is 8.0
+        # average_quality = (0.0 + 8.0) / 2 = 4.0
+        assert metrics.average_quality == pytest.approx(4.0, abs=0.1)
+
+    def test_health_score_nan_quality_treated_as_zero(self, world_service, world_db):
+        """Test that NaN quality scores are treated as 0."""
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_score": float("nan")}
+        )
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's NaN treated as 0.0, Bob is 8.0
+        # average_quality = (0.0 + 8.0) / 2 = 4.0
+        assert metrics.average_quality == pytest.approx(4.0, abs=0.1)
+
+    def test_health_score_overflow_quality_clamped(self, world_service, world_db):
+        """Test that quality scores above 10 are clamped to 10."""
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 15.0})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's 15.0 clamped to 10.0, Bob is 8.0
+        # average_quality = (10.0 + 8.0) / 2 = 9.0
+        assert metrics.average_quality == pytest.approx(9.0, abs=0.1)
