@@ -93,7 +93,11 @@ async def _load_prefs(page_key: str) -> dict:
     """
     key = _storage_key(page_key)
     key_json = json.dumps(key)
-    raw = await ui.run_javascript(f"localStorage.getItem({key_json})")
+    try:
+        raw = await ui.run_javascript(f"localStorage.getItem({key_json})")
+    except TimeoutError:
+        logger.debug("localStorage read timed out for %s (browser not ready)", page_key)
+        return {}
     if not raw:
         logger.debug("No saved preferences for %s", page_key)
         return {}
@@ -127,8 +131,8 @@ def load_prefs_deferred(page_key: str, callback: Callable[[dict], None]) -> None
         try:
             prefs = await _load_prefs(page_key)
             callback(prefs)
-        except RuntimeError:
-            logger.debug("Pref load skipped: UI element destroyed for %s", page_key)
+        except (RuntimeError, TimeoutError):
+            logger.debug("Pref load skipped for %s (timeout or UI element destroyed)", page_key)
 
     ui.timer(0.1, _deferred, once=True)
     logger.debug("Scheduled deferred pref load for %s", page_key)

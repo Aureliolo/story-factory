@@ -12,7 +12,7 @@ from src.services.world_quality_service._common import (
     retry_temperature,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
@@ -141,8 +141,9 @@ Write all text in {brief.language}."""
         # Convert to dict for compatibility with existing code
         return item.model_dump()
     except Exception as e:
-        logger.exception("Item creation failed for story %s: %s", story_state.id, e)
-        raise WorldGenerationError(f"Item creation failed: {e}") from e
+        summary = summarize_llm_error(e)
+        logger.error("Item creation failed for story %s: %s", story_state.id, summary)
+        raise WorldGenerationError(f"Item creation failed: {summary}") from e
 
 
 def _judge_item_quality(
@@ -218,12 +219,14 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                     e,
                 )
             else:
-                logger.exception(
+                logger.error(
                     "Item quality judgment failed for '%s': %s",
                     item.get("name") or "Unknown",
-                    e,
+                    summarize_llm_error(e),
                 )
-            raise WorldGenerationError(f"Item quality judgment failed: {e}") from e
+            raise WorldGenerationError(
+                f"Item quality judgment failed: {summarize_llm_error(e)}"
+            ) from e
 
     return judge_with_averaging(_single_judge_call, ItemQualityScores, judge_config)
 
@@ -294,5 +297,6 @@ Return ONLY the improved item."""
         result["type"] = "item"
         return result
     except Exception as e:
-        logger.exception("Item refinement failed for '%s': %s", item.get("name") or "Unknown", e)
-        raise WorldGenerationError(f"Item refinement failed: {e}") from e
+        summary = summarize_llm_error(e)
+        logger.error("Item refinement failed for '%s': %s", item.get("name") or "Unknown", summary)
+        raise WorldGenerationError(f"Item refinement failed: {summary}") from e

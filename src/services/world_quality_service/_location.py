@@ -12,7 +12,7 @@ from src.services.world_quality_service._common import (
     retry_temperature,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 from src.utils.validation import validate_unique_name
 
 logger = logging.getLogger(__name__)
@@ -142,8 +142,9 @@ Write all text in {brief.language}."""
         # Convert to dict for compatibility with existing code
         return location.model_dump()
     except Exception as e:
-        logger.exception("Location creation failed for story %s: %s", story_state.id, e)
-        raise WorldGenerationError(f"Location creation failed: {e}") from e
+        summary = summarize_llm_error(e)
+        logger.error("Location creation failed for story %s: %s", story_state.id, summary)
+        raise WorldGenerationError(f"Location creation failed: {summary}") from e
 
 
 def _judge_location_quality(
@@ -217,12 +218,14 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
                     e,
                 )
             else:
-                logger.exception(
+                logger.error(
                     "Location quality judgment failed for '%s': %s",
                     location.get("name", "Unknown"),
-                    e,
+                    summarize_llm_error(e),
                 )
-            raise WorldGenerationError(f"Location quality judgment failed: {e}") from e
+            raise WorldGenerationError(
+                f"Location quality judgment failed: {summarize_llm_error(e)}"
+            ) from e
 
     return judge_with_averaging(_single_judge_call, LocationQualityScores, judge_config)
 
@@ -294,7 +297,8 @@ Return ONLY the improved location."""
         result["type"] = "location"
         return result
     except Exception as e:
-        logger.exception(
-            "Location refinement failed for '%s': %s", location.get("name") or "Unknown", e
+        summary = summarize_llm_error(e)
+        logger.error(
+            "Location refinement failed for '%s': %s", location.get("name") or "Unknown", summary
         )
-        raise WorldGenerationError(f"Location refinement failed: {e}") from e
+        raise WorldGenerationError(f"Location refinement failed: {summary}") from e

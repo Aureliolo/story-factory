@@ -125,8 +125,9 @@ def _generate_batch(
                     )
                 )
         except WorldGenerationError as e:
-            errors.append(str(e))
-            logger.error("Failed to generate %s %d/%d: %s", entity_type, i + 1, count, e)
+            error_msg = str(e)[:200]
+            errors.append(error_msg)
+            logger.error("Failed to generate %s %d/%d: %s", entity_type, i + 1, count, error_msg)
 
     if not results and errors:
         raise WorldGenerationError(
@@ -241,9 +242,10 @@ def _review_batch(
                     )
                 )
         except WorldGenerationError as e:
-            errors.append(str(e))
-            logger.error("Failed to review %s '%s': %s", entity_type, entity_name, e)
-            results.append((entity, zero_scores_fn(f"Review failed: {e}")))
+            error_msg = str(e)[:200]
+            errors.append(error_msg)
+            logger.error("Failed to review %s '%s': %s", entity_type, entity_name, error_msg)
+            results.append((entity, zero_scores_fn(f"Review failed: {error_msg}")))
 
     if errors:
         logger.warning(

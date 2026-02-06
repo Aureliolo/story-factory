@@ -11,7 +11,7 @@ from src.services.world_quality_service._common import (
     judge_with_averaging,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -193,8 +193,9 @@ Write all text in {brief.language}."""
         )
         return character
     except Exception as e:
-        logger.error("Character creation error for story %s: %s", story_state.id, e)
-        raise WorldGenerationError(f"Character creation failed: {e}") from e
+        summary = summarize_llm_error(e)
+        logger.error("Character creation error for story %s: %s", story_state.id, summary)
+        raise WorldGenerationError(f"Character creation failed: {summary}") from e
 
 
 def _judge_character_quality(
@@ -241,13 +242,16 @@ def _judge_character_quality(
                 temperature=temperature,
             )
         except Exception as e:
+            summary = summarize_llm_error(e)
             if multi_call:
-                logger.warning("Character quality judgment failed for '%s': %s", character.name, e)
-            else:
-                logger.exception(
-                    "Character quality judgment failed for '%s': %s", character.name, e
+                logger.warning(
+                    "Character quality judgment failed for '%s': %s", character.name, summary
                 )
-            raise WorldGenerationError(f"Character quality judgment failed: {e}") from e
+            else:
+                logger.error(
+                    "Character quality judgment failed for '%s': %s", character.name, summary
+                )
+            raise WorldGenerationError(f"Character quality judgment failed: {summary}") from e
 
     return judge_with_averaging(_single_judge_call, CharacterQualityScores, judge_config)
 
@@ -370,5 +374,6 @@ Return ONLY the improved character."""
             temperature=temperature,
         )
     except Exception as e:
-        logger.exception("Character refinement failed for '%s': %s", character.name, e)
-        raise WorldGenerationError(f"Character refinement failed: {e}") from e
+        summary = summarize_llm_error(e)
+        logger.error("Character refinement failed for '%s': %s", character.name, summary)
+        raise WorldGenerationError(f"Character refinement failed: {summary}") from e

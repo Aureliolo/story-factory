@@ -10,7 +10,7 @@ from src.services.world_quality_service._common import (
     judge_with_averaging,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
-from src.utils.exceptions import WorldGenerationError
+from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -125,13 +125,15 @@ def _judge_chapter_quality(
                     e,
                 )
             else:
-                logger.exception(
+                logger.error(
                     "Chapter quality judgment failed for 'Ch%d: %s': %s",
                     chapter.number,
                     chapter.title,
-                    e,
+                    summarize_llm_error(e),
                 )
-            raise WorldGenerationError(f"Chapter quality judgment failed: {e}") from e
+            raise WorldGenerationError(
+                f"Chapter quality judgment failed: {summarize_llm_error(e)}"
+            ) from e
 
     return judge_with_averaging(_single_judge_call, ChapterQualityScores, judge_config)
 
@@ -257,10 +259,11 @@ Write all text in {brief.language if brief else "English"}."""
             temperature=temperature,
         )
     except Exception as e:
-        logger.exception(
+        summary = summarize_llm_error(e)
+        logger.error(
             "Chapter refinement failed for 'Ch%d: %s': %s",
             chapter.number,
             chapter.title,
-            e,
+            summary,
         )
-        raise WorldGenerationError(f"Chapter refinement failed: {e}") from e
+        raise WorldGenerationError(f"Chapter refinement failed: {summary}") from e

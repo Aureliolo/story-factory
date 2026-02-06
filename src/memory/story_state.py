@@ -53,7 +53,7 @@ class Character(BaseModel):
                 cleaned[int_key] = str(value)
             except (ValueError, TypeError):
                 # Invalid key (like "Embracing Corruption") - skip this entry
-                logger.debug(f"Skipping invalid arc_progress key: {key!r}")
+                logger.warning("Skipping invalid arc_progress key: %r (expected integer)", key)
         return cleaned
 
     def update_arc(self, chapter_number: int, state: str) -> None:
