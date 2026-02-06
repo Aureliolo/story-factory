@@ -23,13 +23,19 @@ from src.utils.logging_config import setup_logging
 logger = logging.getLogger(__name__)
 
 
-def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False) -> None:
+def run_web_ui(
+    host: str = "127.0.0.1",
+    port: int = 7860,
+    reload: bool = False,
+    startup_t0: float | None = None,
+) -> None:
     """Launch the NiceGUI web interface.
 
     Args:
         host: Host to bind to.
         port: Port to listen on.
         reload: Enable auto-reload for development.
+        startup_t0: Start time from main() for accurate startup timing.
     """
     from src.services import ServiceContainer
     from src.settings import Settings
@@ -51,7 +57,9 @@ def run_web_ui(host: str = "127.0.0.1", port: int = 7860, reload: bool = False) 
     app = create_app(services)
     logger.debug("App created in %.2fs", time.perf_counter() - t2)
 
-    logger.info("Startup complete in %.2fs, launching server...", time.perf_counter() - t0)
+    # Use the original start time from main() for accurate total startup timing
+    total_t0 = startup_t0 if startup_t0 is not None else t0
+    logger.info("Startup complete in %.2fs, launching server...", time.perf_counter() - total_t0)
     app.run(host=host, port=port, reload=reload)
 
 
@@ -197,6 +205,7 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
 
 def main() -> None:
     """Main entry point."""
+    t0 = time.perf_counter()
     parser = argparse.ArgumentParser(description="Story Factory - AI-Powered Story Production Team")
     parser.add_argument(
         "--cli",
@@ -272,7 +281,7 @@ def main() -> None:
     if args.cli or args.list_stories or args.load:
         run_cli(load_story=args.load, list_stories=args.list_stories)
     else:
-        run_web_ui(host=args.host, port=args.port, reload=args.reload)
+        run_web_ui(host=args.host, port=args.port, reload=args.reload, startup_t0=t0)
 
 
 if __name__ == "__main__":

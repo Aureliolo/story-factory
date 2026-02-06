@@ -146,20 +146,33 @@ class TestWorldHealthMetrics:
         assert metrics.relationship_density == 1.5
 
     def test_calculate_health_score_perfect(self):
-        """Test health score calculation with no issues."""
+        """Test health score calculation with no issues and perfect quality."""
         metrics = WorldHealthMetrics(
             total_entities=10,
             total_relationships=15,
             orphan_count=0,
             circular_count=0,
+            average_quality=10.0,
             relationship_density=1.5,
         )
 
         score = metrics.calculate_health_score()
 
-        # Perfect score should be 100 + 10 (density bonus)
-        # But capped at 100
+        # structural = min(100 + 10, 100) = 100
+        # quality = 10.0 * 10 = 100
+        # score = 100 * 0.6 + 100 * 0.4 = 100
         assert score == 100.0
+
+    def test_calculate_health_score_empty_world(self):
+        """Test health score calculation for empty world returns 0."""
+        metrics = WorldHealthMetrics(
+            total_entities=0,
+            total_relationships=0,
+        )
+
+        score = metrics.calculate_health_score()
+
+        assert score == 0.0
 
     def test_calculate_health_score_with_orphans(self):
         """Test health score calculation with orphan entities."""
@@ -167,13 +180,16 @@ class TestWorldHealthMetrics:
             total_entities=10,
             orphan_count=5,  # -2 per orphan = -10
             circular_count=0,
+            average_quality=10.0,
             relationship_density=0.5,
         )
 
         score = metrics.calculate_health_score()
 
-        # 100 - 10 (5 orphans * 2) = 90
-        assert score == 90.0
+        # structural = 100 - 10 = 90
+        # quality = 100
+        # score = 90 * 0.6 + 100 * 0.4 = 54 + 40 = 94
+        assert score == 94.0
 
     def test_calculate_health_score_with_circular(self):
         """Test health score calculation with circular relationships."""
@@ -181,31 +197,32 @@ class TestWorldHealthMetrics:
             total_entities=10,
             orphan_count=0,
             circular_count=3,  # -5 per cycle = -15
+            average_quality=10.0,
             relationship_density=0.5,
         )
 
         score = metrics.calculate_health_score()
 
-        # 100 - 15 (3 cycles * 5) = 85
-        assert score == 85.0
+        # structural = 100 - 15 = 85
+        # quality = 100
+        # score = 85 * 0.6 + 100 * 0.4 = 51 + 40 = 91
+        assert score == 91.0
 
-    def test_calculate_health_score_with_low_quality(self):
-        """Test health score calculation with low quality entities."""
+    def test_calculate_health_score_with_zero_quality(self):
+        """Test health score with zero quality (unscored entities)."""
         metrics = WorldHealthMetrics(
             total_entities=10,
             orphan_count=0,
             circular_count=0,
-            low_quality_entities=[
-                {"id": "1", "name": "Bad1", "type": "character", "quality_score": 3.0},
-                {"id": "2", "name": "Bad2", "type": "character", "quality_score": 2.0},
-            ],
+            average_quality=0.0,
             relationship_density=0.5,
         )
 
         score = metrics.calculate_health_score()
 
-        # 100 - 6 (2 low quality * 3) = 94
-        assert score == 94.0
+        # structural = 100, quality = 0
+        # score = 100 * 0.6 + 0 * 0.4 = 60
+        assert score == 60.0
 
     def test_calculate_health_score_caps_penalties(self):
         """Test that penalties are capped at their maximum values."""
@@ -213,15 +230,17 @@ class TestWorldHealthMetrics:
             total_entities=100,
             orphan_count=100,  # Would be -200 but capped at -20
             circular_count=100,  # Would be -500 but capped at -25
-            low_quality_entities=[{"id": str(i)} for i in range(100)],  # Capped at -30
             contradiction_count=100,  # Would be -500 but capped at -25
+            average_quality=0.0,
             relationship_density=0.0,
         )
 
         score = metrics.calculate_health_score()
 
-        # 100 - 20 - 25 - 30 - 25 = 0 (minimum)
-        assert score == 0.0
+        # structural = 100 - 20 - 25 - 25 = 30
+        # quality = 0
+        # score = 30 * 0.6 + 0 * 0.4 = 18
+        assert score == 18.0
 
     def test_calculate_health_score_density_bonus(self):
         """Test density bonus in health score calculation."""
@@ -229,19 +248,24 @@ class TestWorldHealthMetrics:
         metrics_high = WorldHealthMetrics(
             total_entities=10,
             total_relationships=20,
+            average_quality=10.0,
             relationship_density=2.0,
         )
         score_high = metrics_high.calculate_health_score()
-        assert score_high == 100.0  # 100 + 10 capped at 100
+        # structural = min(100 + 10, 100) = 100, quality = 100
+        # score = 100 * 0.6 + 100 * 0.4 = 100
+        assert score_high == 100.0
 
         # Medium density gets +5
         metrics_med = WorldHealthMetrics(
             total_entities=10,
             total_relationships=12,
+            average_quality=10.0,
             relationship_density=1.2,
         )
         score_med = metrics_med.calculate_health_score()
-        assert score_med == 100.0  # 100 + 5 capped at 100
+        # structural = min(100 + 5, 100) = 100, quality = 100
+        assert score_med == 100.0
 
     def test_generate_recommendations_orphans(self):
         """Test recommendation generation for orphan entities."""

@@ -158,7 +158,7 @@ def get_world_health_metrics(
         elif "quality_score" in attrs:
             quality_score = attrs.get("quality_score", 0.0)
 
-        if isinstance(quality_score, (int, float)) and quality_score > 0:
+        if isinstance(quality_score, (int, float)):
             quality_scores.append(float(quality_score))
             if quality_score < quality_threshold:
                 low_quality_entities.append(
