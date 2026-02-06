@@ -46,6 +46,10 @@ logger = logging.getLogger(__name__)
 NOISY_STD_THRESHOLD = 0.5
 CONSISTENT_STD_THRESHOLD = 0.2
 
+# Guidance thresholds for temperature sweep analysis
+LOW_VARIANCE_STD_THRESHOLD = 0.05
+HIGH_TEMP_SWEET_SPOT = 0.7
+
 
 def compute_statistics(values: list[float]) -> dict[str, float]:
     """Compute mean, std, min, max, coefficient of variation for a list of values.
@@ -343,6 +347,32 @@ def judge_entity(
         return None
 
 
+def _make_empty_result(
+    entity_type: str,
+    judge_calls: int,
+    judge_temperature: float,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Create the canonical empty result dict for a consistency test.
+
+    Used both as the initial result in run_judge_consistency_test and as the
+    error placeholder when entity creation fails in sweep mode.
+    """
+    return {
+        "entity_type": entity_type,
+        "entity_name": "",
+        "entity_data": None,
+        "judge_calls": judge_calls,
+        "judge_temperature": judge_temperature,
+        "individual_scores": [],
+        "per_dimension_stats": {},
+        "average_stats": {},
+        "feedback_similarity": 0.0,
+        "verdict": "",
+        "error": error,
+    }
+
+
 def run_judge_consistency_test(
     svc_container: ServiceContainer,
     story_state: StoryState,
@@ -375,19 +405,7 @@ def run_judge_consistency_test(
     config = svc_container.world_quality.get_config()
     judge_temp = temperature if temperature is not None else config.judge_temperature
 
-    result: dict[str, Any] = {
-        "entity_type": entity_type,
-        "entity_name": "",
-        "entity_data": None,
-        "judge_calls": judge_calls,
-        "judge_temperature": judge_temp,
-        "individual_scores": [],
-        "per_dimension_stats": {},
-        "average_stats": {},
-        "feedback_similarity": 0.0,
-        "verdict": "",
-        "error": None,
-    }
+    result = _make_empty_result(entity_type, judge_calls, judge_temp)
 
     # Step 1: Create entity (or reuse pre-created)
     if entity_data is not None:
@@ -498,10 +516,6 @@ def parse_temperatures(temp_str: str) -> list[float]:
             sys.exit(1)
         temperatures.append(temp)
 
-    if not temperatures:
-        print("ERROR: No temperatures provided")
-        sys.exit(1)
-
     logger.debug("Parsed temperatures: %s", temperatures)
     return sorted(temperatures)
 
@@ -558,8 +572,8 @@ def print_temperature_sweep_guidance(
         temp = r.get("judge_temperature", 0)
         by_temp.setdefault(temp, []).append(r)
 
-    # Compute average std per temperature
-    temp_avg_stds: dict[float, float] = {}
+    # Compute average std per temperature (None = no usable data at this temp)
+    temp_avg_stds: dict[float, float | None] = {}
     for temp in temperatures:
         temp_results = by_temp.get(temp, [])
         stds = [
@@ -567,19 +581,25 @@ def print_temperature_sweep_guidance(
             for r in temp_results
             if r.get("verdict") not in ("insufficient_data", "") and r.get("error") is None
         ]
-        temp_avg_stds[temp] = sum(stds) / len(stds) if stds else 0.0
+        temp_avg_stds[temp] = sum(stds) / len(stds) if stds else None
 
-    # Check if ALL temperatures have near-zero variance
-    all_low_variance = all(std < 0.05 for std in temp_avg_stds.values())
-    all_noisy = all(std > NOISY_STD_THRESHOLD for std in temp_avg_stds.values())
+    # Filter to temps with actual data for variance checks
+    valid_stds = [std for std in temp_avg_stds.values() if std is not None]
+    all_low_variance = bool(valid_stds) and all(
+        std < LOW_VARIANCE_STD_THRESHOLD for std in valid_stds
+    )
+    all_noisy = bool(valid_stds) and all(std > NOISY_STD_THRESHOLD for std in valid_stds)
 
     if all_low_variance:
-        print("RESULT: All temperatures show near-zero variance (avg std < 0.05)")
+        print(
+            f"RESULT: All temperatures show near-zero variance "
+            f"(avg std < {LOW_VARIANCE_STD_THRESHOLD})"
+        )
         print("RECOMMENDATION: Multi-call averaging is WASTEFUL at all tested temperatures.")
         print("  -> Disable multi-call averaging (Issue #266 C4). Halves all judge costs.")
         print("  -> Single judge call is sufficient for consistent scores.")
     elif all_noisy:
-        print("RESULT: All temperatures show high variance (avg std > 0.5)")
+        print(f"RESULT: All temperatures show high variance (avg std > {NOISY_STD_THRESHOLD})")
         print("RECOMMENDATION: Lower judge temperature further or fix judge prompts.")
         print("  -> Multi-call averaging may help but does not fix the root cause.")
     else:
@@ -587,11 +607,11 @@ def print_temperature_sweep_guidance(
         sweet_spot_temp = None
         for temp in temperatures:
             std = temp_avg_stds[temp]
-            if std >= 0.05:
+            if std is not None and std >= LOW_VARIANCE_STD_THRESHOLD:
                 sweet_spot_temp = temp
                 break
 
-        if sweet_spot_temp is not None and sweet_spot_temp >= 0.7:
+        if sweet_spot_temp is not None and sweet_spot_temp >= HIGH_TEMP_SWEET_SPOT:
             print(
                 f"RESULT: Variance only appears at temp >= {sweet_spot_temp} "
                 f"(avg std = {temp_avg_stds[sweet_spot_temp]:.3f})"
@@ -615,8 +635,8 @@ def print_temperature_sweep_guidance(
     print("\nPer-temperature average std:")
     for temp in temperatures:
         std = temp_avg_stds[temp]
-        marker = " <-- current" if temp == temperatures[0] else ""
-        print(f"  temp={temp:.1f}: avg_std={std:.3f}{marker}")
+        std_str = f"{std:.3f}" if std is not None else "no data"
+        print(f"  temp={temp:.1f}: avg_std={std_str}")
 
     # KV cache caveat
     print("\nCAVEAT: Ollama KV cache effect")
@@ -691,7 +711,10 @@ def main() -> None:
     svc = ServiceContainer(settings)
     config = svc.world_quality.get_config()
 
-    # Override judge model if specified
+    # Override judge model if specified.
+    # Monkey-patches WorldQualityService._get_judge_model(entity_type=None) -> str.
+    # Call chain: judge_entity -> wqs._judge_X_quality -> _get_judge_model.
+    # If _get_judge_model's name or signature changes, this override will break.
     judge_model_override = args.judge_model
     if judge_model_override:
         svc.world_quality._get_judge_model = lambda entity_type=None: judge_model_override  # type: ignore[method-assign]
@@ -749,19 +772,7 @@ def main() -> None:
                 logger.error("No entity available for %s (LLM and synthetic both failed)", et)
                 for temp in temperatures:
                     results.append(
-                        {
-                            "entity_type": et,
-                            "entity_name": "",
-                            "entity_data": None,
-                            "judge_calls": args.judge_calls,
-                            "judge_temperature": temp,
-                            "individual_scores": [],
-                            "per_dimension_stats": {},
-                            "average_stats": {},
-                            "feedback_similarity": 0.0,
-                            "verdict": "",
-                            "error": "No entity available",
-                        }
+                        _make_empty_result(et, args.judge_calls, temp, error="No entity available")
                     )
                 continue
 

@@ -1,6 +1,7 @@
 """Tests for WorldQualityService - multi-model iteration for world building quality."""
 
 import json
+import logging
 from unittest.mock import MagicMock, patch
 
 import ollama
@@ -3021,7 +3022,7 @@ class TestExceptionHandlingPaths:
 
     @patch("src.services.world_quality_service._relationship.generate_structured")
     def test_judge_relationship_quality_error_with_multi_call_logs_warning(
-        self, mock_generate_structured, service, story_state
+        self, mock_generate_structured, service, story_state, caplog
     ):
         """Test relationship judge logs warning (not error) when multi-call is enabled."""
         service.settings.judge_multi_call_enabled = True
@@ -3029,8 +3030,20 @@ class TestExceptionHandlingPaths:
 
         relationship = {"source": "A", "target": "B", "relation_type": "knows", "description": "X"}
 
-        with pytest.raises(WorldGenerationError, match="Relationship quality judgment failed"):
-            service._judge_relationship_quality(relationship, story_state, temperature=0.1)
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(WorldGenerationError, match="Relationship quality judgment failed"):
+                service._judge_relationship_quality(relationship, story_state, temperature=0.1)
+
+        # The _relationship module should log WARNING (not ERROR) for individual call failures
+        rel_warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "_relationship" in r.name
+        ]
+        assert any("judgment failed" in msg.message for msg in rel_warnings)
+        # No ERROR from _relationship module (only _common logs ERROR for the aggregate fallback)
+        rel_errors = [
+            r for r in caplog.records if r.levelno == logging.ERROR and "_relationship" in r.name
+        ]
+        assert len(rel_errors) == 0
 
     # ========== Relationship Refinement Exception Paths ==========
 

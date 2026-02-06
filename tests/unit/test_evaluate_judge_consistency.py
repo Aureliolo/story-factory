@@ -13,7 +13,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.evaluate_judge_consistency import (
+    _make_empty_result,
     compute_statistics,
+    make_synthetic_entity,
     parse_temperatures,
     print_temperature_sweep_guidance,
     print_temperature_sweep_summary,
@@ -92,14 +94,15 @@ class TestRunJudgeConsistencyTestWithOverrides:
         return svc
 
     def _make_mock_scores(self, avg: float = 7.0):
-        """Create a mock quality scores object."""
+        """Create a mock quality scores object with real faction dimensions."""
         scores = MagicMock()
         scores.average = avg
         scores.feedback = "Good entity"
         scores.to_dict.return_value = {
-            "relevance": 7.0,
-            "depth": 7.0,
-            "consistency": 7.0,
+            "coherence": 7.0,
+            "influence": 7.0,
+            "conflict_potential": 7.0,
+            "distinctiveness": 7.0,
             "average": avg,
             "feedback": "Good entity",
         }
@@ -126,6 +129,7 @@ class TestRunJudgeConsistencyTestWithOverrides:
         assert result["entity_data"] == entity_data
         assert result["error"] is None
         assert len(result["individual_scores"]) == 2
+        assert result["verdict"] == "consistent"
 
     def test_temperature_override(self):
         """When temperature is provided, uses it instead of config."""
@@ -495,3 +499,57 @@ class TestComputeStatisticsEdgeCases:
         assert result["std"] > 0
         assert result["min"] == 5.0
         assert result["max"] == 9.0
+
+
+class TestMakeSyntheticEntity:
+    """Tests for make_synthetic_entity() fallback data."""
+
+    @pytest.mark.parametrize(
+        "entity_type",
+        ["character", "faction", "location", "item", "concept", "relationship"],
+    )
+    def test_known_entity_types_return_dict_and_name(self, entity_type):
+        """Each known entity type returns (dict, non-empty str)."""
+        data, name = make_synthetic_entity(entity_type)
+        assert isinstance(data, dict)
+        assert isinstance(name, str)
+        assert len(name) > 0
+
+    def test_unknown_entity_type_returns_none(self):
+        """Unknown entity type returns (None, '')."""
+        data, name = make_synthetic_entity("unknown_type")
+        assert data is None
+        assert name == ""
+
+    def test_character_has_expected_keys(self):
+        """Character synthetic entity has name and description keys."""
+        data, _ = make_synthetic_entity("character")
+        assert data is not None
+        assert "name" in data
+        assert "description" in data
+
+    def test_relationship_has_source_and_target(self):
+        """Relationship synthetic entity has source and target keys."""
+        data, _ = make_synthetic_entity("relationship")
+        assert data is not None
+        assert "source" in data
+        assert "target" in data
+
+
+class TestMakeEmptyResult:
+    """Tests for _make_empty_result() canonical result dict."""
+
+    def test_has_all_required_keys(self):
+        """Result dict contains all expected keys."""
+        result = _make_empty_result("character", 5, 0.1)
+        assert result["entity_type"] == "character"
+        assert result["judge_calls"] == 5
+        assert result["judge_temperature"] == 0.1
+        assert result["error"] is None
+        assert result["verdict"] == ""
+        assert result["individual_scores"] == []
+
+    def test_error_passed_through(self):
+        """Error string is included in result dict."""
+        result = _make_empty_result("faction", 3, 0.5, error="No entity available")
+        assert result["error"] == "No entity available"
