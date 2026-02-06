@@ -92,6 +92,7 @@ class TestEntityModulesUseSummarizeLlmError:
     @pytest.mark.parametrize(
         "module_path",
         [
+            "src.services.world_quality_service._batch",
             "src.services.world_quality_service._character",
             "src.services.world_quality_service._concept",
             "src.services.world_quality_service._location",

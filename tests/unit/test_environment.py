@@ -307,10 +307,13 @@ class TestEnvironmentLogging:
 
         assert any("Could not parse dependencies" in r.message for r in caplog.records)
 
-    def test_successful_check_logs_debug(self, tmp_path, caplog):
+    def test_successful_check_logs_debug(self, caplog):
         """Test that successful environment check logs at DEBUG level."""
-        pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text('[project]\ndependencies = ["pytest>=9.0.0"]\n')
-
         with caplog.at_level(logging.DEBUG, logger="src.utils.environment"):
             check_environment()
+
+        assert any(
+            "Environment validation passed" in r.message
+            for r in caplog.records
+            if r.levelno == logging.DEBUG
+        )

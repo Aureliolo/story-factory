@@ -205,12 +205,12 @@ def quality_refinement_loop(
                 break
 
         except WorldGenerationError as e:
-            last_error = str(e)
+            last_error = str(e)[:200]
             logger.warning(
                 "%s generation error on iteration %d (already logged upstream): %s",
                 entity_type.capitalize(),
                 iteration + 1,
-                str(e)[:200],
+                last_error,
             )
             # Reset scores to prevent refining with stale feedback from a
             # previous iteration.  With scores=None the next iteration will
