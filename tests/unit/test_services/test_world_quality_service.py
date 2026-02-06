@@ -3446,9 +3446,8 @@ class TestRefinementLoopEdgeCases:
 
         assert faction["name"] == "Test Guild"
         assert scores.average < 7.0
-        # New behavior: returns BEST iteration number, not total iterations
-        # Only iteration 1 succeeded (refinement errors on 2 and 3)
-        assert iterations == 1
+        # Returns total iteration count (iteration 1 succeeded, refinement error on 2)
+        assert iterations == 2
 
     # ========== Item Loop Edge Cases ==========
 

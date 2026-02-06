@@ -327,8 +327,8 @@ class TestFactionGenerationEarlyStopping:
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
-        # Returns best iteration number (1) and best scores (8.2)
-        assert iterations == 1
+        # Returns total iteration count (3) and best scores (8.2)
+        assert iterations == 3
         assert final_scores.average == 8.2
 
     @patch.object(WorldQualityService, "_create_faction")
@@ -414,8 +414,8 @@ class TestFactionGenerationEarlyStopping:
 
         # Should only run 3 iterations (early stopping saves compute)
         assert mock_judge.call_count == 3
-        # Returns best iteration number (1) and best scores (8.0)
-        assert iterations == 1
+        # Returns total iteration count (3) and best scores (8.0)
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -492,8 +492,8 @@ class TestCharacterGenerationEarlyStopping:
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
-        # Returns best iteration number (1) and best scores (8.2)
-        assert iterations == 1
+        # Returns total iteration count (3) and best scores (8.2)
+        assert iterations == 3
         assert final_scores.average == 8.2
 
     @patch.object(WorldQualityService, "_create_character")
@@ -598,8 +598,8 @@ class TestLocationGenerationEarlyStopping:
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
-        # Returns best iteration number (1) and best scores (8.0)
-        assert iterations == 1
+        # Returns total iteration count (3) and best scores (8.0)
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -685,8 +685,8 @@ class TestRelationshipGenerationEarlyStopping:
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
-        # Returns best iteration number (1) and best scores (8.0)
-        assert iterations == 1
+        # Returns total iteration count (3) and best scores (8.0)
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -752,8 +752,8 @@ class TestItemGenerationEarlyStopping:
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
-        # Returns best iteration number (1) and best scores (8.0)
-        assert iterations == 1
+        # Returns total iteration count (3) and best scores (8.0)
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
@@ -811,8 +811,8 @@ class TestConceptGenerationEarlyStopping:
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
         assert mock_judge.call_count == 3
-        # Returns best iteration number (1) and best scores (8.0)
-        assert iterations == 1
+        # Returns total iteration count (3) and best scores (8.0)
+        assert iterations == 3
         assert final_scores.average == 8.0
 
 
