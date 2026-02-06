@@ -383,6 +383,8 @@ def compute_statistics(values: list[float]) -> dict[str, float]:
         Dict with mean, std, min, max.
     """
     if not values:
+        # Intentional: return zeros for empty input so aggregation code can
+        # proceed without special-casing missing data from failed judge calls.
         return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
     mean = statistics.mean(values)
     std = statistics.stdev(values) if len(values) >= 2 else 0.0

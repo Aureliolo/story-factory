@@ -588,18 +588,38 @@ class TestQualityLoopUnchangedOutput:
         analytics_call = mock_svc._log_refinement_analytics.call_args
         assert analytics_call.kwargs["early_stop_triggered"] is True
 
-    def test_unchanged_output_does_not_trigger_on_first_iteration(self, mock_svc, config):
-        """Unchanged detection only fires after iteration 0 has history."""
-        config.max_iterations = 2
+    def test_unchanged_detection_compares_against_previous_refine(self, mock_svc, config):
+        """Unchanged detection triggers when refine echoes its OWN previous output."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10  # Disable normal early stopping
 
-        entity = {"name": "Hero"}
-        high_scores = _make_scores(9.0)
+        # Refine produces a new entity once, then echoes it
+        refine_results = [
+            {"name": "Hero", "trait": "brave v2"},  # Different from creation
+            {"name": "Hero", "trait": "brave v2"},  # Same as previous refine
+        ]
+        refine_idx = 0
 
-        _result_entity, result_scores, iterations = quality_refinement_loop(
+        def refine_fn(e, s, i):
+            """Return new entity once, then echo it."""
+            nonlocal refine_idx
+            result = refine_results[min(refine_idx, len(refine_results) - 1)]
+            refine_idx += 1
+            return result
+
+        judge_calls = 0
+
+        def judge_fn(e):
+            """Count judge invocations."""
+            nonlocal judge_calls
+            judge_calls += 1
+            return _make_scores(6.0)  # Always below threshold
+
+        quality_refinement_loop(
             entity_type="character",
-            create_fn=lambda retries: entity,
-            judge_fn=lambda e: high_scores,
-            refine_fn=lambda e, s, i: entity,  # Same entity, but irrelevant
+            create_fn=lambda retries: {"name": "Hero", "trait": "brave v1"},
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
             get_name=lambda e: e["name"],
             serialize=lambda e: e.copy(),
             is_empty=lambda e: not e.get("name"),
@@ -609,9 +629,10 @@ class TestQualityLoopUnchangedOutput:
             story_id="test-story",
         )
 
-        # Should return on first iteration via threshold, not via unchanged detection
-        assert iterations == 1
-        assert result_scores.average == 9.0
+        # Iteration 0: create v1 → judge (6.0, below threshold)
+        # Iteration 1: refine → v2 (different) → judge (6.0)
+        # Iteration 2: refine → v2 (same as iteration 1) → unchanged detection → break
+        assert judge_calls == 2
 
     def test_unchanged_output_different_entities_continues(self, mock_svc, config):
         """Different dicts from refine don't trigger unchanged detection."""

@@ -1,6 +1,7 @@
 # Issue #246 Investigation: Refinement Loop Inefficiencies
 
 ## Date: 2026-02-06
+
 ## Status: Phase 3 Complete (Implementation) — see PR #261
 
 ---
@@ -66,7 +67,7 @@ Typical creation scores land at 7.4-7.5. Even improved prompts only get ~50% of 
 
 The judge calibration block (`_common.py:20-32`) creates a psychological ceiling:
 
-```
+```text
 - 8-9: Excellent (genuinely impressive, few weaknesses — justify in feedback)
 ```
 
@@ -230,11 +231,7 @@ Total time: 107s (108 LLM calls)
 
 ### Analysis: Which Variant Wins?
 
-**Winner: F_encouraging with threshold=7.5**
-
-Wait - F fails at 7.5. Let's reconsider.
-
-**Best overall: D_minimal** (or C_no_calibration)
+**Best overall: D_minimal** (or C_no_calibration). F_encouraging was considered but rejected because mediocre entities score exactly 7.5 at threshold=7.5, meaning bad work would pass.
 
 | Criterion                  | D_minimal | C_no_calibration | F_encouraging |
 |---------------------------|-----------|------------------|---------------|
@@ -272,7 +269,7 @@ Based on Phase 1 + Phase 2 findings, the following changes are needed:
 
 Replace the current `JUDGE_CALIBRATION_BLOCK` in `_common.py` with the exact benchmarked D_minimal variant:
 
-```
+```text
 Score each dimension 0-10 with one decimal place.
 Differentiate between dimensions — scores should vary based on actual quality.
 ```
@@ -312,4 +309,4 @@ The A/B test showed improved prompts with per-dimension scores and actionable in
 2. ~~Run the calibration variant benchmark~~ DONE
 3. ~~Analyze results to pick the best calibration approach~~ DONE -> D_minimal + threshold 7.5
 4. ~~Implement the winning calibration + threshold + early-exit fixes (Fixes 1-5)~~ DONE (PR #261)
-5. Re-run `evaluate_refinement.py` to validate improvement
+5. Re-run `evaluate_refinement.py` to validate improvement (post-merge)
