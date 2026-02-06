@@ -40,7 +40,7 @@ Story Factory uses clean architecture principles with clear separation of concer
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
 │                  Story Orchestrator                          │
-│                  (Workflow Coordination)                     │
+│             (services/orchestrator/__init__.py)              │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │         Multi-Agent Production Pipeline              │  │
 │  │                                                       │  │
@@ -118,19 +118,32 @@ story-factory/
 │
 ├── services/                # Business logic layer
 │   ├── __init__.py         # ServiceContainer
+│   ├── orchestrator/       # Multi-agent orchestration
+│   │   ├── __init__.py     # Main StoryOrchestrator
+│   │   ├── _interview.py   # Interview phase logic
+│   │   ├── _structure.py   # Architecture phase logic
+│   │   ├── _writing.py     # Writing phase logic
+│   │   ├── _editing.py     # Editing and continuity logic
+│   │   └── _persistence.py # State persistence helpers
+│   ├── story_service/      # Story generation workflow
+│   ├── world_service/      # Entity/world management
+│   ├── world_quality_service/ # World quality enhancement
 │   ├── project_service.py  # Project CRUD operations
-│   ├── story_service.py    # Story generation workflow
-│   ├── world_service.py    # Entity/world management
 │   ├── model_service.py    # Ollama model operations
-│   ├── export_service.py   # Export to multiple formats
-│   ├── model_mode_service.py # Model performance tracking
+│   ├── export_service/     # Export to multiple formats
+│   ├── model_mode_service/ # Model performance tracking
 │   ├── scoring_service.py  # Quality scoring logic
 │   ├── template_service.py # Story template management
 │   ├── backup_service.py   # Project backup/restore
 │   ├── import_service.py   # Import entities from text
 │   ├── comparison_service.py # Model comparison testing
 │   ├── suggestion_service.py # AI-powered suggestions
-│   ├── world_quality_service.py # World quality enhancement
+│   ├── timeline_service.py # Timeline management
+│   ├── calendar_service.py # Calendar view
+│   ├── conflict_analysis_service.py # Story conflict analysis
+│   ├── content_guidelines_service.py # Content guidelines
+│   ├── temporal_validation_service.py # Timeline validation
+│   ├── world_template_service.py # World templates
 │   └── llm_client.py       # Unified LLM client
 │
 ├── ui/                      # NiceGUI UI layer
@@ -160,10 +173,6 @@ story-factory/
 │       ├── settings.py     # Settings configuration
 │       ├── models.py       # Model management
 │       └── analytics.py    # Model performance analytics
-│
-├── workflows/               # Orchestration
-│   ├── __init__.py
-│   └── orchestrator.py     # Coordinates agents
 │
 ├── prompts/                 # Prompt templates
 │   ├── __init__.py

@@ -14,7 +14,7 @@
 | `agents/` | 506 | 100% |
 | `memory/` | 1005 | 100% |
 | `services/` | 1069 | 100% |
-| `workflows/orchestrator.py` | 543 | 100% |
+| `services/orchestrator` | 543 | 100% |
 | `settings.py` | 233 | 100% |
 | `utils/` | 292 | 100% |
 | **Total** | **3862** | **100%** |
@@ -124,7 +124,7 @@ def test_handles_database_error(self):
 ### pyproject.toml Coverage Config
 ```toml
 [tool.coverage.run]
-source = ["agents", "services", "workflows", "memory", "utils", "settings.py"]
+source = ["agents", "services", "memory", "utils", "settings.py"]
 omit = [
     "tests/*",
     "*/site-packages/*",
@@ -145,7 +145,7 @@ fail_under = 100
 5. **Test error paths** - Not just happy paths
 
 ### Coverage Goals
-- **Core modules**: 100% (agents, services, workflows, memory, utils)
+- **Core modules**: 100% (agents, services, memory, utils)
 - **UI components**: Tested via component tests
 
 ### Running Tests

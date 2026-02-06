@@ -3,8 +3,8 @@
 [![CI](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/Aureliolo/story-factory/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Aureliolo/story-factory/branch/main/graph/badge.svg)](https://codecov.io/gh/Aureliolo/story-factory)
 [![docstring coverage](docs/badges/interrogate_badge.svg)](https://pypi.org/project/interrogate/)
-[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
-[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![License: All Rights Reserved](https://img.shields.io/badge/License-All_Rights_Reserved-red.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Aureliolo/story-factory?utm_source=oss&utm_medium=github&utm_campaign=Aureliolo%2Fstory-factory&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
@@ -30,6 +30,8 @@ A local AI-powered multi-agent system for generating short stories, novellas, an
 - [License](#license)
 
 ## Screenshots
+
+> **Note:** Screenshots show the application interface as of February 2026. The UI may have been updated since these were captured. The actual interface will reflect the latest features and design improvements.
 
 ### Main Interface
 ![Home Screen](https://github.com/user-attachments/assets/9056d5cb-b696-4510-89ba-3fbfd2fe067e)
@@ -166,7 +168,7 @@ Get up and running in 5 minutes:
 # 1. Install Ollama
 # Visit https://ollama.com/download and follow instructions for your OS
 
-# 2. Pull a recommended starter model (choose one)
+# 2. Pull a recommended starter model
 ollama pull huihui_ai/dolphin3-abliterated:8b
 
 # 3. Clone this repository
@@ -185,7 +187,7 @@ python main.py
 # 7. Open your browser to http://localhost:7860
 ```
 
-That's it! You're ready to create stories. See the [Installation](#installation) section for detailed setup options.
+That's it! You're ready to create stories. See the [Installation](#installation) section for detailed setup options and multi-model configurations.
 
 ## Installation
 
@@ -225,7 +227,7 @@ ollama --version
 
 ### 2. Pull Recommended Models
 
-Start with one of these tested model combinations:
+Start with one of these tested model combinations (updated February 2026):
 
 #### For 8GB VRAM (Entry Level)
 ```bash
@@ -236,17 +238,20 @@ ollama pull huihui_ai/dolphin3-abliterated:8b
 #### For 16GB VRAM (Recommended)
 ```bash
 # Balanced quality and speed
-ollama pull huihui_ai/dolphin3-abliterated:8b     # Fast, versatile
-ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0  # Creative writing
+ollama pull huihui_ai/dolphin3-abliterated:8b         # Fast, versatile
+ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0 # Creative writing
 ```
 
-#### For 24GB VRAM (Premium)
+#### For 24GB VRAM (Premium - February 2026 Update)
+
 ```bash
-# Best quality multi-agent setup
+# Best quality multi-agent setup with MoE efficiency
 ollama pull huihui_ai/dolphin3-abliterated:8b           # Interviewer
 ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0   # Writer/Editor
-ollama pull huihui_ai/qwen3-abliterated:30b             # Architect/Continuity
+ollama pull huihui_ai/qwen3-abliterated:30b             # Architect/Continuity (MoE: 30B/3B active)
 ```
+
+> **Note:** Qwen3-30B-A3B is a Mixture-of-Experts (MoE) model that activates only 3B parameters at a time, providing 70B-level reasoning at half the VRAM cost.
 
 See [docs/MODELS.md](docs/MODELS.md) for comprehensive model recommendations and performance comparisons.
 
@@ -484,20 +489,32 @@ story-factory/
 │   │   ├── builtin_templates.py # Built-in story templates
 │   │   └── world_quality.py # World quality tracking
 │   ├── services/           # Business logic layer
-│   │   ├── orchestrator.py # Agent coordination (merged from workflows/)
+│   │   ├── orchestrator/   # Multi-agent coordination
+│   │   │   ├── __init__.py # Main StoryOrchestrator
+│   │   │   ├── _interview.py # Interview phase
+│   │   │   ├── _structure.py # Architecture phase
+│   │   │   ├── _writing.py # Writing phase
+│   │   │   ├── _editing.py # Editing phase
+│   │   │   └── _persistence.py # State management
 │   │   ├── project_service.py # Project CRUD operations
-│   │   ├── story_service.py # Story generation workflow
-│   │   ├── world_service.py # Entity/world management
+│   │   ├── story_service/  # Story generation workflow
+│   │   ├── world_service/  # Entity/world management
 │   │   ├── model_service.py # Ollama model operations
-│   │   ├── export_service.py # Export to multiple formats
-│   │   ├── model_mode_service.py # Model performance tracking
+│   │   ├── export_service/ # Export to multiple formats
+│   │   ├── model_mode_service/ # Model performance tracking
 │   │   ├── scoring_service.py # Quality scoring logic
 │   │   ├── template_service.py # Story template management
 │   │   ├── backup_service.py # Project backup/restore
 │   │   ├── import_service.py # Import entities from text
 │   │   ├── comparison_service.py # Model comparison testing
 │   │   ├── suggestion_service.py # AI-powered suggestions
-│   │   ├── world_quality_service.py # World quality enhancement
+│   │   ├── world_quality_service/ # World quality enhancement
+│   │   ├── timeline_service.py # Timeline management
+│   │   ├── calendar_service.py # Calendar view
+│   │   ├── conflict_analysis_service.py # Story conflict analysis
+│   │   ├── content_guidelines_service.py # Content guidelines
+│   │   ├── temporal_validation_service.py # Timeline validation
+│   │   ├── world_template_service.py # World templates
 │   │   └── llm_client.py   # Unified LLM client
 │   ├── ui/                 # NiceGUI web interface
 │   │   ├── app.py          # Main application setup
@@ -754,60 +771,96 @@ For more help, check:
 ### General Questions
 
 **Q: Do I need an internet connection?**
-A: No, Story Factory runs entirely locally. Internet is only needed to download models initially.
+A: No, Story Factory runs entirely locally. Internet is only needed to download Ollama models initially.
 
 **Q: Is my data private?**
-A: Yes, completely. All processing happens on your machine. No data is sent to external servers.
+A: Yes, completely. All processing happens on your machine. No data is sent to external servers. All models run locally via Ollama.
 
 **Q: Can I use this commercially?**
-A: The software is MIT licensed (free for commercial use), but check the licenses of the LLM models you use.
+A: This software is provided for reference only with all rights reserved. Contact the copyright holder for licensing inquiries. Also check the licenses of the LLM models you use.
 
 **Q: How long does it take to generate a story?**
 A: Depends on length and hardware:
 - Short story (1 chapter): 5-15 minutes
 - Novella (7 chapters): 30-90 minutes
-- Novel (20 chapters): 2-5 hours
+- Novel (20+ chapters): 2-5 hours
+
+Performance varies significantly based on GPU VRAM, model size, and CPU speed.
 
 ### Technical Questions
 
 **Q: Can I run this without a GPU?**
-A: Yes, but it will be very slow. GPU with 8GB+ VRAM is strongly recommended.
+A: Yes, but it will be very slow (10-50x slower). GPU with 8GB+ VRAM is strongly recommended for reasonable performance.
 
 **Q: What's the difference between models?**
-A: Models vary in size (parameters), quality, speed, and specialization. See [docs/MODELS.md](docs/MODELS.md) for detailed comparisons.
+A: Models vary in:
+- **Size** (parameters): 8B, 14B, 30B, 70B, etc.
+- **Quality**: Reasoning ability, creativity, instruction-following
+- **Speed**: Smaller models are faster but less capable
+- **Specialization**: Some excel at creative writing, others at reasoning.
+
+See [docs/MODELS.md](docs/MODELS.md) for detailed comparisons and recommendations.
 
 **Q: Can I use OpenAI/Anthropic models instead of Ollama?**
-A: Not currently. The system is designed for local Ollama models only.
+A: Not currently. The system is designed exclusively for local Ollama models to ensure privacy and offline operation.
 
 **Q: How much disk space do I need?**
 A: Plan for:
 - Python environment: ~500 MB
 - Each 8B model: ~5 GB
 - Each 14B model: ~8-10 GB
+- Each 30B MoE model: ~15-20 GB
 - Generated stories: Variable (typically <100 MB per project)
+- Total recommended: 50GB+ free space for comfortable usage
 
 **Q: Can I run multiple stories at once?**
-A: The UI supports one active generation at a time to avoid VRAM conflicts. You can manage multiple projects.
+A: The UI supports one active generation at a time to avoid VRAM conflicts. You can manage multiple projects but only generate one story at a time.
+
+**Q: What's the recommended VRAM for different story lengths?**
+A:
+- **8GB VRAM**: Short stories (1-3 chapters), single model
+- **16GB VRAM**: Novellas (5-10 chapters), 2-3 models
+- **24GB VRAM**: Full novels (20+ chapters), multi-model setup with MoE models
 
 ### Feature Questions
 
 **Q: Can I edit generated text?**
-A: Yes! The web UI allows chapter regeneration with feedback and manual editing.
+A: Yes! The web UI allows:
+- Chapter regeneration with feedback
+- Version control with rollback support
+- Export and edit in external tools.
 
 **Q: Can I save and resume stories?**
-A: Yes, projects are automatically saved and can be resumed at any checkpoint.
+A: Yes, projects are automatically saved and can be resumed at any checkpoint. The system maintains your entire story state including world-building data.
 
 **Q: Can I customize the agents?**
 A: Yes, through settings.json you can:
 - Assign different models per agent
-- Adjust temperature (creativity)
-- Customize system prompts (advanced)
+- Adjust temperature (creativity level)
+- Configure context window sizes
+- Set workflow preferences (checkpoint vs continuous mode)
+
+Advanced users can modify system prompts in `src/prompts/` (requires code knowledge).
 
 **Q: Does it support languages other than English?**
-A: Primarily English. Some models support other languages, but quality varies.
+A: Primarily English. Some models (like Qwen3) support multiple languages, but quality and reliability vary. The system prompts are English-only.
 
 **Q: Can I create my own story templates?**
-A: Yes! The Templates tab allows importing custom templates and creating them from existing projects.
+A: Yes! The Templates tab allows:
+- Importing custom templates from JSON
+- Creating templates from existing projects
+- Sharing templates with others.
+
+**Q: How do I update to the latest version?**
+
+A:
+
+```bash
+git pull origin main
+pip install --upgrade .
+```
+
+Check the release notes for any breaking changes or new requirements.
 
 ### Troubleshooting Questions
 
@@ -816,6 +869,7 @@ A: Check:
 1. CUDA is installed (`nvidia-smi`)
 2. Ollama detects GPU (`ollama run <model>` should show GPU info)
 3. No other apps are using all VRAM
+4. Ollama is using the GPU version (not CPU-only)
 
 **Q: Why do I get "model not found" errors?**
 A: The model needs to be pulled first:
@@ -823,11 +877,23 @@ A: The model needs to be pulled first:
 ollama pull <model-name>
 ```
 
+Check available models: `ollama list`
+
 **Q: Can I use models from HuggingFace?**
-A: Yes, but they need to be converted to GGUF format and imported to Ollama. See [docs/MODELS.md](docs/MODELS.md) for instructions.
+A: Yes, but they need to be:
+1. Converted to GGUF format
+2. Imported to Ollama via Modelfile
+
+See [docs/MODELS.md](docs/MODELS.md) for detailed instructions on importing custom models.
 
 **Q: Why is the UI showing "Offline"?**
-A: Ollama isn't running or reachable. Check the [Troubleshooting](#troubleshooting) section.
+A: Ollama isn't running or reachable. Check:
+- Ollama is running (`curl http://localhost:11434/api/tags`)
+- Correct URL in settings.json
+- Firewall isn't blocking port 11434
+- Ollama service hasn't crashed
+
+See the [Troubleshooting](#troubleshooting) section for detailed solutions.
 
 ## Contributing
 
@@ -851,12 +917,15 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architectural guidelines.
 
 ## Tech Stack
 
-- **[NiceGUI](https://nicegui.io/)**: Modern Python web UI framework
-- **[Ollama](https://ollama.com/)**: Local LLM serving
-- **[NetworkX](https://networkx.org/)**: Graph analysis for world-building
-- **[SQLite](https://sqlite.org/)**: Entity storage
-- **[vis.js](https://visjs.org/)**: Interactive graph visualization
-- **[Pydantic](https://pydantic.dev/)**: Data validation
+- **[Python](https://www.python.org/)**: 3.14+ - Modern async/await support
+- **[NiceGUI](https://nicegui.io/)** - Modern Python web UI framework with real-time updates
+- **[Ollama](https://ollama.com/)** - Local LLM serving with efficient model management
+- **[NetworkX](https://networkx.org/)** - Graph analysis for world-building relationships
+- **[SQLite](https://sqlite.org/)** - Lightweight entity storage with ACID guarantees
+- **[vis.js](https://visjs.org/)** - Interactive graph visualization for world explorer
+- **[Pydantic](https://pydantic.dev/)** - Runtime data validation and settings management
+- **[Pytest](https://pytest.org/)** - Comprehensive testing framework with 2000+ tests
+- **[Ruff](https://github.com/astral-sh/ruff)** - Ultra-fast Python linter and formatter
 
 ## License
 
@@ -920,45 +989,58 @@ Special thanks to all the model creators, AI researchers, and open-source contri
 
 ## Project Status & Roadmap
 
-### Current Status (v1.0)
+### Current Status (v1.0 - February 2026)
 
 ✅ **Stable Features**:
-- Multi-agent story generation
-- Web UI with dark mode
-- World building with graph visualization
-- Story templates and presets
-- Multiple export formats
-- Model performance analytics
-- Adaptive learning system
-- CLI mode
+- Multi-agent story generation with 5 specialized AI agents
+- Modern web UI with NiceGUI 3.x and full dark mode support
+- World building system with SQLite + NetworkX graph database
+- Story templates and genre presets for quick starts
+- Multiple export formats (Markdown, Text, HTML, EPUB, PDF)
+- Model performance analytics and quality tracking
+- Adaptive learning system that improves based on user preferences
+- Background story generation (non-blocking UI)
+- Chapter version control with rollback support
+- Project backup and restore functionality
+- CLI mode for terminal-based story generation
+
+### Recent Updates (2025-2026)
+
+🆕 **Latest Improvements**:
+- **MoE Model Support**: Qwen3-30B-A3B for 70B-level reasoning at half the VRAM
+- **Enhanced World Quality**: AI-powered entity refinement with early stopping detection
+- **Improved Testing**: 2000+ tests with 100% coverage on core modules
+- **Performance Optimizations**: LRU caching, incremental graph updates, thread-safe operations
+- **Better Error Handling**: Comprehensive exception hierarchy and retry logic
+- **Keyboard Shortcuts**: Power-user navigation (`Ctrl+/`)
+
+### Known Limitations
+
+- Single user only (local application)
+- One active generation at a time (VRAM constraints)
+- Requires good GPU for reasonable performance (CPU mode is very slow)
+- English-focused (multilingual support is limited)
+- File-based storage (not suitable for large team collaboration)
 
 ### Planned Features
 
 📋 **Short-term** (v1.1-v1.2):
-- Better error recovery and retry logic
-- Enhanced world import from text
-- Custom agent system prompts (UI configuration)
-- Story outline variations
-- Chapter-level regeneration with feedback
+- Enhanced world import from existing stories
+- Custom agent system prompts via UI configuration
+- Story outline variations and alternatives
+- Improved error recovery and retry strategies
+- Better progress indicators for long-running operations
 
 🔮 **Long-term** (v2.0+):
-- Plugin system for custom agents/exporters
-- Multi-language support
-- Collaborative writing (multi-user)
-- Cloud deployment option
-- Advanced analytics and A/B testing
+- Plugin system for custom agents and exporters
+- Multi-language story generation support
+- Collaborative writing features (multi-user)
+- Cloud deployment option for team use
+- Advanced A/B testing for model comparison
 - Voice narration export
-- Integration with external writing tools
+- Integration with external writing tools (Scrivener, etc.)
 
-### Known Limitations
-
-- Single user (local application)
-- One active generation at a time (VRAM constraints)
-- Requires good GPU for reasonable performance
-- English-focused (multilingual support limited)
-- File-based storage (not suitable for large teams)
-
-See [GitHub Issues](https://github.com/Aureliolo/story-factory/issues) for active development.
+See [GitHub Issues](https://github.com/Aureliolo/story-factory/issues) for active development and feature requests.
 
 ## Purpose
 
