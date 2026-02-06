@@ -777,7 +777,7 @@ class TestWorldHealthMethods:
         assert metrics.total_entities == 0
         assert metrics.total_relationships == 0
         assert metrics.orphan_count == 0
-        assert metrics.health_score == 100.0  # No penalties
+        assert metrics.health_score == 0.0  # Empty worlds score 0
 
     def test_get_world_health_metrics_generates_recommendations(self, world_service, world_db):
         """Test that health metrics include recommendations."""
@@ -1058,3 +1058,105 @@ class TestWorldHealthMethods:
         # Both should be counted in distribution
         assert metrics.quality_distribution["8-10"] >= 1  # Alice
         assert metrics.quality_distribution["6-8"] >= 1  # Bob
+
+    def test_health_score_weighted_structural_and_quality(self, world_service, world_db):
+        """Test health score is a weighted blend of structural (60%) and quality (40%)."""
+        # Create entities with perfect quality (10.0) and no structural issues
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 10.0})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 10.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # structural = 100 (no penalties, density < 1.0 so no bonus)
+        # quality = 10.0 * 10 = 100
+        # score = 100 * 0.6 + 100 * 0.4 = 100
+        assert metrics.health_score == 100.0
+
+    def test_health_score_unscored_entities_contribute_zero(self, world_service, world_db):
+        """Test unscored entities contribute 0.0 to quality average."""
+        # Create entities with no quality scores
+        world_db.add_entity("character", "Alice")
+        world_db.add_entity("character", "Bob")
+        world_db.add_entity("location", "Town")
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # All entities are unscored, average quality should be 0.0
+        assert metrics.average_quality == 0.0
+        # All 3 entities should be in the 0-2 bucket
+        assert metrics.quality_distribution["0-2"] == 3
+        # Health score should reflect 0 quality: structural * 0.6 + 0 * 0.4
+        # structural = 100 - orphan penalties (all 3 are orphans = -6)
+        # structural = 94, score = 94 * 0.6 + 0 * 0.4 = 56.4
+        assert metrics.health_score == pytest.approx(56.4, abs=0.1)
+
+    def test_health_score_mixed_scored_and_unscored(self, world_service, world_db):
+        """Test health score with mix of scored and unscored entities."""
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 8.0})
+        bob_id = world_db.add_entity("character", "Bob")  # Unscored
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Average quality = (8.0 + 0.0) / 2 = 4.0
+        assert metrics.average_quality == pytest.approx(4.0, abs=0.1)
+        # structural = 100, quality = 4.0 * 10 = 40
+        # score = 100 * 0.6 + 40 * 0.4 = 76.0
+        assert metrics.health_score == pytest.approx(76.0, abs=0.1)
+
+    def test_health_score_bool_quality_ignored(self, world_service, world_db, caplog):
+        """Test that boolean quality scores are excluded from quality average."""
+        import logging
+
+        # Create entity with bool quality_score (corrupt data)
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": True})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        with caplog.at_level(logging.DEBUG, logger="src.services.world_service._health"):
+            metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's bool score is excluded, only Bob's 8.0 counts
+        # average_quality = 8.0 (only one valid score)
+        assert metrics.average_quality == pytest.approx(8.0, abs=0.1)
+        # Verify debug log for bool quality score
+        assert any("bool quality score" in r.message for r in caplog.records)
+
+    def test_health_score_negative_quality_clamped(self, world_service, world_db):
+        """Test that negative quality scores are clamped to 0."""
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": -5.0})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's -5.0 clamped to 0.0, Bob is 8.0
+        # average_quality = (0.0 + 8.0) / 2 = 4.0
+        assert metrics.average_quality == pytest.approx(4.0, abs=0.1)
+
+    def test_health_score_nan_quality_treated_as_zero(self, world_service, world_db):
+        """Test that NaN quality scores are treated as 0."""
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_score": float("nan")}
+        )
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's NaN treated as 0.0, Bob is 8.0
+        # average_quality = (0.0 + 8.0) / 2 = 4.0
+        assert metrics.average_quality == pytest.approx(4.0, abs=0.1)
+
+    def test_health_score_overflow_quality_clamped(self, world_service, world_db):
+        """Test that quality scores above 10 are clamped to 10."""
+        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 15.0})
+        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        metrics = world_service.get_world_health_metrics(world_db)
+
+        # Alice's 15.0 clamped to 10.0, Bob is 8.0
+        # average_quality = (10.0 + 8.0) / 2 = 9.0
+        assert metrics.average_quality == pytest.approx(9.0, abs=0.1)

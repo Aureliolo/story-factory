@@ -165,55 +165,72 @@ class WorldHealthMetrics(BaseModel):
     def calculate_health_score(self) -> float:
         """Calculate overall health score based on metrics.
 
-        Scoring factors:
+        The score is a weighted blend of structural health (60%) and quality (40%).
+
+        Structural scoring (0-100):
         - Base score: 100
         - Orphan penalty: -2 per orphan (max -20)
         - Circular penalty: -5 per circular chain (max -25)
-        - Low quality penalty: -3 per low quality entity (max -30)
         - Contradiction penalty: -5 per contradiction (max -25)
         - Temporal error penalty: -3 per error (max -15)
         - Temporal warning penalty: -1 per warning (max -5)
         - Density bonus: +10 if density >= 1.5, +5 if >= 1.0
 
+        Quality scoring (0-100):
+        - average_quality scaled to 0-100 (quality is 0-10)
+
+        Empty worlds (no entities) always score 0.
+
         Returns:
             Health score between 0 and 100.
         """
-        score = 100.0
+        # Empty worlds score 0 — there is nothing healthy about an empty world
+        if self.total_entities == 0:
+            self.health_score = 0.0
+            logger.debug("Calculated health score: 0.0 (empty world)")
+            return self.health_score
+
+        structural_score = 100.0
 
         # Orphan penalty
         orphan_penalty = min(self.orphan_count * 2, 20)
-        score -= orphan_penalty
+        structural_score -= orphan_penalty
 
         # Circular relationship penalty
         circular_penalty = min(self.circular_count * 5, 25)
-        score -= circular_penalty
-
-        # Low quality entity penalty
-        low_quality_penalty = min(len(self.low_quality_entities) * 3, 30)
-        score -= low_quality_penalty
+        structural_score -= circular_penalty
 
         # Contradiction penalty
         contradiction_penalty = min(self.contradiction_count * 5, 25)
-        score -= contradiction_penalty
+        structural_score -= contradiction_penalty
 
         # Temporal consistency penalty
         temporal_error_penalty = min(self.temporal_error_count * 3, 15)
         temporal_warning_penalty = min(self.temporal_warning_count, 5)
-        score -= temporal_error_penalty
-        score -= temporal_warning_penalty
+        structural_score -= temporal_error_penalty
+        structural_score -= temporal_warning_penalty
 
         # Density bonus
         if self.relationship_density >= 1.5:
-            score += 10
+            structural_score += 10
         elif self.relationship_density >= 1.0:
-            score += 5
+            structural_score += 5
+
+        structural_score = max(0.0, min(100.0, structural_score))
+
+        # Quality score: average_quality is 0-10, scale to 0-100
+        quality_score = self.average_quality * 10.0
+
+        # Weighted blend: structural 60%, quality 40%
+        score = structural_score * 0.6 + quality_score * 0.4
 
         # Ensure score is within bounds
         self.health_score = max(0.0, min(100.0, score))
         logger.debug(
             f"Calculated health score: {self.health_score:.1f} "
-            f"(orphan_penalty={orphan_penalty}, circular_penalty={circular_penalty}, "
-            f"low_quality_penalty={low_quality_penalty}, contradiction_penalty={contradiction_penalty}, "
+            f"(structural={structural_score:.1f}, quality={quality_score:.1f}, "
+            f"orphan_penalty={orphan_penalty}, circular_penalty={circular_penalty}, "
+            f"contradiction_penalty={contradiction_penalty}, "
             f"temporal_penalty={temporal_error_penalty + temporal_warning_penalty})"
         )
         return self.health_score

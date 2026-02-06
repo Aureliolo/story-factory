@@ -217,7 +217,7 @@ class GenerationStatus:
                     self._progress_label = ui.label("Generating...").classes("font-medium")
 
                     with ui.row().classes("gap-2 items-center"):
-                        self._phase_label = ui.label("Phase: Interview").classes(
+                        self._phase_label = ui.label("Phase: Starting...").classes(
                             "text-sm text-gray-400"
                         )
                         self._chapter_label = ui.label("Chapter 1").classes("text-sm text-gray-400")
