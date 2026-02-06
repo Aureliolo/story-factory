@@ -70,13 +70,15 @@ Design documents for planned features:
 
 ## Documentation Updates
 
-Last updated: January 2026
+Last updated: February 2026
 
 ### Recent Changes
-- Removed obsolete implementation-complete documentation (UI mockups, feature specs)
-- Consolidated feature documentation into README and feature-specific docs
-- Organized documentation into clear categories
-- Added this documentation index
+- Updated Python version requirements to 3.12+ (3.14+ recommended)
+- Refreshed model recommendations with MoE support (Qwen3-30B-A3B)
+- Updated architecture documentation to reflect orchestrator restructuring
+- Enhanced FAQ section with more detailed technical answers
+- Updated tech stack with current version numbers
+- Improved project status and roadmap information
 
 ### Documentation Standards
 - Keep docs up-to-date with implementation
