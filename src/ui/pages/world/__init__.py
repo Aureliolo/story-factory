@@ -134,6 +134,8 @@ class WorldPage:
         # Generation progress dialog state
         self._generation_cancel_event: threading.Event | None = None
         self._generation_dialog: ui.dialog | None = None
+        # Per-render cache for entity options (populated in build(), cleared after)
+        self._cached_entity_options: dict[str, str] | None = None
 
     # ========== Build ==========
 
@@ -149,7 +151,6 @@ class WorldPage:
             return
 
         # Pre-fetch entity options once for all child sections to avoid duplicate API calls
-        self._cached_entity_options: dict[str, str] | None = None
         if self.state.world_db:
             entities = self.services.world.list_entities(self.state.world_db)
             self._cached_entity_options = {e.id: e.name for e in entities}

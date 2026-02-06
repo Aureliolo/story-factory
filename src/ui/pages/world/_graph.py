@@ -45,7 +45,7 @@ def get_entity_options(page) -> dict[str, str]:
         Dictionary mapping entity ID to entity name.
     """
     # Use cached options from parent build() if available
-    if hasattr(page, "_cached_entity_options") and page._cached_entity_options is not None:
+    if page._cached_entity_options is not None:
         logger.debug("Using cached entity options (%d entries)", len(page._cached_entity_options))
         return dict(page._cached_entity_options)
 

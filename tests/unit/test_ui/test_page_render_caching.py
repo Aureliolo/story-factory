@@ -304,25 +304,6 @@ class TestWorldPageCaching:
         assert result == {"e1": "Alice"}
         page.services.world.list_entities.assert_called_once()
 
-    def test_get_entity_options_falls_back_when_no_cache_attr(self):
-        """get_entity_options() should call list_entities() when _cached_entity_options doesn't exist."""
-        from src.ui.pages.world._graph import get_entity_options
-
-        page = MagicMock(spec=[])
-        page.state = MagicMock()
-        page.state.world_db = MagicMock()
-        page.services = MagicMock()
-
-        entity = MagicMock()
-        entity.id = "e1"
-        entity.name = "Alice"
-        page.services.world.list_entities.return_value = [entity]
-
-        result = get_entity_options(page)
-
-        assert result == {"e1": "Alice"}
-        page.services.world.list_entities.assert_called_once()
-
     def test_get_entity_options_returns_copy_of_cache(self):
         """get_entity_options() should return a copy so mutations don't affect cache."""
         from src.ui.pages.world._graph import get_entity_options
