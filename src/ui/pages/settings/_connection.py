@@ -41,8 +41,8 @@ def build_connection_section(page: SettingsPage) -> None:
                 icon="play_arrow",
             ).props("outline dense")
 
-            # Connection status
-            health = page.services.model.check_health()
+            # Connection status (use cached health from parent build())
+            health = page._cached_health
             if health.is_healthy:
                 with ui.row().classes("items-center gap-1"):
                     ui.icon("check_circle", size="sm").classes("text-green-500")
