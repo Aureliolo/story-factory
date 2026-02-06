@@ -143,11 +143,15 @@ def quality_refinement_loop(
                             break
 
                     needs_judging = True
-                else:
-                    # No scores and entity unchanged since last refinement
-                    # error — skip redundant judging (#266 B10)
+                else:  # pragma: no cover — defensive, unreachable with current error handler
+                    # scores is None and not first iteration: entity is
+                    # unchanged since the last error. Skip this iteration
+                    # to avoid redundant judging (#266 B10). With the
+                    # current error handler this path is unreachable:
+                    # judge errors keep needs_judging=True (handled at
+                    # top of loop), refinement errors preserve scores.
                     logger.debug(
-                        "%s '%s' unchanged after refinement error on iteration %d, "
+                        "%s '%s' unchanged after error on iteration %d, "
                         "skipping redundant judge call",
                         entity_type.capitalize(),
                         get_name(entity) if entity is not None else "unknown",
@@ -160,20 +164,9 @@ def quality_refinement_loop(
             if not history.entity_name and entity is not None:
                 history.entity_name = get_name(entity)
 
-            # Judge — only if entity was created or refined this iteration (#266 B10)
-            if not needs_judging:
-                logger.debug(
-                    "%s '%s' not flagged for judging on iteration %d, skipping",
-                    entity_type.capitalize(),
-                    get_name(entity) if entity is not None else "unknown",
-                    iteration + 1,
-                )
-                iteration += 1
-                continue
-
-            # At this point entity is guaranteed non-None: needs_judging is only
-            # set True after successful create/refine or when judge failed on an
-            # existing entity.
+            # At this point entity is guaranteed non-None and needs_judging is
+            # True: all code paths above either set needs_judging=True, or
+            # continue/break out of this iteration.
             assert entity is not None  # nosec — invariant, not runtime check
 
             scores = judge_fn(entity)
