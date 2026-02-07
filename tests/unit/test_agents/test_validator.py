@@ -105,11 +105,12 @@ class TestValidateOrRaise:
         with pytest.raises((ResponseValidationError, ValueError)):
             validate_or_raise("", "English", validator=validator)
 
-    def test_accepts_custom_validator(self, validator):
-        """Test accepts pre-created validator agent."""
+    def test_accepts_custom_validator(self):
+        """Test accepts a separately constructed ValidatorAgent via the validator kwarg."""
+        custom_validator = ValidatorAgent(settings=Settings())
         response = "Valid response."
 
-        result = validate_or_raise(response, "English", validator=validator)
+        result = validate_or_raise(response, "English", validator=custom_validator)
 
         assert result == response
 

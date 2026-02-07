@@ -300,6 +300,8 @@ class BaseAgent:
                             e,
                         )
                         if attempt < max_retries - 1:
+                            backoff = min(2**attempt, 10)
+                            time.sleep(backoff)
                             continue
 
                     except ollama.ResponseError as e:

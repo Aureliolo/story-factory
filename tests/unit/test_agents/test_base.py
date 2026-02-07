@@ -607,8 +607,9 @@ class TestBaseAgentGenerateStructured:
         assert metrics.completion_tokens == 50
         assert metrics.total_tokens == 150
 
-    def test_generate_structured_retries_on_connection_error(self):
-        """Test generate_structured retries on ConnectionError then succeeds."""
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_connection_error(self, mock_sleep):
+        """Test generate_structured retries on ConnectionError with backoff."""
         agent = create_mock_agent()
         agent.client.chat.side_effect = [
             ConnectionError("Connection refused"),
@@ -619,9 +620,11 @@ class TestBaseAgentGenerateStructured:
 
         assert result.name == "Recovered"
         assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)  # min(2**0, 10) = 1
 
-    def test_generate_structured_retries_on_timeout_error(self):
-        """Test generate_structured retries on TimeoutError then succeeds."""
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_timeout_error(self, mock_sleep):
+        """Test generate_structured retries on TimeoutError with backoff."""
         agent = create_mock_agent()
         agent.client.chat.side_effect = [
             TimeoutError("Request timed out"),
@@ -632,8 +635,10 @@ class TestBaseAgentGenerateStructured:
 
         assert result.name == "Recovered"
         assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)  # min(2**0, 10) = 1
 
-    def test_generate_structured_exhausts_retries_raises(self):
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_exhausts_retries_raises(self, mock_sleep):
         """Test generate_structured raises LLMGenerationError after exhausting all retries."""
         agent = create_mock_agent()
         agent.client.chat.side_effect = ConnectionError("Connection refused")
@@ -642,6 +647,7 @@ class TestBaseAgentGenerateStructured:
             agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
 
         assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)  # backoff on first attempt before retry
 
     def test_generate_structured_max_retries_zero_raises(self):
         """Test generate_structured raises ValueError when max_retries < 1."""
