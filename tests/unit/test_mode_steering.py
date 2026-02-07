@@ -257,8 +257,8 @@ class TestModelModeServiceModelSelection:
     ):
         """Models that can't achieve 80% GPU residency should be excluded."""
         mock_get_models.return_value = {
-            "small-model:8b": 5.0,  # 24/5 = 480% — fits easily
-            "huge-model:70b": 43.0,  # 24/43 = 56% — below 80% threshold
+            "small-model:8b": 5.0,  # 24 GiB = 25.8 GB → 25.8/5 = 515% — fits easily
+            "huge-model:70b": 43.0,  # 24 GiB = 25.8 GB → 25.8/43 = 60% — below 80%
         }
         service.settings.custom_model_tags = {
             "small-model:8b": ["writer"],
@@ -275,12 +275,12 @@ class TestModelModeServiceModelSelection:
         assert result == "small-model:8b"
 
     @patch("src.settings.get_installed_models_with_sizes")
-    def test_allows_model_at_exactly_80_percent_gpu_residency(
+    def test_allows_model_above_80_percent_gpu_residency(
         self, mock_get_models: MagicMock, service: ModelModeService
     ):
-        """Models at exactly 80% GPU residency should be allowed."""
+        """Models above 80% GPU residency should be allowed."""
         mock_get_models.return_value = {
-            "borderline-model:30b": 30.0,  # 24/30 = 80% — exactly at threshold
+            "borderline-model:30b": 30.0,  # 24 GiB = 25.8 GB → 25.8/30 = 86% — above threshold
         }
         service.settings.custom_model_tags = {
             "borderline-model:30b": ["writer"],
@@ -300,13 +300,13 @@ class TestModelModeServiceModelSelection:
     ):
         """When all tagged models fail GPU residency, should raise ValueError."""
         mock_get_models.return_value = {
-            "huge-model:70b": 43.0,  # 8/43 = 19% — way below threshold
+            "huge-model:70b": 43.0,  # 8 GiB = 8.6 GB → 8.6/43 = 20% — way below threshold
         }
         service.settings.custom_model_tags = {
             "huge-model:70b": ["writer"],
         }
 
-        with pytest.raises(ValueError, match="No model tagged for role"):
+        with pytest.raises(ValueError, match="excluded by GPU residency"):
             service._select_model_with_size_preference(
                 "writer",
                 SizePreference.LARGEST,

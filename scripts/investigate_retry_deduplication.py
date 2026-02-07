@@ -40,6 +40,7 @@ from pydantic import BaseModel, ValidationError
 
 from scripts._ollama_helpers import (
     CANONICAL_BRIEF,
+    INVESTIGATION_NUM_CTX,
     OLLAMA_BASE,
     unload_model,
     warm_model,
@@ -219,7 +220,7 @@ def capture_raw_response(
         "messages": [{"role": "user", "content": prompt}],
         "format": "json",
         "stream": False,
-        "options": {"temperature": temperature, "num_ctx": 4096},
+        "options": {"temperature": temperature, "num_ctx": INVESTIGATION_NUM_CTX},
     }
 
     start = time.monotonic()

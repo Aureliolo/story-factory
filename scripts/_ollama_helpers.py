@@ -15,14 +15,12 @@ from typing import Any
 
 import httpx
 
+from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY
+
 logger = logging.getLogger(__name__)
 
 OLLAMA_BASE = "http://localhost:11434"
 EMBEDDING_MODELS = {"bge-m3", "snowflake-arctic-embed", "mxbai-embed-large"}
-
-# Minimum fraction of a model that must fit in GPU VRAM.
-# Mirrors MIN_GPU_RESIDENCY from src/services/model_mode_service/_vram.py.
-MIN_GPU_RESIDENCY = 0.8
 
 # Default context window for investigation scripts.
 # Investigation prompts are small (~1K tokens). Using the model's default

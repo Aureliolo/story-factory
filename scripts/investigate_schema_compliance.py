@@ -359,8 +359,9 @@ def test_schema_compliance(
     output, then validates the response with Pydantic. This respects ``num_ctx``
     unlike the /v1/ OpenAI-compatible endpoint.
 
-    When max_retries > 0, failed attempts append the validation error to the
-    conversation context and retry, mimicking instructor's retry behaviour.
+    When max_retries > 0, failed attempts simply re-send the same prompt.
+    This tests whether the model can eventually produce valid output through
+    repeated independent attempts (no error feedback between retries).
 
     Args:
         model: Ollama model name.
@@ -627,7 +628,7 @@ def evaluate_model(
         "overall_retry_pass_rate": (
             round(total_pass_retry / total_tests, 3) if total_tests > 0 else 0.0
         ),
-        "instructor_recovery_rate": (
+        "retry_recovery_rate": (
             round(
                 (total_pass_retry - total_pass_raw) / max(total_tests - total_pass_raw, 1),
                 3,
@@ -757,8 +758,10 @@ def main() -> None:
     for i, model in enumerate(models):
         print(f"[{i + 1}/{len(models)}] Testing: {model}")
         # Pre-load model via native API with small context window.
-        # Ollama's /v1/ endpoint ignores num_ctx, so we warm via /api/chat first.
-        warm_model(model)
+        if not warm_model(model):
+            logger.warning("Failed to warm model %s, skipping evaluation", model)
+            print("  SKIPPED: failed to warm model (is Ollama running?)")
+            continue
         model_result = evaluate_model(
             model, schemas, args.trials, args.temperature, args.timeout, args.verbose
         )
@@ -768,7 +771,7 @@ def main() -> None:
         print(
             f"  Summary: raw={summary['overall_raw_pass_rate']:.0%} "
             f"retry={summary['overall_retry_pass_rate']:.0%} "
-            f"recovery={summary['instructor_recovery_rate']:.0%} "
+            f"recovery={summary['retry_recovery_rate']:.0%} "
             f"({model_result['total_time_seconds']:.0f}s)"
         )
 
@@ -883,12 +886,12 @@ def main() -> None:
             )
 
     # Recovery effectiveness
-    print("\nINSTRUCTOR RECOVERY EFFECTIVENESS:")
+    print("\nRETRY RECOVERY EFFECTIVENESS:")
     for mr in all_model_results:
         summary = mr["summary"]
         raw = summary["overall_raw_pass_rate"]
         retry = summary["overall_retry_pass_rate"]
-        recovery = summary["instructor_recovery_rate"]
+        recovery = summary["retry_recovery_rate"]
         if recovery > 0:
             print(f"  {mr['model']}: {raw:.0%} -> {retry:.0%} (recovery={recovery:.0%})")
         else:
