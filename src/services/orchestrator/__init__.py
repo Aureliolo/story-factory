@@ -74,7 +74,7 @@ class StoryOrchestrator:
         self.writer = WriterAgent(model=model_override, settings=self.settings)
         self.editor = EditorAgent(model=model_override, settings=self.settings)
         self.continuity = ContinuityAgent(model=model_override, settings=self.settings)
-        self.validator = ValidatorAgent(settings=self.settings)  # Uses small model
+        self.validator = ValidatorAgent(settings=self.settings)  # Rule-based only
 
         # State
         self.story_state: StoryState | None = None

@@ -119,14 +119,12 @@ def _suppress_noisy_loggers() -> None:
     """Suppress noisy third-party loggers to WARNING level.
 
     Called by both setup_logging() and set_log_level() to keep httpx, httpcore,
-    nicegui, instructor, and openai loggers at WARNING regardless of the application log level.
+    and nicegui loggers at WARNING regardless of the application log level.
     """
-    logger.debug("Suppressing noisy third-party loggers (httpx/httpcore/nicegui/instructor/openai)")
+    logger.debug("Suppressing noisy third-party loggers (httpx/httpcore/nicegui)")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("nicegui").setLevel(logging.WARNING)
-    logging.getLogger("instructor").setLevel(logging.WARNING)
-    logging.getLogger("openai").setLevel(logging.WARNING)
 
 
 def set_log_level(level: str) -> None:

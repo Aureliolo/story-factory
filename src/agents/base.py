@@ -5,11 +5,8 @@ import threading
 import time
 from typing import TypeVar
 
-import instructor
 import ollama
-from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from src.memory.cost_models import GenerationMetrics
 from src.settings import ModelInfo, Settings, get_model_info
@@ -107,7 +104,7 @@ class BaseAgent:
 
         Notes:
             - Initializes an Ollama client using the configured URL and timeout.
-            - Lazily initializes the instructor client placeholder and the storage for last generation metrics.
+            - Storage for last generation metrics is initialized to None.
         """
         validate_not_empty(name, "name")
         validate_not_empty(role, "role")
@@ -137,9 +134,6 @@ class BaseAgent:
             host=self.settings.ollama_url, timeout=self.settings.get_scaled_timeout(self.model)
         )
 
-        # Instructor client for structured outputs (lazily initialized)
-        self._instructor_client: instructor.Instructor | None = None
-
         # Store metrics from the last generation for cost tracking
         self._last_generation_metrics: GenerationMetrics | None = None
 
@@ -153,40 +147,6 @@ class BaseAgent:
         """
         return self._last_generation_metrics
 
-    @property
-    def instructor_client(self) -> instructor.Instructor:
-        """
-        Lazily create and return an Instructor client configured to use Ollama's OpenAI-compatible JSON API.
-
-        The client is cached on the instance after first creation and reused for subsequent calls.
-
-        Returns:
-            instructor.Instructor: An Instructor client targeting Ollama's OpenAI-compatible endpoint with JSON mode.
-        """
-        if self._instructor_client is None:
-            # Create OpenAI client pointing to Ollama's OpenAI-compatible endpoint
-            openai_client = OpenAI(
-                base_url=f"{self.settings.ollama_url}/v1",
-                api_key="ollama",  # Required but not used by Ollama
-                timeout=self.settings.get_scaled_timeout(self.model),
-            )
-            self._instructor_client = instructor.from_openai(
-                openai_client,
-                mode=instructor.Mode.JSON,
-            )
-            self._instructor_client.on(
-                "parse:error",
-                lambda e: logger.warning("Structured output validation failed (will retry): %s", e),
-            )
-            self._instructor_client.on(
-                "completion:error",
-                lambda e: logger.warning(
-                    "LLM API error during structured output (will retry): %s", e
-                ),
-            )
-            logger.debug(f"Created instructor client for {self.name}")
-        return self._instructor_client
-
     def generate_structured(
         self,
         prompt: str,
@@ -195,10 +155,11 @@ class BaseAgent:
         temperature: float | None = None,
         max_retries: int = 3,
     ) -> T:
-        """Generate structured output with automatic validation and retry.
+        """Generate structured output using native Ollama format parameter.
 
-        Uses Instructor library to enforce JSON schema at the API level,
-        with automatic retries that include validation feedback to the LLM.
+        Uses ollama.Client.chat() with `format=` set to the Pydantic model's
+        JSON schema. Ollama constrains output at the grammar level, ensuring
+        valid JSON matching the schema (investigation #267: 858 calls, 0 failures).
 
         Args:
             prompt: The user prompt to send.
@@ -213,8 +174,12 @@ class BaseAgent:
         Raises:
             CircuitOpenError: If the circuit breaker is open.
             LLMGenerationError: If generation fails after all retries.
+            ValueError: If max_retries < 1.
         """
         validate_not_empty(prompt, "prompt")
+
+        if max_retries < 1:
+            raise ValueError(f"max_retries must be >= 1, got {max_retries}")
 
         # Check circuit breaker before proceeding
         circuit_breaker = get_circuit_breaker(
@@ -244,7 +209,7 @@ class BaseAgent:
         else:
             system_content = self.system_prompt
 
-        messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_content}]
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
 
         if context:
             messages.append({"role": "system", "content": f"CURRENT STORY CONTEXT:\n{context}"})
@@ -257,51 +222,106 @@ class BaseAgent:
         # Clear previous metrics before new generation
         self._last_generation_metrics = None
 
+        # Get JSON schema for format parameter
+        json_schema = response_model.model_json_schema()
+
         # Acquire semaphore to limit concurrent requests
         with _get_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} structured generation"):
-                try:
-                    logger.debug(
-                        f"{self.name}: Calling LLM ({use_model}) for structured output "
-                        f"(model={response_model.__name__}, temp={use_temp}, "
-                        f"max_retries={max_retries})"
-                    )
+                last_error: Exception | None = None
 
-                    start_time = time.time()
-                    result = self.instructor_client.chat.completions.create(
-                        model=use_model,
-                        messages=messages,
-                        response_model=response_model,
-                        max_retries=max_retries,
-                        temperature=use_temp,
-                    )
-                    duration = time.time() - start_time
+                for attempt in range(max_retries):
+                    try:
+                        logger.debug(
+                            f"{self.name}: Calling LLM ({use_model}) for structured output "
+                            f"(model={response_model.__name__}, temp={use_temp}, "
+                            f"attempt={attempt + 1}/{max_retries})"
+                        )
 
-                    # Store metrics for structured generation
-                    # Note: Instructor uses OpenAI-compatible API which doesn't expose
-                    # token counts in the same way as native Ollama, so we track what we can
-                    self._last_generation_metrics = GenerationMetrics(
-                        prompt_tokens=None,  # Not available from instructor
-                        completion_tokens=None,  # Not available from instructor
-                        total_tokens=0,
-                        time_seconds=duration,
-                        model_id=use_model,
-                        agent_role=self.agent_role,
-                    )
+                        start_time = time.time()
+                        response = self.client.chat(
+                            model=use_model,
+                            messages=messages,
+                            format=json_schema,
+                            options={
+                                "temperature": use_temp,
+                                "num_ctx": self.settings.context_size,
+                            },
+                        )
+                        duration = time.time() - start_time
 
-                    logger.info(
-                        f"{self.name}: Structured output received "
-                        f"({response_model.__name__}, {duration:.2f}s)"
-                    )
-                    circuit_breaker.record_success()
-                    return result
+                        # Extract token counts from native Ollama response
+                        prompt_tokens = response.get("prompt_eval_count")
+                        completion_tokens = response.get("eval_count")
+                        total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
 
-                except Exception as e:
-                    logger.error(f"{self.name}: Structured generation failed: {e}")
-                    circuit_breaker.record_failure(e)
-                    raise LLMGenerationError(
-                        f"Structured generation failed for {response_model.__name__}: {e}"
-                    ) from e
+                        # Parse and validate the response
+                        content = response["message"]["content"]
+                        result = response_model.model_validate_json(content)
+
+                        # Store metrics for structured generation
+                        self._last_generation_metrics = GenerationMetrics(
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens,
+                            total_tokens=total_tokens,
+                            time_seconds=duration,
+                            model_id=use_model,
+                            agent_role=self.agent_role,
+                        )
+
+                        logger.info(
+                            f"{self.name}: Structured output received "
+                            f"({response_model.__name__}, {duration:.2f}s, "
+                            f"tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
+                        )
+                        circuit_breaker.record_success()
+                        return result
+
+                    except (ValidationError, KeyError, TypeError) as e:
+                        last_error = e
+                        logger.warning(
+                            "%s: Structured output validation/parsing failed (attempt %d/%d): %s",
+                            self.name,
+                            attempt + 1,
+                            max_retries,
+                            e,
+                        )
+                        if attempt < max_retries - 1:
+                            continue  # Retry with same prompt
+
+                    except (ConnectionError, TimeoutError) as e:
+                        last_error = e
+                        circuit_breaker.record_failure(e)
+                        logger.warning(
+                            "%s: Connection/timeout error on structured attempt %d/%d: %s",
+                            self.name,
+                            attempt + 1,
+                            max_retries,
+                            e,
+                        )
+                        if attempt < max_retries - 1:
+                            backoff = min(2**attempt, 10)
+                            time.sleep(backoff)
+                            continue
+
+                    except ollama.ResponseError as e:
+                        # Model-specific errors — don't retry
+                        logger.error(f"{self.name}: Ollama response error: {e}")
+                        circuit_breaker.record_failure(e)
+                        raise LLMGenerationError(
+                            f"Structured generation failed for {response_model.__name__}: {e}"
+                        ) from e
+
+                # All retries exhausted
+                logger.error(
+                    "%s: Structured generation failed after %d attempts",
+                    self.name,
+                    max_retries,
+                )
+                circuit_breaker.record_failure(last_error)
+                raise LLMGenerationError(
+                    f"Structured generation failed for {response_model.__name__}: {last_error}"
+                ) from last_error
 
     @classmethod
     @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)

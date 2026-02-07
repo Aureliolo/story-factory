@@ -1,73 +1,55 @@
 """Shared LLM client utilities for services.
 
-Provides Instructor client for structured outputs in services that don't use agents.
+Provides native Ollama client for structured outputs in services that don't use agents.
+Uses ollama.Client.chat() with `format=` parameter for grammar-constrained JSON output.
 """
 
 import logging
+import threading
+import time
 
-import instructor
-from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
-from pydantic import BaseModel
+import ollama
+from pydantic import BaseModel, ValidationError
 
 from src.settings import Settings
-from src.utils.exceptions import summarize_llm_error
+from src.utils.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 
-# Module-level cache for instructor clients (keyed by settings hash)
-_instructor_clients: dict[int, instructor.Instructor] = {}
+# Module-level cache for Ollama clients (keyed by (url, timeout))
+_ollama_clients: dict[tuple[str, float], ollama.Client] = {}
+_ollama_clients_lock = threading.Lock()
 
 
-def get_instructor_client(settings: Settings, model_id: str | None = None) -> instructor.Instructor:
-    """Get or create an Instructor client for the given settings.
+def get_ollama_client(settings: Settings, model_id: str | None = None) -> ollama.Client:
+    """Get or create an Ollama client for the given settings.
 
-    The client is cached based on settings and model to avoid recreating it for each call.
+    The client is cached based on URL and timeout to avoid recreating it for each call.
     Timeout is scaled based on model size when model_id is provided.
+    Thread-safe via double-checked locking.
 
     Args:
         settings: Application settings with ollama_url and ollama_timeout.
         model_id: Optional model ID for timeout scaling. If None, uses base timeout.
 
     Returns:
-        Instructor client configured for Ollama's OpenAI-compatible endpoint.
+        Ollama client configured for the given settings.
     """
     # Get timeout (scaled by model size if model_id provided)
     timeout = settings.get_scaled_timeout(model_id) if model_id else float(settings.ollama_timeout)
 
-    # Create a simple hash based on relevant settings and timeout
-    settings_key = hash((settings.ollama_url, timeout))
+    cache_key = (settings.ollama_url, timeout)
 
-    if settings_key not in _instructor_clients:
-        openai_client = OpenAI(
-            base_url=f"{settings.ollama_url}/v1",
-            api_key="ollama",  # Required but not used by Ollama
-            timeout=timeout,
-        )
-        client = instructor.from_openai(
-            openai_client,
-            mode=instructor.Mode.JSON,
-        )
-        client.on(
-            "parse:error",
-            lambda e: logger.warning(
-                "Structured output validation failed (will retry): %s",
-                summarize_llm_error(e) if isinstance(e, Exception) else str(e)[:300],
-            ),
-        )
-        client.on(
-            "completion:error",
-            lambda e: logger.warning(
-                "LLM API error during structured output (will retry): %s",
-                summarize_llm_error(e) if isinstance(e, Exception) else str(e)[:300],
-            ),
-        )
-        _instructor_clients[settings_key] = client
-        logger.debug(
-            f"Created instructor client for {settings.ollama_url} (timeout={timeout:.0f}s)"
-        )
+    if cache_key not in _ollama_clients:
+        with _ollama_clients_lock:
+            if cache_key not in _ollama_clients:
+                client = ollama.Client(host=settings.ollama_url, timeout=timeout)
+                _ollama_clients[cache_key] = client
+                logger.debug(
+                    f"Created Ollama client for {settings.ollama_url} (timeout={timeout:.0f}s)"
+                )
 
-    return _instructor_clients[settings_key]
+    return _ollama_clients[cache_key]
 
 
 def generate_structured[T: BaseModel](
@@ -79,10 +61,11 @@ def generate_structured[T: BaseModel](
     temperature: float = 0.1,
     max_retries: int = 3,
 ) -> T:
-    """Generate structured output with automatic validation and retry.
+    """Generate structured output using native Ollama format parameter.
 
     This is a standalone function for services that don't use BaseAgent.
-    Uses Instructor library to enforce JSON schema at the API level.
+    Uses ollama.Client.chat() with `format=` set to the Pydantic model's
+    JSON schema for grammar-constrained output.
 
     Args:
         settings: Application settings.
@@ -97,31 +80,94 @@ def generate_structured[T: BaseModel](
         Instance of response_model with validated data.
 
     Raises:
-        Exception: If generation fails after all retries.
+        LLMError: If generation fails after all retries or on non-retryable Ollama errors.
+        ValueError: If max_retries < 1.
     """
-    client = get_instructor_client(settings, model_id=model)
+    client = get_ollama_client(settings, model_id=model)
 
     # Add /no_think prefix for Qwen models
     if system_prompt and "qwen" in model.lower():
         system_prompt = f"/no_think\n{system_prompt}"
 
-    messages: list[ChatCompletionMessageParam] = []
+    messages: list[dict[str, str]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
+
+    # Get JSON schema for format parameter
+    json_schema = response_model.model_json_schema()
 
     logger.debug(
         f"Generating structured output: model={model}, response_model={response_model.__name__}, "
         f"temperature={temperature}, max_retries={max_retries}"
     )
 
-    result = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        response_model=response_model,
-        max_retries=max_retries,
-        temperature=temperature,
-    )
+    if max_retries < 1:
+        raise ValueError(f"max_retries must be >= 1, got {max_retries}")
 
-    logger.debug(f"Structured output received: {response_model.__name__}")
-    return result
+    last_error: Exception | None = None
+
+    for attempt in range(max_retries):
+        try:
+            start_time = time.time()
+            response = client.chat(
+                model=model,
+                messages=messages,
+                format=json_schema,
+                options={
+                    "temperature": temperature,
+                    "num_ctx": settings.context_size,
+                },
+            )
+            duration = time.time() - start_time
+
+            # Extract token counts from native Ollama response
+            prompt_tokens = response.get("prompt_eval_count")
+            completion_tokens = response.get("eval_count")
+
+            content = response["message"]["content"]
+            result = response_model.model_validate_json(content)
+
+            logger.debug(
+                f"Structured output received: {response_model.__name__} "
+                f"({duration:.2f}s, tokens: {prompt_tokens}+{completion_tokens})"
+            )
+            return result
+
+        except (ValidationError, KeyError, TypeError) as e:
+            last_error = e
+            logger.warning(
+                "Structured output validation/parsing failed (attempt %d/%d): %s",
+                attempt + 1,
+                max_retries,
+                e,
+            )
+            if attempt < max_retries - 1:
+                continue  # Retry with same prompt
+
+        except (ConnectionError, TimeoutError) as e:
+            last_error = e
+            logger.warning(
+                "Transient error in structured output (attempt %d/%d): %s",
+                attempt + 1,
+                max_retries,
+                e,
+            )
+            if attempt < max_retries - 1:
+                backoff = min(2**attempt, 10)
+                logger.debug("Backing off %.1fs before retry", backoff)
+                time.sleep(backoff)
+                continue
+
+        except ollama.ResponseError as e:
+            logger.error("Ollama response error during structured generation: %s", e)
+            raise LLMError(
+                f"Structured generation failed for {response_model.__name__}: {e}"
+            ) from e
+
+    # All retries exhausted
+    logger.error("Structured output generation failed after %d attempts", max_retries)
+    raise LLMError(
+        f"Structured generation failed for {response_model.__name__} "
+        f"after {max_retries} attempts: {last_error}"
+    ) from last_error

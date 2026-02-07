@@ -236,7 +236,6 @@ class TestAgentRoles:
             "writer",
             "editor",
             "continuity",
-            "validator",
             "suggestion",
             "embedding",
         ]
@@ -829,25 +828,6 @@ class TestSettingsGetModelForAgent:
 
         assert result == "my-custom-model:7b"
 
-    def test_validator_prefers_tiny_models(self, monkeypatch):
-        """Test validator role prefers tiny models."""
-        monkeypatch.setattr(
-            "src.settings._settings.get_installed_models_with_sizes",
-            lambda timeout=None: {
-                "qwen3:0.6b": 0.5,  # Tagged for validator, tiny tier
-                "huihui_ai/dolphin3-abliterated:8b": 5.0,  # Small tier
-            },
-        )
-
-        settings = Settings()
-        settings.use_per_agent_models = True
-        settings.agent_models = {"validator": "auto"}
-
-        result = settings.get_model_for_agent("validator", available_vram=24)
-
-        # Should select the tiny model tagged for validator
-        assert result == "qwen3:0.6b"
-
     def test_returns_default_when_no_models_installed(self, monkeypatch, caplog):
         """Test returns default model when no models installed."""
         monkeypatch.setattr(
@@ -1260,13 +1240,6 @@ class TestNewSettingsValidation:
         settings = Settings()
         settings.validator_printable_ratio = 1.5  # Above 1.0
         with pytest.raises(ValueError, match="validator_printable_ratio must be between"):
-            settings.validate()
-
-    def test_validate_raises_on_invalid_validator_ai_check_min_length(self):
-        """Should raise ValueError for validator_ai_check_min_length out of range."""
-        settings = Settings()
-        settings.validator_ai_check_min_length = 20000  # Too high (max 10000)
-        with pytest.raises(ValueError, match="validator_ai_check_min_length must be between"):
             settings.validate()
 
     # --- Outline generation ---
@@ -1734,46 +1707,6 @@ class TestMissingValidationCoverage:
             settings.validate()
 
 
-class TestValidatorModelSelection:
-    """Tests for validator model selection."""
-
-    def test_selects_tagged_validator_model(self, monkeypatch):
-        """Test selects tiny model tagged for validator role."""
-        monkeypatch.setattr(
-            "src.settings._settings.get_installed_models_with_sizes",
-            lambda timeout=None: {"qwen3:0.6b": 0.5},
-        )
-
-        settings = Settings()
-        settings.use_per_agent_models = True
-        settings.agent_models = {"validator": "auto"}
-
-        result = settings.get_model_for_agent("validator", available_vram=24)
-
-        assert result == "qwen3:0.6b"
-
-    def test_validator_selects_tagged_model(self, monkeypatch):
-        """Test validator selects model tagged for validator role."""
-        monkeypatch.setattr(
-            "src.settings._settings.get_installed_models_with_sizes",
-            lambda timeout=None: {
-                "custom-tiny:1b": 1.0,
-                "custom-medium:12b": 10.0,
-            },
-        )
-
-        settings = Settings()
-        settings.use_per_agent_models = True
-        settings.agent_models = {"validator": "auto"}
-        # Tag the tiny model for validator
-        settings.custom_model_tags = {"custom-tiny:1b": ["validator"]}
-
-        result = settings.get_model_for_agent("validator", available_vram=24)
-
-        # Validator selects the tagged model
-        assert result == "custom-tiny:1b"
-
-
 class TestBackupCorruptedSettings:
     """Tests for _backup_corrupted_settings method."""
 
@@ -2180,8 +2113,8 @@ class TestSettingsMigration:
             "writer": 0.9,
             "editor": 0.6,
             "continuity": 0.3,
-            "validator": 0.1,
             "suggestion": 0.8,
+            "judge": 0.1,
             # No "embedding" key — simulates pre-migration file
         }
 
@@ -2553,12 +2486,6 @@ class TestMinimumRoleQuality:
         assert "judge" in MINIMUM_ROLE_QUALITY
         assert MINIMUM_ROLE_QUALITY["judge"] >= 7
 
-    def test_minimum_role_quality_excludes_validator(self):
-        """Validator has no minimum quality — any small model works."""
-        from src.settings._types import MINIMUM_ROLE_QUALITY
-
-        assert "validator" not in MINIMUM_ROLE_QUALITY
-
     def test_minimum_role_quality_excludes_embedding(self):
         """Embedding has no minimum quality — separate selection path."""
         from src.settings._types import MINIMUM_ROLE_QUALITY
@@ -2585,18 +2512,6 @@ class TestMinimumRoleQuality:
 
         with caplog.at_level(logging.WARNING, logger="src.settings._types"):
             check_minimum_quality("good-model:12b", 8.0, "judge")
-
-        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
-        assert not any("below minimum quality" in m for m in warning_messages)
-
-    def test_check_minimum_quality_no_warn_validator(self, caplog):
-        """Validator role has no minimum — should never warn."""
-        import logging
-
-        from src.settings._types import check_minimum_quality
-
-        with caplog.at_level(logging.WARNING, logger="src.settings._types"):
-            check_minimum_quality("tiny-model:0.5b", 2.0, "validator")
 
         warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
         assert not any("below minimum quality" in m for m in warning_messages)
@@ -2661,10 +2576,6 @@ class TestMinimumRoleQuality:
     def test_registry_gemma3_4b_has_judge_tag(self):
         """Gemma 3 4B should have judge tag (rank=0.94, Issue #228)."""
         assert "judge" in RECOMMENDED_MODELS["gemma3:4b"]["tags"]
-
-    def test_registry_qwen3_4b_no_interviewer_tag(self):
-        """Qwen3 4B (Quality 5) should not have interviewer tag."""
-        assert "interviewer" not in RECOMMENDED_MODELS["qwen3:4b"]["tags"]
 
 
 class TestLogLevelValidation:

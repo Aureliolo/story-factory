@@ -307,8 +307,6 @@ class TestSetLogLevel:
         assert logging.getLogger("httpx").level == logging.WARNING
         assert logging.getLogger("httpcore").level == logging.WARNING
         assert logging.getLogger("nicegui").level == logging.WARNING
-        assert logging.getLogger("instructor").level == logging.WARNING
-        assert logging.getLogger("openai").level == logging.WARNING
 
     def test_set_log_level_logs_change(self, caplog):
         """set_log_level should log the level change."""
