@@ -40,6 +40,8 @@ CANONICAL_BRIEF = (
 def get_total_gpu_vram_mb() -> int:
     """Detect total GPU VRAM in MB via nvidia-smi.
 
+    Only reads the first GPU. Multi-GPU setups will only report GPU 0's VRAM.
+
     Returns:
         Total VRAM in MB, or 0 if detection fails (no GPU / nvidia-smi not found).
     """
@@ -77,7 +79,9 @@ def get_installed_models(enforce_gpu_residency: bool = True) -> list[str]:
         logger.error("Failed to list Ollama models: %s", e)
         return []
 
-    gpu_vram_gb = get_total_gpu_vram_mb() / 1024 if enforce_gpu_residency else 0
+    # Both gpu_vram and model size use binary units (GiB) here — the ratio is
+    # unit-agnostic so the residency percentage is correct without conversion.
+    gpu_vram_gib = get_total_gpu_vram_mb() / 1024 if enforce_gpu_residency else 0
 
     result = []
     for m in models:
@@ -87,19 +91,19 @@ def get_installed_models(enforce_gpu_residency: bool = True) -> list[str]:
             continue
 
         # 80% GPU residency rule: skip models too large for the GPU.
-        if enforce_gpu_residency and gpu_vram_gb > 0:
+        if enforce_gpu_residency and gpu_vram_gib > 0:
             size_bytes = m.get("size", 0)
-            size_gb = size_bytes / (1024**3)
-            if size_gb > 0:
-                gpu_residency = gpu_vram_gb / size_gb
+            size_gib = size_bytes / (1024**3)
+            if size_gib > 0:
+                gpu_residency = gpu_vram_gib / size_gib
                 if gpu_residency < MIN_GPU_RESIDENCY:
                     logger.info(
-                        "Excluding %s: %.0f%% GPU residency (%.1fGB model, %.0fGB GPU). "
+                        "Excluding %s: %.0f%% GPU residency (%.1f GiB model, %.0f GiB GPU). "
                         "Minimum %.0f%% required.",
                         name,
                         gpu_residency * 100,
-                        size_gb,
-                        gpu_vram_gb,
+                        size_gib,
+                        gpu_vram_gib,
                         MIN_GPU_RESIDENCY * 100,
                     )
                     continue

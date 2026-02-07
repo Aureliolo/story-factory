@@ -610,7 +610,10 @@ def main() -> None:
 
         current_model = model
         # Pre-load model via native API with small context window.
-        warm_model(model)
+        if not warm_model(model):
+            logger.warning("Failed to warm model %s, skipping", model)
+            print(f"  SKIPPED: failed to warm model {model}")
+            continue
         print(f"[{i + 1}/{len(failing_pairs)}] {model} / {schema}")
 
         pair_result = investigate_retry_pair(
