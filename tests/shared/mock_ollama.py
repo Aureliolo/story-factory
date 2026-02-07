@@ -43,14 +43,6 @@ ALL_ROLE_TAGS = [
     "judge",
 ]
 
-# Valid Ollama hosts that the mock accepts (default Ollama endpoints)
-VALID_HOSTS = [
-    None,
-    "http://localhost:11434",
-    "localhost:11434",
-    "http://127.0.0.1:11434",
-]
-
 
 class MockResponse:
     """Mock response object supporting both attribute and dict access.
@@ -167,18 +159,11 @@ class MockOllamaClient:
         """Initialize the mock Ollama client.
 
         Args:
-            host: Host address (validated against VALID_HOSTS).
+            host: Host address.
             timeout: Request timeout in seconds.
-
-        Raises:
-            ConnectionError: If host is not in VALID_HOSTS.
         """
         self.host = host
         self.timeout = timeout
-
-        # Simulate connection failure for invalid hosts
-        if host is not None and host not in VALID_HOSTS:
-            raise ConnectionError(f"Failed to connect to {host}")
 
     def list(self) -> MockListResponse:
         """

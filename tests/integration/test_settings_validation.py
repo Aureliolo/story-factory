@@ -60,7 +60,6 @@ class TestModelSelectionFallback:
                             "writer": "uninstalled-writer-model:7b",
                             "editor": "installed-model:latest",
                             "continuity": "auto",
-                            "validator": "auto",
                             "suggestion": "auto",
                             "judge": "auto",
                         },

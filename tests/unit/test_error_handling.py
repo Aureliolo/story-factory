@@ -1,5 +1,7 @@
 """Tests for error handling utilities."""
 
+from unittest.mock import patch
+
 import pytest
 
 from src.agents.base import BaseAgent, LLMConnectionError
@@ -148,8 +150,9 @@ class TestDecoratorIntegration:
 
     def test_check_ollama_health_returns_error_on_failure(self):
         """check_ollama_health should gracefully handle connection errors."""
-        # Use an invalid URL to trigger connection error
-        is_healthy, message = BaseAgent.check_ollama_health("http://invalid-host:99999")
+        # Patch ollama.Client to raise ConnectionError
+        with patch("ollama.Client", side_effect=ConnectionError("Connection refused")):
+            is_healthy, message = BaseAgent.check_ollama_health("http://invalid-host:99999")
 
         assert is_healthy is False
         assert "Ollama connection failed" in message

@@ -607,6 +607,42 @@ class TestBaseAgentGenerateStructured:
         assert metrics.completion_tokens == 50
         assert metrics.total_tokens == 150
 
+    def test_generate_structured_retries_on_connection_error(self):
+        """Test generate_structured retries on ConnectionError then succeeds."""
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            ConnectionError("Connection refused"),
+            self._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+
+    def test_generate_structured_retries_on_timeout_error(self):
+        """Test generate_structured retries on TimeoutError then succeeds."""
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            TimeoutError("Request timed out"),
+            self._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+
+    def test_generate_structured_exhausts_retries_raises(self):
+        """Test generate_structured raises LLMGenerationError after exhausting all retries."""
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = ConnectionError("Connection refused")
+
+        with pytest.raises(LLMGenerationError, match="Structured generation failed"):
+            agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert agent.client.chat.call_count == 2
+
 
 class TestBaseAgentPromptTemplate:
     """Tests for prompt template methods."""
