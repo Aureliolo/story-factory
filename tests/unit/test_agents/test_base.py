@@ -643,6 +643,13 @@ class TestBaseAgentGenerateStructured:
 
         assert agent.client.chat.call_count == 2
 
+    def test_generate_structured_max_retries_zero_raises(self):
+        """Test generate_structured raises ValueError when max_retries < 1."""
+        agent = create_mock_agent()
+
+        with pytest.raises(ValueError, match="max_retries must be >= 1"):
+            agent.generate_structured("Test prompt", SampleOutputModel, max_retries=0)
+
 
 class TestBaseAgentPromptTemplate:
     """Tests for prompt template methods."""
