@@ -33,16 +33,17 @@ from typing import Any
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import instructor
-from openai import OpenAI
+import httpx
 from pydantic import BaseModel, ValidationError
 
 from scripts._ollama_helpers import (
     CANONICAL_BRIEF,
+    INVESTIGATION_NUM_CTX,
     OLLAMA_BASE,
     get_installed_models,
     get_model_info,
     unload_model,
+    warm_model,
 )
 from src.memory.story_state import (
     Character,
@@ -289,6 +290,60 @@ def get_schema_complexity(model_class: type[BaseModel]) -> dict[str, Any]:
 # =====================================================================
 # Core test function
 # =====================================================================
+def _call_ollama_native(
+    model: str,
+    prompt: str,
+    json_schema: dict[str, Any],
+    temperature: float,
+    timeout: int,
+) -> dict[str, Any]:
+    """Make a single Ollama native API call with structured output via format param.
+
+    Uses /api/chat with the ``format`` parameter set to a JSON schema, which
+    tells Ollama to constrain output to match the schema. This also respects
+    ``num_ctx`` in options — unlike the /v1/ OpenAI-compatible endpoint.
+
+    Args:
+        model: Ollama model name.
+        prompt: User prompt.
+        json_schema: Pydantic model's JSON schema for the ``format`` parameter.
+        temperature: Generation temperature.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        Dict with raw_text, response_time_seconds, error (None on success).
+    """
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "format": json_schema,
+        "stream": False,
+        "options": {
+            "temperature": temperature,
+            "num_ctx": INVESTIGATION_NUM_CTX,
+        },
+    }
+
+    start = time.monotonic()
+    try:
+        resp = httpx.post(
+            f"{OLLAMA_BASE}/api/chat",
+            json=payload,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        elapsed = round(time.monotonic() - start, 2)
+        raw_text = body.get("message", {}).get("content", "")
+        return {"raw_text": raw_text, "response_time_seconds": elapsed, "error": None}
+    except httpx.TimeoutException:
+        elapsed = round(time.monotonic() - start, 2)
+        return {"raw_text": "", "response_time_seconds": elapsed, "error": "timeout"}
+    except (httpx.HTTPError, json.JSONDecodeError) as e:
+        elapsed = round(time.monotonic() - start, 2)
+        return {"raw_text": "", "response_time_seconds": elapsed, "error": str(e)[:500]}
+
+
 def test_schema_compliance(
     model: str,
     schema_name: str,
@@ -298,7 +353,15 @@ def test_schema_compliance(
     max_retries: int,
     verbose: bool,
 ) -> dict[str, Any]:
-    """Test a single model against a single schema.
+    """Test a single model against a single schema via Ollama native API.
+
+    Uses /api/chat with the ``format`` parameter (JSON schema) for structured
+    output, then validates the response with Pydantic. This respects ``num_ctx``
+    unlike the /v1/ OpenAI-compatible endpoint.
+
+    When max_retries > 0, failed attempts simply re-send the same prompt.
+    This tests whether the model can eventually produce valid output through
+    repeated independent attempts (no error feedback between retries).
 
     Args:
         model: Ollama model name.
@@ -306,7 +369,7 @@ def test_schema_compliance(
         schema_info: Schema registry entry with model_class and prompt.
         temperature: Generation temperature.
         timeout: Request timeout in seconds.
-        max_retries: Number of instructor retries (0 for raw, 3 for recovery).
+        max_retries: Number of retries on validation failure (0 for raw, 3 for recovery).
         verbose: Print detailed output.
 
     Returns:
@@ -314,24 +377,9 @@ def test_schema_compliance(
     """
     model_class = schema_info["model_class"]
     prompt = schema_info["prompt"]
+    json_schema = model_class.model_json_schema()
 
-    # Capture raw responses on parse errors
     parse_error_messages: list[str] = []
-
-    def on_parse_error(e: Any) -> None:
-        """Capture exception message when Pydantic validation fails."""
-        error_str = str(e)[:500] if e else ""
-        parse_error_messages.append(error_str)
-        logger.debug("Parse error captured for %s/%s: %s", model, schema_name, error_str[:100])
-
-    # Create a fresh instructor client for this test
-    openai_client = OpenAI(
-        base_url=f"{OLLAMA_BASE}/v1",
-        api_key="ollama",
-        timeout=float(timeout),
-    )
-    client = instructor.from_openai(openai_client, mode=instructor.Mode.JSON)
-    client.on("parse:error", on_parse_error)
 
     result: dict[str, Any] = {
         "schema": schema_name,
@@ -346,57 +394,91 @@ def test_schema_compliance(
     }
 
     start = time.monotonic()
+    attempts = 1 + max_retries  # 1 initial + N retries
 
-    try:
-        parsed = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_model=model_class,
-            max_retries=max_retries,
-            temperature=temperature,
-        )
-        elapsed = round(time.monotonic() - start, 2)
-        result["passed"] = True
-        result["response_time_seconds"] = elapsed
+    for attempt in range(attempts):
+        api_result = _call_ollama_native(model, prompt, json_schema, temperature, timeout)
 
-        # Serialize the parsed result for the report
-        if hasattr(parsed, "model_dump"):
+        if api_result["error"]:
+            # Network / timeout error — don't retry, just record
+            elapsed = round(time.monotonic() - start, 2)
+            result["response_time_seconds"] = elapsed
+            result["error_type"] = "api_error"
+            result["error_detail"] = api_result["error"]
+            if verbose:
+                logger.warning(
+                    "  FAIL %s (retries=%d, attempt=%d) api_error: %s",
+                    schema_name,
+                    max_retries,
+                    attempt + 1,
+                    api_result["error"][:100],
+                )
+            break
+
+        raw_text = api_result["raw_text"]
+
+        # Try to parse and validate
+        try:
+            data = json.loads(raw_text)
+            parsed = model_class.model_validate(data)
+            elapsed = round(time.monotonic() - start, 2)
+            result["passed"] = True
+            result["response_time_seconds"] = elapsed
             result["parsed_data"] = parsed.model_dump(mode="json")
-        else:
-            result["parsed_data"] = str(parsed)
+            if verbose:
+                logger.info(
+                    "  PASS %s (retries=%d, attempt=%d) in %.1fs",
+                    schema_name,
+                    max_retries,
+                    attempt + 1,
+                    elapsed,
+                )
+            break
 
-        if verbose:
-            logger.info("  PASS %s (retries=%d) in %.1fs", schema_name, max_retries, elapsed)
+        except json.JSONDecodeError as e:
+            error_msg = f"JSON parse error: {e}"
+            parse_error_messages.append(error_msg[:500])
+            logger.debug("JSON parse error for %s/%s attempt %d", model, schema_name, attempt + 1)
+            if attempt == attempts - 1:
+                elapsed = round(time.monotonic() - start, 2)
+                result["response_time_seconds"] = elapsed
+                result["error_type"] = "json_parse_error"
+                result["error_detail"] = error_msg[:500]
+                if verbose:
+                    logger.warning(
+                        "  FAIL %s (retries=%d) json_parse: %s",
+                        schema_name,
+                        max_retries,
+                        error_msg[:100],
+                    )
 
-    except ValidationError as e:
-        elapsed = round(time.monotonic() - start, 2)
-        result["response_time_seconds"] = elapsed
-        result["error_type"] = "validation_error"
-        result["error_detail"] = str(e)[:500]
-        result["validation_errors"] = [
-            {"type": err["type"], "loc": list(err["loc"]), "msg": err["msg"]} for err in e.errors()
-        ]
-        if verbose:
-            logger.warning(
-                "  FAIL %s (retries=%d) validation: %s",
+        except ValidationError as e:
+            error_msg = str(e)[:500]
+            parse_error_messages.append(error_msg)
+            logger.debug(
+                "Validation error for %s/%s attempt %d: %s",
+                model,
                 schema_name,
-                max_retries,
-                str(e)[:100],
+                attempt + 1,
+                error_msg[:100],
             )
 
-    except Exception as e:
-        elapsed = round(time.monotonic() - start, 2)
-        result["response_time_seconds"] = elapsed
-        result["error_type"] = type(e).__name__
-        result["error_detail"] = str(e)[:500]
-        if verbose:
-            logger.warning(
-                "  FAIL %s (retries=%d) %s: %s",
-                schema_name,
-                max_retries,
-                type(e).__name__,
-                str(e)[:100],
-            )
+            if attempt == attempts - 1:
+                elapsed = round(time.monotonic() - start, 2)
+                result["response_time_seconds"] = elapsed
+                result["error_type"] = "validation_error"
+                result["error_detail"] = error_msg
+                result["validation_errors"] = [
+                    {"type": err["type"], "loc": list(err["loc"]), "msg": err["msg"]}
+                    for err in e.errors()
+                ]
+                if verbose:
+                    logger.warning(
+                        "  FAIL %s (retries=%d) validation: %s",
+                        schema_name,
+                        max_retries,
+                        error_msg[:100],
+                    )
 
     result["parse_error_messages"] = parse_error_messages
     return result
@@ -546,7 +628,7 @@ def evaluate_model(
         "overall_retry_pass_rate": (
             round(total_pass_retry / total_tests, 3) if total_tests > 0 else 0.0
         ),
-        "instructor_recovery_rate": (
+        "retry_recovery_rate": (
             round(
                 (total_pass_retry - total_pass_raw) / max(total_tests - total_pass_raw, 1),
                 3,
@@ -675,6 +757,11 @@ def main() -> None:
 
     for i, model in enumerate(models):
         print(f"[{i + 1}/{len(models)}] Testing: {model}")
+        # Pre-load model via native API with small context window.
+        if not warm_model(model):
+            logger.warning("Failed to warm model %s, skipping evaluation", model)
+            print("  SKIPPED: failed to warm model (is Ollama running?)")
+            continue
         model_result = evaluate_model(
             model, schemas, args.trials, args.temperature, args.timeout, args.verbose
         )
@@ -684,7 +771,7 @@ def main() -> None:
         print(
             f"  Summary: raw={summary['overall_raw_pass_rate']:.0%} "
             f"retry={summary['overall_retry_pass_rate']:.0%} "
-            f"recovery={summary['instructor_recovery_rate']:.0%} "
+            f"recovery={summary['retry_recovery_rate']:.0%} "
             f"({model_result['total_time_seconds']:.0f}s)"
         )
 
@@ -799,12 +886,12 @@ def main() -> None:
             )
 
     # Recovery effectiveness
-    print("\nINSTRUCTOR RECOVERY EFFECTIVENESS:")
+    print("\nRETRY RECOVERY EFFECTIVENESS:")
     for mr in all_model_results:
         summary = mr["summary"]
         raw = summary["overall_raw_pass_rate"]
         retry = summary["overall_retry_pass_rate"]
-        recovery = summary["instructor_recovery_rate"]
+        recovery = summary["retry_recovery_rate"]
         if recovery > 0:
             print(f"  {mr['model']}: {raw:.0%} -> {retry:.0%} (recovery={recovery:.0%})")
         else:

@@ -121,7 +121,10 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "tags": ["architect", "continuity", "interviewer", "validator"],
     },
     # === HIGH-END ===
-    # 70B+ models: Large enough to excel at everything
+    # 70B+ models: Large enough to excel at everything.
+    # WARNING: 80% GPU residency rule applies. On a 24GB GPU, max model ~30GB.
+    # These models require 48GB+ VRAM to avoid heavy CPU offloading (5-10x slower).
+    # See MIN_GPU_RESIDENCY in src/services/model_mode_service/_vram.py.
     "huihui_ai/llama3.3-abliterated:70b": {
         "name": "Llama 3.3 70B Abliterated",
         "size_gb": 40,
@@ -143,11 +146,11 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
     "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M": {
         "name": "Llama 3.3 70B Q4_K_M",
         "size_gb": 43,
-        "vram_required": 24,
+        "vram_required": 48,
         "quality": 9,
         "speed": 4,
         "uncensored": True,
-        "description": "Quantized 70B, fits 24GB VRAM",
+        "description": "Quantized 70B, needs 48GB+ VRAM (43GB weights alone)",
         "tags": [
             "writer",
             "editor",

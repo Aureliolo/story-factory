@@ -300,6 +300,7 @@ def select_model_with_size_preference(
     Raises:
         ValueError: If no installed model is tagged for the given agent_role.
     """
+    from src.services.model_mode_service._vram import MIN_GPU_RESIDENCY
     from src.settings import RECOMMENDED_MODELS, get_installed_models_with_sizes, get_model_info
 
     installed_models = get_installed_models_with_sizes()
@@ -312,9 +313,34 @@ def select_model_with_size_preference(
 
     # Find models tagged for this role
     candidates: list[dict] = []
+    excluded_by_residency: list[str] = []
+
+    # available_vram is in GiB (from nvidia-smi MiB // 1024).
+    # size_gb from ollama list is in decimal GB (1 GB = 1000 MB).
+    # Convert to same units: 1 GiB = 1024^3 / 1000^3 ≈ 1.0737 GB.
+    available_vram_gb = available_vram * (1024**3 / 1000**3)
+
     for model_id, size_gb in installed_models.items():
         tags = svc.settings.get_model_tags(model_id)
         if agent_role in tags:
+            # 80% GPU residency rule: skip models that can't be at least 80% GPU-resident.
+            # Heavy GPU/CPU splitting causes 5-10x inference slowdown.
+            if size_gb > 0 and available_vram_gb > 0:
+                gpu_residency = available_vram_gb / size_gb
+                if gpu_residency < MIN_GPU_RESIDENCY:
+                    excluded_by_residency.append(model_id)
+                    logger.info(
+                        "Excluding %s for %s: %.0f%% GPU residency "
+                        "(%.1fGB model, %.1fGB GPU). Minimum %.0f%% required.",
+                        model_id,
+                        agent_role,
+                        gpu_residency * 100,
+                        size_gb,
+                        available_vram_gb,
+                        MIN_GPU_RESIDENCY * 100,
+                    )
+                    continue
+
             # Get quality from RECOMMENDED_MODELS or estimate from model size
             model_info = get_model_info(model_id)
             quality: float = model_info["quality"]
@@ -334,6 +360,13 @@ def select_model_with_size_preference(
             )
 
     if not candidates:
+        if excluded_by_residency:
+            excluded_list = ", ".join(excluded_by_residency)
+            raise ValueError(
+                f"All models tagged for role '{agent_role}' were excluded by GPU residency "
+                f"({available_vram_gb:.0f} GB GPU, min {MIN_GPU_RESIDENCY * 100:.0f}%). "
+                f"Excluded: [{excluded_list}]."
+            )
         installed_list = ", ".join(installed_models.keys())
         raise ValueError(
             f"No model tagged for role '{agent_role}'. "

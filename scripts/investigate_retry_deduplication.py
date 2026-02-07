@@ -40,8 +40,10 @@ from pydantic import BaseModel, ValidationError
 
 from scripts._ollama_helpers import (
     CANONICAL_BRIEF,
+    INVESTIGATION_NUM_CTX,
     OLLAMA_BASE,
     unload_model,
+    warm_model,
 )
 from src.memory.story_state import (
     Character,
@@ -218,7 +220,7 @@ def capture_raw_response(
         "messages": [{"role": "user", "content": prompt}],
         "format": "json",
         "stream": False,
-        "options": {"temperature": temperature},
+        "options": {"temperature": temperature, "num_ctx": INVESTIGATION_NUM_CTX},
     }
 
     start = time.monotonic()
@@ -607,6 +609,11 @@ def main() -> None:
             unload_model(current_model)
 
         current_model = model
+        # Pre-load model via native API with small context window.
+        if not warm_model(model):
+            logger.warning("Failed to warm model %s, skipping", model)
+            print(f"  SKIPPED: failed to warm model {model}")
+            continue
         print(f"[{i + 1}/{len(failing_pairs)}] {model} / {schema}")
 
         pair_result = investigate_retry_pair(
