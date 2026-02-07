@@ -42,6 +42,7 @@ from scripts._ollama_helpers import (
     CANONICAL_BRIEF,
     OLLAMA_BASE,
     unload_model,
+    warm_model,
 )
 from src.memory.story_state import (
     Character,
@@ -218,7 +219,7 @@ def capture_raw_response(
         "messages": [{"role": "user", "content": prompt}],
         "format": "json",
         "stream": False,
-        "options": {"temperature": temperature},
+        "options": {"temperature": temperature, "num_ctx": 4096},
     }
 
     start = time.monotonic()
@@ -607,6 +608,8 @@ def main() -> None:
             unload_model(current_model)
 
         current_model = model
+        # Pre-load model via native API with small context window.
+        warm_model(model)
         print(f"[{i + 1}/{len(failing_pairs)}] {model} / {schema}")
 
         pair_result = investigate_retry_pair(

@@ -252,6 +252,68 @@ class TestModelModeServiceModelSelection:
         assert result == "huihui_ai/dolphin3-abliterated:8b"
 
     @patch("src.settings.get_installed_models_with_sizes")
+    def test_excludes_model_below_80_percent_gpu_residency(
+        self, mock_get_models: MagicMock, service: ModelModeService
+    ):
+        """Models that can't achieve 80% GPU residency should be excluded."""
+        mock_get_models.return_value = {
+            "small-model:8b": 5.0,  # 24/5 = 480% — fits easily
+            "huge-model:70b": 43.0,  # 24/43 = 56% — below 80% threshold
+        }
+        service.settings.custom_model_tags = {
+            "small-model:8b": ["writer"],
+            "huge-model:70b": ["writer"],
+        }
+
+        result = service._select_model_with_size_preference(
+            "writer",
+            SizePreference.LARGEST,
+            24,  # 24GB GPU
+        )
+
+        # 70B model excluded by 80% rule, only small model remains
+        assert result == "small-model:8b"
+
+    @patch("src.settings.get_installed_models_with_sizes")
+    def test_allows_model_at_exactly_80_percent_gpu_residency(
+        self, mock_get_models: MagicMock, service: ModelModeService
+    ):
+        """Models at exactly 80% GPU residency should be allowed."""
+        mock_get_models.return_value = {
+            "borderline-model:30b": 30.0,  # 24/30 = 80% — exactly at threshold
+        }
+        service.settings.custom_model_tags = {
+            "borderline-model:30b": ["writer"],
+        }
+
+        result = service._select_model_with_size_preference(
+            "writer",
+            SizePreference.LARGEST,
+            24,  # 24GB GPU
+        )
+
+        assert result == "borderline-model:30b"
+
+    @patch("src.settings.get_installed_models_with_sizes")
+    def test_gpu_residency_excludes_all_raises_no_tagged(
+        self, mock_get_models: MagicMock, service: ModelModeService
+    ):
+        """When all tagged models fail GPU residency, should raise ValueError."""
+        mock_get_models.return_value = {
+            "huge-model:70b": 43.0,  # 8/43 = 19% — way below threshold
+        }
+        service.settings.custom_model_tags = {
+            "huge-model:70b": ["writer"],
+        }
+
+        with pytest.raises(ValueError, match="No model tagged for role"):
+            service._select_model_with_size_preference(
+                "writer",
+                SizePreference.LARGEST,
+                8,  # 8GB GPU
+            )
+
+    @patch("src.settings.get_installed_models_with_sizes")
     def test_raises_when_no_tagged_models(
         self, mock_get_models: MagicMock, service: ModelModeService
     ):

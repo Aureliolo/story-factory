@@ -162,6 +162,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - Recommended model: `huihui_ai/dolphin3-abliterated:8b`
 - Temperature varies by agent role (writer: 0.9, editor: 0.6, continuity: 0.3)
 - Context size: 32768 tokens default
+- **80% GPU residency rule**: Never run a model unless at least 80% of it fits in GPU VRAM. Models split heavily between GPU and system RAM run drastically slower (5-10x). For a 24GB GPU, max model size is ~30GB. This is enforced in `select_model_with_size_preference()` and should be respected by all investigation scripts. The constant `MIN_GPU_RESIDENCY` lives in `src/services/model_mode_service/_vram.py`.
 
 ## Data Storage
 

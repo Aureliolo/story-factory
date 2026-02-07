@@ -1,4 +1,9 @@
-"""VRAM management functions for ModelModeService."""
+"""VRAM management functions for ModelModeService.
+
+80% GPU residency rule: never run a model unless at least 80% of it fits in
+GPU VRAM. Models split heavily between GPU and system RAM run drastically
+slower (5-10x). For a 24 GB GPU the practical max model size is ~30 GB.
+"""
 
 import logging
 from typing import TYPE_CHECKING
@@ -10,6 +15,11 @@ if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
 
 logger = logging.getLogger(__name__)
+
+# Minimum fraction of a model that must fit in GPU VRAM.
+# Models below this threshold are excluded from auto-selection because
+# heavy GPU/CPU splitting causes 5-10x inference slowdown.
+MIN_GPU_RESIDENCY = 0.8
 
 
 def prepare_model(svc: ModelModeService, model_id: str) -> None:
