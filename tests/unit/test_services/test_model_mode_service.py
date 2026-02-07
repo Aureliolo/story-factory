@@ -1386,8 +1386,8 @@ class TestUnloadAllExcept:
         # Should have tried both models
         assert mock_client.generate.call_count == 2
 
-        # Tracking should still be updated
-        assert service._loaded_models == {"keep-model:7b"}
+        # Failed unloads stay tracked (models still in VRAM)
+        assert service._loaded_models == {"model-a:8b", "model-b:12b", "keep-model:7b"}
 
     def test_unload_handles_connection_error(
         self, service: ModelModeService, mock_client: MagicMock, caplog
@@ -1406,5 +1406,25 @@ class TestUnloadAllExcept:
         # Should have tried the model
         assert mock_client.generate.call_count == 1
 
-        # Tracking should still be updated
-        assert service._loaded_models == {"keep-model:7b"}
+        # Failed unload stays tracked (model still in VRAM)
+        assert service._loaded_models == {"model-a:8b", "keep-model:7b"}
+
+    def test_unload_handles_timeout_error(
+        self, service: ModelModeService, mock_client: MagicMock, caplog
+    ) -> None:
+        """Test that TimeoutError during unload is logged but doesn't stop processing."""
+        import logging
+
+        from src.services.model_mode_service._vram import unload_all_except
+
+        service._loaded_models = {"model-a:8b", "keep-model:7b"}
+        mock_client.generate.side_effect = TimeoutError("Request timed out")
+
+        with caplog.at_level(logging.WARNING):
+            unload_all_except(service, "keep-model:7b")
+
+        # Should have tried the model
+        assert mock_client.generate.call_count == 1
+
+        # Failed unload stays tracked (model still in VRAM)
+        assert service._loaded_models == {"model-a:8b", "keep-model:7b"}

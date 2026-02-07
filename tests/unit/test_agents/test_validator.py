@@ -121,6 +121,15 @@ class TestValidateOrRaise:
 
         assert result == response
 
+    def test_creates_default_validator_when_none(self, settings, monkeypatch):
+        """Test that validate_or_raise creates a default ValidatorAgent when none provided."""
+        monkeypatch.setattr("src.agents.validator.Settings.load", lambda: settings)
+
+        response = "Valid response text."
+        result = validate_or_raise(response, "English")
+
+        assert result == response
+
 
 class TestValidatorLanguageChecks:
     """Tests for language-specific validation."""
