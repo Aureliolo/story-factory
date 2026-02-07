@@ -8,6 +8,8 @@ slower (5-10x). For a 24 GB GPU the practical max model size is ~30 GB.
 import logging
 from typing import TYPE_CHECKING
 
+import ollama
+
 from src.memory.mode_models import VramStrategy
 from src.utils.validation import validate_not_empty
 
@@ -83,25 +85,30 @@ def prepare_model(svc: ModelModeService, model_id: str) -> None:
 
 
 def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
-    """Unload all models except the specified one.
+    """Unload all tracked models except the specified one via Ollama API.
 
-    Note: Ollama manages model lifecycle automatically via LRU caching.
-    This method only updates our tracking. Actual VRAM freeing depends
-    on Ollama's internal memory management, not explicit unload calls.
-
-    For truly sequential model usage, consider using Ollama's --noprune
-    flag with manual model loading/unloading via the API if available.
+    Calls ``ollama.Client.generate(model=..., keep_alive=0)`` for each model
+    to be removed, which tells Ollama to immediately evict the model from VRAM.
+    Errors are logged but do not interrupt the process (best-effort unload).
 
     Args:
         svc: The ModelModeService instance.
         keep_model: The model ID to keep loaded.
     """
-    # For now, just clear our tracking
-    # Ollama will unload based on its own LRU cache
     models_to_remove = svc._loaded_models - {keep_model}
-    if models_to_remove:
-        logger.debug(
-            f"Marking models for potential unload by Ollama: {models_to_remove} "
-            f"(actual unloading depends on Ollama's memory management)"
-        )
-        svc._loaded_models = {keep_model}
+    if not models_to_remove:
+        logger.debug("No models to unload (keeping %s)", keep_model)
+        return
+
+    logger.info("Unloading %d model(s) from VRAM: %s", len(models_to_remove), models_to_remove)
+
+    for model_id in models_to_remove:
+        try:
+            svc._ollama_client.generate(model=model_id, keep_alive=0)
+            logger.debug("Unloaded model %s from VRAM (keep_alive=0)", model_id)
+        except ollama.ResponseError as e:
+            logger.warning("Failed to unload model %s: %s", model_id, e)
+        except ConnectionError as e:
+            logger.warning("Connection error unloading model %s: %s", model_id, e)
+
+    svc._loaded_models = {keep_model}

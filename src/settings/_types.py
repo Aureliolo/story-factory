@@ -68,10 +68,6 @@ AGENT_ROLES: dict[str, AgentRoleInfo] = {
         "name": "Continuity Checker",
         "description": "Checks for plot holes",
     },
-    "validator": {
-        "name": "Validator",
-        "description": "Validates AI responses",
-    },
     "judge": {
         "name": "Judge",
         "description": "Evaluates entity quality for refinement",

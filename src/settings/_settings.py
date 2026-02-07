@@ -50,7 +50,6 @@ class Settings:
             "writer": "auto",
             "editor": "auto",
             "continuity": "auto",
-            "validator": "auto",  # Small, fast model for validation
             "suggestion": "auto",  # Creative model for writing suggestions
             "judge": "auto",  # Capable model for quality judging (needs reasoning)
         }
@@ -69,7 +68,6 @@ class Settings:
             "writer": 0.9,
             "editor": 0.6,
             "continuity": 0.3,
-            "validator": 0.1,  # Very low for consistent validation
             "suggestion": 0.8,  # Creative for writing prompts
             "judge": 0.1,  # Very low for consistent quality judgments
             "embedding": 0.0,  # Not used for generation — embeddings are deterministic
@@ -280,7 +278,6 @@ class Settings:
     # Validation thresholds
     validator_cjk_char_threshold: int = 5  # Max CJK chars allowed in English text
     validator_printable_ratio: float = 0.9  # Min ratio of printable characters
-    validator_ai_check_min_length: int = 200  # Min response length for AI validation
 
     # Outline generation
     outline_variations_min: int = 3  # Min outline variations to generate

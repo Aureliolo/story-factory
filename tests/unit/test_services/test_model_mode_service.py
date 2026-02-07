@@ -1283,3 +1283,128 @@ class TestSelectModelQualityWarning:
         assert result == "good-judge:12b"
         warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
         assert not any("below minimum quality" in m for m in warning_messages)
+
+
+class TestUnloadAllExcept:
+    """Tests for unload_all_except VRAM management (#286)."""
+
+    @pytest.fixture
+    def temp_db(self) -> Path:
+        """Create a temporary database file."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            return Path(f.name)
+
+    @pytest.fixture
+    def mock_settings(self) -> MagicMock:
+        """Create mock settings for VRAM tests."""
+        mock = MagicMock(spec=Settings)
+        mock.ollama_url = "http://localhost:11434"
+        mock.ollama_generate_timeout = 60.0
+        mock.vram_strategy = "sequential"
+        return mock
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        """Create a mock Ollama client for VRAM tests."""
+        return MagicMock()
+
+    @pytest.fixture
+    def service(
+        self, mock_settings: MagicMock, temp_db: Path, mock_client: MagicMock
+    ) -> ModelModeService:
+        """Create a ModelModeService with mocked dependencies."""
+        svc = ModelModeService(mock_settings, db_path=temp_db)
+        # Replace the real Ollama client with a mock
+        svc._ollama_client = mock_client
+        return svc
+
+    def test_unload_calls_ollama_api(
+        self, service: ModelModeService, mock_client: MagicMock
+    ) -> None:
+        """Test that unload_all_except calls generate(keep_alive=0) for each model."""
+        from src.services.model_mode_service._vram import unload_all_except
+
+        service._loaded_models = {"model-a:8b", "model-b:12b", "keep-model:7b"}
+
+        unload_all_except(service, "keep-model:7b")
+
+        # Should have called generate for the 2 models to remove
+        assert mock_client.generate.call_count == 2
+
+        # Verify keep_alive=0 was passed
+        for call in mock_client.generate.call_args_list:
+            assert call.kwargs["keep_alive"] == 0
+
+        # Verify the models that were unloaded
+        unloaded_models = {call.kwargs["model"] for call in mock_client.generate.call_args_list}
+        assert unloaded_models == {"model-a:8b", "model-b:12b"}
+
+        # Tracking should only have the kept model
+        assert service._loaded_models == {"keep-model:7b"}
+
+    def test_unload_no_models_to_remove(
+        self, service: ModelModeService, mock_client: MagicMock
+    ) -> None:
+        """Test that unload_all_except does nothing when only the keep model is loaded."""
+        from src.services.model_mode_service._vram import unload_all_except
+
+        service._loaded_models = {"keep-model:7b"}
+
+        unload_all_except(service, "keep-model:7b")
+
+        mock_client.generate.assert_not_called()
+        assert service._loaded_models == {"keep-model:7b"}
+
+    def test_unload_empty_loaded_models(
+        self, service: ModelModeService, mock_client: MagicMock
+    ) -> None:
+        """Test that unload_all_except handles empty loaded models set."""
+        from src.services.model_mode_service._vram import unload_all_except
+
+        service._loaded_models = set()
+
+        unload_all_except(service, "keep-model:7b")
+
+        mock_client.generate.assert_not_called()
+
+    def test_unload_handles_response_error(
+        self, service: ModelModeService, mock_client: MagicMock, caplog
+    ) -> None:
+        """Test that ResponseError during unload is logged but doesn't stop processing."""
+        import logging
+
+        import ollama
+
+        from src.services.model_mode_service._vram import unload_all_except
+
+        service._loaded_models = {"model-a:8b", "model-b:12b", "keep-model:7b"}
+        mock_client.generate.side_effect = ollama.ResponseError("model not found")
+
+        with caplog.at_level(logging.WARNING):
+            unload_all_except(service, "keep-model:7b")
+
+        # Should have tried both models
+        assert mock_client.generate.call_count == 2
+
+        # Tracking should still be updated
+        assert service._loaded_models == {"keep-model:7b"}
+
+    def test_unload_handles_connection_error(
+        self, service: ModelModeService, mock_client: MagicMock, caplog
+    ) -> None:
+        """Test that ConnectionError during unload is logged but doesn't stop processing."""
+        import logging
+
+        from src.services.model_mode_service._vram import unload_all_except
+
+        service._loaded_models = {"model-a:8b", "keep-model:7b"}
+        mock_client.generate.side_effect = ConnectionError("Ollama not running")
+
+        with caplog.at_level(logging.WARNING):
+            unload_all_except(service, "keep-model:7b")
+
+        # Should have tried the model
+        assert mock_client.generate.call_count == 1
+
+        # Tracking should still be updated
+        assert service._loaded_models == {"keep-model:7b"}

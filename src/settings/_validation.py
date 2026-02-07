@@ -588,11 +588,6 @@ def _validate_validation_thresholds(settings: Settings) -> None:
             f"validator_printable_ratio must be between 0.0 and 1.0, "
             f"got {settings.validator_printable_ratio}"
         )
-    if not 0 <= settings.validator_ai_check_min_length <= 10000:
-        raise ValueError(
-            f"validator_ai_check_min_length must be between 0 and 10000, "
-            f"got {settings.validator_ai_check_min_length}"
-        )
 
 
 def _validate_outline_generation(settings: Settings) -> None:

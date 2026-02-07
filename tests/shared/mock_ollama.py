@@ -38,7 +38,6 @@ ALL_ROLE_TAGS = [
     "writer",
     "editor",
     "continuity",
-    "validator",
     "suggestion",
     "quality",
     "judge",

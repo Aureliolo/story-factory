@@ -94,7 +94,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "uncensored": False,
         "description": "Strong judge for its size, good structured output",
         # Judge: MAE=2.04, rank=0.94 parametric (Issue #228).
-        "tags": ["validator", "judge"],
+        "tags": ["judge"],
     },
     # === MICROSOFT PHI ===
     "phi4:14b": {
@@ -118,7 +118,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "uncensored": True,
         "description": "Good reasoning at smaller size",
         # No judge tag: empirically copies prompt example scores verbatim (Issue #228).
-        "tags": ["architect", "continuity", "interviewer", "validator"],
+        "tags": ["architect", "continuity", "interviewer"],
     },
     # === HIGH-END ===
     # 70B+ models: Large enough to excel at everything.
@@ -181,38 +181,6 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         ],
     },
     # === SMALL / FAST ===
-    # Quality 3-5: Validator only, maybe basic interviewer
-    "qwen3:0.6b": {
-        "name": "Qwen3 0.6B",
-        "size_gb": 0.5,
-        "vram_required": 2,
-        "quality": 3,
-        "speed": 10,
-        "uncensored": False,
-        "description": "Tiny, ultra-fast - for validator only",
-        "tags": ["validator"],
-    },
-    "smollm2:1.7b": {
-        "name": "SmolLM2 1.7B",
-        "size_gb": 1.2,
-        "vram_required": 2,
-        "quality": 4,
-        "speed": 10,
-        "uncensored": True,
-        "description": "Small but capable - good for validation",
-        "tags": ["validator"],
-    },
-    "qwen3:4b": {
-        "name": "Qwen3 4B",
-        "size_gb": 2.5,
-        "vram_required": 4,
-        "quality": 5,
-        "speed": 9,
-        "uncensored": True,
-        "description": "Fast inference, good for quick tasks",
-        # No interviewer tag: Quality 5 too low for structured interview output.
-        "tags": ["validator"],
-    },
     # Quality 6: Strong structured output for its size, best small-model judge (Issue #228).
     "phi4-mini": {
         "name": "Phi-4 Mini 3.8B",
@@ -222,7 +190,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": False,
         "description": "Microsoft reasoning model, best small-model judge — produces independent scores",
-        "tags": ["validator", "judge"],
+        "tags": ["judge"],
     },
     # === EMBEDDING MODELS ===
     # Used for semantic duplicate detection during world generation.

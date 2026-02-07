@@ -11,6 +11,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import ollama
+
 from src.memory.mode_database import ModeDatabase
 from src.memory.mode_models import (
     GenerationMode,
@@ -63,6 +65,12 @@ class ModelModeService:
 
         # Track chapters for periodic triggers
         self._chapters_since_analysis = 0
+
+        # Ollama client for VRAM management (keep_alive=0 unloads)
+        self._ollama_client = ollama.Client(
+            host=settings.ollama_url,
+            timeout=settings.ollama_generate_timeout,
+        )
 
         # Loaded model tracking (for VRAM management)
         self._loaded_models: set[str] = set()

@@ -1,4 +1,9 @@
-"""Response Validator Agent - Quick sanity checks on AI responses."""
+"""Response Validator - Rule-based sanity checks on AI responses.
+
+Investigation #267 proved AI validation (smollm2) adds zero value over regex
+checks: both achieve ~70% accuracy with ~40% false positive rate. This module
+now uses only fast rule-based checks (CJK detection, printable ratio).
+"""
 
 import logging
 import re
@@ -7,45 +12,28 @@ from src.settings import Settings
 from src.utils.exceptions import ResponseValidationError
 from src.utils.validation import validate_not_empty
 
-from .base import BaseAgent
-
 logger = logging.getLogger(__name__)
 
 # Re-export exception for backward compatibility
 __all__ = ["ResponseValidationError", "ValidatorAgent", "validate_or_raise"]
 
 
-VALIDATOR_SYSTEM_PROMPT = """You are a response validator. Your ONLY job is to answer TRUE or FALSE.
+class ValidatorAgent:
+    """Rule-based validator for AI responses.
 
-You check if AI-generated content:
-1. Is written in the CORRECT language (most important!)
-2. Is relevant to the task (not random gibberish)
-3. Does not contain obvious errors like wrong character encoding
+    Performs fast sanity checks without requiring an LLM:
+    - CJK character detection for English responses
+    - Non-printable character ratio check
+    """
 
-Be strict about language - if the expected language is English but you see Chinese/Japanese/Korean characters, that's FALSE.
-Be lenient about content quality - you're just checking basic sanity, not quality.
-
-ALWAYS respond with ONLY one word: TRUE or FALSE. Nothing else."""
-
-
-class ValidatorAgent(BaseAgent):
-    """Agent that validates AI responses for basic correctness."""
-
-    def __init__(self, model: str | None = None, settings: Settings | None = None) -> None:
-        """Initialize the Validator agent.
+    def __init__(self, settings: Settings | None = None) -> None:
+        """Initialize the Validator.
 
         Args:
-            model: Override model to use. If None, uses settings-based model for validator.
             settings: Application settings. If None, loads default settings.
         """
-        super().__init__(
-            name="Validator",
-            role="Response Validator",
-            system_prompt=VALIDATOR_SYSTEM_PROMPT,
-            agent_role="validator",
-            model=model,
-            settings=settings,
-        )
+        self.settings = settings or Settings.load()
+        logger.debug("ValidatorAgent initialized (rule-based only)")
 
     def validate_response(
         self,
@@ -53,7 +41,7 @@ class ValidatorAgent(BaseAgent):
         expected_language: str = "English",
         task_description: str = "",
     ) -> bool:
-        """Validate an AI response.
+        """Validate an AI response using rule-based checks.
 
         Args:
             response: The AI-generated response to validate
@@ -87,67 +75,13 @@ class ValidatorAgent(BaseAgent):
                 f"Response contains too many non-printable characters ({1 - printable_ratio:.0%})"
             )
 
-        # Use AI for more nuanced validation (only for longer responses)
-        if len(response) > self.settings.validator_ai_check_min_length:
-            try:
-                result = self._ai_validate(response, expected_language, task_description)
-                if not result:
-                    raise ResponseValidationError(
-                        f"AI validator rejected response. Expected language: {expected_language}"
-                    )
-            except ResponseValidationError:
-                # Re-raise validation errors
-                raise
-            except Exception as e:
-                # If validator fails, log but don't block (fail open)
-                logger.warning(f"Validator check failed: {e}")
-
+        logger.debug(
+            "Response validated (lang=%s, len=%d, printable=%.0f%%)",
+            expected_language,
+            len(response),
+            printable_ratio * 100,
+        )
         return True
-
-    def _ai_validate(
-        self,
-        response: str,
-        expected_language: str,
-        task_description: str,
-    ) -> bool:
-        """Use AI to validate response."""
-        # Truncate response for validation (we don't need to check everything)
-        sample = response[:1000] + ("..." if len(response) > 1000 else "")
-
-        prompt = f"""Check this AI response:
-
-EXPECTED LANGUAGE: {expected_language}
-TASK: {task_description or "Generate story content"}
-
-RESPONSE SAMPLE:
----
-{sample}
----
-
-Is this response:
-1. Written in {expected_language}? (CRITICAL)
-2. Relevant to the task?
-3. Not gibberish or corrupted text?
-
-Answer only TRUE or FALSE."""
-
-        try:
-            # Allow very short responses (TRUE/FALSE) for validator
-            result = self.generate(prompt, temperature=self.temperature, min_response_length=1)
-            result_clean = result.strip().upper()
-
-            # Parse response
-            if "TRUE" in result_clean:
-                return True
-            elif "FALSE" in result_clean:
-                return False
-            else:
-                # Ambiguous response, assume OK
-                logger.debug(f"Validator gave ambiguous response: {result}")
-                return True
-        except Exception as e:
-            logger.warning(f"Validator AI call failed: {e}")
-            return True  # Fail open
 
 
 def validate_or_raise(
