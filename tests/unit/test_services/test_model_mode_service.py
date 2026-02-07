@@ -1,6 +1,5 @@
 """Unit tests for ModelModeService."""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -24,10 +23,9 @@ class TestModelModeService:
     """Tests for ModelModeService."""
 
     @pytest.fixture
-    def temp_db(self) -> Path:
+    def temp_db(self, tmp_path: Path) -> Path:
         """Create a temporary database file."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            return Path(f.name)
+        return tmp_path / "test.db"
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
@@ -470,10 +468,9 @@ class TestModelModeServiceVramStrategy:
     """Tests for VRAM strategy validation."""
 
     @pytest.fixture
-    def temp_db(self) -> Path:
+    def temp_db(self, tmp_path: Path) -> Path:
         """Create a temporary database file."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            return Path(f.name)
+        return tmp_path / "test.db"
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
@@ -523,10 +520,9 @@ class TestModelModeServiceAdditional:
     """Additional tests for full coverage."""
 
     @pytest.fixture
-    def temp_db(self) -> Path:
+    def temp_db(self, tmp_path: Path) -> Path:
         """Create a temporary database file."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            return Path(f.name)
+        return tmp_path / "test.db"
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:
@@ -1289,10 +1285,9 @@ class TestUnloadAllExcept:
     """Tests for unload_all_except VRAM management (#286)."""
 
     @pytest.fixture
-    def temp_db(self) -> Path:
+    def temp_db(self, tmp_path: Path) -> Path:
         """Create a temporary database file."""
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            return Path(f.name)
+        return tmp_path / "test.db"
 
     @pytest.fixture
     def mock_settings(self) -> MagicMock:

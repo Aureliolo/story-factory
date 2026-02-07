@@ -80,7 +80,8 @@ def generate_structured[T: BaseModel](
         Instance of response_model with validated data.
 
     Raises:
-        Exception: If generation fails after all retries.
+        LLMError: If generation fails after all retries or on non-retryable Ollama errors.
+        ValueError: If max_retries < 1.
     """
     client = get_ollama_client(settings, model_id=model)
 
@@ -133,10 +134,10 @@ def generate_structured[T: BaseModel](
             )
             return result
 
-        except ValidationError as e:
+        except (ValidationError, KeyError, TypeError) as e:
             last_error = e
             logger.warning(
-                "Structured output validation failed (attempt %d/%d): %s",
+                "Structured output validation/parsing failed (attempt %d/%d): %s",
                 attempt + 1,
                 max_retries,
                 e,
@@ -153,6 +154,9 @@ def generate_structured[T: BaseModel](
                 e,
             )
             if attempt < max_retries - 1:
+                backoff = min(2**attempt, 10)
+                logger.debug("Backing off %.1fs before retry", backoff)
+                time.sleep(backoff)
                 continue
 
         except ollama.ResponseError as e:

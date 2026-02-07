@@ -108,7 +108,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         # Judge: MAE=2.00, rank=0.99 parametric (Issue #228).
         "tags": ["architect", "continuity", "judge"],
     },
-    # Quality 7 reasoning: architect, continuity, interviewer, validator. No suggestion.
+    # Quality 7 reasoning: architect, continuity, interviewer. No suggestion.
     "huihui_ai/qwen3-abliterated:8b": {
         "name": "Qwen3 8B Abliterated",
         "size_gb": 5,

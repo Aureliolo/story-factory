@@ -151,7 +151,7 @@ class MockOllamaClient:
     This mock:
     - Prevents real Ollama connections during tests
     - Supports both dict and object access patterns used in the codebase
-    - Raises ConnectionError for invalid hosts (to test error handling)
+    - Accepts any host (test connection failures by patching ollama.Client directly)
     - Returns consistent mock responses for all API methods
     """
 

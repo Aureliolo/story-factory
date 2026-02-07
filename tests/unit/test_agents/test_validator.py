@@ -113,14 +113,6 @@ class TestValidateOrRaise:
 
         assert result == response
 
-    def test_creates_validator_when_not_provided(self, settings):
-        """Test creates new validator when not provided."""
-        response = "Valid response."
-
-        result = validate_or_raise(response, "English", validator=ValidatorAgent(settings=settings))
-
-        assert result == response
-
     def test_creates_default_validator_when_none(self, settings, monkeypatch):
         """Test that validate_or_raise creates a default ValidatorAgent when none provided."""
         monkeypatch.setattr("src.agents.validator.Settings.load", lambda: settings)

@@ -14,6 +14,9 @@ from src.utils.validation import validate_not_empty
 
 logger = logging.getLogger(__name__)
 
+# CJK character detection pattern (Chinese, Japanese, Korean)
+_CJK_PATTERN = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]")
+
 # Re-export exception for backward compatibility
 __all__ = ["ResponseValidationError", "ValidatorAgent", "validate_or_raise"]
 
@@ -60,8 +63,7 @@ class ValidatorAgent:
         # Check for obvious wrong-language characters
         if expected_language == "English":
             # Check for CJK characters (Chinese, Japanese, Korean)
-            cjk_pattern = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]")
-            cjk_matches = cjk_pattern.findall(response)
+            cjk_matches = _CJK_PATTERN.findall(response)
             if len(cjk_matches) > self.settings.validator_cjk_char_threshold:
                 raise ResponseValidationError(
                     f"Response contains {len(cjk_matches)} CJK characters but expected {expected_language}. "

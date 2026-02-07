@@ -174,8 +174,12 @@ class BaseAgent:
         Raises:
             CircuitOpenError: If the circuit breaker is open.
             LLMGenerationError: If generation fails after all retries.
+            ValueError: If max_retries < 1.
         """
         validate_not_empty(prompt, "prompt")
+
+        if max_retries < 1:
+            raise ValueError(f"max_retries must be >= 1, got {max_retries}")
 
         # Check circuit breaker before proceeding
         circuit_breaker = get_circuit_breaker(
@@ -273,10 +277,10 @@ class BaseAgent:
                         circuit_breaker.record_success()
                         return result
 
-                    except ValidationError as e:
+                    except (ValidationError, KeyError, TypeError) as e:
                         last_error = e
                         logger.warning(
-                            "%s: Structured output validation failed (attempt %d/%d): %s",
+                            "%s: Structured output validation/parsing failed (attempt %d/%d): %s",
                             self.name,
                             attempt + 1,
                             max_retries,
