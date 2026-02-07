@@ -176,7 +176,7 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 #### Qwen3-30B-A3B Abliterated (NEW - Recommended)
 - **Architecture:** MoE - 30B total, only 3B active per token
 - **Strengths:** Frontier reasoning at consumer VRAM, hybrid thinking mode
-- **Feature:** `/think` and `/no_think` toggles for reasoning mode
+- **Feature:** Hybrid thinking mode (`<think>` tags stripped automatically)
 - **VRAM:** ~18GB at Q4_K_M
 - **Context:** 128K tokens
 - **Ollama:** `huihui_ai/qwen3-abliterated:30b`

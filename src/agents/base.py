@@ -204,10 +204,7 @@ class BaseAgent:
 
         # Build messages
         use_model = self.model
-        if "qwen" in use_model.lower():
-            system_content = f"/no_think\n{self.system_prompt}"
-        else:
-            system_content = self.system_prompt
+        system_content = self.system_prompt
 
         messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
 
@@ -426,13 +423,8 @@ class BaseAgent:
                 time_until_retry=time_until_retry,
             )
 
-        # Add /no_think prefix for Qwen models to disable thinking mode
-        # This prevents models from outputting <think>...</think> tags instead of actual content
         use_model = model or self.model
-        if "qwen" in use_model.lower():
-            system_content = f"/no_think\n{self.system_prompt}"
-        else:
-            system_content = self.system_prompt
+        system_content = self.system_prompt
         messages = [{"role": "system", "content": system_content}]
 
         if context:
