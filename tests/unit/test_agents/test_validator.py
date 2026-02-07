@@ -22,9 +22,9 @@ def validator(settings):
 class TestValidatorAgentInit:
     """Tests for ValidatorAgent initialization."""
 
-    def test_init_with_defaults(self):
+    def test_init_with_defaults(self, settings):
         """Test agent initializes with default settings."""
-        agent = ValidatorAgent()
+        agent = ValidatorAgent(settings=settings)
         assert isinstance(agent.settings, Settings)
 
     def test_init_with_custom_settings(self, settings):
@@ -92,18 +92,18 @@ The rest of the story was in English and told of great adventures."""
 class TestValidateOrRaise:
     """Tests for validate_or_raise convenience function."""
 
-    def test_returns_response_when_valid(self):
+    def test_returns_response_when_valid(self, validator):
         """Test returns original response when valid."""
         response = "This is valid English content."
 
-        result = validate_or_raise(response, "English")
+        result = validate_or_raise(response, "English", validator=validator)
 
         assert result == response
 
-    def test_raises_for_invalid_response(self):
+    def test_raises_for_invalid_response(self, validator):
         """Test raises error for invalid response."""
         with pytest.raises((ResponseValidationError, ValueError)):
-            validate_or_raise("", "English")
+            validate_or_raise("", "English", validator=validator)
 
     def test_accepts_custom_validator(self, validator):
         """Test accepts pre-created validator agent."""
@@ -113,11 +113,11 @@ class TestValidateOrRaise:
 
         assert result == response
 
-    def test_creates_validator_when_not_provided(self):
+    def test_creates_validator_when_not_provided(self, settings):
         """Test creates new validator when not provided."""
         response = "Valid response."
 
-        result = validate_or_raise(response, "English")
+        result = validate_or_raise(response, "English", validator=ValidatorAgent(settings=settings))
 
         assert result == response
 

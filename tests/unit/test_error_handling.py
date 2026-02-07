@@ -151,7 +151,9 @@ class TestDecoratorIntegration:
     def test_check_ollama_health_returns_error_on_failure(self):
         """check_ollama_health should gracefully handle connection errors."""
         # Patch ollama.Client to raise ConnectionError
-        with patch("ollama.Client", side_effect=ConnectionError("Connection refused")):
+        with patch(
+            "src.agents.base.ollama.Client", side_effect=ConnectionError("Connection refused")
+        ):
             is_healthy, message = BaseAgent.check_ollama_health("http://invalid-host:99999")
 
         assert is_healthy is False

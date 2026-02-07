@@ -99,7 +99,6 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 | **Continuity** | Check plot holes, consistency | Strong reasoning, contradiction detection | Reasoning critical |
 | **Interviewer** | Gather story requirements from user | Conversational, compliant, fast | Speed > Quality |
 | **Judge** | Score entity quality | Independent numeric assessment, JSON output | Accuracy > Speed |
-| **Validator** | Basic output validation | Minimal capability needed | Any small model |
 
 ---
 
@@ -115,7 +114,6 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 | **Editor** | Same as Writer (temp 0.5) | - | - | Maintains voice consistency |
 | **Continuity** | DeepSeek-R1-Distill-Qwen-14B | HuggingFace | 10GB | **NEW**: Explicit `<think>` reasoning chains |
 | **Interviewer** | Dolphin 3.0 8B | Ollama | 5GB | Fast, compliant, highly steerable |
-| **Validator** | SmolLM2-1.7B-Instruct | HuggingFace | 1.2GB | **NEW**: Better quality than 0.5B models |
 
 **Key Change from 2025:** Qwen3-30B-A3B replaces Llama 3.3 70B for reasoning tasks - same quality at half the VRAM, enabling parallel model loading.
 
@@ -267,23 +265,6 @@ copying rate, and score spread.
 | 8GB | Dolphin 3 8B or Qwen3 8B | Quality 7, good structured output |
 | 4GB | Gemma 3 4B or Phi-4 Mini | Both achieve rank > 0.89 |
 
-### Tiny Models (Validator Role)
-
-#### SmolLM2-1.7B-Instruct (NEW - Recommended)
-- **Strengths:** Best quality-per-VRAM ratio for validation tasks
-- **VRAM:** ~1.2GB
-- **HuggingFace:** `HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF`
-
-#### Qwen3-0.6B
-- **Strengths:** Ultra-fast validation, minimal resource usage
-- **VRAM:** ~0.5GB
-- **Ollama:** `qwen3:0.6b`
-
-#### SmolLM2-360M-Instruct
-- **Strengths:** Near-instant validation passes
-- **VRAM:** ~0.3GB
-- **Best for:** High-volume validation where speed matters most
-
 ### Embedding Models (Semantic Duplicate Detection)
 
 Used by the world generation pipeline to detect semantic duplicates among entity names (e.g., "Shadow Council" vs "Council of Shadows"). Selected via the `embedding_model` setting, not the agent auto-selection system.
@@ -356,25 +337,6 @@ TEMPLATE """[INST] {{ .System }} {{ .Prompt }} [/INST]"""
 PARAMETER stop "[INST]"
 PARAMETER stop "[/INST]"
 EOF
-```
-
-### SmolLM2-1.7B-Instruct
-
-```bash
-# Download from HuggingFace
-# https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF
-
-cat > Modelfile << 'EOF'
-FROM ./smollm2-1.7b-instruct.Q4_K_M.gguf
-TEMPLATE """<|im_start|>system
-{{ .System }}<|im_end|>
-<|im_start|>user
-{{ .Prompt }}<|im_end|>
-<|im_start|>assistant
-"""
-EOF
-
-ollama create smollm2:1.7b -f Modelfile
 ```
 
 ### Dark Champion V2 21B
@@ -605,7 +567,6 @@ You can approve to switch models or dismiss to keep current settings.
     "editor": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
     "continuity": "deepseek-r1-14b",
     "interviewer": "huihui_ai/dolphin3-abliterated:8b",
-    "validator": "smollm2:1.7b"
   }
 }
 ```
@@ -619,7 +580,6 @@ You can approve to switch models or dismiss to keep current settings.
 | Editor | 0.5-0.6 | Balanced refinement |
 | Continuity | 0.0-0.2 | Deterministic consistency checking |
 | Interviewer | 0.4-0.6 | Balanced exploration |
-| Validator | 0.1 | Minimal variation |
 
 **Note:** Higher temperatures correlate weakly with novelty but moderately with incoherence. They increase variation risk without guaranteeing better creativity.
 

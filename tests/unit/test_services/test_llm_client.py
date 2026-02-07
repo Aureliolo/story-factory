@@ -2,12 +2,14 @@
 
 from unittest.mock import MagicMock, patch
 
+import ollama
 import pytest
 from pydantic import BaseModel
 
 from src.services import llm_client
 from src.services.llm_client import generate_structured, get_ollama_client
 from src.settings import Settings
+from src.utils.exceptions import LLMError
 
 
 class SampleModel(BaseModel):
@@ -268,3 +270,99 @@ class TestGenerateStructured:
         assert result.name == "test"
         assert result.value == 42
         assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_raises_after_retries_exhausted(self, mock_get_client, mock_settings):
+        """Test that LLMError is raised when all retries fail with validation errors."""
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            _make_chat_response('{"invalid": "bad"}'),
+            _make_chat_response('{"also_invalid": "bad"}'),
+            _make_chat_response('{"still_invalid": "bad"}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        with pytest.raises(LLMError, match="Structured generation failed"):
+            generate_structured(
+                settings=mock_settings,
+                model="test-model",
+                prompt="User prompt",
+                response_model=SampleModel,
+                max_retries=3,
+            )
+
+        assert mock_client.chat.call_count == 3
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_connection_error(self, mock_get_client, mock_settings):
+        """Test that ConnectionError triggers retries."""
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            ConnectionError("Connection refused"),
+            _make_chat_response('{"name": "test", "value": 42}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model",
+            prompt="User prompt",
+            response_model=SampleModel,
+            max_retries=2,
+        )
+
+        assert result.name == "test"
+        assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_timeout_error(self, mock_get_client, mock_settings):
+        """Test that TimeoutError triggers retries."""
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            TimeoutError("Request timed out"),
+            _make_chat_response('{"name": "test", "value": 42}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model",
+            prompt="User prompt",
+            response_model=SampleModel,
+            max_retries=2,
+        )
+
+        assert result.name == "test"
+        assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_response_error_fails_fast(self, mock_get_client, mock_settings):
+        """Test that ollama.ResponseError does not retry."""
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = ollama.ResponseError("model not found")
+        mock_get_client.return_value = mock_client
+
+        with pytest.raises(LLMError, match="Structured generation failed"):
+            generate_structured(
+                settings=mock_settings,
+                model="test-model",
+                prompt="User prompt",
+                response_model=SampleModel,
+                max_retries=3,
+            )
+
+        assert mock_client.chat.call_count == 1
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_max_retries_zero_raises_value_error(self, mock_get_client, mock_settings):
+        """Test that max_retries=0 raises ValueError."""
+        mock_get_client.return_value = MagicMock()
+
+        with pytest.raises(ValueError, match="max_retries must be >= 1"):
+            generate_structured(
+                settings=mock_settings,
+                model="test-model",
+                prompt="User prompt",
+                response_model=SampleModel,
+                max_retries=0,
+            )

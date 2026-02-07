@@ -552,7 +552,7 @@ class TestBaseAgentGenerateStructured:
 
     def test_generate_structured_adds_no_think_for_qwen(self):
         """Test generate_structured adds /no_think for Qwen models."""
-        agent = create_mock_agent(model="qwen2.5:7b")
+        agent = create_mock_agent(model="fake-qwen:7b")
         agent.client.chat.return_value = self._make_chat_response('{"name": "Test"}')
 
         agent.generate_structured("Test prompt", SampleOutputModel)

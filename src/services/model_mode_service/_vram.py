@@ -102,13 +102,18 @@ def unload_all_except(svc: ModelModeService, keep_model: str) -> None:
 
     logger.info("Unloading %d model(s) from VRAM: %s", len(models_to_remove), models_to_remove)
 
+    successfully_unloaded: set[str] = set()
     for model_id in models_to_remove:
         try:
             svc._ollama_client.generate(model=model_id, keep_alive=0)
             logger.debug("Unloaded model %s from VRAM (keep_alive=0)", model_id)
+            successfully_unloaded.add(model_id)
         except ollama.ResponseError as e:
             logger.warning("Failed to unload model %s: %s", model_id, e)
         except ConnectionError as e:
             logger.warning("Connection error unloading model %s: %s", model_id, e)
+        except TimeoutError as e:
+            logger.warning("Timeout unloading model %s: %s", model_id, e)
 
-    svc._loaded_models = {keep_model}
+    # Only remove successfully unloaded models from tracking
+    svc._loaded_models = (svc._loaded_models - successfully_unloaded) | {keep_model}

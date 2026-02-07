@@ -5,17 +5,20 @@ Uses ollama.Client.chat() with `format=` parameter for grammar-constrained JSON 
 """
 
 import logging
+import threading
 import time
 
 import ollama
 from pydantic import BaseModel, ValidationError
 
 from src.settings import Settings
+from src.utils.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 
 # Module-level cache for Ollama clients (keyed by (url, timeout))
 _ollama_clients: dict[tuple[str, float], ollama.Client] = {}
+_ollama_clients_lock = threading.Lock()
 
 
 def get_ollama_client(settings: Settings, model_id: str | None = None) -> ollama.Client:
@@ -23,6 +26,7 @@ def get_ollama_client(settings: Settings, model_id: str | None = None) -> ollama
 
     The client is cached based on URL and timeout to avoid recreating it for each call.
     Timeout is scaled based on model size when model_id is provided.
+    Thread-safe via double-checked locking.
 
     Args:
         settings: Application settings with ollama_url and ollama_timeout.
@@ -37,9 +41,13 @@ def get_ollama_client(settings: Settings, model_id: str | None = None) -> ollama
     cache_key = (settings.ollama_url, timeout)
 
     if cache_key not in _ollama_clients:
-        client = ollama.Client(host=settings.ollama_url, timeout=timeout)
-        _ollama_clients[cache_key] = client
-        logger.debug(f"Created Ollama client for {settings.ollama_url} (timeout={timeout:.0f}s)")
+        with _ollama_clients_lock:
+            if cache_key not in _ollama_clients:
+                client = ollama.Client(host=settings.ollama_url, timeout=timeout)
+                _ollama_clients[cache_key] = client
+                logger.debug(
+                    f"Created Ollama client for {settings.ollama_url} (timeout={timeout:.0f}s)"
+                )
 
     return _ollama_clients[cache_key]
 
@@ -93,6 +101,9 @@ def generate_structured[T: BaseModel](
         f"temperature={temperature}, max_retries={max_retries}"
     )
 
+    if max_retries < 1:
+        raise ValueError(f"max_retries must be >= 1, got {max_retries}")
+
     last_error: Exception | None = None
 
     for attempt in range(max_retries):
@@ -133,5 +144,26 @@ def generate_structured[T: BaseModel](
             if attempt < max_retries - 1:
                 continue  # Retry with same prompt
 
+        except (ConnectionError, TimeoutError) as e:
+            last_error = e
+            logger.warning(
+                "Transient error in structured output (attempt %d/%d): %s",
+                attempt + 1,
+                max_retries,
+                e,
+            )
+            if attempt < max_retries - 1:
+                continue
+
+        except ollama.ResponseError as e:
+            logger.error("Ollama response error during structured generation: %s", e)
+            raise LLMError(
+                f"Structured generation failed for {response_model.__name__}: {e}"
+            ) from e
+
     # All retries exhausted
-    raise last_error  # type: ignore[misc]
+    logger.error("Structured output generation failed after %d attempts", max_retries)
+    raise LLMError(
+        f"Structured generation failed for {response_model.__name__} "
+        f"after {max_retries} attempts: {last_error}"
+    ) from last_error
