@@ -2532,10 +2532,19 @@ class TestMiniDescriptions:
         # Short enough, should be returned as-is or trimmed
         assert len(result.split()) <= settings.mini_description_words_max
 
+    def _make_mini_desc_response(self, summary: str) -> dict:
+        """Create a mock chat response for structured mini description output."""
+        return {
+            "message": {"content": json.dumps({"summary": summary}), "role": "assistant"},
+            "done": True,
+        }
+
     def test_generate_mini_description_llm_called_for_long_text(self, service, mock_ollama_client):
-        """Test that LLM is called for long descriptions."""
+        """Test that LLM is called for long descriptions via structured output."""
         long_description = " ".join(["word"] * 50)  # 50 words
-        mock_ollama_client.generate.return_value = {"response": "A concise summary of the entity"}
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response(
+            "A concise summary of the entity"
+        )
         service._client = mock_ollama_client
 
         result = service.generate_mini_description(
@@ -2545,11 +2554,13 @@ class TestMiniDescriptions:
         )
 
         assert result == "A concise summary of the entity"
-        mock_ollama_client.generate.assert_called_once()
+        mock_ollama_client.chat.assert_called_once()
 
-    def test_generate_mini_description_strips_quotes(self, service, mock_ollama_client):
-        """Test that quotes are stripped from response."""
-        mock_ollama_client.generate.return_value = {"response": '"A quoted summary"'}
+    def test_generate_mini_description_structured_output_parses_cleanly(
+        self, service, mock_ollama_client
+    ):
+        """Test that structured output parses JSON cleanly without quote stripping."""
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response("A clean summary")
         service._client = mock_ollama_client
 
         long_description = " ".join(["word"] * 50)
@@ -2559,13 +2570,13 @@ class TestMiniDescriptions:
             full_description=long_description,
         )
 
-        assert result == "A quoted summary"
+        assert result == "A clean summary"
 
-    def test_generate_mini_description_strips_think_tags(self, service, mock_ollama_client):
-        """Test that think tags are stripped from response (#248)."""
-        mock_ollama_client.generate.return_value = {
-            "response": "<think>Let me think about this...</think>A cunning warrior"
-        }
+    def test_generate_mini_description_structured_output_no_preambles(
+        self, service, mock_ollama_client
+    ):
+        """Test that structured output prevents conversational preambles."""
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response("A cunning warrior")
         service._client = mock_ollama_client
 
         long_description = " ".join(["word"] * 50)
@@ -2578,14 +2589,11 @@ class TestMiniDescriptions:
         assert result == "A cunning warrior"
         assert "<think>" not in result
 
-    def test_generate_mini_description_empty_after_cleaning_fallback(
+    def test_generate_mini_description_empty_summary_fallback(
         self, service, settings, mock_ollama_client, caplog
     ):
-        """Test fallback to truncation when LLM returns only think tags."""
-        # LLM returns only think tags, which clean_llm_text() will strip to empty
-        mock_ollama_client.generate.return_value = {
-            "response": "<think>I'm just thinking here...</think>"
-        }
+        """Test fallback to truncation when structured output returns empty summary."""
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response("")
         service._client = mock_ollama_client
 
         # Set max_words to 5 for predictable output
@@ -2600,7 +2608,7 @@ class TestMiniDescriptions:
 
         # Should fall back to truncated description
         assert result == "word1 word2 word3 word4 word5..."
-        assert "cleaned to empty" in caplog.text
+        assert "empty for" in caplog.text
 
     def test_generate_mini_description_truncates_long_response(
         self, service, settings, mock_ollama_client
@@ -2608,7 +2616,7 @@ class TestMiniDescriptions:
         """Test that overly long responses are truncated."""
         # Response with more words than max + 3
         long_response = " ".join(["word"] * 50)
-        mock_ollama_client.generate.return_value = {"response": long_response}
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response(long_response)
         service._client = mock_ollama_client
 
         long_description = " ".join(["description"] * 50)
@@ -2624,7 +2632,7 @@ class TestMiniDescriptions:
 
     def test_generate_mini_description_handles_error(self, service, settings, mock_ollama_client):
         """Test fallback when LLM fails."""
-        mock_ollama_client.generate.side_effect = Exception("LLM error")
+        mock_ollama_client.chat.side_effect = Exception("LLM error")
         service._client = mock_ollama_client
 
         long_description = " ".join(["word"] * 50)
@@ -2638,9 +2646,26 @@ class TestMiniDescriptions:
         assert len(result.split()) <= settings.mini_description_words_max + 1
         assert result.endswith("...")
 
+    def test_generate_mini_description_passes_json_schema_format(self, service, mock_ollama_client):
+        """Test that chat call includes format=MiniDescription.model_json_schema()."""
+        from src.services.world_quality_service._validation import MiniDescription
+
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response("A test summary")
+        service._client = mock_ollama_client
+
+        long_description = " ".join(["word"] * 50)
+        service.generate_mini_description(
+            name="Test",
+            entity_type="character",
+            full_description=long_description,
+        )
+
+        call_kwargs = mock_ollama_client.chat.call_args.kwargs
+        assert call_kwargs["format"] == MiniDescription.model_json_schema()
+
     def test_generate_mini_descriptions_batch(self, service, mock_ollama_client):
         """Test batch mini description generation."""
-        mock_ollama_client.generate.return_value = {"response": "Short summary"}
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response("Short summary")
         service._client = mock_ollama_client
 
         entities = [
@@ -2655,7 +2680,7 @@ class TestMiniDescriptions:
         assert "Entity One" in results
         assert "Entity Two" in results
         assert "Entity Three" not in results
-        assert mock_ollama_client.generate.call_count == 2
+        assert mock_ollama_client.chat.call_count == 2
 
 
 class TestSettingsValidation:

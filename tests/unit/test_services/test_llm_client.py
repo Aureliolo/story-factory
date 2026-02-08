@@ -153,8 +153,8 @@ class TestGenerateStructured:
         assert messages[0]["role"] == "user"
 
     @patch("src.services.llm_client.get_ollama_client")
-    def test_qwen_model_adds_no_think_prefix(self, mock_get_client, mock_settings):
-        """Test that Qwen models get /no_think prefix in system prompt."""
+    def test_qwen_model_no_think_not_added(self, mock_get_client, mock_settings):
+        """Test that Qwen models do NOT get /no_think prefix in system prompt."""
         mock_client = MagicMock()
         mock_client.chat.return_value = _make_chat_response('{"name": "test", "value": 42}')
         mock_get_client.return_value = mock_client
@@ -170,7 +170,7 @@ class TestGenerateStructured:
         call_kwargs = mock_client.chat.call_args[1]
         messages = call_kwargs["messages"]
         assert messages[0]["role"] == "system"
-        assert messages[0]["content"] == "/no_think\nOriginal system prompt"
+        assert messages[0]["content"] == "Original system prompt"
 
     @patch("src.services.llm_client.get_ollama_client")
     def test_qwen_model_no_system_prompt_no_change(self, mock_get_client, mock_settings):

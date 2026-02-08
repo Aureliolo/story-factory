@@ -85,10 +85,6 @@ def generate_structured[T: BaseModel](
     """
     client = get_ollama_client(settings, model_id=model)
 
-    # Add /no_think prefix for Qwen models
-    if system_prompt and "qwen" in model.lower():
-        system_prompt = f"/no_think\n{system_prompt}"
-
     messages: list[dict[str, str]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})

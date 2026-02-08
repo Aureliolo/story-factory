@@ -335,10 +335,10 @@ class TestBaseAgentGenerate:
 
 
 class TestBaseAgentQwenNoThink:
-    """Tests for Qwen model /no_think handling."""
+    """Tests that /no_think is NOT injected for any model."""
 
-    def test_generate_adds_no_think_for_qwen_model(self):
-        """Test /no_think is added to system prompt for Qwen models."""
+    def test_generate_no_think_not_added_for_qwen_model(self):
+        """Test /no_think is NOT added to system prompt for Qwen models."""
         agent = create_mock_agent(model="huihui_ai/qwen3-abliterated:8b")
         agent.client.chat.return_value = {"message": {"content": "Valid response text"}}
 
@@ -347,7 +347,8 @@ class TestBaseAgentQwenNoThink:
         call_args = agent.client.chat.call_args
         messages = call_args.kwargs["messages"]
         system_msg = messages[0]["content"]
-        assert system_msg.startswith("/no_think\n")
+        assert not system_msg.startswith("/no_think")
+        assert system_msg == agent.system_prompt
 
     def test_generate_no_think_not_added_for_non_qwen(self):
         """Test /no_think is NOT added for non-Qwen models."""
@@ -360,6 +361,7 @@ class TestBaseAgentQwenNoThink:
         messages = call_args.kwargs["messages"]
         system_msg = messages[0]["content"]
         assert not system_msg.startswith("/no_think")
+        assert system_msg == agent.system_prompt
 
 
 class TestBaseAgentShortResponseValidation:
@@ -550,8 +552,8 @@ class TestBaseAgentGenerateStructured:
         context_found = any("CURRENT STORY CONTEXT" in m.get("content", "") for m in messages)
         assert context_found
 
-    def test_generate_structured_adds_no_think_for_qwen(self):
-        """Test generate_structured adds /no_think for Qwen models."""
+    def test_generate_structured_no_think_not_added_for_qwen(self):
+        """Test generate_structured does NOT add /no_think for Qwen models."""
         agent = create_mock_agent(model="fake-qwen:7b")
         agent.client.chat.return_value = self._make_chat_response('{"name": "Test"}')
 
@@ -560,7 +562,7 @@ class TestBaseAgentGenerateStructured:
         call_args = agent.client.chat.call_args
         messages = call_args.kwargs["messages"]
         system_msg = messages[0]["content"]
-        assert "/no_think" in system_msg
+        assert "/no_think" not in system_msg
 
     def test_generate_structured_raises_on_error(self):
         """Test generate_structured raises LLMGenerationError on failure."""

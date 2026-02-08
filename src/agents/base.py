@@ -203,11 +203,7 @@ class BaseAgent:
             )
 
         # Build messages
-        use_model = self.model
-        if "qwen" in use_model.lower():
-            system_content = f"/no_think\n{self.system_prompt}"
-        else:
-            system_content = self.system_prompt
+        system_content = self.system_prompt
 
         messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
 
@@ -233,14 +229,14 @@ class BaseAgent:
                 for attempt in range(max_retries):
                     try:
                         logger.debug(
-                            f"{self.name}: Calling LLM ({use_model}) for structured output "
+                            f"{self.name}: Calling LLM ({self.model}) for structured output "
                             f"(model={response_model.__name__}, temp={use_temp}, "
                             f"attempt={attempt + 1}/{max_retries})"
                         )
 
                         start_time = time.time()
                         response = self.client.chat(
-                            model=use_model,
+                            model=self.model,
                             messages=messages,
                             format=json_schema,
                             options={
@@ -265,7 +261,7 @@ class BaseAgent:
                             completion_tokens=completion_tokens,
                             total_tokens=total_tokens,
                             time_seconds=duration,
-                            model_id=use_model,
+                            model_id=self.model,
                             agent_role=self.agent_role,
                         )
 
@@ -426,13 +422,8 @@ class BaseAgent:
                 time_until_retry=time_until_retry,
             )
 
-        # Add /no_think prefix for Qwen models to disable thinking mode
-        # This prevents models from outputting <think>...</think> tags instead of actual content
         use_model = model or self.model
-        if "qwen" in use_model.lower():
-            system_content = f"/no_think\n{self.system_prompt}"
-        else:
-            system_content = self.system_prompt
+        system_content = self.system_prompt
         messages = [{"role": "system", "content": system_content}]
 
         if context:
