@@ -203,7 +203,6 @@ class BaseAgent:
             )
 
         # Build messages
-        use_model = self.model
         system_content = self.system_prompt
 
         messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
@@ -230,14 +229,14 @@ class BaseAgent:
                 for attempt in range(max_retries):
                     try:
                         logger.debug(
-                            f"{self.name}: Calling LLM ({use_model}) for structured output "
+                            f"{self.name}: Calling LLM ({self.model}) for structured output "
                             f"(model={response_model.__name__}, temp={use_temp}, "
                             f"attempt={attempt + 1}/{max_retries})"
                         )
 
                         start_time = time.time()
                         response = self.client.chat(
-                            model=use_model,
+                            model=self.model,
                             messages=messages,
                             format=json_schema,
                             options={
@@ -262,7 +261,7 @@ class BaseAgent:
                             completion_tokens=completion_tokens,
                             total_tokens=total_tokens,
                             time_seconds=duration,
-                            model_id=use_model,
+                            model_id=self.model,
                             agent_role=self.agent_role,
                         )
 

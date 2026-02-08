@@ -122,7 +122,7 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 | Role | Model | VRAM |
 |------|-------|------|
 | **Writer** | Celeste V1.9 12B or Lyra-Gutenberg 12B | 10GB |
-| **Architect** | Qwen3-14B with `/think` mode | 10GB |
+| **Architect** | Qwen3-14B (hybrid thinking) | 10GB |
 | **Continuity** | DeepSeek-R1-Qwen3-8B | 5GB |
 | **Interviewer** | Dolphin 3.0 8B | 5GB |
 

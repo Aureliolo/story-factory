@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from src.memory.entities import Entity
 from src.memory.story_state import StoryBrief
 from src.memory.world_quality import RefinementConfig
-from src.utils.json_parser import extract_json
+from src.utils.json_parser import clean_llm_text, extract_json
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +41,18 @@ def generate_mini_description(
         A short summary (configured word limit).
     """
     max_words = svc.settings.mini_description_words_max
-    if not full_description or len(full_description.split()) <= max_words:
+    description_words = full_description.split()
+    if not full_description or len(description_words) <= max_words:
         # Already short enough, just return trimmed version
-        words = full_description.split()[:max_words]
-        return " ".join(words)
+        return " ".join(description_words[:max_words])
 
     prompt = f"""Summarize in EXACTLY 10-{max_words} words for a tooltip preview.
 
 ENTITY: {name} ({entity_type})
 FULL DESCRIPTION: {full_description}
 
-Write a punchy, informative summary. NO quotes, NO formatting, just the summary text.
-
-SUMMARY:"""
+Respond with a JSON object containing a single "summary" field with a punchy, informative summary.
+NO quotes, NO formatting, NO preambles — just the summary text in the "summary" field."""
 
     try:
         model = svc._get_judge_model(entity_type=entity_type)  # Use fast validator model
@@ -74,7 +73,7 @@ SUMMARY:"""
             },
         )
         parsed = MiniDescription.model_validate_json(response["message"]["content"])
-        summary = parsed.summary.strip()
+        summary = clean_llm_text(parsed.summary).strip()
         # Guard against empty summaries
         if not summary:
             logger.warning(
@@ -82,8 +81,8 @@ SUMMARY:"""
                 entity_type,
                 name,
             )
-            words = full_description.split()[:max_words]
-            return " ".join(words) + ("..." if len(full_description.split()) > max_words else "")
+            truncated_words = description_words[:max_words]
+            return " ".join(truncated_words) + ("..." if len(description_words) > max_words else "")
         # Ensure it's not too long
         words = summary.split()
         if len(words) > max_words + 3:
@@ -92,8 +91,8 @@ SUMMARY:"""
     except Exception as e:
         logger.warning(f"Failed to generate mini description: {e}")
         # Fallback: truncate description
-        words = full_description.split()[:max_words]
-        return " ".join(words) + ("..." if len(full_description.split()) > max_words else "")
+        truncated_words = description_words[:max_words]
+        return " ".join(truncated_words) + ("..." if len(description_words) > max_words else "")
 
 
 def generate_mini_descriptions_batch(

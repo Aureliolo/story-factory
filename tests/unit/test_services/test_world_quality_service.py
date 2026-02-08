@@ -2534,8 +2534,6 @@ class TestMiniDescriptions:
 
     def _make_mini_desc_response(self, summary: str) -> dict:
         """Create a mock chat response for structured mini description output."""
-        import json
-
         return {
             "message": {"content": json.dumps({"summary": summary}), "role": "assistant"},
             "done": True,
@@ -2662,7 +2660,7 @@ class TestMiniDescriptions:
             full_description=long_description,
         )
 
-        call_kwargs = mock_ollama_client.chat.call_args[1]
+        call_kwargs = mock_ollama_client.chat.call_args.kwargs
         assert call_kwargs["format"] == MiniDescription.model_json_schema()
 
     def test_generate_mini_descriptions_batch(self, service, mock_ollama_client):
