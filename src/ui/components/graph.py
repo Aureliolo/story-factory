@@ -307,21 +307,22 @@ class GraphComponent:
             else "",
         )
 
-        # Run JavaScript initialization (deferred via requestAnimationFrame in the JS).
         # The JS destroys any previous vis.Network before creating a new one.
         ui.run_javascript(result.js)
 
         # Add JavaScript handler for node and edge selection.
-        # Uses polling because _buildGraph is deferred via requestAnimationFrame
-        # and window.graphNetwork won't exist yet when this JS first executes.
+        # Uses polling because vis.js init is async (CDN load + font preload),
+        # so window.graphNetwork won't exist yet when this JS first executes.
         if self.on_node_select or self.on_edge_select:
             node_callback = self._callback_id if self.on_node_select else ""
             edge_callback = self._edge_callback_id if self.on_edge_select else ""
             ui.run_javascript(
                 f"""
-                (function _attachClickHandler() {{
+                (function _attachClickHandler(_attempts) {{
+                    _attempts = _attempts || 0;
                     if (!window.graphNetwork) {{
-                        setTimeout(_attachClickHandler, 100);
+                        if (_attempts >= 50) return;
+                        setTimeout(function() {{ _attachClickHandler(_attempts + 1); }}, 100);
                         return;
                     }}
                     window.graphNetwork.off('click');
