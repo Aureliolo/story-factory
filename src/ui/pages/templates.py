@@ -262,7 +262,7 @@ class TemplatesPage:
                                                 "flaw": "red",
                                                 "quirk": "purple",
                                             }.get(trait.category, "blue")
-                                            ui.badge(trait.trait, color=color).props("outline")
+                                            ui.badge(trait.trait).props(f"outline color={color}")
 
                     # Plot points
                     if template.plot_points:

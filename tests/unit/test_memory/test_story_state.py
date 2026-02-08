@@ -615,11 +615,11 @@ class TestCharacterCreationList:
         """Test that CharacterCreationList schema excludes runtime fields."""
         schema = CharacterCreationList.model_json_schema()
         # Walk the schema to find CharacterCreation properties
-        char_schema = schema.get("$defs", {}).get("CharacterCreation", {})
-        if char_schema:
-            props = char_schema.get("properties", {})
-            assert "arc_progress" not in props
-            assert "arc_type" not in props
+        assert "$defs" in schema, "Expected $defs in schema"
+        assert "CharacterCreation" in schema["$defs"], "Expected CharacterCreation in $defs"
+        props = schema["$defs"]["CharacterCreation"]["properties"]
+        assert "arc_progress" not in props
+        assert "arc_type" not in props
 
 
 class TestStoryState:

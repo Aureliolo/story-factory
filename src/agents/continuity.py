@@ -288,16 +288,13 @@ Only include characters who actually speak in this chapter."""
         char_lines = []
         for c in story_state.characters:
             parts = [f"- {c.name}: {c.description}"]
-            core = c.traits_by_category("core")
-            flaws = c.traits_by_category("flaw")
-            quirks = c.traits_by_category("quirk")
-            if core:
-                parts.append(f"  Core: {', '.join(core)}")
-            if flaws:
-                parts.append(f"  Flaws: {', '.join(flaws)}")
-            if quirks:
-                parts.append(f"  Quirks: {', '.join(quirks)}")
-            if not core and not flaws and not quirks and c.trait_names:
+            categorized_found = False
+            for category, label in [("core", "Core"), ("flaw", "Flaws"), ("quirk", "Quirks")]:
+                traits = c.traits_by_category(category)
+                if traits:
+                    parts.append(f"  {label}: {', '.join(traits)}")
+                    categorized_found = True
+            if not categorized_found and c.trait_names:
                 parts.append(f"  Personality: {', '.join(c.trait_names)}")
             char_lines.append("\n".join(parts))
         chars_summary = "\n".join(char_lines)

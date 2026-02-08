@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.memory.content_guidelines import ContentProfile
-from src.memory.templates import PersonalityTrait, TargetLength
+from src.memory.templates import PersonalityTrait, TargetLength, normalize_personality_traits_list
 
 if TYPE_CHECKING:
     from src.memory._chapter_versions import ChapterVersionManager
@@ -32,21 +32,8 @@ class Character(BaseModel):
     @field_validator("personality_traits", mode="before")
     @classmethod
     def normalize_personality_traits(cls, v: Any) -> Any:
-        """Normalize personality traits from plain strings or dicts.
-
-        Handles backward compatibility with old project JSON files and builtin
-        YAML templates that use plain string lists like ["brave", "clever"].
-        Converts them to PersonalityTrait dicts with category defaulting to "core".
-        """
-        if not isinstance(v, list):
-            return v
-        normalized: list[dict[str, str]] = []
-        for item in v:
-            if isinstance(item, str):
-                normalized.append({"trait": item, "category": "core"})
-            else:
-                normalized.append(item)
-        return normalized
+        """Normalize personality traits from plain strings or dicts."""
+        return normalize_personality_traits_list(v)
 
     @field_validator("arc_progress", mode="before")
     @classmethod
@@ -717,31 +704,13 @@ class CharacterCreation(BaseModel):
     @field_validator("personality_traits", mode="before")
     @classmethod
     def normalize_personality_traits(cls, v: Any) -> Any:
-        """Normalize personality traits from plain strings or dicts.
-
-        Same backward-compat logic as Character.normalize_personality_traits.
-        """
-        if not isinstance(v, list):
-            return v
-        normalized: list[dict[str, str]] = []
-        for item in v:
-            if isinstance(item, str):
-                normalized.append({"trait": item, "category": "core"})
-            else:
-                normalized.append(item)
-        return normalized
+        """Normalize personality traits from plain strings or dicts."""
+        return normalize_personality_traits_list(v)
 
     def to_character(self) -> Character:
         """Convert to a full Character with default runtime fields."""
-        return Character(
-            name=self.name,
-            role=self.role,
-            description=self.description,
-            personality_traits=[t.model_copy() for t in self.personality_traits],
-            goals=self.goals.copy(),
-            relationships=self.relationships.copy(),
-            arc_notes=self.arc_notes,
-        )
+        logger.debug("Converting CharacterCreation '%s' to Character", self.name)
+        return Character(**self.model_dump())
 
 
 class CharacterCreationList(BaseModel):
@@ -766,6 +735,7 @@ class CharacterCreationList(BaseModel):
 
     def to_characters(self) -> list[Character]:
         """Convert all CharacterCreation items to full Character objects."""
+        logger.debug("Converting %d CharacterCreation items to Characters", len(self.characters))
         return [c.to_character() for c in self.characters]
 
 
