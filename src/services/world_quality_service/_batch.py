@@ -2,7 +2,7 @@
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
 
 from src.memory.story_state import Chapter, Character, StoryState
@@ -24,6 +24,60 @@ T = TypeVar("T")
 S = TypeVar("S", bound=BaseQualityScores)
 
 
+def _log_batch_summary(
+    results: Sequence[tuple[Any, BaseQualityScores]],
+    entity_type: str,
+    quality_threshold: float,
+    elapsed: float,
+) -> None:
+    """Log an aggregate summary at the end of a batch generation or review.
+
+    Args:
+        results: List of (entity, scores) tuples produced by the batch.
+        entity_type: Human-readable entity type (e.g. "character").
+        quality_threshold: The configured quality threshold for pass/fail.
+        elapsed: Total batch wall-clock time in seconds.
+    """
+    if not results:
+        logger.info(
+            "Batch %s summary: 0 entities produced (%.1fs)",
+            entity_type,
+            elapsed,
+        )
+        return
+
+    averages = [scores.average for _, scores in results]
+    passed = sum(1 for avg in averages if round(avg, 1) >= quality_threshold)
+    total = len(results)
+    min_score = min(averages)
+    max_score = max(averages)
+    avg_score = sum(averages) / total
+
+    failed_names: list[str] = []
+    for entity, scores in results:
+        if round(scores.average, 1) < quality_threshold:
+            if isinstance(entity, dict):
+                name = entity.get("name", "Unknown")
+            else:
+                name = getattr(entity, "name", "Unknown")
+            failed_names.append(name)
+
+    summary_parts = [
+        f"passed={passed}/{total}",
+        f"scores: min={min_score:.1f} max={max_score:.1f} avg={avg_score:.1f}",
+        f"threshold={quality_threshold:.1f}",
+        f"time={elapsed:.1f}s",
+    ]
+    if failed_names:
+        summary_parts.append(f"below threshold: {', '.join(failed_names)}")
+
+    logger.info(
+        "Batch %s summary: %s",
+        entity_type,
+        ", ".join(summary_parts),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Generic helpers
 # ---------------------------------------------------------------------------
@@ -38,6 +92,7 @@ def _generate_batch(
     on_success: Callable[[T], None] | None = None,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
+    quality_threshold: float | None = None,
 ) -> list[tuple[T, S]]:
     """Generic batch generation loop for creating new entities.
 
@@ -53,6 +108,8 @@ def _generate_batch(
         cancel_check: Optional callable that returns ``True`` to cancel.
         progress_callback: Optional callback to receive
             :class:`EntityGenerationProgress` updates.
+        quality_threshold: Quality threshold for pass/fail in batch summary log.
+            Read from ``svc.config`` if not provided.
 
     Returns:
         List of ``(entity, scores)`` tuples.
@@ -61,6 +118,10 @@ def _generate_batch(
         WorldGenerationError: If **no** entities could be generated.
     """
     from src.services.world_quality_service import EntityGenerationProgress
+
+    # Resolve threshold for batch summary
+    if quality_threshold is None:
+        quality_threshold = getattr(getattr(svc, "config", None), "quality_threshold", 7.5)
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []
@@ -144,6 +205,8 @@ def _generate_batch(
             "; ".join(errors),
         )
 
+    _log_batch_summary(results, entity_type, quality_threshold, time.time() - batch_start_time)
+
     return results
 
 
@@ -156,6 +219,7 @@ def _review_batch(
     zero_scores_fn: Callable[[str], S],
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
+    quality_threshold: float | None = None,
 ) -> list[tuple[T, S]]:
     """Generic batch review loop for existing entities.
 
@@ -172,12 +236,18 @@ def _review_batch(
         cancel_check: Optional callable that returns ``True`` to cancel.
         progress_callback: Optional callback to receive
             :class:`EntityGenerationProgress` updates.
+        quality_threshold: Quality threshold for pass/fail in batch summary log.
+            Read from ``svc.config`` if not provided.
 
     Returns:
         List of ``(entity, scores)`` tuples.  On failure the *original*
         entity is kept with zero scores.
     """
     from src.services.world_quality_service import EntityGenerationProgress
+
+    # Resolve threshold for batch summary
+    if quality_threshold is None:
+        quality_threshold = getattr(getattr(svc, "config", None), "quality_threshold", 7.5)
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []
@@ -256,6 +326,8 @@ def _review_batch(
             len(errors),
             "; ".join(errors),
         )
+
+    _log_batch_summary(results, entity_type, quality_threshold, time.time() - batch_start_time)
 
     return results
 

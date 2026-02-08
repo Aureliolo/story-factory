@@ -165,6 +165,119 @@ class TestRefinementHistory:
         assert result == {"name": "Second"}
 
 
+class TestAnalyzeImprovement:
+    """Tests for analyze_improvement() method (#303)."""
+
+    def test_returns_scoring_rounds_key(self):
+        """analyze_improvement() uses 'scoring_rounds' (not 'total_iterations')."""
+        history = RefinementHistory(entity_type="character", entity_name="Hero")
+        history.add_iteration(
+            entity_data={"name": "Hero"},
+            scores={"depth": 7.0},
+            average_score=7.0,
+        )
+        analysis = history.analyze_improvement()
+        assert "scoring_rounds" in analysis
+        assert "total_iterations" not in analysis
+        assert analysis["scoring_rounds"] == 1
+
+    def test_scoring_rounds_matches_iteration_count(self):
+        """scoring_rounds equals the number of recorded iterations."""
+        history = RefinementHistory(entity_type="faction", entity_name="Guild")
+        history.add_iteration(
+            entity_data={"name": "Guild v1"},
+            scores={"s": 5.0},
+            average_score=5.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Guild v2"},
+            scores={"s": 7.0},
+            average_score=7.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Guild v3"},
+            scores={"s": 6.0},
+            average_score=6.0,
+        )
+        analysis = history.analyze_improvement()
+        assert analysis["scoring_rounds"] == 3
+
+    def test_mid_loop_regression_true_when_score_drops(self):
+        """mid_loop_regression is True when any iteration scores lower than its predecessor."""
+        history = RefinementHistory(entity_type="location", entity_name="Tavern")
+        history.add_iteration(
+            entity_data={"name": "Tavern v1"},
+            scores={"s": 7.0},
+            average_score=7.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Tavern v2"},
+            scores={"s": 8.0},
+            average_score=8.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Tavern v3"},
+            scores={"s": 6.0},
+            average_score=6.0,  # Drop from 8.0 to 6.0
+        )
+        analysis = history.analyze_improvement()
+        assert analysis["mid_loop_regression"] is True
+
+    def test_mid_loop_regression_false_when_monotonic_increase(self):
+        """mid_loop_regression is False when scores only increase."""
+        history = RefinementHistory(entity_type="character", entity_name="Hero")
+        history.add_iteration(
+            entity_data={"name": "Hero v1"},
+            scores={"s": 5.0},
+            average_score=5.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Hero v2"},
+            scores={"s": 7.0},
+            average_score=7.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Hero v3"},
+            scores={"s": 9.0},
+            average_score=9.0,
+        )
+        analysis = history.analyze_improvement()
+        assert analysis["mid_loop_regression"] is False
+
+    def test_mid_loop_regression_false_when_flat(self):
+        """mid_loop_regression is False when scores are flat."""
+        history = RefinementHistory(entity_type="item", entity_name="Sword")
+        history.add_iteration(
+            entity_data={"name": "Sword v1"},
+            scores={"s": 6.0},
+            average_score=6.0,
+        )
+        history.add_iteration(
+            entity_data={"name": "Sword v2"},
+            scores={"s": 6.0},
+            average_score=6.0,
+        )
+        analysis = history.analyze_improvement()
+        assert analysis["mid_loop_regression"] is False
+
+    def test_mid_loop_regression_false_single_iteration(self):
+        """mid_loop_regression is False with only one iteration."""
+        history = RefinementHistory(entity_type="concept", entity_name="Magic")
+        history.add_iteration(
+            entity_data={"name": "Magic"},
+            scores={"s": 8.0},
+            average_score=8.0,
+        )
+        analysis = history.analyze_improvement()
+        assert analysis["mid_loop_regression"] is False
+
+    def test_mid_loop_regression_false_no_iterations(self):
+        """mid_loop_regression is False with no iterations."""
+        history = RefinementHistory(entity_type="concept", entity_name="Theme")
+        analysis = history.analyze_improvement()
+        assert analysis["mid_loop_regression"] is False
+
+
 class TestConsecutivePlateaus:
     """Test consecutive_plateaus tracking in RefinementHistory."""
 

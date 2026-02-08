@@ -8,6 +8,8 @@ Tests cover:
 - Review mode (initial_entity provided)
 - Error handling (WorldGenerationError during iterations)
 - Unchanged output detection (#246)
+- Score rounding at threshold boundary (#303)
+- WARNING for sub-threshold entities returned via best-iteration path (#303)
 """
 
 import logging
@@ -1090,3 +1092,186 @@ class TestQualityLoopC3ScoringRounds:
             )
 
         assert any("scoring round" in msg for msg in caplog.messages)
+
+
+class TestQualityLoopScoreRounding:
+    """Tests for score rounding at threshold boundary (#303)."""
+
+    def test_score_rounds_up_to_meet_threshold(self, mock_svc, config):
+        """A score of 7.46 rounds to 7.5 and should pass >= 7.5 threshold."""
+        config.quality_threshold = 7.5
+
+        # CharacterQualityScores: average = (d + g + f + u + a) / 5
+        # To get average = 7.46: 5 * 7.46 = 37.3
+        # Use: 7.0, 7.0, 7.0, 8.0, 8.3 → sum = 37.3, avg = 7.46
+        scores = CharacterQualityScores(
+            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.3
+        )
+        # Verify the average is indeed ~7.46, which would display as "7.5"
+        assert round(scores.average, 1) == 7.5
+        assert scores.average < 7.5  # Raw value is below threshold
+
+        entity = {"name": "Hero"}
+        result_entity, _result_scores, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert result_entity == entity
+        assert iterations == 1
+        # Should have met threshold (threshold_met=True in analytics)
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        assert analytics_call.kwargs["threshold_met"] is True
+
+    def test_score_rounds_down_misses_threshold(self, mock_svc, config):
+        """A score of 7.44 rounds to 7.4 and should fail >= 7.5 threshold."""
+        config.quality_threshold = 7.5
+        config.max_iterations = 1
+
+        # 5 * 7.44 = 37.2 → 7.0, 7.0, 7.0, 8.0, 8.2 → sum = 37.2, avg = 7.44
+        scores = CharacterQualityScores(
+            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.2
+        )
+        assert round(scores.average, 1) == 7.4
+        assert scores.average < 7.5
+
+        entity = {"name": "Hero"}
+        _result_entity, _result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should NOT have met threshold
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        assert analytics_call.kwargs["threshold_met"] is False
+
+    def test_post_loop_threshold_met_uses_rounded_peak(self, mock_svc, config):
+        """Post-loop threshold_met check rounds peak_score to 1 decimal."""
+        config.quality_threshold = 7.5
+        config.max_iterations = 2
+        config.early_stopping_patience = 10
+
+        # avg = 7.46 rounds to 7.5 → threshold_met should be True even post-loop
+        scores_below = CharacterQualityScores(
+            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.3
+        )
+        scores_worse = CharacterQualityScores(
+            depth=5.0, goals=5.0, flaws=5.0, uniqueness=5.0, arc_potential=5.0
+        )
+        judge_count = 0
+
+        def judge_fn(e):
+            """Return borderline scores first, then worse to trigger post-loop path."""
+            nonlocal judge_count
+            judge_count += 1
+            if judge_count == 1:
+                return scores_below
+            return scores_worse
+
+        _result_entity, _result_scores, _iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: {"name": "Hero"},
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: {"name": "Hero v2"},
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Best score was 7.46, rounds to 7.5, so threshold_met should be True
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        assert analytics_call.kwargs["threshold_met"] is True
+
+
+class TestQualityLoopSubThresholdWarning:
+    """Tests for WARNING when sub-threshold entities are returned via best-iteration path (#303)."""
+
+    def test_warning_logged_when_best_entity_below_threshold(self, mock_svc, config, caplog):
+        """WARNING should be logged when returning best entity that didn't meet threshold."""
+        config.quality_threshold = 8.0
+        config.max_iterations = 2
+        config.early_stopping_patience = 10
+
+        # Both iterations below threshold (7.0 then 6.0)
+        scores_list = [_make_scores(7.0), _make_scores(6.0)]
+        judge_idx = 0
+
+        def judge_fn(e):
+            """Return declining scores, both below threshold."""
+            nonlocal judge_idx
+            result = scores_list[min(judge_idx, len(scores_list) - 1)]
+            judge_idx += 1
+            return result
+
+        with caplog.at_level(logging.WARNING):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: {"name": "Hero"},
+                judge_fn=judge_fn,
+                refine_fn=lambda e, s, i: {"name": "Hero v2"},
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("did not meet quality threshold after" in msg for msg in caplog.messages)
+
+    def test_no_warning_when_best_entity_meets_threshold(self, mock_svc, config, caplog):
+        """No sub-threshold WARNING when best entity DID meet threshold via post-loop."""
+        config.quality_threshold = 7.0
+        config.max_iterations = 2
+        config.early_stopping_patience = 10
+
+        # First score above threshold, second below → returns best (iteration 1)
+        scores_list = [_make_scores(7.5), _make_scores(5.0)]
+        judge_idx = 0
+
+        def judge_fn(e):
+            """Return 7.5 then 5.0 — post-loop returns best iteration."""
+            nonlocal judge_idx
+            result = scores_list[min(judge_idx, len(scores_list) - 1)]
+            judge_idx += 1
+            return result
+
+        with caplog.at_level(logging.WARNING):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: {"name": "Hero"},
+                judge_fn=judge_fn,
+                refine_fn=lambda e, s, i: {"name": "Hero v2"},
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert not any("did not meet quality threshold after" in msg for msg in caplog.messages)

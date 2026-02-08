@@ -162,15 +162,12 @@ async def show_build_structure_dialog(
             safe_progress_update(progress_label, progress_bar, "Complete", 1.0)
             dialog.close()
 
-            # Log final stats
-            chapters = len(state.project.chapters)
-            chars = len(state.project.characters)
+            # Log final stats using counts from build_world()
             action = "rebuilt" if rebuild else "built"
-            logger.info(f"Structure {mode} complete: {chapters} chapters, {chars} characters")
-            ui.notify(
-                f"Story structure {action}: {chapters} chapters, {chars} characters",
-                type="positive",
-            )
+            summary_parts = [f"{v} {k}" for k, v in counts.items() if v > 0]
+            summary = ", ".join(summary_parts)
+            logger.info("Structure %s complete: %s", mode, summary)
+            ui.notify(f"Story structure {action}: {summary}", type="positive")
 
             # Run completion callback if provided
             if on_complete:

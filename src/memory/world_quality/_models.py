@@ -188,23 +188,32 @@ class RefinementHistory(BaseModel):
 
     def analyze_improvement(self) -> dict[str, Any]:
         """Analyze whether iterations improved quality."""
+        score_progression = [r.average_score for r in self.iterations]
+
         if len(self.iterations) < 2:
             first_score = self.iterations[0].average_score if self.iterations else 0.0
             return {
                 "improved": False,
                 "reason": "Not enough iterations to compare",
                 "best_iteration": self.best_iteration,
-                "total_iterations": len(self.iterations),
-                "score_progression": [r.average_score for r in self.iterations],
+                "scoring_rounds": len(self.iterations),
+                "score_progression": score_progression,
                 "first_score": first_score,
                 "peak_score": self.peak_score,
                 "final_score": first_score,
                 "worsened_after_peak": False,
+                "mid_loop_regression": False,
             }
 
         first_score = self.iterations[0].average_score
         last_score = self.iterations[-1].average_score
         self.improvement_detected = self.peak_score > first_score
+
+        # mid_loop_regression: True if any iteration scored lower than a previous one
+        mid_loop_regression = any(
+            score_progression[i] < score_progression[i - 1]
+            for i in range(1, len(score_progression))
+        )
 
         return {
             "improved": self.improvement_detected,
@@ -212,10 +221,11 @@ class RefinementHistory(BaseModel):
             "peak_score": self.peak_score,
             "final_score": last_score,
             "best_iteration": self.best_iteration,
-            "total_iterations": len(self.iterations),
-            "score_progression": [r.average_score for r in self.iterations],
+            "scoring_rounds": len(self.iterations),
+            "score_progression": score_progression,
             "worsened_after_peak": last_score < self.peak_score,
             "consecutive_degradations": self.consecutive_degradations,
+            "mid_loop_regression": mid_loop_regression,
         }
 
 
