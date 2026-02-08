@@ -312,7 +312,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
             description=char.description,
             attributes={
                 "role": char.role,
-                "personality_traits": char.personality_traits,
+                "personality_traits": char.trait_names,
                 "goals": char.goals,
                 "arc_notes": char.arc_notes,
             },

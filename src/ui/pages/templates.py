@@ -257,7 +257,12 @@ class TemplatesPage:
                                 if char.personality_traits:
                                     with ui.row().classes("gap-2 mt-2"):
                                         for trait in char.personality_traits:
-                                            ui.badge(trait).props("outline")
+                                            color = {
+                                                "core": "blue",
+                                                "flaw": "red",
+                                                "quirk": "purple",
+                                            }[trait.category]
+                                            ui.badge(trait.trait).props(f"outline color={color}")
 
                     # Plot points
                     if template.plot_points:

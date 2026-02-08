@@ -272,7 +272,7 @@ async def _generate_characters(
             for char, scores in selected:
                 attrs = {
                     "role": char.role,
-                    "traits": char.personality_traits,
+                    "traits": char.trait_names,
                     "goals": char.goals,
                     "arc": char.arc_notes,
                     "quality_scores": scores.to_dict(),
@@ -318,7 +318,7 @@ async def _generate_characters(
                 description=char.description,
                 attributes={
                     "role": char.role,
-                    "traits": char.personality_traits,
+                    "traits": char.trait_names,
                     "goals": char.goals,
                     "arc": char.arc_notes,
                 },

@@ -658,7 +658,7 @@ class TestCreateCharacter:
         assert character is not None
         assert character.name == "Dr. Eleanor Grey"
         assert character.role == "protagonist"
-        assert "observant" in character.personality_traits
+        assert "observant" in character.trait_names
 
     @patch("src.services.world_quality_service._character.generate_structured")
     def test_create_character_with_existing_names(

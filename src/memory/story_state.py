@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.memory.content_guidelines import ContentProfile
-from src.memory.templates import TargetLength
+from src.memory.templates import PersonalityTrait, TargetLength, normalize_personality_traits_list
 
 if TYPE_CHECKING:
     from src.memory._chapter_versions import ChapterVersionManager
@@ -22,12 +22,18 @@ class Character(BaseModel):
     name: str
     role: str  # protagonist, antagonist, supporting, etc.
     description: str
-    personality_traits: list[str] = Field(default_factory=list)
+    personality_traits: list[PersonalityTrait] = Field(default_factory=list)
     goals: list[str] = Field(default_factory=list)
     relationships: dict[str, str] = Field(default_factory=dict)  # character_name -> relationship
     arc_notes: str = ""  # How the character should develop
     arc_type: str | None = None  # Reference to arc template ID (e.g., "hero_journey")
     arc_progress: dict[int, str] = Field(default_factory=dict)  # chapter_number -> arc state
+
+    @field_validator("personality_traits", mode="before")
+    @classmethod
+    def normalize_personality_traits(cls, v: Any) -> Any:
+        """Normalize personality traits from plain strings or dicts."""
+        return normalize_personality_traits_list(v)
 
     @field_validator("arc_progress", mode="before")
     @classmethod
@@ -37,6 +43,9 @@ class Character(BaseModel):
         LLMs sometimes return string keys like {"Embracing Power": "..."} instead of
         integer chapter numbers {1: "..."}. Since arc_progress is filled during writing,
         we just clear invalid data rather than fail character creation.
+
+        This validator also serves as a safety net when loading old project JSON files
+        that may contain invalid arc_progress data.
 
         Using field_validator instead of model_validator ensures this runs before
         Pydantic validates dict[int, str] keys, which is critical for instructor
@@ -55,6 +64,22 @@ class Character(BaseModel):
                 # Invalid key (like "Embracing Corruption") - skip this entry
                 logger.warning("Skipping invalid arc_progress key: %r (expected integer)", key)
         return cleaned
+
+    @property
+    def trait_names(self) -> list[str]:
+        """Get flat list of trait names for prompt building."""
+        return [t.trait for t in self.personality_traits]
+
+    def traits_by_category(self, category: str) -> list[str]:
+        """Get trait names filtered by category.
+
+        Args:
+            category: One of "core", "flaw", "quirk".
+
+        Returns:
+            List of trait names matching the category.
+        """
+        return [t.trait for t in self.personality_traits if t.category == category]
 
     def update_arc(self, chapter_number: int, state: str) -> None:
         """Update character arc progress for a chapter."""
@@ -658,6 +683,60 @@ class CharacterList(BaseModel):
                 logger.debug("Wrapping single Character object in CharacterList")
                 return {"characters": [data]}
         return data
+
+
+class CharacterCreation(BaseModel):
+    """A character as created by the LLM, without runtime-only fields.
+
+    Excludes arc_progress and arc_type which are populated at runtime during
+    the write loop, not during character creation. This prevents grammar-constrained
+    output from wasting tokens on empty/invalid arc_progress fields.
+    """
+
+    name: str
+    role: str
+    description: str
+    personality_traits: list[PersonalityTrait] = Field(default_factory=list)
+    goals: list[str] = Field(default_factory=list)
+    relationships: dict[str, str] = Field(default_factory=dict)
+    arc_notes: str = ""
+
+    @field_validator("personality_traits", mode="before")
+    @classmethod
+    def normalize_personality_traits(cls, v: Any) -> Any:
+        """Normalize personality traits from plain strings or dicts."""
+        return normalize_personality_traits_list(v)
+
+    def to_character(self) -> Character:
+        """Convert to a full Character with default runtime fields."""
+        logger.debug("Converting CharacterCreation '%s' to Character", self.name)
+        return Character(**self.model_dump())
+
+
+class CharacterCreationList(BaseModel):
+    """Wrapper for a list of CharacterCreation models.
+
+    Used with generate_structured() during character creation to exclude
+    runtime-only fields (arc_progress, arc_type) from the grammar constraint.
+    Handles LLMs returning a single object instead of a wrapped list.
+    """
+
+    characters: list[CharacterCreation]
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_single_object(cls, data: Any) -> Any:
+        """Wrap a single CharacterCreation object in a list if needed."""
+        if isinstance(data, dict) and "characters" not in data:
+            if "name" in data and "role" in data:
+                logger.debug("Wrapping single CharacterCreation object in CharacterCreationList")
+                return {"characters": [data]}
+        return data
+
+    def to_characters(self) -> list[Character]:
+        """Convert all CharacterCreation items to full Character objects."""
+        logger.debug("Converting %d CharacterCreation items to Characters", len(self.characters))
+        return [c.to_character() for c in self.characters]
 
 
 class PlotPointList(BaseModel):

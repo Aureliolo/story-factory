@@ -13,7 +13,7 @@ template: |
 
   CHARACTERS:
   {% for char in characters %}
-  - {{ char.name }}: {{ char.description }} | Traits: {{ char.personality_traits | join(", ") }}
+  - {{ char.name }}: {{ char.description }} | Traits: {{ char.trait_names | join(", ") }}
   {% endfor %}
 
   For each character who speaks, identify their dialogue characteristics:

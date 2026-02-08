@@ -599,6 +599,64 @@ class TestContinuityVoiceConsistency:
         assert "ESTABLISHED SPEECH PATTERNS" in prompt
         assert "formal vocabulary" in prompt
 
+    def test_check_character_voice_with_categorized_traits(self, continuity, sample_story_state):
+        """Test voice checking includes categorized trait sections (core/flaw/quirk)."""
+        from src.memory.templates import PersonalityTrait
+
+        # Replace characters with categorized traits to hit flaw/quirk branches
+        sample_story_state.characters = [
+            Character(
+                name="Sarah Chen",
+                role="protagonist",
+                description="Brilliant archaeologist",
+                personality_traits=[
+                    PersonalityTrait(trait="intelligent", category="core"),
+                    PersonalityTrait(trait="brave", category="core"),
+                    PersonalityTrait(trait="stubborn", category="flaw"),
+                    PersonalityTrait(trait="hums when nervous", category="quirk"),
+                ],
+                goals=["Find the lost tomb"],
+            ),
+        ]
+
+        mock_result = ContinuityIssueList(issues=[])
+        continuity.generate_structured = MagicMock(return_value=mock_result)
+
+        continuity.check_character_voice(sample_story_state, "Chapter content...")
+
+        call_args = continuity.generate_structured.call_args
+        prompt = call_args[0][0]
+        assert "Core Traits: intelligent, brave" in prompt
+        assert "Flaws: stubborn" in prompt
+        assert "Quirks: hums when nervous" in prompt
+
+    def test_check_character_voice_uncategorized_traits_fallback(
+        self, continuity, sample_story_state
+    ):
+        """Test voice checking falls back to Personality label when no categories match."""
+        # Use a mock character where traits_by_category returns empty for all categories
+        # but trait_names returns values (simulates pre-enrichment data)
+        mock_char = MagicMock()
+        mock_char.name = "Old Character"
+        mock_char.description = "From legacy data"
+        mock_char.traits_by_category.return_value = []
+        mock_char.trait_names = ["brave", "clever"]
+
+        sample_story_state.characters = [mock_char]
+
+        mock_result = ContinuityIssueList(issues=[])
+        continuity.generate_structured = MagicMock(return_value=mock_result)
+
+        continuity.check_character_voice(sample_story_state, "Chapter content...")
+
+        call_args = continuity.generate_structured.call_args
+        prompt = call_args[0][0]
+        assert "Personality: brave, clever" in prompt
+        # Should not have Core/Flaws/Quirks labels
+        assert "Core Traits:" not in prompt
+        assert "Flaws:" not in prompt
+        assert "Quirks:" not in prompt
+
     def test_check_character_voice_no_characters(self, continuity, sample_story_state):
         """Test returns empty list when no characters."""
         sample_story_state.characters = []

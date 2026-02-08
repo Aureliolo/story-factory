@@ -9,7 +9,8 @@ from src.memory.story_state import (
     Chapter,
     ChapterList,
     Character,
-    CharacterList,
+    CharacterCreation,
+    CharacterCreationList,
     PlotOutline,
     PlotPoint,
     StoryBrief,
@@ -112,9 +113,9 @@ class TestArchitectCreateCharacters:
 
     def test_creates_characters_via_structured_generation(self, architect, sample_story_state):
         """Test creates characters using generate_structured."""
-        mock_characters = CharacterList(
+        mock_characters = CharacterCreationList(
             characters=[
-                Character(
+                CharacterCreation(
                     name="Oliver Grey",
                     role="protagonist",
                     description="A curious 16-year-old with untapped magical potential",
@@ -123,7 +124,7 @@ class TestArchitectCreateCharacters:
                     relationships={},
                     arc_notes="Grows from uncertain outsider to confident wizard",
                 ),
-                Character(
+                CharacterCreation(
                     name="Professor Nightshade",
                     role="supporting",
                     description="Stern but caring headmaster of the academy",
@@ -132,7 +133,7 @@ class TestArchitectCreateCharacters:
                     relationships={"Oliver Grey": "Mentor"},
                     arc_notes="Reveals hidden connection to Oliver's past",
                 ),
-                Character(
+                CharacterCreation(
                     name="Luna Swift",
                     role="love_interest",
                     description="Quick-witted student with a mysterious past",
@@ -141,7 +142,7 @@ class TestArchitectCreateCharacters:
                     relationships={"Oliver Grey": "Friend"},
                     arc_notes="Becomes Oliver's closest ally",
                 ),
-                Character(
+                CharacterCreation(
                     name="Marcus Thorn",
                     role="antagonist",
                     description="Ambitious rival with hidden motives",
@@ -159,7 +160,7 @@ class TestArchitectCreateCharacters:
         assert len(characters) == 4
         assert characters[0].name == "Oliver Grey"
         assert characters[0].role == "protagonist"
-        assert "curious" in characters[0].personality_traits
+        assert "curious" in characters[0].trait_names
         architect.generate_structured.assert_called_once()
 
     def test_raises_error_on_generation_failure(self, architect, sample_story_state):
@@ -178,10 +179,10 @@ class TestArchitectCreateCharacters:
         from src.utils.exceptions import LLMGenerationError
 
         # Mock returning only 2 characters (less than minimum of 4)
-        mock_result = CharacterList(
+        mock_result = CharacterCreationList(
             characters=[
-                Character(name="A", role="protagonist", description="Test"),
-                Character(name="B", role="antagonist", description="Test"),
+                CharacterCreation(name="A", role="protagonist", description="Test"),
+                CharacterCreation(name="B", role="antagonist", description="Test"),
             ]
         )
         architect.generate_structured = MagicMock(return_value=mock_result)
@@ -194,9 +195,9 @@ class TestArchitectCreateCharacters:
 
     def test_create_characters_with_arc_templates(self, architect, sample_story_state):
         """Test that arc templates are applied to characters."""
-        mock_characters = CharacterList(
+        mock_characters = CharacterCreationList(
             characters=[
-                Character(
+                CharacterCreation(
                     name="Hero",
                     role="protagonist",
                     description="A brave adventurer",
@@ -204,7 +205,7 @@ class TestArchitectCreateCharacters:
                     goals=["Save the world"],
                     arc_notes="Classic hero journey",
                 ),
-                Character(
+                CharacterCreation(
                     name="Villain",
                     role="antagonist",
                     description="A cunning mastermind",
@@ -212,14 +213,14 @@ class TestArchitectCreateCharacters:
                     goals=["Domination"],
                     arc_notes="Hidden depths",
                 ),
-                Character(
+                CharacterCreation(
                     name="Ally1",
                     role="supporting",
                     description="Helpful friend",
                     personality_traits=["loyal"],
                     goals=["Help hero"],
                 ),
-                Character(
+                CharacterCreation(
                     name="Ally2",
                     role="supporting",
                     description="Another friend",
@@ -256,37 +257,37 @@ class TestArchitectCreateCharacters:
 
     def test_create_characters_with_invalid_arc_id(self, architect, sample_story_state):
         """Test that invalid arc template IDs are handled gracefully."""
-        mock_characters = CharacterList(
+        mock_characters = CharacterCreationList(
             characters=[
-                Character(
+                CharacterCreation(
                     name="Hero",
                     role="protagonist",
                     description="A brave adventurer",
                     personality_traits=["brave"],
                     goals=["Save the world"],
                 ),
-                Character(
+                CharacterCreation(
                     name="Ally1",
                     role="supporting",
                     description="Helpful friend",
                     personality_traits=["loyal"],
                     goals=["Help hero"],
                 ),
-                Character(
+                CharacterCreation(
                     name="Ally2",
                     role="supporting",
                     description="Another friend",
                     personality_traits=["wise"],
                     goals=["Guide hero"],
                 ),
-                Character(
+                CharacterCreation(
                     name="Ally3",
                     role="supporting",
                     description="Third friend",
                     personality_traits=["brave"],
                     goals=["Support hero"],
                 ),
-                Character(
+                CharacterCreation(
                     name="Villain",
                     role="antagonist",
                     description="The enemy",
@@ -585,9 +586,9 @@ class TestArchitectCharacterTrimming:
         sample_story_state.target_characters_max = 3
 
         # Return 6 characters, which exceeds max of 3
-        mock_characters = CharacterList(
+        mock_characters = CharacterCreationList(
             characters=[
-                Character(name=f"Char{i}", role="supporting", description=f"Character {i}")
+                CharacterCreation(name=f"Char{i}", role="supporting", description=f"Character {i}")
                 for i in range(6)
             ]
         )
@@ -610,9 +611,9 @@ class TestArchitectProjectSpecificCharacterCount:
         sample_story_state.target_characters_min = 6
         sample_story_state.target_characters_max = None  # Use default max
 
-        mock_result = CharacterList(
+        mock_result = CharacterCreationList(
             characters=[
-                Character(name=f"Char{i}", role="supporting", description=f"Character {i}")
+                CharacterCreation(name=f"Char{i}", role="supporting", description=f"Character {i}")
                 for i in range(6)
             ]
         )
@@ -627,9 +628,9 @@ class TestArchitectProjectSpecificCharacterCount:
         sample_story_state.target_characters_min = None  # Use default min
         sample_story_state.target_characters_max = 8
 
-        mock_result = CharacterList(
+        mock_result = CharacterCreationList(
             characters=[
-                Character(name=f"Char{i}", role="supporting", description=f"Character {i}")
+                CharacterCreation(name=f"Char{i}", role="supporting", description=f"Character {i}")
                 for i in range(architect.settings.world_gen_characters_min)
             ]
         )
@@ -645,10 +646,10 @@ class TestArchitectProjectSpecificCharacterCount:
         sample_story_state.target_characters_min = 2
         sample_story_state.target_characters_max = 3
 
-        mock_result = CharacterList(
+        mock_result = CharacterCreationList(
             characters=[
-                Character(name="Hero", role="protagonist", description="Main"),
-                Character(name="Sidekick", role="supporting", description="Helper"),
+                CharacterCreation(name="Hero", role="protagonist", description="Main"),
+                CharacterCreation(name="Sidekick", role="supporting", description="Helper"),
             ]
         )
         architect.generate_structured = MagicMock(return_value=mock_result)
@@ -1093,9 +1094,9 @@ class TestGenerateMoreCharacters:
 
     def test_generates_new_characters(self, architect, sample_story_state):
         """Test generates new characters complementing existing ones."""
-        mock_result = CharacterList(
+        mock_result = CharacterCreationList(
             characters=[
-                Character(
+                CharacterCreation(
                     name="Marcus Vale",
                     role="supporting",
                     description="A mysterious librarian with knowledge of ancient texts",
@@ -1104,7 +1105,7 @@ class TestGenerateMoreCharacters:
                     relationships={"Oliver Grey": "Mentor figure"},
                     arc_notes="Reveals his true identity as a guardian",
                 ),
-                Character(
+                CharacterCreation(
                     name="Luna Frost",
                     role="supporting",
                     description="A talented student with ice magic abilities",
@@ -1151,9 +1152,9 @@ class TestGenerateMoreCharacters:
 
     def test_includes_language_requirement(self, architect, sample_story_state):
         """Test prompt includes language requirement from brief."""
-        mock_result = CharacterList(
+        mock_result = CharacterCreationList(
             characters=[
-                Character(
+                CharacterCreation(
                     name="Test",
                     role="supporting",
                     description="A test character",

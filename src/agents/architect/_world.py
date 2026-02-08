@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.memory.story_state import (
     Character,
-    CharacterList,
+    CharacterCreationList,
     StoryState,
 )
 from src.utils.json_parser import extract_json_list
@@ -167,25 +167,25 @@ def create_characters(
     # Try up to 3 times if we don't get enough characters
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
-        result = agent.generate_structured(prompt, CharacterList)
+        result = agent.generate_structured(prompt, CharacterCreationList)
         if len(result.characters) >= min_chars:
+            # Convert to full Character objects
+            characters = result.to_characters()
+
             # Set arc_type on characters only if a valid template was found
-            for char in result.characters:
+            for char in characters:
                 if char.role == "protagonist" and protagonist_arc_template:
                     char.arc_type = protagonist_arc_id
                 elif char.role == "antagonist" and antagonist_arc_template:
                     char.arc_type = antagonist_arc_id
 
             # Trim to max_chars if the LLM returned too many
-            if len(result.characters) > max_chars:
-                logger.info(f"Trimming characters from {len(result.characters)} to {max_chars}")
-                result.characters = result.characters[:max_chars]
+            if len(characters) > max_chars:
+                logger.info(f"Trimming characters from {len(characters)} to {max_chars}")
+                characters = characters[:max_chars]
 
-            logger.info(
-                f"Created {len(result.characters)} characters: "
-                f"{[c.name for c in result.characters]}"
-            )
-            return result.characters
+            logger.info(f"Created {len(characters)} characters: {[c.name for c in characters]}")
+            return characters
         logger.warning(
             f"Attempt {attempt}: Got {len(result.characters)} characters, expected {min_chars}. "
             f"{'Retrying...' if attempt < max_attempts else 'Giving up.'}"
@@ -238,11 +238,10 @@ def generate_more_characters(
     )
 
     prompt = builder.build()
-    result = agent.generate_structured(prompt, CharacterList)
-    logger.info(
-        f"Generated {len(result.characters)} new characters: {[c.name for c in result.characters]}"
-    )
-    return result.characters
+    result = agent.generate_structured(prompt, CharacterCreationList)
+    characters = result.to_characters()
+    logger.info(f"Generated {len(characters)} new characters: {[c.name for c in characters]}")
+    return characters
 
 
 def generate_locations(

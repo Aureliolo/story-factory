@@ -125,7 +125,7 @@ class PromptBuilder:
         for char in characters:
             char_lines.append(f"- {char.name} ({char.role}): {char.description}")
             if char.personality_traits:
-                char_lines.append(f"  Traits: {', '.join(char.personality_traits)}")
+                char_lines.append(f"  Traits: {', '.join(char.trait_names)}")
             if char.goals:
                 char_lines.append(f"  Goals: {', '.join(char.goals)}")
 

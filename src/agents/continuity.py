@@ -156,7 +156,7 @@ class ContinuityAgent(BaseAgent):
                 previous_content += f"\n[Chapter {ch.number}]\n{ch.content[-ctx_chars:]}\n"
 
         chars_summary = "\n".join(
-            f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
+            f"- {c.name}: {c.description} | Traits: {', '.join(c.trait_names)}"
             for c in story_state.characters
         )
 
@@ -228,7 +228,7 @@ Return a list of issues found. If no issues, return an empty list."""
         logger.debug("Extracting dialogue patterns for %d characters", len(story_state.characters))
 
         chars_summary = "\n".join(
-            f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
+            f"- {c.name}: {c.description} | Traits: {', '.join(c.trait_names)}"
             for c in story_state.characters
         )
 
@@ -285,10 +285,23 @@ Only include characters who actually speak in this chapter."""
 
         logger.debug("Checking voice consistency for %d characters", len(story_state.characters))
 
-        chars_summary = "\n".join(
-            f"- {c.name}: {c.description}\n  Personality: {', '.join(c.personality_traits)}"
-            for c in story_state.characters
-        )
+        char_lines = []
+        for c in story_state.characters:
+            parts = [f"- {c.name}: {c.description}"]
+            categorized_found = False
+            for category, label in [
+                ("core", "Core Traits"),
+                ("flaw", "Flaws"),
+                ("quirk", "Quirks"),
+            ]:
+                traits = c.traits_by_category(category)
+                if traits:
+                    parts.append(f"  {label}: {', '.join(traits)}")
+                    categorized_found = True
+            if not categorized_found and c.trait_names:
+                parts.append(f"  Personality: {', '.join(c.trait_names)}")
+            char_lines.append("\n".join(parts))
+        chars_summary = "\n".join(char_lines)
 
         # Build context from established patterns
         patterns_context = ""

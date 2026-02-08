@@ -1,9 +1,14 @@
 """Tests for memory/story_state.py."""
 
+import pytest
+from pydantic import ValidationError
+
 from src.memory.story_state import (
     Chapter,
     ChapterList,
     Character,
+    CharacterCreation,
+    CharacterCreationList,
     CharacterList,
     OutlineVariation,
     PlotPoint,
@@ -12,6 +17,7 @@ from src.memory.story_state import (
     StoryBrief,
     StoryState,
 )
+from src.memory.templates import CharacterTemplate, PersonalityTrait
 
 
 class TestScene:
@@ -339,6 +345,286 @@ class TestCharacter:
         char = Character.model_validate(raw_data)
         # Should convert to empty dict
         assert char.arc_progress == {}
+
+
+class TestPersonalityTrait:
+    """Tests for PersonalityTrait model."""
+
+    def test_basic_creation(self):
+        """Test creating a PersonalityTrait with explicit category."""
+        trait = PersonalityTrait(trait="brave", category="core")
+        assert trait.trait == "brave"
+        assert trait.category == "core"
+
+    def test_default_category_is_core(self):
+        """Test that category defaults to 'core'."""
+        trait = PersonalityTrait(trait="clever")
+        assert trait.category == "core"
+
+    def test_flaw_category(self):
+        """Test creating a flaw trait."""
+        trait = PersonalityTrait(trait="arrogant", category="flaw")
+        assert trait.category == "flaw"
+
+    def test_quirk_category(self):
+        """Test creating a quirk trait."""
+        trait = PersonalityTrait(trait="talks to animals", category="quirk")
+        assert trait.category == "quirk"
+
+    def test_invalid_category_rejected(self):
+        """Test that an invalid category raises ValidationError."""
+        with pytest.raises(ValidationError):
+            PersonalityTrait(trait="mysterious", category="unknown")
+
+
+class TestCharacterTemplatePersonalityTraits:
+    """Tests for CharacterTemplate personality trait normalization."""
+
+    def test_normalize_passthrough_for_non_list(self):
+        """Test that non-list input is passed through for Pydantic to handle."""
+        with pytest.raises(ValidationError):
+            CharacterTemplate(
+                name="Hero",
+                role="protagonist",
+                description="A brave hero",
+                personality_traits="not a list",
+            )
+
+
+class TestCharacterPersonalityTraits:
+    """Tests for Character personality trait normalization and access."""
+
+    def test_backward_compat_plain_strings(self):
+        """Test that plain string traits are auto-converted to PersonalityTrait objects."""
+        char = Character(
+            name="Alice",
+            role="protagonist",
+            description="Hero",
+            personality_traits=["brave", "clever", "stubborn"],
+        )
+        assert len(char.personality_traits) == 3
+        assert all(isinstance(t, PersonalityTrait) for t in char.personality_traits)
+        assert char.personality_traits[0].trait == "brave"
+        assert char.personality_traits[0].category == "core"
+
+    def test_structured_traits(self):
+        """Test creating a character with structured PersonalityTrait objects."""
+        char = Character(
+            name="Bob",
+            role="antagonist",
+            description="Villain",
+            personality_traits=[
+                {"trait": "ruthless", "category": "core"},
+                {"trait": "overconfident", "category": "flaw"},
+                {"trait": "collects butterflies", "category": "quirk"},
+            ],
+        )
+        assert len(char.personality_traits) == 3
+        assert char.personality_traits[0].trait == "ruthless"
+        assert char.personality_traits[1].category == "flaw"
+        assert char.personality_traits[2].category == "quirk"
+
+    def test_trait_names_property(self):
+        """Test trait_names returns flat list of names."""
+        char = Character(
+            name="Alice",
+            role="protagonist",
+            description="Hero",
+            personality_traits=[
+                {"trait": "brave", "category": "core"},
+                {"trait": "arrogant", "category": "flaw"},
+            ],
+        )
+        assert char.trait_names == ["brave", "arrogant"]
+
+    def test_trait_names_empty(self):
+        """Test trait_names returns empty list when no traits."""
+        char = Character(name="Alice", role="protagonist", description="Hero")
+        assert char.trait_names == []
+
+    def test_traits_by_category(self):
+        """Test filtering traits by category."""
+        char = Character(
+            name="Alice",
+            role="protagonist",
+            description="Hero",
+            personality_traits=[
+                {"trait": "brave", "category": "core"},
+                {"trait": "loyal", "category": "core"},
+                {"trait": "impulsive", "category": "flaw"},
+                {"trait": "hums when nervous", "category": "quirk"},
+            ],
+        )
+        assert char.traits_by_category("core") == ["brave", "loyal"]
+        assert char.traits_by_category("flaw") == ["impulsive"]
+        assert char.traits_by_category("quirk") == ["hums when nervous"]
+
+    def test_traits_by_category_empty(self):
+        """Test filtering by category with no matches."""
+        char = Character(
+            name="Alice",
+            role="protagonist",
+            description="Hero",
+            personality_traits=[{"trait": "brave", "category": "core"}],
+        )
+        assert char.traits_by_category("flaw") == []
+
+    def test_normalize_passthrough_for_non_list(self):
+        """Test that non-list input is passed through for Pydantic to handle."""
+        # The validator should pass through non-list values (Pydantic raises the type error)
+        with pytest.raises(ValidationError):
+            Character(
+                name="Alice",
+                role="protagonist",
+                description="Hero",
+                personality_traits="not a list",
+            )
+
+    def test_serialization_roundtrip(self):
+        """Test that PersonalityTrait data survives serialize/deserialize."""
+        char = Character(
+            name="Alice",
+            role="protagonist",
+            description="Hero",
+            personality_traits=[
+                {"trait": "brave", "category": "core"},
+                {"trait": "reckless", "category": "flaw"},
+            ],
+        )
+        data = char.model_dump(mode="json")
+        restored = Character.model_validate(data)
+        assert len(restored.personality_traits) == 2
+        assert restored.personality_traits[0].trait == "brave"
+        assert restored.personality_traits[0].category == "core"
+        assert restored.personality_traits[1].trait == "reckless"
+        assert restored.personality_traits[1].category == "flaw"
+
+
+class TestCharacterCreation:
+    """Tests for CharacterCreation model (no runtime fields)."""
+
+    def test_basic_creation(self):
+        """Test creating a CharacterCreation without arc_progress/arc_type."""
+        cc = CharacterCreation(
+            name="Alice",
+            role="protagonist",
+            description="A brave hero",
+            personality_traits=["brave", "clever"],
+            goals=["save the world"],
+            arc_notes="Hero's journey",
+        )
+        assert cc.name == "Alice"
+        assert cc.role == "protagonist"
+        assert len(cc.personality_traits) == 2
+        assert cc.personality_traits[0].trait == "brave"
+
+    def test_to_character_conversion(self):
+        """Test converting CharacterCreation to full Character."""
+        cc = CharacterCreation(
+            name="Alice",
+            role="protagonist",
+            description="A brave hero",
+            personality_traits=[
+                {"trait": "brave", "category": "core"},
+                {"trait": "reckless", "category": "flaw"},
+            ],
+            goals=["save the world"],
+            relationships={"Bob": "rival"},
+            arc_notes="Hero's journey",
+        )
+        char = cc.to_character()
+        assert isinstance(char, Character)
+        assert char.name == "Alice"
+        assert char.role == "protagonist"
+        assert char.description == "A brave hero"
+        assert len(char.personality_traits) == 2
+        assert char.personality_traits[0].trait == "brave"
+        assert char.personality_traits[1].category == "flaw"
+        assert char.goals == ["save the world"]
+        assert char.relationships == {"Bob": "rival"}
+        assert char.arc_notes == "Hero's journey"
+        # Runtime fields should be empty defaults
+        assert char.arc_type is None
+        assert char.arc_progress == {}
+
+    def test_normalize_passthrough_for_non_list(self):
+        """Test that non-list input is passed through for Pydantic to handle."""
+        with pytest.raises(ValidationError):
+            CharacterCreation(
+                name="Alice",
+                role="protagonist",
+                description="Hero",
+                personality_traits="not a list",
+            )
+
+    def test_schema_excludes_runtime_fields(self):
+        """Test that CharacterCreation schema excludes arc_progress and arc_type."""
+        schema = CharacterCreation.model_json_schema()
+        props = schema["properties"]
+        assert "arc_progress" not in props
+        assert "arc_type" not in props
+        assert "name" in props
+        assert "role" in props
+        assert "personality_traits" in props
+
+
+class TestCharacterCreationList:
+    """Tests for CharacterCreationList wrapper model."""
+
+    def test_wraps_single_object(self):
+        """Test CharacterCreationList wraps a single object in a list."""
+        single_char = {"name": "Hero", "role": "protagonist", "description": "A brave hero"}
+        result = CharacterCreationList.model_validate(single_char)
+        assert len(result.characters) == 1
+        assert result.characters[0].name == "Hero"
+
+    def test_accepts_proper_format(self):
+        """Test CharacterCreationList accepts properly formatted input."""
+        data = {
+            "characters": [
+                {"name": "Alice", "role": "protagonist", "description": "Hero"},
+                {"name": "Bob", "role": "antagonist", "description": "Villain"},
+            ]
+        }
+        result = CharacterCreationList.model_validate(data)
+        assert len(result.characters) == 2
+
+    def test_to_characters(self):
+        """Test converting CharacterCreationList to list of Characters."""
+        data = {
+            "characters": [
+                {
+                    "name": "Alice",
+                    "role": "protagonist",
+                    "description": "Hero",
+                    "personality_traits": [{"trait": "brave", "category": "core"}],
+                },
+                {
+                    "name": "Bob",
+                    "role": "antagonist",
+                    "description": "Villain",
+                    "personality_traits": [{"trait": "cunning", "category": "flaw"}],
+                },
+            ]
+        }
+        result = CharacterCreationList.model_validate(data)
+        characters = result.to_characters()
+        assert len(characters) == 2
+        assert all(isinstance(c, Character) for c in characters)
+        assert characters[0].name == "Alice"
+        assert characters[0].arc_type is None
+        assert characters[0].arc_progress == {}
+        assert characters[1].name == "Bob"
+
+    def test_schema_excludes_runtime_fields(self):
+        """Test that CharacterCreationList schema excludes runtime fields."""
+        schema = CharacterCreationList.model_json_schema()
+        # Walk the schema to find CharacterCreation properties
+        assert "$defs" in schema, "Expected $defs in schema"
+        assert "CharacterCreation" in schema["$defs"], "Expected CharacterCreation in $defs"
+        props = schema["$defs"]["CharacterCreation"]["properties"]
+        assert "arc_progress" not in props
+        assert "arc_type" not in props
 
 
 class TestStoryState:

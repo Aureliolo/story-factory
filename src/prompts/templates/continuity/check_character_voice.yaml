@@ -11,7 +11,7 @@ template: |
   ESTABLISHED CHARACTERS:
   {% for char in characters %}
   - {{ char.name }}: {{ char.description }}
-    Personality: {{ char.personality_traits | join(", ") }}
+    Personality: {{ char.trait_names | join(", ") }}
   {% endfor %}
 
   {% if patterns_context %}

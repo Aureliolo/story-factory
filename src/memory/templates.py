@@ -2,11 +2,50 @@
 
 import logging
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
+
+
+class PersonalityTrait(BaseModel):
+    """A categorized personality trait for richer character modeling.
+
+    Categories help continuity checks (distinguishing core traits from flaws
+    for voice consistency) and quality judges (the "flaws" dimension benefits
+    from knowing which traits are flaws).
+    """
+
+    trait: str
+    category: Literal["core", "flaw", "quirk"] = "core"
+
+
+def normalize_personality_traits_list(v: Any) -> Any:
+    """Normalize a list of personality traits from plain strings to dicts.
+
+    Handles backward compatibility with old project JSON files and builtin
+    YAML templates that use plain string lists like ["brave", "clever"].
+    Converts them to PersonalityTrait dicts with category defaulting to "core".
+    """
+    if not isinstance(v, list):
+        return v
+    normalized: list[dict[str, str]] = []
+    has_plain_strings = False
+    for item in v:
+        if isinstance(item, str):
+            normalized.append({"trait": item, "category": "core"})
+            has_plain_strings = True
+        else:
+            normalized.append(item)
+    if has_plain_strings:
+        logger.debug(
+            "Normalized %d personality traits (%d from plain strings)",
+            len(normalized),
+            sum(1 for i in v if isinstance(i, str)),
+        )
+    return normalized
+
 
 # Shared type for target length across templates and story briefs
 type TargetLength = Literal["short_story", "novella", "novel"]
@@ -81,10 +120,16 @@ class CharacterTemplate(BaseModel):
     name: str  # Placeholder name or role
     role: str  # protagonist, antagonist, mentor, etc.
     description: str
-    personality_traits: list[str] = Field(default_factory=list)
+    personality_traits: list[PersonalityTrait] = Field(default_factory=list)
     goals: list[str] = Field(default_factory=list)
     arc_notes: str = ""
     arc_type: str | None = None  # Reference to arc template ID (e.g., "hero_journey")
+
+    @field_validator("personality_traits", mode="before")
+    @classmethod
+    def normalize_personality_traits(cls, v: Any) -> Any:
+        """Normalize personality traits from plain strings or dicts."""
+        return normalize_personality_traits_list(v)
 
 
 class PlotPointTemplate(BaseModel):
