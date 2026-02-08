@@ -1,5 +1,8 @@
 """Tests for memory/story_state.py."""
 
+import pytest
+from pydantic import ValidationError
+
 from src.memory.story_state import (
     Chapter,
     ChapterList,
@@ -14,7 +17,7 @@ from src.memory.story_state import (
     StoryBrief,
     StoryState,
 )
-from src.memory.templates import PersonalityTrait
+from src.memory.templates import CharacterTemplate, PersonalityTrait
 
 
 class TestScene:
@@ -369,6 +372,20 @@ class TestPersonalityTrait:
         assert trait.category == "quirk"
 
 
+class TestCharacterTemplatePersonalityTraits:
+    """Tests for CharacterTemplate personality trait normalization."""
+
+    def test_normalize_passthrough_for_non_list(self):
+        """Test that non-list input is passed through for Pydantic to handle."""
+        with pytest.raises(ValidationError):
+            CharacterTemplate(
+                name="Hero",
+                role="protagonist",
+                description="A brave hero",
+                personality_traits="not a list",
+            )
+
+
 class TestCharacterPersonalityTraits:
     """Tests for Character personality trait normalization and access."""
 
@@ -447,6 +464,17 @@ class TestCharacterPersonalityTraits:
         )
         assert char.traits_by_category("flaw") == []
 
+    def test_normalize_passthrough_for_non_list(self):
+        """Test that non-list input is passed through for Pydantic to handle."""
+        # The validator should pass through non-list values (Pydantic raises the type error)
+        with pytest.raises(ValidationError):
+            Character(
+                name="Alice",
+                role="protagonist",
+                description="Hero",
+                personality_traits="not a list",
+            )
+
     def test_serialization_roundtrip(self):
         """Test that PersonalityTrait data survives serialize/deserialize."""
         char = Character(
@@ -513,6 +541,16 @@ class TestCharacterCreation:
         # Runtime fields should be empty defaults
         assert char.arc_type is None
         assert char.arc_progress == {}
+
+    def test_normalize_passthrough_for_non_list(self):
+        """Test that non-list input is passed through for Pydantic to handle."""
+        with pytest.raises(ValidationError):
+            CharacterCreation(
+                name="Alice",
+                role="protagonist",
+                description="Hero",
+                personality_traits="not a list",
+            )
 
     def test_schema_excludes_runtime_fields(self):
         """Test that CharacterCreation schema excludes arc_progress and arc_type."""
