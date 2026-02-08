@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from nicegui import ui
-from nicegui.elements.html import Html
+from nicegui.element import Element
 
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
@@ -75,7 +75,8 @@ class GraphComponent:
         self.on_edge_context_menu = on_edge_context_menu
         self.height = height
 
-        self._container: Html | None = None
+        self._container: Element | None = None
+        self._no_data_label: Element | None = None
         self._filter_types: list[str] = [
             "character",
             "location",
@@ -85,6 +86,7 @@ class GraphComponent:
         ]
         self._layout = "force-directed"
         self._selected_entity_id: str | None = None
+        self._restoring_prefs = False  # Guard flag to suppress on_change during pref restore
         self._callback_id = f"graph_node_select_{uuid.uuid4().hex[:8]}"
         self._edge_callback_id = f"graph_edge_select_{uuid.uuid4().hex[:8]}"
         self._create_rel_callback_id = f"graph_create_relationship_{uuid.uuid4().hex[:8]}"
@@ -213,11 +215,16 @@ class GraphComponent:
                     on_click=self.refresh,
                 ).props("flat round")
 
-            # Graph container (no script tags allowed here)
+            # Graph container — plain div instead of ui.html() because NiceGUI's
+            # Html Vue component calls renderContent() on every re-render, which
+            # resets innerHTML and destroys the vis.js canvas.
+            self._no_data_label = ui.label(
+                "No world data to display. Create or load a project first."
+            ).classes("text-gray-400 text-center w-full py-16")
             self._container = (
-                ui.html("", sanitize=False)
-                .classes("w-full border border-gray-700 rounded-lg bg-gray-800")
-                .style(f"height: {self.height}px;")
+                ui.element("div")
+                .classes("w-full border border-gray-700 rounded-lg")
+                .style(f"height: {self.height}px; background: #1f2937;")
             )
 
             # Initial render
@@ -258,25 +265,32 @@ class GraphComponent:
         self._render_graph()
 
     def _render_graph(self) -> None:
-        """Render the graph HTML."""
+        """Render the graph via vis.js inside the plain div container.
+
+        Uses ui.element('div') instead of ui.html() to avoid NiceGUI's Html Vue
+        component calling renderContent() on every re-render, which resets
+        innerHTML and destroys the vis.js canvas.
+        """
         if not self._container:
             return
 
         if not self.world_db:
-            self._container.content = """
-                <div style="
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: #9ca3af;
-                ">
-                    <p>No world data to display. Create or load a project first.</p>
-                </div>
-            """
+            # Show "no data" label, hide graph container
+            if self._no_data_label:
+                self._no_data_label.set_visibility(True)
+            self._container.set_visibility(False)
             return
 
-        # Generate vis.js HTML and JavaScript separately
+        # Hide "no data" label, show graph container
+        if self._no_data_label:
+            self._no_data_label.set_visibility(False)
+        self._container.set_visibility(True)
+
+        # The container is a plain ui.element('div') with auto-generated id "c{N}".
+        # Pass this as the container_id so vis.js can find it via getElementById.
+        container_id = f"c{self._container.id}"
+
+        # Generate vis.js JavaScript (HTML container is the plain div itself)
         result = render_graph_html(
             world_db=self.world_db,
             settings=self.settings,
@@ -284,7 +298,7 @@ class GraphComponent:
             layout=self._layout,
             height=self.height - 20,  # Account for border
             selected_entity_id=self._selected_entity_id,
-            container_id="graph-container-main",
+            container_id=container_id,
             create_rel_callback_id=self._create_rel_callback_id
             if self.on_create_relationship
             else "",
@@ -293,19 +307,23 @@ class GraphComponent:
             else "",
         )
 
-        # Set HTML content (no script tags)
-        self._container.content = result.html
-
-        # Run JavaScript initialization
+        # Run JavaScript initialization (deferred via requestAnimationFrame in the JS).
+        # The JS destroys any previous vis.Network before creating a new one.
         ui.run_javascript(result.js)
 
-        # Add JavaScript handler for node and edge selection
+        # Add JavaScript handler for node and edge selection.
+        # Uses polling because _buildGraph is deferred via requestAnimationFrame
+        # and window.graphNetwork won't exist yet when this JS first executes.
         if self.on_node_select or self.on_edge_select:
             node_callback = self._callback_id if self.on_node_select else ""
             edge_callback = self._edge_callback_id if self.on_edge_select else ""
             ui.run_javascript(
                 f"""
-                if (window.graphNetwork) {{
+                (function _attachClickHandler() {{
+                    if (!window.graphNetwork) {{
+                        setTimeout(_attachClickHandler, 100);
+                        return;
+                    }}
                     window.graphNetwork.off('click');
                     window.graphNetwork.on('click', function(params) {{
                         if (params.nodes.length > 0) {{
@@ -320,7 +338,7 @@ class GraphComponent:
                             }}
                         }}
                     }});
-                }}
+                }})();
             """
             )
 
@@ -413,6 +431,11 @@ class GraphComponent:
             entity_type: Entity type to toggle.
             enabled: Whether to enable the filter.
         """
+        # Skip when _apply_prefs is restoring checkbox values to prevent
+        # cascade of _render_graph() calls that race with async vis.js init
+        if self._restoring_prefs:
+            return
+
         if enabled and entity_type not in self._filter_types:
             self._filter_types.append(entity_type)
         elif not enabled and entity_type in self._filter_types:
@@ -427,6 +450,9 @@ class GraphComponent:
         Args:
             e: Change event with new value.
         """
+        if self._restoring_prefs:
+            return
+
         self._layout = e.value
         save_pref(_PAGE_KEY, "layout", e.value)
         self._render_graph()
@@ -442,21 +468,33 @@ class GraphComponent:
 
         changed = False
 
-        if "filter_types" in prefs and isinstance(prefs["filter_types"], list):
-            valid_types = {"character", "location", "item", "faction", "concept"}
-            loaded = [t for t in prefs["filter_types"] if t in valid_types]
-            if loaded != self._filter_types:
-                self._filter_types = loaded
-                changed = True
-                for etype, cb in self._filter_checkboxes.items():
-                    cb.value = etype in self._filter_types
+        # Guard flag prevents checkbox on_change → _toggle_filter → _render_graph cascade.
+        # Without this, each checkbox update triggers a separate _render_graph() call,
+        # causing multiple rapid vis.js destructions/re-creations that race with async
+        # font loading and leave the graph blank.
+        self._restoring_prefs = True
+        try:
+            if "filter_types" in prefs and isinstance(prefs["filter_types"], list):
+                valid_types = {"character", "location", "item", "faction", "concept"}
+                loaded = [t for t in prefs["filter_types"] if t in valid_types]
+                if loaded != self._filter_types:
+                    self._filter_types = loaded
+                    changed = True
+                    for etype, cb in self._filter_checkboxes.items():
+                        cb.value = etype in self._filter_types
 
-        if "layout" in prefs and prefs["layout"] in ("force-directed", "hierarchical", "circular"):
-            if prefs["layout"] != self._layout:
-                self._layout = prefs["layout"]
-                changed = True
-                if self._layout_select:
-                    self._layout_select.value = self._layout
+            if "layout" in prefs and prefs["layout"] in (
+                "force-directed",
+                "hierarchical",
+                "circular",
+            ):
+                if prefs["layout"] != self._layout:
+                    self._layout = prefs["layout"]
+                    changed = True
+                    if self._layout_select:
+                        self._layout_select.value = self._layout
+        finally:
+            self._restoring_prefs = False
 
         if changed:
             logger.info("Restored world graph preferences from localStorage")
@@ -488,8 +526,14 @@ def mini_graph(
     # Ensure vis-network library is loaded
     _ensure_vis_network_loaded()
 
-    # Use unique container ID for mini graphs
-    container_id = f"mini-graph-{uuid.uuid4().hex[:8]}"
+    # Use a plain div to avoid NiceGUI Html component's updated() → renderContent()
+    # which wipes dynamically added vis.js canvas on any Vue re-render.
+    container = (
+        ui.element("div")
+        .classes("w-full border border-gray-700 rounded bg-gray-800")
+        .style(f"height: {height}px; background: #1f2937;")
+    )
+    container_id = f"c{container.id}"
 
     result = render_graph_html(
         world_db=world_db,
@@ -499,11 +543,6 @@ def mini_graph(
         height=height,
         container_id=container_id,
     )
-
-    # Add HTML container (no script tags)
-    ui.html(result.html, sanitize=False).classes(
-        "w-full border border-gray-700 rounded bg-gray-800"
-    ).style(f"height: {height}px;")
 
     # Run JavaScript initialization
     ui.run_javascript(result.js)

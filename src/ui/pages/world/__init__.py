@@ -131,6 +131,8 @@ class WorldPage:
         self._analysis_result: Html | None = None
         self._undo_btn: Button | None = None
         self._redo_btn: Button | None = None
+        # Guard flag: suppresses on_change callbacks during browser pref restoration
+        self._restoring_browser_prefs = False
         # Generation progress dialog state
         self._generation_cancel_event: threading.Event | None = None
         self._generation_dialog: ui.dialog | None = None
