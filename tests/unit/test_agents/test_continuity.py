@@ -630,6 +630,33 @@ class TestContinuityVoiceConsistency:
         assert "Flaws: stubborn" in prompt
         assert "Quirks: hums when nervous" in prompt
 
+    def test_check_character_voice_uncategorized_traits_fallback(
+        self, continuity, sample_story_state
+    ):
+        """Test voice checking falls back to Personality label when no categories match."""
+        # Use a mock character where traits_by_category returns empty for all categories
+        # but trait_names returns values (simulates pre-enrichment data)
+        mock_char = MagicMock()
+        mock_char.name = "Old Character"
+        mock_char.description = "From legacy data"
+        mock_char.traits_by_category.return_value = []
+        mock_char.trait_names = ["brave", "clever"]
+
+        sample_story_state.characters = [mock_char]
+
+        mock_result = ContinuityIssueList(issues=[])
+        continuity.generate_structured = MagicMock(return_value=mock_result)
+
+        continuity.check_character_voice(sample_story_state, "Chapter content...")
+
+        call_args = continuity.generate_structured.call_args
+        prompt = call_args[0][0]
+        assert "Personality: brave, clever" in prompt
+        # Should not have Core/Flaws/Quirks labels
+        assert "Core:" not in prompt
+        assert "Flaws:" not in prompt
+        assert "Quirks:" not in prompt
+
     def test_check_character_voice_no_characters(self, continuity, sample_story_state):
         """Test returns empty list when no characters."""
         sample_story_state.characters = []
