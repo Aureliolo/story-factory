@@ -274,7 +274,7 @@ CHARACTER TO EVALUATE:
 Name: {character.name}
 Role: {character.role}
 Description: {character.description}
-Traits: {", ".join(character.personality_traits)}
+Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
 
@@ -339,7 +339,7 @@ ORIGINAL CHARACTER:
 Name: {character.name}
 Role: {character.role}
 Description: {character.description}
-Traits: {", ".join(character.personality_traits)}
+Traits: {", ".join(character.trait_names)}
 Goals: {", ".join(character.goals)}
 Arc Notes: {character.arc_notes}
 

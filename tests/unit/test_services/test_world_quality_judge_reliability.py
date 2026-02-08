@@ -1021,7 +1021,7 @@ class TestJudgeCallLogLevel:
         character.name = "TestHero"
         character.role = "protagonist"
         character.description = "A test character"
-        character.personality_traits = ["brave"]
+        character.trait_names = ["brave"]
         character.goals = ["survive"]
         character.arc_notes = "grows"
 
@@ -1056,7 +1056,7 @@ class TestJudgeCallLogLevel:
         character.name = "TestHero"
         character.role = "protagonist"
         character.description = "A test character"
-        character.personality_traits = ["brave"]
+        character.trait_names = ["brave"]
         character.goals = ["survive"]
         character.arc_notes = "grows"
 

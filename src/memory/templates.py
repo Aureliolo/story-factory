@@ -2,11 +2,24 @@
 
 import logging
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
+
+
+class PersonalityTrait(BaseModel):
+    """A categorized personality trait for richer character modeling.
+
+    Categories help continuity checks (distinguishing core traits from flaws
+    for voice consistency) and quality judges (the "flaws" dimension benefits
+    from knowing which traits are flaws).
+    """
+
+    trait: str
+    category: Literal["core", "flaw", "quirk"] = "core"
+
 
 # Shared type for target length across templates and story briefs
 type TargetLength = Literal["short_story", "novella", "novel"]
@@ -81,10 +94,28 @@ class CharacterTemplate(BaseModel):
     name: str  # Placeholder name or role
     role: str  # protagonist, antagonist, mentor, etc.
     description: str
-    personality_traits: list[str] = Field(default_factory=list)
+    personality_traits: list[PersonalityTrait] = Field(default_factory=list)
     goals: list[str] = Field(default_factory=list)
     arc_notes: str = ""
     arc_type: str | None = None  # Reference to arc template ID (e.g., "hero_journey")
+
+    @field_validator("personality_traits", mode="before")
+    @classmethod
+    def normalize_personality_traits(cls, v: Any) -> Any:
+        """Normalize personality traits from plain strings or dicts.
+
+        Builtin YAML templates use plain string lists like ["brave", "clever"].
+        This converts them to PersonalityTrait-compatible dicts with category "core".
+        """
+        if not isinstance(v, list):
+            return v
+        normalized: list[dict[str, str]] = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append({"trait": item, "category": "core"})
+            else:
+                normalized.append(item)
+        return normalized
 
 
 class PlotPointTemplate(BaseModel):

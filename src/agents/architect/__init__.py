@@ -64,7 +64,9 @@ class ArchitectAgent(BaseAgent):
         "name": "Full Name",
         "role": "protagonist|antagonist|love_interest|supporting",
         "description": "Physical and personality description (2-3 sentences)",
-        "personality_traits": ["trait1", "trait2", "trait3"],
+        "personality_traits": [
+            {"trait": "trait description", "category": "core|flaw|quirk"}
+        ],
         "goals": ["what they want", "what they need"],
         "relationships": {"other_character": "relationship description"},
         "arc_notes": "How this character should change through the story"

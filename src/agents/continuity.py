@@ -156,7 +156,7 @@ class ContinuityAgent(BaseAgent):
                 previous_content += f"\n[Chapter {ch.number}]\n{ch.content[-ctx_chars:]}\n"
 
         chars_summary = "\n".join(
-            f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
+            f"- {c.name}: {c.description} | Traits: {', '.join(c.trait_names)}"
             for c in story_state.characters
         )
 
@@ -228,7 +228,7 @@ Return a list of issues found. If no issues, return an empty list."""
         logger.debug("Extracting dialogue patterns for %d characters", len(story_state.characters))
 
         chars_summary = "\n".join(
-            f"- {c.name}: {c.description} | Traits: {', '.join(c.personality_traits)}"
+            f"- {c.name}: {c.description} | Traits: {', '.join(c.trait_names)}"
             for c in story_state.characters
         )
 
@@ -285,10 +285,22 @@ Only include characters who actually speak in this chapter."""
 
         logger.debug("Checking voice consistency for %d characters", len(story_state.characters))
 
-        chars_summary = "\n".join(
-            f"- {c.name}: {c.description}\n  Personality: {', '.join(c.personality_traits)}"
-            for c in story_state.characters
-        )
+        char_lines = []
+        for c in story_state.characters:
+            parts = [f"- {c.name}: {c.description}"]
+            core = c.traits_by_category("core")
+            flaws = c.traits_by_category("flaw")
+            quirks = c.traits_by_category("quirk")
+            if core:
+                parts.append(f"  Core: {', '.join(core)}")
+            if flaws:
+                parts.append(f"  Flaws: {', '.join(flaws)}")
+            if quirks:
+                parts.append(f"  Quirks: {', '.join(quirks)}")
+            if not core and not flaws and not quirks and c.trait_names:
+                parts.append(f"  Personality: {', '.join(c.trait_names)}")
+            char_lines.append("\n".join(parts))
+        chars_summary = "\n".join(char_lines)
 
         # Build context from established patterns
         patterns_context = ""

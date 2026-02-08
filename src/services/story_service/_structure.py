@@ -71,7 +71,7 @@ def extract_entities_to_world(
 
         attributes = {
             "role": char.role,
-            "personality_traits": char.personality_traits,
+            "personality_traits": char.trait_names,
             "goals": char.goals,
             "arc_notes": char.arc_notes,
         }
