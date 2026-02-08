@@ -626,7 +626,7 @@ class TestContinuityVoiceConsistency:
 
         call_args = continuity.generate_structured.call_args
         prompt = call_args[0][0]
-        assert "Core: intelligent, brave" in prompt
+        assert "Core Traits: intelligent, brave" in prompt
         assert "Flaws: stubborn" in prompt
         assert "Quirks: hums when nervous" in prompt
 
@@ -653,7 +653,7 @@ class TestContinuityVoiceConsistency:
         prompt = call_args[0][0]
         assert "Personality: brave, clever" in prompt
         # Should not have Core/Flaws/Quirks labels
-        assert "Core:" not in prompt
+        assert "Core Traits:" not in prompt
         assert "Flaws:" not in prompt
         assert "Quirks:" not in prompt
 

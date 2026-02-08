@@ -261,7 +261,7 @@ class TemplatesPage:
                                                 "core": "blue",
                                                 "flaw": "red",
                                                 "quirk": "purple",
-                                            }.get(trait.category, "blue")
+                                            }[trait.category]
                                             ui.badge(trait.trait).props(f"outline color={color}")
 
                     # Plot points

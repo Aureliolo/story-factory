@@ -371,6 +371,11 @@ class TestPersonalityTrait:
         trait = PersonalityTrait(trait="talks to animals", category="quirk")
         assert trait.category == "quirk"
 
+    def test_invalid_category_rejected(self):
+        """Test that an invalid category raises ValidationError."""
+        with pytest.raises(ValidationError):
+            PersonalityTrait(trait="mysterious", category="unknown")
+
 
 class TestCharacterTemplatePersonalityTraits:
     """Tests for CharacterTemplate personality trait normalization."""

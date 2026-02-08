@@ -289,7 +289,11 @@ Only include characters who actually speak in this chapter."""
         for c in story_state.characters:
             parts = [f"- {c.name}: {c.description}"]
             categorized_found = False
-            for category, label in [("core", "Core"), ("flaw", "Flaws"), ("quirk", "Quirks")]:
+            for category, label in [
+                ("core", "Core Traits"),
+                ("flaw", "Flaws"),
+                ("quirk", "Quirks"),
+            ]:
                 traits = c.traits_by_category(category)
                 if traits:
                     parts.append(f"  {label}: {', '.join(traits)}")
