@@ -253,6 +253,14 @@ def render_graph_html(
         }}
 
         function _buildGraph() {{
+            // Destroy previous network to prevent stale canvas on re-render
+            if (window.graphNetwork) {{
+                window.graphNetwork.destroy();
+                window.graphNetwork = null;
+                window.graphNodes = null;
+                window.graphEdges = null;
+            }}
+
             var fontColor = '#e5e7eb';
             var bgColor = '#1f2937';
 
@@ -288,7 +296,7 @@ def render_graph_html(
                     dragView: true,
                     zoomView: true,
                     multiselect: false,
-                    selectionBox: false
+                    selectable: true
                 }},
                 {layout_options}
             }};

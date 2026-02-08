@@ -310,6 +310,9 @@ def update_search_scope(page, scope: str, enabled: bool) -> None:
         scope: 'names' or 'descriptions'.
         enabled: Whether this scope is enabled.
     """
+    if getattr(page, "_restoring_browser_prefs", False):
+        return
+
     if scope == "names":
         page.state.entity_search_names = enabled
         save_pref(_PAGE_KEY, "entity_search_names", enabled)
@@ -327,6 +330,9 @@ def on_quality_filter_change(page, e: Any) -> None:
         page: WorldPage instance.
         e: Change event.
     """
+    if getattr(page, "_restoring_browser_prefs", False):
+        return
+
     page.state.entity_quality_filter = e.value
     logger.debug(f"Quality filter changed to: {e.value}")
     save_pref(_PAGE_KEY, "entity_quality_filter", e.value)
@@ -340,6 +346,9 @@ def on_sort_change(page, e: Any) -> None:
         page: WorldPage instance.
         e: Change event.
     """
+    if getattr(page, "_restoring_browser_prefs", False):
+        return
+
     page.state.entity_sort_by = e.value
     logger.debug(f"Sort changed to: {e.value}")
     save_pref(_PAGE_KEY, "entity_sort_by", e.value)
@@ -502,6 +511,10 @@ def _apply_prefs(page, prefs: dict) -> None:
     Validates every field against its allowed values/types before applying.
     Invalid or stale localStorage entries are silently ignored.
 
+    Uses ``_restoring_browser_prefs`` flag on the page to prevent widget
+    on_change callbacks from triggering redundant refresh_entity_list() calls
+    during preference restoration.
+
     Args:
         page: WorldPage instance.
         prefs: Dict of field→value from localStorage.
@@ -550,15 +563,21 @@ def _apply_prefs(page, prefs: dict) -> None:
 
     if changed:
         logger.info("Restored entity browser preferences from localStorage")
-        if hasattr(page, "_quality_select") and page._quality_select:
-            page._quality_select.value = page.state.entity_quality_filter
-        if hasattr(page, "_sort_select") and page._sort_select:
-            page._sort_select.value = page.state.entity_sort_by
-        if hasattr(page, "_sort_direction_btn") and page._sort_direction_btn:
-            icon = "arrow_downward" if page.state.entity_sort_descending else "arrow_upward"
-            page._sort_direction_btn.props(f"icon={icon}")
-        if hasattr(page, "_search_names_cb") and page._search_names_cb:
-            page._search_names_cb.value = page.state.entity_search_names
-        if hasattr(page, "_search_desc_cb") and page._search_desc_cb:
-            page._search_desc_cb.value = page.state.entity_search_descriptions
+        # Guard flag: suppress on_change callbacks while updating widget values
+        # to prevent cascade of refresh_entity_list() calls
+        page._restoring_browser_prefs = True
+        try:
+            if hasattr(page, "_quality_select") and page._quality_select:
+                page._quality_select.value = page.state.entity_quality_filter
+            if hasattr(page, "_sort_select") and page._sort_select:
+                page._sort_select.value = page.state.entity_sort_by
+            if hasattr(page, "_sort_direction_btn") and page._sort_direction_btn:
+                icon = "arrow_downward" if page.state.entity_sort_descending else "arrow_upward"
+                page._sort_direction_btn.props(f"icon={icon}")
+            if hasattr(page, "_search_names_cb") and page._search_names_cb:
+                page._search_names_cb.value = page.state.entity_search_names
+            if hasattr(page, "_search_desc_cb") and page._search_desc_cb:
+                page._search_desc_cb.value = page.state.entity_search_descriptions
+        finally:
+            page._restoring_browser_prefs = False
         refresh_entity_list(page)

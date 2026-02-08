@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
-from nicegui.elements.html import Html
+from nicegui.element import Element
 
 from src.memory.conflict_types import (
     CONFLICT_COLORS,
@@ -72,7 +72,8 @@ class ConflictGraphComponent:
         self.on_node_select = on_node_select
         self.height = height
 
-        self._container: Html | None = None
+        self._container: Element | None = None
+        self._no_data_label: Element | None = None
         self._metrics_container: ui.column | None = None
         self._filter_categories: list[ConflictCategory] = list(ConflictCategory)
         self._entity_types: list[str] = ["character", "faction"]
@@ -150,11 +151,16 @@ class ConflictGraphComponent:
                         on_click=self.refresh,
                     ).props("flat round size=sm").tooltip("Refresh graph")
 
-                # Graph container
+                # Graph container — plain div instead of ui.html() because NiceGUI's
+                # Html Vue component calls renderContent() on every re-render,
+                # which resets innerHTML and destroys the vis.js canvas.
+                self._no_data_label = ui.label(
+                    "No world data to display. Create or load a project first."
+                ).classes("text-gray-400 text-center w-full py-16")
                 self._container = (
-                    ui.html("", sanitize=False)
-                    .classes("w-full border border-gray-700 rounded-lg bg-gray-800")
-                    .style(f"height: {self.height}px;")
+                    ui.element("div")
+                    .classes("w-full border border-gray-700 rounded-lg")
+                    .style(f"height: {self.height}px; background: #1f2937;")
                 )
 
             # Metrics panel
@@ -192,19 +198,9 @@ class ConflictGraphComponent:
             return
 
         if not self.world_db or not self.services:
-            self._container.content = """
-                <style>
-                    .conflict-empty { color: #9ca3af; }
-                </style>
-                <div class="conflict-empty" style="
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <p>No world data to display. Create or load a project first.</p>
-                </div>
-            """
+            if self._no_data_label:
+                self._no_data_label.set_visibility(True)
+            self._container.set_visibility(False)
             self._update_metrics(None)
             return
 
@@ -221,20 +217,20 @@ class ConflictGraphComponent:
             entity_types=self._entity_types if self._entity_types else None,
         )
 
+        # Show graph container, hide "no data" label
+        if self._no_data_label:
+            self._no_data_label.set_visibility(False)
+        self._container.set_visibility(True)
+
         if not self._graph_data.nodes:
-            self._container.content = """
-                <style>
-                    .conflict-empty { color: #9ca3af; }
-                </style>
-                <div class="conflict-empty" style="
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <p>No entities match the current filters.</p>
-                </div>
-            """
+            # Clear any previous vis.js canvas and show empty message via JS
+            container_id = f"c{self._container.id}"
+            ui.run_javascript(
+                f"var el = document.getElementById('{container_id}');"
+                f"if (el) el.innerHTML = '<div style=\"height:100%;display:flex;"
+                f'align-items:center;justify-content:center;color:#9ca3af;">'
+                f"<p>No entities match the current filters.</p></div>';"
+            )
             self._update_metrics(self._graph_data.metrics)
             return
 
@@ -263,20 +259,8 @@ class ConflictGraphComponent:
             for e in self._graph_data.edges
         ]
 
-        container_id = f"conflict-graph-{uuid.uuid4().hex[:8]}"
-
-        # HTML container
-        html = f"""
-        <style>
-            #{container_id} {{
-                border: none;
-                background: transparent;
-            }}
-        </style>
-        <div id="{container_id}" style="height: {self.height - 20}px;"></div>
-        """
-
-        self._container.content = html
+        # Use the plain div's auto-generated NiceGUI ID as the vis.js container
+        container_id = f"c{self._container.id}"
 
         # JavaScript initialization
         js = f"""
@@ -293,6 +277,12 @@ class ConflictGraphComponent:
                     }}
                     setTimeout(initConflictGraph, 100);
                     return;
+                }}
+
+                // Destroy previous network to prevent stale canvas on re-render
+                if (window.conflictNetwork) {{
+                    window.conflictNetwork.destroy();
+                    window.conflictNetwork = null;
                 }}
 
                 var container = document.getElementById('{container_id}');
