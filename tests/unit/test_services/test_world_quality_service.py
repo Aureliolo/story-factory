@@ -10,6 +10,7 @@ import pytest
 from src.memory.story_state import (
     Chapter,
     Character,
+    CharacterCreation,
     Concept,
     Faction,
     Item,
@@ -642,16 +643,15 @@ class TestCreateCharacter:
     @patch("src.services.world_quality_service._character.generate_structured")
     def test_create_character_success(self, mock_generate_structured, service, story_state):
         """Test successful character creation."""
-        mock_character = Character(
+        mock_creation = CharacterCreation(
             name="Dr. Eleanor Grey",
             role="protagonist",
             description="A brilliant detective haunted by past failures",
             personality_traits=["observant", "determined", "secretive"],
             goals=["solve the case", "find redemption"],
-            relationships={},
             arc_notes="Will learn to trust others",
         )
-        mock_generate_structured.return_value = mock_character
+        mock_generate_structured.return_value = mock_creation
 
         character = service._create_character(story_state, existing_names=[], temperature=0.9)
 
@@ -659,22 +659,23 @@ class TestCreateCharacter:
         assert character.name == "Dr. Eleanor Grey"
         assert character.role == "protagonist"
         assert "observant" in character.trait_names
+        assert character.arc_progress == {}
+        assert character.arc_type is None
 
     @patch("src.services.world_quality_service._character.generate_structured")
     def test_create_character_with_existing_names(
         self, mock_generate_structured, service, story_state
     ):
         """Test character creation avoids existing names."""
-        mock_character = Character(
+        mock_creation = CharacterCreation(
             name="New Character",
             role="supporting",
             description="A mysterious stranger",
             personality_traits=["quiet"],
             goals=["unknown"],
-            relationships={},
             arc_notes="Will reveal secrets",
         )
-        mock_generate_structured.return_value = mock_character
+        mock_generate_structured.return_value = mock_creation
 
         character = service._create_character(
             story_state, existing_names=["John Doe", "Jane Doe"], temperature=0.9
@@ -832,13 +833,12 @@ class TestRefineCharacter:
     @patch("src.services.world_quality_service._character.generate_structured")
     def test_refine_character_success(self, mock_generate_structured, service, story_state):
         """Test successful character refinement."""
-        mock_generate_structured.return_value = Character(
+        mock_generate_structured.return_value = CharacterCreation(
             name="John Doe",
             role="protagonist",
             description="A more complex description with deeper psychology",
             personality_traits=["brave", "conflicted", "hopeful"],
             goals=["save the world", "overcome inner demons"],
-            relationships={"Mary": "ally"},
             arc_notes="Will transform from bitter loner to trusting friend",
         )
 
@@ -849,6 +849,8 @@ class TestRefineCharacter:
             personality_traits=["brave"],
             goals=["save the world"],
             arc_notes="Basic arc",
+            arc_progress={1: "Ordinary world", 2: "Call to adventure"},
+            arc_type="hero_journey",
         )
         scores = CharacterQualityScores(
             depth=5.0,
@@ -864,19 +866,21 @@ class TestRefineCharacter:
         assert refined.name == "John Doe"
         assert "deeper psychology" in refined.description
         assert len(refined.personality_traits) > 1
+        # arc_progress and arc_type should be preserved from original
+        assert refined.arc_progress == {1: "Ordinary world", 2: "Call to adventure"}
+        assert refined.arc_type == "hero_journey"
 
     @patch("src.services.world_quality_service._character.generate_structured")
     def test_refine_character_includes_weak_dimensions_in_prompt(
         self, mock_generate_structured, service, story_state
     ):
         """Test refinement prompt includes weak dimensions."""
-        mock_generate_structured.return_value = Character(
+        mock_generate_structured.return_value = CharacterCreation(
             name="Test",
             role="supporting",
             description="Refined",
             personality_traits=[],
             goals=[],
-            relationships={},
             arc_notes="",
         )
 
@@ -913,13 +917,12 @@ class TestRefineCharacter:
     @patch("src.services.world_quality_service._character.generate_structured")
     def test_refine_character_with_no_brief_uses_english(self, mock_generate_structured, service):
         """Test refinement uses English when brief is missing."""
-        mock_generate_structured.return_value = Character(
+        mock_generate_structured.return_value = CharacterCreation(
             name="Test",
             role="supporting",
             description="Refined",
             personality_traits=[],
             goals=[],
-            relationships={},
             arc_notes="",
         )
 
@@ -935,6 +938,43 @@ class TestRefineCharacter:
         call_args = mock_generate_structured.call_args
         prompt = call_args.kwargs["prompt"]
         assert "English" in prompt
+
+    @patch("src.services.world_quality_service._character.generate_structured")
+    def test_refine_character_uses_character_creation_model(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test refinement uses CharacterCreation to exclude arc_progress from schema (#305)."""
+        mock_generate_structured.return_value = CharacterCreation(
+            name="Test",
+            role="supporting",
+            description="Refined",
+        )
+
+        original_char = Character(name="Test", role="supporting", description="Test")
+        scores = CharacterQualityScores(
+            depth=6.0, goals=6.0, flaws=6.0, uniqueness=6.0, arc_potential=6.0
+        )
+
+        service._refine_character(original_char, scores, story_state, temperature=0.7)
+
+        call_args = mock_generate_structured.call_args
+        assert call_args.kwargs["response_model"] is CharacterCreation
+
+    @patch("src.services.world_quality_service._character.generate_structured")
+    def test_create_character_uses_character_creation_model(
+        self, mock_generate_structured, service, story_state
+    ):
+        """Test creation uses CharacterCreation to exclude arc_progress from schema (#305)."""
+        mock_generate_structured.return_value = CharacterCreation(
+            name="Test",
+            role="supporting",
+            description="Created",
+        )
+
+        service._create_character(story_state, existing_names=[], temperature=0.9)
+
+        call_args = mock_generate_structured.call_args
+        assert call_args.kwargs["response_model"] is CharacterCreation
 
 
 class TestGenerateCharacterWithQuality:
@@ -3943,7 +3983,7 @@ class TestCustomInstructions:
         self, mock_generate_structured, service, story_state
     ):
         """Test character creation with custom_instructions parameter."""
-        mock_character = Character(
+        mock_creation = CharacterCreation(
             name="Custom Char",
             role="supporting",
             description="A custom character",
@@ -3951,7 +3991,7 @@ class TestCustomInstructions:
             goals=["custom goal"],
             arc_notes="Custom arc",
         )
-        mock_generate_structured.return_value = mock_character
+        mock_generate_structured.return_value = mock_creation
 
         result = service._create_character(
             story_state,
