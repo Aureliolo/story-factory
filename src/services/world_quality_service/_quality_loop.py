@@ -7,6 +7,7 @@ and this module orchestrates the loop.
 """
 
 import logging
+import time
 from collections.abc import Callable
 from typing import TypeVar, cast
 
@@ -104,7 +105,14 @@ def quality_refinement_loop(
             elif entity is None or (iteration == 0) or is_empty(entity):
                 # Need fresh creation
                 stage = "create"
+                t_create = time.perf_counter()
                 entity = create_fn(creation_retries)
+                logger.info(
+                    "%s creation took %.2fs (iteration %d)",
+                    entity_type.capitalize(),
+                    time.perf_counter() - t_create,
+                    iteration + 1,
+                )
                 if entity is None or is_empty(entity):
                     creation_retries += 1
                     last_error = (
@@ -123,7 +131,14 @@ def quality_refinement_loop(
                 if scores is not None:
                     stage = "refine"
                     dynamic_temp_iter = iteration + 1
+                    t_refine = time.perf_counter()
                     entity = refine_fn(entity, scores, dynamic_temp_iter)
+                    logger.info(
+                        "%s refinement took %.2fs (iteration %d)",
+                        entity_type.capitalize(),
+                        time.perf_counter() - t_refine,
+                        iteration + 1,
+                    )
                     if entity is None or is_empty(entity):
                         creation_retries += 1
                         last_error = (
@@ -176,9 +191,17 @@ def quality_refinement_loop(
             assert entity is not None  # nosec — invariant, not runtime check
 
             stage = "judge"
+            t_judge = time.perf_counter()
             scores = judge_fn(entity)
+            judge_duration = time.perf_counter() - t_judge
             scoring_rounds += 1
             needs_judging = False
+            logger.info(
+                "%s judge call took %.2fs (scoring round %d)",
+                entity_type.capitalize(),
+                judge_duration,
+                scoring_rounds,
+            )
 
             # Track in history
             history.add_iteration(

@@ -10,6 +10,7 @@ Tests cover:
 - Unchanged output detection (#246)
 - Score rounding at threshold boundary (#303)
 - WARNING for sub-threshold entities returned via best-iteration path (#303)
+- Per-iteration timing instrumentation (#304)
 """
 
 import logging
@@ -1276,3 +1277,105 @@ class TestQualityLoopSubThresholdWarning:
             )
 
         assert not any("did not meet quality threshold after" in msg for msg in caplog.messages)
+
+
+class TestQualityLoopTimingInstrumentation:
+    """Tests for per-iteration timing instrumentation (#304)."""
+
+    def test_creation_timing_logged(self, mock_svc, config, caplog):
+        """Creation timing should be logged at INFO level."""
+        entity = {"name": "Hero"}
+        scores = _make_scores(8.5)
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=lambda e: scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("creation took" in msg.lower() for msg in caplog.messages)
+
+    def test_judge_timing_logged(self, mock_svc, config, caplog):
+        """Judge call timing should be logged at INFO level."""
+        entity = {"name": "Hero"}
+        scores = _make_scores(8.5)
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=lambda e: scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("judge call took" in msg.lower() for msg in caplog.messages)
+
+    def test_refinement_timing_logged(self, mock_svc, config, caplog):
+        """Refinement timing should be logged at INFO level when refine is called."""
+        config.max_iterations = 2
+        config.early_stopping_patience = 10
+
+        judge_count = 0
+
+        def judge_fn(e):
+            """Return below threshold first, then above."""
+            nonlocal judge_count
+            judge_count += 1
+            if judge_count == 1:
+                return _make_scores(5.0, feedback="Needs work")
+            return _make_scores(9.0, feedback="Great")
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: {"name": "Hero"},
+                judge_fn=judge_fn,
+                refine_fn=lambda e, s, i: {"name": "Hero v2"},
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("refinement took" in msg.lower() for msg in caplog.messages)
+
+    def test_judge_timing_includes_scoring_round(self, mock_svc, config, caplog):
+        """Judge timing log should include the scoring round number."""
+        entity = {"name": "Hero"}
+        scores = _make_scores(8.5)
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=lambda e: scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("scoring round 1" in msg.lower() for msg in caplog.messages)

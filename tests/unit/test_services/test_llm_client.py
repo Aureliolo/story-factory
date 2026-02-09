@@ -1,5 +1,6 @@
 """Tests for services/llm_client.py."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import ollama
@@ -366,3 +367,23 @@ class TestGenerateStructured:
                 response_model=SampleModel,
                 max_retries=0,
             )
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_logs_model_and_tokens_at_info(self, mock_get_client, mock_settings, caplog):
+        """Test that successful generation logs model name and token counts at INFO."""
+        mock_client = MagicMock()
+        mock_client.chat.return_value = _make_chat_response('{"name": "test", "value": 42}')
+        mock_get_client.return_value = mock_client
+
+        with caplog.at_level(logging.INFO, logger="src.services.llm_client"):
+            generate_structured(
+                settings=mock_settings,
+                model="test-model:8b",
+                prompt="Generate something",
+                response_model=SampleModel,
+            )
+
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any("test-model:8b" in r.message for r in info_records)
+        assert any("tokens:" in r.message.lower() for r in info_records)
+        assert any("SampleModel" in r.message for r in info_records)

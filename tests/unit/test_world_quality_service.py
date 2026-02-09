@@ -200,7 +200,7 @@ class TestMiniDescriptionLogging:
 
         # Check completion log message
         completion_logs = [
-            r for r in caplog.records if "Completed mini description generation" in r.message
+            r for r in caplog.records if "Completed mini description batch" in r.message
         ]
         assert len(completion_logs) == 1
         assert "1 descriptions" in completion_logs[0].message

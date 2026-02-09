@@ -441,6 +441,76 @@ class ModelService:
                 "error": True,
             }
 
+    def get_running_models(self) -> list[dict[str, str | float]]:
+        """Query Ollama /api/ps to get currently loaded (running) models.
+
+        Returns:
+            List of dicts with 'name' and 'size_gb' for each loaded model.
+            Empty list on connection failure.
+        """
+        logger.debug("get_running_models called")
+        try:
+            client = ollama.Client(
+                host=self.settings.ollama_url, timeout=self.settings.ollama_health_check_timeout
+            )
+            response = client.ps()
+            models = []
+            for model in response.models:
+                name = getattr(model, "name", "") or getattr(model, "model", "")
+                size_bytes = getattr(model, "size", 0) or 0
+                size_gb = round(size_bytes / (1024**3), 1)
+                models.append({"name": name, "size_gb": size_gb})
+            logger.debug("Found %d running models via /api/ps", len(models))
+            return models
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
+            logger.warning("Failed to query running models from Ollama: %s", e)
+            return []
+        except AttributeError:
+            # Older Ollama client versions may not have .ps()
+            logger.debug("Ollama client does not support ps() — skipping running model check")
+            return []
+
+    def log_model_load_state(self, target_model: str | None = None) -> None:
+        """Log whether target model is already loaded in Ollama's VRAM.
+
+        Queries /api/ps and logs which models are resident. If a target model
+        is specified and not loaded, logs a warning that the first call will
+        incur a cold-start penalty.
+
+        Args:
+            target_model: Optional model ID to check for. If None, just logs
+                what's currently loaded.
+        """
+        running = self.get_running_models()
+        running_names = [str(m["name"]) for m in running]
+
+        if not running:
+            logger.info("Ollama model load state: no models currently loaded in VRAM")
+            if target_model:
+                logger.warning(
+                    "Model '%s' is not loaded — first LLM call will incur a cold-start "
+                    "penalty (~30-60s for loading model into VRAM)",
+                    target_model,
+                )
+            return
+
+        running_desc = ", ".join(f"{m['name']} ({m['size_gb']}GB)" for m in running)
+        logger.info("Ollama model load state: %d model(s) loaded — %s", len(running), running_desc)
+
+        if target_model:
+            if target_model in running_names:
+                logger.info(
+                    "Target model '%s' is already loaded — no cold-start penalty expected",
+                    target_model,
+                )
+            else:
+                logger.warning(
+                    "Target model '%s' is NOT loaded (loaded: %s) — first LLM call will "
+                    "incur a cold-start penalty (~30-60s for loading model into VRAM)",
+                    target_model,
+                    ", ".join(running_names),
+                )
+
     def get_vram(self) -> int:
         """Get available VRAM in GB.
 

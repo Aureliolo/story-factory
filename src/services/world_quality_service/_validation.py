@@ -63,6 +63,7 @@ NO quotes, NO formatting, NO preambles — just the summary text in the "summary
             model,
         )
         messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
+        start_time = time.perf_counter()
         response = svc.client.chat(
             model=model,
             messages=messages,
@@ -71,6 +72,20 @@ NO quotes, NO formatting, NO preambles — just the summary text in the "summary
                 "temperature": svc.settings.world_quality_judge_temp,
                 "num_predict": svc.settings.llm_tokens_mini_description,
             },
+        )
+        duration = time.perf_counter() - start_time
+        prompt_tokens = response.get("prompt_eval_count")
+        completion_tokens = response.get("eval_count")
+        total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+        logger.info(
+            "Mini description LLM call: %s '%s' (model=%s, %.2fs, tokens: %s+%s=%s)",
+            entity_type,
+            name,
+            model,
+            duration,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
         )
         parsed = MiniDescription.model_validate_json(response["message"]["content"])
         summary = clean_llm_text(parsed.summary).strip()
@@ -130,8 +145,10 @@ def generate_mini_descriptions_batch(
     elapsed = time.time() - start_time
     avg_time = elapsed / max(len(results), 1)
     logger.info(
-        f"Completed mini description generation: {len(results)} descriptions "
-        f"in {elapsed:.2f}s ({avg_time:.2f}s avg)"
+        "Completed mini description batch: %d descriptions in %.2fs (%.2fs avg per entity)",
+        len(results),
+        elapsed,
+        avg_time,
     )
 
     return results
