@@ -3,7 +3,7 @@
 import logging
 import random
 
-from src.memory.story_state import Character, StoryState
+from src.memory.story_state import Character, CharacterCreation, StoryState
 from src.memory.world_quality import CharacterQualityScores
 from src.services.llm_client import generate_structured
 from src.services.world_quality_service._common import (
@@ -184,14 +184,14 @@ Write all text in {brief.language}."""
 
     try:
         model = svc._get_creator_model(entity_type="character")
-        character = generate_structured(
+        creation = generate_structured(
             settings=svc.settings,
             model=model,
             prompt=prompt,
-            response_model=Character,
+            response_model=CharacterCreation,
             temperature=temperature,
         )
-        return character
+        return creation.to_character()
     except Exception as e:
         summary = summarize_llm_error(e)
         logger.error("Character creation error for story %s: %s", story_state.id, summary)
@@ -366,13 +366,21 @@ Return ONLY the improved character."""
 
     try:
         model = svc._get_creator_model(entity_type="character")
-        return generate_structured(
+        creation = generate_structured(
             settings=svc.settings,
             model=model,
             prompt=prompt,
-            response_model=Character,
+            response_model=CharacterCreation,
             temperature=temperature,
         )
+        refined = creation.to_character()
+        # Preserve fields not included in the refinement prompt — arc data
+        # is populated during the write loop, and relationships aren't
+        # part of the quality evaluation dimensions.
+        refined.arc_progress = character.arc_progress.copy()
+        refined.arc_type = character.arc_type
+        refined.relationships = character.relationships.copy()
+        return refined
     except Exception as e:
         summary = summarize_llm_error(e)
         logger.error("Character refinement failed for '%s': %s", character.name, summary)
