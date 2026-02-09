@@ -137,7 +137,7 @@ def log_refinement_analytics(
         "peak_score": history.peak_score,
         "best_iteration": analysis["best_iteration"],
         "improved": analysis["improved"],
-        "worsened_after_peak": analysis.get("worsened_after_peak", False),
+        "worsened_after_peak": analysis["worsened_after_peak"],
         "average": history.final_score,  # For backwards compatibility
     }
     record_entity_quality(

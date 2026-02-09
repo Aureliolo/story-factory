@@ -1244,17 +1244,17 @@ class TestQualityLoopSubThresholdWarning:
         assert any("did not meet quality threshold after" in msg for msg in caplog.messages)
 
     def test_no_warning_when_best_entity_meets_threshold(self, mock_svc, config, caplog):
-        """No sub-threshold WARNING when best entity DID meet threshold via post-loop."""
+        """No sub-threshold WARNING when threshold is met in-loop (early return)."""
         config.quality_threshold = 7.0
         config.max_iterations = 2
         config.early_stopping_patience = 10
 
-        # First score above threshold, second below → returns best (iteration 1)
+        # First score (7.5) meets threshold in-loop → early return, no post-loop path
         scores_list = [_make_scores(7.5), _make_scores(5.0)]
         judge_idx = 0
 
         def judge_fn(e):
-            """Return 7.5 then 5.0 — post-loop returns best iteration."""
+            """Return 7.5 — meets threshold in-loop on first iteration."""
             nonlocal judge_idx
             result = scores_list[min(judge_idx, len(scores_list) - 1)]
             judge_idx += 1
