@@ -54,7 +54,10 @@ def run_web_ui(
 
     # Check model load state before first LLM call
     try:
-        target_model = settings.get_model_for_agent("writer")
+        if settings.use_mode_system:
+            target_model = services.mode.get_model_for_agent("writer")
+        else:
+            target_model = settings.get_model_for_agent("writer")
         services.model.log_model_load_state(target_model)
     except Exception as e:
         logger.debug("Could not check model load state: %s", e)

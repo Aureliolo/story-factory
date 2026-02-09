@@ -63,7 +63,7 @@ NO quotes, NO formatting, NO preambles — just the summary text in the "summary
             model,
         )
         messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
-        start_time = time.time()
+        start_time = time.perf_counter()
         response = svc.client.chat(
             model=model,
             messages=messages,
@@ -73,7 +73,7 @@ NO quotes, NO formatting, NO preambles — just the summary text in the "summary
                 "num_predict": svc.settings.llm_tokens_mini_description,
             },
         )
-        duration = time.time() - start_time
+        duration = time.perf_counter() - start_time
         prompt_tokens = response.get("prompt_eval_count")
         completion_tokens = response.get("eval_count")
         total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)

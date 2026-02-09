@@ -100,9 +100,10 @@ class ServiceContainer:
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
         self.temporal_validation = TemporalValidationService(self.settings)
+        service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",
-            19,
+            service_count,
             time.perf_counter() - t0,
         )
 
