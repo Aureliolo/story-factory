@@ -265,11 +265,14 @@ class TestComputeClusteringMetrics:
     """Tests for score clustering analysis."""
 
     def test_empty_records(self):
-        """Empty records should return zero metrics."""
+        """Empty records should return zero metrics including mean/min/max."""
         metrics = compute_clustering_metrics([])
         assert metrics["unique_scores"] == 0
         assert metrics["total_scores"] == 0
         assert metrics["score_range"] == 0.0
+        assert metrics["mean"] == 0.0
+        assert metrics["min"] == 0.0
+        assert metrics["max"] == 0.0
 
     def test_single_score(self):
         """Single score — range and std_dev should be 0."""

@@ -52,18 +52,18 @@ REFINEMENT_TIME_RE = re.compile(
 
 # "Faction 'The Veilkeepers' iteration 1: score 7.5 (best so far: 7.5 at iteration 1)"
 ITERATION_SCORE_RE = re.compile(
-    r"(\w+) '(.+?)' iteration (\d+): score ([\d.]+) "
+    r"(\w+) '(.+)' iteration (\d+): score ([\d.]+) "
     r"\(best so far: ([\d.]+) at iteration (\d+)\)",
 )
 
 # "Faction 'The Veilkeepers' iteration 1 dimension scores: {'coherence': '8.5', ...}"
 DIMENSION_SCORES_RE = re.compile(
-    r"(\w+) '(.+?)' iteration (\d+) dimension scores: (\{.+\})",
+    r"(\w+) '(.+)' iteration (\d+) dimension scores: (\{.+\})",
 )
 
 # "Faction 'The Veilkeepers' met quality threshold (7.5 >= 7.5)"
 THRESHOLD_MET_RE = re.compile(
-    r"(\w+) '(.+?)' met quality threshold \(([\d.]+) >= ([\d.]+)\)",
+    r"(\w+) '(.+)' met quality threshold \(([\d.]+) >= ([\d.]+)\)",
 )
 
 
@@ -297,6 +297,9 @@ def compute_clustering_metrics(records: list[EntityRecord]) -> dict[str, Any]:
             "score_range": 0.0,
             "std_dev": 0.0,
             "iqr": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "max": 0.0,
         }
 
     # Round to 1 decimal for unique counting (matches log format)

@@ -72,7 +72,7 @@ class EntityDepthRecord:
             description: Entity description text.
             attributes: Additional entity attributes from the database.
         """
-        self.entity_type = entity_type
+        self.entity_type = entity_type.lower()
         self.name = name
         self.description = description
         self.attributes = attributes
@@ -214,7 +214,8 @@ def read_world_database(db_path: Path) -> list[EntityDepthRecord]:
                 name = row["name"]
                 description = row["description"] or ""
                 try:
-                    attributes = json.loads(row["attributes"]) if row["attributes"] else {}
+                    raw = json.loads(row["attributes"]) if row["attributes"] else {}
+                    attributes = raw if isinstance(raw, dict) else {}
                 except json.JSONDecodeError, TypeError:
                     attributes = {}
 
@@ -238,6 +239,9 @@ def find_world_databases(db_dir: Path) -> list[Path]:
     dbs: list[Path] = []
     if not db_dir.exists():
         logger.debug("Database directory does not exist: %s", db_dir)
+        return dbs
+    if not db_dir.is_dir():
+        logger.warning("Database path exists but is not a directory: %s", db_dir)
         return dbs
 
     # Look for .db and .sqlite files
@@ -275,25 +279,25 @@ def compute_type_depth_stats(records: list[EntityDepthRecord]) -> dict[str, dict
     for r in records:
         type_groups[r.entity_type].append(r)
 
+    def _stats(values: list[float]) -> dict[str, float]:
+        """Compute mean, std_dev, min, max for a list of numeric values."""
+        if not values:
+            return {"mean": 0.0, "std_dev": 0.0, "min": 0.0, "max": 0.0}
+        mean = sum(values) / len(values)
+        variance = sum((v - mean) ** 2 for v in values) / len(values)
+        return {
+            "mean": round(mean, 2),
+            "std_dev": round(math.sqrt(variance), 3),
+            "min": round(min(values), 2),
+            "max": round(max(values), 2),
+        }
+
     result: dict[str, dict[str, Any]] = {}
     for entity_type, group in sorted(type_groups.items()):
         text_lengths = [r.total_text_length for r in group]
         word_counts = [r.word_count for r in group]
         vocab_diversities = [r.vocabulary_diversity for r in group]
         completeness_vals = [r.field_completeness for r in group]
-
-        def _stats(values: list[float]) -> dict[str, float]:
-            """Compute mean, std_dev, min, max for a list of numeric values."""
-            if not values:
-                return {"mean": 0.0, "std_dev": 0.0, "min": 0.0, "max": 0.0}
-            mean = sum(values) / len(values)
-            variance = sum((v - mean) ** 2 for v in values) / len(values) if values else 0.0
-            return {
-                "mean": round(mean, 2),
-                "std_dev": round(math.sqrt(variance), 3),
-                "min": round(min(values), 2),
-                "max": round(max(values), 2),
-            }
 
         result[entity_type] = {
             "entity_count": len(group),

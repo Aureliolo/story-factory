@@ -311,6 +311,28 @@ class TestReadWorldDatabase:
         assert len(records) == 1
         assert records[0].attributes == {}
 
+    def test_read_non_dict_json_attributes(self, tmp_path: Path):
+        """Non-dict JSON (e.g. list) in attributes should default to empty dict."""
+        db_path = tmp_path / "list_attrs.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE entities (
+                id TEXT PRIMARY KEY, type TEXT, name TEXT,
+                description TEXT, attributes TEXT,
+                created_at TEXT, updated_at TEXT
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("id-1", "faction", "Guild", "desc", "[1, 2, 3]", "2024-01-01", "2024-01-01"),
+        )
+        conn.commit()
+        conn.close()
+
+        records = read_world_database(db_path)
+        assert len(records) == 1
+        assert records[0].attributes == {}
+
 
 class TestFindWorldDatabases:
     """Tests for finding world database files."""
@@ -332,9 +354,16 @@ class TestFindWorldDatabases:
         dbs = find_world_databases(tmp_path)
         assert len(dbs) == 2
 
-    def test_nonexistent_directory(self):
+    def test_nonexistent_directory(self, tmp_path: Path):
         """Nonexistent directory should return empty list."""
-        dbs = find_world_databases(Path("/nonexistent/path/12345"))
+        dbs = find_world_databases(tmp_path / "does_not_exist")
+        assert dbs == []
+
+    def test_file_instead_of_directory(self, tmp_path: Path):
+        """Regular file instead of directory should return empty list."""
+        file_path = tmp_path / "not_a_dir.txt"
+        file_path.write_text("hello")
+        dbs = find_world_databases(file_path)
         assert dbs == []
 
 
