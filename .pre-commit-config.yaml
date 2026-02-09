@@ -79,6 +79,7 @@ repos:
     rev: 1.7.0
     hooks:
       - id: interrogate
+        language_version: python3.14
         args: [-vv, src, scripts, tests]
         pass_filenames: false
 
@@ -89,6 +90,7 @@ repos:
         name: generate docstring coverage badge
         entry: interrogate --generate-badge docs/badges src scripts tests
         language: python
+        language_version: python3.14
         additional_dependencies: [interrogate>=1.7.0]
         pass_filenames: false
         always_run: true
