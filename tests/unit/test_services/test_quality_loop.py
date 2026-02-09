@@ -1164,29 +1164,30 @@ class TestQualityLoopScoreRounding:
         assert analytics_call.kwargs["threshold_met"] is False
 
     def test_post_loop_threshold_met_uses_rounded_peak(self, mock_svc, config):
-        """Post-loop threshold_met check rounds peak_score to 1 decimal."""
+        """Post-loop threshold_met rounds peak_score — 7.44 rounds to 7.4, fails >= 7.5."""
         config.quality_threshold = 7.5
         config.max_iterations = 2
         config.early_stopping_patience = 10
 
-        # avg = 7.46 rounds to 7.5 → threshold_met should be True even post-loop
+        # avg = 7.44 rounds to 7.4 → fails in-loop, enters post-loop path
         scores_below = CharacterQualityScores(
-            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.3
+            depth=7.0, goals=7.0, flaws=7.0, uniqueness=8.0, arc_potential=8.2
         )
+        # Second iteration even worse → post-loop returns best (iteration 1)
         scores_worse = CharacterQualityScores(
             depth=5.0, goals=5.0, flaws=5.0, uniqueness=5.0, arc_potential=5.0
         )
         judge_count = 0
 
         def judge_fn(e):
-            """Return borderline scores first, then worse to trigger post-loop path."""
+            """Return sub-threshold scores, then worse, to reach post-loop path."""
             nonlocal judge_count
             judge_count += 1
             if judge_count == 1:
                 return scores_below
             return scores_worse
 
-        _result_entity, _result_scores, _iterations = quality_refinement_loop(
+        quality_refinement_loop(
             entity_type="character",
             create_fn=lambda retries: {"name": "Hero"},
             judge_fn=judge_fn,
@@ -1200,9 +1201,9 @@ class TestQualityLoopScoreRounding:
             story_id="test-story",
         )
 
-        # Best score was 7.46, rounds to 7.5, so threshold_met should be True
+        # Peak was 7.44, rounds to 7.4, so threshold_met should be False
         analytics_call = mock_svc._log_refinement_analytics.call_args
-        assert analytics_call.kwargs["threshold_met"] is True
+        assert analytics_call.kwargs["threshold_met"] is False
 
 
 class TestQualityLoopSubThresholdWarning:

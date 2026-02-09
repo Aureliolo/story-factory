@@ -109,7 +109,7 @@ def _generate_batch(
         progress_callback: Optional callback to receive
             :class:`EntityGenerationProgress` updates.
         quality_threshold: Quality threshold for pass/fail in batch summary log.
-            Read from ``svc.config`` if not provided.
+            Read from ``svc.get_config().quality_threshold`` if not provided.
 
     Returns:
         List of ``(entity, scores)`` tuples.
@@ -121,7 +121,7 @@ def _generate_batch(
 
     # Resolve threshold for batch summary
     if quality_threshold is None:
-        quality_threshold = getattr(getattr(svc, "config", None), "quality_threshold", 7.5)
+        quality_threshold = svc.get_config().quality_threshold
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []
@@ -237,7 +237,7 @@ def _review_batch(
         progress_callback: Optional callback to receive
             :class:`EntityGenerationProgress` updates.
         quality_threshold: Quality threshold for pass/fail in batch summary log.
-            Read from ``svc.config`` if not provided.
+            Read from ``svc.get_config().quality_threshold`` if not provided.
 
     Returns:
         List of ``(entity, scores)`` tuples.  On failure the *original*
@@ -247,7 +247,7 @@ def _review_batch(
 
     # Resolve threshold for batch summary
     if quality_threshold is None:
-        quality_threshold = getattr(getattr(svc, "config", None), "quality_threshold", 7.5)
+        quality_threshold = svc.get_config().quality_threshold
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []

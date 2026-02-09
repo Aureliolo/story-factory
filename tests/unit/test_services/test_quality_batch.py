@@ -6,7 +6,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.memory.world_quality import CharacterQualityScores
-from src.services.world_quality_service._batch import _generate_batch, _log_batch_summary
+from src.services.world_quality_service._batch import (
+    _generate_batch,
+    _log_batch_summary,
+    _review_batch,
+)
 
 
 def _make_scores(avg: float, feedback: str = "Test") -> CharacterQualityScores:
@@ -21,8 +25,9 @@ def mock_svc():
     """Create a mock WorldQualityService."""
     svc = MagicMock()
     svc._calculate_eta = MagicMock(return_value=0.0)
-    svc.config = MagicMock()
-    svc.config.quality_threshold = 7.5
+    config = MagicMock()
+    config.quality_threshold = 7.5
+    svc.get_config = MagicMock(return_value=config)
     return svc
 
 
@@ -123,3 +128,21 @@ class TestGenerateBatchSummary:
             )
 
         assert any("Batch faction summary" in msg for msg in caplog.messages)
+
+    def test_review_batch_logs_summary(self, mock_svc, caplog):
+        """_review_batch logs batch summary after completing."""
+        entity = {"name": "Test Entity"}
+        scores = _make_scores(8.0)
+
+        with caplog.at_level(logging.INFO):
+            _review_batch(
+                svc=mock_svc,
+                entities=[entity],
+                entity_type="character",
+                review_fn=lambda e: (e, scores, 1),
+                get_name=lambda e: e["name"],
+                zero_scores_fn=lambda reason: _make_scores(0.0),
+                quality_threshold=7.5,
+            )
+
+        assert any("Batch character summary" in msg for msg in caplog.messages)

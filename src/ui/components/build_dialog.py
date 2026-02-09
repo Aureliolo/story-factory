@@ -165,7 +165,7 @@ async def show_build_structure_dialog(
             # Log final stats using counts from build_world()
             action = "rebuilt" if rebuild else "built"
             summary_parts = [f"{v} {k}" for k, v in counts.items() if v > 0]
-            summary = ", ".join(summary_parts)
+            summary = ", ".join(summary_parts) if summary_parts else "no entities generated"
             logger.info("Structure %s complete: %s", mode, summary)
             ui.notify(f"Story structure {action}: {summary}", type="positive")
 

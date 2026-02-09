@@ -125,8 +125,8 @@ def log_refinement_analytics(
         f"  - Best iteration: {analysis['best_iteration']} ({history.peak_score:.1f})\n"
         f"  - Final returned: iteration {history.final_iteration} ({history.final_score:.1f})\n"
         f"  - Improved over first: {analysis['improved']}\n"
-        f"  - Worsened after peak: {analysis.get('worsened_after_peak', False)}\n"
-        f"  - Mid-loop regression: {analysis.get('mid_loop_regression', False)}\n"
+        f"  - Worsened after peak: {analysis['worsened_after_peak']}\n"
+        f"  - Mid-loop regression: {analysis['mid_loop_regression']}\n"
         f"  - Threshold met: {threshold_met}\n"
         f"  - Early stop triggered: {early_stop_triggered}"
     )
