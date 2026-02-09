@@ -202,7 +202,7 @@ def get_refinement_progression_data(
                 raw_json = record.pop("score_progression_json")
                 try:
                     record["score_progression"] = json.loads(raw_json)
-                except (json.JSONDecodeError, TypeError):
+                except json.JSONDecodeError, TypeError:
                     logger.warning(
                         "Malformed score_progression_json for entity %s, using empty list",
                         record.get("entity_name"),

@@ -309,7 +309,7 @@ class BackupVerifier:
             if not isinstance(backup_version, int):
                 try:
                     backup_version = int(backup_version)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     result.version_compatible = False
                     result.errors.append(
                         f"Invalid backup_format_version type in metadata: "

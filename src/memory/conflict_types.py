@@ -8,14 +8,14 @@ These models define the structure for:
 
 import logging
 import threading
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
 
-class ConflictCategory(str, Enum):
+class ConflictCategory(StrEnum):
     """Categories for relationship conflict classification."""
 
     ALLIANCE = "alliance"  # Positive relationships

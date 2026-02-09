@@ -53,9 +53,9 @@ def review_plot_quality(
             story_state,
             config.get_refinement_temperature(iteration),
         ),
-        get_name=lambda plot: plot.plot_summary[:50] + "..."
-        if len(plot.plot_summary) > 50
-        else plot.plot_summary,
+        get_name=lambda plot: (
+            plot.plot_summary[:50] + "..." if len(plot.plot_summary) > 50 else plot.plot_summary
+        ),
         serialize=lambda plot: plot.model_dump(),
         is_empty=lambda plot: not plot.plot_summary and not plot.plot_points,
         score_cls=PlotQualityScores,
