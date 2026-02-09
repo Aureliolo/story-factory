@@ -5,7 +5,6 @@ Tests the entity depth analysis functions without requiring actual world databas
 
 import json
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -115,18 +114,27 @@ class TestEntityDepthRecord:
     def test_field_completeness_minimal(self):
         """Entity with only description should have low completeness."""
         r = EntityDepthRecord("faction", "Guild", "A guild.", {})
-        # faction expects 7 fields, only description populated = 1/7
+        # faction expects 5 depth fields, only description populated = 1/5 = 0.2
         assert r.field_completeness < 0.3
 
     def test_expected_field_count_known_type(self):
         """Known entity type should use EXPECTED_FIELDS."""
         r = EntityDepthRecord("faction", "Guild", "desc", {})
-        assert r.expected_field_count == 7  # faction has 7 expected fields
+        assert (
+            r.expected_field_count == 5
+        )  # faction: description, leader, goals, values, base_location
 
     def test_expected_field_count_character(self):
-        """Character should have 9 expected fields."""
+        """Character should have 8 expected fields."""
         r = EntityDepthRecord("character", "Hero", "desc", {})
-        assert r.expected_field_count == 9
+        assert (
+            r.expected_field_count == 8
+        )  # role, description, personality_traits, goals, relationships, arc_notes, arc_type, arc_progress
+
+    def test_expected_field_count_unknown_type(self):
+        """Unknown entity type should fall back to description + attribute count."""
+        r = EntityDepthRecord("widget", "Gizmo", "desc", {"foo": "bar", "baz": "qux"})
+        assert r.expected_field_count == 3  # 1 (description) + 2 attributes
 
 
 # =====================================================================
@@ -201,18 +209,17 @@ class TestNormalizeWords:
 class TestReadWorldDatabase:
     """Tests for reading SQLite world databases."""
 
-    def _create_test_db(self, entities: list[tuple[str, str, str, str]]) -> Path:
+    def _create_test_db(self, tmp_path: Path, entities: list[tuple[str, str, str, str]]) -> Path:
         """Create a temporary SQLite database with test entities.
 
         Args:
+            tmp_path: Pytest-provided temporary directory.
             entities: List of (type, name, description, attributes_json) tuples.
 
         Returns:
             Path to the temporary database file.
         """
-        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        tmp.close()
-        db_path = Path(tmp.name)
+        db_path = tmp_path / "test_world.db"
 
         conn = sqlite3.connect(str(db_path))
         conn.execute(
@@ -231,21 +238,21 @@ class TestReadWorldDatabase:
         conn.close()
         return db_path
 
-    def test_read_basic_entities(self):
+    def test_read_basic_entities(self, tmp_path: Path):
         """Read entities from a basic database."""
         db_path = self._create_test_db(
+            tmp_path,
             [
                 ("faction", "The Guild", "A trading guild.", '{"leader": "Aldric"}'),
                 ("location", "Castle", "A stone castle.", "{}"),
-            ]
+            ],
         )
         records = read_world_database(db_path)
         assert len(records) == 2
         types = {r.entity_type for r in records}
         assert types == {"faction", "location"}
-        db_path.unlink()
 
-    def test_read_with_complex_attributes(self):
+    def test_read_with_complex_attributes(self, tmp_path: Path):
         """Read entities with complex JSON attributes."""
         attrs = json.dumps(
             {
@@ -255,28 +262,25 @@ class TestReadWorldDatabase:
             }
         )
         db_path = self._create_test_db(
+            tmp_path,
             [
                 ("faction", "Guild", "Trading guild.", attrs),
-            ]
+            ],
         )
         records = read_world_database(db_path)
         assert len(records) == 1
         assert records[0].attributes["leader"] == "Guildmaster"
         assert len(records[0].attributes["goals"]) == 2
-        db_path.unlink()
 
-    def test_read_empty_database(self):
+    def test_read_empty_database(self, tmp_path: Path):
         """Empty database should return no records."""
-        db_path = self._create_test_db([])
+        db_path = self._create_test_db(tmp_path, [])
         records = read_world_database(db_path)
         assert records == []
-        db_path.unlink()
 
-    def test_read_no_entities_table(self):
+    def test_read_no_entities_table(self, tmp_path: Path):
         """Database without entities table should return empty list."""
-        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        tmp.close()
-        db_path = Path(tmp.name)
+        db_path = tmp_path / "no_entities.db"
         conn = sqlite3.connect(str(db_path))
         conn.execute("CREATE TABLE other_table (id TEXT)")
         conn.commit()
@@ -284,13 +288,10 @@ class TestReadWorldDatabase:
 
         records = read_world_database(db_path)
         assert records == []
-        db_path.unlink()
 
-    def test_read_invalid_json_attributes(self):
+    def test_read_invalid_json_attributes(self, tmp_path: Path):
         """Invalid JSON in attributes should be handled gracefully."""
-        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        tmp.close()
-        db_path = Path(tmp.name)
+        db_path = tmp_path / "invalid_json.db"
         conn = sqlite3.connect(str(db_path))
         conn.execute(
             """CREATE TABLE entities (
@@ -309,31 +310,27 @@ class TestReadWorldDatabase:
         records = read_world_database(db_path)
         assert len(records) == 1
         assert records[0].attributes == {}
-        db_path.unlink()
 
 
 class TestFindWorldDatabases:
     """Tests for finding world database files."""
 
-    def test_find_db_files(self):
+    def test_find_db_files(self, tmp_path: Path):
         """Find .db files in a directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test files
-            (Path(tmpdir) / "world1.db").write_bytes(b"")
-            (Path(tmpdir) / "world2.db").write_bytes(b"")
-            (Path(tmpdir) / "readme.txt").write_bytes(b"")
+        (tmp_path / "world1.db").write_bytes(b"")
+        (tmp_path / "world2.db").write_bytes(b"")
+        (tmp_path / "readme.txt").write_bytes(b"")
 
-            dbs = find_world_databases(Path(tmpdir))
-            assert len(dbs) == 2
+        dbs = find_world_databases(tmp_path)
+        assert len(dbs) == 2
 
-    def test_find_sqlite_files(self):
+    def test_find_sqlite_files(self, tmp_path: Path):
         """Find .sqlite and .sqlite3 files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "world.sqlite").write_bytes(b"")
-            (Path(tmpdir) / "world.sqlite3").write_bytes(b"")
+        (tmp_path / "world.sqlite").write_bytes(b"")
+        (tmp_path / "world.sqlite3").write_bytes(b"")
 
-            dbs = find_world_databases(Path(tmpdir))
-            assert len(dbs) == 2
+        dbs = find_world_databases(tmp_path)
+        assert len(dbs) == 2
 
     def test_nonexistent_directory(self):
         """Nonexistent directory should return empty list."""

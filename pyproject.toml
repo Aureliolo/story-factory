@@ -258,5 +258,4 @@ color = true
 omit_covered_files = false
 exclude = [
     "setup.py",
-    "scripts",
 ]

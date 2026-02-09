@@ -24,6 +24,7 @@ Usage:
 """
 
 import argparse
+import ast
 import json
 import logging
 import math
@@ -73,6 +74,12 @@ class EntityRecord:
     """Collects all scoring data for a single entity across iterations."""
 
     def __init__(self, entity_type: str, name: str) -> None:
+        """Initialize an entity record for tracking scores across iterations.
+
+        Args:
+            entity_type: Entity type label (e.g. "faction", "location").
+            name: Entity display name.
+        """
         self.entity_type = entity_type.lower()
         self.name = name
         self.scores: list[float] = []
@@ -114,6 +121,7 @@ def parse_log_file(log_path: Path) -> list[EntityRecord]:
     entities: dict[tuple[str, str], EntityRecord] = {}
 
     def get_or_create(entity_type: str, name: str) -> EntityRecord:
+        """Get an existing record or create a new one for the given entity."""
         key = (entity_type.lower(), name)
         if key not in entities:
             entities[key] = EntityRecord(entity_type, name)
@@ -221,15 +229,16 @@ def _parse_dimension_dict(s: str) -> dict[str, float]:
     The log format uses Python dict repr with single-quoted string values:
     {'coherence': '8.5', 'influence': '7.0', ...}
 
+    Uses ast.literal_eval for safe parsing of Python literals, which handles
+    edge cases (embedded quotes, etc.) that naive quote replacement would miss.
+
     Args:
         s: String representation of the dimension scores dict.
 
     Returns:
         Dict mapping dimension names to float scores.
     """
-    # Replace single quotes with double quotes for JSON parsing
-    cleaned = s.replace("'", '"')
-    raw = json.loads(cleaned)
+    raw = ast.literal_eval(s)
     return {k: float(v) for k, v in raw.items()}
 
 
@@ -247,12 +256,15 @@ def compute_score_histogram(records: list[EntityRecord]) -> dict[str, int]:
     Returns:
         Dict mapping bin labels (e.g. "7.0-7.5") to count of scores in that bin.
     """
-    bins: dict[str, int] = {}
+    bins: dict[str, int] = defaultdict(int)
     for r in records:
         for score in r.scores:
             bin_lower = math.floor(score * 2) / 2  # 0.5-wide bins
+            # Clamp score 10.0 into the 9.5-10.0 bin instead of creating 10.0-10.5
+            if bin_lower >= 10.0:
+                bin_lower = 9.5
             bin_label = f"{bin_lower:.1f}-{bin_lower + 0.5:.1f}"
-            bins[bin_label] = bins.get(bin_label, 0) + 1
+            bins[bin_label] += 1
 
     # Sort by bin lower bound
     return dict(sorted(bins.items(), key=lambda x: float(x[0].split("-")[0])))
@@ -268,7 +280,7 @@ def compute_clustering_metrics(records: list[EntityRecord]) -> dict[str, Any]:
         Dict with:
         - unique_scores: number of distinct score values
         - total_scores: total number of scores
-        - modal_scores: top 3 most common scores
+        - modal_scores: top 5 most common scores
         - score_range: max - min of all scores
         - std_dev: standard deviation of all scores
         - iqr: interquartile range
@@ -386,10 +398,13 @@ def compute_dimension_variance(records: list[EntityRecord]) -> dict[str, dict[st
     for r in records:
         for dim_scores in r.dimension_scores:
             for dim, score in dim_scores.items():
+                # Skip the computed average — it's not a real dimension
+                if dim == "average":
+                    continue
                 type_dims[r.entity_type][dim].append(score)
 
             # Intra-entity spread: how much do dimensions differ within one judge call?
-            dim_values = list(dim_scores.values())
+            dim_values = [v for k, v in dim_scores.items() if k != "average"]
             if len(dim_values) >= 2:
                 spread = max(dim_values) - min(dim_values)
                 intra_spreads[r.entity_type].append(spread)
@@ -408,7 +423,7 @@ def compute_dimension_variance(records: list[EntityRecord]) -> dict[str, dict[st
                 "count": len(values),
             }
 
-        spreads = intra_spreads.get(entity_type, [])
+        spreads = intra_spreads[entity_type]
         avg_intra_spread = round(sum(spreads) / len(spreads), 2) if spreads else 0.0
 
         result[entity_type] = {
@@ -438,6 +453,7 @@ def compute_time_vs_score(records: list[EntityRecord]) -> dict[str, Any]:
             type_pairs[r.entity_type].append((r.total_generation_time, final_score))
 
     def _pearson(data: list[tuple[float, float]]) -> float:
+        """Compute Pearson correlation coefficient for (x, y) pairs."""
         if len(data) < 3:
             return 0.0
         n = len(data)
@@ -667,9 +683,10 @@ def main() -> None:
         print()
         print("--- Per-Entity Details ---")
         for r in sorted(records, key=lambda x: (x.entity_type, x.name)):
+            create_str = f"{r.creation_time:.1f}s" if r.creation_time is not None else "n/a"
             print(
                 f"  [{r.entity_type}] {r.name}: scores={r.scores}, "
-                f"create={r.creation_time:.1f}s, total={r.total_generation_time:.1f}s, "
+                f"create={create_str}, total={r.total_generation_time:.1f}s, "
                 f"met_threshold={r.threshold_met}"
             )
 

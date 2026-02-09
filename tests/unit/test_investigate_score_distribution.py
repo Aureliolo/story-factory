@@ -4,8 +4,6 @@ Tests the log parsing and analysis functions without requiring actual log files
 or a running Ollama instance.
 """
 
-import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -85,9 +83,9 @@ class TestParseDimensionDict:
         result = _parse_dimension_dict("{'atmosphere': '7.2'}")
         assert result == {"atmosphere": 7.2}
 
-    def test_invalid_json_raises(self):
+    def test_invalid_format_raises(self):
         """Invalid format should raise an error."""
-        with pytest.raises((json.JSONDecodeError, ValueError)):
+        with pytest.raises((ValueError, SyntaxError)):
             _parse_dimension_dict("not a dict")
 
 
@@ -97,22 +95,21 @@ class TestParseDimensionDict:
 class TestParseLogFile:
     """Tests for parsing log files."""
 
-    def _write_log(self, lines: list[str]) -> Path:
+    def _write_log(self, tmp_path: Path, lines: list[str]) -> Path:
         """Write lines to a temporary log file and return its path."""
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False, encoding="utf-8")
-        for line in lines:
-            tmp.write(line + "\n")
-        tmp.close()
-        return Path(tmp.name)
+        log_path = tmp_path / "test.log"
+        log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return log_path
 
-    def test_parse_creation_and_score(self):
+    def test_parse_creation_and_score(self, tmp_path: Path):
         """Parse creation time followed by iteration score."""
         log_path = self._write_log(
+            tmp_path,
             [
                 "2024-01-01 INFO Faction creation took 2.34s (iteration 1)",
                 "2024-01-01 INFO Faction 'The Guild' iteration 1: score 7.5 "
                 "(best so far: 7.5 at iteration 1)",
-            ]
+            ],
         )
         records = parse_log_file(log_path)
         assert len(records) == 1
@@ -120,11 +117,11 @@ class TestParseLogFile:
         assert records[0].name == "The Guild"
         assert records[0].scores == [7.5]
         assert records[0].creation_time == pytest.approx(2.34)
-        log_path.unlink()
 
-    def test_parse_refinement_time(self):
+    def test_parse_refinement_time(self, tmp_path: Path):
         """Parse refinement times correctly."""
         log_path = self._write_log(
+            tmp_path,
             [
                 "2024-01-01 INFO Faction creation took 2.00s (iteration 1)",
                 "2024-01-01 INFO Faction 'The Guild' iteration 1: score 6.5 "
@@ -132,81 +129,79 @@ class TestParseLogFile:
                 "2024-01-01 INFO Faction refinement took 3.12s (iteration 2)",
                 "2024-01-01 INFO Faction 'The Guild' iteration 2: score 7.8 "
                 "(best so far: 7.8 at iteration 2)",
-            ]
+            ],
         )
         records = parse_log_file(log_path)
         assert len(records) == 1
         assert records[0].refinement_times == [pytest.approx(3.12)]
         assert records[0].scores == [6.5, 7.8]
-        log_path.unlink()
 
-    def test_parse_threshold_met(self):
+    def test_parse_threshold_met(self, tmp_path: Path):
         """Parse threshold met line."""
         log_path = self._write_log(
+            tmp_path,
             [
                 "2024-01-01 INFO Faction 'The Guild' iteration 1: score 7.5 "
                 "(best so far: 7.5 at iteration 1)",
                 "2024-01-01 INFO Faction 'The Guild' met quality threshold (7.5 >= 7.5)",
-            ]
+            ],
         )
         records = parse_log_file(log_path)
         assert len(records) == 1
         assert records[0].threshold_met is True
         assert records[0].final_score == 7.5
         assert records[0].threshold_value == 7.5
-        log_path.unlink()
 
-    def test_parse_dimension_scores(self):
+    def test_parse_dimension_scores(self, tmp_path: Path):
         """Parse dimension score lines."""
         log_path = self._write_log(
+            tmp_path,
             [
                 "2024-01-01 INFO Faction 'The Guild' iteration 1: score 7.5 "
                 "(best so far: 7.5 at iteration 1)",
                 "2024-01-01 DEBUG Faction 'The Guild' iteration 1 dimension scores: "
                 "{'coherence': '8.0', 'influence': '7.0'}",
-            ]
+            ],
         )
         records = parse_log_file(log_path)
         assert len(records) == 1
         assert len(records[0].dimension_scores) == 1
         assert records[0].dimension_scores[0] == {"coherence": 8.0, "influence": 7.0}
-        log_path.unlink()
 
-    def test_parse_multiple_entities(self):
+    def test_parse_multiple_entities(self, tmp_path: Path):
         """Parse multiple different entities."""
         log_path = self._write_log(
+            tmp_path,
             [
                 "2024-01-01 INFO Faction 'Guild A' iteration 1: score 7.5 "
                 "(best so far: 7.5 at iteration 1)",
                 "2024-01-01 INFO Location 'Castle' iteration 1: score 8.0 "
                 "(best so far: 8.0 at iteration 1)",
-            ]
+            ],
         )
         records = parse_log_file(log_path)
         assert len(records) == 2
         types = {r.entity_type for r in records}
         assert types == {"faction", "location"}
-        log_path.unlink()
 
-    def test_parse_empty_log(self):
+    def test_parse_empty_log(self, tmp_path: Path):
         """Empty log file should return no records."""
-        log_path = self._write_log([])
+        log_path = self._write_log(tmp_path, [])
         records = parse_log_file(log_path)
         assert records == []
-        log_path.unlink()
 
-    def test_parse_irrelevant_lines(self):
+    def test_parse_irrelevant_lines(self, tmp_path: Path):
         """Lines that don't match patterns should be ignored."""
         log_path = self._write_log(
+            tmp_path,
             [
                 "2024-01-01 INFO Starting application...",
                 "2024-01-01 DEBUG Some random debug message",
                 "2024-01-01 WARNING Connection timeout",
-            ]
+            ],
         )
         records = parse_log_file(log_path)
         assert records == []
-        log_path.unlink()
 
 
 # =====================================================================
@@ -252,6 +247,15 @@ class TestComputeScoreHistogram:
         keys = list(hist.keys())
         lower_bounds = [float(k.split("-")[0]) for k in keys]
         assert lower_bounds == sorted(lower_bounds)
+
+    def test_score_10_clamped_to_last_bin(self):
+        """Score of exactly 10.0 should go into 9.5-10.0 bin, not 10.0-10.5."""
+        r = EntityRecord("faction", "A")
+        r.scores = [10.0]
+        hist = compute_score_histogram([r])
+        assert "9.5-10.0" in hist
+        assert hist["9.5-10.0"] == 1
+        assert "10.0-10.5" not in hist
 
 
 # =====================================================================
@@ -391,6 +395,17 @@ class TestComputeDimensionVariance:
         result = compute_dimension_variance([r])
         assert result["faction"]["dimensions"]["coherence"]["mean"] == 8.5
         assert result["faction"]["dimensions"]["influence"]["mean"] == 6.5
+
+    def test_average_dimension_excluded(self):
+        """The 'average' key should be filtered from dimension analysis."""
+        r = EntityRecord("faction", "A")
+        r.dimension_scores = [{"coherence": 8.0, "influence": 6.0, "average": 7.0}]
+        result = compute_dimension_variance([r])
+        assert "average" not in result["faction"]["dimensions"]
+        assert "coherence" in result["faction"]["dimensions"]
+        assert "influence" in result["faction"]["dimensions"]
+        # Intra-entity spread should exclude average: 8.0 - 6.0 = 2.0
+        assert result["faction"]["avg_intra_entity_spread"] == 2.0
 
 
 # =====================================================================

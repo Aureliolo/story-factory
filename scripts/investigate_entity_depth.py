@@ -30,10 +30,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Fields expected per entity type (based on Pydantic models in story_state.py)
+# Fields expected per entity type for depth analysis.
+# Based on Pydantic models in story_state.py, but excluding ``name`` and ``type``
+# which are always-populated DB columns and don't indicate content depth.
 EXPECTED_FIELDS: dict[str, list[str]] = {
     "character": [
-        "name",
         "role",
         "description",
         "personality_traits",
@@ -43,10 +44,10 @@ EXPECTED_FIELDS: dict[str, list[str]] = {
         "arc_type",
         "arc_progress",
     ],
-    "faction": ["name", "type", "description", "leader", "goals", "values", "base_location"],
-    "item": ["name", "type", "description", "significance", "properties"],
-    "concept": ["name", "type", "description", "manifestations"],
-    "location": ["name", "type", "description", "significance"],
+    "faction": ["description", "leader", "goals", "values", "base_location"],
+    "item": ["description", "significance", "properties"],
+    "concept": ["description", "manifestations"],
+    "location": ["description", "significance"],
 }
 
 
@@ -63,6 +64,14 @@ class EntityDepthRecord:
         description: str,
         attributes: dict[str, Any],
     ) -> None:
+        """Initialize an entity depth record.
+
+        Args:
+            entity_type: Entity type (e.g. "faction", "character").
+            name: Entity display name.
+            description: Entity description text.
+            attributes: Additional entity attributes from the database.
+        """
         self.entity_type = entity_type
         self.name = name
         self.description = description
@@ -121,9 +130,13 @@ class EntityDepthRecord:
     @property
     def expected_field_count(self) -> int:
         """Number of fields expected for this entity type."""
-        return len(EXPECTED_FIELDS.get(self.entity_type, [])) or (
-            1 + len(self.attributes)  # description + attributes
+        if self.entity_type in EXPECTED_FIELDS:
+            return len(EXPECTED_FIELDS[self.entity_type])
+        # Unknown entity type: fall back to description + attribute count
+        logger.debug(
+            "Unknown entity type %r — using actual field count as expected", self.entity_type
         )
+        return 1 + len(self.attributes)
 
     @property
     def field_completeness(self) -> float:
@@ -161,7 +174,7 @@ def _normalize_words(text: str) -> list[str]:
         text: Raw text content.
 
     Returns:
-        List of lowercase alphanumeric words.
+        List of lowercase alphabetic words.
     """
     return [w.lower() for w in re.findall(r"[a-zA-Z]+", text)]
 
@@ -183,32 +196,29 @@ def read_world_database(db_path: Path) -> list[EntityDepthRecord]:
     records: list[EntityDepthRecord] = []
 
     try:
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        # Check if entities table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entities'")
-        if not cursor.fetchone():
-            logger.warning("No 'entities' table in %s", db_path)
-            conn.close()
-            return []
+            # Check if entities table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entities'")
+            if not cursor.fetchone():
+                logger.warning("No 'entities' table in %s", db_path)
+                return []
 
-        cursor.execute(
-            "SELECT type, name, description, attributes FROM entities ORDER BY type, name"
-        )
-        for row in cursor.fetchall():
-            entity_type = row["type"]
-            name = row["name"]
-            description = row["description"] or ""
-            try:
-                attributes = json.loads(row["attributes"]) if row["attributes"] else {}
-            except json.JSONDecodeError, TypeError:
-                attributes = {}
+            cursor.execute(
+                "SELECT type, name, description, attributes FROM entities ORDER BY type, name"
+            )
+            for row in cursor.fetchall():
+                entity_type = row["type"]
+                name = row["name"]
+                description = row["description"] or ""
+                try:
+                    attributes = json.loads(row["attributes"]) if row["attributes"] else {}
+                except json.JSONDecodeError, TypeError:
+                    attributes = {}
 
-            records.append(EntityDepthRecord(entity_type, name, description, attributes))
-
-        conn.close()
+                records.append(EntityDepthRecord(entity_type, name, description, attributes))
     except sqlite3.Error as e:
         logger.error("Failed to read database %s: %s", db_path, e)
 
@@ -227,6 +237,7 @@ def find_world_databases(db_dir: Path) -> list[Path]:
     """
     dbs: list[Path] = []
     if not db_dir.exists():
+        logger.debug("Database directory does not exist: %s", db_dir)
         return dbs
 
     # Look for .db and .sqlite files
@@ -242,8 +253,8 @@ def find_world_databases(db_dir: Path) -> list[Path]:
                     header = fh.read(16)
                     if header.startswith(b"SQLite format 3"):
                         dbs.append(f)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("Could not read file %s for SQLite detection: %s", f, e)
 
     return sorted(dbs)
 
@@ -272,6 +283,7 @@ def compute_type_depth_stats(records: list[EntityDepthRecord]) -> dict[str, dict
         completeness_vals = [r.field_completeness for r in group]
 
         def _stats(values: list[float]) -> dict[str, float]:
+            """Compute mean, std_dev, min, max for a list of numeric values."""
             if not values:
                 return {"mean": 0.0, "std_dev": 0.0, "min": 0.0, "max": 0.0}
             mean = sum(values) / len(values)
