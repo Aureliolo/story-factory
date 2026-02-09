@@ -124,9 +124,15 @@ def generate_structured[T: BaseModel](
             content = response["message"]["content"]
             result = response_model.model_validate_json(content)
 
-            logger.debug(
-                f"Structured output received: {response_model.__name__} "
-                f"({duration:.2f}s, tokens: {prompt_tokens}+{completion_tokens})"
+            total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+            logger.info(
+                "LLM call complete: model=%s, schema=%s, %.2fs, tokens: %s+%s=%s",
+                model,
+                response_model.__name__,
+                duration,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
             )
             return result
 

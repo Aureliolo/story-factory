@@ -43,19 +43,29 @@ def run_web_ui(
 
     logger.info("Starting Story Factory web UI...")
 
-    # Load settings and create services (with timing for startup debugging)
+    # Load settings and create services (with timing for startup phases)
     t0 = time.perf_counter()
     settings = Settings.load()
-    logger.debug("Settings loaded in %.2fs", time.perf_counter() - t0)
+    logger.info("Settings loaded in %.2fs", time.perf_counter() - t0)
 
     t1 = time.perf_counter()
     services = ServiceContainer(settings)
-    logger.debug("Services created in %.2fs", time.perf_counter() - t1)
+    logger.info("ServiceContainer initialized in %.2fs", time.perf_counter() - t1)
+
+    # Check model load state before first LLM call
+    try:
+        if settings.use_mode_system:
+            target_model = services.mode.get_model_for_agent("writer")
+        else:
+            target_model = settings.get_model_for_agent("writer")
+        services.model.log_model_load_state(target_model)
+    except Exception as e:
+        logger.debug("Could not check model load state: %s", e)
 
     # Create and run app
     t2 = time.perf_counter()
     app = create_app(services)
-    logger.debug("App created in %.2fs", time.perf_counter() - t2)
+    logger.info("App created in %.2fs", time.perf_counter() - t2)
 
     # Use the original start time from main() for accurate total startup timing
     total_t0 = startup_t0 if startup_t0 is not None else t0
@@ -263,7 +273,9 @@ def main() -> None:
     # so failures appear in the log file, not just stderr
     from src.utils.environment import check_environment
 
+    t_env = time.perf_counter()
     check_environment()
+    logger.info("Environment check completed in %.2fs", time.perf_counter() - t_env)
 
     # If no explicit --log-level on CLI, respect the persisted setting
     if not any(arg.startswith("--log-level") for arg in sys.argv):

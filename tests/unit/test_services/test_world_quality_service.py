@@ -2724,6 +2724,49 @@ class TestMiniDescriptions:
         assert "Entity Three" not in results
         assert mock_ollama_client.chat.call_count == 2
 
+    def test_generate_mini_description_logs_token_counts(self, service, mock_ollama_client, caplog):
+        """Test that mini description logs model name and token counts at INFO (#304)."""
+        response = self._make_mini_desc_response("A brave warrior")
+        response["prompt_eval_count"] = 80
+        response["eval_count"] = 20
+        mock_ollama_client.chat.return_value = response
+        service._client = mock_ollama_client
+
+        long_description = " ".join(["word"] * 50)
+        with caplog.at_level(logging.INFO, logger="src.services.world_quality_service._validation"):
+            service.generate_mini_description(
+                name="Test Hero",
+                entity_type="character",
+                full_description=long_description,
+            )
+
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any(
+            "Mini description LLM call" in r.message and "tokens:" in r.message.lower()
+            for r in info_records
+        )
+
+    def test_generate_mini_descriptions_batch_logs_summary(
+        self, service, mock_ollama_client, caplog
+    ):
+        """Test that batch mini descriptions logs aggregate timing (#304)."""
+        response = self._make_mini_desc_response("Short summary")
+        response["prompt_eval_count"] = 50
+        response["eval_count"] = 10
+        mock_ollama_client.chat.return_value = response
+        service._client = mock_ollama_client
+
+        entities = [
+            {"name": "Entity One", "type": "character", "description": " ".join(["word"] * 50)},
+            {"name": "Entity Two", "type": "location", "description": " ".join(["word"] * 50)},
+        ]
+
+        with caplog.at_level(logging.INFO, logger="src.services.world_quality_service._validation"):
+            service.generate_mini_descriptions_batch(entities)
+
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any("Completed mini description batch" in r.message for r in info_records)
+
 
 class TestSettingsValidation:
     """Tests for world quality settings validation."""
