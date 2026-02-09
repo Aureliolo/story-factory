@@ -428,7 +428,7 @@ class Settings:
                     # If construction succeeded, the field is valid
                     setattr(defaults, field_name, data[field_name])
                     recovered_fields.append(field_name)
-                except (TypeError, ValueError):  # pragma: no cover
+                except TypeError, ValueError:  # pragma: no cover
                     # Defensive: dataclasses don't type-check, but keep for safety
                     invalid_fields.append(field_name)
                     setattr(defaults, field_name, default_value)

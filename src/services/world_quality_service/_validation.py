@@ -550,7 +550,7 @@ IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no 
                 raw_confidence = suggestion.get("confidence", 0.5)
                 try:
                     confidence = float(raw_confidence)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     confidence = 0.5
                 confidence = max(0.0, min(1.0, confidence))
 
@@ -765,7 +765,7 @@ Return JSON:
             # Coerce confidence to float with fallback and clamping
             try:
                 confidence = float(result.get("confidence", 0.5))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 confidence = 0.5
             confidence = max(0.0, min(1.0, confidence))
 

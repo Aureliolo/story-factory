@@ -7,13 +7,13 @@ These models define the structure for:
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class VramStrategy(str, Enum):
+class VramStrategy(StrEnum):
     """VRAM management strategy for model loading."""
 
     SEQUENTIAL = "sequential"  # Fully unload between agents
@@ -21,7 +21,7 @@ class VramStrategy(str, Enum):
     ADAPTIVE = "adaptive"  # Smart loading based on available VRAM
 
 
-class LearningTrigger(str, Enum):
+class LearningTrigger(StrEnum):
     """When to trigger learning/tuning analysis."""
 
     OFF = "off"  # No automatic analysis
@@ -30,7 +30,7 @@ class LearningTrigger(str, Enum):
     CONTINUOUS = "continuous"  # Background analysis
 
 
-class AutonomyLevel(str, Enum):
+class AutonomyLevel(StrEnum):
     """How autonomous the tuning system should be."""
 
     MANUAL = "manual"  # All changes require approval
@@ -40,7 +40,7 @@ class AutonomyLevel(str, Enum):
     EXPERIMENTAL = "experimental"  # Try variations to gather data
 
 
-class SizePreference(str, Enum):
+class SizePreference(StrEnum):
     """Model size preference for automatic selection.
 
     Modes use this to steer model selection toward larger or smaller models
@@ -167,7 +167,7 @@ class GenerationScore(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
-class RecommendationType(str, Enum):
+class RecommendationType(StrEnum):
     """Types of tuning recommendations."""
 
     MODEL_SWAP = "model_swap"  # Change model for a role
@@ -263,7 +263,7 @@ class LearningSettings(BaseModel):
 # Used for automatic model selection based on installed models
 
 
-class ModelSizeTier(str, Enum):
+class ModelSizeTier(StrEnum):
     """Model size classification for automatic selection."""
 
     LARGE = "large"  # 20GB+, for architect/complex reasoning

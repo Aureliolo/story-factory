@@ -244,6 +244,6 @@ class TimelinePage:
 
             dialog.open()
 
-        except (IndexError, AttributeError):
+        except IndexError, AttributeError:
             logger.exception("Error deleting event at index %d", index)
             ui.notify("Error deleting event", type="negative")

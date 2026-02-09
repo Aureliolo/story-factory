@@ -169,7 +169,7 @@ def load_prefs_deferred(page_key: str, callback: Callable[[dict], None]) -> None
         try:
             prefs = await _load_prefs(page_key)
             callback(prefs)
-        except (RuntimeError, TimeoutError):
+        except RuntimeError, TimeoutError:
             logger.debug("Pref load skipped for %s (timeout or UI element destroyed)", page_key)
 
     ui.timer(_INITIAL_DELAY, _deferred, once=True)

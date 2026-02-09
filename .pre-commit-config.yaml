@@ -12,6 +12,10 @@ ci:
   # - check-deps: can't pip install in pre-commit.ci sandbox
   skip: [mypy, check-deps]
 
+# Python 3.14+ required — PEP 758 syntax (except A, B:) from ruff 0.15+ formatter
+default_language_version:
+  python: python3.14
+
 repos:
   # Check and install dependencies before any other hooks
   - repo: local
@@ -26,7 +30,7 @@ repos:
 
   # Use ruff for linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.14
+    rev: v0.15.0
     hooks:
       - id: ruff
         args: [--fix]
@@ -40,7 +44,7 @@ repos:
         additional_dependencies:
           - pydantic==2.12.5
           - pytest==9.0.2
-          - nicegui==3.6.1
+          - nicegui==3.7.1
           - ollama==0.6.1
           - instructor==1.14.4
           - openai==2.15.0
@@ -75,6 +79,7 @@ repos:
     rev: 1.7.0
     hooks:
       - id: interrogate
+        language_version: python3.14
         args: [-vv, src, scripts, tests]
         pass_filenames: false
 
@@ -85,6 +90,7 @@ repos:
         name: generate docstring coverage badge
         entry: interrogate --generate-badge docs/badges src scripts tests
         language: python
+        language_version: python3.14
         additional_dependencies: [interrogate>=1.7.0]
         pass_filenames: false
         always_run: true
