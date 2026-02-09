@@ -150,8 +150,6 @@ async def show_build_structure_dialog(
                 build_options,
                 on_progress,
             )
-            logger.info(f"Structure {mode} counts: {counts}")
-
             # Save the project
             safe_progress_update(progress_label, progress_bar, "Saving project...", 0.95)
             if state.project:

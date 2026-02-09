@@ -268,7 +268,7 @@ class ProjectService:
 
         # Sort by updated_at descending (most recent first)
         projects.sort(key=lambda p: p.updated_at, reverse=True)
-        logger.info(f"Listed {len(projects)} projects")
+        logger.debug(f"Listed {len(projects)} projects")
         return projects
 
     def delete_project(self, project_id: str) -> bool:

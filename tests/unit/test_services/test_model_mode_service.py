@@ -12,6 +12,7 @@ from src.memory.mode_models import (
     LearningTrigger,
     QualityScores,
     RecommendationType,
+    SizePreference,
     TuningRecommendation,
     VramStrategy,
 )
@@ -1279,6 +1280,68 @@ class TestSelectModelQualityWarning:
         assert result == "good-judge:12b"
         warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
         assert not any("below minimum quality" in m for m in warning_messages)
+
+
+class TestGpuExclusionDedup:
+    """Tests for GPU exclusion log deduplication (#298)."""
+
+    def _make_svc(self, model_tags: dict[str, list[str]]):
+        """Construct a minimal mock service with get_model_tags."""
+        svc = MagicMock()
+        svc.settings.get_model_tags.side_effect = lambda m: model_tags.get(m, [])
+        return svc
+
+    def test_first_exclusion_logs_info_subsequent_logs_debug(self, caplog, monkeypatch):
+        """First GPU exclusion of a model logs INFO, subsequent calls log DEBUG."""
+        import logging
+
+        from src.services.model_mode_service import _modes
+        from src.services.model_mode_service._modes import select_model_with_size_preference
+
+        # Reset the seen-set so previous tests don't interfere
+        monkeypatch.setattr(_modes, "_excluded_models_logged", set())
+
+        # big-model:70b is too large for 8 GiB GPU, small-model:1b will be selected
+        tags = {"big-model:70b": ["writer"], "small-model:1b": ["writer"]}
+        svc = self._make_svc(tags)
+        monkeypatch.setattr(
+            "src.settings.get_installed_models_with_sizes",
+            lambda: {"big-model:70b": 40.0, "small-model:1b": 0.5},
+        )
+        monkeypatch.setattr(
+            "src.settings.get_model_info",
+            lambda m: {"quality": 7, "speed": 7, "vram_required": 40 if "70b" in m else 1},
+        )
+
+        # First call — big-model should be excluded at INFO
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_mode_service._modes"):
+            select_model_with_size_preference(svc, "writer", SizePreference.LARGEST, 8)
+
+        info_records = [
+            r
+            for r in caplog.records
+            if "Excluding big-model:70b" in r.message and r.levelno == logging.INFO
+        ]
+        assert len(info_records) == 1, "First exclusion should log at INFO"
+
+        caplog.clear()
+
+        # Second call — same model should be excluded at DEBUG
+        with caplog.at_level(logging.DEBUG, logger="src.services.model_mode_service._modes"):
+            select_model_with_size_preference(svc, "writer", SizePreference.LARGEST, 8)
+
+        debug_records = [
+            r
+            for r in caplog.records
+            if "Excluding big-model:70b" in r.message and r.levelno == logging.DEBUG
+        ]
+        info_records_2 = [
+            r
+            for r in caplog.records
+            if "Excluding big-model:70b" in r.message and r.levelno == logging.INFO
+        ]
+        assert len(debug_records) == 1, "Subsequent exclusion should log at DEBUG"
+        assert len(info_records_2) == 0, "Subsequent exclusion should NOT log at INFO"
 
 
 class TestUnloadAllExcept:
