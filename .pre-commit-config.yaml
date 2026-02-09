@@ -10,9 +10,11 @@ ci:
   # Skip in CI - these hooks require local environment setup
   # - mypy: image with all deps exceeds 250MB limit
   # - check-deps: can't pip install in pre-commit.ci sandbox
-  # - interrogate/interrogate-badge: pre-commit.ci runs Python 3.12
-  #   which can't ast.parse() PEP 758 syntax (except A, B:) used by ruff 0.15+
-  skip: [mypy, check-deps, interrogate, interrogate-badge]
+  skip: [mypy, check-deps]
+
+# Python 3.14+ required — PEP 758 syntax (except A, B:) from ruff 0.15+ formatter
+default_language_version:
+  python: python3.14
 
 repos:
   # Check and install dependencies before any other hooks
