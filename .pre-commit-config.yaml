@@ -44,7 +44,7 @@ repos:
         additional_dependencies:
           - pydantic==2.12.5
           - pytest==9.0.2
-          - nicegui==3.6.1
+          - nicegui==3.7.1
           - ollama==0.6.1
           - instructor==1.14.4
           - openai==2.15.0
