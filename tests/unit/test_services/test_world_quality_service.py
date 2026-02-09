@@ -848,6 +848,7 @@ class TestRefineCharacter:
             description="A simple description",
             personality_traits=["brave"],
             goals=["save the world"],
+            relationships={"Mary": "ally"},
             arc_notes="Basic arc",
             arc_progress={1: "Ordinary world", 2: "Call to adventure"},
             arc_type="hero_journey",
@@ -866,7 +867,8 @@ class TestRefineCharacter:
         assert refined.name == "John Doe"
         assert "deeper psychology" in refined.description
         assert len(refined.personality_traits) > 1
-        # arc_progress and arc_type should be preserved from original
+        # arc_progress, arc_type, and relationships should be preserved from original
+        assert refined.relationships == {"Mary": "ally"}
         assert refined.arc_progress == {1: "Ordinary world", 2: "Call to adventure"}
         assert refined.arc_type == "hero_journey"
 

@@ -374,10 +374,12 @@ Return ONLY the improved character."""
             temperature=temperature,
         )
         refined = creation.to_character()
-        # Preserve runtime-only fields from the original character — arc data
-        # is populated during the write loop, not during refinement.
+        # Preserve fields not included in the refinement prompt — arc data
+        # is populated during the write loop, and relationships aren't
+        # part of the quality evaluation dimensions.
         refined.arc_progress = character.arc_progress.copy()
         refined.arc_type = character.arc_type
+        refined.relationships = character.relationships.copy()
         return refined
     except Exception as e:
         summary = summarize_llm_error(e)
