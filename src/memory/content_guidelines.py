@@ -5,14 +5,14 @@ for violence, language, themes, and romance in generated content.
 """
 
 import logging
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
-class ViolenceLevel(str, Enum):
+class ViolenceLevel(StrEnum):
     """Level of violence allowed in content."""
 
     MINIMAL = "minimal"  # No graphic violence, conflicts resolved peacefully
@@ -20,7 +20,7 @@ class ViolenceLevel(str, Enum):
     GRAPHIC = "graphic"  # Detailed violence, injuries described
 
 
-class LanguageLevel(str, Enum):
+class LanguageLevel(StrEnum):
     """Level of language/profanity allowed in content."""
 
     CLEAN = "clean"  # No profanity or crude language
@@ -28,7 +28,7 @@ class LanguageLevel(str, Enum):
     UNRESTRICTED = "unrestricted"  # Realistic language including strong profanity
 
 
-class ThemeLevel(str, Enum):
+class ThemeLevel(StrEnum):
     """Level of mature themes allowed in content."""
 
     LIGHT = "light"  # Family-friendly themes, no darkness
@@ -36,7 +36,7 @@ class ThemeLevel(str, Enum):
     DARK = "dark"  # Heavy themes (trauma, abuse, death) explored in depth
 
 
-class RomanceLevel(str, Enum):
+class RomanceLevel(StrEnum):
     """Level of romantic/sexual content allowed."""
 
     NONE = "none"  # No romantic content

@@ -865,7 +865,7 @@ def compute_mae(predicted: dict[str, float], ground_truth: dict[str, float]) -> 
         if pred_val is not None:
             try:
                 errors.append(abs(float(pred_val) - gt_val))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
 
     if not errors:
@@ -903,7 +903,7 @@ def compute_copying_rate(
                 try:
                     if abs(float(pred_val) - example_val) < 0.05:
                         copied += 1
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     continue
 
     if total == 0:
@@ -939,7 +939,7 @@ def compute_score_spread(
             if val is not None:
                 try:
                     dim_values[et].setdefault(dim, []).append(float(val))
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     continue
 
     spreads = []
@@ -1087,7 +1087,7 @@ def evaluate_model(
                     elif k in ENTITY_DIMENSIONS.get(et, {}):
                         try:
                             predicted_dims[k] = round(float(v), 1)
-                        except (TypeError, ValueError):
+                        except TypeError, ValueError:
                             continue
 
             predicted_avg = (

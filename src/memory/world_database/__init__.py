@@ -57,7 +57,7 @@ def flatten_deep_attributes(
         logger.debug(f"Flattening nested {type(obj).__name__} at depth {current_depth}")
         try:
             return json.dumps(obj, ensure_ascii=False, sort_keys=True)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             logger.warning(
                 "Failed to JSON-serialize attributes at max depth; falling back to str()"
             )

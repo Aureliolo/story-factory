@@ -265,7 +265,7 @@ def find_path(db: WorldDatabase, source_id: str, target_id: str) -> list[str]:
     try:
         path: list[str] = nx.shortest_path(graph, source_id, target_id)
         return path
-    except (nx.NetworkXNoPath, nx.NodeNotFound):
+    except nx.NetworkXNoPath, nx.NodeNotFound:
         return []
 
 

@@ -60,7 +60,7 @@ class Character(BaseModel):
             try:
                 int_key = int(key)
                 cleaned[int_key] = str(value)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 # Invalid key (like "Embracing Corruption") - skip this entry
                 logger.warning("Skipping invalid arc_progress key: %r (expected integer)", key)
         return cleaned

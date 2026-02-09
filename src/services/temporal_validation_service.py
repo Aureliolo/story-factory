@@ -1,7 +1,7 @@
 """Temporal validation service - validates temporal consistency of world entities."""
 
 import logging
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -14,7 +14,7 @@ from src.settings import Settings
 logger = logging.getLogger(__name__)
 
 
-class TemporalErrorType(str, Enum):
+class TemporalErrorType(StrEnum):
     """Types of temporal validation errors."""
 
     PREDATES_DEPENDENCY = "predates_dependency"  # Entity exists before its dependency
@@ -26,7 +26,7 @@ class TemporalErrorType(str, Enum):
     FOUNDING_ORDER = "founding_order"  # Faction founded before parent faction
 
 
-class TemporalErrorSeverity(str, Enum):
+class TemporalErrorSeverity(StrEnum):
     """Severity levels for temporal errors."""
 
     WARNING = "warning"  # Minor inconsistency, acceptable
