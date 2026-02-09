@@ -206,8 +206,10 @@ def quality_refinement_loop(
                 {k: f"{v:.1f}" for k, v in scores.to_dict().items() if isinstance(v, float)},
             )
 
-            # Threshold check
-            if scores.average >= config.quality_threshold:
+            # Threshold check — round to 1 decimal so the comparison matches
+            # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
+            rounded_score = round(scores.average, 1)
+            if rounded_score >= config.quality_threshold:
                 logger.info(
                     "%s '%s' met quality threshold (%.1f >= %.1f)",
                     entity_type.capitalize(),
@@ -318,6 +320,19 @@ def quality_refinement_loop(
         )
 
     if best_entity_data:
+        threshold_met = round(history.peak_score, 1) >= config.quality_threshold
+        if not threshold_met:
+            logger.warning(
+                "%s '%s' did not meet quality threshold after %d scoring round(s) "
+                "(best: %.1f, threshold: %.1f). Returning best iteration %d.",
+                entity_type.capitalize(),
+                history.entity_name,
+                scoring_rounds,
+                history.peak_score,
+                config.quality_threshold,
+                history.best_iteration,
+            )
+
         # Reconstruct scores from best iteration
         best_scores: S | None = None
         for record in history.iterations:
@@ -330,7 +345,7 @@ def quality_refinement_loop(
             svc._log_refinement_analytics(
                 history,
                 story_id,
-                threshold_met=history.peak_score >= config.quality_threshold,
+                threshold_met=threshold_met,
                 early_stop_triggered=early_stopped,
                 quality_threshold=config.quality_threshold,
                 max_iterations=config.max_iterations,

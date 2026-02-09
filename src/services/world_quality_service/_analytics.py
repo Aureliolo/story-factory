@@ -120,12 +120,13 @@ def log_refinement_analytics(
 
     logger.info(
         f"REFINEMENT ANALYTICS [{history.entity_type}] '{history.entity_name}':\n"
-        f"  - Total iterations: {analysis['total_iterations']}\n"
+        f"  - Scoring rounds: {analysis['scoring_rounds']}\n"
         f"  - Score progression: {' -> '.join(f'{s:.1f}' for s in analysis['score_progression'])}\n"
         f"  - Best iteration: {analysis['best_iteration']} ({history.peak_score:.1f})\n"
         f"  - Final returned: iteration {history.final_iteration} ({history.final_score:.1f})\n"
         f"  - Improved over first: {analysis['improved']}\n"
-        f"  - Worsened after peak: {analysis.get('worsened_after_peak', False)}\n"
+        f"  - Worsened after peak: {analysis['worsened_after_peak']}\n"
+        f"  - Mid-loop regression: {analysis['mid_loop_regression']}\n"
         f"  - Threshold met: {threshold_met}\n"
         f"  - Early stop triggered: {early_stop_triggered}"
     )
@@ -136,7 +137,7 @@ def log_refinement_analytics(
         "peak_score": history.peak_score,
         "best_iteration": analysis["best_iteration"],
         "improved": analysis["improved"],
-        "worsened_after_peak": analysis.get("worsened_after_peak", False),
+        "worsened_after_peak": analysis["worsened_after_peak"],
         "average": history.final_score,  # For backwards compatibility
     }
     record_entity_quality(
@@ -145,7 +146,7 @@ def log_refinement_analytics(
         entity_type=history.entity_type,
         entity_name=history.entity_name,
         scores=extended_scores,
-        iterations=analysis["total_iterations"],
+        iterations=analysis["scoring_rounds"],
         generation_time=0.0,  # Not tracked at this level
         early_stop_triggered=early_stop_triggered,
         threshold_met=threshold_met,
