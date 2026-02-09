@@ -1,5 +1,6 @@
 """Tests for ServiceContainer initialization."""
 
+import logging
 from unittest.mock import patch
 
 from src.services import ServiceContainer
@@ -44,3 +45,15 @@ class TestServiceContainer:
 
             mock_load.assert_called_once()
             assert container.settings is mock_settings
+
+    def test_init_logs_timing(self, caplog):
+        """Test ServiceContainer logs initialization timing at INFO level."""
+        settings = Settings()
+        with caplog.at_level(logging.INFO, logger="src.services"):
+            ServiceContainer(settings)
+
+        assert any("Initializing ServiceContainer" in r.message for r in caplog.records)
+        assert any(
+            "ServiceContainer initialized" in r.message and "services" in r.message
+            for r in caplog.records
+        )

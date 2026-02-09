@@ -4,6 +4,8 @@ This module provides a clean interface between the UI and the underlying
 business logic, agents, and data storage.
 """
 
+import logging
+import time
 from dataclasses import dataclass
 
 from src.settings import Settings
@@ -27,6 +29,8 @@ from .timeline_service import TimelineService
 from .world_quality_service import WorldQualityService
 from .world_service import WorldBuildOptions, WorldBuildProgress, WorldService
 from .world_template_service import WorldTemplateService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -73,6 +77,8 @@ class ServiceContainer:
         Notes:
             Some services are initialized with other service instances as dependencies (for example, `mode` is provided to `scoring`, `story`, `world_quality`, and `import_svc`).
         """
+        t0 = time.perf_counter()
+        logger.info("Initializing ServiceContainer...")
         self.settings = settings or Settings.load()
         self.project = ProjectService(self.settings)
         self.world = WorldService(self.settings)
@@ -94,6 +100,11 @@ class ServiceContainer:
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
         self.temporal_validation = TemporalValidationService(self.settings)
+        logger.info(
+            "ServiceContainer initialized: %d services in %.2fs",
+            19,
+            time.perf_counter() - t0,
+        )
 
 
 __all__ = [

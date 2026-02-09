@@ -1160,3 +1160,165 @@ class TestModelServiceStateChangeLogging:
             assert not any("Found 1 installed models with sizes" in r.message for r in info_records)
             debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
             assert any("Found 1 installed models with sizes" in r.message for r in debug_records)
+
+
+class TestModelServiceGetRunningModels:
+    """Tests for get_running_models method."""
+
+    def test_returns_running_models(self, model_service):
+        """Test returns list of currently loaded models."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+
+            mock_model = MagicMock()
+            mock_model.name = "test-model:8b"
+            mock_model.size = 5 * 1024**3  # 5 GB
+
+            mock_instance.ps.return_value = MagicMock(models=[mock_model])
+
+            result = model_service.get_running_models()
+
+            assert len(result) == 1
+            assert result[0]["name"] == "test-model:8b"
+            assert result[0]["size_gb"] == 5.0
+
+    def test_returns_multiple_running_models(self, model_service):
+        """Test returns multiple loaded models."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+
+            mock_model1 = MagicMock()
+            mock_model1.name = "model-a:8b"
+            mock_model1.size = 5 * 1024**3
+
+            mock_model2 = MagicMock()
+            mock_model2.name = "model-b:30b"
+            mock_model2.size = 18 * 1024**3
+
+            mock_instance.ps.return_value = MagicMock(models=[mock_model1, mock_model2])
+
+            result = model_service.get_running_models()
+
+            assert len(result) == 2
+            names = [m["name"] for m in result]
+            assert "model-a:8b" in names
+            assert "model-b:30b" in names
+
+    def test_returns_empty_on_connection_error(self, model_service):
+        """Test returns empty list when Ollama is unreachable."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.ps.side_effect = ConnectionError("Connection refused")
+
+            result = model_service.get_running_models()
+
+            assert result == []
+
+    def test_returns_empty_on_attribute_error(self, model_service):
+        """Test handles older Ollama clients without ps() method."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.ps.side_effect = AttributeError("no attribute ps")
+
+            result = model_service.get_running_models()
+
+            assert result == []
+
+    def test_returns_empty_list_when_no_models_loaded(self, model_service):
+        """Test returns empty list when no models are in VRAM."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+            mock_instance.ps.return_value = MagicMock(models=[])
+
+            result = model_service.get_running_models()
+
+            assert result == []
+
+    def test_falls_back_to_model_attr_if_name_missing(self, model_service):
+        """Test falls back to 'model' attribute if 'name' is not present."""
+        with patch("src.services.model_service.ollama.Client") as mock_client:
+            mock_instance = MagicMock()
+            mock_client.return_value = mock_instance
+
+            mock_model = MagicMock(spec=[])  # No default attributes
+            mock_model.name = ""
+            mock_model.model = "fallback-model:8b"
+            mock_model.size = 5 * 1024**3
+
+            mock_instance.ps.return_value = MagicMock(models=[mock_model])
+
+            result = model_service.get_running_models()
+
+            assert len(result) == 1
+            assert result[0]["name"] == "fallback-model:8b"
+
+
+class TestModelServiceLogModelLoadState:
+    """Tests for log_model_load_state method."""
+
+    def test_logs_no_models_loaded(self, model_service, caplog):
+        """Test logs informative message when no models are loaded."""
+        with caplog.at_level(logging.INFO, logger="src.services.model_service"):
+            with patch.object(model_service, "get_running_models", return_value=[]):
+                model_service.log_model_load_state()
+
+        assert any("no models currently loaded" in r.message for r in caplog.records)
+
+    def test_logs_loaded_models(self, model_service, caplog):
+        """Test logs details of loaded models."""
+        running = [{"name": "test-model:8b", "size_gb": 5.0}]
+        with caplog.at_level(logging.INFO, logger="src.services.model_service"):
+            with patch.object(model_service, "get_running_models", return_value=running):
+                model_service.log_model_load_state()
+
+        assert any("1 model(s) loaded" in r.message for r in caplog.records)
+        assert any("test-model:8b" in r.message for r in caplog.records)
+
+    def test_warns_cold_start_when_target_not_loaded(self, model_service, caplog):
+        """Test warns about cold-start when target model is not loaded."""
+        with caplog.at_level(logging.WARNING, logger="src.services.model_service"):
+            with patch.object(model_service, "get_running_models", return_value=[]):
+                model_service.log_model_load_state(target_model="test-writer:8b")
+
+        warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("cold-start" in r.message.lower() for r in warn_records)
+        assert any("test-writer:8b" in r.message for r in warn_records)
+
+    def test_warns_cold_start_when_different_model_loaded(self, model_service, caplog):
+        """Test warns about cold-start when a different model is loaded."""
+        running = [{"name": "other-model:8b", "size_gb": 5.0}]
+        with caplog.at_level(logging.INFO, logger="src.services.model_service"):
+            with patch.object(model_service, "get_running_models", return_value=running):
+                model_service.log_model_load_state(target_model="test-writer:8b")
+
+        warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("NOT loaded" in r.message for r in warn_records)
+
+    def test_no_warning_when_target_already_loaded(self, model_service, caplog):
+        """Test no cold-start warning when target model is already loaded."""
+        running = [{"name": "test-writer:8b", "size_gb": 5.0}]
+        with caplog.at_level(logging.INFO, logger="src.services.model_service"):
+            with patch.object(model_service, "get_running_models", return_value=running):
+                model_service.log_model_load_state(target_model="test-writer:8b")
+
+        warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert not warn_records
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any("already loaded" in r.message for r in info_records)
+
+    def test_no_target_model_just_logs_state(self, model_service, caplog):
+        """Test logs state without warnings when no target specified."""
+        running = [{"name": "some-model:8b", "size_gb": 5.0}]
+        with caplog.at_level(logging.INFO, logger="src.services.model_service"):
+            with patch.object(model_service, "get_running_models", return_value=running):
+                model_service.log_model_load_state()
+
+        warn_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert not warn_records
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        assert any("1 model(s) loaded" in r.message for r in info_records)
