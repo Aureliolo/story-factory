@@ -1,6 +1,7 @@
 """Mode management functions for ModelModeService."""
 
 import logging
+import threading
 from typing import TYPE_CHECKING
 
 from src.memory.mode_models import (
@@ -19,6 +20,9 @@ if TYPE_CHECKING:
     from src.services.model_mode_service import ModelModeService
 
 logger = logging.getLogger(__name__)
+
+_excluded_models_lock = threading.Lock()
+_excluded_models_logged: set[str] = set()
 
 
 def set_mode(svc: ModelModeService, mode_id: str) -> GenerationMode:
@@ -329,7 +333,12 @@ def select_model_with_size_preference(
                 gpu_residency = available_vram_gb / size_gb
                 if gpu_residency < MIN_GPU_RESIDENCY:
                     excluded_by_residency.append(model_id)
-                    logger.info(
+                    with _excluded_models_lock:
+                        log_fn = (
+                            logger.info if model_id not in _excluded_models_logged else logger.debug
+                        )
+                        _excluded_models_logged.add(model_id)
+                    log_fn(
                         "Excluding %s for %s: %.0f%% GPU residency "
                         "(%.1fGB model, %.1fGB GPU). Minimum %.0f%% required.",
                         model_id,
