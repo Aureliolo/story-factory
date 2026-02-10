@@ -660,7 +660,9 @@ def save_to_settings(page: SettingsPage) -> None:
     if hasattr(page, "_quality_threshold_inputs"):
         for entity_type, input_widget in page._quality_threshold_inputs.items():
             settings.world_quality_thresholds[entity_type] = float(input_widget.value)
-        # Keep legacy single threshold in sync (use the max of per-entity thresholds)
+        # Keep legacy single threshold in sync — older code paths and migration
+        # use world_quality_threshold as the seed value for new per-entity keys.
+        # max() ensures it stays representative of the strictest configured threshold.
         settings.world_quality_threshold = max(settings.world_quality_thresholds.values())
     if hasattr(page, "_quality_max_iterations_input"):
         settings.world_quality_max_iterations = int(page._quality_max_iterations_input.value)
