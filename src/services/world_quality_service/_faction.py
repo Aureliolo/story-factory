@@ -323,7 +323,7 @@ def _refine_faction(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
-    threshold = svc.get_config().quality_threshold
+    threshold = svc.get_config().get_threshold("faction")
     improvement_focus = []
     if scores.coherence < threshold:
         improvement_focus.append("Make internal logic more consistent")

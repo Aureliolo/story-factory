@@ -86,22 +86,39 @@ def build_world_gen_section(page: SettingsPage) -> None:
         ui.separator().classes("my-3")
         _subsection_header("Quality Refinement", "auto_fix_high")
 
-        # Quality threshold and iterations in a row
-        with ui.row().classes("items-center gap-4"):
-            with ui.column().classes("gap-1"):
-                ui.label("Threshold").classes("text-xs text-gray-500")
-                page._quality_threshold_input = (
-                    ui.number(
-                        value=page.settings.world_quality_threshold,
-                        min=0.0,
-                        max=10.0,
-                        step=0.5,
-                    )
-                    .props("outlined dense")
-                    .classes("w-16")
-                    .tooltip("Minimum quality score (0-10) to accept entity")
+        # Per-entity quality thresholds
+        ui.label("Quality Thresholds (per entity type)").classes("text-xs text-gray-500 mb-1")
+        page._quality_threshold_inputs: dict[str, ui.number] = {}  # type: ignore[misc]
+        entity_threshold_configs = [
+            ("character", "Character", "people"),
+            ("location", "Location", "place"),
+            ("faction", "Faction", "groups"),
+            ("item", "Item", "inventory"),
+            ("concept", "Concept", "lightbulb"),
+        ]
+        with ui.row().classes("items-center gap-3 flex-wrap mb-3"):
+            for key, label, icon in entity_threshold_configs:
+                threshold_val = page.settings.world_quality_thresholds.get(
+                    key, page.settings.world_quality_threshold
                 )
+                with ui.column().classes("gap-1"):
+                    with ui.row().classes("items-center gap-1"):
+                        ui.icon(icon, size="xs").classes("text-gray-500")
+                        ui.label(label).classes("text-xs text-gray-500")
+                    page._quality_threshold_inputs[key] = (
+                        ui.number(
+                            value=threshold_val,
+                            min=0.0,
+                            max=10.0,
+                            step=0.5,
+                        )
+                        .props("outlined dense")
+                        .classes("w-16")
+                        .tooltip(f"Min quality score (0-10) for {label.lower()} entities")
+                    )
 
+        # Max iterations and patience in a row
+        with ui.row().classes("items-center gap-4"):
             with ui.column().classes("gap-1"):
                 ui.label("Max Iter.").classes("text-xs text-gray-500")
                 page._quality_max_iterations_input = (
@@ -616,9 +633,12 @@ def save_to_settings(page: SettingsPage) -> None:
         setattr(settings, f"world_gen_{key}_min", min_val)
         setattr(settings, f"world_gen_{key}_max", max_val)
 
-    # Quality refinement settings
-    if hasattr(page, "_quality_threshold_input"):
-        settings.world_quality_threshold = float(page._quality_threshold_input.value)
+    # Quality refinement settings — per-entity thresholds
+    if hasattr(page, "_quality_threshold_inputs"):
+        for entity_type, input_widget in page._quality_threshold_inputs.items():
+            settings.world_quality_thresholds[entity_type] = float(input_widget.value)
+        # Keep legacy single threshold in sync (use the max of per-entity thresholds)
+        settings.world_quality_threshold = max(settings.world_quality_thresholds.values())
     if hasattr(page, "_quality_max_iterations_input"):
         settings.world_quality_max_iterations = int(page._quality_max_iterations_input.value)
     if hasattr(page, "_quality_patience_input"):
@@ -701,9 +721,12 @@ def refresh_from_settings(page: SettingsPage) -> None:
                 min_input.value = getattr(settings, min_attr)
                 max_input.value = getattr(settings, max_attr)
 
-    # Quality refinement settings
-    if hasattr(page, "_quality_threshold_input"):
-        page._quality_threshold_input.value = settings.world_quality_threshold
+    # Quality refinement settings — per-entity thresholds
+    if hasattr(page, "_quality_threshold_inputs"):
+        for entity_type, input_widget in page._quality_threshold_inputs.items():
+            input_widget.value = settings.world_quality_thresholds.get(
+                entity_type, settings.world_quality_threshold
+            )
     if hasattr(page, "_quality_max_iterations_input"):
         page._quality_max_iterations_input.value = settings.world_quality_max_iterations
     if hasattr(page, "_quality_patience_input"):

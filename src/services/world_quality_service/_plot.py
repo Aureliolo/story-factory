@@ -198,7 +198,7 @@ def _refine_plot(
     """
     logger.debug("Refining plot outline for story %s", story_state.id)
     brief = story_state.brief
-    weak = scores.weak_dimensions(svc.get_config().quality_threshold)
+    weak = scores.weak_dimensions(svc.get_config().get_threshold("plot"))
 
     # Format plot points for the prompt
     plot_points_text = []

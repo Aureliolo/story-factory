@@ -1379,3 +1379,195 @@ class TestQualityLoopTimingInstrumentation:
             )
 
         assert any("scoring round 1" in msg.lower() for msg in caplog.messages)
+
+
+class TestPerEntityThresholds:
+    """Test per-entity quality threshold support in the quality loop."""
+
+    def test_uses_per_entity_threshold_for_character(self, mock_svc):
+        """Loop should use per-entity threshold (7.0) instead of fallback (8.0)."""
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds={"character": 7.0},
+            max_iterations=5,
+            early_stopping_patience=2,
+            early_stopping_min_iterations=2,
+        )
+        entity = {"name": "Hero"}
+        # Score 7.2 — above per-entity 7.0 but below legacy 8.0
+        scores = _make_scores(7.2)
+
+        result_entity, _result_scores, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should pass on first iteration (7.2 >= 7.0)
+        assert result_entity == entity
+        assert iterations == 1
+
+    def test_uses_per_entity_threshold_for_item(self, mock_svc):
+        """Loop should use higher per-entity threshold for items."""
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds={"item": 8.5},
+            max_iterations=3,
+            early_stopping_patience=2,
+            early_stopping_min_iterations=2,
+        )
+        entity = {"name": "Sword"}
+        # Score 8.0 — above fallback 7.5 but below item-specific 8.5
+        scores_low = _make_scores(8.0)
+        scores_high = _make_scores(8.6)
+
+        call_count = 0
+
+        def judge_fn(e):
+            """Return low scores first, then high scores."""
+            nonlocal call_count
+            call_count += 1
+            return scores_low if call_count == 1 else scores_high
+
+        _result_entity, _result_scores, iterations = quality_refinement_loop(
+            entity_type="item",
+            create_fn=lambda retries: entity,
+            judge_fn=judge_fn,
+            refine_fn=lambda e, s, i: {"name": "Sword v2"},
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should need refinement (8.0 < 8.5), then pass (8.6 >= 8.5)
+        assert iterations == 2
+
+    def test_falls_back_to_legacy_threshold(self, mock_svc):
+        """Loop should use legacy threshold when entity_type not in quality_thresholds."""
+        config = RefinementConfig(
+            quality_threshold=6.0,
+            quality_thresholds={"character": 7.0},  # No "faction" entry
+            max_iterations=5,
+            early_stopping_patience=2,
+            early_stopping_min_iterations=2,
+        )
+        entity = {"name": "Guild"}
+        # Score 6.5 — above fallback 6.0
+        scores = _make_scores(6.5)
+
+        _, _, iterations = quality_refinement_loop(
+            entity_type="faction",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should pass on first iteration (6.5 >= 6.0 fallback)
+        assert iterations == 1
+
+    def test_none_quality_thresholds_uses_legacy(self, mock_svc):
+        """When quality_thresholds is None, should use legacy threshold."""
+        config = RefinementConfig(
+            quality_threshold=7.0,
+            quality_thresholds=None,
+            max_iterations=5,
+            early_stopping_patience=2,
+            early_stopping_min_iterations=2,
+        )
+        entity = {"name": "Hero"}
+        scores = _make_scores(7.5)
+
+        _, _, iterations = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert iterations == 1
+
+
+class TestRefinementConfigGetThreshold:
+    """Test RefinementConfig.get_threshold() method."""
+
+    def test_returns_per_entity_threshold(self):
+        """get_threshold should return per-entity value when available."""
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds={"character": 8.0, "item": 9.0},
+        )
+        assert config.get_threshold("character") == 8.0
+        assert config.get_threshold("item") == 9.0
+
+    def test_falls_back_to_legacy(self):
+        """get_threshold should return legacy threshold for unlisted types."""
+        config = RefinementConfig(
+            quality_threshold=7.5,
+            quality_thresholds={"character": 8.0},
+        )
+        assert config.get_threshold("faction") == 7.5
+
+    def test_none_thresholds_uses_legacy(self):
+        """get_threshold with None thresholds should return legacy threshold."""
+        config = RefinementConfig(
+            quality_threshold=6.0,
+            quality_thresholds=None,
+        )
+        assert config.get_threshold("character") == 6.0
+
+    def test_empty_thresholds_uses_legacy(self):
+        """get_threshold with empty dict should return legacy threshold."""
+        config = RefinementConfig(
+            quality_threshold=6.5,
+            quality_thresholds={},
+        )
+        assert config.get_threshold("character") == 6.5
+
+    def test_from_settings_populates_thresholds(self):
+        """from_settings should populate quality_thresholds from settings."""
+        mock_settings = MagicMock()
+        mock_settings.world_quality_max_iterations = 3
+        mock_settings.world_quality_threshold = 7.5
+        mock_settings.world_quality_thresholds = {"character": 7.5, "item": 8.0}
+        mock_settings.world_quality_creator_temp = 0.9
+        mock_settings.world_quality_judge_temp = 0.1
+        mock_settings.world_quality_refinement_temp = 0.7
+        mock_settings.world_quality_early_stopping_patience = 2
+        mock_settings.world_quality_refinement_temp_start = 0.7
+        mock_settings.world_quality_refinement_temp_end = 0.35
+        mock_settings.world_quality_refinement_temp_decay = "linear"
+        mock_settings.world_quality_early_stopping_min_iterations = 2
+        mock_settings.world_quality_early_stopping_variance_tolerance = 0.3
+
+        config = RefinementConfig.from_settings(mock_settings)
+
+        assert config.quality_thresholds == {"character": 7.5, "item": 8.0}
+        assert config.get_threshold("character") == 7.5
+        assert config.get_threshold("item") == 8.0
+        assert config.get_threshold("faction") == 7.5  # fallback

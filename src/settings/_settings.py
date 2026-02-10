@@ -18,6 +18,16 @@ from src.settings._utils import get_installed_models_with_sizes
 # Configure module logger
 logger = logging.getLogger(__name__)
 
+# Default per-entity quality thresholds — used by migration to populate empty dicts.
+# Items score consistently higher, so the bar is raised.
+PER_ENTITY_QUALITY_DEFAULTS: dict[str, float] = {
+    "character": 7.5,
+    "location": 7.5,
+    "faction": 7.5,
+    "item": 8.0,
+    "concept": 7.5,
+}
+
 
 @dataclass
 class AgentSettings:
@@ -131,7 +141,12 @@ class Settings:
     # World quality refinement settings
     world_quality_enabled: bool = True  # Enable quality refinement for world generation
     world_quality_max_iterations: int = 3  # Maximum refinement iterations per entity
-    world_quality_threshold: float = 7.5  # Min score (0-10) to pass quality review
+    world_quality_threshold: float = (
+        7.5  # Min score (0-10) to pass quality review (legacy fallback)
+    )
+    world_quality_thresholds: dict[str, float] = field(
+        default_factory=dict  # Empty → migration fills from PER_ENTITY_QUALITY_DEFAULTS
+    )
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
     world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
     world_quality_refinement_temp: float = 0.7  # Temperature for refinement passes

@@ -334,7 +334,7 @@ def _refine_relationship(
         story_state.id,
     )
     brief = story_state.brief
-    threshold = svc.get_config().quality_threshold
+    threshold = svc.get_config().get_threshold("relationship")
 
     # Build specific improvement instructions from feedback
     improvement_focus = []

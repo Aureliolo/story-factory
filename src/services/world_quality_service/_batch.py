@@ -119,9 +119,9 @@ def _generate_batch(
     """
     from src.services.world_quality_service import EntityGenerationProgress
 
-    # Resolve threshold for batch summary
+    # Resolve threshold for batch summary (prefer per-entity, fall back to global)
     if quality_threshold is None:
-        quality_threshold = svc.get_config().quality_threshold
+        quality_threshold = svc.get_config().get_threshold(entity_type)
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []
@@ -245,9 +245,9 @@ def _review_batch(
     """
     from src.services.world_quality_service import EntityGenerationProgress
 
-    # Resolve threshold for batch summary
+    # Resolve threshold for batch summary (prefer per-entity, fall back to global)
     if quality_threshold is None:
-        quality_threshold = svc.get_config().quality_threshold
+        quality_threshold = svc.get_config().get_threshold(entity_type)
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []
