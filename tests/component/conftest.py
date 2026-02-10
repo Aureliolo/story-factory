@@ -26,7 +26,9 @@ def test_settings():
     """
     from src.settings import Settings
 
-    return Settings()
+    settings = Settings()
+    settings.validate()
+    return settings
 
 
 @pytest.fixture
