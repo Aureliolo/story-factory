@@ -1627,6 +1627,19 @@ class TestMissingValidationCoverage:
         changed = settings.validate()
         assert changed is False
 
+    def test_validate_thresholds_raises_on_missing_type_after_migration(self):
+        """Direct validation rejects missing entity types (bypassing migration)."""
+        from src.settings._validation import _validate_world_quality_thresholds
+
+        settings = Settings()
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            # missing: faction, item, concept
+        }
+        with pytest.raises(ValueError, match="world_quality_thresholds missing entity types"):
+            _validate_world_quality_thresholds(settings)
+
     # --- World gen entity min/max validation (lines 561, 565, 569) ---
 
     def test_validate_raises_on_invalid_world_gen_characters_min(self):
