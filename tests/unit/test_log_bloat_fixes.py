@@ -287,8 +287,22 @@ class TestQualityLoopErrorPropagation:
         from src.services.world_quality_service._quality_loop import quality_refinement_loop
         from src.utils.exceptions import WorldGenerationError
 
+        all_thresholds = dict.fromkeys(
+            (
+                "character",
+                "location",
+                "faction",
+                "item",
+                "concept",
+                "relationship",
+                "plot",
+                "chapter",
+            ),
+            8.0,
+        )
         config = RefinementConfig(
             quality_threshold=8.0,
+            quality_thresholds=all_thresholds,
             max_iterations=3,
             creator_temperature=0.9,
             judge_temperature=0.1,
@@ -348,8 +362,22 @@ class TestIterationCountReporting:
         from src.memory.world_quality import CharacterQualityScores, RefinementConfig
         from src.services.world_quality_service._quality_loop import quality_refinement_loop
 
+        all_thresholds = dict.fromkeys(
+            (
+                "character",
+                "location",
+                "faction",
+                "item",
+                "concept",
+                "relationship",
+                "plot",
+                "chapter",
+            ),
+            8.0,
+        )
         config = RefinementConfig(
             quality_threshold=8.0,
+            quality_thresholds=all_thresholds,
             max_iterations=3,
             creator_temperature=0.9,
             judge_temperature=0.1,

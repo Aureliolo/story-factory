@@ -22,7 +22,9 @@ class TestSettingsPageCaching:
         state.on_redo = MagicMock()
 
         services = MagicMock()
-        services.settings = Settings()
+        settings = Settings()
+        settings.validate()
+        services.settings = settings
 
         # Mock health check
         health = MagicMock()
