@@ -9,7 +9,7 @@ Judge tag policy (Issue #228, updated #294, Feb 2026):
   and Spearman rank correlation > 0.85 on the parametric prompt variant
   (no example scores) earn the tag.  Untested models (e.g. 70B models that
   timeout during benchmarking) do NOT receive the tag.
-  See ``output/diagnostics/judge_accuracy_20260210_063748.json`` for latest results.
+  See ``output/diagnostics/judge_accuracy_*.json`` for latest results.
 """
 
 from src.settings._types import ModelInfo

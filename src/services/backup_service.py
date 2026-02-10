@@ -303,7 +303,10 @@ class BackupVerifier:
                 result.errors.append("Metadata must be a JSON object for version check")
                 return
 
-            backup_version = metadata.get("backup_format_version", BACKUP_FORMAT_VERSION)
+            backup_version = metadata.get("backup_format_version")
+            if backup_version is None:
+                backup_version = 1  # Legacy backups pre-date versioning
+                logger.warning("Backup missing backup_format_version, treating as v1")
 
             # Validate and coerce backup_version to int
             if not isinstance(backup_version, int):

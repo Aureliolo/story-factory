@@ -1523,7 +1523,7 @@ class TestMissingValidationCoverage:
         # Empty default → migration fills all types from world_quality_threshold (7.5)
         assert settings.world_quality_thresholds["character"] == 7.5
         assert settings.world_quality_thresholds["item"] == 7.5
-        assert len(settings.world_quality_thresholds) == 5
+        assert len(settings.world_quality_thresholds) == 8
 
     def test_validate_raises_on_per_entity_threshold_out_of_range(self):
         """Should raise ValueError for per-entity threshold out of 0-10 range."""
@@ -1534,6 +1534,9 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 7.5,
             "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
         }
         with pytest.raises(
             ValueError, match=r"world_quality_thresholds\[character\] must be between"
@@ -1549,6 +1552,9 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": -1.0,
             "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
         }
         with pytest.raises(ValueError, match=r"world_quality_thresholds\[item\] must be between"):
             settings.validate()
@@ -1561,6 +1567,9 @@ class TestMissingValidationCoverage:
             "location": 7.5,
             "item": 8.0,
             "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
             # missing: faction
         }
         changed = settings.validate()
@@ -1579,6 +1588,9 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 7.5,
             "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
             "alien": 5.0,
         }
         with pytest.raises(ValueError, match="world_quality_thresholds has unknown entity types"):
@@ -1594,6 +1606,10 @@ class TestMissingValidationCoverage:
         assert settings.world_quality_thresholds["character"] == 6.0
         assert settings.world_quality_thresholds["item"] == 6.0
         assert settings.world_quality_thresholds["faction"] == 6.0
+        assert settings.world_quality_thresholds["relationship"] == 6.0
+        assert settings.world_quality_thresholds["plot"] == 6.0
+        assert settings.world_quality_thresholds["chapter"] == 6.0
+        assert len(settings.world_quality_thresholds) == 8
 
     def test_migration_backfills_missing_entity_types(self):
         """Missing entity types should be backfilled from PER_ENTITY_QUALITY_DEFAULTS."""
@@ -1602,7 +1618,7 @@ class TestMissingValidationCoverage:
             "character": 8.0,
             "location": 7.0,
             "faction": 7.5,
-            # missing: item, concept
+            # missing: item, concept, relationship, plot, chapter
         }
         changed = settings.validate()
         assert changed is True
@@ -1610,6 +1626,9 @@ class TestMissingValidationCoverage:
         assert (
             settings.world_quality_thresholds["concept"] == 7.5
         )  # from PER_ENTITY_QUALITY_DEFAULTS
+        assert settings.world_quality_thresholds["relationship"] == 7.5
+        assert settings.world_quality_thresholds["plot"] == 7.5
+        assert settings.world_quality_thresholds["chapter"] == 7.5
 
     def test_no_migration_when_all_types_present(self):
         """No threshold migration needed when all entity types are present."""
@@ -1621,6 +1640,9 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             "item": 8.0,
             "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
         }
         # Set a valid embedding model to prevent embedding migration from returning True
         settings.embedding_model = "mxbai-embed-large"
@@ -1635,7 +1657,7 @@ class TestMissingValidationCoverage:
         settings.world_quality_thresholds = {
             "character": 7.5,
             "location": 7.5,
-            # missing: faction, item, concept
+            # missing: faction, item, concept, relationship, plot, chapter
         }
         with pytest.raises(ValueError, match="world_quality_thresholds missing entity types"):
             _validate_world_quality_thresholds(settings)
@@ -2493,6 +2515,9 @@ class TestEmbeddingModelMigration:
             "faction": 7.5,
             "item": 8.0,
             "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
         }
         changed = settings.validate()
         assert changed is False
@@ -2515,6 +2540,9 @@ class TestEmbeddingModelMigration:
             "faction": 7.5,
             "item": 8.0,
             "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
         }
         changed = settings.validate()
         assert changed is False

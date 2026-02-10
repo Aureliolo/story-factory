@@ -89,22 +89,45 @@ def build_world_gen_section(page: SettingsPage) -> None:
         # Per-entity quality thresholds
         ui.label("Quality Thresholds (per entity type)").classes("text-xs text-gray-500 mb-1")
         page._quality_threshold_inputs: dict[str, ui.number] = {}  # type: ignore[misc]
-        entity_threshold_configs = [
+        primary_threshold_configs = [
             ("character", "Character", "people"),
             ("location", "Location", "place"),
             ("faction", "Faction", "groups"),
             ("item", "Item", "inventory"),
             ("concept", "Concept", "lightbulb"),
         ]
+        secondary_threshold_configs = [
+            ("relationship", "Relationship", "link"),
+            ("plot", "Plot", "auto_stories"),
+            ("chapter", "Chapter", "menu_book"),
+        ]
         with ui.row().classes("items-center gap-3 flex-wrap mb-3"):
-            for key, label, icon in entity_threshold_configs:
-                threshold_val = page.settings.world_quality_thresholds.get(
-                    key, page.settings.world_quality_threshold
-                )
+            for key, label, icon in primary_threshold_configs:
+                threshold_val = page.settings.world_quality_thresholds[key]
                 with ui.column().classes("gap-1"):
                     with ui.row().classes("items-center gap-1"):
                         ui.icon(icon, size="xs").classes("text-gray-500")
                         ui.label(label).classes("text-xs text-gray-500")
+                    page._quality_threshold_inputs[key] = (
+                        ui.number(
+                            value=threshold_val,
+                            min=0.0,
+                            max=10.0,
+                            step=0.5,
+                        )
+                        .props("outlined dense")
+                        .classes("w-16")
+                        .tooltip(f"Min quality score (0-10) for {label.lower()} entities")
+                    )
+
+        ui.label("Secondary").classes("text-xs text-gray-400 mt-1")
+        with ui.row().classes("items-center gap-3 flex-wrap mb-3"):
+            for key, label, icon in secondary_threshold_configs:
+                threshold_val = page.settings.world_quality_thresholds[key]
+                with ui.column().classes("gap-1"):
+                    with ui.row().classes("items-center gap-1"):
+                        ui.icon(icon, size="xs").classes("text-gray-400")
+                        ui.label(label).classes("text-xs text-gray-400")
                     page._quality_threshold_inputs[key] = (
                         ui.number(
                             value=threshold_val,
@@ -724,9 +747,7 @@ def refresh_from_settings(page: SettingsPage) -> None:
     # Quality refinement settings — per-entity thresholds
     if hasattr(page, "_quality_threshold_inputs"):
         for entity_type, input_widget in page._quality_threshold_inputs.items():
-            input_widget.value = settings.world_quality_thresholds.get(
-                entity_type, settings.world_quality_threshold
-            )
+            input_widget.value = settings.world_quality_thresholds[entity_type]
     if hasattr(page, "_quality_max_iterations_input"):
         page._quality_max_iterations_input.value = settings.world_quality_max_iterations
     if hasattr(page, "_quality_patience_input"):

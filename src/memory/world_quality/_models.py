@@ -316,29 +316,36 @@ class RefinementConfig(BaseModel):
     def get_threshold(self, entity_type: str) -> float:
         """Get quality threshold for a specific entity type.
 
-        Looks up per-entity threshold from quality_thresholds dict, falling
-        back to the legacy quality_threshold if not available.
+        Looks up per-entity threshold from quality_thresholds dict.  Raises
+        ``ValueError`` when the dict is empty (settings not validated) or the
+        requested entity type is missing.
 
         Args:
             entity_type: Entity type to get threshold for (e.g., "character", "item").
 
         Returns:
             Quality threshold for the entity type.
+
+        Raises:
+            ValueError: If quality_thresholds is empty or entity_type is missing.
         """
-        if self.quality_thresholds and entity_type in self.quality_thresholds:
-            threshold = self.quality_thresholds[entity_type]
-            logger.debug(
-                "Using per-entity quality threshold for %s: %.1f",
-                entity_type,
-                threshold,
+        if not self.quality_thresholds:
+            raise ValueError(
+                f"quality_thresholds is empty — run settings.validate() before "
+                f"calling get_threshold(). Requested type: '{entity_type}'"
             )
-            return threshold
+        if entity_type not in self.quality_thresholds:
+            raise ValueError(
+                f"No quality threshold configured for entity type '{entity_type}'. "
+                f"Available: {sorted(self.quality_thresholds)}"
+            )
+        threshold = self.quality_thresholds[entity_type]
         logger.debug(
-            "No per-entity threshold for %s, using fallback: %.1f",
+            "Using per-entity quality threshold for %s: %.1f",
             entity_type,
-            self.quality_threshold,
+            threshold,
         )
-        return self.quality_threshold
+        return threshold
 
     def get_refinement_temperature(
         self, iteration: int, max_iterations: int | None = None

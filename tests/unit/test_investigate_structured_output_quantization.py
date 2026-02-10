@@ -352,7 +352,7 @@ class TestRunConstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_constrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_constrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 1
         assert results[0]["round"] == 1
@@ -375,7 +375,7 @@ class TestRunConstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_constrained(mock_client, "test-model:8b", rounds=3, timeout=30)
+        results = run_constrained(mock_client, "test-model:8b", rounds=3)
 
         assert len(results) == 3
         assert results[0]["round"] == 1
@@ -396,7 +396,7 @@ class TestRunConstrained:
         )
         mock_client.chat.return_value = _make_chat_response(invalid_content)
 
-        results = run_constrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_constrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 0
 
@@ -404,7 +404,7 @@ class TestRunConstrained:
         """ollama.ResponseError should be caught and round skipped."""
         mock_client.chat.side_effect = ollama.ResponseError("model not found")
 
-        results = run_constrained(mock_client, "test-model:8b", rounds=2, timeout=30)
+        results = run_constrained(mock_client, "test-model:8b", rounds=2)
 
         assert len(results) == 0
 
@@ -425,7 +425,7 @@ class TestRunConstrained:
             _make_chat_response(valid_content),
         ]
 
-        results = run_constrained(mock_client, "test-model:8b", rounds=3, timeout=30)
+        results = run_constrained(mock_client, "test-model:8b", rounds=3)
 
         assert len(results) == 2
         assert results[0]["round"] == 1
@@ -435,7 +435,7 @@ class TestRunConstrained:
         """KeyError (e.g., missing 'message' key) should be caught."""
         mock_client.chat.return_value = {"bad_key": "no message"}
 
-        results = run_constrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_constrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 0
 
@@ -452,7 +452,7 @@ class TestRunConstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        run_constrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        run_constrained(mock_client, "test-model:8b", rounds=1)
 
         call_kwargs = mock_client.chat.call_args
         assert call_kwargs.kwargs["model"] == "test-model:8b"
@@ -485,7 +485,7 @@ class TestRunUnconstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 1
         assert results[0]["coherence"] == 7.5
@@ -507,7 +507,7 @@ class TestRunUnconstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=3, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=3)
 
         assert len(results) == 3
 
@@ -522,7 +522,7 @@ class TestRunUnconstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 0
 
@@ -530,7 +530,7 @@ class TestRunUnconstrained:
         """Invalid JSON should be caught and round skipped."""
         mock_client.chat.return_value = _make_chat_response("not valid json {{{")
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 0
 
@@ -538,7 +538,7 @@ class TestRunUnconstrained:
         """ollama.ResponseError should be caught and round skipped."""
         mock_client.chat.side_effect = ollama.ResponseError("server error")
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=2, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=2)
 
         assert len(results) == 0
 
@@ -556,7 +556,7 @@ class TestRunUnconstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 1
         assert results[0]["coherence"] == 7.5
@@ -573,7 +573,7 @@ class TestRunUnconstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 1
         assert results[0]["coherence"] == 7.5
@@ -595,7 +595,7 @@ class TestRunUnconstrained:
             _make_chat_response(valid_content),
         ]
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=3, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=3)
 
         assert len(results) == 2
         assert results[0]["round"] == 1
@@ -613,7 +613,7 @@ class TestRunUnconstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         call_kwargs = mock_client.chat.call_args
         assert call_kwargs.kwargs["model"] == "test-model:8b"
@@ -631,7 +631,7 @@ class TestRunUnconstrained:
         )
         mock_client.chat.return_value = _make_chat_response(content)
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         # None is filtered by `if val is not None`, so only 3 dims found -> skipped
         assert len(results) == 0
@@ -640,6 +640,6 @@ class TestRunUnconstrained:
         """KeyError (e.g., missing 'message' key) should be caught."""
         mock_client.chat.return_value = {"bad_key": "no message"}
 
-        results = run_unconstrained(mock_client, "test-model:8b", rounds=1, timeout=30)
+        results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 0

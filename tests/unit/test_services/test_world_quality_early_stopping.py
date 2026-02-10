@@ -22,6 +22,20 @@ from src.settings import Settings
 from tests.shared.mock_ollama import TEST_MODEL
 
 
+def _all_thresholds(value: float) -> dict[str, float]:
+    """Return a complete per-entity quality_thresholds dict with all 8 types set to *value*."""
+    return {
+        "character": value,
+        "location": value,
+        "faction": value,
+        "item": value,
+        "concept": value,
+        "relationship": value,
+        "plot": value,
+        "chapter": value,
+    }
+
+
 def _make_unique_refine(factory: Callable[[int], Any]) -> Callable[..., Any]:
     """Create a refine side_effect that produces unique entities per call.
 
@@ -58,6 +72,7 @@ def settings():
         world_quality_enabled=True,
         world_quality_max_iterations=10,
         world_quality_threshold=9.0,  # High threshold so 8.x scores don't exit early
+        world_quality_thresholds=_all_thresholds(9.0),
         world_quality_creator_temp=0.9,
         world_quality_judge_temp=0.1,
         world_quality_refinement_temp=0.7,

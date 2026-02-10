@@ -67,7 +67,7 @@ DO NOT wrap in "properties" or "description" - return ONLY the flat scores objec
 SCORE_DIMS = ["coherence", "influence", "conflict_potential", "distinctiveness"]
 
 
-def run_constrained(client: ollama.Client, model: str, rounds: int, timeout: int) -> list[dict]:
+def run_constrained(client: ollama.Client, model: str, rounds: int) -> list[dict]:
     """Run judge calls with format=json_schema (production path)."""
     schema = FactionQualityScores.model_json_schema()
     results = []
@@ -100,7 +100,7 @@ def run_constrained(client: ollama.Client, model: str, rounds: int, timeout: int
     return results
 
 
-def run_unconstrained(client: ollama.Client, model: str, rounds: int, timeout: int) -> list[dict]:
+def run_unconstrained(client: ollama.Client, model: str, rounds: int) -> list[dict]:
     """Run judge calls with format='json' (unconstrained baseline)."""
     results = []
     for i in range(rounds):
@@ -295,12 +295,11 @@ def main() -> None:
         default=10,
         help="Number of judge calls per mode (default: 10)",
     )
-    parser.add_argument("--timeout", type=int, default=30, help="Timeout per call in seconds")
     parser.add_argument("--verbose", action="store_true", help="Show per-dimension details")
     args = parser.parse_args()
 
     # Resolve model
-    client = ollama.Client(host="http://localhost:11434", timeout=float(args.timeout))
+    client = ollama.Client(host="http://localhost:11434")
 
     if args.model:
         model = args.model
@@ -328,7 +327,7 @@ def main() -> None:
 
     # Run constrained mode (production path)
     print(f"\nRunning {args.rounds} constrained calls (format=json_schema)...")
-    constrained_results = run_constrained(client, model, args.rounds, args.timeout)
+    constrained_results = run_constrained(client, model, args.rounds)
     constrained_analysis = analyze_scores(constrained_results, "Constrained (json_schema)")
     print_analysis(constrained_analysis, args.verbose)
 
@@ -337,11 +336,11 @@ def main() -> None:
         client.generate(model=model, prompt="", keep_alive=0)
         time.sleep(1)
     except ollama.ResponseError:
-        pass
+        pass  # Best-effort model eviction — failure is harmless
 
     # Run unconstrained mode (baseline)
     print(f"\nRunning {args.rounds} unconstrained calls (format='json')...")
-    unconstrained_results = run_unconstrained(client, model, args.rounds, args.timeout)
+    unconstrained_results = run_unconstrained(client, model, args.rounds)
     unconstrained_analysis = analyze_scores(unconstrained_results, "Unconstrained (json)")
     print_analysis(unconstrained_analysis, args.verbose)
 
@@ -352,7 +351,7 @@ def main() -> None:
     try:
         client.generate(model=model, prompt="", keep_alive=0)
     except ollama.ResponseError:
-        pass
+        pass  # Best-effort model eviction — failure is harmless
 
     # Save results
     output_dir = Path("output/diagnostics")

@@ -26,6 +26,20 @@ from src.services.world_quality_service._quality_loop import quality_refinement_
 from src.utils.exceptions import WorldGenerationError
 
 
+def _all_thresholds(value: float) -> dict[str, float]:
+    """Return a complete per-entity quality_thresholds dict with all 8 types set to *value*."""
+    return {
+        "character": value,
+        "location": value,
+        "faction": value,
+        "item": value,
+        "concept": value,
+        "relationship": value,
+        "plot": value,
+        "chapter": value,
+    }
+
+
 @pytest.fixture
 def mock_svc():
     """Create a mock WorldQualityService with analytics logging."""
@@ -39,6 +53,7 @@ def config():
     """Create a RefinementConfig with test defaults."""
     return RefinementConfig(
         quality_threshold=8.0,
+        quality_thresholds=_all_thresholds(8.0),
         max_iterations=5,
         creator_temperature=0.9,
         judge_temperature=0.1,
@@ -1101,6 +1116,7 @@ class TestQualityLoopScoreRounding:
     def test_score_rounds_up_to_meet_threshold(self, mock_svc, config):
         """A score of 7.46 rounds to 7.5 and should pass >= 7.5 threshold."""
         config.quality_threshold = 7.5
+        config.quality_thresholds = _all_thresholds(7.5)
 
         # CharacterQualityScores: average = (d + g + f + u + a) / 5
         # To get average = 7.46: 5 * 7.46 = 37.3
@@ -1136,6 +1152,7 @@ class TestQualityLoopScoreRounding:
     def test_score_rounds_down_misses_threshold(self, mock_svc, config):
         """A score of 7.44 rounds to 7.4 and should fail >= 7.5 threshold."""
         config.quality_threshold = 7.5
+        config.quality_thresholds = _all_thresholds(7.5)
         config.max_iterations = 1
 
         # 5 * 7.44 = 37.2 → 7.0, 7.0, 7.0, 8.0, 8.2 → sum = 37.2, avg = 7.44
@@ -1167,6 +1184,7 @@ class TestQualityLoopScoreRounding:
     def test_post_loop_threshold_met_uses_rounded_peak(self, mock_svc, config):
         """Post-loop threshold_met rounds peak_score — 7.44 rounds to 7.4, fails >= 7.5."""
         config.quality_threshold = 7.5
+        config.quality_thresholds = _all_thresholds(7.5)
         config.max_iterations = 2
         config.early_stopping_patience = 10
 
@@ -1247,6 +1265,7 @@ class TestQualityLoopSubThresholdWarning:
     def test_no_warning_when_best_entity_meets_threshold(self, mock_svc, config, caplog):
         """No sub-threshold WARNING when threshold is met in-loop (early return)."""
         config.quality_threshold = 7.0
+        config.quality_thresholds = _all_thresholds(7.0)
         config.max_iterations = 2
         config.early_stopping_patience = 10
 
@@ -1386,9 +1405,11 @@ class TestPerEntityThresholds:
 
     def test_uses_per_entity_threshold_for_character(self, mock_svc):
         """Loop should use per-entity threshold (7.0) instead of fallback (8.0)."""
+        thresholds = _all_thresholds(8.0)
+        thresholds["character"] = 7.0
         config = RefinementConfig(
             quality_threshold=8.0,
-            quality_thresholds={"character": 7.0},
+            quality_thresholds=thresholds,
             max_iterations=5,
             early_stopping_patience=2,
             early_stopping_min_iterations=2,
@@ -1417,9 +1438,11 @@ class TestPerEntityThresholds:
 
     def test_uses_per_entity_threshold_for_item(self, mock_svc):
         """Loop should use higher per-entity threshold for items."""
+        thresholds = _all_thresholds(7.5)
+        thresholds["item"] = 8.5
         config = RefinementConfig(
             quality_threshold=7.5,
-            quality_thresholds={"item": 8.5},
+            quality_thresholds=thresholds,
             max_iterations=3,
             early_stopping_patience=2,
             early_stopping_min_iterations=2,
@@ -1454,8 +1477,8 @@ class TestPerEntityThresholds:
         # Should need refinement (8.0 < 8.5), then pass (8.6 >= 8.5)
         assert iterations == 2
 
-    def test_falls_back_to_legacy_threshold(self, mock_svc):
-        """Loop should use legacy threshold when entity_type not in quality_thresholds."""
+    def test_missing_entity_type_raises(self, mock_svc):
+        """Loop should propagate ValueError when entity_type is missing from thresholds."""
         config = RefinementConfig(
             quality_threshold=6.0,
             quality_thresholds={"character": 7.0},  # No "faction" entry
@@ -1464,28 +1487,25 @@ class TestPerEntityThresholds:
             early_stopping_min_iterations=2,
         )
         entity = {"name": "Guild"}
-        # Score 6.5 — above fallback 6.0
         scores = _make_scores(6.5)
 
-        _, _, iterations = quality_refinement_loop(
-            entity_type="faction",
-            create_fn=lambda retries: entity,
-            judge_fn=lambda e: scores,
-            refine_fn=lambda e, s, i: e,
-            get_name=lambda e: e["name"],
-            serialize=lambda e: e.copy(),
-            is_empty=lambda e: not e.get("name"),
-            score_cls=CharacterQualityScores,
-            config=config,
-            svc=mock_svc,
-            story_id="test-story",
-        )
+        with pytest.raises(ValueError, match="No quality threshold configured"):
+            quality_refinement_loop(
+                entity_type="faction",
+                create_fn=lambda retries: entity,
+                judge_fn=lambda e: scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
 
-        # Should pass on first iteration (6.5 >= 6.0 fallback)
-        assert iterations == 1
-
-    def test_none_quality_thresholds_uses_legacy(self, mock_svc):
-        """When quality_thresholds is None, should use legacy threshold."""
+    def test_none_quality_thresholds_raises(self, mock_svc):
+        """When quality_thresholds is None, get_threshold should raise ValueError."""
         config = RefinementConfig(
             quality_threshold=7.0,
             quality_thresholds=None,
@@ -1496,21 +1516,20 @@ class TestPerEntityThresholds:
         entity = {"name": "Hero"}
         scores = _make_scores(7.5)
 
-        _, _, iterations = quality_refinement_loop(
-            entity_type="character",
-            create_fn=lambda retries: entity,
-            judge_fn=lambda e: scores,
-            refine_fn=lambda e, s, i: e,
-            get_name=lambda e: e["name"],
-            serialize=lambda e: e.copy(),
-            is_empty=lambda e: not e.get("name"),
-            score_cls=CharacterQualityScores,
-            config=config,
-            svc=mock_svc,
-            story_id="test-story",
-        )
-
-        assert iterations == 1
+        with pytest.raises(ValueError, match="quality_thresholds is empty"):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entity,
+                judge_fn=lambda e: scores,
+                refine_fn=lambda e, s, i: e,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
 
 
 class TestRefinementConfigGetThreshold:
@@ -1520,41 +1539,44 @@ class TestRefinementConfigGetThreshold:
         """get_threshold should return per-entity value when available."""
         config = RefinementConfig(
             quality_threshold=7.5,
-            quality_thresholds={"character": 8.0, "item": 9.0},
+            quality_thresholds=_all_thresholds(7.5) | {"character": 8.0, "item": 9.0},
         )
         assert config.get_threshold("character") == 8.0
         assert config.get_threshold("item") == 9.0
 
-    def test_falls_back_to_legacy(self):
-        """get_threshold should return legacy threshold for unlisted types."""
+    def test_missing_type_raises(self):
+        """get_threshold should raise ValueError for unlisted types."""
         config = RefinementConfig(
             quality_threshold=7.5,
             quality_thresholds={"character": 8.0},
         )
-        assert config.get_threshold("faction") == 7.5
+        with pytest.raises(ValueError, match="No quality threshold configured"):
+            config.get_threshold("faction")
 
-    def test_none_thresholds_uses_legacy(self):
-        """get_threshold with None thresholds should return legacy threshold."""
+    def test_none_thresholds_raises(self):
+        """get_threshold with None thresholds should raise ValueError."""
         config = RefinementConfig(
             quality_threshold=6.0,
             quality_thresholds=None,
         )
-        assert config.get_threshold("character") == 6.0
+        with pytest.raises(ValueError, match="quality_thresholds is empty"):
+            config.get_threshold("character")
 
-    def test_empty_thresholds_uses_legacy(self):
-        """get_threshold with empty dict should return legacy threshold."""
+    def test_empty_thresholds_raises(self):
+        """get_threshold with empty dict should raise ValueError."""
         config = RefinementConfig(
             quality_threshold=6.5,
             quality_thresholds={},
         )
-        assert config.get_threshold("character") == 6.5
+        with pytest.raises(ValueError, match="quality_thresholds is empty"):
+            config.get_threshold("character")
 
     def test_from_settings_populates_thresholds(self):
         """from_settings should populate quality_thresholds from settings."""
         mock_settings = MagicMock()
         mock_settings.world_quality_max_iterations = 3
         mock_settings.world_quality_threshold = 7.5
-        mock_settings.world_quality_thresholds = {"character": 7.5, "item": 8.0}
+        mock_settings.world_quality_thresholds = _all_thresholds(7.5) | {"item": 8.0}
         mock_settings.world_quality_creator_temp = 0.9
         mock_settings.world_quality_judge_temp = 0.1
         mock_settings.world_quality_refinement_temp = 0.7
@@ -1567,7 +1589,5 @@ class TestRefinementConfigGetThreshold:
 
         config = RefinementConfig.from_settings(mock_settings)
 
-        assert config.quality_thresholds == {"character": 7.5, "item": 8.0}
         assert config.get_threshold("character") == 7.5
         assert config.get_threshold("item") == 8.0
-        assert config.get_threshold("faction") == 7.5  # fallback
