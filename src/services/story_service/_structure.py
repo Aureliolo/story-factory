@@ -4,103 +4,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.memory.story_state import StoryState
-from src.memory.world_database import WorldDatabase
-from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
     from src.services.story_service import StoryService
 
 logger = logging.getLogger(__name__)
-
-
-def build_structure(svc: StoryService, state: StoryState, world_db: WorldDatabase) -> StoryState:
-    """Build the story structure and extract entities to world database.
-
-    Parameters:
-        svc: The StoryService instance.
-        state: The story state with completed brief.
-        world_db: WorldDatabase to populate with extracted entities.
-
-    Returns:
-        Updated StoryState with structure.
-    """
-    validate_not_none(state, "state")
-    validate_type(state, "state", StoryState)
-    validate_not_none(world_db, "world_db")
-    validate_type(world_db, "world_db", WorldDatabase)
-    logger.debug(f"build_structure called: project_id={state.id}")
-    if not state.brief:
-        error_msg = "Cannot build structure - no brief exists."
-        logger.error(f"build_structure failed for project {state.id}: {error_msg}")
-        raise ValueError(error_msg)
-
-    try:
-        orchestrator = svc._get_orchestrator(state)
-        orchestrator.build_story_structure()
-        svc._sync_state(orchestrator, state)
-
-        # Extract entities to world database
-        extract_entities_to_world(svc, state, world_db)
-
-        logger.info(
-            f"Story structure built for project {state.id}: "
-            f"{len(state.characters)} characters, {len(state.chapters)} chapters"
-        )
-        return state
-    except Exception as e:
-        logger.error(f"Failed to build structure for project {state.id}: {e}", exc_info=True)
-        raise
-
-
-def extract_entities_to_world(
-    svc: StoryService, state: StoryState, world_db: WorldDatabase
-) -> None:
-    """Extract characters and locations from story state to world database.
-
-    Parameters:
-        svc: The StoryService instance (unused but kept for consistency).
-        state: Story state with characters.
-        world_db: WorldDatabase to populate.
-    """
-    # Extract characters
-    for char in state.characters:
-        # Check if already exists
-        existing = world_db.search_entities(char.name, entity_type="character")
-        if existing:
-            continue
-
-        attributes = {
-            "role": char.role,
-            "personality_traits": char.trait_names,
-            "goals": char.goals,
-            "arc_notes": char.arc_notes,
-        }
-
-        entity_id = world_db.add_entity(
-            entity_type="character",
-            name=char.name,
-            description=char.description,
-            attributes=attributes,
-        )
-
-        # Add relationships from character data
-        for related_name, relationship in char.relationships.items():
-            # Find the related character
-            related_entities = world_db.search_entities(related_name, entity_type="character")
-            if related_entities:
-                world_db.add_relationship(
-                    source_id=entity_id,
-                    target_id=related_entities[0].id,
-                    relation_type=relationship,
-                )
-                logger.info(
-                    "Created implicit character relationship: %s -[%s]-> %s",
-                    char.name,
-                    relationship,
-                    related_name,
-                )
-
-    logger.info(f"Extracted {len(state.characters)} characters to world database")
 
 
 def generate_outline_variations(

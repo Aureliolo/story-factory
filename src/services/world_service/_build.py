@@ -116,7 +116,6 @@ def build_world(
             services.story.rebuild_world(state)
         else:
             # Initial build - build on existing state (doesn't clear)
-            # Note: build_structure also extracts to world_db, but we handle that below
             orchestrator = services.story._get_orchestrator(state)
             orchestrator.build_story_structure()
             services.story._sync_state(orchestrator, state)

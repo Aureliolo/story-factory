@@ -5,7 +5,7 @@ module into logical sub-modules for maintainability.
 
 Sub-modules:
     _interview  - Interview phase (start, process, finalize, continue)
-    _structure  - Structure building, outline variations, entity extraction
+    _structure  - Outline variations, selection, rating, merging
     _writing    - Chapter writing, regeneration, short story
     _editing    - Continuation, editing, review, world generation
 """
@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 
 from src.agents.continuity import ContinuityIssue
 from src.memory.story_state import Character, StoryBrief, StoryState
-from src.memory.world_database import WorldDatabase
 from src.services.orchestrator import StoryOrchestrator, WorkflowEvent
 from src.services.story_service import _editing, _interview, _structure, _writing
 from src.settings import Settings
@@ -198,14 +197,6 @@ class StoryService:
         return _interview.continue_interview(self, state, additional_info)
 
     # ========== STRUCTURE PHASE ==========
-
-    def build_structure(self, state: StoryState, world_db: WorldDatabase) -> StoryState:
-        """Build the story structure and extract entities to world database."""
-        return _structure.build_structure(self, state, world_db)
-
-    def _extract_entities_to_world(self, state: StoryState, world_db: WorldDatabase) -> None:
-        """Extract characters and locations from story state to world database."""
-        _structure.extract_entities_to_world(self, state, world_db)
 
     def generate_outline_variations(
         self,

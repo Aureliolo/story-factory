@@ -152,18 +152,6 @@ class WorldService:
 
     # ========== ENTITY EXTRACTION ==========
 
-    def extract_entities_from_structure(self, state: StoryState, world_db: WorldDatabase) -> int:
-        """Extract characters and locations from story structure to world database.
-
-        Args:
-            state: Story state with characters and world description.
-            world_db: WorldDatabase to populate.
-
-        Returns:
-            Number of entities extracted.
-        """
-        return _extraction.extract_entities_from_structure(self, state, world_db)
-
     def extract_from_chapter(
         self,
         content: str,
