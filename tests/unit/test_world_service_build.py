@@ -185,11 +185,11 @@ def mock_services():
     """Create mock ServiceContainer."""
     services = MagicMock()
     services.story.rebuild_world = MagicMock()
-    services.story.generate_relationships = MagicMock(return_value=[])
     services.world_quality.generate_locations_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_factions_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_items_with_quality = MagicMock(return_value=[])
     services.world_quality.generate_concepts_with_quality = MagicMock(return_value=[])
+    services.world_quality.generate_relationships_with_quality = MagicMock(return_value=[])
 
     # Quality review pass-through: return characters/chapters unchanged with mock scores
     def _review_characters(characters, state, cancel_check=None):
@@ -439,9 +439,12 @@ class TestGenerateFactions:
             ({"name": "Guild", "description": "A guild", "leader": "Master"}, mock_quality_scores),
         ]
 
-        count = world_service._generate_factions(sample_story_state, mock_world_db, mock_services)
+        faction_count, implicit_count = world_service._generate_factions(
+            sample_story_state, mock_world_db, mock_services
+        )
 
-        assert count == 1
+        assert faction_count == 1
+        assert implicit_count == 0
         factions = mock_world_db.list_entities(entity_type="faction")
         assert len(factions) == 1
         assert factions[0].name == "Guild"
@@ -463,12 +466,15 @@ class TestGenerateFactions:
             ),
         ]
 
-        world_service._generate_factions(sample_story_state, mock_world_db, mock_services)
+        _faction_count, implicit_count = world_service._generate_factions(
+            sample_story_state, mock_world_db, mock_services
+        )
 
-        # Check relationship was created
+        # Check relationship was created and counted
         relationships = mock_world_db.list_relationships()
         assert len(relationships) == 1
         assert relationships[0].relation_type == "based_in"
+        assert implicit_count == 1
 
     def test_skips_invalid_factions(
         self, world_service, mock_world_db, sample_story_state, mock_services, caplog
@@ -485,11 +491,12 @@ class TestGenerateFactions:
         ]
 
         with caplog.at_level(logging.WARNING):
-            count = world_service._generate_factions(
+            faction_count, implicit_count = world_service._generate_factions(
                 sample_story_state, mock_world_db, mock_services
             )
 
-        assert count == 0
+        assert faction_count == 0
+        assert implicit_count == 0
         assert "Skipping invalid faction" in caplog.text
 
 
@@ -589,18 +596,24 @@ class TestGenerateRelationships:
     def test_generates_relationships(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
-        """Test generates and adds relationships."""
+        """Test generates and adds relationships via quality service."""
         # Add some entities first
         mock_world_db.add_entity("character", "Hero", "The hero")
         mock_world_db.add_entity("character", "Villain", "The villain")
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "Hero",
-                "target": "Villain",
-                "relation_type": "enemies",
-                "description": "Mortal enemies",
-            },
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "Hero",
+                    "target": "Villain",
+                    "relation_type": "enemies",
+                    "description": "Mortal enemies",
+                },
+                mock_quality_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -611,6 +624,8 @@ class TestGenerateRelationships:
         relationships = mock_world_db.list_relationships()
         assert len(relationships) == 1
         assert relationships[0].relation_type == "enemies"
+        # Verify quality service was called, not story service
+        mock_services.world_quality.generate_relationships_with_quality.assert_called_once()
 
     def test_skips_invalid_relationships(
         self, world_service, mock_world_db, sample_story_state, mock_services
@@ -619,12 +634,18 @@ class TestGenerateRelationships:
         mock_world_db.add_entity("character", "Hero", "The hero")
         # Note: Villain is NOT added
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "Hero",
-                "target": "Villain",
-                "relation_type": "enemies",
-            },  # Villain doesn't exist
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 7.0
+
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "Hero",
+                    "target": "Villain",
+                    "relation_type": "enemies",
+                },
+                mock_quality_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -639,9 +660,15 @@ class TestGenerateRelationships:
         """Test skips relationships that are not proper dicts and logs warning."""
         import logging
 
-        mock_services.story.generate_relationships.return_value = [
-            "just a string",  # Invalid - not a dict
-            {"missing": "required_fields"},  # Invalid - missing source/target
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 5.0
+
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            ("just a string", mock_quality_scores),  # Invalid - not a dict
+            (
+                {"missing": "required_fields"},
+                mock_quality_scores,
+            ),  # Invalid - missing source/target
         ]
 
         with caplog.at_level(logging.WARNING):
@@ -651,6 +678,23 @@ class TestGenerateRelationships:
 
         assert count == 0
         assert "Skipping invalid relationship" in caplog.text
+
+    def test_passes_cancel_check_to_quality_service(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that cancel_check is passed to generate_relationships_with_quality."""
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        def my_cancel_check():
+            """Stub cancel check that never cancels."""
+            return False
+
+        world_service._generate_relationships(
+            sample_story_state, mock_world_db, mock_services, cancel_check=my_cancel_check
+        )
+
+        call_kwargs = mock_services.world_quality.generate_relationships_with_quality.call_args
+        assert call_kwargs.kwargs["cancel_check"] is my_cancel_check
 
 
 class TestBuildWorld:
@@ -684,7 +728,7 @@ class TestBuildWorld:
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         counts = world_service.build_world(
             sample_story_state,
@@ -735,7 +779,7 @@ class TestBuildWorld:
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         world_service.build_world(
             sample_story_state,
@@ -764,7 +808,7 @@ class TestBuildWorld:
         ]
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         counts = world_service.build_world(
             sample_story_state,
@@ -798,7 +842,7 @@ class TestBuildWorld:
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         options = WorldBuildOptions(world_template=template)
 
@@ -836,7 +880,7 @@ class TestBuildWorld:
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         world_service.build_world(
             sample_story_state,
@@ -897,7 +941,7 @@ class TestWorldBuildCancellation:
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         options = WorldBuildOptions.full(cancellation_event=cancel_event)
 
@@ -928,7 +972,7 @@ class TestWorldBuildCancellation:
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         options = WorldBuildOptions.full(cancellation_event=cancel_event)
 
@@ -955,7 +999,7 @@ class TestWorldBuildCancellation:
         mock_services.world_quality.generate_factions_with_quality.return_value = []
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
-        mock_services.story.generate_relationships.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
 
         options = WorldBuildOptions.full(cancellation_event=cancel_event)
 
@@ -1018,9 +1062,18 @@ class TestWorldBuildCancellation:
         mock_world_db.add_entity("character", "Villain", "The villain")
         mock_world_db.add_entity("character", "Mentor", "The mentor")
 
-        mock_services.story.generate_relationships.return_value = [
-            {"source": "Hero", "target": "Villain", "relation_type": "enemies"},
-            {"source": "Hero", "target": "Mentor", "relation_type": "allies"},
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 7.0
+
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {"source": "Hero", "target": "Villain", "relation_type": "enemies"},
+                mock_quality_scores,
+            ),
+            (
+                {"source": "Hero", "target": "Mentor", "relation_type": "allies"},
+                mock_quality_scores,
+            ),
         ]
 
         # Cancel immediately
@@ -1173,17 +1226,29 @@ class TestLocationQualityRefinement:
 class TestFuzzyEntityNameMatching:
     """Tests for fuzzy entity name matching in relationship generation."""
 
-    def test_exact_match(self, world_service, sample_story_state, mock_world_db, mock_services):
+    @pytest.fixture
+    def mock_rel_scores(self):
+        """Create mock quality scores for relationship tests."""
+        scores = MagicMock()
+        scores.average = 7.5
+        return scores
+
+    def test_exact_match(
+        self, world_service, sample_story_state, mock_world_db, mock_services, mock_rel_scores
+    ):
         """Test exact name match still works."""
         mock_world_db.add_entity("character", "Kai Chen", "A hacker")
         mock_world_db.add_entity("concept", "Echoes of the Network", "A concept")
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "Kai Chen",
-                "target": "Echoes of the Network",
-                "relation_type": "explores",
-            },
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "Kai Chen",
+                    "target": "Echoes of the Network",
+                    "relation_type": "explores",
+                },
+                mock_rel_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -1192,19 +1257,22 @@ class TestFuzzyEntityNameMatching:
         assert count == 1
 
     def test_fuzzy_match_the_prefix(
-        self, world_service, sample_story_state, mock_world_db, mock_services
+        self, world_service, sample_story_state, mock_world_db, mock_services, mock_rel_scores
     ):
         """Test fuzzy match handles 'The' prefix added by LLM."""
         mock_world_db.add_entity("character", "Kai Chen", "A hacker")
         mock_world_db.add_entity("concept", "Echoes of the Network", "A concept")
 
         # LLM added "The" prefix that doesn't exist in the actual entity name
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "The Echoes of the Network",
-                "target": "Kai Chen",
-                "relation_type": "influences",
-            },
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "The Echoes of the Network",
+                    "target": "Kai Chen",
+                    "relation_type": "influences",
+                },
+                mock_rel_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -1215,18 +1283,21 @@ class TestFuzzyEntityNameMatching:
         assert len(rels) == 1
 
     def test_fuzzy_match_case_insensitive(
-        self, world_service, sample_story_state, mock_world_db, mock_services
+        self, world_service, sample_story_state, mock_world_db, mock_services, mock_rel_scores
     ):
         """Test fuzzy match handles case differences."""
         mock_world_db.add_entity("faction", "The Synchroflux", "A faction")
         mock_world_db.add_entity("character", "Kai Chen", "A hacker")
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "the synchroflux",
-                "target": "Kai Chen",
-                "relation_type": "recruits",
-            },
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "the synchroflux",
+                    "target": "Kai Chen",
+                    "relation_type": "recruits",
+                },
+                mock_rel_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -1235,17 +1306,20 @@ class TestFuzzyEntityNameMatching:
         assert count == 1
 
     def test_no_match_still_warns(
-        self, world_service, sample_story_state, mock_world_db, mock_services
+        self, world_service, sample_story_state, mock_world_db, mock_services, mock_rel_scores
     ):
         """Test that completely wrong names still produce a warning."""
         mock_world_db.add_entity("character", "Kai Chen", "A hacker")
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "Nonexistent Entity",
-                "target": "Kai Chen",
-                "relation_type": "knows",
-            },
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "Nonexistent Entity",
+                    "target": "Kai Chen",
+                    "relation_type": "knows",
+                },
+                mock_rel_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -1254,18 +1328,21 @@ class TestFuzzyEntityNameMatching:
         assert count == 0
 
     def test_fuzzy_match_a_prefix(
-        self, world_service, sample_story_state, mock_world_db, mock_services
+        self, world_service, sample_story_state, mock_world_db, mock_services, mock_rel_scores
     ):
         """Test fuzzy match handles 'A' prefix added by LLM."""
         mock_world_db.add_entity("item", "Cursed Blade", "A sword")
         mock_world_db.add_entity("character", "Kai Chen", "A hacker")
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "A Cursed Blade",
-                "target": "Kai Chen",
-                "relation_type": "wields",
-            },
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "A Cursed Blade",
+                    "target": "Kai Chen",
+                    "relation_type": "wields",
+                },
+                mock_rel_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -1274,18 +1351,21 @@ class TestFuzzyEntityNameMatching:
         assert count == 1
 
     def test_fuzzy_match_an_prefix(
-        self, world_service, sample_story_state, mock_world_db, mock_services
+        self, world_service, sample_story_state, mock_world_db, mock_services, mock_rel_scores
     ):
         """Test fuzzy match handles 'An' prefix added by LLM."""
         mock_world_db.add_entity("concept", "Ancient Promise", "A concept")
         mock_world_db.add_entity("character", "Kai Chen", "A hacker")
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "An Ancient Promise",
-                "target": "Kai Chen",
-                "relation_type": "binds",
-            },
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "An Ancient Promise",
+                    "target": "Kai Chen",
+                    "relation_type": "binds",
+                },
+                mock_rel_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -1294,18 +1374,21 @@ class TestFuzzyEntityNameMatching:
         assert count == 1
 
     def test_fuzzy_match_whitespace_normalization(
-        self, world_service, sample_story_state, mock_world_db, mock_services
+        self, world_service, sample_story_state, mock_world_db, mock_services, mock_rel_scores
     ):
         """Test fuzzy match handles extra whitespace in LLM-generated names."""
         mock_world_db.add_entity("location", "Dark Forest", "A forest")
         mock_world_db.add_entity("character", "Kai Chen", "A hacker")
 
-        mock_services.story.generate_relationships.return_value = [
-            {
-                "source": "  Dark   Forest  ",
-                "target": "Kai Chen",
-                "relation_type": "explores",
-            },
+        mock_services.world_quality.generate_relationships_with_quality.return_value = [
+            (
+                {
+                    "source": "  Dark   Forest  ",
+                    "target": "Kai Chen",
+                    "relation_type": "explores",
+                },
+                mock_rel_scores,
+            ),
         ]
 
         count = world_service._generate_relationships(
@@ -1360,3 +1443,157 @@ class TestFindEntityByNameAmbiguity:
 
         assert result is None
         assert "Ambiguous fuzzy match" in caplog.text
+
+
+class TestImplicitRelationshipTracking:
+    """Tests for implicit relationship logging and counting."""
+
+    def test_faction_generation_logs_implicit_relationships(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test faction generation logs each implicit based_in relationship."""
+        import logging
+
+        # Add a location first
+        mock_world_db.add_entity("location", "Castle", "A grand castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_factions_with_quality.return_value = [
+            (
+                {"name": "Knights", "description": "Noble knights", "base_location": "Castle"},
+                mock_quality_scores,
+            ),
+        ]
+
+        with caplog.at_level(logging.INFO):
+            faction_count, implicit_count = world_service._generate_factions(
+                sample_story_state, mock_world_db, mock_services
+            )
+
+        assert faction_count == 1
+        assert implicit_count == 1
+        assert "Created implicit 'based_in' relationship: Knights -> Castle" in caplog.text
+        assert "1 implicit based_in relationship(s)" in caplog.text
+
+    def test_faction_generation_counts_multiple_implicit_relationships(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test faction generation correctly counts multiple implicit relationships."""
+        mock_world_db.add_entity("location", "Castle", "A castle")
+        mock_world_db.add_entity("location", "Forest", "A forest")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_factions_with_quality.return_value = [
+            (
+                {"name": "Knights", "description": "Noble", "base_location": "Castle"},
+                mock_quality_scores,
+            ),
+            (
+                {"name": "Rangers", "description": "Scouts", "base_location": "Forest"},
+                mock_quality_scores,
+            ),
+            (
+                {"name": "Mages", "description": "Wizards", "base_location": "Tower"},
+                mock_quality_scores,
+            ),
+        ]
+
+        faction_count, implicit_count = world_service._generate_factions(
+            sample_story_state, mock_world_db, mock_services
+        )
+
+        assert faction_count == 3
+        # Only Castle and Forest exist as locations; Tower doesn't
+        assert implicit_count == 2
+
+    def test_faction_generation_no_implicit_when_no_base_location(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test no implicit relationships when factions have no base_location."""
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_factions_with_quality.return_value = [
+            (
+                {"name": "Wanderers", "description": "Nomadic", "base_location": ""},
+                mock_quality_scores,
+            ),
+        ]
+
+        faction_count, implicit_count = world_service._generate_factions(
+            sample_story_state, mock_world_db, mock_services
+        )
+
+        assert faction_count == 1
+        assert implicit_count == 0
+
+    def test_build_summary_includes_implicit_relationships(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test build summary includes implicit relationship count."""
+        import logging
+
+        mock_world_db.add_entity("location", "Castle", "A castle")
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.to_dict.return_value = {}
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = [
+            (
+                {"name": "Knights", "description": "Noble", "base_location": "Castle"},
+                mock_quality_scores,
+            ),
+        ]
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        with caplog.at_level(logging.INFO):
+            counts = world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                WorldBuildOptions.full(),
+            )
+
+        assert counts["implicit_relationships"] == 1
+        assert "0 explicit + 1 implicit" in caplog.text
+
+    def test_build_counts_dict_has_implicit_relationships_key(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test build_world returns counts dict with implicit_relationships key."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert "implicit_relationships" in counts
+        assert counts["implicit_relationships"] == 0
+
+
+class TestRelationshipQualityRefinement:
+    """Tests for relationship generation using quality refinement pipeline."""
+
+    def test_generate_relationships_uses_quality_service(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test _generate_relationships uses world_quality service, not story service."""
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        world_service._generate_relationships(sample_story_state, mock_world_db, mock_services)
+
+        mock_services.world_quality.generate_relationships_with_quality.assert_called_once()

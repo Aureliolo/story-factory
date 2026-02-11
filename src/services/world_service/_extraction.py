@@ -73,6 +73,12 @@ def extract_entities_from_structure(
                         target_id=related_entities[0].id,
                         relation_type=relationship,
                     )
+                    logger.info(
+                        "Created implicit character relationship: %s -[%s]-> %s",
+                        char.name,
+                        relationship,
+                        related_name,
+                    )
 
         # Extract locations from world description
         if state.world_description:

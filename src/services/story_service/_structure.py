@@ -93,6 +93,12 @@ def extract_entities_to_world(
                     target_id=related_entities[0].id,
                     relation_type=relationship,
                 )
+                logger.info(
+                    "Created implicit character relationship: %s -[%s]-> %s",
+                    char.name,
+                    relationship,
+                    related_name,
+                )
 
     logger.info(f"Extracted {len(state.characters)} characters to world database")
 
