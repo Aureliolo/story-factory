@@ -544,8 +544,12 @@ class WorldService:
         world_db: WorldDatabase,
         services: ServiceContainer,
         cancel_check: Callable[[], bool] | None = None,
-    ) -> int:
-        """Generate and add factions to world database."""
+    ) -> tuple[int, int]:
+        """Generate and add factions to world database.
+
+        Returns:
+            Tuple of (factions_added, implicit_relationships_added).
+        """
         return _build._generate_factions(
             self,
             state,

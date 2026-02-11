@@ -65,6 +65,7 @@ def build_world(
         "items": 0,
         "concepts": 0,
         "relationships": 0,
+        "implicit_relationships": 0,
     }
 
     # Calculate total steps for progress reporting
@@ -202,7 +203,7 @@ def build_world(
     if options.generate_factions:
         check_cancelled()
         report_progress("Generating factions...", "faction")
-        faction_count = _generate_factions(
+        faction_count, implicit_rel_count = _generate_factions(
             svc,
             state,
             world_db,
@@ -210,6 +211,7 @@ def build_world(
             cancel_check=options.is_cancelled,
         )
         counts["factions"] = faction_count
+        counts["implicit_relationships"] += implicit_rel_count
         logger.info(f"Generated {faction_count} factions")
 
     # Step 6: Generate items if requested
@@ -255,7 +257,15 @@ def build_world(
         logger.info(f"Generated {rel_count} relationships")
 
     report_progress("World build complete!")
-    logger.info(f"World build complete for project {state.id}: {counts}")
+    total_rels = counts["relationships"] + counts["implicit_relationships"]
+    logger.info(
+        "World build complete for project %s: %s (total relationships: %d = %d explicit + %d implicit)",
+        state.id,
+        counts,
+        total_rels,
+        counts["relationships"],
+        counts["implicit_relationships"],
+    )
     return counts
 
 
@@ -373,8 +383,12 @@ def _generate_factions(
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
-) -> int:
-    """Generate and add factions to world database."""
+) -> tuple[int, int]:
+    """Generate and add factions to world database.
+
+    Returns:
+        Tuple of (factions_added, implicit_relationships_added).
+    """
     all_entities = world_db.list_entities()
     faction_names = [e.name for e in all_entities if e.type == "faction"]
     existing_locations = [e.name for e in all_entities if e.type == "location"]
@@ -392,6 +406,7 @@ def _generate_factions(
         cancel_check=cancel_check,
     )
     added_count = 0
+    implicit_rel_count = 0
 
     for faction, faction_scores in faction_results:
         if isinstance(faction, dict) and "name" in faction:
@@ -409,7 +424,7 @@ def _generate_factions(
             )
             added_count += 1
 
-            # Create relationship to base location if it exists
+            # Create implicit relationship to base location if it exists
             base_loc = faction.get("base_location", "")
             if base_loc:
                 location_entity = next(
@@ -423,10 +438,21 @@ def _generate_factions(
                         relation_type="based_in",
                         description=f"{faction['name']} is headquartered in {base_loc}",
                     )
+                    implicit_rel_count += 1
+                    logger.info(
+                        "Created implicit 'based_in' relationship: %s -> %s",
+                        faction["name"],
+                        base_loc,
+                    )
         else:
             logger.warning(f"Skipping invalid faction: {faction}")
 
-    return added_count
+    if implicit_rel_count:
+        logger.info(
+            "Faction generation created %d implicit based_in relationship(s)",
+            implicit_rel_count,
+        )
+    return added_count, implicit_rel_count
 
 
 def _generate_items(
@@ -521,7 +547,7 @@ def _generate_relationships(
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
-    """Generate and add relationships between entities."""
+    """Generate and add relationships between entities using quality refinement."""
     all_entities = world_db.list_entities()
     entity_names = [e.name for e in all_entities]
     existing_rels = [(r.source_id, r.target_id) for r in world_db.list_relationships()]
@@ -531,12 +557,12 @@ def _generate_relationships(
         svc.settings.world_gen_relationships_max,
     )
 
-    relationships = services.story.generate_relationships(
-        state, entity_names, existing_rels, rel_count
+    relationship_results = services.world_quality.generate_relationships_with_quality(
+        state, entity_names, existing_rels, rel_count, cancel_check=cancel_check
     )
     added_count = 0
 
-    for rel in relationships:
+    for rel, scores in relationship_results:
         if cancel_check and cancel_check():
             logger.info(f"Relationship processing cancelled after {added_count} relationships")
             break
@@ -553,6 +579,12 @@ def _generate_relationships(
                     description=rel.get("description", ""),
                 )
                 added_count += 1
+                logger.debug(
+                    "Added relationship %s -> %s (quality: %.1f)",
+                    rel["source"],
+                    rel["target"],
+                    scores.average,
+                )
             else:
                 logger.warning(
                     f"Could not find entities for relationship: "
