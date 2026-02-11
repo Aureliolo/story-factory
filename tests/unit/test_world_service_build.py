@@ -343,6 +343,29 @@ class TestExtractCharactersToWorld:
         assert rels[0].target_id == hero.id
         assert rels[0].relation_type == "mentor"
 
+    def test_skips_implicit_relationships_for_existing_characters(
+        self, world_service, mock_world_db, sample_story_state
+    ):
+        """Test that incremental builds don't duplicate implicit relationships."""
+        # First run: both characters are new, relationships created
+        char_count, rel_count = world_service._extract_characters_to_world(
+            sample_story_state, mock_world_db
+        )
+        assert char_count == 2
+        assert rel_count == 1
+
+        # Second run: both characters exist, no new relationships
+        char_count, rel_count = world_service._extract_characters_to_world(
+            sample_story_state, mock_world_db
+        )
+        assert char_count == 0
+        assert rel_count == 0
+
+        # Verify only 1 relationship exists (no duplicate)
+        mentor = mock_world_db.search_entities("Mentor", entity_type="character")[0]
+        rels = mock_world_db.get_relationships(mentor.id)
+        assert len(rels) == 1
+
     def test_skips_relationships_for_unknown_targets(self, world_service, mock_world_db):
         """Test skips relationships when target character is not in the character list."""
         state = StoryState(id="test-unknown-target")

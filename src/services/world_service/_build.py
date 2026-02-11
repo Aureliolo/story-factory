@@ -317,6 +317,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
     """
     added_count = 0
     char_id_map: dict[str, str] = {}
+    newly_added: set[str] = set()
 
     # Pass 1: add all characters, building a name→ID map
     for char in state.characters:
@@ -338,11 +339,15 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
             },
         )
         char_id_map[char.name] = entity_id
+        newly_added.add(char.name)
         added_count += 1
 
-    # Pass 2: create implicit relationships from architect-defined Character.relationships
+    # Pass 2: create implicit relationships only for newly added characters
+    # (skip pre-existing characters to avoid duplicates on incremental builds)
     implicit_rel_count = 0
     for char in state.characters:
+        if char.name not in newly_added:
+            continue
         source_id = char_id_map[char.name]  # guaranteed by pass 1
 
         for related_name, relationship in char.relationships.items():
