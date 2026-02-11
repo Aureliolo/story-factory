@@ -343,9 +343,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
     # Pass 2: create implicit relationships from architect-defined Character.relationships
     implicit_rel_count = 0
     for char in state.characters:
-        source_id = char_id_map.get(char.name)
-        if not source_id:
-            continue
+        source_id = char_id_map[char.name]  # guaranteed by pass 1
 
         for related_name, relationship in char.relationships.items():
             target_id = char_id_map.get(related_name)
