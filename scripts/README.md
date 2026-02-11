@@ -10,7 +10,6 @@ Standalone utility scripts for development, diagnostics, and operations. These a
 | `evaluate_refinement.py`          | Full refinement loop instrumentation | Main diagnostic for refinement loop issues  |
 | `evaluate_ab_prompts.py`          | A/B test prompt variants         | After identifying prompt-related problems       |
 | `control_panel.py`                | Desktop GUI for app management   | Running Story Factory on desktop                |
-| `start.ps1`                       | PowerShell control panel         | Running Story Factory on Windows                |
 | `healthcheck.py`                  | Verify environment setup         | After install or when things break              |
 | `check_deps.py`                   | Check/install dependencies       | After updating pyproject.toml                   |
 | `check_file_size.py`              | Enforce max file length          | Pre-commit hook (automatic)                     |
@@ -144,16 +143,6 @@ python scripts/control_panel.py
 ```
 
 Requires `customtkinter` (optional dependency, not installed by default).
-
-### `start.ps1`
-
-PowerShell terminal-based control panel for Windows. Same functionality as `control_panel.py` but runs in the terminal.
-
-```powershell
-.\scripts\start.ps1
-```
-
-Menu options: Start, Stop, Restart, Open Browser, Clear Logs, Start Ollama, Quit.
 
 ### `healthcheck.py`
 

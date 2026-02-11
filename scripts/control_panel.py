@@ -1086,9 +1086,7 @@ class ControlPanel(ctk.CTk):
         else:
             for line in lines:
                 tag = self._get_log_tag(line)
-                # Truncate long lines for display (after tag detection)
-                display_line = line[:147] + "..." if len(line) > 150 else line
-                self._log_text.insert("end", display_line + "\n", tag)
+                self._log_text.insert("end", line + "\n", tag)
 
         self._log_text.configure(state="disabled")
 
