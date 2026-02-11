@@ -550,7 +550,13 @@ def _generate_relationships(
     """Generate and add relationships between entities using quality refinement."""
     all_entities = world_db.list_entities()
     entity_names = [e.name for e in all_entities]
-    existing_rels = [(r.source_id, r.target_id) for r in world_db.list_relationships()]
+
+    # Map IDs to names so the quality service gets name pairs for duplicate detection
+    entity_by_id = {e.id: e.name for e in all_entities}
+    existing_rels = [
+        (entity_by_id.get(r.source_id, ""), entity_by_id.get(r.target_id, ""))
+        for r in world_db.list_relationships()
+    ]
 
     rel_count = random.randint(
         svc.settings.world_gen_relationships_min,
