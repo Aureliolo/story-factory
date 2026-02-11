@@ -320,10 +320,10 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
 
     # Pass 1: add all characters, building a name→ID map
     for char in state.characters:
-        existing = world_db.search_entities(char.name, entity_type="character")
+        existing = world_db.get_entity_by_name(char.name, entity_type="character")
         if existing:
             logger.debug(f"Character already exists: {char.name}")
-            char_id_map[char.name] = existing[0].id
+            char_id_map[char.name] = existing.id
             continue
 
         entity_id = world_db.add_entity(
@@ -362,7 +362,7 @@ def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> 
                 relation_type=relationship,
             )
             implicit_rel_count += 1
-            logger.info(
+            logger.debug(
                 "Created implicit character relationship: %s -[%s]-> %s",
                 char.name,
                 relationship,
