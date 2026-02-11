@@ -242,7 +242,7 @@ def _refine_concept(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
-    threshold = svc.get_config().quality_threshold
+    threshold = svc.get_config().get_threshold("concept")
     improvement_focus = []
     if scores.relevance < threshold:
         improvement_focus.append("Strengthen alignment with story themes")

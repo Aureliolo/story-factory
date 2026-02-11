@@ -36,6 +36,7 @@ def validate(settings: Settings) -> bool:
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
     _validate_timeouts(settings)
+    changed = _validate_world_quality_thresholds_migration(settings) or changed
     _validate_world_quality(settings)
     _validate_dynamic_temperature(settings)
     _validate_early_stopping(settings)
@@ -294,6 +295,9 @@ def _validate_world_quality(settings: Settings) -> None:
             f"world_quality_threshold must be between 0.0 and 10.0, "
             f"got {settings.world_quality_threshold}"
         )
+
+    # Validate per-entity quality thresholds
+    _validate_world_quality_thresholds(settings)
 
     if not 1 <= settings.world_quality_early_stopping_patience <= 10:
         raise ValueError(
@@ -815,6 +819,80 @@ def _validate_world_health(settings: Settings) -> None:
             f"validate_temporal_consistency must be a boolean, "
             f"got {type(settings.validate_temporal_consistency)}"
         )
+
+
+def _validate_world_quality_thresholds_migration(settings: Settings) -> bool:
+    """Migrate old single world_quality_threshold to per-entity thresholds dict.
+
+    If the thresholds dict is empty (e.g. loaded from old settings.json that
+    didn't have it), populate it from the single threshold value.
+
+    Returns:
+        True if migration occurred, False otherwise.
+    """
+    from src.settings._settings import PER_ENTITY_QUALITY_DEFAULTS
+
+    expected_types = set(PER_ENTITY_QUALITY_DEFAULTS)
+
+    if not settings.world_quality_thresholds:
+        # Empty dict — migrate from single threshold
+        threshold = settings.world_quality_threshold
+        settings.world_quality_thresholds = dict.fromkeys(expected_types, threshold)
+        logger.warning(
+            "Migrated single world_quality_threshold (%.1f) to per-entity thresholds",
+            threshold,
+        )
+        return True
+
+    # Backfill any missing entity types from defaults
+    current_types = set(settings.world_quality_thresholds)
+    missing = expected_types - current_types
+    if missing:
+        for et in sorted(missing):
+            settings.world_quality_thresholds[et] = PER_ENTITY_QUALITY_DEFAULTS[et]
+            logger.warning(
+                "Added missing quality threshold for entity type '%s': %.1f",
+                et,
+                PER_ENTITY_QUALITY_DEFAULTS[et],
+            )
+        return True
+
+    return False
+
+
+def _validate_world_quality_thresholds(settings: Settings) -> None:
+    """Validate per-entity quality thresholds dict.
+
+    Checks that all required entity types are present and values are in 0-10 range.
+
+    Raises:
+        ValueError: If thresholds are invalid.
+    """
+    from src.settings._settings import PER_ENTITY_QUALITY_DEFAULTS
+
+    expected_types = set(PER_ENTITY_QUALITY_DEFAULTS)
+    current_types = set(settings.world_quality_thresholds)
+
+    missing = expected_types - current_types
+    if missing:
+        raise ValueError(
+            f"world_quality_thresholds missing entity types: {sorted(missing)}; "
+            f"expected: {sorted(expected_types)}"
+        )
+
+    unknown = current_types - expected_types
+    if unknown:
+        raise ValueError(
+            f"world_quality_thresholds has unknown entity types: {sorted(unknown)}; "
+            f"expected only: {sorted(expected_types)}"
+        )
+
+    for entity_type, threshold in settings.world_quality_thresholds.items():
+        if not 0.0 <= threshold <= 10.0:
+            raise ValueError(
+                f"world_quality_thresholds[{entity_type}] must be between 0.0 and 10.0, "
+                f"got {threshold}"
+            )
 
 
 def _validate_embedding_model(settings: Settings) -> bool:

@@ -3,11 +3,13 @@
 This is a curated list for the UI - auto-selection works with ANY installed model.
 Tags indicate which roles the model is particularly good for.
 
-Judge tag policy (Issue #228, Feb 2026):
+Judge tag policy (Issue #228, updated #294, Feb 2026):
   Models with the ``judge`` tag have been empirically validated via
   ``scripts/evaluate_judge_accuracy.py``.  Only models that achieve MAE < 2.5
   and Spearman rank correlation > 0.85 on the parametric prompt variant
-  (no example scores) earn the tag.  See ``docs/MODELS.md`` for full results.
+  (no example scores) earn the tag.  Untested models (e.g. 70B models that
+  timeout during benchmarking) do NOT receive the tag.
+  See ``output/diagnostics/judge_accuracy_*.json`` for latest results.
 """
 
 from src.settings._types import ModelInfo
@@ -45,7 +47,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Fast, compliant, no Chinese output - great all-rounder",
-        # No judge tag: empirically copies prompt example scores on faction/concept (Issue #228).
+        # No judge tag: MAE=2.45, rank=0.76 parametric — marginal (Issue #294).
         "tags": ["continuity", "interviewer", "suggestion"],
     },
     # Quality 8: All roles except writer (editing-focused, not prose creation).
@@ -57,7 +59,8 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 8,
         "uncensored": True,
         "description": "128K context, excellent for editing and refinement",
-        "tags": ["editor", "architect", "continuity", "interviewer", "suggestion", "judge"],
+        # No judge tag: MAE=2.53, rank=0.74 parametric — fails both criteria (Issue #294).
+        "tags": ["editor", "architect", "continuity", "interviewer", "suggestion"],
     },
     # === REASONING SPECIALISTS ===
     # Reasoning-optimized: architect, continuity, interviewer, suggestion. NOT writer/editor.
@@ -69,11 +72,11 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 7,
         "uncensored": True,
         "description": "MoE (30B/3B active), strong reasoning - excellent for architect",
-        # Judge: MAE=2.08, rank=0.98 parametric (Issue #228).
+        # Judge: MAE=2.12, rank=0.96 parametric (Issue #294).
         "tags": ["architect", "continuity", "interviewer", "suggestion", "judge"],
     },
     # === GOOGLE GEMMA ===
-    # Gemma3 12B: best empirical judge model (Issue #228).
+    # Gemma3 12B: best empirical judge model (Issue #294).
     "gemma3:12b": {
         "name": "Gemma 3 12B",
         "size_gb": 8,
@@ -82,7 +85,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 8,
         "uncensored": False,
         "description": "Best empirical judge — MAE 1.58, rank 0.98, zero copying",
-        # Judge: MAE=1.58, rank=0.98 parametric, best tested (Issue #228).
+        # Judge: MAE=1.58, rank=0.98 parametric, best tested (Issue #294).
         "tags": ["continuity", "judge"],
     },
     "gemma3:4b": {
@@ -93,7 +96,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": False,
         "description": "Strong judge for its size, good structured output",
-        # Judge: MAE=2.04, rank=0.94 parametric (Issue #228).
+        # Judge: MAE=2.04, rank=0.94 parametric (Issue #294).
         "tags": ["judge"],
     },
     # === MICROSOFT PHI ===
@@ -105,7 +108,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 7,
         "uncensored": False,
         "description": "Near-perfect rank correlation as judge, strong reasoning",
-        # Judge: MAE=2.00, rank=0.99 parametric (Issue #228).
+        # Judge: MAE=1.96, rank=0.97 parametric (Issue #294).
         "tags": ["architect", "continuity", "judge"],
     },
     # Quality 7 reasoning: architect, continuity, interviewer. No suggestion.
@@ -117,7 +120,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": True,
         "description": "Good reasoning at smaller size",
-        # No judge tag: empirically copies prompt example scores verbatim (Issue #228).
+        # No judge tag: MAE=2.44, rank=0.85 parametric — borderline (Issue #294).
         "tags": ["architect", "continuity", "interviewer"],
     },
     # === HIGH-END ===
@@ -133,6 +136,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 5,
         "uncensored": True,
         "description": "Premium reasoning, excellent for complex story architecture",
+        # No judge tag: untested — timed out during benchmark (Issue #294).
         "tags": [
             "writer",
             "editor",
@@ -140,7 +144,6 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
             "continuity",
             "interviewer",
             "suggestion",
-            "judge",
         ],
     },
     "huihui_ai/llama3.3-abliterated:70b-instruct-q4_K_M": {
@@ -151,6 +154,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 4,
         "uncensored": True,
         "description": "Quantized 70B, needs 48GB+ VRAM (43GB weights alone)",
+        # No judge tag: untested — timed out during benchmark (Issue #294).
         "tags": [
             "writer",
             "editor",
@@ -158,7 +162,6 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
             "continuity",
             "interviewer",
             "suggestion",
-            "judge",
         ],
     },
     # Creative 70B: Best at prose, good at everything due to size
@@ -170,6 +173,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 4,
         "uncensored": True,
         "description": "Premium creative writer - writes like a novelist",
+        # No judge tag: untested — not installed during benchmark (Issue #294).
         "tags": [
             "writer",
             "editor",
@@ -177,11 +181,10 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
             "continuity",
             "interviewer",
             "suggestion",
-            "judge",
         ],
     },
     # === SMALL / FAST ===
-    # Quality 6: Strong structured output for its size, best small-model judge (Issue #228).
+    # Quality 6: Strong structured output for its size, best small-model judge (Issue #294).
     "phi4-mini": {
         "name": "Phi-4 Mini 3.8B",
         "size_gb": 2.3,
@@ -190,6 +193,7 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "speed": 9,
         "uncensored": False,
         "description": "Microsoft reasoning model, best small-model judge — produces independent scores",
+        # Judge: MAE=1.99, rank=1.00 parametric (Issue #294).
         "tags": ["judge"],
     },
     # === EMBEDDING MODELS ===

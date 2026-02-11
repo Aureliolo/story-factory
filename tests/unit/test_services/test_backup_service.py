@@ -928,14 +928,14 @@ class TestBackupVerifier:
         assert file_results_for_project[0].checksum_valid is True
 
     def test_verify_no_version_in_metadata_defaults_to_compatible(self, tmp_path):
-        """Test verification treats missing backup_format_version as compatible (defaults to v1)."""
+        """Test verification treats missing backup_format_version as legacy v1."""
         zip_path = tmp_path / "no_version.zip"
 
         metadata = {
             "project_id": "test",
             "project_name": "Test",
             "files": ["project.json"],
-            # No backup_format_version field - defaults to 1
+            # No backup_format_version field — treated as legacy v1
         }
 
         with zipfile.ZipFile(zip_path, "w") as zf:

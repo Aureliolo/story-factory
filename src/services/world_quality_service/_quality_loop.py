@@ -63,11 +63,14 @@ def quality_refinement_loop(
     Raises:
         WorldGenerationError: If no valid entity could be produced after all attempts.
     """
+    # Resolve per-entity threshold
+    entity_threshold = config.get_threshold(entity_type)
+
     logger.info(
         "Starting quality refinement loop for %s (threshold=%.1f, max_iterations=%d, "
         "review_mode=%s)",
         entity_type,
-        config.quality_threshold,
+        entity_threshold,
         config.max_iterations,
         initial_entity is not None,
     )
@@ -232,13 +235,13 @@ def quality_refinement_loop(
             # Threshold check — round to 1 decimal so the comparison matches
             # the %.1f log display (e.g. 7.46 rounds to 7.5, passes >= 7.5).
             rounded_score = round(scores.average, 1)
-            if rounded_score >= config.quality_threshold:
+            if rounded_score >= entity_threshold:
                 logger.info(
                     "%s '%s' met quality threshold (%.1f >= %.1f)",
                     entity_type.capitalize(),
                     get_name(entity),
                     scores.average,
-                    config.quality_threshold,
+                    entity_threshold,
                 )
                 history.final_iteration = current_iter
                 history.final_score = scores.average
@@ -247,7 +250,7 @@ def quality_refinement_loop(
                     story_id,
                     threshold_met=True,
                     early_stop_triggered=False,
-                    quality_threshold=config.quality_threshold,
+                    quality_threshold=entity_threshold,
                     max_iterations=config.max_iterations,
                 )
                 return entity, scores, scoring_rounds
@@ -343,7 +346,7 @@ def quality_refinement_loop(
         )
 
     if best_entity_data:
-        threshold_met = round(history.peak_score, 1) >= config.quality_threshold
+        threshold_met = round(history.peak_score, 1) >= entity_threshold
         if not threshold_met:
             logger.warning(
                 "%s '%s' did not meet quality threshold after %d scoring round(s) "
@@ -352,7 +355,7 @@ def quality_refinement_loop(
                 history.entity_name,
                 scoring_rounds,
                 history.peak_score,
-                config.quality_threshold,
+                entity_threshold,
                 history.best_iteration,
             )
 
@@ -370,7 +373,7 @@ def quality_refinement_loop(
                 story_id,
                 threshold_met=threshold_met,
                 early_stop_triggered=early_stopped,
-                quality_threshold=config.quality_threshold,
+                quality_threshold=entity_threshold,
                 max_iterations=config.max_iterations,
             )
             # Reconstruct the entity from stored data
@@ -395,7 +398,7 @@ def quality_refinement_loop(
             entity_type.capitalize(),
             get_name(entity),
             scores.average,
-            config.quality_threshold,
+            entity_threshold,
         )
         history.final_iteration = scoring_rounds
         history.final_score = scores.average
@@ -404,7 +407,7 @@ def quality_refinement_loop(
             story_id,
             threshold_met=False,
             early_stop_triggered=early_stopped,
-            quality_threshold=config.quality_threshold,
+            quality_threshold=entity_threshold,
             max_iterations=config.max_iterations,
         )
         return entity, scores, scoring_rounds

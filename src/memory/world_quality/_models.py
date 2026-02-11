@@ -272,7 +272,11 @@ class RefinementConfig(BaseModel):
 
     max_iterations: int = Field(default=3, ge=1, le=10, description="Max refinement iterations")
     quality_threshold: float = Field(
-        default=7.5, ge=0.0, le=10.0, description="Minimum average score"
+        default=7.5, ge=0.0, le=10.0, description="Minimum average score (legacy fallback)"
+    )
+    quality_thresholds: dict[str, float] | None = Field(
+        default=None,
+        description="Per-entity-type quality thresholds (overrides quality_threshold)",
     )
     creator_temperature: float = Field(
         default=0.9, ge=0.0, le=2.0, description="Temperature for creation"
@@ -308,6 +312,40 @@ class RefinementConfig(BaseModel):
     early_stopping_variance_tolerance: float = Field(
         default=0.3, ge=0.0, le=2.0, description="Score variance tolerance for early stopping"
     )
+
+    def get_threshold(self, entity_type: str) -> float:
+        """Get quality threshold for a specific entity type.
+
+        Looks up per-entity threshold from quality_thresholds dict.  Raises
+        ``ValueError`` when the dict is empty (settings not validated) or the
+        requested entity type is missing.
+
+        Args:
+            entity_type: Entity type to get threshold for (e.g., "character", "item").
+
+        Returns:
+            Quality threshold for the entity type.
+
+        Raises:
+            ValueError: If quality_thresholds is empty or entity_type is missing.
+        """
+        if not self.quality_thresholds:
+            raise ValueError(
+                f"quality_thresholds is empty — run settings.validate() before "
+                f"calling get_threshold(). Requested type: '{entity_type}'"
+            )
+        if entity_type not in self.quality_thresholds:
+            raise ValueError(
+                f"No quality threshold configured for entity type '{entity_type}'. "
+                f"Available: {sorted(self.quality_thresholds)}"
+            )
+        threshold = self.quality_thresholds[entity_type]
+        logger.debug(
+            "Using per-entity quality threshold for %s: %.1f",
+            entity_type,
+            threshold,
+        )
+        return threshold
 
     def get_refinement_temperature(
         self, iteration: int, max_iterations: int | None = None
@@ -404,9 +442,16 @@ class RefinementConfig(BaseModel):
         Raises:
             AttributeError: If any required attribute is missing on the settings object.
         """
+        # Read per-entity thresholds if available
+        quality_thresholds: dict[str, float] | None = None
+        if hasattr(settings, "world_quality_thresholds") and settings.world_quality_thresholds:
+            quality_thresholds = dict(settings.world_quality_thresholds)
+            logger.debug("Loaded per-entity quality thresholds: %s", quality_thresholds)
+
         return cls(
             max_iterations=settings.world_quality_max_iterations,
             quality_threshold=settings.world_quality_threshold,
+            quality_thresholds=quality_thresholds,
             creator_temperature=settings.world_quality_creator_temp,
             judge_temperature=settings.world_quality_judge_temp,
             refinement_temperature=settings.world_quality_refinement_temp,

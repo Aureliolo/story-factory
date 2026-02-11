@@ -242,7 +242,7 @@ def _refine_item(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
-    threshold = svc.get_config().quality_threshold
+    threshold = svc.get_config().get_threshold("item")
     improvement_focus = []
     if scores.significance < threshold:
         improvement_focus.append("Increase story importance and plot relevance")

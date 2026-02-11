@@ -179,6 +179,7 @@ Create a character with:
 3. Meaningful flaws that drive conflict
 4. Uniqueness - not a genre archetype
 5. Arc potential - room for transformation
+6. Arc notes (arc_notes) - describe the character's potential transformation arc: how they might change over the story, what events could trigger growth or regression
 
 Write all text in {brief.language}."""
 
@@ -316,7 +317,7 @@ def _refine_character(
     """
     logger.debug("Refining character '%s' for story %s", character.name, story_state.id)
     brief = story_state.brief
-    threshold = svc.get_config().quality_threshold
+    threshold = svc.get_config().get_threshold("character")
 
     # Build specific improvement instructions from feedback
     improvement_focus = []

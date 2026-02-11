@@ -243,7 +243,7 @@ def _refine_location(
     brief = story_state.brief
 
     # Build specific improvement instructions from feedback
-    threshold = svc.get_config().quality_threshold
+    threshold = svc.get_config().get_threshold("location")
     improvement_focus = []
     if scores.atmosphere < threshold:
         improvement_focus.append("Add richer sensory details and mood")

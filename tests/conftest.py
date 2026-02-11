@@ -146,7 +146,9 @@ def cached_settings() -> Settings:
     """
     # Create default settings WITHOUT loading from file
     # This ensures tests don't depend on local settings.json content
-    return Settings()
+    settings = Settings()
+    settings.validate()
+    return settings
 
 
 @pytest.fixture
@@ -165,7 +167,8 @@ def tmp_settings(tmp_path: Path) -> Settings:
     # Create default settings WITHOUT loading from file
     # This ensures tests don't depend on local settings.json content
     settings = Settings()
-    # Override paths to use temp directories (if needed in future)
+    # Run validation to apply migrations (e.g. populate world_quality_thresholds)
+    settings.validate()
     return settings
 
 

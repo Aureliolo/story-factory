@@ -217,7 +217,7 @@ def _refine_chapter_outline(
     """
     logger.debug("Refining chapter outline 'Ch%d: %s'", chapter.number, chapter.title)
     brief = story_state.brief
-    weak = scores.weak_dimensions(svc.get_config().quality_threshold)
+    weak = scores.weak_dimensions(svc.get_config().get_threshold("chapter"))
 
     # Get plot summary for context
     plot_summary = ""

@@ -109,7 +109,7 @@ def _generate_batch(
         progress_callback: Optional callback to receive
             :class:`EntityGenerationProgress` updates.
         quality_threshold: Quality threshold for pass/fail in batch summary log.
-            Read from ``svc.get_config().quality_threshold`` if not provided.
+            Resolved via ``svc.get_config().get_threshold(entity_type)`` if not provided.
 
     Returns:
         List of ``(entity, scores)`` tuples.
@@ -119,9 +119,9 @@ def _generate_batch(
     """
     from src.services.world_quality_service import EntityGenerationProgress
 
-    # Resolve threshold for batch summary
+    # Resolve threshold for batch summary (raises ValueError if type missing)
     if quality_threshold is None:
-        quality_threshold = svc.get_config().quality_threshold
+        quality_threshold = svc.get_config().get_threshold(entity_type)
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []
@@ -237,7 +237,7 @@ def _review_batch(
         progress_callback: Optional callback to receive
             :class:`EntityGenerationProgress` updates.
         quality_threshold: Quality threshold for pass/fail in batch summary log.
-            Read from ``svc.get_config().quality_threshold`` if not provided.
+            Resolved via ``svc.get_config().get_threshold(entity_type)`` if not provided.
 
     Returns:
         List of ``(entity, scores)`` tuples.  On failure the *original*
@@ -245,9 +245,9 @@ def _review_batch(
     """
     from src.services.world_quality_service import EntityGenerationProgress
 
-    # Resolve threshold for batch summary
+    # Resolve threshold for batch summary (raises ValueError if type missing)
     if quality_threshold is None:
-        quality_threshold = svc.get_config().quality_threshold
+        quality_threshold = svc.get_config().get_threshold(entity_type)
 
     results: list[tuple[T, S]] = []
     errors: list[str] = []

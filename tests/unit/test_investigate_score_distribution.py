@@ -88,6 +88,11 @@ class TestParseDimensionDict:
         with pytest.raises((ValueError, SyntaxError)):
             _parse_dimension_dict("not a dict")
 
+    def test_non_numeric_value_raises(self):
+        """Non-numeric dimension values should raise ValueError."""
+        with pytest.raises(ValueError):
+            _parse_dimension_dict("{'coherence': 'bad', 'influence': '7.0'}")
+
 
 # =====================================================================
 # parse_log_file tests
@@ -189,6 +194,24 @@ class TestParseLogFile:
         log_path = self._write_log(tmp_path, [])
         records = parse_log_file(log_path)
         assert records == []
+
+    def test_malformed_dimension_scores_skipped(self, tmp_path: Path):
+        """Malformed dimension scores should be silently skipped, not crash."""
+        log_path = self._write_log(
+            tmp_path,
+            [
+                "2024-01-01 INFO Faction 'The Guild' iteration 1: score 7.5 "
+                "(best so far: 7.5 at iteration 1)",
+                "2024-01-01 DEBUG Faction 'The Guild' iteration 1 dimension scores: "
+                "{'coherence': 'bad', 'influence': '7.0'}",
+            ],
+        )
+        records = parse_log_file(log_path)
+        assert len(records) == 1
+        # Dimension scores should be empty — the malformed entry was skipped
+        assert records[0].dimension_scores == []
+        # But the score was still parsed
+        assert records[0].scores == [7.5]
 
     def test_parse_irrelevant_lines(self, tmp_path: Path):
         """Lines that don't match patterns should be ignored."""

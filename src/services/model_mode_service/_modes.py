@@ -90,13 +90,13 @@ def set_mode(svc: ModelModeService, mode_id: str) -> GenerationMode:
         mode = GenerationMode(
             id=custom["id"],
             name=custom["name"],
-            description=custom.get("description", ""),
+            description=custom["description"] or "",
             agent_models=custom["agent_models"],
             agent_temperatures=custom["agent_temperatures"],
             size_preference=size_preference,
             vram_strategy=vram_strategy,
             is_preset=False,
-            is_experimental=bool(custom.get("is_experimental", False)),
+            is_experimental=bool(custom["is_experimental"]),
         )
         svc._current_mode = mode
         # Sync mode's VRAM strategy to settings so UI reflects mode default
@@ -172,13 +172,13 @@ def list_modes(svc: ModelModeService) -> list[GenerationMode]:
             GenerationMode(
                 id=custom["id"],
                 name=custom["name"],
-                description=custom.get("description", ""),
+                description=custom["description"] or "",
                 agent_models=custom["agent_models"],
                 agent_temperatures=custom["agent_temperatures"],
                 size_preference=size_preference,
                 vram_strategy=VramStrategy(custom["vram_strategy"]),
                 is_preset=False,
-                is_experimental=bool(custom.get("is_experimental", False)),
+                is_experimental=bool(custom["is_experimental"]),
             )
         )
 

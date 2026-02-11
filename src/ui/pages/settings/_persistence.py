@@ -134,6 +134,7 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "world_gen_relationships_max": settings.world_gen_relationships_max,
         # Quality refinement
         "world_quality_threshold": settings.world_quality_threshold,
+        "world_quality_thresholds": dict(settings.world_quality_thresholds),
         "world_quality_max_iterations": settings.world_quality_max_iterations,
         "world_quality_early_stopping_patience": settings.world_quality_early_stopping_patience,
         # Data integrity
@@ -241,6 +242,8 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
     # Quality refinement (with backward compatibility)
     if "world_quality_threshold" in snapshot:
         settings.world_quality_threshold = snapshot["world_quality_threshold"]
+    if "world_quality_thresholds" in snapshot:
+        settings.world_quality_thresholds = dict(snapshot["world_quality_thresholds"])
     if "world_quality_max_iterations" in snapshot:
         settings.world_quality_max_iterations = snapshot["world_quality_max_iterations"]
     if "world_quality_early_stopping_patience" in snapshot:

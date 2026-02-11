@@ -1514,6 +1514,154 @@ class TestMissingValidationCoverage:
         ):
             settings.validate()
 
+    # --- Per-entity quality thresholds ---
+
+    def test_validate_per_entity_thresholds_default(self):
+        """Default (empty) thresholds should be migrated from single threshold on validate."""
+        settings = Settings()
+        settings.validate()
+        # Empty default → migration fills all types from world_quality_threshold (7.5)
+        assert settings.world_quality_thresholds["character"] == 7.5
+        assert settings.world_quality_thresholds["item"] == 7.5
+        assert len(settings.world_quality_thresholds) == 8
+
+    def test_validate_raises_on_per_entity_threshold_out_of_range(self):
+        """Should raise ValueError for per-entity threshold out of 0-10 range."""
+        settings = Settings()
+        settings.world_quality_thresholds = {
+            "character": 11.0,
+            "location": 7.5,
+            "faction": 7.5,
+            "item": 7.5,
+            "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
+        }
+        with pytest.raises(
+            ValueError, match=r"world_quality_thresholds\[character\] must be between"
+        ):
+            settings.validate()
+
+    def test_validate_raises_on_per_entity_threshold_negative(self):
+        """Should raise ValueError for negative per-entity threshold."""
+        settings = Settings()
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            "faction": 7.5,
+            "item": -1.0,
+            "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
+        }
+        with pytest.raises(ValueError, match=r"world_quality_thresholds\[item\] must be between"):
+            settings.validate()
+
+    def test_migration_backfills_single_missing_entity_type(self):
+        """Missing entity type should be backfilled by migration, not raise."""
+        settings = Settings()
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            "item": 8.0,
+            "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
+            # missing: faction
+        }
+        changed = settings.validate()
+        assert changed is True
+        assert "faction" in settings.world_quality_thresholds
+        assert (
+            settings.world_quality_thresholds["faction"] == 7.5
+        )  # from PER_ENTITY_QUALITY_DEFAULTS
+
+    def test_validate_raises_on_unknown_entity_type_in_thresholds(self):
+        """Should raise ValueError when an unknown entity type is present."""
+        settings = Settings()
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            "faction": 7.5,
+            "item": 7.5,
+            "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
+            "alien": 5.0,
+        }
+        with pytest.raises(ValueError, match="world_quality_thresholds has unknown entity types"):
+            settings.validate()
+
+    def test_migration_from_empty_thresholds(self):
+        """Empty thresholds dict should be migrated from single threshold."""
+        settings = Settings()
+        settings.world_quality_thresholds = {}
+        settings.world_quality_threshold = 6.0
+        changed = settings.validate()
+        assert changed is True
+        assert settings.world_quality_thresholds["character"] == 6.0
+        assert settings.world_quality_thresholds["item"] == 6.0
+        assert settings.world_quality_thresholds["faction"] == 6.0
+        assert settings.world_quality_thresholds["relationship"] == 6.0
+        assert settings.world_quality_thresholds["plot"] == 6.0
+        assert settings.world_quality_thresholds["chapter"] == 6.0
+        assert len(settings.world_quality_thresholds) == 8
+
+    def test_migration_backfills_missing_entity_types(self):
+        """Missing entity types should be backfilled from PER_ENTITY_QUALITY_DEFAULTS."""
+        settings = Settings()
+        settings.world_quality_thresholds = {
+            "character": 8.0,
+            "location": 7.0,
+            "faction": 7.5,
+            # missing: item, concept, relationship, plot, chapter
+        }
+        changed = settings.validate()
+        assert changed is True
+        assert settings.world_quality_thresholds["item"] == 8.0  # from PER_ENTITY_QUALITY_DEFAULTS
+        assert (
+            settings.world_quality_thresholds["concept"] == 7.5
+        )  # from PER_ENTITY_QUALITY_DEFAULTS
+        assert settings.world_quality_thresholds["relationship"] == 7.5
+        assert settings.world_quality_thresholds["plot"] == 7.5
+        assert settings.world_quality_thresholds["chapter"] == 7.5
+
+    def test_no_migration_when_all_types_present(self):
+        """No threshold migration needed when all entity types are present."""
+        settings = Settings()
+        # Set all thresholds explicitly so migration doesn't trigger
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            "faction": 7.5,
+            "item": 8.0,
+            "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
+        }
+        # Set a valid embedding model to prevent embedding migration from returning True
+        settings.embedding_model = "mxbai-embed-large"
+        changed = settings.validate()
+        assert changed is False
+
+    def test_validate_thresholds_raises_on_missing_type_after_migration(self):
+        """Direct validation rejects missing entity types (bypassing migration)."""
+        from src.settings._validation import _validate_world_quality_thresholds
+
+        settings = Settings()
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            # missing: faction, item, concept, relationship, plot, chapter
+        }
+        with pytest.raises(ValueError, match="world_quality_thresholds missing entity types"):
+            _validate_world_quality_thresholds(settings)
+
     # --- World gen entity min/max validation (lines 561, 565, 569) ---
 
     def test_validate_raises_on_invalid_world_gen_characters_min(self):
@@ -2360,6 +2508,17 @@ class TestEmbeddingModelMigration:
         """validate() should return False when no settings are mutated."""
         settings = Settings()
         settings.embedding_model = "mxbai-embed-large"  # Already valid, no migration
+        # Populate per-entity thresholds so migration doesn't trigger
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            "faction": 7.5,
+            "item": 8.0,
+            "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
+        }
         changed = settings.validate()
         assert changed is False
 
@@ -2374,6 +2533,17 @@ class TestEmbeddingModelMigration:
         )
         settings = Settings()
         settings.embedding_model = "some-old-model"
+        # Populate per-entity thresholds so migration doesn't trigger
+        settings.world_quality_thresholds = {
+            "character": 7.5,
+            "location": 7.5,
+            "faction": 7.5,
+            "item": 8.0,
+            "concept": 7.5,
+            "relationship": 7.5,
+            "plot": 7.5,
+            "chapter": 7.5,
+        }
         changed = settings.validate()
         assert changed is False
 
