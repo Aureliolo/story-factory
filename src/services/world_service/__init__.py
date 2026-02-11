@@ -506,8 +506,8 @@ class WorldService:
         return _build._clear_world_db(world_db)
 
     @staticmethod
-    def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> int:
-        """Extract characters from story state to world database."""
+    def _extract_characters_to_world(state: StoryState, world_db: WorldDatabase) -> tuple[int, int]:
+        """Extract characters and implicit relationships to world database."""
         return _build._extract_characters_to_world(state, world_db)
 
     def _generate_locations(

@@ -271,9 +271,11 @@ class TestExtractCharactersToWorld:
 
     def test_extracts_all_characters(self, world_service, mock_world_db, sample_story_state):
         """Test extracts all characters from story state."""
-        count = world_service._extract_characters_to_world(sample_story_state, mock_world_db)
+        char_count, _rel_count = world_service._extract_characters_to_world(
+            sample_story_state, mock_world_db
+        )
 
-        assert count == 2
+        assert char_count == 2
         entities = mock_world_db.list_entities(entity_type="character")
         assert len(entities) == 2
         names = [e.name for e in entities]
@@ -285,10 +287,12 @@ class TestExtractCharactersToWorld:
         # Pre-add one character
         mock_world_db.add_entity("character", "Hero", "Pre-existing")
 
-        count = world_service._extract_characters_to_world(sample_story_state, mock_world_db)
+        char_count, _rel_count = world_service._extract_characters_to_world(
+            sample_story_state, mock_world_db
+        )
 
         # Only Mentor should be added
-        assert count == 1
+        assert char_count == 1
         entities = mock_world_db.list_entities(entity_type="character")
         assert len(entities) == 2
 
@@ -317,8 +321,55 @@ class TestExtractCharactersToWorld:
         )
         state.characters = []
 
-        count = world_service._extract_characters_to_world(state, mock_world_db)
-        assert count == 0
+        char_count, rel_count = world_service._extract_characters_to_world(state, mock_world_db)
+        assert char_count == 0
+        assert rel_count == 0
+
+    def test_creates_implicit_relationships(self, world_service, mock_world_db, sample_story_state):
+        """Test creates implicit relationships from Character.relationships."""
+        char_count, rel_count = world_service._extract_characters_to_world(
+            sample_story_state, mock_world_db
+        )
+
+        assert char_count == 2
+        # Mentor has relationships={"Hero": "mentor"}
+        assert rel_count == 1
+
+        # Verify the relationship exists in the database
+        mentor = mock_world_db.search_entities("Mentor", entity_type="character")[0]
+        hero = mock_world_db.search_entities("Hero", entity_type="character")[0]
+        rels = mock_world_db.get_relationships(mentor.id)
+        assert len(rels) == 1
+        assert rels[0].target_id == hero.id
+        assert rels[0].relation_type == "mentor"
+
+    def test_skips_relationships_for_unknown_targets(self, world_service, mock_world_db):
+        """Test skips relationships when target character is not in the character list."""
+        state = StoryState(id="test-unknown-target")
+        state.brief = StoryBrief(
+            premise="Test",
+            genre="test",
+            tone="test",
+            target_length="short_story",
+            themes=[],
+            language="English",
+            setting_time="Modern",
+            setting_place="City",
+            content_rating="none",
+        )
+        state.characters = [
+            Character(
+                name="Alice",
+                role="protagonist",
+                description="Main character",
+                relationships={"Unknown": "friend"},
+            ),
+        ]
+
+        char_count, rel_count = world_service._extract_characters_to_world(state, mock_world_db)
+
+        assert char_count == 1
+        assert rel_count == 0
 
 
 class TestGenerateLocations:
@@ -1561,8 +1612,9 @@ class TestImplicitRelationshipTracking:
                 WorldBuildOptions.full(),
             )
 
-        assert counts["implicit_relationships"] == 1
-        assert "0 explicit + 1 implicit" in caplog.text
+        # 1 from character extraction (Mentor->Hero) + 1 from faction (Knights->Castle)
+        assert counts["implicit_relationships"] == 2
+        assert "0 explicit + 2 implicit" in caplog.text
 
     def test_build_counts_dict_has_implicit_relationships_key(
         self, world_service, mock_world_db, sample_story_state, mock_services
@@ -1582,7 +1634,8 @@ class TestImplicitRelationshipTracking:
         )
 
         assert "implicit_relationships" in counts
-        assert counts["implicit_relationships"] == 0
+        # 1 from character extraction (Mentor->Hero), 0 from factions
+        assert counts["implicit_relationships"] == 1
 
 
 class TestRelationshipQualityRefinement:
