@@ -4,7 +4,6 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
 from src.utils.validation import (
     validate_not_empty,
@@ -17,89 +16,6 @@ if TYPE_CHECKING:
     from src.services.world_service import WorldService
 
 logger = logging.getLogger(__name__)
-
-
-def extract_entities_from_structure(
-    svc: WorldService, state: StoryState, world_db: WorldDatabase
-) -> int:
-    """Extract characters and locations from story structure to world database.
-
-    Args:
-        svc: WorldService instance.
-        state: Story state with characters and world description.
-        world_db: WorldDatabase to populate.
-
-    Returns:
-        Number of entities extracted.
-    """
-    validate_not_none(state, "state")
-    validate_type(state, "state", StoryState)
-    validate_not_none(world_db, "world_db")
-    validate_type(world_db, "world_db", WorldDatabase)
-    logger.debug(
-        f"extract_entities_from_structure called: project_id={state.id}, "
-        f"characters={len(state.characters)}"
-    )
-    count = 0
-
-    try:
-        # Extract characters
-        for char in state.characters:
-            existing = world_db.search_entities(char.name, entity_type="character")
-            if existing:
-                continue
-
-            attributes = {
-                "role": char.role,
-                "personality_traits": char.trait_names,
-                "goals": char.goals,
-                "arc_notes": char.arc_notes,
-            }
-
-            entity_id = world_db.add_entity(
-                entity_type="character",
-                name=char.name,
-                description=char.description,
-                attributes=attributes,
-            )
-            count += 1
-
-            # Add relationships from character data
-            for related_name, relationship in char.relationships.items():
-                related_entities = world_db.search_entities(related_name, entity_type="character")
-                if related_entities:
-                    world_db.add_relationship(
-                        source_id=entity_id,
-                        target_id=related_entities[0].id,
-                        relation_type=relationship,
-                    )
-                    logger.info(
-                        "Created implicit character relationship: %s -[%s]-> %s",
-                        char.name,
-                        relationship,
-                        related_name,
-                    )
-
-        # Extract locations from world description
-        if state.world_description:
-            locations = _extract_locations_from_text(svc, state.world_description)
-            for loc_name, loc_desc in locations:
-                existing = world_db.search_entities(loc_name, entity_type="location")
-                if existing:
-                    continue
-
-                world_db.add_entity(
-                    entity_type="location",
-                    name=loc_name,
-                    description=loc_desc,
-                )
-                count += 1
-
-        logger.info(f"Extracted {count} entities from story structure for project {state.id}")
-        return count
-    except Exception as e:
-        logger.error(f"Failed to extract entities for project {state.id}: {e}", exc_info=True)
-        raise
 
 
 def extract_from_chapter(

@@ -98,82 +98,6 @@ class TestWorldServiceInit:
         assert isinstance(service.settings, Settings)
 
 
-class TestWorldServiceExtractEntitiesFromStructure:
-    """Tests for extract_entities_from_structure method."""
-
-    def test_extracts_characters(self, world_service, world_db, sample_story_state):
-        """Test extracts characters from story state."""
-        count = world_service.extract_entities_from_structure(sample_story_state, world_db)
-
-        assert count >= 2  # At least the two characters
-
-        # Verify characters were added
-        entities = world_db.list_entities(entity_type="character")
-        names = [e.name for e in entities]
-        assert "Sir Roland" in names
-        assert "Lady Elara" in names
-
-    def test_extracts_locations_from_world_description(
-        self, world_service, world_db, sample_story_state
-    ):
-        """Test extracts locations from world description."""
-        count = world_service.extract_entities_from_structure(sample_story_state, world_db)
-
-        assert count > 0
-
-        # Verify at least some locations were extracted
-        locations = world_db.list_entities(entity_type="location")
-        # Location extraction is heuristic-based, may vary
-        assert isinstance(locations, list)
-
-    def test_creates_character_relationships(self, world_service, world_db, sample_story_state):
-        """Test creates relationships between characters."""
-        world_service.extract_entities_from_structure(sample_story_state, world_db)
-
-        # Get Sir Roland
-        roland_entities = world_db.search_entities("Sir Roland", entity_type="character")
-        if roland_entities:
-            relationships = world_db.get_relationships(roland_entities[0].id)
-            # May have relationship with Lady Elara
-            assert isinstance(relationships, list)
-
-    def test_skips_existing_entities(self, world_service, world_db, sample_story_state):
-        """Test doesn't duplicate existing entities."""
-        # Add Roland first
-        world_db.add_entity(
-            entity_type="character",
-            name="Sir Roland",
-            description="Already exists",
-        )
-
-        world_service.extract_entities_from_structure(sample_story_state, world_db)
-
-        # Should only add Lady Elara + any locations
-        rolands = world_db.search_entities("Sir Roland", entity_type="character")
-        assert len(rolands) == 1  # Only one Roland
-
-    def test_handles_empty_characters(self, world_service, world_db):
-        """Test handles story state with no characters."""
-        state = StoryState(
-            id="test",
-            status="writing",
-            brief=StoryBrief(
-                premise="A story",
-                genre="Fiction",
-                tone="Neutral",
-                setting_time="Now",
-                setting_place="Here",
-                target_length="short_story",
-                language="English",
-                content_rating="general",
-            ),
-        )
-
-        count = world_service.extract_entities_from_structure(state, world_db)
-
-        assert count >= 0
-
-
 class TestWorldServiceExtractFromChapter:
     """Tests for extract_from_chapter method."""
 
@@ -473,65 +397,6 @@ class TestWorldServiceContextForAgents:
 class TestWorldServiceEdgeCases:
     """Tests for edge cases and uncovered code paths."""
 
-    def test_extract_skips_existing_location_in_world_description(self, world_service, world_db):
-        """Test extract_entities_from_structure skips existing locations in world_description."""
-        # Create a story state with world_description containing pattern-matching locations
-        brief = StoryBrief(
-            premise="Test story",
-            genre="Fantasy",
-            tone="Epic",
-            setting_time="Medieval",
-            setting_place="Test Kingdom",
-            target_length="short_story",
-            language="English",
-            content_rating="general",
-        )
-
-        # First, run extraction to find what names are actually extracted
-        state = StoryState(
-            id="test-skip-loc",
-            project_name="Test",
-            brief=brief,
-            status="writing",
-            # World description with location patterns
-            world_description="The Great Castle stands tall in the Northern Valley. The heroes traveled to the Ancient Forest.",
-        )
-
-        # Run extraction once to get the extracted location names
-        world_service.extract_entities_from_structure(state, world_db)
-
-        # Get the locations that were extracted
-        extracted_locations = world_db.list_entities(entity_type="location")
-
-        # If any locations were extracted, clear the DB and test the skip logic
-        if extracted_locations:
-            # Clear DB
-            for loc in extracted_locations:
-                world_db.delete_entity(loc.id)
-
-            # Pre-add the first extracted location
-            first_loc_name = extracted_locations[0].name
-            world_db.add_entity(
-                entity_type="location",
-                name=first_loc_name,
-                description="Pre-existing",
-            )
-
-            # Run extraction again - should skip the pre-existing location
-            state2 = StoryState(
-                id="test-skip-loc-2",
-                project_name="Test2",
-                brief=brief,
-                status="writing",
-                world_description=state.world_description,
-            )
-            world_service.extract_entities_from_structure(state2, world_db)
-
-            # Count occurrences of the first location name
-            all_locs = world_db.list_entities(entity_type="location")
-            first_name_count = sum(1 for e in all_locs if e.name == first_loc_name)
-            assert first_name_count == 1  # Only one instance, not duplicated
-
     def test_extract_from_chapter_adds_locations(self, world_service, world_db):
         """Test extract_from_chapter adds new location entities."""
         # Chapter content with a clear location pattern
@@ -605,25 +470,6 @@ Inside, they found another location: the Crystal Grotto."""
 
 class TestWorldServiceErrorHandling:
     """Tests for WorldService error handling paths."""
-
-    def test_extract_entities_from_structure_exception(self, world_service, world_db, monkeypatch):
-        """Test exception handling in extract_entities_from_structure."""
-        from src.memory.story_state import Character, StoryState
-
-        state = StoryState(id="test-error")
-        state.characters = [
-            Character(name="Alice", role="protagonist", description="Test character")
-        ]
-
-        # Mock add_entity to raise an exception
-        def mock_add_entity(*args, **kwargs):
-            """Simulate a database error when adding an entity."""
-            raise RuntimeError("Simulated database error")
-
-        monkeypatch.setattr(world_db, "add_entity", mock_add_entity)
-
-        with pytest.raises(RuntimeError, match="Simulated database error"):
-            world_service.extract_entities_from_structure(state, world_db)
 
     def test_extract_from_chapter_exception(self, world_service, world_db, monkeypatch):
         """Test exception handling in extract_from_chapter."""

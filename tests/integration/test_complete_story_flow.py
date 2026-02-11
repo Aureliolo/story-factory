@@ -354,9 +354,9 @@ class TestErrorRecovery:
         """Test that validation prevents invalid workflow operations."""
         story_state, world_db = services.project.create_project("Validation Test")
 
-        # Try to build structure without brief
+        # Try to build world without brief
         with pytest.raises(ValueError, match="brief"):
-            services.story.build_structure(story_state, world_db)
+            services.world.build_world(story_state, world_db, services)
 
         # Try to continue interview without brief
         with pytest.raises(ValueError, match="brief"):

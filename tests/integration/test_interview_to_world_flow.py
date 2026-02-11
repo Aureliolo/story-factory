@@ -143,13 +143,13 @@ class TestWorldDatabase:
 class TestInterviewValidation:
     """Test interview phase validation."""
 
-    def test_build_structure_requires_brief(self, services):
-        """Test that build_structure validates brief exists."""
+    def test_build_world_requires_brief(self, services):
+        """Test that build_world validates brief exists."""
         story_state, world_db = services.project.create_project("No Brief")
 
         # Should raise error without brief
         with pytest.raises(ValueError, match="brief"):
-            services.story.build_structure(story_state, world_db)
+            services.world.build_world(story_state, world_db, services)
 
     def test_continue_interview_requires_brief(self, services):
         """Test that continue_interview validates brief exists."""

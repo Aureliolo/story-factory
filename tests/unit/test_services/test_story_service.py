@@ -1,12 +1,10 @@
 """Tests for StoryService."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.memory.story_state import Chapter, Character, OutlineVariation, StoryBrief, StoryState
-from src.memory.world_database import WorldDatabase
 from src.services.orchestrator import WorkflowEvent
 from src.services.story_service import GenerationCancelled, StoryService
 from src.settings import Settings
@@ -78,14 +76,6 @@ def sample_story_with_chapters(sample_brief):
         ],
     )
     return state
-
-
-@pytest.fixture
-def world_db(tmp_path: Path):
-    """Create a temporary WorldDatabase."""
-    db = WorldDatabase(tmp_path / "test_world.db")
-    yield db
-    db.close()
 
 
 class TestStoryServiceInit:
@@ -254,97 +244,8 @@ class TestStoryServiceInterview:
             story_service.continue_interview(sample_story_state, "More info")
 
 
-class TestStoryServiceStructure:
-    """Tests for structure building phase."""
-
-    def test_build_structure(self, story_service, sample_story_state, world_db):
-        """Test builds story structure."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
-            mock_orch = MagicMock()
-            mock_orch.story_state = sample_story_state
-            MockOrchestrator.return_value = mock_orch
-
-            result = story_service.build_structure(sample_story_state, world_db)
-
-            mock_orch.build_story_structure.assert_called_once()
-            assert result == sample_story_state
-
-    def test_build_structure_raises_without_brief(self, story_service, world_db):
-        """Test build_structure raises when no brief exists."""
-        state = StoryState(id="test", status="interview")
-
-        with pytest.raises(ValueError, match="brief"):
-            story_service.build_structure(state, world_db)
-
-    def test_extract_entities_to_world(self, story_service, sample_story_with_chapters, world_db):
-        """Test extracts characters to world database."""
-        story_service._extract_entities_to_world(sample_story_with_chapters, world_db)
-
-        entities = world_db.list_entities(entity_type="character")
-        assert len(entities) == 1
-        assert entities[0].name == "Jack Stone"
-        assert entities[0].type == "character"
-
-    def test_extract_entities_skips_existing(
-        self, story_service, sample_story_with_chapters, world_db
-    ):
-        """Test skips extraction if entity already exists in world database."""
-        # Add the character first
-        world_db.add_entity("character", "Jack Stone", "A detective")
-
-        # Extract should skip the existing entity
-        story_service._extract_entities_to_world(sample_story_with_chapters, world_db)
-
-        # Should still be just one entity
-        entities = world_db.list_entities(entity_type="character")
-        assert len(entities) == 1
-
-    def test_extract_entities_with_relationships(self, story_service, world_db):
-        """Test extracts character relationships to world database when related entity exists."""
-        # Pre-add Bob so Alice's relationship can be created
-        bob_id = world_db.add_entity("character", "Bob", "Friend character")
-
-        state = StoryState(
-            id="test-rel",
-            project_name="Relationship Test",
-            brief=StoryBrief(
-                premise="A story",
-                genre="Drama",
-                tone="Serious",
-                setting_time="Present",
-                setting_place="City",
-                target_length="novel",
-                language="English",
-                content_rating="general",
-            ),
-            status="writing",
-            characters=[
-                Character(
-                    name="Alice",
-                    role="protagonist",
-                    description="Main character",
-                    personality_traits=["kind"],
-                    goals=["happiness"],
-                    relationships={"Bob": "friend"},
-                ),
-            ],
-        )
-
-        story_service._extract_entities_to_world(state, world_db)
-
-        entities = world_db.list_entities(entity_type="character")
-        assert len(entities) == 2
-
-        # Check relationships were added
-        alice = next((e for e in entities if e.name == "Alice"), None)
-        assert alice is not None
-        assert alice.type == "character"
-
-        # Check relationship exists from Alice to Bob
-        relationships = world_db.get_relationships(alice.id)
-        assert len(relationships) > 0
-        assert any(r.target_id == bob_id or r.source_id == bob_id for r in relationships)
-        assert any(r.relation_type == "friend" for r in relationships)
+class TestStoryServiceOutline:
+    """Tests for outline retrieval."""
 
     def test_get_outline(self, story_service, sample_story_state):
         """Test gets story outline summary."""
@@ -764,21 +665,6 @@ class TestStoryServiceExceptionHandling:
 
             with pytest.raises(RuntimeError, match="Failed to generate brief"):
                 story_service.finalize_interview(sample_story_state)
-
-    def test_build_structure_raises_on_orchestrator_error(
-        self, story_service, sample_story_state, world_db
-    ):
-        """Test build_structure propagates exceptions from orchestrator."""
-        with patch("src.services.story_service.StoryOrchestrator") as MockOrchestrator:
-            mock_orch = MagicMock()
-            mock_orch.build_story_structure.side_effect = RuntimeError(
-                "Structure generation failed"
-            )
-            mock_orch.story_state = sample_story_state
-            MockOrchestrator.return_value = mock_orch
-
-            with pytest.raises(RuntimeError, match="Structure generation failed"):
-                story_service.build_structure(sample_story_state, world_db)
 
 
 class TestStoryServiceOutlineVariations:
