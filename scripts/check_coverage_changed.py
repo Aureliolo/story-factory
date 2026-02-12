@@ -121,6 +121,9 @@ def file_path_to_module(file_path: str) -> str:
     module = path.replace("/", ".").replace("\\", ".")
     if module.endswith(".py"):
         module = module[:-3]
+    # __init__ modules are referenced by their package name
+    if module.endswith(".__init__"):
+        module = module[: -len(".__init__")]
     return module
 
 
