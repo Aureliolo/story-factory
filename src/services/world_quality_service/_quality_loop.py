@@ -121,7 +121,7 @@ def quality_refinement_loop(
                     last_error = (
                         f"{entity_type} creation returned empty on iteration {iteration + 1}"
                     )
-                    logger.warning(
+                    logger.debug(
                         "%s (retry %d)",
                         last_error,
                         creation_retries,
@@ -254,6 +254,24 @@ def quality_refinement_loop(
                     max_iterations=config.max_iterations,
                 )
                 return entity, scores, scoring_rounds
+
+            # Score-plateau early-stop: consecutive identical scores (#328)
+            if (
+                len(history.iterations) >= max(2, config.early_stopping_min_iterations)
+                and abs(scores.average - history.iterations[-2].average_score)
+                <= config.score_plateau_tolerance
+            ):
+                early_stopped = True
+                logger.info(
+                    "Early stop: %s '%s' score plateaued at %.1f "
+                    "(no improvement from scoring round %d to %d)",
+                    entity_type.capitalize(),
+                    get_name(entity),
+                    scores.average,
+                    scoring_rounds - 1,
+                    scoring_rounds,
+                )
+                break
 
             # Early stopping check — use scoring_rounds for min_iterations (#266 C3)
             if history.should_stop_early(

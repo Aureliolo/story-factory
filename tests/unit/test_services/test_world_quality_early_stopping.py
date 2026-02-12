@@ -466,8 +466,8 @@ class TestCharacterGenerationEarlyStopping:
             story_state, existing_names=[]
         )
 
-        # Should run all max_iterations (10) since no threshold met and no early stopping on zeros
-        assert mock_judge.call_count == 10
+        # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
+        assert mock_judge.call_count == 2
         # Returns last iteration since best_character was never set (peak_score never exceeded)
         assert char.name == "ZeroChar"
         assert final_scores.average == 0
@@ -576,7 +576,8 @@ class TestLocationGenerationEarlyStopping:
             story_state, existing_names=[]
         )
 
-        assert mock_judge.call_count == 10
+        # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
+        assert mock_judge.call_count == 2
         assert loc["name"] == "ZeroLoc"
         assert final_scores.average == 0
 
@@ -653,7 +654,8 @@ class TestRelationshipGenerationEarlyStopping:
             story_state, entity_names=["Alice", "Bob"], existing_rels=[]
         )
 
-        assert mock_judge.call_count == 10
+        # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
+        assert mock_judge.call_count == 2
         assert rel["source"] == "Alice"
         assert final_scores.average == 0
 
@@ -730,7 +732,8 @@ class TestItemGenerationEarlyStopping:
             story_state, existing_names=[]
         )
 
-        assert mock_judge.call_count == 10
+        # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
+        assert mock_judge.call_count == 2
         assert item["name"] == "ZeroItem"
         assert final_scores.average == 0
 
@@ -795,7 +798,8 @@ class TestConceptGenerationEarlyStopping:
             story_state, existing_names=[]
         )
 
-        assert mock_judge.call_count == 10
+        # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
+        assert mock_judge.call_count == 2
         assert concept["name"] == "ZeroConcept"
         assert final_scores.average == 0
 
