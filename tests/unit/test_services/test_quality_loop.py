@@ -729,6 +729,7 @@ class TestQualityLoopB10SkipRedundantJudge:
         """After WorldGenerationError during refinement, judge is NOT called on unchanged entity."""
         config.max_iterations = 4
         config.early_stopping_patience = 10
+        config.early_stopping_min_iterations = 10  # Disable score-plateau early-stop
 
         judge_calls = 0
         refine_calls = 0
@@ -949,6 +950,7 @@ class TestQualityLoopStageTracking:
         """Only refinement errors are counted in failed_refinements, not create or judge errors."""
         config.max_iterations = 6
         config.early_stopping_patience = 10
+        config.early_stopping_min_iterations = 10  # Disable score-plateau early-stop
 
         create_count = 0
         judge_count = 0
@@ -1591,3 +1593,251 @@ class TestRefinementConfigGetThreshold:
 
         assert config.get_threshold("character") == 7.5
         assert config.get_threshold("item") == 8.0
+
+
+class TestScorePlateauEarlyStop:
+    """Tests for score-plateau early-stop (#328)."""
+
+    def test_identical_consecutive_scores_trigger_plateau(self, mock_svc, config):
+        """Two consecutive identical scores trigger score-plateau early-stop."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10  # Disable normal early stopping
+        config.early_stopping_min_iterations = 2
+
+        entities = [{"name": f"v{i}"} for i in range(5)]
+        iter_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[iter_idx]
+
+        # Scores: 7.0, 7.0 → plateau on second scoring round
+        judge_idx = 0
+
+        def judge_fn(e):
+            """Return 7.0 for all iterations."""
+            nonlocal judge_idx
+            judge_idx += 1
+            return _make_scores(7.0)
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entities[0],
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Should stop after 2 scoring rounds (7.0 → 7.0)
+        assert scoring_rounds == 2
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        assert analytics_call.kwargs["early_stop_triggered"] is True
+
+    def test_near_equal_scores_trigger_plateau(self, mock_svc, config):
+        """Scores within 0.1 tolerance trigger score-plateau early-stop."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10
+        config.early_stopping_min_iterations = 2
+
+        entities = [{"name": f"v{i}"} for i in range(5)]
+        iter_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[iter_idx]
+
+        # Scores: 7.0, 7.05 → within 0.1 tolerance
+        score_values = [7.0, 7.05]
+        judge_idx = 0
+
+        def judge_fn(e):
+            """Return scores that are near-equal."""
+            nonlocal judge_idx
+            result = _make_scores(score_values[min(judge_idx, len(score_values) - 1)])
+            judge_idx += 1
+            return result
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entities[0],
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        assert scoring_rounds == 2
+        analytics_call = mock_svc._log_refinement_analytics.call_args
+        assert analytics_call.kwargs["early_stop_triggered"] is True
+
+    def test_plateau_respects_min_iterations(self, mock_svc, config):
+        """Score-plateau does not trigger before early_stopping_min_iterations."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10
+        config.early_stopping_min_iterations = 3  # Require at least 3 iterations
+
+        entities = [{"name": f"v{i}"} for i in range(5)]
+        iter_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[iter_idx]
+
+        # Scores: 7.0, 7.0, 7.0 → plateau triggers on 3rd (>= min_iterations=3)
+        def judge_fn(e):
+            """Return constant 7.0."""
+            return _make_scores(7.0)
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entities[0],
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # With min_iterations=3, needs at least 3 scoring rounds
+        # Scoring round 2 has only 2 iterations, doesn't meet min 3
+        # Scoring round 3: len(history) == 3 >= max(2, 3), triggers
+        assert scoring_rounds == 3
+
+    def test_improving_scores_do_not_trigger_plateau(self, mock_svc, config):
+        """Steadily improving scores never trigger score-plateau early-stop."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 10
+        config.early_stopping_min_iterations = 2
+
+        entities = [{"name": f"v{i}"} for i in range(5)]
+        iter_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[iter_idx]
+
+        # Scores: 5.0, 6.0, 7.0 → always improving, never plateau
+        score_values = [5.0, 6.0, 7.0]
+        judge_idx = 0
+
+        def judge_fn(e):
+            """Return improving scores."""
+            nonlocal judge_idx
+            result = _make_scores(score_values[min(judge_idx, len(score_values) - 1)])
+            judge_idx += 1
+            return result
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entities[0],
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # All 3 iterations should run (no plateau)
+        assert scoring_rounds == 3
+
+    def test_plateau_logs_info_message(self, mock_svc, config, caplog):
+        """Score-plateau early-stop logs an info message."""
+        config.max_iterations = 5
+        config.early_stopping_patience = 10
+        config.early_stopping_min_iterations = 2
+
+        entities = [{"name": f"v{i}"} for i in range(5)]
+        iter_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[iter_idx]
+
+        with caplog.at_level(logging.INFO):
+            quality_refinement_loop(
+                entity_type="character",
+                create_fn=lambda retries: entities[0],
+                judge_fn=lambda e: _make_scores(7.0),
+                refine_fn=refine_fn,
+                get_name=lambda e: e["name"],
+                serialize=lambda e: e.copy(),
+                is_empty=lambda e: not e.get("name"),
+                score_cls=CharacterQualityScores,
+                config=config,
+                svc=mock_svc,
+                story_id="test-story",
+            )
+
+        assert any("score plateaued at" in msg for msg in caplog.messages)
+
+    def test_score_difference_above_tolerance_continues(self, mock_svc, config):
+        """Scores differing by more than 0.1 do not trigger plateau."""
+        config.max_iterations = 3
+        config.early_stopping_patience = 10
+        config.early_stopping_min_iterations = 2
+
+        entities = [{"name": f"v{i}"} for i in range(5)]
+        iter_idx = 0
+
+        def refine_fn(e, s, i):
+            """Return a different entity each time."""
+            nonlocal iter_idx
+            iter_idx += 1
+            return entities[iter_idx]
+
+        # Scores: 7.0, 6.8 → difference 0.2 > tolerance 0.1
+        score_values = [7.0, 6.8, 6.6]
+        judge_idx = 0
+
+        def judge_fn(e):
+            """Return scores with 0.2 difference."""
+            nonlocal judge_idx
+            result = _make_scores(score_values[min(judge_idx, len(score_values) - 1)])
+            judge_idx += 1
+            return result
+
+        _entity, _scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entities[0],
+            judge_fn=judge_fn,
+            refine_fn=refine_fn,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # All 3 iterations should run (0.2 difference > 0.1 tolerance)
+        assert scoring_rounds == 3

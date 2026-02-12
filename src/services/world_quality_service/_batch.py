@@ -2,6 +2,7 @@
 
 import logging
 import time
+from collections import Counter
 from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
 
@@ -29,6 +30,7 @@ def _log_batch_summary(
     entity_type: str,
     quality_threshold: float,
     elapsed: float,
+    get_name: Callable[[Any], str] | None = None,
 ) -> None:
     """Log an aggregate summary at the end of a batch generation or review.
 
@@ -37,6 +39,9 @@ def _log_batch_summary(
         entity_type: Human-readable entity type (e.g. "character").
         quality_threshold: The configured quality threshold for pass/fail.
         elapsed: Total batch wall-clock time in seconds.
+        get_name: Callable to extract display name from an entity. When provided,
+            used for all entity types (chapters, relationships, etc.). Falls back
+            to ``entity.get("name")`` / ``getattr(entity, "name")`` when ``None``.
     """
     if not results:
         logger.info(
@@ -56,7 +61,9 @@ def _log_batch_summary(
     failed_names: list[str] = []
     for entity, scores in results:
         if round(scores.average, 1) < quality_threshold:
-            if isinstance(entity, dict):
+            if get_name is not None:
+                name = get_name(entity)
+            elif isinstance(entity, dict):
                 name = entity.get("name", "Unknown")
             else:
                 name = getattr(entity, "name", "Unknown")
@@ -76,6 +83,28 @@ def _log_batch_summary(
         entity_type,
         ", ".join(summary_parts),
     )
+
+
+def _aggregate_errors(errors: list[str]) -> str:
+    """Deduplicate and aggregate identical error messages.
+
+    Instead of repeating ``"Failed to generate relationship after 3 attempts"``
+    nine times, produces ``"Failed to generate relationship after 3 attempts (x9)"``.
+
+    Args:
+        errors: List of raw error messages (may contain duplicates).
+
+    Returns:
+        A single joined string with counts appended for repeated messages.
+    """
+    counts = Counter(errors)
+    parts: list[str] = []
+    for msg, count in counts.items():
+        if count > 1:
+            parts.append(f"{msg} (x{count})")
+        else:
+            parts.append(msg)
+    return "; ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -202,10 +231,12 @@ def _generate_batch(
             count,
             entity_type,
             len(errors),
-            "; ".join(errors),
+            _aggregate_errors(errors),
         )
 
-    _log_batch_summary(results, entity_type, quality_threshold, time.time() - batch_start_time)
+    _log_batch_summary(
+        results, entity_type, quality_threshold, time.time() - batch_start_time, get_name=get_name
+    )
 
     return results
 
@@ -324,10 +355,12 @@ def _review_batch(
             count,
             entity_type,
             len(errors),
-            "; ".join(errors),
+            _aggregate_errors(errors),
         )
 
-    _log_batch_summary(results, entity_type, quality_threshold, time.time() - batch_start_time)
+    _log_batch_summary(
+        results, entity_type, quality_threshold, time.time() - batch_start_time, get_name=get_name
+    )
 
     return results
 

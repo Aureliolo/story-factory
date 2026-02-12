@@ -118,18 +118,29 @@ def log_refinement_analytics(
     """
     analysis = history.analyze_improvement()
 
-    logger.info(
-        f"REFINEMENT ANALYTICS [{history.entity_type}] '{history.entity_name}':\n"
-        f"  - Scoring rounds: {analysis['scoring_rounds']}\n"
-        f"  - Score progression: {' -> '.join(f'{s:.1f}' for s in analysis['score_progression'])}\n"
-        f"  - Best iteration: {analysis['best_iteration']} ({history.peak_score:.1f})\n"
-        f"  - Final returned: iteration {history.final_iteration} ({history.final_score:.1f})\n"
-        f"  - Improved over first: {analysis['improved']}\n"
-        f"  - Worsened after peak: {analysis['worsened_after_peak']}\n"
-        f"  - Mid-loop regression: {analysis['mid_loop_regression']}\n"
-        f"  - Threshold met: {threshold_met}\n"
-        f"  - Early stop triggered: {early_stop_triggered}"
-    )
+    # Condensed single-line log for entities that passed on the first try
+    if len(history.iterations) == 1 and threshold_met:
+        logger.info(
+            "REFINEMENT ANALYTICS [%s] '%s': score=%.1f, iterations=1, passed=True",
+            history.entity_type,
+            history.entity_name,
+            history.final_score,
+        )
+    else:
+        logger.info(
+            f"REFINEMENT ANALYTICS [{history.entity_type}] '{history.entity_name}':\n"
+            f"  - Scoring rounds: {analysis['scoring_rounds']}\n"
+            f"  - Score progression: "
+            f"{' -> '.join(f'{s:.1f}' for s in analysis['score_progression'])}\n"
+            f"  - Best iteration: {analysis['best_iteration']} ({history.peak_score:.1f})\n"
+            f"  - Final returned: iteration {history.final_iteration} "
+            f"({history.final_score:.1f})\n"
+            f"  - Improved over first: {analysis['improved']}\n"
+            f"  - Worsened after peak: {analysis['worsened_after_peak']}\n"
+            f"  - Mid-loop regression: {analysis['mid_loop_regression']}\n"
+            f"  - Threshold met: {threshold_met}\n"
+            f"  - Early stop triggered: {early_stop_triggered}"
+        )
 
     # Record to analytics database with extended scores info
     extended_scores = {
