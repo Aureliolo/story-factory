@@ -29,7 +29,6 @@ def _make_history(
     iterations: int = 1,
     scores: list[float] | None = None,
     final_score: float = 8.5,
-    peak_score: float = 8.5,
 ) -> RefinementHistory:
     """Create a RefinementHistory with the given number of iterations."""
     history = RefinementHistory(entity_type=entity_type, entity_name=entity_name)
@@ -72,7 +71,7 @@ class TestCondensedAnalytics:
 
     def test_single_iteration_fail_logs_full(self, mock_svc, caplog):
         """Single iteration + threshold NOT met → full multi-line log."""
-        history = _make_history(iterations=1, final_score=5.0, peak_score=5.0)
+        history = _make_history(iterations=1, final_score=5.0)
 
         with caplog.at_level(logging.INFO):
             log_refinement_analytics(
@@ -95,7 +94,6 @@ class TestCondensedAnalytics:
             iterations=3,
             scores=[5.0, 6.5, 8.5],
             final_score=8.5,
-            peak_score=8.5,
         )
 
         with caplog.at_level(logging.INFO):
@@ -119,7 +117,6 @@ class TestCondensedAnalytics:
             iterations=3,
             scores=[6.0, 6.0, 6.0],
             final_score=6.0,
-            peak_score=6.0,
         )
 
         with caplog.at_level(logging.INFO):

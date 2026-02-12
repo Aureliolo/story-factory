@@ -474,6 +474,23 @@ class TestShouldStopEarlyPlateau:
         assert history.should_stop_early(patience=2, min_iterations=2) is True
 
 
+class TestShouldStopEarlyNoPeak:
+    """Test should_stop_early() when best_iteration is 0 (no peak established)."""
+
+    def test_returns_false_when_no_peak_even_with_enough_iterations(self):
+        """should_stop_early returns False when best_iteration is 0 (all zero scores)."""
+        history = RefinementHistory(entity_type="character", entity_name="Test")
+        # All zero scores: best_iteration stays 0 because 0.0 is not > 0.0 (peak_score)
+        history.add_iteration(entity_data={"v": 1}, scores={"s": 0.0}, average_score=0.0)
+        history.add_iteration(entity_data={"v": 2}, scores={"s": 0.0}, average_score=0.0)
+        history.add_iteration(entity_data={"v": 3}, scores={"s": 0.0}, average_score=0.0)
+
+        assert history.best_iteration == 0
+        assert len(history.iterations) == 3
+        # Even with enough iterations and plateaus, returns False when no peak
+        assert history.should_stop_early(patience=2, min_iterations=2) is False
+
+
 class TestFactionQualityScores:
     """Tests for FactionQualityScores model."""
 

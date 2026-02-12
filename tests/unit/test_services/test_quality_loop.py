@@ -1588,11 +1588,13 @@ class TestRefinementConfigGetThreshold:
         mock_settings.world_quality_refinement_temp_decay = "linear"
         mock_settings.world_quality_early_stopping_min_iterations = 2
         mock_settings.world_quality_early_stopping_variance_tolerance = 0.3
+        mock_settings.world_quality_score_plateau_tolerance = 0.2
 
         config = RefinementConfig.from_settings(mock_settings)
 
         assert config.get_threshold("character") == 7.5
         assert config.get_threshold("item") == 8.0
+        assert config.score_plateau_tolerance == 0.2
 
 
 class TestScorePlateauEarlyStop:

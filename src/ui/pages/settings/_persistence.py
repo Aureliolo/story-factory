@@ -172,6 +172,7 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "world_quality_refinement_temp_decay",
         "world_quality_early_stopping_min_iterations",
         "world_quality_early_stopping_variance_tolerance",
+        "world_quality_score_plateau_tolerance",
     ]
     for key in advanced_llm_keys:
         snapshot[key] = getattr(settings, key)
@@ -273,6 +274,7 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
         "world_quality_refinement_temp_decay",
         "world_quality_early_stopping_min_iterations",
         "world_quality_early_stopping_variance_tolerance",
+        "world_quality_score_plateau_tolerance",
     ]
     for key in advanced_llm_keys:
         if key in snapshot:

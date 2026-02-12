@@ -42,7 +42,10 @@ def validate(settings: Settings) -> bool:
     _validate_early_stopping(settings)
     _validate_circuit_breaker(settings)
     _validate_retry_strategy(settings)
-    _validate_semantic_duplicate(settings)
+    # Embedding model migration must run before semantic duplicate check so that
+    # an auto-migrated model satisfies the "embedding_model required" constraint.
+    changed = _validate_embedding_model(settings) or changed
+    changed = _validate_semantic_duplicate(settings) or changed
     _validate_temperature_decay_semantics(settings)
     _validate_judge_consistency(settings)
     _validate_world_gen_counts(settings)
@@ -66,7 +69,6 @@ def validate(settings: Settings) -> bool:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
-    changed = _validate_embedding_model(settings) or changed
     return changed
 
 
@@ -372,15 +374,28 @@ def _validate_retry_strategy(settings: Settings) -> None:
         )
 
 
-def _validate_semantic_duplicate(settings: Settings) -> None:
-    """Validate semantic duplicate detection settings."""
+def _validate_semantic_duplicate(settings: Settings) -> bool:
+    """Validate semantic duplicate detection settings.
+
+    Auto-disables semantic_duplicate_enabled when embedding_model is empty,
+    since semantic duplicate detection cannot function without an embedding model.
+
+    Returns:
+        True if settings were mutated (auto-disabled), False otherwise.
+    """
     if not 0.5 <= settings.semantic_duplicate_threshold <= 1.0:
         raise ValueError(
             f"semantic_duplicate_threshold must be between 0.5 and 1.0, "
             f"got {settings.semantic_duplicate_threshold}"
         )
     if settings.semantic_duplicate_enabled and not settings.embedding_model.strip():
-        raise ValueError("embedding_model must be set when semantic_duplicate_enabled is True")
+        logger.warning(
+            "semantic_duplicate_enabled requires an embedding_model; "
+            "auto-disabling semantic duplicate detection"
+        )
+        settings.semantic_duplicate_enabled = False
+        return True
+    return False
 
 
 def _validate_temperature_decay_semantics(settings: Settings) -> None:

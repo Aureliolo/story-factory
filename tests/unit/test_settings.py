@@ -2350,13 +2350,32 @@ class TestWP1WP2SettingsValidation:
         with pytest.raises(ValueError, match="semantic_duplicate_threshold must be between"):
             settings.validate()
 
-    def test_validate_raises_on_empty_embedding_model_when_semantic_enabled(self):
-        """Should raise ValueError when semantic_duplicate_enabled but embedding_model is empty."""
+    def test_validate_auto_migrates_embedding_when_semantic_enabled(self):
+        """Enabling semantic duplicate with empty model auto-migrates embedding model."""
         settings = Settings()
         settings.semantic_duplicate_enabled = True
         settings.embedding_model = ""  # Empty model
-        with pytest.raises(ValueError, match="embedding_model must be set"):
-            settings.validate()
+        changed = settings.validate()
+        # Embedding model migration runs first, setting a valid model
+        assert changed is True
+        assert settings.semantic_duplicate_enabled is True
+        assert settings.embedding_model != ""
+
+    def test_validate_auto_disables_semantic_when_no_embedding_available(self):
+        """Should auto-disable semantic_duplicate_enabled when no embedding model exists."""
+        from unittest.mock import patch
+
+        settings = Settings()
+        settings.semantic_duplicate_enabled = True
+        settings.embedding_model = ""
+        # Patch registry to have no embedding models (import is inside the function)
+        with patch(
+            "src.settings._model_registry.RECOMMENDED_MODELS",
+            {"some-model:8b": {"tags": ["writer"]}},
+        ):
+            changed = settings.validate()
+        assert changed is True
+        assert settings.semantic_duplicate_enabled is False
 
     def test_validate_raises_on_invalid_temp_decay_order(self):
         """Should raise ValueError when temp_start < temp_end (invalid decay)."""

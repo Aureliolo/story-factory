@@ -529,6 +529,17 @@ def build_refinement_stopping_section(page: SettingsPage) -> None:
                     width="w-16",
                 )
 
+            with ui.column().classes("gap-1"):
+                ui.label("Plateau Tol.").classes("text-xs text-gray-500")
+                page._score_plateau_tolerance_input = page._build_number_input(
+                    value=page.settings.world_quality_score_plateau_tolerance,
+                    min_val=0.0,
+                    max_val=1.0,
+                    step=0.05,
+                    tooltip_text="Max score difference for plateau early-stop (0.0-1.0)",
+                    width="w-16",
+                )
+
     logger.debug("Refinement & stopping section built")
 
 
@@ -704,6 +715,11 @@ def save_to_settings(page: SettingsPage) -> None:
             "world_quality_early_stopping_variance_tolerance",
             float,
         ),
+        (
+            "_score_plateau_tolerance_input",
+            "world_quality_score_plateau_tolerance",
+            float,
+        ),
         # Judge consistency settings
         ("_judge_consistency_switch", "judge_consistency_enabled", None),
         ("_judge_multi_call_switch", "judge_multi_call_enabled", None),
@@ -780,6 +796,7 @@ def refresh_from_settings(page: SettingsPage) -> None:
             "_early_stopping_variance_tolerance_input",
             "world_quality_early_stopping_variance_tolerance",
         ),
+        ("_score_plateau_tolerance_input", "world_quality_score_plateau_tolerance"),
         # Judge consistency settings
         ("_judge_consistency_switch", "judge_consistency_enabled"),
         ("_judge_multi_call_switch", "judge_multi_call_enabled"),

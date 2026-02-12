@@ -166,6 +166,7 @@ class Settings:
     # Enhanced early stopping settings (#167)
     world_quality_early_stopping_min_iterations: int = 2  # Min scoring rounds before early stop
     world_quality_early_stopping_variance_tolerance: float = 0.3  # Score variance tolerance
+    world_quality_score_plateau_tolerance: float = 0.1  # Max score diff for plateau detection
 
     # Circuit breaker settings (#175)
     circuit_breaker_enabled: bool = True  # Enable circuit breaker for LLM calls

@@ -258,7 +258,8 @@ def quality_refinement_loop(
             # Score-plateau early-stop: consecutive identical scores (#328)
             if (
                 len(history.iterations) >= max(2, config.early_stopping_min_iterations)
-                and abs(scores.average - history.iterations[-2].average_score) <= 0.1
+                and abs(scores.average - history.iterations[-2].average_score)
+                <= config.score_plateau_tolerance
             ):
                 early_stopped = True
                 logger.info(
