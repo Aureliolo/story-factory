@@ -441,7 +441,7 @@ class RefinementConfig(BaseModel):
                 - world_quality_refinement_temp_decay
                 - world_quality_early_stopping_min_iterations
                 - world_quality_early_stopping_variance_tolerance
-                - world_quality_score_plateau_tolerance (optional, defaults to 0.1)
+                - world_quality_score_plateau_tolerance
 
         Returns:
             RefinementConfig: Configuration populated from the corresponding settings attributes.
@@ -468,7 +468,7 @@ class RefinementConfig(BaseModel):
             refinement_temp_decay=settings.world_quality_refinement_temp_decay,
             early_stopping_min_iterations=settings.world_quality_early_stopping_min_iterations,
             early_stopping_variance_tolerance=settings.world_quality_early_stopping_variance_tolerance,
-            score_plateau_tolerance=getattr(settings, "world_quality_score_plateau_tolerance", 0.1),
+            score_plateau_tolerance=settings.world_quality_score_plateau_tolerance,
         )
 
 

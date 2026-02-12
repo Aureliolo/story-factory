@@ -2308,6 +2308,15 @@ class TestWP1WP2SettingsValidation:
         ):
             settings.validate()
 
+    def test_validate_raises_on_invalid_score_plateau_tolerance(self):
+        """Should raise ValueError for score_plateau_tolerance out of range."""
+        settings = Settings()
+        settings.world_quality_score_plateau_tolerance = 2.0
+        with pytest.raises(
+            ValueError, match="world_quality_score_plateau_tolerance must be between"
+        ):
+            settings.validate()
+
     def test_validate_raises_on_invalid_circuit_breaker_failure_threshold(self):
         """Should raise ValueError for circuit breaker failure_threshold out of range."""
         settings = Settings()

@@ -340,6 +340,11 @@ def _validate_early_stopping(settings: Settings) -> None:
             f"world_quality_early_stopping_variance_tolerance must be between 0.0 and 2.0, "
             f"got {settings.world_quality_early_stopping_variance_tolerance}"
         )
+    if not 0.0 <= settings.world_quality_score_plateau_tolerance <= 1.0:
+        raise ValueError(
+            f"world_quality_score_plateau_tolerance must be between 0.0 and 1.0, "
+            f"got {settings.world_quality_score_plateau_tolerance}"
+        )
 
 
 def _validate_circuit_breaker(settings: Settings) -> None:
