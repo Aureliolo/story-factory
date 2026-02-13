@@ -34,16 +34,15 @@ def _log_batch_summary(
     elapsed: float,
     get_name: Callable[[Any], str] | None = None,
 ) -> None:
-    """Log an aggregate summary at the end of a batch generation or review.
-
-    Args:
-        results: List of (entity, scores) tuples produced by the batch.
-        entity_type: Human-readable entity type (e.g. "character").
-        quality_threshold: The configured quality threshold for pass/fail.
+    """
+    Log an aggregate batch summary for generated or reviewed entities.
+    
+    Parameters:
+        results: Sequence of (entity, BaseQualityScores) tuples produced by the batch.
+        entity_type: Human-readable entity type (e.g., "character").
+        quality_threshold: Threshold used to determine pass/fail; averages are rounded to 1 decimal and compared against this value.
         elapsed: Total batch wall-clock time in seconds.
-        get_name: Callable to extract display name from an entity. When provided,
-            used for all entity types (chapters, relationships, etc.). Falls back
-            to ``entity.get("name")`` / ``getattr(entity, "name")`` when ``None``.
+        get_name: Optional callable that extracts a display name from an entity. If omitted, the function falls back to entity.get("name") for dicts or getattr(entity, "name") for other objects.
     """
     if not results:
         logger.info(
@@ -125,28 +124,27 @@ def _generate_batch(
     progress_callback: Callable | None = None,
     quality_threshold: float | None = None,
 ) -> list[tuple[T, S]]:
-    """Generic batch generation loop for creating new entities.
-
-    Args:
-        svc: WorldQualityService instance (used for ``_calculate_eta``).
-        count: Number of entities to generate.
-        entity_type: Human-readable type name for logging/progress (e.g. "faction").
-        generate_fn: Called with the loop index ``i``; must return
-            ``(entity, scores, iterations)``.
-        get_name: Extract a display name from the generated entity.
-        on_success: Optional hook called after a successful generation (e.g. to
-            track names for deduplication).
-        cancel_check: Optional callable that returns ``True`` to cancel.
-        progress_callback: Optional callback to receive
-            :class:`EntityGenerationProgress` updates.
-        quality_threshold: Quality threshold for pass/fail in batch summary log.
-            Resolved via ``svc.get_config().get_threshold(entity_type)`` if not provided.
-
+    """
+    Run a generic batch loop to generate multiple entities with quality refinement and progress reporting.
+    
+    Each successful generation appends the produced (entity, scores) tuple to the result list; failed generations are recorded and reported and may trigger early termination after repeated failures. Progress updates are emitted via the optional progress_callback.
+    
+    Parameters:
+        svc: WorldQualityService instance used for progress ETA calculation.
+        count (int): Number of entities to attempt to generate.
+        entity_type (str): Human-readable type name used in logs and progress (e.g., "faction").
+        generate_fn (Callable[[int], tuple[T, S, int]]): Function called with the loop index that returns (entity, scores, iterations).
+        get_name (Callable[[T], str]): Function that extracts a display name from a generated entity for logging.
+        on_success (Callable[[T], None] | None): Optional hook invoked after a successful generation (e.g., to track names).
+        cancel_check (Callable[[], bool] | None): Optional callable that returns True to cancel the batch early.
+        progress_callback (Callable | None): Optional callback receiving EntityGenerationProgress updates.
+        quality_threshold (float | None): Threshold used in the batch summary; if None it is resolved from svc configuration.
+    
     Returns:
-        List of ``(entity, scores)`` tuples.
-
+        list[tuple[T, S]]: The list of successfully generated (entity, scores) tuples.
+    
     Raises:
-        WorldGenerationError: If **no** entities could be generated.
+        WorldGenerationError: If no entities could be generated successfully.
     """
     from src.services.world_quality_service import EntityGenerationProgress
 
@@ -588,20 +586,20 @@ def generate_relationships_with_quality(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
 ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
-    """Generate multiple relationships with quality refinement.
-
-    Args:
-        svc: WorldQualityService instance.
-        story_state: Current story state.
-        entity_names: Entity names available for relationships.
-        existing_rels: Existing relationships as (source, target, relation_type) 3-tuples.
-        count: Number of relationships to generate.
-        cancel_check: Optional callable that returns True to cancel generation.
-        progress_callback: Optional callback to receive progress updates.
-
+    """
+    Generate multiple relationships with quality refinement.
+    
+    Parameters:
+        story_state (StoryState): Current story state used to inform generation.
+        entity_names (list[str]): Names of entities available as relationship endpoints.
+        existing_rels (list[tuple[str, str, str]]): Existing relationships as (source, target, relation_type) tuples used to avoid duplicates; relation_type may be e.g. "knows".
+        count (int): Number of relationships to generate.
+        cancel_check (Callable[[], bool] | None): Optional callable that returns True to cancel generation early.
+        progress_callback (Callable | None): Optional callback invoked with progress updates.
+    
     Returns:
-        List of (relationship_dict, QualityScores) tuples.
-
+        list[tuple[dict[str, Any], RelationshipQualityScores]]: Generated relationship dictionaries paired with their quality scores.
+    
     Raises:
         WorldGenerationError: If no relationships could be generated.
     """

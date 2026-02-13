@@ -289,12 +289,18 @@ class WorldDatabase:
             logger.debug(f"Database schema initialized: {self.db_path}")
 
     def _run_migrations(self, cursor: sqlite3.Cursor, from_version: int, to_version: int) -> None:
-        """Run database migrations.
-
-        Args:
-            cursor: Database cursor.
-            from_version: Current schema version.
-            to_version: Target schema version.
+        """
+        Apply incremental schema migrations to bring the database from from_version up to to_version.
+        
+        Performs in-place schema changes and data migrations as needed:
+        - v1 -> v2: creates the entity_versions table and indexes.
+        - v2 -> v3: creates world_settings and historical_eras tables and indexes.
+        - v3 -> v4: if a relationships table exists, normalizes legacy free-form relationship types (may update rows).
+        
+        Parameters:
+            cursor (sqlite3.Cursor): Database cursor used to execute migration SQL statements.
+            from_version (int): Current schema version stored in the database.
+            to_version (int): Target schema version to migrate to.
         """
         logger.info(f"Migrating database schema from v{from_version} to v{to_version}")
 
