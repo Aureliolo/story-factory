@@ -598,16 +598,17 @@ def _generate_relationships(
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
-    """
-    Generate relationships between entities and persist them to the world database.
+    """Generate and add relationships between entities using quality refinement.
 
-    Calls the world quality service to propose relationships (with quality scores), resolves entity names (using fuzzy matching), normalizes relation types, and adds resolved relationships to the database. Honors the optional cancellation callback and caps the number of generated relationships based on the number of available entities; invalid or unresolved proposals are skipped and logged.
-
-    Parameters:
-        cancel_check (Callable[[], bool] | None): Optional callable that returns True when processing should stop.
+    Args:
+        svc: WorldService instance.
+        state: Current story state with brief.
+        world_db: World database to read entities from and persist relationships to.
+        services: Service container providing the world quality service.
+        cancel_check: Optional callable that returns True to stop generation.
 
     Returns:
-        int: Number of relationships successfully added to the world database.
+        Number of relationships successfully added to the world database.
     """
     all_entities = world_db.list_entities()
     entity_names = [e.name for e in all_entities]

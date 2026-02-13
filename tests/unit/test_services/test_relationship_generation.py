@@ -16,12 +16,7 @@ from src.utils.exceptions import WorldGenerationError
 
 @pytest.fixture
 def story_state():
-    """
-    Create a StoryState pre-populated with a brief for relationship-generation tests.
-
-    Returns:
-        StoryState: A StoryState with id "test-rel-story" whose brief contains premise, genre, subgenres, tone, themes, setting_time, setting_place, target_length, language, and content_rating.
-    """
+    """Create a story state with brief for relationship tests."""
     state = StoryState(id="test-rel-story")
     state.brief = StoryBrief(
         premise="A space opera with warring factions",
@@ -82,9 +77,7 @@ class TestConsecutiveFailureEarlyTermination:
         call_count = 0
 
         def failing_generate(_i):
-            """
-            Always raises WorldGenerationError with message "LLM error" and increments the nonlocal `call_count`.
-            """
+            """Always raise WorldGenerationError."""
             nonlocal call_count
             call_count += 1
             raise WorldGenerationError("LLM error")
@@ -113,20 +106,7 @@ class TestConsecutiveFailureEarlyTermination:
         pattern = [False, False, True, False, False, True, False, False, True, True]
 
         def mixed_generate(_i):
-            """
-            Return a generated relationship tuple or raise a WorldGenerationError according to a predefined success/failure pattern.
-
-            This helper increments a nonlocal call counter and uses an external boolean `pattern` sequence to decide outcome. The `_i` parameter is ignored.
-
-            Parameters:
-                _i: (any) Ignored input; included for compatibility with generator interfaces.
-
-            Returns:
-                tuple: (relation, scores, count) where `relation` is a dict with a `name` key like `"rel-<index>"`, `scores` is an object with `average` set to 8.0, and `count` is the integer `1`.
-
-            Raises:
-                WorldGenerationError: If the pattern indicates a failure for the current call index.
-            """
+            """Succeed or fail based on the predefined pattern."""
             nonlocal call_index
             idx = call_index
             call_index += 1
@@ -172,19 +152,7 @@ class TestDynamicScaling:
         captured_count = {}
 
         def capture_generate(state, names, rels, count, cancel_check=None):
-            """
-            Record the requested generation count for later assertions in the surrounding test.
-
-            Parameters:
-                state: The world/story state passed by the caller (ignored).
-                names: The list of entity names passed by the caller (ignored).
-                rels: Existing relationships passed by the caller (ignored).
-                count (int): The requested number of relationships to generate; this value is captured.
-                cancel_check: Optional callable to check for cancellation (ignored).
-
-            Returns:
-                list: An empty list of generated relationships.
-            """
+            """Capture the count argument for later assertion."""
             captured_count["value"] = count
             return []
 
@@ -216,19 +184,7 @@ class TestDynamicScaling:
         captured_count = {}
 
         def capture_generate(state, names, rels, count, cancel_check=None):
-            """
-            Record the requested generation count for later assertions in the surrounding test.
-
-            Parameters:
-                state: The world/story state passed by the caller (ignored).
-                names: The list of entity names passed by the caller (ignored).
-                rels: Existing relationships passed by the caller (ignored).
-                count (int): The requested number of relationships to generate; this value is captured.
-                cancel_check: Optional callable to check for cancellation (ignored).
-
-            Returns:
-                list: An empty list of generated relationships.
-            """
+            """Capture the count argument for later assertion."""
             captured_count["value"] = count
             return []
 
@@ -316,16 +272,7 @@ class TestRelationTypeNormalizedBeforeStorage:
         services = MagicMock()
 
         def fake_generate(state, names, rels, count, cancel_check=None):
-            """
-            Provide a single fake generated relationship whose `relation_type` is prose containing "rivals".
-
-            This function ignores its arguments and always returns the same result, used for testing.
-
-            Returns:
-                list: A list containing one tuple (relationship, scores) where `relationship` is a dict with keys
-                    `source`, `target`, `relation_type`, and `description`, and `scores` is an object with
-                    an `average` attribute set to 8.0.
-            """
+            """Return a relationship with a prose-style type containing 'rivals'."""
             scores = MagicMock()
             scores.average = 8.0
             return [
@@ -372,17 +319,7 @@ class TestRelationTypeNormalizedInBuild:
         services = MagicMock()
 
         def fake_generate(state, names, rels, count, cancel_check=None):
-            """
-            Produce a single fake relationship record with a hyphenated-case `relation_type` for testing.
-
-            Returns:
-                list: A single-item list containing a tuple (relation, scores) where `relation` is a dict with keys:
-                    - "source": source entity name
-                    - "target": target entity name
-                    - "relation_type": the hyphenated-case type ("Allies-With")
-                    - "description": brief relationship description
-                and `scores` is a mock-like object with an `average` attribute set to 8.0.
-            """
+            """Return a relationship with hyphenated-case type."""
             scores = MagicMock()
             scores.average = 8.0
             return [
@@ -498,20 +435,7 @@ class TestExistingRelsIncludeTypes:
         captured_rels = []
 
         def fake_generate_fn(state, names, rels):
-            """
-            Test helper that records the provided `rels` and returns a successful generated relationship.
-
-            Parameters:
-                state: The current story/state object passed to the generator.
-                names (list): The list of entity names passed to the generator.
-                rels (list): The list of existing relationships supplied to the generator; a copy of this list is appended to `captured_rels`.
-
-            Returns:
-                tuple: A 3-tuple containing:
-                    - dict: A relationship with keys `source`, `target`, and `relation_type`.
-                    - object: A scores-like object with an `average` attribute set to 8.0.
-                    - int: The count (1) indicating one generated relationship.
-            """
+            """Capture rels list and return a successful relationship."""
             captured_rels.append(list(rels))
             scores = MagicMock()
             scores.average = 8.0

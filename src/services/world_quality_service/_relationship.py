@@ -31,23 +31,23 @@ def generate_relationship_with_quality(
     entity_names: list[str],
     existing_rels: list[tuple[str, str, str]],
 ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
-    """
-    Generate or refine a relationship between entities until quality thresholds are met.
+    """Generate a relationship with iterative quality refinement.
 
-    Attempts to create a candidate relationship, evaluates its quality, and iteratively refines it using the configured creator, judge, and refiner until the configured threshold or stopping criteria are reached. Tracks previously rejected duplicate (source, target, relation_type) tuples to avoid regenerating the same pair.
+    Uses the generic quality refinement loop to create, judge, and refine
+    relationships until the quality threshold is met or stopping criteria is reached.
 
-    Parameters:
-        svc: WorldQualityService instance providing create/judge/refine functionality and configuration.
-        story_state (StoryState): Current story state; must include a non-empty brief.
-        entity_names (list[str]): Available entity names for relationship generation.
-        existing_rels (list[tuple[str, str, str]]): Existing relationships as (source, target, relation_type) tuples to avoid.
+    Args:
+        svc: WorldQualityService instance.
+        story_state: Current story state with brief.
+        entity_names: Names of entities that can have relationships.
+        existing_rels: Existing (source, target, relation_type) 3-tuples to avoid.
 
     Returns:
-        tuple[dict[str, Any], RelationshipQualityScores, int]: The chosen or refined relationship dictionary, its quality scores, and the number of iterations used.
+        Tuple of (relationship_dict, quality_scores, iterations_used).
 
     Raises:
         ValueError: If story_state.brief is missing or fewer than two entity names are provided.
-        WorldGenerationError: If creation, judging, or refinement fails during generation.
+        WorldGenerationError: If relationship generation fails after all retries.
     """
     config = svc.get_config()
     brief = story_state.brief
@@ -61,14 +61,7 @@ def generate_relationship_with_quality(
     rejected_pairs: list[tuple[str, str, str]] = []
 
     def _create(retries: int) -> dict[str, Any]:
-        """
-        Create a new relationship while avoiding previously rejected or existing pairs.
-
-        Combines the current existing relationships with any rejected pairs and requests the service to generate a relationship candidate.
-
-        Returns:
-            relationship (dict): A relationship dictionary produced by the creator service.
-        """
+        """Create a new relationship, passing rejected pairs to avoid duplicates."""
         combined_rels = existing_rels + rejected_pairs
         result: dict[str, Any] = svc._create_relationship(
             story_state,
@@ -79,13 +72,10 @@ def generate_relationship_with_quality(
         return result
 
     def _is_empty(rel: dict[str, Any]) -> bool:
-        """
-        Determine whether a generated relationship is empty or should be rejected as a duplicate.
+        """Check if relationship is empty or a duplicate that should be rejected.
 
-        Considers a relationship empty if it lacks a `source` or `target`. If the relationship's `(source, target, relation_type)` matches any existing relationship (including previously rejected pairs), the pair is appended to `rejected_pairs` and the relationship is treated as empty.
-
-        Returns:
-            `true` if the relationship lacks a source or target or is a duplicate (and is recorded in `rejected_pairs`), `false` otherwise.
+        Returns True if source/target missing or if the pair already exists,
+        tracking rejected pairs to avoid regenerating them.
         """
         if not rel.get("source") or not rel.get("target"):
             return True
@@ -130,17 +120,19 @@ def _is_duplicate_relationship(
     rel_type: str,
     existing_rels: list[tuple[str, str, str]],
 ) -> bool:
-    """
-    Determine whether a relationship between the given source and target already appears in existing_rels, matching either direction regardless of relation type.
+    """Check if a relationship already exists (in either direction).
 
-    Parameters:
-        source (str): Source entity name.
-        target (str): Target entity name.
-        rel_type (str): Relationship type (this function does not consider type when checking duplicates).
-        existing_rels (list[tuple[str, str, str]]): List of existing (source, target, relation_type) 3-tuples.
+    Only compares source/target names; ``rel_type`` is accepted for
+    signature compatibility but is not used in the comparison.
+
+    Args:
+        source: Source entity name.
+        target: Target entity name.
+        rel_type: Relationship type (unused in comparison).
+        existing_rels: List of existing (source, target, relation_type) 3-tuples.
 
     Returns:
-        `true` if a matching source/target pair exists in either direction, `false` otherwise.
+        True if this source/target pair already exists in either direction.
     """
     for existing_source, existing_target, *_rest in existing_rels:
         # Check both directions
@@ -153,16 +145,16 @@ def _is_duplicate_relationship(
 
 
 def _compute_diversity_hint(existing_types: list[str]) -> str:
-    """
-    Return a prompt hint suggesting one under-represented conflict category to prioritize when creating new relationships.
+    """Compute a diversity hint based on the distribution of relationship categories.
 
-    If fewer than 3 relationship types are provided or the distribution is balanced, returns an empty string. If any conflict category (RIVALRY, TENSION, or ALLIANCE) comprises less than 15% of the input types, returns a short hint recommending that category with example framings.
+    When one conflict category is under-represented (< 15% of total),
+    returns a hint suggesting the LLM prioritize that category.
 
-    Parameters:
-        existing_types (list[str]): Relationship type identifiers from existing relationships.
+    Args:
+        existing_types: List of relationship type strings from existing relationships.
 
     Returns:
-        str: A hint string recommending an under-represented conflict category, or an empty string if no hint is needed.
+        A prompt hint string, or empty string if distribution is balanced or too few rels.
     """
     if len(existing_types) < 3:
         return ""
@@ -202,21 +194,22 @@ def _create_relationship(
     existing_rels: list[tuple[str, str, str]],
     temperature: float,
 ) -> dict[str, Any]:
-    """
-    Generate a single relationship JSON object for the story using the creator model.
+    """Create a new relationship using the creator model.
 
-    Parameters:
-        svc: Service client used to select models and call the LLM (not documented here).
-        story_state (StoryState): Story state containing a non-empty `brief`; returns {} if brief is missing.
-        entity_names (list[str]): Available entity names to choose as source and target.
-        existing_rels (list[tuple[str, str, str]]): Existing relationships as (source, target, relation_type) used to avoid duplicates and inform diversity hints.
-        temperature (float): Sampling temperature for the creator model.
+    Args:
+        svc: WorldQualityService instance for model selection and LLM calls.
+        story_state: Story state with brief; returns ``{}`` if brief is missing.
+        entity_names: Available entity names to choose as source and target.
+        existing_rels: Existing (source, target, relation_type) 3-tuples used to
+            avoid duplicates and inform diversity hints.
+        temperature: Sampling temperature for the creator model.
 
     Returns:
-        dict[str, Any]: A relationship object with keys `source`, `target`, `relation_type` (normalized to the controlled vocabulary), and `description`.
+        Relationship dict with keys ``source``, ``target``, ``relation_type``
+        (normalized to controlled vocabulary), and ``description``.
 
     Raises:
-        WorldGenerationError: If the creator model fails, returns invalid or unparsable JSON, or any other generation/parsing error occurs.
+        WorldGenerationError: If the creator model fails or returns unparsable JSON.
     """
     logger.debug(
         "Creating relationship for story %s (%d entities available)",

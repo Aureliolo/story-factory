@@ -500,19 +500,15 @@ class WorldQualityService:
         entity_names: list[str],
         existing_rels: list[tuple[str, str, str]],
     ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
-        """
-        Generate a relationship between entities or update an existing one using the service's creator–judge refine loop.
+        """Generate a relationship using the creator-judge refine loop.
 
-        Parameters:
-            story_state (StoryState): The current story/world brief used to ground generation.
-            entity_names (list[str]): Names of entities to consider when creating the relationship.
-            existing_rels (list[tuple[str, str, str]]): Existing relationships to avoid duplicating, each tuple is (source_name, target_name, relationship_type).
+        Args:
+            story_state: The current story/world brief used to ground generation.
+            entity_names: Names of entities to consider when creating the relationship.
+            existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicating.
 
         Returns:
-            tuple: A 3-tuple containing:
-                - relationship (dict[str, Any]): The created or updated relationship object.
-                - scores (RelationshipQualityScores): Quality scores produced by the judge for the relationship.
-                - iterations (int): The number of refinement iterations performed.
+            Tuple of (relationship_dict, quality_scores, iterations_used).
         """
         return _generate_relationship_with_quality(self, story_state, entity_names, existing_rels)
 
@@ -600,19 +596,18 @@ class WorldQualityService:
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,
     ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
-        """
-        Generate or update relationships among the given entities and return each relationship with quality scores.
+        """Generate multiple relationships with quality refinement.
 
-        Parameters:
-            story_state (StoryState): Current story/world state used as context for generation.
-            entity_names (list[str]): Names of entities between which relationships may be created.
-            existing_rels (list[tuple[str, str, str]]): Existing relationships as tuples (source_name, target_name, relationship_type).
-            count (int): Number of relationship suggestions to produce.
-            cancel_check (Callable[[], bool] | None): Optional callback invoked to determine whether to abort early.
-            progress_callback (Callable[[EntityGenerationProgress], None] | None): Optional callback invoked with progress updates.
+        Args:
+            story_state: Current story/world state used as context for generation.
+            entity_names: Names of entities between which relationships may be created.
+            existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicating.
+            count: Number of relationships to generate.
+            cancel_check: Optional callable that returns True to cancel early.
+            progress_callback: Optional callback invoked with progress updates.
 
         Returns:
-            list[tuple[dict[str, Any], RelationshipQualityScores]]: A list of generated or updated relationship objects paired with their quality scores.
+            List of (relationship_dict, quality_scores) tuples.
         """
         return _generate_relationships_with_quality(
             self, story_state, entity_names, existing_rels, count, cancel_check, progress_callback
