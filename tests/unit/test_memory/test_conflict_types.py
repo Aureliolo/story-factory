@@ -86,3 +86,15 @@ class TestNormalizeRelationType:
     def test_leading_trailing_whitespace(self):
         """Leading/trailing whitespace should be stripped."""
         assert normalize_relation_type("  loves  ") == "loves"
+
+    def test_pipe_delimited_no_recognized_falls_through_to_substring(self):
+        """Pipe-delimited with no recognized parts falls through to substring matching."""
+        # "foo|bitter_rivals_bar" — neither "foo" nor "bitter_rivals_bar" is a direct match,
+        # but substring matching should find "rivals" inside "foo|bitter_rivals_bar"
+        result = normalize_relation_type("foo|bitter_rivals_bar")
+        assert result == "rivals"
+
+    def test_pipe_delimited_no_recognized_no_substring(self):
+        """Pipe-delimited with no recognized parts and no substring match returns normalized."""
+        result = normalize_relation_type("xyz|abc")
+        assert result == "xyz|abc"

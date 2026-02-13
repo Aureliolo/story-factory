@@ -159,8 +159,6 @@ def _compute_diversity_hint(existing_types: list[str]) -> str:
 
     cats = Counter(classify_relationship(t) for t in existing_types)
     total = sum(cats.values())
-    if total == 0:
-        return ""
 
     # Check for under-represented categories (excluding NEUTRAL which is informational)
     category_hints = {
