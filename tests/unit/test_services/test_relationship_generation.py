@@ -352,6 +352,87 @@ class TestRelationTypeNormalizedInBuild:
         assert rels[0].relation_type == "allies_with"
         world_db.close()
 
+    def test_missing_relation_type_defaults_to_related_to(self, story_state, tmp_path):
+        """When LLM omits relation_type, it should default to 'related_to' with a debug log."""
+        from src.services.world_service import WorldService
+        from src.services.world_service._build import _generate_relationships
+
+        settings = MagicMock()
+        settings.world_gen_relationships_min = 1
+        settings.world_gen_relationships_max = 1
+        svc = WorldService(settings)
+
+        world_db = WorldDatabase(tmp_path / "test_missing_type.db")
+        try:
+            world_db.add_entity("character", "Alpha", "Character Alpha")
+            world_db.add_entity("character", "Beta", "Character Beta")
+
+            services = MagicMock()
+
+            def fake_generate(state, names, rels, count, cancel_check=None):
+                """Return a relationship without relation_type key."""
+                scores = MagicMock()
+                scores.average = 8.0
+                return [
+                    (
+                        {
+                            "source": "Alpha",
+                            "target": "Beta",
+                            "description": "They know each other",
+                        },
+                        scores,
+                    )
+                ]
+
+            services.world_quality.generate_relationships_with_quality.side_effect = fake_generate
+
+            with patch("src.services.world_service._build.random.randint", return_value=1):
+                _generate_relationships(svc, story_state, world_db, services)
+
+            rels = world_db.list_relationships()
+            assert len(rels) == 1
+            assert rels[0].relation_type == "related_to"
+        finally:
+            world_db.close()
+
+    def test_orphaned_relationships_skipped(self, story_state, tmp_path):
+        """Relationships referencing deleted entities should be skipped with a warning."""
+        from src.services.world_service import WorldService
+        from src.services.world_service._build import _generate_relationships
+
+        settings = MagicMock()
+        settings.world_gen_relationships_min = 1
+        settings.world_gen_relationships_max = 1
+        svc = WorldService(settings)
+
+        world_db = WorldDatabase(tmp_path / "test_orphan.db")
+        try:
+            # Add entities and create a relationship
+            world_db.add_entity("character", "Alpha", "Character Alpha")
+            world_db.add_entity("character", "Beta", "Character Beta")
+            entities = world_db.list_entities()
+            world_db.add_relationship(
+                source_id=entities[0].id,
+                target_id=entities[1].id,
+                relation_type="knows",
+                description="They know each other",
+            )
+            # Delete one entity to orphan the relationship
+            world_db.delete_entity(entities[1].id)
+
+            services = MagicMock()
+            services.world_quality.generate_relationships_with_quality.return_value = []
+
+            with patch("src.services.world_service._build.random.randint", return_value=1):
+                _generate_relationships(svc, story_state, world_db, services)
+
+            # The orphaned relationship should have been skipped, not passed to quality service
+            call_args = services.world_quality.generate_relationships_with_quality.call_args
+            existing_rels_passed = call_args[0][2]
+            assert len(existing_rels_passed) == 0
+        finally:
+            world_db.close()
+
 
 # =========================================================================
 # Group 3: Diversity & Refinement
