@@ -144,28 +144,32 @@ class TestDynamicScaling:
 
         # Set up world_db with only 5 entities
         world_db = WorldDatabase(tmp_path / "test_scale.db")
-        for i in range(5):
-            world_db.add_entity("character", f"Char{i}", f"Character {i}")
+        try:
+            for i in range(5):
+                world_db.add_entity("character", f"Char{i}", f"Character {i}")
 
-        services = MagicMock()
-        # Capture the count passed to generate_relationships_with_quality
-        captured_count = {}
+            services = MagicMock()
+            # Capture the count passed to generate_relationships_with_quality
+            captured_count = {}
 
-        def capture_generate(state, names, rels, count, cancel_check=None):
-            """Capture the count argument for later assertion."""
-            captured_count["value"] = count
-            return []
+            def capture_generate(state, names, rels, count, cancel_check=None):
+                """Capture the count argument for later assertion."""
+                captured_count["value"] = count
+                return []
 
-        services.world_quality.generate_relationships_with_quality.side_effect = capture_generate
+            services.world_quality.generate_relationships_with_quality.side_effect = (
+                capture_generate
+            )
 
-        from src.services.world_service._build import _generate_relationships
+            from src.services.world_service._build import _generate_relationships
 
-        with patch("src.services.world_service._build.random.randint", return_value=25):
-            _generate_relationships(svc, story_state, world_db, services)
+            with patch("src.services.world_service._build.random.randint", return_value=25):
+                _generate_relationships(svc, story_state, world_db, services)
 
-        # 5 entities x 1.5 = 7, so count should be capped to 7
-        assert captured_count["value"] == 7
-        world_db.close()
+            # 5 entities x 1.5 = 7, so count should be capped to 7
+            assert captured_count["value"] == 7
+        finally:
+            world_db.close()
 
     def test_dynamic_scaling_no_cap_when_entities_sufficient(self, story_state, tmp_path):
         """20 entities → max 30, settings request 15 → stays 15."""
@@ -177,27 +181,31 @@ class TestDynamicScaling:
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_no_cap.db")
-        for i in range(20):
-            world_db.add_entity("character", f"Char{i}", f"Character {i}")
+        try:
+            for i in range(20):
+                world_db.add_entity("character", f"Char{i}", f"Character {i}")
 
-        services = MagicMock()
-        captured_count = {}
+            services = MagicMock()
+            captured_count = {}
 
-        def capture_generate(state, names, rels, count, cancel_check=None):
-            """Capture the count argument for later assertion."""
-            captured_count["value"] = count
-            return []
+            def capture_generate(state, names, rels, count, cancel_check=None):
+                """Capture the count argument for later assertion."""
+                captured_count["value"] = count
+                return []
 
-        services.world_quality.generate_relationships_with_quality.side_effect = capture_generate
+            services.world_quality.generate_relationships_with_quality.side_effect = (
+                capture_generate
+            )
 
-        from src.services.world_service._build import _generate_relationships
+            from src.services.world_service._build import _generate_relationships
 
-        with patch("src.services.world_service._build.random.randint", return_value=15):
-            _generate_relationships(svc, story_state, world_db, services)
+            with patch("src.services.world_service._build.random.randint", return_value=15):
+                _generate_relationships(svc, story_state, world_db, services)
 
-        # 20 entities x 1.5 = 30, which is above 15, so no cap applied
-        assert captured_count["value"] == 15
-        world_db.close()
+            # 20 entities x 1.5 = 30, which is above 15, so no cap applied
+            assert captured_count["value"] == 15
+        finally:
+            world_db.close()
 
 
 # =========================================================================

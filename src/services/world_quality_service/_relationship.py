@@ -1,6 +1,7 @@
 """Relationship generation, judgment, and refinement functions."""
 
 import logging
+from collections import Counter
 from typing import Any
 
 import ollama
@@ -84,7 +85,7 @@ def generate_relationship_with_quality(
         target = rel.get("target", "")
         rel_type = rel.get("relation_type", "knows")
         combined_rels = existing_rels + rejected_pairs
-        if _is_duplicate_relationship(source, target, rel_type, combined_rels):
+        if _is_duplicate_relationship(source, target, combined_rels):
             logger.warning("Generated duplicate relationship %s -> %s, rejecting", source, target)
             rejected_pairs.append((source, target, rel_type))
             return True
@@ -117,24 +118,19 @@ def generate_relationship_with_quality(
 def _is_duplicate_relationship(
     source: str,
     target: str,
-    rel_type: str,
     existing_rels: list[tuple[str, str, str]],
 ) -> bool:
-    """Check if a relationship already exists (in either direction).
-
-    Only compares source/target names; ``rel_type`` is accepted for
-    signature compatibility but is not used in the comparison.
+    """Check if a relationship already exists between two entities (in either direction).
 
     Args:
         source: Source entity name.
         target: Target entity name.
-        rel_type: Relationship type (unused in comparison).
         existing_rels: List of existing (source, target, relation_type) 3-tuples.
 
     Returns:
         True if this source/target pair already exists in either direction.
     """
-    for existing_source, existing_target, *_rest in existing_rels:
+    for existing_source, existing_target, _rel_type in existing_rels:
         # Check both directions
         same_pair = (source == existing_source and target == existing_target) or (
             source == existing_target and target == existing_source
@@ -158,8 +154,6 @@ def _compute_diversity_hint(existing_types: list[str]) -> str:
     """
     if len(existing_types) < 3:
         return ""
-
-    from collections import Counter
 
     cats = Counter(classify_relationship(t) for t in existing_types)
     total = sum(cats.values())
@@ -220,7 +214,7 @@ def _create_relationship(
     if not brief:
         return {}
 
-    existing_rel_strs = [f"- {s} <-> {t}" for s, t, *_rest in existing_rels]
+    existing_rel_strs = [f"- {s} <-> {t}" for s, t, _rt in existing_rels]
     existing_pairs_block = "\n".join(existing_rel_strs) if existing_rel_strs else "None"
 
     type_list = ", ".join(VALID_RELATIONSHIP_TYPES)

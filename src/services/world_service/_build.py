@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Cap relationship count at this ratio of entity count to avoid excessive duplicates
+RELATIONSHIP_TO_ENTITY_RATIO_CAP = 1.5
+
 
 def build_world(
     svc: WorldService,
@@ -616,14 +619,18 @@ def _generate_relationships(
     # Map IDs to names so the quality service gets name pairs for duplicate detection
     # 3-tuples: (source_name, target_name, relation_type) for diversity analysis
     entity_by_id = {e.id: e.name for e in all_entities}
-    existing_rels: list[tuple[str, str, str]] = [
-        (
-            entity_by_id.get(r.source_id, ""),
-            entity_by_id.get(r.target_id, ""),
-            r.relation_type,
-        )
-        for r in world_db.list_relationships()
-    ]
+    existing_rels: list[tuple[str, str, str]] = []
+    for r in world_db.list_relationships():
+        source_name = entity_by_id.get(r.source_id)
+        target_name = entity_by_id.get(r.target_id)
+        if not source_name or not target_name:
+            logger.warning(
+                "Skipping relationship %s -> %s: missing entity reference",
+                r.source_id,
+                r.target_id,
+            )
+            continue
+        existing_rels.append((source_name, target_name, r.relation_type))
 
     rel_count = random.randint(
         svc.settings.world_gen_relationships_min,
@@ -631,13 +638,14 @@ def _generate_relationships(
     )
 
     # Cap relationship count based on available entities to avoid excessive duplicates
-    max_by_entities = int(len(entity_names) * 1.5)
+    max_by_entities = int(len(entity_names) * RELATIONSHIP_TO_ENTITY_RATIO_CAP)
     if rel_count > max_by_entities:
         logger.info(
-            "Capping relationship count from %d to %d (based on %d entities × 1.5)",
+            "Capping relationship count from %d to %d (based on %d entities x %.1f)",
             rel_count,
             max_by_entities,
             len(entity_names),
+            RELATIONSHIP_TO_ENTITY_RATIO_CAP,
         )
         rel_count = max_by_entities
 

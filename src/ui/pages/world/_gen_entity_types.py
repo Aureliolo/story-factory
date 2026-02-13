@@ -548,9 +548,11 @@ async def generate_relationships_for_entities(
     )
 
     all_entity_names = get_all_entity_names(page)
+    entity_map = {e.id: e.name for e in page.state.world_db.list_entities()}
     existing_rels: list[tuple[str, str, str]] = [
-        (r.source_id, r.target_id, r.relation_type)
+        (entity_map.get(r.source_id, ""), entity_map.get(r.target_id, ""), r.relation_type)
         for r in page.state.world_db.list_relationships()
+        if entity_map.get(r.source_id) and entity_map.get(r.target_id)
     ]
     total_count = len(entity_names) * count_per_entity
 

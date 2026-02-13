@@ -614,9 +614,7 @@ def generate_relationships_with_quality(
             story_state, entity_names, rels
         ),
         get_name=lambda r: f"{r['source']} -> {r['target']}",
-        on_success=lambda r: rels.append(
-            (r["source"], r["target"], r.get("relation_type", "knows"))
-        ),
+        on_success=lambda r: rels.append((r["source"], r["target"], r["relation_type"])),
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )

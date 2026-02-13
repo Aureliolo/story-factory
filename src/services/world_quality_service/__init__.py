@@ -690,10 +690,8 @@ class WorldQualityService:
 
     # -- Private: Relationship helpers --
     @staticmethod
-    def _is_duplicate_relationship(source_name, target_name, rel_type, existing_rels):
-        return _relationship._is_duplicate_relationship(
-            source_name, target_name, rel_type, existing_rels
-        )
+    def _is_duplicate_relationship(source_name, target_name, existing_rels):
+        return _relationship._is_duplicate_relationship(source_name, target_name, existing_rels)
 
     def _create_relationship(self, story_state, entity_names, existing_rels, temperature):
         return _relationship._create_relationship(

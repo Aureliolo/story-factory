@@ -1424,22 +1424,22 @@ class TestIsDuplicateRelationship:
 
     def test_duplicate_same_direction(self, service):
         """Test detecting duplicate in same direction."""
-        existing = [("Alice", "Bob"), ("Charlie", "Diana")]
-        assert service._is_duplicate_relationship("Alice", "Bob", "knows", existing)
+        existing = [("Alice", "Bob", "knows"), ("Charlie", "Diana", "loves")]
+        assert service._is_duplicate_relationship("Alice", "Bob", existing)
 
     def test_duplicate_reverse_direction(self, service):
         """Test detecting duplicate in reverse direction."""
-        existing = [("Alice", "Bob")]
-        assert service._is_duplicate_relationship("Bob", "Alice", "knows", existing)
+        existing = [("Alice", "Bob", "knows")]
+        assert service._is_duplicate_relationship("Bob", "Alice", existing)
 
     def test_not_duplicate(self, service):
         """Test that unrelated pairs are not duplicates."""
-        existing = [("Alice", "Bob")]
-        assert not service._is_duplicate_relationship("Charlie", "Diana", "knows", existing)
+        existing = [("Alice", "Bob", "knows")]
+        assert not service._is_duplicate_relationship("Charlie", "Diana", existing)
 
     def test_empty_existing_list(self, service):
         """Test with empty existing list."""
-        assert not service._is_duplicate_relationship("Alice", "Bob", "knows", [])
+        assert not service._is_duplicate_relationship("Alice", "Bob", [])
 
 
 class TestCreateRelationship:
