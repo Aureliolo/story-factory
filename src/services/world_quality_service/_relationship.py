@@ -471,6 +471,8 @@ Output ONLY valid JSON:
 
         data = extract_json(response["response"], strict=False)
         if data and isinstance(data, dict):
+            raw_type = data.get("relation_type", "related_to")
+            data["relation_type"] = normalize_relation_type(raw_type)
             result: dict[str, Any] = data
             return result
         else:
