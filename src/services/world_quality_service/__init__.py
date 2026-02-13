@@ -498,7 +498,7 @@ class WorldQualityService:
         self,
         story_state: StoryState,
         entity_names: list[str],
-        existing_rels: list[tuple[str, str]],
+        existing_rels: list[tuple[str, str, str]],
     ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
         return _generate_relationship_with_quality(self, story_state, entity_names, existing_rels)
 
@@ -581,7 +581,7 @@ class WorldQualityService:
         self,
         story_state: StoryState,
         entity_names: list[str],
-        existing_rels: list[tuple[str, str]],
+        existing_rels: list[tuple[str, str, str]],
         count: int = 5,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[EntityGenerationProgress], None] | None = None,

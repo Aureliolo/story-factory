@@ -1668,7 +1668,7 @@ class TestGenerateRelationshipWithQuality:
             service.generate_relationship_with_quality(
                 story_state,
                 entity_names=["Alice", "Bob", "Charlie"],
-                existing_rels=[("Alice", "Bob")],  # Already exists
+                existing_rels=[("Alice", "Bob", "knows")],  # Already exists
             )
 
     @patch.object(WorldQualityService, "_create_relationship")
