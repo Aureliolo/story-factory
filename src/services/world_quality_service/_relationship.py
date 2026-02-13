@@ -46,6 +46,7 @@ def generate_relationship_with_quality(
         Tuple of (relationship_dict, quality_scores, iterations_used).
 
     Raises:
+        ValueError: If story_state.brief is missing or fewer than two entity names are provided.
         WorldGenerationError: If relationship generation fails after all retries.
     """
     config = svc.get_config()
@@ -119,16 +120,19 @@ def _is_duplicate_relationship(
     rel_type: str,
     existing_rels: list[tuple[str, str, str]],
 ) -> bool:
-    """Check if a relationship already exists (in either direction for same type).
+    """Check if a relationship already exists (in either direction).
+
+    Only compares source/target names; ``rel_type`` is accepted for
+    signature compatibility but is not used in the comparison.
 
     Args:
         source: Source entity name.
         target: Target entity name.
-        rel_type: Relationship type.
+        rel_type: Relationship type (unused in comparison).
         existing_rels: List of existing (source, target, relation_type) 3-tuples.
 
     Returns:
-        True if this relationship already exists.
+        True if this source/target pair already exists in either direction.
     """
     for existing_source, existing_target, *_rest in existing_rels:
         # Check both directions
@@ -190,7 +194,23 @@ def _create_relationship(
     existing_rels: list[tuple[str, str, str]],
     temperature: float,
 ) -> dict[str, Any]:
-    """Create a new relationship using the creator model."""
+    """Create a new relationship using the creator model.
+
+    Args:
+        svc: WorldQualityService instance for model selection and LLM calls.
+        story_state: Story state with brief; returns ``{}`` if brief is missing.
+        entity_names: Available entity names to choose as source and target.
+        existing_rels: Existing (source, target, relation_type) 3-tuples used to
+            avoid duplicates and inform diversity hints.
+        temperature: Sampling temperature for the creator model.
+
+    Returns:
+        Relationship dict with keys ``source``, ``target``, ``relation_type``
+        (normalized to controlled vocabulary), and ``description``.
+
+    Raises:
+        WorldGenerationError: If the creator model fails or returns unparsable JSON.
+    """
     logger.debug(
         "Creating relationship for story %s (%d entities available)",
         story_state.id,

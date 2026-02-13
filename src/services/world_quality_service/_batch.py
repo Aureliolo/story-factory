@@ -38,7 +38,7 @@ def _log_batch_summary(
 
     Args:
         results: List of (entity, scores) tuples produced by the batch.
-        entity_type: Human-readable entity type (e.g. "character").
+        entity_type: Human-readable entity type (e.g., "character").
         quality_threshold: The configured quality threshold for pass/fail.
         elapsed: Total batch wall-clock time in seconds.
         get_name: Callable to extract display name from an entity. When provided,
@@ -130,11 +130,11 @@ def _generate_batch(
     Args:
         svc: WorldQualityService instance (used for ``_calculate_eta``).
         count: Number of entities to generate.
-        entity_type: Human-readable type name for logging/progress (e.g. "faction").
+        entity_type: Human-readable type name for logging/progress (e.g., "faction").
         generate_fn: Called with the loop index ``i``; must return
             ``(entity, scores, iterations)``.
         get_name: Extract a display name from the generated entity.
-        on_success: Optional hook called after a successful generation (e.g. to
+        on_success: Optional hook called after a successful generation (e.g., to
             track names for deduplication).
         cancel_check: Optional callable that returns ``True`` to cancel.
         progress_callback: Optional callback to receive
@@ -594,7 +594,7 @@ def generate_relationships_with_quality(
         svc: WorldQualityService instance.
         story_state: Current story state.
         entity_names: Entity names available for relationships.
-        existing_rels: Existing relationships as (source, target, relation_type) 3-tuples.
+        existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicates.
         count: Number of relationships to generate.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
