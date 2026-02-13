@@ -404,13 +404,13 @@ async def _generate_relationships(
     entity_names = [e.name for e in entities]
     logger.info(f"Found {len(entities)} existing entities: {entity_names}")
 
-    # Get existing relationships - look up entity names from IDs
-    existing_rels = []
+    # Get existing relationships as 3-tuples (source_name, target_name, relation_type)
+    existing_rels: list[tuple[str, str, str]] = []
     for rel in page.state.world_db.list_relationships():
         source = page.services.world.get_entity(page.state.world_db, rel.source_id)
         target = page.services.world.get_entity(page.state.world_db, rel.target_id)
         if source and target:
-            existing_rels.append((source.name, target.name))
+            existing_rels.append((source.name, target.name, rel.relation_type))
     logger.info(f"Found {len(existing_rels)} existing relationships")
 
     if len(entity_names) < 2:
@@ -548,7 +548,10 @@ async def generate_relationships_for_entities(
     )
 
     all_entity_names = get_all_entity_names(page)
-    existing_rels = [(r.source_id, r.target_id) for r in page.state.world_db.list_relationships()]
+    existing_rels: list[tuple[str, str, str]] = [
+        (r.source_id, r.target_id, r.relation_type)
+        for r in page.state.world_db.list_relationships()
+    ]
     total_count = len(entity_names) * count_per_entity
 
     page._generation_cancel_event = threading.Event()

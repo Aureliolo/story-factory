@@ -1950,3 +1950,73 @@ class TestWorldDatabaseWorldSettings:
         assert result.id == "test-settings-id"
         assert result.timeline_start_year == 200
         assert result.timeline_end_year == 500
+
+    def test_schema_migration_v3_to_v4_normalizes_relation_types(self, tmp_path):
+        """Test that migration v3→v4 normalizes legacy free-form relationship types."""
+        import sqlite3
+        from datetime import datetime
+
+        db_path = tmp_path / "test_migration_v3v4.db"
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Create v3 schema manually
+        cursor.execute("""CREATE TABLE schema_version (version INTEGER PRIMARY KEY)""")
+        cursor.execute("INSERT INTO schema_version VALUES (3)")
+        cursor.execute(
+            """CREATE TABLE entities (
+                id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT NOT NULL,
+                description TEXT DEFAULT '', attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )"""
+        )
+        cursor.execute(
+            """CREATE TABLE relationships (
+                id TEXT PRIMARY KEY, source_id TEXT NOT NULL, target_id TEXT NOT NULL,
+                relation_type TEXT NOT NULL, description TEXT DEFAULT '',
+                strength REAL DEFAULT 1.0, bidirectional INTEGER DEFAULT 0,
+                attributes TEXT DEFAULT '{}', created_at TEXT NOT NULL
+            )"""
+        )
+
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("e1", "character", "Alice", "", "{}", now, now),
+        )
+        cursor.execute(
+            "INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("e2", "character", "Bob", "", "{}", now, now),
+        )
+        cursor.execute(
+            "INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("e3", "character", "Charlie", "", "{}", now, now),
+        )
+
+        # Insert relationships with legacy free-form types
+        cursor.execute(
+            "INSERT INTO relationships VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("r1", "e1", "e2", "Allies-With", "They are allies", 1.0, 0, "{}", now),
+        )
+        cursor.execute(
+            "INSERT INTO relationships VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("r2", "e2", "e3", "bitter rivals who fought", "A feud", 1.0, 0, "{}", now),
+        )
+        cursor.execute(
+            "INSERT INTO relationships VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("r3", "e1", "e3", "knows", "Already correct", 1.0, 0, "{}", now),
+        )
+        conn.commit()
+        conn.close()
+
+        # Open with WorldDatabase — should trigger migration to v4
+        with WorldDatabase(db_path) as db:
+            rels = db.list_relationships()
+            rel_by_id = {r.id: r for r in rels}
+
+            # "Allies-With" → "allies_with"
+            assert rel_by_id["r1"].relation_type == "allies_with"
+            # "bitter rivals who fought" → "rivals" (substring match)
+            assert rel_by_id["r2"].relation_type == "rivals"
+            # "knows" is already correct — unchanged
+            assert rel_by_id["r3"].relation_type == "knows"

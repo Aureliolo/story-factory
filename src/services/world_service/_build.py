@@ -5,6 +5,7 @@ import random
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from src.memory.conflict_types import normalize_relation_type
 from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_database import WorldDatabase
 from src.utils.exceptions import GenerationCancelledError
@@ -602,9 +603,14 @@ def _generate_relationships(
     entity_names = [e.name for e in all_entities]
 
     # Map IDs to names so the quality service gets name pairs for duplicate detection
+    # 3-tuples: (source_name, target_name, relation_type) for diversity analysis
     entity_by_id = {e.id: e.name for e in all_entities}
-    existing_rels = [
-        (entity_by_id.get(r.source_id, ""), entity_by_id.get(r.target_id, ""))
+    existing_rels: list[tuple[str, str, str]] = [
+        (
+            entity_by_id.get(r.source_id, ""),
+            entity_by_id.get(r.target_id, ""),
+            r.relation_type,
+        )
         for r in world_db.list_relationships()
     ]
 
@@ -612,6 +618,17 @@ def _generate_relationships(
         svc.settings.world_gen_relationships_min,
         svc.settings.world_gen_relationships_max,
     )
+
+    # Cap relationship count based on available entities to avoid excessive duplicates
+    max_by_entities = int(len(entity_names) * 1.5)
+    if rel_count > max_by_entities:
+        logger.info(
+            "Capping relationship count from %d to %d (based on %d entities × 1.5)",
+            rel_count,
+            max_by_entities,
+            len(entity_names),
+        )
+        rel_count = max_by_entities
 
     relationship_results = services.world_quality.generate_relationships_with_quality(
         state, entity_names, existing_rels, rel_count, cancel_check=cancel_check
@@ -628,10 +645,11 @@ def _generate_relationships(
             target_entity = _find_entity_by_name(all_entities, rel["target"])
 
             if source_entity and target_entity:
+                relation_type = normalize_relation_type(rel.get("relation_type", "related_to"))
                 world_db.add_relationship(
                     source_id=source_entity.id,
                     target_id=target_entity.id,
-                    relation_type=rel.get("relation_type", "related_to"),
+                    relation_type=relation_type,
                     description=rel.get("description", ""),
                 )
                 added_count += 1

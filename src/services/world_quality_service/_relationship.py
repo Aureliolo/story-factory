@@ -5,6 +5,12 @@ from typing import Any
 
 import ollama
 
+from src.memory.conflict_types import (
+    VALID_RELATIONSHIP_TYPES,
+    ConflictCategory,
+    classify_relationship,
+    normalize_relation_type,
+)
 from src.memory.story_state import StoryState
 from src.memory.world_quality import RelationshipQualityScores
 from src.services.llm_client import generate_structured
@@ -23,7 +29,7 @@ def generate_relationship_with_quality(
     svc,
     story_state: StoryState,
     entity_names: list[str],
-    existing_rels: list[tuple[str, str]],
+    existing_rels: list[tuple[str, str, str]],
 ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
     """Generate a relationship with iterative quality refinement.
 
@@ -34,7 +40,7 @@ def generate_relationship_with_quality(
         svc: WorldQualityService instance.
         story_state: Current story state with brief.
         entity_names: Names of entities that can have relationships.
-        existing_rels: Existing (source, target) pairs to avoid.
+        existing_rels: Existing (source, target, relation_type) 3-tuples to avoid.
 
     Returns:
         Tuple of (relationship_dict, quality_scores, iterations_used).
@@ -51,7 +57,7 @@ def generate_relationship_with_quality(
         raise ValueError("Need at least 2 entities for relationship generation")
 
     # Track rejected duplicate pairs across loop iterations via mutable closure
-    rejected_pairs: list[tuple[str, str]] = []
+    rejected_pairs: list[tuple[str, str, str]] = []
 
     def _create(retries: int) -> dict[str, Any]:
         """Create a new relationship, passing rejected pairs to avoid duplicates."""
@@ -79,7 +85,7 @@ def generate_relationship_with_quality(
         combined_rels = existing_rels + rejected_pairs
         if _is_duplicate_relationship(source, target, rel_type, combined_rels):
             logger.warning("Generated duplicate relationship %s -> %s, rejecting", source, target)
-            rejected_pairs.append((source, target))
+            rejected_pairs.append((source, target, rel_type))
             return True
         return False
 
@@ -111,7 +117,7 @@ def _is_duplicate_relationship(
     source: str,
     target: str,
     rel_type: str,
-    existing_rels: list[tuple[str, str]],
+    existing_rels: list[tuple[str, str, str]],
 ) -> bool:
     """Check if a relationship already exists (in either direction for same type).
 
@@ -119,12 +125,12 @@ def _is_duplicate_relationship(
         source: Source entity name.
         target: Target entity name.
         rel_type: Relationship type.
-        existing_rels: List of existing (source, target) pairs.
+        existing_rels: List of existing (source, target, relation_type) 3-tuples.
 
     Returns:
         True if this relationship already exists.
     """
-    for existing_source, existing_target in existing_rels:
+    for existing_source, existing_target, *_rest in existing_rels:
         # Check both directions
         same_pair = (source == existing_source and target == existing_target) or (
             source == existing_target and target == existing_source
@@ -134,11 +140,56 @@ def _is_duplicate_relationship(
     return False
 
 
+def _compute_diversity_hint(existing_types: list[str]) -> str:
+    """Compute a diversity hint based on the distribution of relationship categories.
+
+    When one conflict category is under-represented (< 15% of total),
+    returns a hint suggesting the LLM prioritize that category.
+
+    Args:
+        existing_types: List of relationship type strings from existing relationships.
+
+    Returns:
+        A prompt hint string, or empty string if distribution is balanced or too few rels.
+    """
+    if len(existing_types) < 3:
+        return ""
+
+    from collections import Counter
+
+    cats = Counter(classify_relationship(t) for t in existing_types)
+    total = sum(cats.values())
+    if total == 0:
+        return ""
+
+    # Check for under-represented categories (excluding NEUTRAL which is informational)
+    category_hints = {
+        ConflictCategory.RIVALRY: "conflicts, betrayals, or opposition",
+        ConflictCategory.TENSION: "distrust, competition, or manipulation",
+        ConflictCategory.ALLIANCE: "loyalty, cooperation, or protection",
+    }
+    for cat, examples in category_hints.items():
+        if cats.get(cat, 0) / total < 0.15:
+            logger.debug(
+                "Diversity hint: %s under-represented (%d/%d = %.0f%%)",
+                cat.value,
+                cats.get(cat, 0),
+                total,
+                (cats.get(cat, 0) / total) * 100,
+            )
+            return (
+                f"\nHINT: The world lacks {cat.value} relationships. "
+                f"Prioritize creating a {cat.value}-type relationship ({examples})."
+            )
+
+    return ""
+
+
 def _create_relationship(
     svc,
     story_state: StoryState,
     entity_names: list[str],
-    existing_rels: list[tuple[str, str]],
+    existing_rels: list[tuple[str, str, str]],
     temperature: float,
 ) -> dict[str, Any]:
     """Create a new relationship using the creator model."""
@@ -151,8 +202,14 @@ def _create_relationship(
     if not brief:
         return {}
 
-    existing_rel_strs = [f"- {s} <-> {t}" for s, t in existing_rels]
-    existing_pairs_block = "\n".join(existing_rel_strs[:15]) if existing_rel_strs else "None"
+    existing_rel_strs = [f"- {s} <-> {t}" for s, t, *_rest in existing_rels]
+    existing_pairs_block = "\n".join(existing_rel_strs) if existing_rel_strs else "None"
+
+    type_list = ", ".join(VALID_RELATIONSHIP_TYPES)
+
+    # Compute diversity hint from existing relationship types
+    existing_types = [rel_type for _s, _t, rel_type in existing_rels if rel_type]
+    diversity_hint = _compute_diversity_hint(existing_types)
 
     prompt = f"""Create a compelling relationship between entities for a {brief.genre} story.
 
@@ -176,9 +233,9 @@ Output ONLY valid JSON (all text in {brief.language}):
 {{
     "source": "Entity Name 1",
     "target": "Entity Name 2",
-    "relation_type": "knows|loves|hates|allies_with|enemies_with|located_in|owns|member_of",
+    "relation_type": "One of: {type_list}",
     "description": "Description of the relationship with history and dynamics"
-}}"""
+}}{diversity_hint}"""
 
     try:
         model = svc._get_creator_model(entity_type="relationship")
@@ -200,6 +257,9 @@ Output ONLY valid JSON (all text in {brief.language}):
             )
             data = data[0] if data and isinstance(data[0], dict) else None
         if data and isinstance(data, dict):
+            # Normalize relation_type to controlled vocabulary
+            raw_type = data.get("relation_type", "related_to")
+            data["relation_type"] = normalize_relation_type(raw_type)
             result: dict[str, Any] = data
             return result
         else:
