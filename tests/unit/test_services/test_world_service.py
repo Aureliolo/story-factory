@@ -1160,7 +1160,7 @@ class TestHealthMetricsCache:
         """build_world clears the health cache after building."""
         first = world_service.get_world_health_metrics(world_db)
 
-        # Use a mock ServiceContainer — build_world invalidates before delegating
+        # Use a mock ServiceContainer — build_world invalidates after delegating
         mock_services = MagicMock()
         mock_services.world_quality = MagicMock()
         mock_services.scoring = MagicMock()
