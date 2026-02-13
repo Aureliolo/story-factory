@@ -530,9 +530,9 @@ async def generate_relationships_for_entities(
 ) -> None:
     """
     Generate relationships for the given entities and present a preview for adding them to the world database.
-    
+
     Generates up to `count_per_entity` relationship suggestions for each name in `entity_names`. When quality refinement is enabled in the page state and world-quality is enabled in settings, generation runs with quality scoring and a preview dialog is shown allowing the user to select which relationships to add; otherwise the user is notified that quality refinement is required. Selected relationships are added to the project's world database, the graph cache is invalidated, UI lists/graph are refreshed, and the user is notified of the result. If no project or world database is loaded, the function notifies the user and returns immediately.
-    
+
     Parameters:
         page: The WorldPage instance containing state, services, and UI helpers.
         entity_names (list[str]): Names of entities to generate relationships for.

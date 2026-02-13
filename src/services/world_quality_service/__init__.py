@@ -502,12 +502,12 @@ class WorldQualityService:
     ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
         """
         Generate a relationship between entities or update an existing one using the service's creator–judge refine loop.
-        
+
         Parameters:
             story_state (StoryState): The current story/world brief used to ground generation.
             entity_names (list[str]): Names of entities to consider when creating the relationship.
             existing_rels (list[tuple[str, str, str]]): Existing relationships to avoid duplicating, each tuple is (source_name, target_name, relationship_type).
-        
+
         Returns:
             tuple: A 3-tuple containing:
                 - relationship (dict[str, Any]): The created or updated relationship object.
@@ -602,7 +602,7 @@ class WorldQualityService:
     ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
         """
         Generate or update relationships among the given entities and return each relationship with quality scores.
-        
+
         Parameters:
             story_state (StoryState): Current story/world state used as context for generation.
             entity_names (list[str]): Names of entities between which relationships may be created.
@@ -610,7 +610,7 @@ class WorldQualityService:
             count (int): Number of relationship suggestions to produce.
             cancel_check (Callable[[], bool] | None): Optional callback invoked to determine whether to abort early.
             progress_callback (Callable[[EntityGenerationProgress], None] | None): Optional callback invoked with progress updates.
-        
+
         Returns:
             list[tuple[dict[str, Any], RelationshipQualityScores]]: A list of generated or updated relationship objects paired with their quality scores.
         """

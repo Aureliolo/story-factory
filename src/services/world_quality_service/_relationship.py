@@ -33,18 +33,18 @@ def generate_relationship_with_quality(
 ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
     """
     Generate or refine a relationship between entities until quality thresholds are met.
-    
+
     Attempts to create a candidate relationship, evaluates its quality, and iteratively refines it using the configured creator, judge, and refiner until the configured threshold or stopping criteria are reached. Tracks previously rejected duplicate (source, target, relation_type) tuples to avoid regenerating the same pair.
-    
+
     Parameters:
         svc: WorldQualityService instance providing create/judge/refine functionality and configuration.
         story_state (StoryState): Current story state; must include a non-empty brief.
         entity_names (list[str]): Available entity names for relationship generation.
         existing_rels (list[tuple[str, str, str]]): Existing relationships as (source, target, relation_type) tuples to avoid.
-    
+
     Returns:
         tuple[dict[str, Any], RelationshipQualityScores, int]: The chosen or refined relationship dictionary, its quality scores, and the number of iterations used.
-    
+
     Raises:
         ValueError: If story_state.brief is missing or fewer than two entity names are provided.
         WorldGenerationError: If creation, judging, or refinement fails during generation.
@@ -63,9 +63,9 @@ def generate_relationship_with_quality(
     def _create(retries: int) -> dict[str, Any]:
         """
         Create a new relationship while avoiding previously rejected or existing pairs.
-        
+
         Combines the current existing relationships with any rejected pairs and requests the service to generate a relationship candidate.
-        
+
         Returns:
             relationship (dict): A relationship dictionary produced by the creator service.
         """
@@ -81,9 +81,9 @@ def generate_relationship_with_quality(
     def _is_empty(rel: dict[str, Any]) -> bool:
         """
         Determine whether a generated relationship is empty or should be rejected as a duplicate.
-        
+
         Considers a relationship empty if it lacks a `source` or `target`. If the relationship's `(source, target, relation_type)` matches any existing relationship (including previously rejected pairs), the pair is appended to `rejected_pairs` and the relationship is treated as empty.
-        
+
         Returns:
             `true` if the relationship lacks a source or target or is a duplicate (and is recorded in `rejected_pairs`), `false` otherwise.
         """
@@ -132,13 +132,13 @@ def _is_duplicate_relationship(
 ) -> bool:
     """
     Determine whether a relationship between the given source and target already appears in existing_rels, matching either direction regardless of relation type.
-    
+
     Parameters:
         source (str): Source entity name.
         target (str): Target entity name.
         rel_type (str): Relationship type (this function does not consider type when checking duplicates).
         existing_rels (list[tuple[str, str, str]]): List of existing (source, target, relation_type) 3-tuples.
-    
+
     Returns:
         `true` if a matching source/target pair exists in either direction, `false` otherwise.
     """
@@ -155,12 +155,12 @@ def _is_duplicate_relationship(
 def _compute_diversity_hint(existing_types: list[str]) -> str:
     """
     Return a prompt hint suggesting one under-represented conflict category to prioritize when creating new relationships.
-    
+
     If fewer than 3 relationship types are provided or the distribution is balanced, returns an empty string. If any conflict category (RIVALRY, TENSION, or ALLIANCE) comprises less than 15% of the input types, returns a short hint recommending that category with example framings.
-    
+
     Parameters:
         existing_types (list[str]): Relationship type identifiers from existing relationships.
-    
+
     Returns:
         str: A hint string recommending an under-represented conflict category, or an empty string if no hint is needed.
     """
@@ -204,17 +204,17 @@ def _create_relationship(
 ) -> dict[str, Any]:
     """
     Generate a single relationship JSON object for the story using the creator model.
-    
+
     Parameters:
         svc: Service client used to select models and call the LLM (not documented here).
         story_state (StoryState): Story state containing a non-empty `brief`; returns {} if brief is missing.
         entity_names (list[str]): Available entity names to choose as source and target.
         existing_rels (list[tuple[str, str, str]]): Existing relationships as (source, target, relation_type) used to avoid duplicates and inform diversity hints.
         temperature (float): Sampling temperature for the creator model.
-    
+
     Returns:
         dict[str, Any]: A relationship object with keys `source`, `target`, `relation_type` (normalized to the controlled vocabulary), and `description`.
-    
+
     Raises:
         WorldGenerationError: If the creator model fails, returns invalid or unparsable JSON, or any other generation/parsing error occurs.
     """

@@ -600,12 +600,12 @@ def _generate_relationships(
 ) -> int:
     """
     Generate relationships between entities and persist them to the world database.
-    
+
     Calls the world quality service to propose relationships (with quality scores), resolves entity names (using fuzzy matching), normalizes relation types, and adds resolved relationships to the database. Honors the optional cancellation callback and caps the number of generated relationships based on the number of available entities; invalid or unresolved proposals are skipped and logged.
-    
+
     Parameters:
         cancel_check (Callable[[], bool] | None): Optional callable that returns True when processing should stop.
-    
+
     Returns:
         int: Number of relationships successfully added to the world database.
     """

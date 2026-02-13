@@ -36,7 +36,7 @@ def _log_batch_summary(
 ) -> None:
     """
     Log an aggregate batch summary for generated or reviewed entities.
-    
+
     Parameters:
         results: Sequence of (entity, BaseQualityScores) tuples produced by the batch.
         entity_type: Human-readable entity type (e.g., "character").
@@ -126,9 +126,9 @@ def _generate_batch(
 ) -> list[tuple[T, S]]:
     """
     Run a generic batch loop to generate multiple entities with quality refinement and progress reporting.
-    
+
     Each successful generation appends the produced (entity, scores) tuple to the result list; failed generations are recorded and reported and may trigger early termination after repeated failures. Progress updates are emitted via the optional progress_callback.
-    
+
     Parameters:
         svc: WorldQualityService instance used for progress ETA calculation.
         count (int): Number of entities to attempt to generate.
@@ -139,10 +139,10 @@ def _generate_batch(
         cancel_check (Callable[[], bool] | None): Optional callable that returns True to cancel the batch early.
         progress_callback (Callable | None): Optional callback receiving EntityGenerationProgress updates.
         quality_threshold (float | None): Threshold used in the batch summary; if None it is resolved from svc configuration.
-    
+
     Returns:
         list[tuple[T, S]]: The list of successfully generated (entity, scores) tuples.
-    
+
     Raises:
         WorldGenerationError: If no entities could be generated successfully.
     """
@@ -588,7 +588,7 @@ def generate_relationships_with_quality(
 ) -> list[tuple[dict[str, Any], RelationshipQualityScores]]:
     """
     Generate multiple relationships with quality refinement.
-    
+
     Parameters:
         story_state (StoryState): Current story state used to inform generation.
         entity_names (list[str]): Names of entities available as relationship endpoints.
@@ -596,10 +596,10 @@ def generate_relationships_with_quality(
         count (int): Number of relationships to generate.
         cancel_check (Callable[[], bool] | None): Optional callable that returns True to cancel generation early.
         progress_callback (Callable | None): Optional callback invoked with progress updates.
-    
+
     Returns:
         list[tuple[dict[str, Any], RelationshipQualityScores]]: Generated relationship dictionaries paired with their quality scores.
-    
+
     Raises:
         WorldGenerationError: If no relationships could be generated.
     """

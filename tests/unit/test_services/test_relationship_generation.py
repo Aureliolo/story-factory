@@ -18,7 +18,7 @@ from src.utils.exceptions import WorldGenerationError
 def story_state():
     """
     Create a StoryState pre-populated with a brief for relationship-generation tests.
-    
+
     Returns:
         StoryState: A StoryState with id "test-rel-story" whose brief contains premise, genre, subgenres, tone, themes, setting_time, setting_place, target_length, language, and content_rating.
     """
@@ -115,15 +115,15 @@ class TestConsecutiveFailureEarlyTermination:
         def mixed_generate(_i):
             """
             Return a generated relationship tuple or raise a WorldGenerationError according to a predefined success/failure pattern.
-            
+
             This helper increments a nonlocal call counter and uses an external boolean `pattern` sequence to decide outcome. The `_i` parameter is ignored.
-            
+
             Parameters:
                 _i: (any) Ignored input; included for compatibility with generator interfaces.
-            
+
             Returns:
                 tuple: (relation, scores, count) where `relation` is a dict with a `name` key like `"rel-<index>"`, `scores` is an object with `average` set to 8.0, and `count` is the integer `1`.
-            
+
             Raises:
                 WorldGenerationError: If the pattern indicates a failure for the current call index.
             """
@@ -174,14 +174,14 @@ class TestDynamicScaling:
         def capture_generate(state, names, rels, count, cancel_check=None):
             """
             Record the requested generation count for later assertions in the surrounding test.
-            
+
             Parameters:
                 state: The world/story state passed by the caller (ignored).
                 names: The list of entity names passed by the caller (ignored).
                 rels: Existing relationships passed by the caller (ignored).
                 count (int): The requested number of relationships to generate; this value is captured.
                 cancel_check: Optional callable to check for cancellation (ignored).
-            
+
             Returns:
                 list: An empty list of generated relationships.
             """
@@ -218,14 +218,14 @@ class TestDynamicScaling:
         def capture_generate(state, names, rels, count, cancel_check=None):
             """
             Record the requested generation count for later assertions in the surrounding test.
-            
+
             Parameters:
                 state: The world/story state passed by the caller (ignored).
                 names: The list of entity names passed by the caller (ignored).
                 rels: Existing relationships passed by the caller (ignored).
                 count (int): The requested number of relationships to generate; this value is captured.
                 cancel_check: Optional callable to check for cancellation (ignored).
-            
+
             Returns:
                 list: An empty list of generated relationships.
             """
@@ -318,9 +318,9 @@ class TestRelationTypeNormalizedBeforeStorage:
         def fake_generate(state, names, rels, count, cancel_check=None):
             """
             Provide a single fake generated relationship whose `relation_type` is prose containing "rivals".
-            
+
             This function ignores its arguments and always returns the same result, used for testing.
-            
+
             Returns:
                 list: A list containing one tuple (relationship, scores) where `relationship` is a dict with keys
                     `source`, `target`, `relation_type`, and `description`, and `scores` is an object with
@@ -374,7 +374,7 @@ class TestRelationTypeNormalizedInBuild:
         def fake_generate(state, names, rels, count, cancel_check=None):
             """
             Produce a single fake relationship record with a hyphenated-case `relation_type` for testing.
-            
+
             Returns:
                 list: A single-item list containing a tuple (relation, scores) where `relation` is a dict with keys:
                     - "source": source entity name
@@ -500,12 +500,12 @@ class TestExistingRelsIncludeTypes:
         def fake_generate_fn(state, names, rels):
             """
             Test helper that records the provided `rels` and returns a successful generated relationship.
-            
+
             Parameters:
                 state: The current story/state object passed to the generator.
                 names (list): The list of entity names passed to the generator.
                 rels (list): The list of existing relationships supplied to the generator; a copy of this list is appended to `captured_rels`.
-            
+
             Returns:
                 tuple: A 3-tuple containing:
                     - dict: A relationship with keys `source`, `target`, and `relation_type`.
