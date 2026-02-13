@@ -179,7 +179,9 @@ class WorldService:
         Returns:
             Dictionary with counts of extracted items.
         """
-        return _extraction.extract_from_chapter(self, content, world_db, chapter_number)
+        result = _extraction.extract_from_chapter(self, content, world_db, chapter_number)
+        self.invalidate_health_cache()
+        return result
 
     # ========== ENTITY CRUD ==========
 
@@ -288,7 +290,9 @@ class WorldService:
         Raises:
             ValueError: If version not found or entity not found.
         """
-        return _entities.revert_entity_to_version(self, world_db, entity_id, version_number)
+        result = _entities.revert_entity_to_version(self, world_db, entity_id, version_number)
+        self.invalidate_health_cache()
+        return result
 
     def list_entities(
         self,
@@ -682,14 +686,13 @@ class WorldService:
                 logger.debug("Health metrics cache hit (age=%.1fs)", now - self._health_cache_time)
                 return self._health_cache
 
-        result = _health.get_world_health_metrics(self, world_db, quality_threshold)
+            logger.debug("Health metrics cache miss — recomputing")
+            result = _health.get_world_health_metrics(self, world_db, quality_threshold)
 
-        with self._health_cache_lock:
             self._health_cache = result
             self._health_cache_key = cache_key
             self._health_cache_time = time.monotonic()
-
-        return result
+            return result
 
     def invalidate_health_cache(self) -> None:
         """Clear the cached health metrics so the next call recomputes."""

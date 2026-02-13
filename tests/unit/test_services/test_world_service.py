@@ -1129,3 +1129,55 @@ class TestHealthMetricsCache:
         second = world_service.get_world_health_metrics(world_db)
 
         assert first is not second
+
+    def test_extract_from_chapter_invalidates_cache(self, world_service, world_db):
+        """extract_from_chapter clears the health cache."""
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.extract_from_chapter(
+            "The heroes arrived at the Enchanted Forest.", world_db, chapter_number=1
+        )
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+
+    def test_revert_entity_to_version_invalidates_cache(self, world_service, world_db):
+        """revert_entity_to_version clears the health cache."""
+        eid = world_service.add_entity(
+            world_db, "character", "Alice", description="v1", attributes={"role": "original"}
+        )
+        world_service.update_entity(world_db, eid, attributes={"role": "changed"})
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.revert_entity_to_version(world_db, eid, 1)
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+
+    def test_build_world_invalidates_cache(
+        self, world_service, world_db, sample_story_state, settings
+    ):
+        """build_world clears the health cache before building."""
+        from unittest.mock import MagicMock
+
+        from src.services.world_service import WorldBuildOptions
+
+        first = world_service.get_world_health_metrics(world_db)
+
+        # Use a mock ServiceContainer — build_world invalidates before delegating
+        mock_services = MagicMock()
+        mock_services.world_quality = MagicMock()
+        mock_services.scoring = MagicMock()
+
+        options = WorldBuildOptions(
+            generate_structure=True,
+            generate_locations=False,
+            generate_factions=False,
+            generate_items=False,
+            generate_concepts=False,
+            generate_relationships=False,
+        )
+        world_service.build_world(sample_story_state, world_db, mock_services, options=options)
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
