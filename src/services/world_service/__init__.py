@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     from src.services import ServiceContainer
 
 logger = logging.getLogger(__name__)
+
+_HEALTH_CACHE_TTL_SECONDS = 30
 
 
 @dataclass
@@ -116,6 +119,13 @@ class WorldService:
         """
         logger.debug("Initializing WorldService")
         self.settings = settings or Settings.load()
+
+        # TTL cache for health metrics (avoids redundant recomputation on page reload)
+        self._health_cache: WorldHealthMetrics | None = None
+        self._health_cache_key: tuple[str, float] | None = None  # (db_path, threshold)
+        self._health_cache_time: float = 0.0
+        self._health_cache_lock = threading.RLock()
+
         logger.debug("WorldService initialized successfully")
 
     # ========== UNIFIED WORLD BUILDING ==========
@@ -148,7 +158,9 @@ class WorldService:
             ValueError: If no brief exists.
             WorldGenerationError: If generation fails.
         """
-        return _build.build_world(self, state, world_db, services, options, progress_callback)
+        result = _build.build_world(self, state, world_db, services, options, progress_callback)
+        self.invalidate_health_cache()
+        return result
 
     # ========== ENTITY EXTRACTION ==========
 
@@ -168,7 +180,9 @@ class WorldService:
         Returns:
             Dictionary with counts of extracted items.
         """
-        return _extraction.extract_from_chapter(self, content, world_db, chapter_number)
+        result = _extraction.extract_from_chapter(self, content, world_db, chapter_number)
+        self.invalidate_health_cache()
+        return result
 
     # ========== ENTITY CRUD ==========
 
@@ -192,7 +206,9 @@ class WorldService:
         Returns:
             The new entity's ID.
         """
-        return _entities.add_entity(self, world_db, entity_type, name, description, attributes)
+        result = _entities.add_entity(self, world_db, entity_type, name, description, attributes)
+        self.invalidate_health_cache()
+        return result
 
     def update_entity(
         self,
@@ -214,7 +230,9 @@ class WorldService:
         Returns:
             True if updated, False if not found.
         """
-        return _entities.update_entity(self, world_db, entity_id, name, description, attributes)
+        result = _entities.update_entity(self, world_db, entity_id, name, description, attributes)
+        self.invalidate_health_cache()
+        return result
 
     def delete_entity(self, world_db: WorldDatabase, entity_id: str) -> bool:
         """Delete an entity and its relationships.
@@ -226,7 +244,9 @@ class WorldService:
         Returns:
             True if deleted, False if not found.
         """
-        return _entities.delete_entity(self, world_db, entity_id)
+        result = _entities.delete_entity(self, world_db, entity_id)
+        self.invalidate_health_cache()
+        return result
 
     def get_entity(self, world_db: WorldDatabase, entity_id: str) -> Entity | None:
         """Get an entity by ID.
@@ -271,7 +291,9 @@ class WorldService:
         Raises:
             ValueError: If version not found or entity not found.
         """
-        return _entities.revert_entity_to_version(self, world_db, entity_id, version_number)
+        result = _entities.revert_entity_to_version(self, world_db, entity_id, version_number)
+        self.invalidate_health_cache()
+        return result
 
     def list_entities(
         self,
@@ -355,9 +377,11 @@ class WorldService:
         Returns:
             The new relationship's ID.
         """
-        return _graph.add_relationship(
+        result = _graph.add_relationship(
             self, world_db, source_id, target_id, relation_type, description, bidirectional
         )
+        self.invalidate_health_cache()
+        return result
 
     def delete_relationship(self, world_db: WorldDatabase, relationship_id: str) -> bool:
         """Delete a relationship.
@@ -369,7 +393,9 @@ class WorldService:
         Returns:
             True if deleted, False if not found.
         """
-        return _graph.delete_relationship(self, world_db, relationship_id)
+        result = _graph.delete_relationship(self, world_db, relationship_id)
+        self.invalidate_health_cache()
+        return result
 
     def get_relationships(
         self,
@@ -639,7 +665,9 @@ class WorldService:
         """Get comprehensive health metrics for a story world.
 
         Aggregates entity counts, orphan detection, circular relationships,
-        quality scores, and computes overall health score.
+        quality scores, and computes overall health score. Results are cached
+        for up to ``_HEALTH_CACHE_TTL_SECONDS`` to avoid redundant computation
+        when the UI refreshes without data changes.
 
         Args:
             world_db: WorldDatabase instance.
@@ -648,4 +676,29 @@ class WorldService:
         Returns:
             WorldHealthMetrics object with all computed metrics.
         """
-        return _health.get_world_health_metrics(self, world_db, quality_threshold)
+        cache_key = (str(world_db.db_path), quality_threshold)
+        with self._health_cache_lock:
+            now = time.monotonic()
+            if (
+                self._health_cache is not None
+                and self._health_cache_key == cache_key
+                and (now - self._health_cache_time) < _HEALTH_CACHE_TTL_SECONDS
+            ):
+                logger.debug("Health metrics cache hit (age=%.1fs)", now - self._health_cache_time)
+                return self._health_cache
+
+            logger.debug("Health metrics cache miss — recomputing")
+            result = _health.get_world_health_metrics(self, world_db, quality_threshold)
+
+            self._health_cache = result
+            self._health_cache_key = cache_key
+            self._health_cache_time = time.monotonic()
+            return result
+
+    def invalidate_health_cache(self) -> None:
+        """Clear the cached health metrics so the next call recomputes."""
+        with self._health_cache_lock:
+            self._health_cache = None
+            self._health_cache_key = None
+            self._health_cache_time = 0.0
+            logger.debug("Health metrics cache invalidated")

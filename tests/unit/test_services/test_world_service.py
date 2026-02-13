@@ -1,12 +1,14 @@
 """Tests for WorldService."""
 
+import time
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.memory.story_state import Character, StoryBrief, StoryState
 from src.memory.world_database import WorldDatabase
-from src.services.world_service import WorldService
+from src.services.world_service import _HEALTH_CACHE_TTL_SECONDS, WorldBuildOptions, WorldService
 from src.settings import Settings
 
 
@@ -1006,3 +1008,172 @@ class TestWorldHealthMethods:
         # Alice's 15.0 clamped to 10.0, Bob is 8.0
         # average_quality = (10.0 + 8.0) / 2 = 9.0
         assert metrics.average_quality == pytest.approx(9.0, abs=0.1)
+
+
+class TestHealthMetricsCache:
+    """Tests for WorldService health metrics TTL cache."""
+
+    def test_cache_hit_returns_same_object(self, world_service, world_db):
+        """Calling get_world_health_metrics twice returns the cached object."""
+        world_db.add_entity("character", "Alice", attributes={"quality_score": 8.0})
+
+        first = world_service.get_world_health_metrics(world_db)
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is second  # exact same object, not a recomputation
+
+    def test_cache_miss_on_different_world_db(self, world_service, tmp_path):
+        """Different world_db instance triggers fresh computation."""
+        db1 = WorldDatabase(tmp_path / "world1.db")
+        db2 = WorldDatabase(tmp_path / "world2.db")
+        try:
+            db1.add_entity("character", "Alice")
+            db2.add_entity("location", "Town")
+
+            first = world_service.get_world_health_metrics(db1)
+            second = world_service.get_world_health_metrics(db2)
+
+            assert first is not second
+            assert first.total_entities == 1
+            assert second.total_entities == 1
+            assert first.entity_counts["character"] == 1
+            assert second.entity_counts["location"] == 1
+        finally:
+            db1.close()
+            db2.close()
+
+    def test_cache_miss_on_different_threshold(self, world_service, world_db):
+        """Different quality_threshold triggers fresh computation."""
+        world_db.add_entity("character", "Alice", attributes={"quality_score": 5.0})
+
+        first = world_service.get_world_health_metrics(world_db, quality_threshold=6.0)
+        second = world_service.get_world_health_metrics(world_db, quality_threshold=4.0)
+
+        assert first is not second
+
+    def test_cache_expires_after_ttl(self, world_service, world_db):
+        """After TTL elapses the cache is stale and recomputes."""
+        world_db.add_entity("character", "Alice")
+
+        first = world_service.get_world_health_metrics(world_db)
+
+        # Compute the future timestamp before patching (avoid calling mock inside patch)
+        future_time = time.monotonic() + _HEALTH_CACHE_TTL_SECONDS + 1
+        with patch("src.services.world_service.time.monotonic", return_value=future_time):
+            second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second  # recomputed
+
+    def test_invalidate_health_cache(self, world_service, world_db):
+        """invalidate_health_cache forces recomputation on next call."""
+        world_db.add_entity("character", "Alice")
+
+        first = world_service.get_world_health_metrics(world_db)
+        world_service.invalidate_health_cache()
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+
+    def test_add_entity_invalidates_cache(self, world_service, world_db):
+        """add_entity clears the health cache."""
+        world_db.add_entity("character", "Alice")
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.add_entity(world_db, "character", "Bob", description="new")
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+        assert second.total_entities == first.total_entities + 1
+
+    def test_update_entity_invalidates_cache(self, world_service, world_db):
+        """update_entity clears the health cache."""
+        eid = world_db.add_entity("character", "Alice")
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.update_entity(world_db, eid, name="Alice Updated")
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+
+    def test_delete_entity_invalidates_cache(self, world_service, world_db):
+        """delete_entity clears the health cache."""
+        eid = world_service.add_entity(world_db, "character", "Alice", description="test")
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.delete_entity(world_db, eid)
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+        assert second.total_entities == first.total_entities - 1
+
+    def test_add_relationship_invalidates_cache(self, world_service, world_db):
+        """add_relationship clears the health cache."""
+        a_id = world_db.add_entity("character", "Alice")
+        b_id = world_db.add_entity("character", "Bob")
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.add_relationship(world_db, a_id, b_id, "knows")
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+        assert second.total_relationships == first.total_relationships + 1
+
+    def test_delete_relationship_invalidates_cache(self, world_service, world_db):
+        """delete_relationship clears the health cache."""
+        a_id = world_db.add_entity("character", "Alice")
+        b_id = world_db.add_entity("character", "Bob")
+        rel_id = world_service.add_relationship(world_db, a_id, b_id, "knows")
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.delete_relationship(world_db, rel_id)
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+
+    def test_extract_from_chapter_invalidates_cache(self, world_service, world_db):
+        """extract_from_chapter clears the health cache."""
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.extract_from_chapter(
+            "The heroes arrived at the Enchanted Forest.", world_db, chapter_number=1
+        )
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+
+    def test_revert_entity_to_version_invalidates_cache(self, world_service, world_db):
+        """revert_entity_to_version clears the health cache."""
+        eid = world_service.add_entity(
+            world_db, "character", "Alice", description="v1", attributes={"role": "original"}
+        )
+        world_service.update_entity(world_db, eid, attributes={"role": "changed"})
+        first = world_service.get_world_health_metrics(world_db)
+
+        world_service.revert_entity_to_version(world_db, eid, 1)
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
+
+    def test_build_world_invalidates_cache(
+        self, world_service, world_db, sample_story_state, settings
+    ):
+        """build_world clears the health cache after building."""
+        first = world_service.get_world_health_metrics(world_db)
+
+        # Use a mock ServiceContainer — build_world invalidates after delegating
+        mock_services = MagicMock()
+        mock_services.world_quality = MagicMock()
+        mock_services.scoring = MagicMock()
+
+        options = WorldBuildOptions(
+            generate_structure=True,
+            generate_locations=False,
+            generate_factions=False,
+            generate_items=False,
+            generate_concepts=False,
+            generate_relationships=False,
+        )
+        world_service.build_world(sample_story_state, world_db, mock_services, options=options)
+        second = world_service.get_world_health_metrics(world_db)
+
+        assert first is not second
