@@ -2,13 +2,13 @@
 
 import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.memory.story_state import Character, StoryBrief, StoryState
 from src.memory.world_database import WorldDatabase
-from src.services.world_service import _HEALTH_CACHE_TTL_SECONDS, WorldService
+from src.services.world_service import _HEALTH_CACHE_TTL_SECONDS, WorldBuildOptions, WorldService
 from src.settings import Settings
 
 
@@ -1157,11 +1157,7 @@ class TestHealthMetricsCache:
     def test_build_world_invalidates_cache(
         self, world_service, world_db, sample_story_state, settings
     ):
-        """build_world clears the health cache before building."""
-        from unittest.mock import MagicMock
-
-        from src.services.world_service import WorldBuildOptions
-
+        """build_world clears the health cache after building."""
         first = world_service.get_world_health_metrics(world_db)
 
         # Use a mock ServiceContainer — build_world invalidates before delegating

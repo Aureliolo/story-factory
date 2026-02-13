@@ -122,7 +122,7 @@ class WorldService:
 
         # TTL cache for health metrics (avoids redundant recomputation on page reload)
         self._health_cache: WorldHealthMetrics | None = None
-        self._health_cache_key: tuple[int, float] | None = None  # (id(world_db), threshold)
+        self._health_cache_key: tuple[str, float] | None = None  # (db_path, threshold)
         self._health_cache_time: float = 0.0
         self._health_cache_lock = threading.RLock()
 
@@ -158,8 +158,9 @@ class WorldService:
             ValueError: If no brief exists.
             WorldGenerationError: If generation fails.
         """
+        result = _build.build_world(self, state, world_db, services, options, progress_callback)
         self.invalidate_health_cache()
-        return _build.build_world(self, state, world_db, services, options, progress_callback)
+        return result
 
     # ========== ENTITY EXTRACTION ==========
 
@@ -675,7 +676,7 @@ class WorldService:
         Returns:
             WorldHealthMetrics object with all computed metrics.
         """
-        cache_key = (id(world_db), quality_threshold)
+        cache_key = (str(world_db.db_path), quality_threshold)
         with self._health_cache_lock:
             now = time.monotonic()
             if (
