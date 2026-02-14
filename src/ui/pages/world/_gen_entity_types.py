@@ -404,13 +404,13 @@ async def _generate_relationships(
     entity_names = [e.name for e in entities]
     logger.info(f"Found {len(entities)} existing entities: {entity_names}")
 
-    # Get existing relationships - look up entity names from IDs
-    existing_rels = []
+    # Get existing relationships as 3-tuples (source_name, target_name, relation_type)
+    existing_rels: list[tuple[str, str, str]] = []
     for rel in page.state.world_db.list_relationships():
         source = page.services.world.get_entity(page.state.world_db, rel.source_id)
         target = page.services.world.get_entity(page.state.world_db, rel.target_id)
         if source and target:
-            existing_rels.append((source.name, target.name))
+            existing_rels.append((source.name, target.name, rel.relation_type))
     logger.info(f"Found {len(existing_rels)} existing relationships")
 
     if len(entity_names) < 2:
@@ -466,7 +466,7 @@ async def _generate_relationships(
                             page.state.world_db,
                             source_entity.id,
                             target_entity.id,
-                            rel_data.get("relation_type", "knows"),
+                            rel_data.get("relation_type", "related_to"),
                             rel_data.get("description", ""),
                         )
                         page.state.world_db.update_relationship(
@@ -489,11 +489,13 @@ async def _generate_relationships(
         return
     else:
         logger.info("Calling story service to generate relationships...")
+        # Story service expects 2-tuples (source_name, target_name)
+        existing_rels_2t: list[tuple[str, str]] = [(s, t) for s, t, _rt in existing_rels]
         relationships = await run.io_bound(
             page.services.story.generate_relationships,
             page.state.project,
             entity_names,
-            existing_rels,
+            existing_rels_2t,
             count,
         )
         logger.info(f"Generated {len(relationships)} relationships from LLM")
@@ -508,7 +510,7 @@ async def _generate_relationships(
                         page.state.world_db,
                         source_entity.id,
                         target_entity.id,
-                        rel.get("relation_type", "knows"),
+                        rel.get("relation_type", "related_to"),
                         rel.get("description", ""),
                     )
                     added += 1
@@ -548,7 +550,12 @@ async def generate_relationships_for_entities(
     )
 
     all_entity_names = get_all_entity_names(page)
-    existing_rels = [(r.source_id, r.target_id) for r in page.state.world_db.list_relationships()]
+    entity_map = {e.id: e.name for e in page.state.world_db.list_entities()}
+    existing_rels: list[tuple[str, str, str]] = [
+        (entity_map.get(r.source_id, ""), entity_map.get(r.target_id, ""), r.relation_type)
+        for r in page.state.world_db.list_relationships()
+        if entity_map.get(r.source_id) and entity_map.get(r.target_id)
+    ]
     total_count = len(entity_names) * count_per_entity
 
     page._generation_cancel_event = threading.Event()

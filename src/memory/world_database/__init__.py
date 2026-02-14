@@ -20,7 +20,7 @@ from . import _entities, _events, _graph, _io, _relationships, _versions
 logger = logging.getLogger(__name__)
 
 # Schema version for migration support
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Valid entity types (whitelist)
 VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
@@ -358,6 +358,37 @@ class WorldDatabase:
                 "CREATE INDEX IF NOT EXISTS idx_historical_eras_start ON historical_eras(start_year)"
             )
             logger.info("Migration v2->v3: Added world_settings and historical_eras tables")
+
+        # Migration from v3 to v4: Normalize legacy free-form relationship types
+        if from_version < 4:
+            # Only normalize if the relationships table already exists
+            # (new databases create it after migrations run)
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='relationships'"
+            )
+            if cursor.fetchone():
+                from src.memory.conflict_types import normalize_relation_type
+
+                cursor.execute("SELECT id, relation_type FROM relationships")
+                rows = cursor.fetchall()
+                updates = [
+                    (normalized, row_id)
+                    for row_id, raw_type in rows
+                    if (normalized := normalize_relation_type(raw_type)) != raw_type
+                ]
+                if updates:
+                    cursor.executemany(
+                        "UPDATE relationships SET relation_type = ? WHERE id = ?",
+                        updates,
+                    )
+                updated = len(updates)
+                logger.info(
+                    "Migration v3->v4: Normalized %d/%d relationship types",
+                    updated,
+                    len(rows),
+                )
+            else:
+                logger.info("Migration v3->v4: Skipped (relationships table not yet created)")
 
         logger.info("Database migration complete")
 

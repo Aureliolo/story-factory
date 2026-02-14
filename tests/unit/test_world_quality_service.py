@@ -674,7 +674,7 @@ class TestProgressCallback:
                 {
                     "source": "Entity1",
                     "target": "Entity2",
-                    "relationship_type": "knows",
+                    "relation_type": "knows",
                     "description": "A connection",
                 },
                 MagicMock(average=7.5),
@@ -828,28 +828,28 @@ class TestDuplicateRelationshipDetection:
 
     def test_detects_same_direction_duplicate(self):
         """Duplicate detected when same source->target pair exists."""
-        existing = [("Alice", "Bob")]
-        assert _is_duplicate_relationship("Alice", "Bob", "knows", existing) is True
+        existing = [("Alice", "Bob", "knows")]
+        assert _is_duplicate_relationship("Alice", "Bob", existing) is True
 
     def test_detects_reverse_direction_duplicate(self):
         """Duplicate detected when target->source pair exists (bidirectional)."""
-        existing = [("Alice", "Bob")]
-        assert _is_duplicate_relationship("Bob", "Alice", "knows", existing) is True
+        existing = [("Alice", "Bob", "knows")]
+        assert _is_duplicate_relationship("Bob", "Alice", existing) is True
 
     def test_allows_new_pair(self):
         """New pair is not flagged as duplicate."""
-        existing = [("Alice", "Bob")]
-        assert _is_duplicate_relationship("Alice", "Carol", "knows", existing) is False
+        existing = [("Alice", "Bob", "knows")]
+        assert _is_duplicate_relationship("Alice", "Carol", existing) is False
 
     def test_empty_existing_rels(self):
         """No duplicates when existing list is empty."""
-        assert _is_duplicate_relationship("Alice", "Bob", "knows", []) is False
+        assert _is_duplicate_relationship("Alice", "Bob", []) is False
 
     def test_multiple_existing_rels(self):
         """Correctly checks against multiple existing pairs."""
-        existing = [("Alice", "Bob"), ("Carol", "Dave")]
-        assert _is_duplicate_relationship("Dave", "Carol", "knows", existing) is True
-        assert _is_duplicate_relationship("Alice", "Carol", "knows", existing) is False
+        existing = [("Alice", "Bob", "knows"), ("Carol", "Dave", "loves")]
+        assert _is_duplicate_relationship("Dave", "Carol", existing) is True
+        assert _is_duplicate_relationship("Alice", "Carol", existing) is False
 
 
 class TestJudgeCalibrationPrompts:

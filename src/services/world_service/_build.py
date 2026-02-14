@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Cap relationship count at this ratio of entity count to avoid excessive duplicates
+RELATIONSHIP_TO_ENTITY_RATIO_CAP = 1.5
+
 
 def build_world(
     svc: WorldService,
@@ -597,21 +600,53 @@ def _generate_relationships(
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
 ) -> int:
-    """Generate and add relationships between entities using quality refinement."""
+    """Generate and add relationships between entities using quality refinement.
+
+    Args:
+        svc: WorldService instance.
+        state: Current story state with brief.
+        world_db: World database to read entities from and persist relationships to.
+        services: Service container providing the world quality service.
+        cancel_check: Optional callable that returns True to stop generation.
+
+    Returns:
+        Number of relationships successfully added to the world database.
+    """
     all_entities = world_db.list_entities()
     entity_names = [e.name for e in all_entities]
 
     # Map IDs to names so the quality service gets name pairs for duplicate detection
+    # 3-tuples: (source_name, target_name, relation_type) for diversity analysis
     entity_by_id = {e.id: e.name for e in all_entities}
-    existing_rels = [
-        (entity_by_id.get(r.source_id, ""), entity_by_id.get(r.target_id, ""))
-        for r in world_db.list_relationships()
-    ]
+    existing_rels: list[tuple[str, str, str]] = []
+    for r in world_db.list_relationships():
+        source_name = entity_by_id.get(r.source_id)
+        target_name = entity_by_id.get(r.target_id)
+        if not source_name or not target_name:
+            logger.warning(
+                "Skipping relationship %s -> %s: missing entity reference",
+                r.source_id,
+                r.target_id,
+            )
+            continue
+        existing_rels.append((source_name, target_name, r.relation_type))
 
     rel_count = random.randint(
         svc.settings.world_gen_relationships_min,
         svc.settings.world_gen_relationships_max,
     )
+
+    # Cap relationship count based on available entities to avoid excessive duplicates
+    max_by_entities = int(len(entity_names) * RELATIONSHIP_TO_ENTITY_RATIO_CAP)
+    if rel_count > max_by_entities:
+        logger.info(
+            "Capping relationship count from %d to %d (based on %d entities x %.1f)",
+            rel_count,
+            max_by_entities,
+            len(entity_names),
+            RELATIONSHIP_TO_ENTITY_RATIO_CAP,
+        )
+        rel_count = max_by_entities
 
     relationship_results = services.world_quality.generate_relationships_with_quality(
         state, entity_names, existing_rels, rel_count, cancel_check=cancel_check
@@ -628,10 +663,20 @@ def _generate_relationships(
             target_entity = _find_entity_by_name(all_entities, rel["target"])
 
             if source_entity and target_entity:
+                # relation_type is already normalized by world_quality_service;
+                # just use it directly with a safety default.
+                relation_type = rel.get("relation_type")
+                if not relation_type:
+                    logger.debug(
+                        "Relationship %s -> %s missing relation_type, defaulting to 'related_to'",
+                        rel["source"],
+                        rel["target"],
+                    )
+                    relation_type = "related_to"
                 world_db.add_relationship(
                     source_id=source_entity.id,
                     target_id=target_entity.id,
-                    relation_type=rel.get("relation_type", "related_to"),
+                    relation_type=relation_type,
                     description=rel.get("description", ""),
                 )
                 added_count += 1

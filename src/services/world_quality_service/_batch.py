@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 S = TypeVar("S", bound=BaseQualityScores)
 
+MAX_CONSECUTIVE_BATCH_FAILURES = 3
+
 
 def _log_batch_summary(
     results: Sequence[tuple[Any, BaseQualityScores]],
@@ -36,7 +38,7 @@ def _log_batch_summary(
 
     Args:
         results: List of (entity, scores) tuples produced by the batch.
-        entity_type: Human-readable entity type (e.g. "character").
+        entity_type: Human-readable entity type (e.g., "character").
         quality_threshold: The configured quality threshold for pass/fail.
         elapsed: Total batch wall-clock time in seconds.
         get_name: Callable to extract display name from an entity. When provided,
@@ -128,11 +130,11 @@ def _generate_batch(
     Args:
         svc: WorldQualityService instance (used for ``_calculate_eta``).
         count: Number of entities to generate.
-        entity_type: Human-readable type name for logging/progress (e.g. "faction").
+        entity_type: Human-readable type name for logging/progress (e.g., "faction").
         generate_fn: Called with the loop index ``i``; must return
             ``(entity, scores, iterations)``.
         get_name: Extract a display name from the generated entity.
-        on_success: Optional hook called after a successful generation (e.g. to
+        on_success: Optional hook called after a successful generation (e.g., to
             track names for deduplication).
         cancel_check: Optional callable that returns ``True`` to cancel.
         progress_callback: Optional callback to receive
@@ -156,6 +158,7 @@ def _generate_batch(
     errors: list[str] = []
     batch_start_time = time.time()
     completed_times: list[float] = []
+    consecutive_failures = 0
 
     for i in range(count):
         if cancel_check and cancel_check():
@@ -186,6 +189,7 @@ def _generate_batch(
             entity_elapsed = time.time() - entity_start
             completed_times.append(entity_elapsed)
             results.append((entity, scores))
+            consecutive_failures = 0
             entity_name = get_name(entity)
 
             if on_success:
@@ -217,7 +221,19 @@ def _generate_batch(
         except WorldGenerationError as e:
             error_msg = summarize_llm_error(e, max_length=200)
             errors.append(error_msg)
+            consecutive_failures += 1
             logger.error("Failed to generate %s %d/%d: %s", entity_type, i + 1, count, error_msg)
+
+            if consecutive_failures >= MAX_CONSECUTIVE_BATCH_FAILURES:
+                logger.warning(
+                    "%s batch early termination: %d consecutive failures. "
+                    "Generated %d/%d successfully before stopping.",
+                    entity_type.capitalize(),
+                    consecutive_failures,
+                    len(results),
+                    count,
+                )
+                break
 
     if not results and errors:
         raise WorldGenerationError(
@@ -567,7 +583,7 @@ def generate_relationships_with_quality(
     svc,
     story_state: StoryState,
     entity_names: list[str],
-    existing_rels: list[tuple[str, str]],
+    existing_rels: list[tuple[str, str, str]],
     count: int = 5,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable | None = None,
@@ -578,7 +594,7 @@ def generate_relationships_with_quality(
         svc: WorldQualityService instance.
         story_state: Current story state.
         entity_names: Entity names available for relationships.
-        existing_rels: Existing relationships to avoid.
+        existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicates.
         count: Number of relationships to generate.
         cancel_check: Optional callable that returns True to cancel generation.
         progress_callback: Optional callback to receive progress updates.
@@ -589,7 +605,7 @@ def generate_relationships_with_quality(
     Raises:
         WorldGenerationError: If no relationships could be generated.
     """
-    rels = existing_rels.copy()
+    rels: list[tuple[str, str, str]] = existing_rels.copy()
     return _generate_batch(
         svc=svc,
         count=count,
@@ -598,7 +614,7 @@ def generate_relationships_with_quality(
             story_state, entity_names, rels
         ),
         get_name=lambda r: f"{r['source']} -> {r['target']}",
-        on_success=lambda r: rels.append((r["source"], r["target"])),
+        on_success=lambda r: rels.append((r["source"], r["target"], r["relation_type"])),
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )

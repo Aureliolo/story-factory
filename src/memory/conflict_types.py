@@ -47,6 +47,7 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "admires": ConflictCategory.ALLIANCE,
     "collaborates_with": ConflictCategory.ALLIANCE,
     "friends_with": ConflictCategory.ALLIANCE,
+    "friends": ConflictCategory.ALLIANCE,
     # Rivalry - active opposition, hostility
     "hates": ConflictCategory.RIVALRY,
     "enemy_of": ConflictCategory.RIVALRY,
@@ -70,6 +71,7 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "threatens": ConflictCategory.TENSION,
     "manipulates": ConflictCategory.TENSION,
     "envies": ConflictCategory.TENSION,
+    "owes_debt_to": ConflictCategory.TENSION,
     # Neutral - informational, no inherent conflict
     "knows": ConflictCategory.NEUTRAL,
     "works_with": ConflictCategory.NEUTRAL,
@@ -92,9 +94,71 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "based_in": ConflictCategory.NEUTRAL,
     "lives_in": ConflictCategory.NEUTRAL,
     "located_near": ConflictCategory.NEUTRAL,
+    "connected_to": ConflictCategory.NEUTRAL,
     # Romantic / emotional bonds
     "romantic_interest": ConflictCategory.TENSION,
 }
+
+# Sorted list of all valid relationship types for constraining LLM prompts
+VALID_RELATIONSHIP_TYPES: list[str] = sorted(RELATION_CONFLICT_MAPPING.keys())
+
+# Keys sorted by length descending for substring matching (prefer longer matches first)
+_SORTED_KEYS_BY_LENGTH: list[str] = sorted(RELATION_CONFLICT_MAPPING.keys(), key=len, reverse=True)
+
+
+def normalize_relation_type(raw_type: str) -> str:
+    """Normalize a free-form relationship type to the controlled vocabulary.
+
+    Applies the following normalization steps:
+    1. Lowercase, replace hyphens/spaces with underscores.
+    2. If the normalized string is a known type, return it.
+    3. If pipe-delimited, take the first recognized part.
+    4. If a known type appears as a substring, extract and return it
+       (prefers longer matches to avoid partial hits).
+    5. Otherwise return the normalized string unchanged.
+
+    Args:
+        raw_type: Raw relationship type string from the LLM or legacy data.
+
+    Returns:
+        Normalized relationship type string.
+    """
+    normalized = raw_type.lower().strip().replace("-", "_").replace(" ", "_")
+
+    # Direct match
+    if normalized in RELATION_CONFLICT_MAPPING:
+        return normalized
+
+    # Pipe-delimited: take first recognized part
+    if "|" in normalized:
+        parts = [p.strip() for p in normalized.split("|") if p.strip()]
+        for part in parts:
+            if part in RELATION_CONFLICT_MAPPING:
+                logger.debug(
+                    "Normalized pipe-delimited type '%s' -> '%s' (first recognized part)",
+                    raw_type,
+                    part,
+                )
+                return part
+        # No recognized part — fall through to substring matching on the full string
+        logger.debug(
+            "No recognized part in pipe-delimited type '%s', trying substring match",
+            raw_type,
+        )
+
+    # Substring match: check if any known key appears in the normalized input
+    # Sort by length descending so "allies_with" matches before "allies"
+    for key in _SORTED_KEYS_BY_LENGTH:
+        if key in normalized and key != normalized:
+            logger.debug(
+                "Normalized prose type '%s' -> '%s' (substring match)",
+                raw_type,
+                key,
+            )
+            return key
+
+    logger.debug("No normalization match for '%s', returning as-is: '%s'", raw_type, normalized)
+    return normalized
 
 
 # Colors for conflict visualization (consistent with theme.py patterns)
