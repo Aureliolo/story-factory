@@ -103,6 +103,7 @@ def build_circular_types_section(page: SettingsPage) -> None:
         )
 
         def _toggle_check_all(e) -> None:
+            """Toggle visibility of the circular types multi-select based on check-all state."""
             page._circular_types_select.set_visibility(not e.value)
 
         page._circular_check_all_checkbox = ui.checkbox(

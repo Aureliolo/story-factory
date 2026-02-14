@@ -83,7 +83,8 @@ def generate_relationship_with_quality(
         # Check for duplicate relationship (includes previously rejected pairs)
         source = rel.get("source", "")
         target = rel.get("target", "")
-        rel_type = rel.get("relation_type", "knows")
+        raw_type = rel.get("relation_type") or "related_to"
+        rel_type = normalize_relation_type(raw_type)
         combined_rels = existing_rels + rejected_pairs
         if _is_duplicate_relationship(source, target, combined_rels):
             logger.warning("Generated duplicate relationship %s -> %s, rejecting", source, target)

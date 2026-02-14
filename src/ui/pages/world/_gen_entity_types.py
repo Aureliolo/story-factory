@@ -466,7 +466,7 @@ async def _generate_relationships(
                             page.state.world_db,
                             source_entity.id,
                             target_entity.id,
-                            rel_data.get("relation_type", "knows"),
+                            rel_data.get("relation_type", "related_to"),
                             rel_data.get("description", ""),
                         )
                         page.state.world_db.update_relationship(
@@ -489,11 +489,13 @@ async def _generate_relationships(
         return
     else:
         logger.info("Calling story service to generate relationships...")
+        # Story service expects 2-tuples (source_name, target_name)
+        existing_rels_2t: list[tuple[str, str]] = [(s, t) for s, t, _rt in existing_rels]
         relationships = await run.io_bound(
             page.services.story.generate_relationships,
             page.state.project,
             entity_names,
-            existing_rels,
+            existing_rels_2t,
             count,
         )
         logger.info(f"Generated {len(relationships)} relationships from LLM")
@@ -508,7 +510,7 @@ async def _generate_relationships(
                         page.state.world_db,
                         source_entity.id,
                         target_entity.id,
-                        rel.get("relation_type", "knows"),
+                        rel.get("relation_type", "related_to"),
                         rel.get("description", ""),
                     )
                     added += 1

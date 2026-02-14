@@ -263,8 +263,8 @@ class TestRelationTypeNormalizedBeforeStorage:
         # "bitter rivals who fought for years" should normalize to "rivals"
         assert result["relation_type"] == "rivals"
 
-    def test_relation_type_normalized_in_build(self, story_state, tmp_path):
-        """Relation type should be normalized when stored via _generate_relationships."""
+    def test_relation_type_stored_from_service(self, story_state, tmp_path):
+        """Relation type from the service should be stored as-is (service normalizes)."""
         from src.services.world_service import WorldService
         from src.services.world_service._build import _generate_relationships
 
@@ -274,44 +274,46 @@ class TestRelationTypeNormalizedBeforeStorage:
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_normalize.db")
-        world_db.add_entity("character", "Alpha", "Character Alpha")
-        world_db.add_entity("character", "Beta", "Character Beta")
+        try:
+            world_db.add_entity("character", "Alpha", "Character Alpha")
+            world_db.add_entity("character", "Beta", "Character Beta")
 
-        services = MagicMock()
+            services = MagicMock()
 
-        def fake_generate(state, names, rels, count, cancel_check=None):
-            """Return a relationship with a prose-style type containing 'rivals'."""
-            scores = MagicMock()
-            scores.average = 8.0
-            return [
-                (
-                    {
-                        "source": "Alpha",
-                        "target": "Beta",
-                        "relation_type": "bitter rivals who fought",
-                        "description": "A feud",
-                    },
-                    scores,
-                )
-            ]
+            def fake_generate(state, names, rels, count, cancel_check=None):
+                """Return a relationship with a pre-normalized type (as the real service does)."""
+                scores = MagicMock()
+                scores.average = 8.0
+                return [
+                    (
+                        {
+                            "source": "Alpha",
+                            "target": "Beta",
+                            "relation_type": "rivals",
+                            "description": "A feud",
+                        },
+                        scores,
+                    )
+                ]
 
-        services.world_quality.generate_relationships_with_quality.side_effect = fake_generate
+            services.world_quality.generate_relationships_with_quality.side_effect = fake_generate
 
-        with patch("src.services.world_service._build.random.randint", return_value=1):
-            _generate_relationships(svc, story_state, world_db, services)
+            with patch("src.services.world_service._build.random.randint", return_value=1):
+                _generate_relationships(svc, story_state, world_db, services)
 
-        rels = world_db.list_relationships()
-        assert len(rels) == 1
-        # "bitter rivals who fought" normalizes to "rivals" via substring match
-        assert rels[0].relation_type == "rivals"
-        world_db.close()
+            rels = world_db.list_relationships()
+            assert len(rels) == 1
+            # Service returns pre-normalized "rivals"; _build.py stores it directly
+            assert rels[0].relation_type == "rivals"
+        finally:
+            world_db.close()
 
 
 class TestRelationTypeNormalizedInBuild:
-    """D4: Verify _build.py normalizes relation_type before storage."""
+    """D4: Verify _build.py stores relation_type from service correctly."""
 
     def test_known_type_stored_correctly(self, story_state, tmp_path):
-        """A known type should be stored as-is after normalization."""
+        """A pre-normalized type from the service should be stored as-is."""
         from src.services.world_service import WorldService
         from src.services.world_service._build import _generate_relationships
 
@@ -321,36 +323,38 @@ class TestRelationTypeNormalizedInBuild:
         svc = WorldService(settings)
 
         world_db = WorldDatabase(tmp_path / "test_build_norm.db")
-        world_db.add_entity("character", "Alpha", "Character Alpha")
-        world_db.add_entity("character", "Beta", "Character Beta")
+        try:
+            world_db.add_entity("character", "Alpha", "Character Alpha")
+            world_db.add_entity("character", "Beta", "Character Beta")
 
-        services = MagicMock()
+            services = MagicMock()
 
-        def fake_generate(state, names, rels, count, cancel_check=None):
-            """Return a relationship with hyphenated-case type."""
-            scores = MagicMock()
-            scores.average = 8.0
-            return [
-                (
-                    {
-                        "source": "Alpha",
-                        "target": "Beta",
-                        "relation_type": "Allies-With",
-                        "description": "They work together",
-                    },
-                    scores,
-                )
-            ]
+            def fake_generate(state, names, rels, count, cancel_check=None):
+                """Return a relationship with a pre-normalized type."""
+                scores = MagicMock()
+                scores.average = 8.0
+                return [
+                    (
+                        {
+                            "source": "Alpha",
+                            "target": "Beta",
+                            "relation_type": "allies_with",
+                            "description": "They work together",
+                        },
+                        scores,
+                    )
+                ]
 
-        services.world_quality.generate_relationships_with_quality.side_effect = fake_generate
+            services.world_quality.generate_relationships_with_quality.side_effect = fake_generate
 
-        with patch("src.services.world_service._build.random.randint", return_value=1):
-            _generate_relationships(svc, story_state, world_db, services)
+            with patch("src.services.world_service._build.random.randint", return_value=1):
+                _generate_relationships(svc, story_state, world_db, services)
 
-        rels = world_db.list_relationships()
-        assert len(rels) == 1
-        assert rels[0].relation_type == "allies_with"
-        world_db.close()
+            rels = world_db.list_relationships()
+            assert len(rels) == 1
+            assert rels[0].relation_type == "allies_with"
+        finally:
+            world_db.close()
 
     def test_missing_relation_type_defaults_to_related_to(self, story_state, tmp_path):
         """When LLM omits relation_type, it should default to 'related_to' with a debug log."""

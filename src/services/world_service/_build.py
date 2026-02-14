@@ -5,7 +5,6 @@ import random
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from src.memory.conflict_types import normalize_relation_type
 from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_database import WorldDatabase
 from src.utils.exceptions import GenerationCancelledError
@@ -664,15 +663,16 @@ def _generate_relationships(
             target_entity = _find_entity_by_name(all_entities, rel["target"])
 
             if source_entity and target_entity:
-                raw_type = rel.get("relation_type")
-                if not raw_type:
+                # relation_type is already normalized by world_quality_service;
+                # just use it directly with a safety default.
+                relation_type = rel.get("relation_type")
+                if not relation_type:
                     logger.debug(
                         "Relationship %s -> %s missing relation_type, defaulting to 'related_to'",
                         rel["source"],
                         rel["target"],
                     )
-                    raw_type = "related_to"
-                relation_type = normalize_relation_type(raw_type)
+                    relation_type = "related_to"
                 world_db.add_relationship(
                     source_id=source_entity.id,
                     target_id=target_entity.id,

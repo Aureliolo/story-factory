@@ -371,15 +371,17 @@ class WorldDatabase:
 
                 cursor.execute("SELECT id, relation_type FROM relationships")
                 rows = cursor.fetchall()
-                updated = 0
-                for row_id, raw_type in rows:
-                    normalized = normalize_relation_type(raw_type)
-                    if normalized != raw_type:
-                        cursor.execute(
-                            "UPDATE relationships SET relation_type = ? WHERE id = ?",
-                            (normalized, row_id),
-                        )
-                        updated += 1
+                updates = [
+                    (normalize_relation_type(raw_type), row_id)
+                    for row_id, raw_type in rows
+                    if normalize_relation_type(raw_type) != raw_type
+                ]
+                if updates:
+                    cursor.executemany(
+                        "UPDATE relationships SET relation_type = ? WHERE id = ?",
+                        updates,
+                    )
+                updated = len(updates)
                 logger.info(
                     "Migration v3->v4: Normalized %d/%d relationship types",
                     updated,
