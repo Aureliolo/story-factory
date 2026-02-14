@@ -53,6 +53,14 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 SUPPORTED_ENTITY_TYPES = ["location", "faction", "item", "concept", "character"]
 
+# Diagnosis thresholds — centralised so they're easy to tune
+COLD_START_THRESHOLD_S = 1.5
+SEMANTIC_OVERHEAD_THRESHOLD_PCT = 15
+UNACCOUNTED_OVERHEAD_THRESHOLD_PCT = 15
+VRAM_SWAP_HIGH_THRESHOLD_PCT = 30
+VRAM_SWAP_MEDIUM_THRESHOLD_PCT = 10
+HEALTH_DROP_THRESHOLD = -5
+
 
 # =====================================================================
 # Timing Collector
@@ -198,8 +206,8 @@ class VramMonitor:
             phase: Current phase (create, judge, refine).
         """
         if self._last_model and self._last_model != model:
-            # Model transition detected
-            swap_time = call_end - self._last_response_time
+            # Model transition detected — measure gap between previous response and current call start
+            swap_time = max(0, call_start - self._last_response_time)
             transition = VramTransition(
                 from_model=self._last_model,
                 to_model=model,
@@ -226,7 +234,7 @@ class VramMonitor:
 def install_patches(
     timing: TimingCollector,
     vram: VramMonitor,
-) -> dict[str, Any]:
+) -> dict[tuple[Any, str], Any]:
     """Install timing instrumentation patches on target modules.
 
     Patches generate_structured and validate_unique_name at their import
@@ -237,13 +245,13 @@ def install_patches(
         vram: VramMonitor for VRAM snapshots around LLM calls.
 
     Returns:
-        Dict mapping (module_path, attr_name) -> original function,
+        Dict mapping (object, attr_name) -> original function,
         for restoring later.
     """
     import src.services.llm_client as llm_module
     import src.utils.validation as validation_module
 
-    originals: dict[str, Any] = {}
+    originals: dict[tuple[Any, str], Any] = {}
 
     # --- Patch generate_structured ---
     original_generate = llm_module.generate_structured
@@ -299,7 +307,7 @@ def install_patches(
         return result
 
     # Patch at source module
-    originals["llm_module.generate_structured"] = original_generate
+    originals[(llm_module, "generate_structured")] = original_generate
     llm_module.generate_structured = instrumented_generate_structured
 
     # Patch at all entity module import sites
@@ -319,8 +327,12 @@ def install_patches(
     for mod_name in entity_modules:
         mod = sys.modules.get(mod_name)
         if mod and hasattr(mod, "generate_structured"):
-            originals[f"{mod_name}.generate_structured"] = mod.generate_structured
+            originals[(mod, "generate_structured")] = mod.generate_structured
             mod.generate_structured = instrumented_generate_structured  # type: ignore[attr-defined]
+        else:
+            logger.warning(
+                "Module %s not loaded or missing generate_structured — patch skipped", mod_name
+            )
 
     # --- Patch validate_unique_name ---
     original_validate = validation_module.validate_unique_name
@@ -358,7 +370,7 @@ def install_patches(
         )
         return result
 
-    originals["validation_module.validate_unique_name"] = original_validate
+    originals[(validation_module, "validate_unique_name")] = original_validate
     validation_module.validate_unique_name = instrumented_validate_unique_name
 
     # Patch at entity module import sites
@@ -371,8 +383,12 @@ def install_patches(
     for mod_name in validation_modules:
         mod = sys.modules.get(mod_name)
         if mod and hasattr(mod, "validate_unique_name"):
-            originals[f"{mod_name}.validate_unique_name"] = mod.validate_unique_name
+            originals[(mod, "validate_unique_name")] = mod.validate_unique_name
             mod.validate_unique_name = instrumented_validate_unique_name  # type: ignore[attr-defined]
+        else:
+            logger.warning(
+                "Module %s not loaded or missing validate_unique_name — patch skipped", mod_name
+            )
 
     # --- Patch SemanticDuplicateChecker ---
     from src.utils.similarity import SemanticDuplicateChecker
@@ -407,8 +423,8 @@ def install_patches(
         )
         return result
 
-    originals["SemanticDuplicateChecker.__post_init__"] = original_init
-    originals["SemanticDuplicateChecker.find_semantic_duplicate"] = original_find
+    originals[(SemanticDuplicateChecker, "__post_init__")] = original_init
+    originals[(SemanticDuplicateChecker, "find_semantic_duplicate")] = original_find
     SemanticDuplicateChecker.__post_init__ = instrumented_post_init  # type: ignore[method-assign]
     SemanticDuplicateChecker.find_semantic_duplicate = instrumented_find_semantic_duplicate  # type: ignore[method-assign]
 
@@ -430,50 +446,23 @@ def install_patches(
         )
         return result
 
-    originals["entities_module.add_entity"] = original_add
+    originals[(entities_module, "add_entity")] = original_add
     entities_module.add_entity = instrumented_add_entity
 
     logger.info("Installed %d instrumentation patches", len(originals))
     return originals
 
 
-def uninstall_patches(originals: dict[str, Any]) -> None:
+def uninstall_patches(originals: dict[tuple[Any, str], Any]) -> None:
     """Restore original functions from saved originals.
 
     Args:
-        originals: Dict from install_patches() mapping keys to original callables.
+        originals: Dict from install_patches() mapping (object, attr_name) to original callables.
     """
-    import src.services.llm_client as llm_module
-    import src.utils.validation as validation_module
-    from src.memory.world_database import _entities as entities_module
-    from src.utils.similarity import SemanticDuplicateChecker
+    for (obj, attr_name), original_fn in originals.items():
+        setattr(obj, attr_name, original_fn)
 
-    if "llm_module.generate_structured" in originals:
-        llm_module.generate_structured = originals["llm_module.generate_structured"]
-
-    if "validation_module.validate_unique_name" in originals:
-        validation_module.validate_unique_name = originals["validation_module.validate_unique_name"]
-
-    if "SemanticDuplicateChecker.__post_init__" in originals:
-        SemanticDuplicateChecker.__post_init__ = originals["SemanticDuplicateChecker.__post_init__"]  # type: ignore[method-assign]
-
-    if "SemanticDuplicateChecker.find_semantic_duplicate" in originals:
-        original_fn = originals["SemanticDuplicateChecker.find_semantic_duplicate"]
-        SemanticDuplicateChecker.find_semantic_duplicate = original_fn  # type: ignore[method-assign]
-
-    if "entities_module.add_entity" in originals:
-        entities_module.add_entity = originals["entities_module.add_entity"]
-
-    # Restore entity module import sites
-    for key, original_fn in originals.items():
-        if key.startswith("src."):
-            parts = key.rsplit(".", 1)
-            if len(parts) == 2:
-                mod = sys.modules.get(parts[0])
-                if mod:
-                    setattr(mod, parts[1], original_fn)
-
-    logger.info("Uninstalled instrumentation patches")
+    logger.info("Uninstalled %d instrumentation patches", len(originals))
 
 
 # =====================================================================
@@ -485,10 +474,16 @@ def take_health_snapshot(
 ) -> dict[str, Any]:
     """Take a world health snapshot using the real WorldService.
 
+    Note: Health snapshots are only meaningful when ``world_db_path`` points to
+    a real world database that entities are being written to.  When no path is
+    provided, the script creates a throwaway diagnostic DB whose health metrics
+    will remain at baseline (no entities are written there by the generation
+    functions this script instruments).
+
     Args:
         svc: ServiceContainer with world service.
         world_db_path: Path to world DB file. If None, creates a temporary
-            in-memory diagnostic DB.
+            diagnostic DB (health deltas will be zero).
 
     Returns:
         Health metrics as a serializable dict.
@@ -497,17 +492,18 @@ def take_health_snapshot(
 
     if world_db_path and world_db_path.exists():
         logger.info("Taking health snapshot from existing DB: %s", world_db_path)
-        world_db = WorldDatabase(world_db_path)
+        db_path = world_db_path
     else:
-        # Create a temporary DB for the diagnostic run
+        # Create a per-run temporary DB so prior runs don't contaminate snapshots
         diagnostics_dir = Path("output/diagnostics")
         diagnostics_dir.mkdir(parents=True, exist_ok=True)
-        db_path = diagnostics_dir / "build_perf_diagnostic.db"
+        timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
+        db_path = diagnostics_dir / f"build_perf_diagnostic_{timestamp}.db"
         logger.info("Creating temporary diagnostic DB at %s", db_path)
-        world_db = WorldDatabase(db_path)
 
-    metrics = svc.world.get_world_health_metrics(world_db)
-    return metrics.model_dump()
+    with WorldDatabase(db_path) as world_db:
+        metrics = svc.world.get_world_health_metrics(world_db)
+        return metrics.model_dump()
 
 
 def compute_health_diff(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
@@ -521,19 +517,13 @@ def compute_health_diff(before: dict[str, Any], after: dict[str, Any]) -> dict[s
         Dict with delta values for key metrics.
     """
     return {
-        "health_delta": round(after.get("health_score", 0) - before.get("health_score", 0), 1),
-        "entities_delta": after.get("total_entities", 0) - before.get("total_entities", 0),
-        "relationships_delta": (
-            after.get("total_relationships", 0) - before.get("total_relationships", 0)
-        ),
-        "orphans_delta": after.get("orphan_count", 0) - before.get("orphan_count", 0),
-        "circular_delta": after.get("circular_count", 0) - before.get("circular_count", 0),
-        "avg_quality_delta": round(
-            after.get("average_quality", 0) - before.get("average_quality", 0), 2
-        ),
-        "density_delta": round(
-            after.get("relationship_density", 0) - before.get("relationship_density", 0), 3
-        ),
+        "health_delta": round(after["health_score"] - before["health_score"], 1),
+        "entities_delta": after["total_entities"] - before["total_entities"],
+        "relationships_delta": after["total_relationships"] - before["total_relationships"],
+        "orphans_delta": after["orphan_count"] - before["orphan_count"],
+        "circular_delta": after["circular_count"] - before["circular_count"],
+        "avg_quality_delta": round(after["average_quality"] - before["average_quality"], 2),
+        "density_delta": round(after["relationship_density"] - before["relationship_density"], 3),
     }
 
 
@@ -569,11 +559,17 @@ def build_per_entity_waterfalls(
         validate_name_s = sum(e.duration_s for e in events if e.operation == "validate_unique_name")
         db_add_s = sum(e.duration_s for e in events if e.operation == "db_add_entity")
 
-        accounted = llm_create_s + llm_judge_s + semantic_init_s + semantic_check_s + db_add_s
-        # validate_unique_name includes semantic_check time, so don't double-count
-        # Use validate_name_s only for the non-semantic portion
-        validate_non_semantic_s = max(0, validate_name_s - semantic_check_s)
-        accounted += validate_non_semantic_s
+        # validate_unique_name includes both semantic_init and semantic_check time,
+        # so subtract both to avoid double-counting
+        validate_non_semantic_s = max(0, validate_name_s - semantic_init_s - semantic_check_s)
+        accounted = (
+            llm_create_s
+            + llm_judge_s
+            + semantic_init_s
+            + semantic_check_s
+            + validate_non_semantic_s
+            + db_add_s
+        )
         raw_unaccounted = total_s - accounted
         if raw_unaccounted < 0:
             logger.warning(
@@ -599,8 +595,8 @@ def build_per_entity_waterfalls(
                 "validate_name_s": round(validate_name_s, 2),
                 "db_add_entity_s": round(db_add_s, 4),
                 "unaccounted_s": round(unaccounted_s, 2),
-                "iterations": entity_info.get("iterations", 0),
-                "final_score": entity_info.get("final_score", 0),
+                "iterations": entity_info["iterations"],
+                "final_score": entity_info["final_score"],
             }
         )
 
@@ -669,18 +665,18 @@ def generate_diagnosis(
     # --- Timing diagnosis ---
     # Check for embedding model cold-start
     semantic_inits = [w["semantic_init_s"] for w in waterfalls if w["semantic_init_s"] > 0]
-    if semantic_inits and semantic_inits[0] > 1.5:
+    if semantic_inits and semantic_inits[0] > COLD_START_THRESHOLD_S:
         diagnosis["timing_gap_primary_cause"] = "semantic_duplicate_init"
         diagnosis["timing_detail"] = (
             f"First semantic init took {semantic_inits[0]:.1f}s (embedding model cold-start). "
             f"Subsequent inits: {[round(s, 1) for s in semantic_inits[1:]]}"
         )
-    elif aggregate["pct_semantic"] > 15:
+    elif aggregate["pct_semantic"] > SEMANTIC_OVERHEAD_THRESHOLD_PCT:
         diagnosis["timing_gap_primary_cause"] = "semantic_checks_overhead"
         diagnosis["timing_detail"] = (
             f"Semantic checks consume {aggregate['pct_semantic']:.1f}% of total time"
         )
-    elif aggregate["pct_unaccounted"] > 15:
+    elif aggregate["pct_unaccounted"] > UNACCOUNTED_OVERHEAD_THRESHOLD_PCT:
         diagnosis["timing_gap_primary_cause"] = "unaccounted_overhead"
         diagnosis["timing_detail"] = (
             f"Unaccounted time is {aggregate['pct_unaccounted']:.1f}% of total. "
@@ -695,7 +691,7 @@ def generate_diagnosis(
         total_swap_s = sum(t.swap_time_s for t in vram.transitions)
         swap_pct = (total_swap_s / total_time_s * 100) if total_time_s > 0 else 0
 
-        if swap_pct > 30:
+        if swap_pct > VRAM_SWAP_HIGH_THRESHOLD_PCT:
             diagnosis["vram_swap_severity"] = "high"
             diagnosis["vram_recommendation"] = (
                 f"Model swapping consumes {swap_pct:.0f}% of total time ({total_swap_s:.1f}s). "
@@ -703,7 +699,7 @@ def generate_diagnosis(
                 "(2) batch all creates then all judges, "
                 "(3) use smaller models that fit together in VRAM"
             )
-        elif swap_pct > 10:
+        elif swap_pct > VRAM_SWAP_MEDIUM_THRESHOLD_PCT:
             diagnosis["vram_swap_severity"] = "medium"
             diagnosis["vram_recommendation"] = (
                 f"Model swapping consumes {swap_pct:.0f}% of total time ({total_swap_s:.1f}s). "
@@ -725,17 +721,17 @@ def generate_diagnosis(
     # --- Health diagnosis ---
     if health_diff:
         causes = []
-        if health_diff.get("orphans_delta", 0) > 0:
+        if health_diff["orphans_delta"] > 0:
             causes.append(
                 f"Orphan count increased by {health_diff['orphans_delta']} "
                 "(relationship generation not keeping up with entity generation)"
             )
-        if health_diff.get("circular_delta", 0) > 0:
+        if health_diff["circular_delta"] > 0:
             causes.append(
                 f"Circular dependencies increased by {health_diff['circular_delta']} "
                 "(check for mutual A↔B or problematic A→B→C→A chains)"
             )
-        if health_diff.get("health_delta", 0) < -5:
+        if health_diff["health_delta"] < HEALTH_DROP_THRESHOLD:
             causes.append(f"Health score dropped by {abs(health_diff['health_delta']):.1f} points")
 
         diagnosis["health_regression_cause"] = (
@@ -803,7 +799,9 @@ def run_entity_generation(
             if verbose:
                 print(f"  [{completed}/{total}] Generating {entity_type} #{i + 1}...")
 
-            timing.set_current_entity(entity_type, f"{entity_type}_{i + 1}")
+            placeholder_name = f"{entity_type}_{i + 1}"
+            timing.set_current_entity(entity_type, placeholder_name)
+            events_before = len(timing.events)
             entity_start = time.perf_counter()
 
             try:
@@ -813,21 +811,27 @@ def run_entity_generation(
 
                 # Extract name
                 if isinstance(entity, dict):
-                    name = entity.get("name", f"{entity_type}_{i + 1}")
+                    name = entity.get("name", placeholder_name)
                 else:
-                    name = getattr(entity, "name", f"{entity_type}_{i + 1}")
+                    name = getattr(entity, "name", placeholder_name)
 
                 # Update timing collector with actual name
                 timing.set_current_entity(entity_type, name)
-                # Re-tag events that were recorded with the placeholder name
-                for event in timing.events:
-                    if (
-                        event.entity_type == entity_type
-                        and event.entity_name == f"{entity_type}_{i + 1}"
-                    ):
+                # Re-tag only newly added events (avoids scanning all events)
+                for event in timing.events[events_before:]:
+                    if event.entity_type == entity_type and event.entity_name == placeholder_name:
                         event.entity_name = name
 
                 existing_names.append(name)
+
+                logger.info(
+                    "Generated %s '%s': score=%.1f, iters=%d, time=%.1fs",
+                    entity_type,
+                    name,
+                    scores.average,
+                    iterations,
+                    entity_elapsed,
+                )
 
                 result_info = {
                     "entity_type": entity_type,
@@ -987,9 +991,9 @@ def main() -> None:
         print("Taking health snapshot (before)...")
         health_before = take_health_snapshot(svc, world_db_path)
         if args.verbose:
-            print(f"  Health score: {health_before.get('health_score', 0):.1f}")
-            print(f"  Entities: {health_before.get('total_entities', 0)}")
-            print(f"  Relationships: {health_before.get('total_relationships', 0)}")
+            print(f"  Health score: {health_before['health_score']:.1f}")
+            print(f"  Entities: {health_before['total_entities']}")
+            print(f"  Relationships: {health_before['total_relationships']}")
         print()
 
     # Install instrumentation
@@ -1026,11 +1030,11 @@ def main() -> None:
         if health_before is not None:
             health_diff = compute_health_diff(health_before, health_after)
         if args.verbose and health_after:
-            print(f"  Health score: {health_after.get('health_score', 0):.1f}")
-            print(f"  Entities: {health_after.get('total_entities', 0)}")
-            print(f"  Relationships: {health_after.get('total_relationships', 0)}")
+            print(f"  Health score: {health_after['health_score']:.1f}")
+            print(f"  Entities: {health_after['total_entities']}")
+            print(f"  Relationships: {health_after['total_relationships']}")
             if health_diff:
-                print(f"  Health delta: {health_diff.get('health_delta', 0):+.1f}")
+                print(f"  Health delta: {health_diff['health_delta']:+.1f}")
         print()
 
     # Build timing waterfalls
@@ -1123,8 +1127,8 @@ def main() -> None:
 
     print()
     print("TIMING (#327):")
-    print(f"  Primary cause: {diagnosis.get('timing_gap_primary_cause', 'unknown')}")
-    print(f"  Detail: {diagnosis.get('timing_detail', 'N/A')}")
+    print(f"  Primary cause: {diagnosis['timing_gap_primary_cause']}")
+    print(f"  Detail: {diagnosis['timing_detail']}")
     print(
         f"  Breakdown: LLM={aggregate['pct_llm']:.0f}%, "
         f"Semantic={aggregate['pct_semantic']:.0f}%, "
@@ -1136,23 +1140,23 @@ def main() -> None:
     if vram.enabled:
         print()
         print("VRAM SWAP (#324):")
-        print(f"  Severity: {diagnosis.get('vram_swap_severity', 'unknown')}")
+        print(f"  Severity: {diagnosis['vram_swap_severity']}")
         print(f"  Transitions: {len(vram.transitions)}")
         if vram.transitions:
             total_swap_s = sum(t.swap_time_s for t in vram.transitions)
             print(f"  Total swap overhead: {total_swap_s:.1f}s")
             print(f"  Avg swap time: {total_swap_s / len(vram.transitions):.1f}s")
-        print(f"  Recommendation: {diagnosis.get('vram_recommendation', 'N/A')}")
+        print(f"  Recommendation: {diagnosis['vram_recommendation']}")
 
     if health_diff:
         print()
         print("HEALTH (#325):")
-        print(f"  Health delta: {health_diff.get('health_delta', 0):+.1f}")
-        print(f"  Entities delta: {health_diff.get('entities_delta', 0):+d}")
-        print(f"  Relationships delta: {health_diff.get('relationships_delta', 0):+d}")
-        print(f"  Orphans delta: {health_diff.get('orphans_delta', 0):+d}")
-        print(f"  Circular delta: {health_diff.get('circular_delta', 0):+d}")
-        print(f"  Cause: {diagnosis.get('health_regression_cause', 'N/A')}")
+        print(f"  Health delta: {health_diff['health_delta']:+.1f}")
+        print(f"  Entities delta: {health_diff['entities_delta']:+d}")
+        print(f"  Relationships delta: {health_diff['relationships_delta']:+d}")
+        print(f"  Orphans delta: {health_diff['orphans_delta']:+d}")
+        print(f"  Circular delta: {health_diff['circular_delta']:+d}")
+        print(f"  Cause: {diagnosis['health_regression_cause']}")
 
     print()
     print("PER-ENTITY WATERFALL:")
