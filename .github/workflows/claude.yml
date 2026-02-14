@@ -7,27 +7,19 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
-  # Note: The issues trigger allows Claude to respond when @claude is mentioned
-  # in the issue title or body when an issue is opened or assigned.
-  # Remove this trigger if you only want Claude to respond to comments.
   issues:
-    types: [opened, assigned]
+    types: [assigned]
 
 jobs:
   claude:
     if: |
-      (github.event_name == 'issue_comment' &&
-       contains(github.event.comment.body, '@claude') &&
-       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
-      (github.event_name == 'pull_request_review_comment' &&
-       contains(github.event.comment.body, '@claude') &&
-       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
-      (github.event_name == 'pull_request_review' &&
-       contains(github.event.review.body, '@claude') &&
-       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.review.author_association)) ||
-      (github.event_name == 'issues' &&
-       (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
-       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.sender.author_association))
+      github.event.sender.login == 'Aureliolo' &&
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
