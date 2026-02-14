@@ -27,7 +27,7 @@ jobs:
        contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.review.author_association)) ||
       (github.event_name == 'issues' &&
        (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
-       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.sender.author_association))
+       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.issue.user.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: write
