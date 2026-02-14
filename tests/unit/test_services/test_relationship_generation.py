@@ -400,7 +400,15 @@ class TestRelationTypeNormalizedInBuild:
             world_db.close()
 
     def test_orphaned_relationships_skipped(self, story_state, tmp_path):
-        """Relationships referencing deleted entities should be skipped with a warning."""
+        """Relationships referencing deleted entities should be skipped with a warning.
+
+        Note: This test relies on SQLite foreign keys being disabled (the default
+        in WorldDatabase.__init__—no ``PRAGMA foreign_keys = ON``). Without FK
+        enforcement, ``delete_entity`` removes the entity row but leaves the
+        relationship row intact, creating the orphan. If FK cascades are ever
+        enabled, the relationship would be auto-deleted and this test would need
+        to create the orphan differently.
+        """
         from src.services.world_service import WorldService
         from src.services.world_service._build import _generate_relationships
 

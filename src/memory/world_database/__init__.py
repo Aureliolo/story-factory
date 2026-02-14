@@ -372,9 +372,9 @@ class WorldDatabase:
                 cursor.execute("SELECT id, relation_type FROM relationships")
                 rows = cursor.fetchall()
                 updates = [
-                    (normalize_relation_type(raw_type), row_id)
+                    (normalized, row_id)
                     for row_id, raw_type in rows
-                    if normalize_relation_type(raw_type) != raw_type
+                    if (normalized := normalize_relation_type(raw_type)) != raw_type
                 ]
                 if updates:
                     cursor.executemany(
