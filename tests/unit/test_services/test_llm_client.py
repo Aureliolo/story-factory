@@ -1,6 +1,7 @@
 """Tests for services/llm_client.py."""
 
 import logging
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import ollama
@@ -38,21 +39,29 @@ def clear_client_cache():
     llm_client._ollama_clients.clear()
 
 
-def _make_chat_response(json_content: str) -> dict:
-    """Create a mock Ollama chat response.
+def _make_chat_response(json_content: str) -> Iterator:
+    """Create a mock streaming Ollama chat response.
+
+    Returns an iterator of MockStreamChunk objects compatible with consume_stream().
 
     Args:
         json_content: JSON string for the response content.
 
     Returns:
-        Dict matching Ollama ChatResponse format.
+        Iterator of stream chunks matching Ollama streaming format.
     """
-    return {
-        "message": {"content": json_content, "role": "assistant"},
-        "done": True,
-        "prompt_eval_count": 100,
-        "eval_count": 50,
-    }
+    from tests.shared.mock_ollama import MockStreamChunk
+
+    return iter(
+        [
+            MockStreamChunk(
+                content=json_content,
+                done=True,
+                prompt_eval_count=100,
+                eval_count=50,
+            ),
+        ]
+    )
 
 
 class TestGetOllamaClient:

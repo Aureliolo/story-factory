@@ -2,6 +2,8 @@
 
 Provides native Ollama client for structured outputs in services that don't use agents.
 Uses ollama.Client.chat() with `format=` parameter for grammar-constrained JSON output.
+All calls use stream=True to prevent HTTP read-timeout on long-running generations
+(e.g. qwen3 thinking mode can produce thousands of internal tokens before output).
 """
 
 import logging
@@ -13,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 
 from src.settings import Settings
 from src.utils.exceptions import LLMError
+from src.utils.streaming import consume_stream
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +109,7 @@ def generate_structured[T: BaseModel](
     for attempt in range(max_retries):
         try:
             start_time = time.time()
-            response = client.chat(
+            stream = client.chat(
                 model=model,
                 messages=messages,
                 format=json_schema,
@@ -114,10 +117,12 @@ def generate_structured[T: BaseModel](
                     "temperature": temperature,
                     "num_ctx": settings.context_size,
                 },
+                stream=True,
             )
+            response = consume_stream(stream)
             duration = time.time() - start_time
 
-            # Extract token counts from native Ollama response
+            # Extract token counts from streamed response
             prompt_tokens = response.get("prompt_eval_count")
             completion_tokens = response.get("eval_count")
 

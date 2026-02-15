@@ -33,7 +33,11 @@ class MockListResponse:
 
 
 class MockChatResponse:
-    """Mock response from ollama.Client().chat()."""
+    """Mock response from ollama.Client().chat().
+
+    Deprecated for streaming: Use MockStreamChunk from tests.shared.mock_ollama instead.
+    Kept for backward compatibility with non-streaming integration tests.
+    """
 
     def __init__(self, content: str):
         """Initialize mock chat response with content."""
@@ -70,10 +74,22 @@ def mock_ollama_for_agents():
     with patch("src.agents.base.ollama") as mock_ollama:
         mock_client = MagicMock()
 
-        # Default chat response
+        # Default chat response — returns stream-compatible iterator
+        # since base.py uses stream=True + consume_stream()
         def default_chat(*args, **kwargs):
-            """Return a default mock chat response for agent tests."""
-            return MockChatResponse("Default AI response")
+            """Return a default mock streaming chat response for agent tests."""
+            from tests.shared.mock_ollama import MockStreamChunk
+
+            return iter(
+                [
+                    MockStreamChunk(
+                        content="Default AI response",
+                        done=True,
+                        prompt_eval_count=10,
+                        eval_count=5,
+                    ),
+                ]
+            )
 
         mock_client.chat.side_effect = default_chat
         mock_ollama.Client.return_value = mock_client

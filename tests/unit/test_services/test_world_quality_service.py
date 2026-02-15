@@ -2584,12 +2584,31 @@ class TestMiniDescriptions:
         # Short enough, should be returned as-is or trimmed
         assert len(result.split()) <= settings.mini_description_words_max
 
-    def _make_mini_desc_response(self, summary: str) -> dict:
-        """Create a mock chat response for structured mini description output."""
-        return {
-            "message": {"content": json.dumps({"summary": summary}), "role": "assistant"},
-            "done": True,
-        }
+    def _make_mini_desc_response(
+        self, summary: str, prompt_eval_count: int = 10, eval_count: int = 5
+    ):
+        """Create a mock streaming chat response for structured mini description output.
+
+        Args:
+            summary: The summary text for the MiniDescription model.
+            prompt_eval_count: Simulated prompt token count.
+            eval_count: Simulated completion token count.
+
+        Returns:
+            Iterator of MockStreamChunk compatible with consume_stream().
+        """
+        from tests.shared.mock_ollama import MockStreamChunk
+
+        return iter(
+            [
+                MockStreamChunk(
+                    content=json.dumps({"summary": summary}),
+                    done=True,
+                    prompt_eval_count=prompt_eval_count,
+                    eval_count=eval_count,
+                ),
+            ]
+        )
 
     def test_generate_mini_description_llm_called_for_long_text(self, service, mock_ollama_client):
         """Test that LLM is called for long descriptions via structured output."""
@@ -2717,7 +2736,10 @@ class TestMiniDescriptions:
 
     def test_generate_mini_descriptions_batch(self, service, mock_ollama_client):
         """Test batch mini description generation."""
-        mock_ollama_client.chat.return_value = self._make_mini_desc_response("Short summary")
+        # Use side_effect callable for fresh iterator on each call (batch makes 2 calls)
+        mock_ollama_client.chat.side_effect = lambda *a, **kw: self._make_mini_desc_response(
+            "Short summary"
+        )
         service._client = mock_ollama_client
 
         entities = [
@@ -2736,10 +2758,9 @@ class TestMiniDescriptions:
 
     def test_generate_mini_description_logs_token_counts(self, service, mock_ollama_client, caplog):
         """Test that mini description logs model name and token counts at INFO (#304)."""
-        response = self._make_mini_desc_response("A brave warrior")
-        response["prompt_eval_count"] = 80
-        response["eval_count"] = 20
-        mock_ollama_client.chat.return_value = response
+        mock_ollama_client.chat.return_value = self._make_mini_desc_response(
+            "A brave warrior", prompt_eval_count=80, eval_count=20
+        )
         service._client = mock_ollama_client
 
         long_description = " ".join(["word"] * 50)
@@ -2760,10 +2781,10 @@ class TestMiniDescriptions:
         self, service, mock_ollama_client, caplog
     ):
         """Test that batch mini descriptions logs aggregate timing (#304)."""
-        response = self._make_mini_desc_response("Short summary")
-        response["prompt_eval_count"] = 50
-        response["eval_count"] = 10
-        mock_ollama_client.chat.return_value = response
+        # Use side_effect callable for fresh iterator on each call (batch makes 2 calls)
+        mock_ollama_client.chat.side_effect = lambda *a, **kw: self._make_mini_desc_response(
+            "Short summary", prompt_eval_count=50, eval_count=10
+        )
         service._client = mock_ollama_client
 
         entities = [

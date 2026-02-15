@@ -16,6 +16,7 @@ from src.utils.exceptions import CircuitOpenError, LLMConnectionError, LLMError,
 from src.utils.json_parser import clean_llm_text
 from src.utils.logging_config import log_performance
 from src.utils.prompt_registry import PromptRegistry
+from src.utils.streaming import consume_stream
 from src.utils.validation import validate_not_empty
 
 # Type variable for generic structured output
@@ -235,7 +236,7 @@ class BaseAgent:
                         )
 
                         start_time = time.time()
-                        response = self.client.chat(
+                        stream = self.client.chat(
                             model=self.model,
                             messages=messages,
                             format=json_schema,
@@ -243,10 +244,12 @@ class BaseAgent:
                                 "temperature": use_temp,
                                 "num_ctx": self.settings.context_size,
                             },
+                            stream=True,
                         )
+                        response = consume_stream(stream)
                         duration = time.time() - start_time
 
-                        # Extract token counts from native Ollama response
+                        # Extract token counts from streamed response
                         prompt_tokens = response.get("prompt_eval_count")
                         completion_tokens = response.get("eval_count")
                         total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
@@ -450,7 +453,7 @@ class BaseAgent:
                         )
 
                         start_time = time.time()
-                        response = self.client.chat(
+                        stream = self.client.chat(
                             model=use_model,
                             messages=messages,
                             options={
@@ -458,12 +461,14 @@ class BaseAgent:
                                 "num_predict": self.settings.max_tokens,
                                 "num_ctx": self.settings.context_size,
                             },
+                            stream=True,
                         )
+                        response = consume_stream(stream)
                         duration = time.time() - start_time
 
                         content: str = response["message"]["content"]
 
-                        # Extract token counts from Ollama response for cost tracking
+                        # Extract token counts from streamed response
                         prompt_tokens = response.get("prompt_eval_count")
                         completion_tokens = response.get("eval_count")
                         total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)

@@ -16,6 +16,7 @@ Usage:
 
 import logging
 import os
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -145,6 +146,34 @@ class MockListResponse:
         return default
 
 
+class MockStreamChunk:
+    """Mock streaming chunk from ollama.Client.chat(stream=True).
+
+    Simulates the ChatResponse chunks that the Ollama client yields
+    during streaming. The final chunk has done=True and includes token counts.
+    """
+
+    def __init__(
+        self,
+        content: str = "",
+        done: bool = False,
+        prompt_eval_count: int | None = None,
+        eval_count: int | None = None,
+    ):
+        """Initialize a mock stream chunk.
+
+        Args:
+            content: Content fragment for this chunk.
+            done: Whether this is the final chunk.
+            prompt_eval_count: Prompt token count (only on final chunk).
+            eval_count: Completion token count (only on final chunk).
+        """
+        self.message = type("Message", (), {"content": content, "role": "assistant"})()
+        self.done = done
+        self.prompt_eval_count = prompt_eval_count
+        self.eval_count = eval_count
+
+
 class MockOllamaClient:
     """Mock Ollama client that returns safe defaults without real connections.
 
@@ -153,6 +182,7 @@ class MockOllamaClient:
     - Supports both dict and object access patterns used in the codebase
     - Accepts any host (test connection failures by patching ollama.Client directly)
     - Returns consistent mock responses for all API methods
+    - Supports stream=True (returns iterator of MockStreamChunk)
     """
 
     def __init__(self, host: str | None = None, timeout: float | None = None):
@@ -194,19 +224,30 @@ class MockOllamaClient:
         model: str | None = None,
         messages: MessageList[dict[str, Any]] | None = None,
         options: dict[str, Any] | None = None,
+        stream: bool = False,
         **kwargs: Any,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | Iterator[MockStreamChunk]:
         """Return a mock chat response.
 
         Args:
             model: Model identifier.
             messages: Conversation messages.
             options: Generation options.
+            stream: If True, return an iterator of MockStreamChunk objects.
             **kwargs: Additional arguments.
 
         Returns:
-            Dict with message content matching Ollama API format.
+            When stream=False: Dict with message content matching Ollama API format.
+            When stream=True: Iterator of MockStreamChunk objects.
         """
+        if stream:
+            return iter(
+                [
+                    MockStreamChunk(
+                        content="Mock AI response", done=True, prompt_eval_count=10, eval_count=5
+                    ),
+                ]
+            )
         return {
             "message": {"content": "Mock AI response", "role": "assistant"},
             "done": True,
