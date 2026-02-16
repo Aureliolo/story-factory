@@ -214,8 +214,8 @@ class TestCalculateTotalSteps:
         # Base (2: character extraction + completion)
         # + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) = 11
-        assert world_service._calculate_total_steps(options) == 11
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 12
+        assert world_service._calculate_total_steps(options) == 12
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
@@ -223,8 +223,8 @@ class TestCalculateTotalSteps:
         # Base (2: character extraction + completion)
         # + clear (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) = 12
-        assert world_service._calculate_total_steps(options) == 12
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 13
+        assert world_service._calculate_total_steps(options) == 13
 
     def test_custom_options(self, world_service):
         """Test step count for custom options."""

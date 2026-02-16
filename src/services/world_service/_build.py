@@ -262,6 +262,7 @@ def build_world(
     # Step 8a: Recover orphan entities by generating additional relationships
     if options.generate_relationships:
         check_cancelled()
+        report_progress("Recovering orphan entities...")
         orphan_count = _recover_orphans(
             svc, state, world_db, services, cancel_check=options.is_cancelled
         )
@@ -300,6 +301,8 @@ def _calculate_total_steps(options: WorldBuildOptions) -> int:
     if options.generate_concepts:
         steps += 1
     if options.generate_relationships:
+        steps += 1
+        # +1 for orphan recovery step after relationship generation
         steps += 1
     return steps
 
@@ -732,6 +735,9 @@ def _recover_orphans(
     Returns:
         Number of relationships successfully added.
     """
+    # Enforce max_attempts cap
+    max_attempts = min(max_attempts, 5)
+
     orphans = world_db.find_orphans()
     if not orphans:
         logger.debug("No orphan entities found, skipping recovery")
@@ -755,6 +761,9 @@ def _recover_orphans(
         if source_name and target_name:
             existing_rels.append((source_name, target_name, r.relation_type))
 
+    # Track orphan names for validation
+    orphan_names = {o.name.lower() for o in orphans}
+
     added_count = 0
     attempts = min(len(orphans), max_attempts)
 
@@ -777,6 +786,17 @@ def _recover_orphans(
             target_entity = _find_entity_by_name(all_entities, rel["target"])
 
             if source_entity and target_entity:
+                # Verify at least one endpoint is an orphan
+                source_is_orphan = source_entity.name.lower() in orphan_names
+                target_is_orphan = target_entity.name.lower() in orphan_names
+                if not source_is_orphan and not target_is_orphan:
+                    logger.warning(
+                        "Orphan recovery: skipping relationship %s -> %s (neither is an orphan)",
+                        rel["source"],
+                        rel["target"],
+                    )
+                    continue
+
                 relation_type = rel.get("relation_type", "related_to")
                 world_db.add_relationship(
                     source_id=source_entity.id,
@@ -793,6 +813,15 @@ def _recover_orphans(
                     relation_type,
                     scores.average,
                 )
+
+                # Remove connected orphan(s) from tracking set
+                if source_is_orphan:
+                    orphan_names.discard(source_entity.name.lower())
+                if target_is_orphan:
+                    orphan_names.discard(target_entity.name.lower())
+                if not orphan_names:
+                    logger.info("Orphan recovery: all orphans now have relationships")
+                    break
             else:
                 logger.warning(
                     "Orphan recovery: could not resolve entities for %s -> %s",

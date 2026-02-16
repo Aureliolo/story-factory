@@ -103,8 +103,8 @@ def get_model_context_size(client: ollama.Client, model: str) -> int | None:
                 logger.debug("Model %s context size: %d tokens", model, context_length)
             return context_length
         except Exception as e:
+            # Don't cache on transient errors — let the next call retry
             logger.debug("Could not query context size for model %s: %s", model, e)
-            _model_context_cache[model] = None
             return None
 
 
@@ -215,7 +215,9 @@ def generate_structured[T: BaseModel](
     if max_retries < 1:
         raise ValueError(f"max_retries must be >= 1, got {max_retries}")
 
-    # Validate context size against model's actual limit
+    # NOTE: Context size validation is intentionally applied only in generate_structured()
+    # because JSON truncation from exceeding context limits causes parse failures here.
+    # Free-form text generation in BaseAgent.generate() tolerates truncation gracefully.
     effective_context_size = validate_context_size(client, model, settings.context_size)
 
     last_error: Exception | None = None

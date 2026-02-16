@@ -235,10 +235,9 @@ def _generate_batch[T, S: BaseQualityScores](
                         count,
                     )
                     consecutive_failures = 0
-                    # Continue the loop — the next generate_fn call will
-                    # naturally produce different entity pairs because
-                    # on_success callbacks have already populated the
-                    # deduplication lists from earlier successes.
+                    # Continue generating — if prior successes populated the deduplication
+                    # lists, subsequent calls will naturally target different entity pairs.
+                    # Otherwise, the second round of failures will trigger termination.
                 else:
                     logger.warning(
                         "%s batch early termination: %d consecutive failures "

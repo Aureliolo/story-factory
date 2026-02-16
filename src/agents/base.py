@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from contextlib import contextmanager
 from typing import TypeVar
 
 import httpx
@@ -50,6 +51,23 @@ def _get_llm_semaphore(settings: Settings) -> threading.Semaphore:
                     f"Initialized LLM semaphore with limit {settings.llm_max_concurrent_requests}"
                 )
     return _llm_semaphore
+
+
+@contextmanager
+def _acquire_llm_semaphore(settings: Settings):
+    """Acquire the LLM semaphore with configurable timeout.
+
+    Raises LLMError if the semaphore cannot be acquired within the timeout.
+    """
+    semaphore = _get_llm_semaphore(settings)
+    timeout = settings.llm_semaphore_timeout
+    acquired = semaphore.acquire(timeout=timeout)
+    if not acquired:
+        raise LLMError(f"LLM request queue timeout after {timeout}s — all slots busy")
+    try:
+        yield
+    finally:
+        semaphore.release()
 
 
 # Re-export exceptions for backward compatibility
@@ -225,12 +243,7 @@ class BaseAgent:
         json_schema = response_model.model_json_schema()
 
         # Acquire semaphore to limit concurrent requests
-        semaphore_timeout = getattr(self.settings, "llm_semaphore_timeout", 300)
-        semaphore = _get_llm_semaphore(self.settings)
-        acquired = semaphore.acquire(timeout=semaphore_timeout)
-        if not acquired:
-            raise LLMError(f"LLM request queue timeout after {semaphore_timeout}s — all slots busy")
-        try:
+        with _acquire_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} structured generation"):
                 last_error: Exception | None = None
 
@@ -333,8 +346,6 @@ class BaseAgent:
                 raise LLMGenerationError(
                     f"Structured generation failed for {response_model.__name__}: {last_error}"
                 ) from last_error
-        finally:
-            semaphore.release()
 
     @classmethod
     @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)
@@ -460,12 +471,7 @@ class BaseAgent:
         max_retries = self.settings.llm_max_retries
 
         # Acquire semaphore to limit concurrent requests
-        semaphore_timeout = getattr(self.settings, "llm_semaphore_timeout", 300)
-        semaphore = _get_llm_semaphore(self.settings)
-        acquired = semaphore.acquire(timeout=semaphore_timeout)
-        if not acquired:
-            raise LLMError(f"LLM request queue timeout after {semaphore_timeout}s — all slots busy")
-        try:
+        with _acquire_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} generation"):
                 for attempt in range(max_retries):
                     try:
@@ -568,8 +574,6 @@ class BaseAgent:
                 raise LLMGenerationError(
                     f"Failed to generate after {max_retries} attempts: {last_error}"
                 ) from last_error
-        finally:
-            semaphore.release()
 
     def get_model_info(self) -> ModelInfo:
         """Get information about the current model."""

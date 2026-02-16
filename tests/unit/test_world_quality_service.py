@@ -1123,19 +1123,6 @@ class TestRetryTemperature:
 class TestMiniDescriptionCaching:
     """Tests for mini description caching (#13)."""
 
-    def test_mini_description_cached_returns_early(self, world_quality_service):
-        """Cached mini description is returned immediately without LLM call."""
-        from src.services.world_quality_service._validation import generate_mini_description
-
-        result = generate_mini_description(
-            world_quality_service,
-            "Alice",
-            "character",
-            "A very long description that would normally require LLM summarization",
-            cached_mini_description="A brave hero",
-        )
-        assert result == "A brave hero"
-
     def test_mini_description_batch_skips_cached(self, caplog, world_quality_service):
         """Batch generation skips entities with cached mini descriptions."""
         with patch.object(

@@ -179,7 +179,8 @@ class WorldHealthMetrics(BaseModel):
         Structural scoring (0-100):
         - Base score: 100
         - Orphan penalty: -2 per orphan (max -20)
-        - Circular penalty: -5 per circular chain (max -25)
+        - Hierarchical circular penalty: -5 per chain (max -25)
+        - Mutual circular penalty: -1 per chain (max -5)
         - Contradiction penalty: -5 per contradiction (max -25)
         - Temporal error penalty: -3 per error (max -15)
         - Temporal warning penalty: -1 per warning (max -5)

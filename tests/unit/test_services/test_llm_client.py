@@ -574,13 +574,18 @@ class TestGetModelContextSize:
         mock_client.show.assert_called_once()
 
     def test_get_model_context_size_returns_none_on_error(self):
-        """Test that None is returned when client.show raises an exception."""
+        """Test that None is returned when client.show raises an exception.
+
+        Transient errors should NOT be cached so the next call can retry.
+        """
         mock_client = MagicMock()
         mock_client.show.side_effect = Exception("Connection refused")
 
         result = get_model_context_size(mock_client, "error-model:8b")
 
         assert result is None
+        # Transient errors must not be cached — the key should be absent
+        assert "error-model:8b" not in _model_context_cache
 
     def test_get_model_context_size_double_check_lock(self):
         """Test double-checked locking when cache is populated during lock acquisition."""

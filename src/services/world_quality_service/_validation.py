@@ -27,29 +27,20 @@ def generate_mini_description(
     name: str,
     entity_type: str,
     full_description: str,
-    cached_mini_description: str | None = None,
 ) -> str:
     """Generate a short 10-15 word mini description for hover tooltips.
 
     Uses a fast model with low temperature for consistent, concise output.
-    If a cached mini description is provided, returns it immediately without
-    making an LLM call.
 
     Args:
         svc: WorldQualityService instance.
         name: Entity name.
         entity_type: Type of entity (character, location, etc.).
         full_description: Full description to summarize.
-        cached_mini_description: Previously generated mini description to reuse.
 
     Returns:
         A short summary (configured word limit).
     """
-    # Return cached value if available
-    if cached_mini_description:
-        logger.debug("Using cached mini description for %s '%s'", entity_type, name)
-        return cached_mini_description
-
     max_words = svc.settings.mini_description_words_max
     description_words = full_description.split()
     if not full_description or len(description_words) <= max_words:
@@ -582,7 +573,7 @@ IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no 
                 raw_confidence = suggestion.get("confidence", 0.5)
                 try:
                     confidence = float(raw_confidence)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):  # fmt: skip
                     confidence = 0.5
                 confidence = max(0.0, min(1.0, confidence))
 
@@ -797,7 +788,7 @@ Return JSON:
             # Coerce confidence to float with fallback and clamping
             try:
                 confidence = float(result.get("confidence", 0.5))
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 confidence = 0.5
             confidence = max(0.0, min(1.0, confidence))
 

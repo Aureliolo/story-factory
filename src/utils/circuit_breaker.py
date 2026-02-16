@@ -287,19 +287,20 @@ def get_circuit_breaker(
     Returns:
         The CircuitBreaker instance for the given name.
     """
-    if name not in _circuit_breakers:
-        with _circuit_breaker_lock:
-            if name not in _circuit_breakers:
-                _circuit_breakers[name] = CircuitBreaker(
-                    name=name,
-                    failure_threshold=failure_threshold,
-                    success_threshold=success_threshold,
-                    timeout_seconds=timeout_seconds,
-                    enabled=enabled,
-                )
-                logger.debug("Created circuit breaker for '%s'", name)
+    if name in _circuit_breakers:
+        return _circuit_breakers[name]
 
-    return _circuit_breakers[name]
+    with _circuit_breaker_lock:
+        if name not in _circuit_breakers:
+            _circuit_breakers[name] = CircuitBreaker(
+                name=name,
+                failure_threshold=failure_threshold,
+                success_threshold=success_threshold,
+                timeout_seconds=timeout_seconds,
+                enabled=enabled,
+            )
+            logger.debug("Created circuit breaker for '%s'", name)
+        return _circuit_breakers[name]
 
 
 def reset_global_circuit_breaker(name: str | None = None) -> None:

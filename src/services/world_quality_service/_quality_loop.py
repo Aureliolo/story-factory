@@ -345,7 +345,8 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             f"Last error: {last_error}"
         )
 
-    # Hail-mary: try one fresh creation if threshold not met and loop ran multiple iterations
+    # Hail-mary: when threshold not met and config allows multiple iterations,
+    # try one fresh creation to see if it beats the best refinement result.
     best_entity_data = history.get_best_entity()
     threshold_met_pre_hail_mary = round(history.peak_score, 1) >= entity_threshold
 
