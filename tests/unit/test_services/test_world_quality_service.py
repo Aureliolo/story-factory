@@ -2,6 +2,7 @@
 
 import json
 import logging
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import ollama
@@ -32,6 +33,7 @@ from src.memory.world_quality import (
 from src.services.world_quality_service import WorldQualityService
 from src.settings import Settings
 from src.utils.exceptions import WorldGenerationError
+from tests.shared.mock_ollama import MockStreamChunk
 
 
 @pytest.fixture
@@ -2586,7 +2588,7 @@ class TestMiniDescriptions:
 
     def _make_mini_desc_response(
         self, summary: str, prompt_eval_count: int = 10, eval_count: int = 5
-    ):
+    ) -> Iterator[MockStreamChunk]:
         """Create a mock streaming chat response for structured mini description output.
 
         Args:
@@ -2597,8 +2599,6 @@ class TestMiniDescriptions:
         Returns:
             Iterator of MockStreamChunk compatible with consume_stream().
         """
-        from tests.shared.mock_ollama import MockStreamChunk
-
         return iter(
             [
                 MockStreamChunk(

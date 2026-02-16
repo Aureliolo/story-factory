@@ -5,6 +5,7 @@ import threading
 import time
 from typing import TypeVar
 
+import httpx
 import ollama
 from pydantic import BaseModel, ValidationError
 
@@ -288,7 +289,12 @@ class BaseAgent:
                         if attempt < max_retries - 1:
                             continue  # Retry with same prompt
 
-                    except (ConnectionError, TimeoutError) as e:
+                    except (
+                        ConnectionError,
+                        TimeoutError,
+                        httpx.TimeoutException,
+                        httpx.TransportError,
+                    ) as e:
                         last_error = e
                         circuit_breaker.record_failure(e)
                         logger.warning(
@@ -537,6 +543,19 @@ class BaseAgent:
                         last_error = e
                         circuit_breaker.record_failure(e)
                         logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
+                        if attempt < max_retries - 1:
+                            logger.info(f"{self.name}: Retrying in {delay}s...")
+                            time.sleep(delay)
+                            delay *= self.settings.llm_retry_backoff
+
+                    except (httpx.TimeoutException, httpx.TransportError) as e:
+                        # Mid-stream httpx errors (ReadTimeout, RemoteProtocolError, etc.)
+                        # not wrapped by ollama-python during streaming iteration
+                        last_error = e
+                        circuit_breaker.record_failure(e)
+                        logger.warning(
+                            f"{self.name}: httpx stream error on attempt {attempt + 1}: {e}"
+                        )
                         if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")
                             time.sleep(delay)

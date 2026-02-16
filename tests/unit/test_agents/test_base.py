@@ -1,6 +1,7 @@
 """Tests for the base agent class."""
 
 import threading
+from collections.abc import Iterator
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +16,9 @@ from src.utils.exceptions import CircuitOpenError, LLMGenerationError
 from tests.shared.mock_ollama import TEST_MODEL, MockStreamChunk
 
 
-def _make_stream_response(content: str, prompt_eval_count: int = 10, eval_count: int = 5):
+def _make_stream_response(
+    content: str, prompt_eval_count: int = 10, eval_count: int = 5
+) -> Iterator[MockStreamChunk]:
     """Create a mock streaming response compatible with consume_stream().
 
     Returns a fresh iterator of MockStreamChunk each time it's called.
@@ -339,6 +342,38 @@ class TestBaseAgentGenerate:
         assert agent.client.chat.call_count == 2
 
     @patch("src.agents.base.time.sleep")
+    def test_generate_retries_on_httpx_timeout(self, mock_sleep):
+        """Test generate retries on httpx.TimeoutException (mid-stream read timeout)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            _make_stream_response("Success after httpx retry"),
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Success after httpx retry"
+        assert agent.client.chat.call_count == 2
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_retries_on_httpx_transport_error(self, mock_sleep):
+        """Test generate retries on httpx.TransportError (mid-stream disconnect)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.RemoteProtocolError("Server disconnected"),
+            _make_stream_response("Success after transport retry"),
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Success after transport retry"
+        assert agent.client.chat.call_count == 2
+
+    @patch("src.agents.base.time.sleep")
     def test_generate_exhausts_retries(self, mock_sleep):
         """Test generate raises after exhausting retries."""
         agent = create_mock_agent()
@@ -366,7 +401,7 @@ class TestBaseAgentQwenNoThink:
 
     def test_generate_no_think_not_added_for_qwen_model(self):
         """Test /no_think is NOT added to system prompt for Qwen models."""
-        agent = create_mock_agent(model="huihui_ai/qwen3-abliterated:8b")
+        agent = create_mock_agent(model="fake-qwen:8b")
         agent.client.chat.return_value = _make_stream_response("Valid response text")
 
         agent.generate("Test prompt")
@@ -379,7 +414,7 @@ class TestBaseAgentQwenNoThink:
 
     def test_generate_no_think_not_added_for_non_qwen(self):
         """Test /no_think is NOT added for non-Qwen models."""
-        agent = create_mock_agent(model="huihui_ai/dolphin3-abliterated:8b")
+        agent = create_mock_agent(model="fake-dolphin:8b")
         agent.client.chat.return_value = _make_stream_response("Valid response text")
 
         agent.generate("Test prompt")

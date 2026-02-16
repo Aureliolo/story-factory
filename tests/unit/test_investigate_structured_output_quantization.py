@@ -5,6 +5,7 @@ a running Ollama instance.
 """
 
 import json
+from collections.abc import Iterator
 from unittest.mock import MagicMock
 
 import ollama
@@ -17,6 +18,7 @@ from scripts.investigate_structured_output_quantization import (
     run_constrained,
     run_unconstrained,
 )
+from tests.shared.mock_ollama import MockStreamChunk
 
 
 # =====================================================================
@@ -41,7 +43,7 @@ def _make_result(
     }
 
 
-def _make_chat_response(content: str):
+def _make_chat_response(content: str) -> Iterator[MockStreamChunk]:
     """Build a mock streaming Ollama chat response compatible with consume_stream().
 
     Args:
@@ -50,8 +52,6 @@ def _make_chat_response(content: str):
     Returns:
         Iterator of MockStreamChunk matching the Ollama streaming format.
     """
-    from tests.shared.mock_ollama import MockStreamChunk
-
     return iter(
         [
             MockStreamChunk(content=content, done=True, prompt_eval_count=10, eval_count=5),
