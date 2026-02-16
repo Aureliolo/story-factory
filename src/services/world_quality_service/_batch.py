@@ -4,7 +4,7 @@ import logging
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence
-from typing import Any, TypeVar
+from typing import Any
 
 from src.memory.story_state import Chapter, Character, StoryState
 from src.memory.world_quality import (
@@ -20,9 +20,6 @@ from src.memory.world_quality import (
 from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
-S = TypeVar("S", bound=BaseQualityScores)
 
 MAX_CONSECUTIVE_BATCH_FAILURES = 3
 
@@ -114,7 +111,7 @@ def _aggregate_errors(errors: list[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _generate_batch(
+def _generate_batch[T, S: BaseQualityScores](
     svc,
     count: int,
     entity_type: str,
@@ -257,7 +254,7 @@ def _generate_batch(
     return results
 
 
-def _review_batch(
+def _review_batch[T, S: BaseQualityScores](
     svc,
     entities: list[T],
     entity_type: str,
