@@ -45,7 +45,7 @@ dependencies = [
     "pydantic==2.12.5",
     "networkx==3.6.1",
     "ebooklib==0.20",
-    "reportlab==4.4.9",
+    "reportlab==4.4.10",
     "Pillow==12.1.1",
     "python-docx==1.2.0",
     "PyYAML==6.0.3",
@@ -64,13 +64,13 @@ test = [
     "pytest-playwright==0.7.2",
 ]
 dev = [
-    "ruff==0.15.0",
+    "ruff==0.15.1",
     "mypy==1.19.1",
     "pre-commit==4.5.1",
     "interrogate==1.7.0",
-    "types-networkx==3.6.1.20251220",
+    "types-networkx==3.6.1.20260210",
     "types-Pillow==10.2.0.20240822",
-    "types-reportlab==4.4.9.20260117",
+    "types-reportlab==4.4.10.20260216",
 ]
 all = [
     "story-factory[test,dev]",
