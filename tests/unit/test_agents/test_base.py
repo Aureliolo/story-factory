@@ -553,7 +553,7 @@ class TestBaseAgentGenerateStructured:
     """Tests for generate_structured method with native Ollama format parameter."""
 
     @staticmethod
-    def _make_chat_response(json_content: str):
+    def _make_chat_response(json_content: str) -> Iterator[MockStreamChunk]:
         """Create a mock streaming Ollama chat response with JSON content.
 
         Args:
@@ -696,6 +696,40 @@ class TestBaseAgentGenerateStructured:
         assert result.name == "Recovered"
         assert agent.client.chat.call_count == 2
         mock_sleep.assert_called_once_with(1)  # min(2**0, 10) = 1
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_httpx_timeout(self, mock_sleep):
+        """Test generate_structured retries on httpx.TimeoutException (mid-stream)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            self._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_httpx_transport_error(self, mock_sleep):
+        """Test generate_structured retries on httpx.TransportError (mid-stream disconnect)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.RemoteProtocolError("Server disconnected"),
+            self._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)
 
     @patch("src.agents.base.time.sleep")
     def test_generate_structured_exhausts_retries_raises(self, mock_sleep):

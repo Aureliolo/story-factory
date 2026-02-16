@@ -522,39 +522,26 @@ class BaseAgent:
                         circuit_breaker.record_success()
                         return cleaned_content
 
-                    except ConnectionError as e:
-                        last_error = e
-                        circuit_breaker.record_failure(e)
-                        logger.warning(
-                            f"{self.name}: Connection error on attempt {attempt + 1}: {e}"
-                        )
-                        if attempt < max_retries - 1:
-                            logger.info(f"{self.name}: Retrying in {delay}s...")
-                            time.sleep(delay)
-                            delay *= self.settings.llm_retry_backoff
-
                     except ollama.ResponseError as e:
                         # Model-specific errors (model not found, etc.) - don't retry
                         logger.error(f"{self.name}: Ollama response error: {e}")
                         circuit_breaker.record_failure(e)
                         raise LLMGenerationError(f"Model error: {e}") from e
 
-                    except TimeoutError as e:
-                        last_error = e
-                        circuit_breaker.record_failure(e)
-                        logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
-                        if attempt < max_retries - 1:
-                            logger.info(f"{self.name}: Retrying in {delay}s...")
-                            time.sleep(delay)
-                            delay *= self.settings.llm_retry_backoff
-
-                    except (httpx.TimeoutException, httpx.TransportError) as e:
-                        # Mid-stream httpx errors (ReadTimeout, RemoteProtocolError, etc.)
-                        # not wrapped by ollama-python during streaming iteration
+                    except (
+                        ConnectionError,
+                        TimeoutError,
+                        httpx.TimeoutException,
+                        httpx.TransportError,
+                    ) as e:
                         last_error = e
                         circuit_breaker.record_failure(e)
                         logger.warning(
-                            f"{self.name}: httpx stream error on attempt {attempt + 1}: {e}"
+                            "%s: Connection/timeout error on attempt %d/%d: %s",
+                            self.name,
+                            attempt + 1,
+                            max_retries,
+                            e,
                         )
                         if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")
