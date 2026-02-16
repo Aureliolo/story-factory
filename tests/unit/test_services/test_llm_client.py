@@ -582,6 +582,28 @@ class TestGetModelContextSize:
 
         assert result is None
 
+    def test_get_model_context_size_double_check_lock(self):
+        """Test double-checked locking when cache is populated during lock acquisition."""
+        mock_client = MagicMock()
+        real_lock = llm_client._model_context_cache_lock
+
+        class InjectingLock:
+            """Lock wrapper that injects a cache entry on acquire."""
+
+            def __enter__(self):
+                """Populate cache before acquiring, simulating a concurrent thread."""
+                _model_context_cache["race-model:8b"] = 4096
+                return real_lock.__enter__()
+
+            def __exit__(self, *args):
+                return real_lock.__exit__(*args)
+
+        with patch.object(llm_client, "_model_context_cache_lock", InjectingLock()):
+            result = get_model_context_size(mock_client, "race-model:8b")
+
+        assert result == 4096
+        mock_client.show.assert_not_called()
+
 
 class TestValidateContextSize:
     """Tests for validate_context_size function."""

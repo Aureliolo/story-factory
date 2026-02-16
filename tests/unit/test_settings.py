@@ -1787,6 +1787,15 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="llm_max_retries must be between"):
             settings.validate()
 
+    # --- LLM semaphore timeout validation (line 548) ---
+
+    def test_validate_raises_on_invalid_llm_semaphore_timeout(self):
+        """Should raise ValueError for llm_semaphore_timeout out of range."""
+        settings = Settings()
+        settings.llm_semaphore_timeout = 10  # Below 30
+        with pytest.raises(ValueError, match="llm_semaphore_timeout must be between 30 and 600"):
+            settings.validate()
+
     # --- Content truncation validation (line 645) ---
 
     def test_validate_raises_on_invalid_content_truncation_for_judgment(self):

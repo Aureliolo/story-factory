@@ -1751,6 +1751,152 @@ class TestRecoverOrphans:
 
         assert result == 0
 
+    def test_recover_orphans_cancel_check_stops_iteration(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test cancel_check breaks the recovery loop after first iteration."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 orphan entities (no relationships) so attempts > 1
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+
+        call_count = 0
+
+        def cancel_after_first():
+            """Return True after the first call to cancel."""
+            nonlocal call_count
+            call_count += 1
+            return call_count > 1
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Alice",
+                    "target": "Bob",
+                    "relation_type": "friends",
+                    "description": "They are friends",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.INFO):
+            result = _recover_orphans(
+                world_service,
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                cancel_check=cancel_after_first,
+            )
+
+        # First iteration succeeds (cancel_check returns False), then second
+        # iteration is cancelled (cancel_check returns True) before generating
+        assert result == 1
+        assert "Orphan recovery cancelled after" in caplog.text
+
+    def test_recover_orphans_empty_relationship_continues(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test empty or missing source/target in generated relationship logs warning and continues."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 orphan entities (no relationships)
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 5.0
+
+        # Return an empty dict (no "source" or "target" keys)
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=({}, mock_scores, 1)
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 0
+        assert "empty relationship generated" in caplog.text
+
+    def test_recover_orphans_unresolvable_entities_logs_warning(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test unresolvable entity names in generated relationship logs warning."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 orphan entities (no relationships)
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+
+        # Return a relationship with names that don't exist in the world db
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Nonexistent Hero",
+                    "target": "Unknown Villain",
+                    "relation_type": "enemies",
+                    "description": "They are enemies",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 0
+        assert "could not resolve entities for" in caplog.text
+
+
+class TestBuildWorldOrphanRecovery:
+    """Tests for orphan recovery integration in build_world."""
+
+    def test_build_world_orphan_recovery_adds_to_relationship_count(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test build_world adds orphan recovery count to relationships total."""
+        from unittest.mock import patch
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        # Patch _recover_orphans to return a positive count
+        with patch(
+            "src.services.world_service._build._recover_orphans",
+            return_value=3,
+        ):
+            counts = world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                WorldBuildOptions.full(),
+            )
+
+        # Relationships should include the orphan recovery count
+        assert counts["relationships"] == 3
+
 
 class TestHealthScoreCircularPenalty:
     """Tests for the split circular penalty in health score calculation."""

@@ -1387,3 +1387,26 @@ class TestHailMaryFreshCreation:
 
         assert entity["name"] == "Original"
         assert scores.average == 6.0
+
+    def test_hail_mary_returns_empty_entity(self):
+        """Hail-mary create_fn returning empty entity keeps original."""
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        create_calls = [0]
+
+        def create_fn(retries):
+            """Return 'Original' first, then empty dict for hail-mary."""
+            create_calls[0] += 1
+            if create_calls[0] == 1:
+                return {"name": "Original", "data": "first"}
+            return {}
+
+        def judge_fn(entity):
+            """Score below threshold."""
+            return _TestScores(dim_a=6.0, dim_b=6.0, feedback="OK")
+
+        kwargs = self._make_loop_args(create_fn, judge_fn, max_iterations=2, threshold=9.0)
+        entity, scores, _iterations = quality_refinement_loop(**kwargs)
+
+        assert entity["name"] == "Original"
+        assert scores.average == 6.0
