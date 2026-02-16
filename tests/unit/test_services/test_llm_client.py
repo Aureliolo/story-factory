@@ -505,6 +505,12 @@ class TestEstimateTokenCount:
         result = estimate_token_count("")
         assert result == 0
 
+    def test_estimate_token_count_longer_string(self):
+        """Test token estimation for a longer, more realistic prompt."""
+        text = "a" * 400
+        result = estimate_token_count(text)
+        assert result == 100  # 400 // 4 = 100
+
 
 class TestWarnIfPromptTooLarge:
     """Tests for warn_if_prompt_too_large function."""

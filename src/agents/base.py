@@ -255,6 +255,14 @@ class BaseAgent:
                             f"attempt={attempt + 1}/{max_retries})"
                         )
 
+                        # Validate context size against model limits (lazy import
+                        # to avoid circular dependency with llm_client)
+                        from src.services.llm_client import validate_context_size
+
+                        validated_context = validate_context_size(
+                            self.client, self.model, self.settings.context_size
+                        )
+
                         start_time = time.time()
                         stream = self.client.chat(
                             model=self.model,
@@ -262,7 +270,7 @@ class BaseAgent:
                             format=json_schema,
                             options={
                                 "temperature": use_temp,
-                                "num_ctx": self.settings.context_size,
+                                "num_ctx": validated_context,
                             },
                             stream=True,
                         )

@@ -1355,6 +1355,7 @@ class TestHailMaryFreshCreation:
     def test_hail_mary_creation_fails_gracefully(self):
         """Original entity is returned when hail-mary creation raises an exception."""
         from src.services.world_quality_service._quality_loop import quality_refinement_loop
+        from src.utils.exceptions import WorldGenerationError
 
         create_calls = [0]
 
@@ -1363,7 +1364,7 @@ class TestHailMaryFreshCreation:
             create_calls[0] += 1
             if create_calls[0] == 1:
                 return {"name": "Original", "data": "first"}
-            raise RuntimeError("Hail-mary creation exploded")
+            raise WorldGenerationError("Hail-mary creation exploded")
 
         def judge_fn(entity):
             """Score below threshold."""

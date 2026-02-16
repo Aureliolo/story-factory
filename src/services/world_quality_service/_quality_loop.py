@@ -395,7 +395,7 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                     "%s hail-mary returned empty entity, keeping original",
                     entity_type.capitalize(),
                 )
-        except Exception as e:
+        except (WorldGenerationError, ValueError, KeyError) as e:
             logger.warning(
                 "%s hail-mary failed: %s. Keeping original best.",
                 entity_type.capitalize(),

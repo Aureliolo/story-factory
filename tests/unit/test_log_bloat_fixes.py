@@ -390,7 +390,8 @@ class TestIterationCountReporting:
         svc._log_refinement_analytics = MagicMock()
 
         # 3 iterations: 6.0, 7.5, 5.0 → best is iteration 2, but total is 3
-        scores_list = [6.0, 7.5, 5.0]
+        # 4th score is for hail-mary fresh creation attempt
+        scores_list = [6.0, 7.5, 5.0, 4.0]
         judge_idx = 0
 
         def judge_fn(entity):
@@ -430,7 +431,7 @@ class TestIterationCountReporting:
             story_id="test-story",
         )
 
-        # Best iteration was 2 (score 7.5), but returned count should be 3 (total)
-        assert iterations == 3, f"Expected total iterations=3, got {iterations}"
+        # Best iteration was 2 (score 7.5), total is 4 (3 loop + 1 hail-mary)
+        assert iterations == 4, f"Expected total iterations=4, got {iterations}"
         # Best entity should still be from iteration 2
         assert _entity == {"name": "v2"}

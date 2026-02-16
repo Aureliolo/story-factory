@@ -22,6 +22,7 @@ from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 logger = logging.getLogger(__name__)
 
 MAX_CONSECUTIVE_BATCH_FAILURES = 3
+MAX_BATCH_SHUFFLE_RETRIES = 1
 
 
 def _log_batch_summary(
@@ -156,7 +157,7 @@ def _generate_batch[T, S: BaseQualityScores](
     batch_start_time = time.time()
     completed_times: list[float] = []
     consecutive_failures = 0
-    shuffles_remaining = 1  # Allow one recovery attempt after consecutive failures
+    shuffles_remaining = MAX_BATCH_SHUFFLE_RETRIES
 
     for i in range(count):
         if cancel_check and cancel_check():

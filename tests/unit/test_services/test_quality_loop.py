@@ -144,7 +144,8 @@ class TestQualityLoopBasicFlow:
         config.early_stopping_patience = 5  # Disable early stopping
 
         entities = [{"name": "v1"}, {"name": "v2"}, {"name": "v3"}]
-        scores_list = [_make_scores(6.0), _make_scores(7.5), _make_scores(5.0)]
+        # 4th score is for the hail-mary judge call (below peak, so best stays v2)
+        scores_list = [_make_scores(6.0), _make_scores(7.5), _make_scores(5.0), _make_scores(4.0)]
         iteration_idx = 0
 
         def create_fn(retries):
@@ -152,7 +153,7 @@ class TestQualityLoopBasicFlow:
             return entities[0]
 
         def judge_fn(entity):
-            """Return scores in sequence: 6.0, 7.5, 5.0."""
+            """Return scores in sequence: 6.0, 7.5, 5.0, 4.0 (hail-mary)."""
             nonlocal iteration_idx
             result = scores_list[iteration_idx]
             iteration_idx += 1
@@ -180,10 +181,11 @@ class TestQualityLoopBasicFlow:
             story_id="test-story",
         )
 
-        # Best iteration was iteration 2 (score 7.5), total iterations = 3
+        # Best iteration was iteration 2 (score 7.5), total iterations = 4
+        # (3 regular iterations + 1 hail-mary attempt that scored below peak)
         assert result_entity == {"name": "v2"}
         assert _result_scores.average == 7.5
-        assert iterations == 3
+        assert iterations == 4
 
     def test_returns_best_when_all_scores_equal(self, mock_svc, config):
         """When all scores are equal, returns earliest (best_iteration=1)."""

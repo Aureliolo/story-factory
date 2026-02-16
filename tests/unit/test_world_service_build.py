@@ -1905,6 +1905,42 @@ class TestRecoverOrphans:
         assert result == 0
         assert "neither is an orphan" in caplog.text
 
+    def test_recover_orphans_missing_relation_type_defaults(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test missing relation_type defaults to 'related_to' with debug log."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 orphan entities
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+
+        # Return relationship without relation_type key
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Alice",
+                    "target": "Bob",
+                    "description": "They meet on the road",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 1
+        assert "defaulting to 'related_to'" in caplog.text
+
 
 class TestBuildWorldOrphanRecovery:
     """Tests for orphan recovery integration in build_world."""
@@ -1950,14 +1986,14 @@ class TestHealthScoreCircularPenalty:
             hierarchical_circular_count=2,
             mutual_circular_count=0,
             average_quality=8.0,
-            relationship_density=1.5,
+            relationship_density=0.5,
         )
         score = metrics.calculate_health_score()
         # hierarchical_penalty = 2 * 5 = 10
-        # structural = 100 - 10 + 10 (density bonus) = 100.0
+        # structural = 100 - 10 = 90.0 (no density bonus at 0.5)
         # quality = 8.0 * 10 = 80.0
-        # final = 100.0 * 0.6 + 80.0 * 0.4 = 60.0 + 32.0 = 92.0
-        assert score == 92.0
+        # final = 90.0 * 0.6 + 80.0 * 0.4 = 54.0 + 32.0 = 86.0
+        assert score == 86.0
 
     def test_health_score_mutual_cycle_light_penalty(self):
         """Test mutual cycles receive a light penalty of 1 per cycle."""
@@ -1969,14 +2005,14 @@ class TestHealthScoreCircularPenalty:
             hierarchical_circular_count=0,
             mutual_circular_count=3,
             average_quality=8.0,
-            relationship_density=1.5,
+            relationship_density=0.5,
         )
         score = metrics.calculate_health_score()
         # mutual_penalty = 3 * 1 = 3
-        # structural = 100 - 3 + 10 = 107 -> capped at 100.0
+        # structural = 100 - 3 = 97.0 (no density bonus at 0.5)
         # quality = 8.0 * 10 = 80.0
-        # final = 100.0 * 0.6 + 80.0 * 0.4 = 92.0
-        assert score == 92.0
+        # final = 97.0 * 0.6 + 80.0 * 0.4 = 58.2 + 32.0 = 90.2
+        assert score == pytest.approx(90.2)
 
     def test_health_score_mixed_cycles(self):
         """Test combined hierarchical and mutual cycle penalties."""
@@ -1988,14 +2024,14 @@ class TestHealthScoreCircularPenalty:
             hierarchical_circular_count=1,
             mutual_circular_count=2,
             average_quality=8.0,
-            relationship_density=1.5,
+            relationship_density=0.5,
         )
         score = metrics.calculate_health_score()
         # hierarchical_penalty = 1 * 5 = 5, mutual_penalty = 2 * 1 = 2, total = 7
-        # structural = 100 - 7 + 10 = 103 -> capped at 100.0
+        # structural = 100 - 7 = 93.0 (no density bonus at 0.5)
         # quality = 8.0 * 10 = 80.0
-        # final = 100.0 * 0.6 + 80.0 * 0.4 = 92.0
-        assert score == 92.0
+        # final = 93.0 * 0.6 + 80.0 * 0.4 = 55.8 + 32.0 = 87.8
+        assert score == pytest.approx(87.8)
 
     def test_health_score_many_hierarchical_cycles_capped(self):
         """Test hierarchical penalty is capped at 25."""
@@ -2007,14 +2043,14 @@ class TestHealthScoreCircularPenalty:
             hierarchical_circular_count=10,
             mutual_circular_count=0,
             average_quality=8.0,
-            relationship_density=1.5,
+            relationship_density=0.5,
         )
         score = metrics.calculate_health_score()
         # hierarchical_penalty = min(10 * 5, 25) = 25
-        # structural = 100 - 25 + 10 = 85.0
+        # structural = 100 - 25 = 75.0 (no density bonus at 0.5)
         # quality = 8.0 * 10 = 80.0
-        # final = 85.0 * 0.6 + 80.0 * 0.4 = 51.0 + 32.0 = 83.0
-        assert score == 83.0
+        # final = 75.0 * 0.6 + 80.0 * 0.4 = 45.0 + 32.0 = 77.0
+        assert score == 77.0
 
     def test_health_score_no_cycles_no_penalty(self):
         """Test no circular penalty when there are no cycles."""
@@ -2026,11 +2062,11 @@ class TestHealthScoreCircularPenalty:
             hierarchical_circular_count=0,
             mutual_circular_count=0,
             average_quality=8.0,
-            relationship_density=1.5,
+            relationship_density=0.5,
         )
         score = metrics.calculate_health_score()
         # no circular penalty
-        # structural = 100 + 10 = 110 -> capped at 100.0
+        # structural = 100.0 (no density bonus at 0.5)
         # quality = 8.0 * 10 = 80.0
-        # final = 100.0 * 0.6 + 80.0 * 0.4 = 92.0
+        # final = 100.0 * 0.6 + 80.0 * 0.4 = 60.0 + 32.0 = 92.0
         assert score == 92.0

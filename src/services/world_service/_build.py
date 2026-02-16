@@ -797,7 +797,13 @@ def _recover_orphans(
                     )
                     continue
 
-                relation_type = rel.get("relation_type", "related_to")
+                relation_type = rel.get("relation_type")
+                if not relation_type:
+                    logger.debug(
+                        "Orphan recovery: no relation_type in generated relationship,"
+                        " defaulting to 'related_to'"
+                    )
+                    relation_type = "related_to"
                 world_db.add_relationship(
                     source_id=source_entity.id,
                     target_id=target_entity.id,

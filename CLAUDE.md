@@ -146,6 +146,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - Shared fixtures in `tests/conftest.py`
 - **Always run tests in background** to avoid blocking on long test runs when working on todo lists
 - **Never run full test suite scans** - only run tests for specific files when needed (e.g., `pytest tests/unit/test_settings.py`). Full test runs take too long and should only be done by CI.
+- **Single tasks: do them directly. Multiple tasks: use agents.** If there is only one thing to fix/change, do it inline in the main conversation. Only spawn background agents when there are multiple independent tasks to parallelize.
 
 **Test patterns:**
 - Use `threading.Event` instead of `time.sleep()` for thread synchronization in tests
