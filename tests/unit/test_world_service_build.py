@@ -1866,6 +1866,45 @@ class TestRecoverOrphans:
         assert result == 0
         assert "could not resolve entities for" in caplog.text
 
+    def test_recover_orphans_skips_non_orphan_relationship(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test skips relationships where neither endpoint is an orphan."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 entities: Alice and Bob are connected, Charlie is the orphan
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+
+        # Return a relationship between already-connected entities (neither is an orphan)
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Alice",
+                    "target": "Bob",
+                    "relation_type": "rivals",
+                    "description": "They become rivals",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 0
+        assert "neither is an orphan" in caplog.text
+
 
 class TestBuildWorldOrphanRecovery:
     """Tests for orphan recovery integration in build_world."""
