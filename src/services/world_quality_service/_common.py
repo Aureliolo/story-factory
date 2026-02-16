@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -20,8 +20,6 @@ _RETRY_TEMP_MAX = 1.5
 # See output/diagnostics/INVESTIGATION_246.md.
 JUDGE_CALIBRATION_BLOCK = """Score each dimension 0-10 with one decimal place.
 Differentiate between dimensions — scores should vary based on actual quality."""
-
-T = TypeVar("T", bound=BaseModel)
 
 
 def retry_temperature(config: Any, creation_retries: int) -> float:
@@ -50,7 +48,7 @@ def retry_temperature(config: Any, creation_retries: int) -> float:
     return result
 
 
-def judge_with_averaging(
+def judge_with_averaging[T: BaseModel](
     judge_fn: Callable[[], T],
     score_model_class: type[T],
     judge_config: JudgeConsistencyConfig,
@@ -109,7 +107,7 @@ def judge_with_averaging(
     return _aggregate_scores(results, score_model_class, judge_config)
 
 
-def _aggregate_scores(
+def _aggregate_scores[T: BaseModel](
     results: list[T],
     score_model_class: type[T],
     judge_config: JudgeConsistencyConfig,

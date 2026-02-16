@@ -9,18 +9,15 @@ and this module orchestrates the loop.
 import logging
 import time
 from collections.abc import Callable
-from typing import TypeVar, cast
+from typing import cast
 
 from src.memory.world_quality import BaseQualityScores, RefinementConfig, RefinementHistory
 from src.utils.exceptions import WorldGenerationError
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-S = TypeVar("S", bound=BaseQualityScores)
 
-
-def quality_refinement_loop(
+def quality_refinement_loop[T, S: BaseQualityScores](
     *,
     entity_type: str,
     create_fn: Callable[[int], T],
