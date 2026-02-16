@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Settings must have UI.** Any new settings added to `src/settings.py` MUST be exposed in the Settings page UI (`src/ui/pages/settings.py`). Users should be able to configure all settings through the web interface, not just by editing JSON files.
 
+**Always update existing documentation.** When making changes that affect architecture, services, key files, settings, or workflows, update the relevant sections of existing documentation (this CLAUDE.md, README.md, etc.) to reflect those changes. Never create new standalone documentation files unless explicitly requested, but always keep existing docs accurate and up to date.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.
