@@ -69,6 +69,7 @@ def validate(settings: Settings) -> bool:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
+    changed = _validate_rag_context(settings) or changed
     return changed
 
 
@@ -844,6 +845,48 @@ def _validate_world_health(settings: Settings) -> None:
             f"validate_temporal_consistency must be a boolean, "
             f"got {type(settings.validate_temporal_consistency)}"
         )
+
+
+def _validate_rag_context(settings: Settings) -> bool:
+    """Validate RAG context retrieval settings.
+
+    Auto-disables rag_context_enabled when embedding_model is empty,
+    since vector search cannot function without embeddings.
+
+    Returns:
+        True if settings were mutated (auto-disabled), False otherwise.
+
+    Raises:
+        ValueError: If any RAG setting is out of range.
+    """
+    if not 100 <= settings.rag_context_max_tokens <= 16000:
+        raise ValueError(
+            f"rag_context_max_tokens must be between 100 and 16000, "
+            f"got {settings.rag_context_max_tokens}"
+        )
+    if not 1 <= settings.rag_context_max_items <= 100:
+        raise ValueError(
+            f"rag_context_max_items must be between 1 and 100, got {settings.rag_context_max_items}"
+        )
+    if not 0.0 <= settings.rag_context_similarity_threshold <= 1.0:
+        raise ValueError(
+            f"rag_context_similarity_threshold must be between 0.0 and 1.0, "
+            f"got {settings.rag_context_similarity_threshold}"
+        )
+    if not 1 <= settings.rag_context_graph_depth <= 3:
+        raise ValueError(
+            f"rag_context_graph_depth must be between 1 and 3, "
+            f"got {settings.rag_context_graph_depth}"
+        )
+
+    # Auto-disable RAG when no embedding model is configured
+    if settings.rag_context_enabled and not settings.embedding_model.strip():
+        logger.warning(
+            "rag_context_enabled requires an embedding_model; auto-disabling RAG context retrieval"
+        )
+        settings.rag_context_enabled = False
+        return True
+    return False
 
 
 def _validate_world_quality_thresholds_migration(settings: Settings) -> bool:

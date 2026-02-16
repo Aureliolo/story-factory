@@ -116,6 +116,14 @@ def add_relationship(
         )
 
     logger.debug(f"Added relationship: {source_id} --{relation_type}--> {target_id}")
+
+    # Notify embedding service of new relationship (outside lock)
+    if db._on_content_changed:
+        source_name = source_entity.name if validate and source_entity else source_id
+        target_name = target_entity.name if validate and target_entity else target_id
+        text = f"{source_name} {relation_type} {target_name}: {description}"
+        db._on_content_changed(rel_id, "relationship", text)
+
     return rel_id
 
 
@@ -207,7 +215,12 @@ def delete_relationship(db: WorldDatabase, rel_id: str) -> bool:
         from . import _graph
 
         _graph.remove_relationship_from_graph(db, source_id, target_id, bidirectional)
-        return True
+
+    # Notify embedding service of deletion (outside lock)
+    if db._on_content_deleted:
+        db._on_content_deleted(rel_id)
+
+    return True
 
 
 def update_relationship(
@@ -287,7 +300,18 @@ def update_relationship(
             db, relationship_id, source_id, target_id, new_type, new_desc, new_strength, new_bidir
         )
 
-        return cursor.rowcount > 0
+        updated = cursor.rowcount > 0
+
+    # Notify embedding service of updated relationship (outside lock)
+    if updated and db._on_content_changed:
+        source = db.get_entity(source_id)
+        target = db.get_entity(target_id)
+        source_name = source.name if source else source_id
+        target_name = target.name if target else target_id
+        text = f"{source_name} {new_type} {target_name}: {new_desc}"
+        db._on_content_changed(relationship_id, "relationship", text)
+
+    return updated
 
 
 def list_relationships(db: WorldDatabase) -> list[Relationship]:

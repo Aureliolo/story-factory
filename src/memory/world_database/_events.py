@@ -57,6 +57,13 @@ def add_event(
         db.conn.commit()
 
     logger.debug(f"Added event: {description[:50]}...")
+
+    # Notify embedding service of new event (outside lock)
+    if db._on_content_changed:
+        chapter_part = f" (Chapter {chapter_number})" if chapter_number else ""
+        text = f"Event: {description}{chapter_part}"
+        db._on_content_changed(event_id, "event", text)
+
     return event_id
 
 

@@ -22,6 +22,7 @@ from src.ui.pages.settings._advanced import (
     build_data_integrity_section,
     build_duplicate_detection_section,
     build_judge_consistency_section,
+    build_rag_context_section,
     build_refinement_stopping_section,
     build_retry_strategy_section,
     build_story_structure_section,
@@ -193,6 +194,7 @@ class SettingsPage:
                         self._build_circuit_breaker_section,
                         self._build_retry_strategy_section,
                         self._build_duplicate_detection_section,
+                        self._build_rag_context_section,
                         self._build_refinement_stopping_section,
                         self._build_judge_consistency_section,
                     ],
@@ -422,6 +424,10 @@ class SettingsPage:
     def _build_duplicate_detection_section(self) -> None:
         """Build duplicate detection settings."""
         build_duplicate_detection_section(self)
+
+    def _build_rag_context_section(self) -> None:
+        """Build RAG smart context settings."""
+        build_rag_context_section(self)
 
     def _build_refinement_stopping_section(self) -> None:
         """Build refinement and stopping settings."""

@@ -1,0 +1,459 @@
+"""Embedding service for generating and managing vector embeddings.
+
+Provides methods to embed world content (entities, relationships, events, facts,
+rules, chapter/scene outlines) into the WorldDatabase vec_embeddings table via
+Ollama's embedding API. Supports incremental embedding after every meaningful
+change and batch re-embedding when the model changes.
+"""
+
+import logging
+import threading
+from typing import Any
+
+import ollama
+
+from src.memory.entities import Entity, Relationship, WorldEvent
+from src.memory.world_database import WorldDatabase
+from src.settings import Settings
+from src.settings._model_registry import get_embedding_prefix
+
+logger = logging.getLogger(__name__)
+
+
+class EmbeddingService:
+    """Generates and manages vector embeddings for world content.
+
+    Thread-safe implementation using RLock for concurrent embedding operations.
+    Gracefully degrades when embedding model is not configured or Ollama is
+    unreachable.
+
+    Attributes:
+        settings: Application settings instance.
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        """Initialize the embedding service.
+
+        Args:
+            settings: Application settings for Ollama connection and model config.
+        """
+        self.settings = settings
+        self._lock = threading.RLock()
+        self._client: ollama.Client | None = None
+        logger.info("EmbeddingService initialized")
+
+    @property
+    def is_available(self) -> bool:
+        """Whether embedding is available (model configured and RAG enabled).
+
+        Returns:
+            True if the embedding model is set and RAG context is enabled.
+        """
+        return bool(self.settings.rag_context_enabled and self.settings.embedding_model.strip())
+
+    def _get_client(self) -> ollama.Client:
+        """Get or create the Ollama client.
+
+        Returns:
+            An initialized Ollama client.
+        """
+        if self._client is None:
+            self._client = ollama.Client(
+                host=self.settings.ollama_url,
+                timeout=self.settings.ollama_generate_timeout,
+            )
+        return self._client
+
+    def _get_model(self) -> str:
+        """Get the configured embedding model name.
+
+        Returns:
+            The embedding model identifier.
+
+        Raises:
+            ValueError: If no embedding model is configured.
+        """
+        model = self.settings.embedding_model.strip()
+        if not model:
+            raise ValueError(
+                "No embedding model configured. "
+                "Set embedding_model in Settings to use vector search."
+            )
+        return model
+
+    def embed_text(self, text: str) -> list[float]:
+        """Generate an embedding vector for the given text.
+
+        Applies the model-specific prompt prefix from the registry for optimal
+        embedding quality.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            Embedding vector as a list of floats. Returns empty list on failure.
+        """
+        if not text or not text.strip():
+            return []
+
+        try:
+            model = self._get_model()
+            prefix = get_embedding_prefix(model)
+            prompt = f"{prefix}{text}"
+
+            with self._lock:
+                client = self._get_client()
+                response = client.embeddings(model=model, prompt=prompt)
+
+            embedding: list[float] = response.get("embedding", [])
+            if not embedding:
+                logger.warning("Empty embedding returned for text: '%s...'", text[:40])
+                return []
+
+            logger.debug(
+                "Generated embedding for '%s...' (%d dimensions)",
+                text[:40],
+                len(embedding),
+            )
+            return embedding
+
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
+            logger.warning("Failed to generate embedding: %s", e)
+            return []
+        except ValueError as e:
+            logger.debug("Embedding skipped: %s", e)
+            return []
+        except Exception as e:
+            logger.exception("Unexpected error generating embedding: %s", e)
+            return []
+
+    def embed_entity(self, db: WorldDatabase, entity: Entity) -> bool:
+        """Embed an entity and store it in the database.
+
+        Args:
+            db: WorldDatabase instance with vec support.
+            entity: The entity to embed.
+
+        Returns:
+            True if the embedding was stored, False otherwise.
+        """
+        if not self.is_available:
+            return False
+
+        text = f"{entity.name}: {entity.description}"
+        embedding = self.embed_text(text)
+        if not embedding:
+            return False
+
+        return db.upsert_embedding(
+            source_id=entity.id,
+            content_type="entity",
+            text=text,
+            embedding=embedding,
+            model=self._get_model(),
+            entity_type=entity.type,
+        )
+
+    def embed_relationship(
+        self,
+        db: WorldDatabase,
+        rel: Relationship,
+        source_name: str,
+        target_name: str,
+    ) -> bool:
+        """Embed a relationship and store it in the database.
+
+        Args:
+            db: WorldDatabase instance with vec support.
+            rel: The relationship to embed.
+            source_name: Name of the source entity.
+            target_name: Name of the target entity.
+
+        Returns:
+            True if the embedding was stored, False otherwise.
+        """
+        if not self.is_available:
+            return False
+
+        text = f"{source_name} {rel.relation_type} {target_name}: {rel.description}"
+        embedding = self.embed_text(text)
+        if not embedding:
+            return False
+
+        return db.upsert_embedding(
+            source_id=rel.id,
+            content_type="relationship",
+            text=text,
+            embedding=embedding,
+            model=self._get_model(),
+        )
+
+    def embed_event(self, db: WorldDatabase, event: WorldEvent) -> bool:
+        """Embed an event and store it in the database.
+
+        Args:
+            db: WorldDatabase instance with vec support.
+            event: The event to embed.
+
+        Returns:
+            True if the embedding was stored, False otherwise.
+        """
+        if not self.is_available:
+            return False
+
+        chapter_part = f" (Chapter {event.chapter_number})" if event.chapter_number else ""
+        text = f"Event: {event.description}{chapter_part}"
+        embedding = self.embed_text(text)
+        if not embedding:
+            return False
+
+        return db.upsert_embedding(
+            source_id=event.id,
+            content_type="event",
+            text=text,
+            embedding=embedding,
+            model=self._get_model(),
+            chapter_number=event.chapter_number,
+        )
+
+    def embed_story_state_data(self, db: WorldDatabase, story_state: Any) -> int:
+        """Embed established facts, world rules, chapter outlines, and scene outlines.
+
+        Uses synthetic source IDs to track these non-entity content types.
+
+        Args:
+            db: WorldDatabase instance with vec support.
+            story_state: StoryState with brief, chapters, and established_facts.
+
+        Returns:
+            Number of items successfully embedded.
+        """
+        if not self.is_available:
+            return 0
+
+        embedded_count = 0
+        model = self._get_model()
+
+        # Embed established facts
+        if hasattr(story_state, "established_facts") and story_state.established_facts:
+            for fact in story_state.established_facts:
+                import hashlib
+
+                fact_hash = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:12]
+                source_id = f"fact:{fact_hash}"
+                text = f"Established fact: {fact}"
+                embedding = self.embed_text(text)
+                if embedding:
+                    if db.upsert_embedding(
+                        source_id=source_id,
+                        content_type="fact",
+                        text=text,
+                        embedding=embedding,
+                        model=model,
+                    ):
+                        embedded_count += 1
+
+        # Embed world rules
+        if hasattr(story_state, "world_rules") and story_state.world_rules:
+            for idx, rule in enumerate(story_state.world_rules):
+                source_id = f"rule:{idx}"
+                text = f"World rule: {rule}"
+                embedding = self.embed_text(text)
+                if embedding:
+                    if db.upsert_embedding(
+                        source_id=source_id,
+                        content_type="rule",
+                        text=text,
+                        embedding=embedding,
+                        model=model,
+                    ):
+                        embedded_count += 1
+
+        # Embed chapter outlines
+        if hasattr(story_state, "chapters") and story_state.chapters:
+            for chapter in story_state.chapters:
+                if chapter.outline:
+                    source_id = f"chapter:{chapter.number}"
+                    title_part = f" '{chapter.title}'" if chapter.title else ""
+                    text = f"Chapter {chapter.number}{title_part}: {chapter.outline}"
+                    embedding = self.embed_text(text)
+                    if embedding:
+                        if db.upsert_embedding(
+                            source_id=source_id,
+                            content_type="chapter_outline",
+                            text=text,
+                            embedding=embedding,
+                            model=model,
+                            chapter_number=chapter.number,
+                        ):
+                            embedded_count += 1
+
+                # Embed scene outlines if available
+                if hasattr(chapter, "scenes") and chapter.scenes:
+                    for scene_idx, scene in enumerate(chapter.scenes):
+                        if hasattr(scene, "outline") and scene.outline:
+                            source_id = f"scene:{chapter.number}:{scene_idx}"
+                            scene_title = (
+                                f" '{scene.title}'"
+                                if hasattr(scene, "title") and scene.title
+                                else ""
+                            )
+                            text = (
+                                f"Chapter {chapter.number} Scene {scene_idx + 1}"
+                                f"{scene_title}: {scene.outline}"
+                            )
+                            embedding = self.embed_text(text)
+                            if embedding:
+                                if db.upsert_embedding(
+                                    source_id=source_id,
+                                    content_type="scene_outline",
+                                    text=text,
+                                    embedding=embedding,
+                                    model=model,
+                                    chapter_number=chapter.number,
+                                ):
+                                    embedded_count += 1
+
+        logger.info("Embedded %d story state items", embedded_count)
+        return embedded_count
+
+    def embed_all_world_data(
+        self,
+        db: WorldDatabase,
+        story_state: Any,
+        progress_callback: Any = None,
+    ) -> dict[str, int]:
+        """Batch-embed all world content: entities, relationships, events, and story state.
+
+        Args:
+            db: WorldDatabase instance.
+            story_state: StoryState with brief and chapter data.
+            progress_callback: Optional callable(current, total, message) for progress updates.
+
+        Returns:
+            Dict mapping content_type to count of items embedded.
+        """
+        if not self.is_available:
+            logger.debug("embed_all_world_data skipped: embedding not available")
+            return {}
+
+        counts: dict[str, int] = {}
+
+        # Embed all entities
+        entities = db.list_entities()
+        entity_count = 0
+        for i, entity in enumerate(entities):
+            if progress_callback:
+                progress_callback(i, len(entities), f"Embedding entity: {entity.name}")
+            if self.embed_entity(db, entity):
+                entity_count += 1
+        counts["entity"] = entity_count
+
+        # Embed all relationships
+        relationships = db.list_relationships()
+        rel_count = 0
+        for rel in relationships:
+            source = db.get_entity(rel.source_id)
+            target = db.get_entity(rel.target_id)
+            if source and target:
+                if self.embed_relationship(db, rel, source.name, target.name):
+                    rel_count += 1
+        counts["relationship"] = rel_count
+
+        # Embed all events
+        events = db.list_events()
+        event_count = 0
+        for event in events:
+            if self.embed_event(db, event):
+                event_count += 1
+        counts["event"] = event_count
+
+        # Embed story state data (facts, rules, outlines)
+        state_count = self.embed_story_state_data(db, story_state)
+        counts["story_state"] = state_count
+
+        total = sum(counts.values())
+        logger.info("Batch embedding complete: %d items total (%s)", total, counts)
+        return counts
+
+    def check_and_reembed_if_needed(
+        self,
+        db: WorldDatabase,
+        story_state: Any,
+    ) -> bool:
+        """Check if re-embedding is needed and perform it if so.
+
+        Triggers full re-embedding when the model has changed (detected by
+        comparing stored model names with current setting). Skips if content
+        hashes are unchanged.
+
+        Args:
+            db: WorldDatabase instance.
+            story_state: StoryState for embedding story data.
+
+        Returns:
+            True if re-embedding was performed, False if not needed.
+        """
+        if not self.is_available:
+            return False
+
+        model = self._get_model()
+
+        if db.needs_reembedding(model):
+            logger.info("Model changed, clearing and re-embedding all content")
+            # Get a sample embedding to detect dimension changes
+            sample = self.embed_text("dimension check")
+            if sample:
+                db.recreate_vec_table(len(sample))
+            else:
+                db.clear_all_embeddings()
+
+            self.embed_all_world_data(db, story_state)
+            return True
+
+        return False
+
+    def attach_to_database(self, db: WorldDatabase) -> None:
+        """Register embedding callbacks on a WorldDatabase instance.
+
+        After calling this method, entity/relationship/event CRUD operations
+        will automatically trigger embedding updates via the registered callbacks.
+
+        Args:
+            db: WorldDatabase instance to attach callbacks to.
+        """
+        if not self.is_available:
+            logger.debug("attach_to_database skipped: embedding not available")
+            return
+
+        def on_content_changed(source_id: str, content_type: str, text: str) -> None:
+            """Handle content changes by embedding the new/updated content."""
+            try:
+                embedding = self.embed_text(text)
+                if embedding:
+                    entity_type = ""
+                    if content_type == "entity":
+                        entity = db.get_entity(source_id)
+                        if entity:
+                            entity_type = entity.type
+                    db.upsert_embedding(
+                        source_id=source_id,
+                        content_type=content_type,
+                        text=text,
+                        embedding=embedding,
+                        model=self._get_model(),
+                        entity_type=entity_type,
+                    )
+            except Exception as e:
+                logger.warning("Failed to embed content change for %s: %s", source_id, e)
+
+        def on_content_deleted(source_id: str) -> None:
+            """Handle content deletions by removing the embedding."""
+            try:
+                db.delete_embedding(source_id)
+            except Exception as e:
+                logger.warning("Failed to delete embedding for %s: %s", source_id, e)
+
+        db.attach_content_changed_callback(on_content_changed)
+        db.attach_content_deleted_callback(on_content_deleted)
+        logger.info("Embedding callbacks attached to WorldDatabase")

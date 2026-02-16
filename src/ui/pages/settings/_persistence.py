@@ -173,6 +173,13 @@ def capture_settings_snapshot(page: SettingsPage) -> dict[str, Any]:
         "world_quality_early_stopping_min_iterations",
         "world_quality_early_stopping_variance_tolerance",
         "world_quality_score_plateau_tolerance",
+        # RAG context settings
+        "rag_context_enabled",
+        "rag_context_max_tokens",
+        "rag_context_max_items",
+        "rag_context_similarity_threshold",
+        "rag_context_graph_expansion",
+        "rag_context_graph_depth",
     ]
     for key in advanced_llm_keys:
         snapshot[key] = getattr(settings, key)
@@ -275,6 +282,13 @@ def restore_settings_snapshot(page: SettingsPage, snapshot: dict[str, Any]) -> N
         "world_quality_early_stopping_min_iterations",
         "world_quality_early_stopping_variance_tolerance",
         "world_quality_score_plateau_tolerance",
+        # RAG context settings
+        "rag_context_enabled",
+        "rag_context_max_tokens",
+        "rag_context_max_items",
+        "rag_context_similarity_threshold",
+        "rag_context_graph_expansion",
+        "rag_context_graph_depth",
     ]
     for key in advanced_llm_keys:
         if key in snapshot:

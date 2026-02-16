@@ -1,9 +1,15 @@
 """Prompt building utilities to reduce duplication across agents."""
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from src.memory.content_guidelines import ContentProfile, format_profile_for_prompt
 from src.memory.story_state import Character, StoryBrief, StoryState
+
+if TYPE_CHECKING:
+    from src.services.context_retrieval_service import RetrievedContext
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +192,31 @@ class PromptBuilder:
             Self for method chaining
         """
         self.sections.append(text)
+        return self
+
+    def add_retrieved_context(self, context: RetrievedContext) -> PromptBuilder:
+        """Add semantically retrieved world context to the prompt.
+
+        Formats the RetrievedContext items into a structured "WORLD CONTEXT"
+        section grouped by content type.
+
+        Args:
+            context: RetrievedContext from ContextRetrievalService.
+
+        Returns:
+            Self for method chaining.
+        """
+        if not context or not context.items:
+            return self
+        formatted = context.format_for_prompt()
+        if formatted:
+            self.sections.append(f"WORLD CONTEXT:\n{formatted}")
+            logger.debug(
+                "Added retrieved context: %d items, ~%d tokens (%s)",
+                len(context.items),
+                context.total_tokens,
+                context.retrieval_method,
+            )
         return self
 
     def add_content_guidelines(self, profile: ContentProfile) -> PromptBuilder:
