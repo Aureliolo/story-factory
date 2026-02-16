@@ -1,8 +1,11 @@
 """Tests for PromptBuilder utility."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from src.memory.story_state import Character, StoryBrief, StoryState
+from src.services.context_retrieval_service import ContextItem, RetrievedContext
 from src.utils.prompt_builder import PromptBuilder
 
 
@@ -262,3 +265,63 @@ class TestPromptBuilder:
         assert "Violence: minimal" in result
         assert "MUST AVOID" in result
         assert "gore" in result
+
+
+class TestAddRetrievedContext:
+    """Tests for PromptBuilder.add_retrieved_context method."""
+
+    def test_add_retrieved_context_with_none(self):
+        """Passing None should not add any sections."""
+        builder = PromptBuilder()
+        result = builder.add_retrieved_context(None)  # type: ignore[arg-type]
+        assert result is builder
+        assert len(builder.sections) == 0
+
+    def test_add_retrieved_context_empty_items(self):
+        """Context with no items should not add any sections."""
+        context = RetrievedContext(items=[], total_tokens=0)
+        builder = PromptBuilder()
+        result = builder.add_retrieved_context(context)
+        assert result is builder
+        assert len(builder.sections) == 0
+
+    def test_add_retrieved_context_with_items(self):
+        """Context with items should add a WORLD CONTEXT section."""
+        items = [
+            ContextItem(
+                source_type="entity",
+                source_id="e1",
+                relevance_score=0.9,
+                text="Alice: The protagonist",
+            ),
+        ]
+        context = RetrievedContext(items=items, total_tokens=10, retrieval_method="vector")
+        builder = PromptBuilder()
+        result = builder.add_retrieved_context(context)
+        assert result is builder
+        assert len(builder.sections) == 1
+        assert builder.sections[0].startswith("WORLD CONTEXT:")
+
+    def test_add_retrieved_context_returns_self_for_chaining(self):
+        """Method should return self for chaining."""
+        items = [
+            ContextItem(
+                source_type="entity",
+                source_id="e1",
+                relevance_score=0.9,
+                text="Alice: The protagonist",
+            ),
+        ]
+        context = RetrievedContext(items=items, total_tokens=10)
+        builder = PromptBuilder()
+        result = builder.add_retrieved_context(context)
+        assert result is builder
+
+    def test_add_retrieved_context_empty_format(self):
+        """If format_for_prompt returns empty string, no section is added."""
+        context = MagicMock()
+        context.items = [MagicMock()]  # Non-empty so we pass the guard
+        context.format_for_prompt.return_value = ""
+        builder = PromptBuilder()
+        builder.add_retrieved_context(context)
+        assert len(builder.sections) == 0

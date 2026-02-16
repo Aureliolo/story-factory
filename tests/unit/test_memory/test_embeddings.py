@@ -706,18 +706,20 @@ class TestRecreateVecTable:
 
     def test_recreate_vec_table_vec_unavailable(self, db):
         """Recreate is a no-op when sqlite-vec is not available."""
+        # Drop the vec_embeddings table if it was created during __init__
+        # (happens when sqlite-vec is installed in the test environment)
+        try:
+            db.conn.execute("DROP TABLE IF EXISTS vec_embeddings")
+        except Exception:
+            pass
         db._vec_available = False
 
         # Should not raise any errors
         _embeddings.recreate_vec_table(db, dimensions=512)
 
-        # Verify no vec_embeddings table was created (may exist from schema init
-        # if vec was available during __init__, but we check it's not a vec0 table)
+        # Verify no vec_embeddings table was created
         cursor = db.conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master "
-            "WHERE type='table' AND name='vec_embeddings' AND sql LIKE '%vec0%'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE name='vec_embeddings'")
         assert cursor.fetchone() is None
 
     def test_recreate_vec_table_success(self):

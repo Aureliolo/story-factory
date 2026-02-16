@@ -2959,3 +2959,90 @@ class TestGetScaledTimeout:
 
         # Formula: 60 * (1 + 10/20) = 60 * 1.5 = 90
         assert timeout == 90.0
+
+
+class TestRagContextValidation:
+    """Tests for RAG context settings validation."""
+
+    def test_validate_rag_default_settings_pass(self):
+        """Default RAG settings should pass validation."""
+        settings = Settings()
+        settings.validate()  # Should not raise
+
+    def test_validate_raises_on_rag_max_tokens_too_low(self):
+        """Should reject rag_context_max_tokens below 100."""
+        settings = Settings()
+        settings.rag_context_max_tokens = 50
+        with pytest.raises(ValueError, match="rag_context_max_tokens"):
+            settings.validate()
+
+    def test_validate_raises_on_rag_max_tokens_too_high(self):
+        """Should reject rag_context_max_tokens above 16000."""
+        settings = Settings()
+        settings.rag_context_max_tokens = 20000
+        with pytest.raises(ValueError, match="rag_context_max_tokens"):
+            settings.validate()
+
+    def test_validate_raises_on_rag_max_items_too_low(self):
+        """Should reject rag_context_max_items below 1."""
+        settings = Settings()
+        settings.rag_context_max_items = 0
+        with pytest.raises(ValueError, match="rag_context_max_items"):
+            settings.validate()
+
+    def test_validate_raises_on_rag_max_items_too_high(self):
+        """Should reject rag_context_max_items above 100."""
+        settings = Settings()
+        settings.rag_context_max_items = 101
+        with pytest.raises(ValueError, match="rag_context_max_items"):
+            settings.validate()
+
+    def test_validate_raises_on_rag_similarity_threshold_too_low(self):
+        """Should reject rag_context_similarity_threshold below 0.0."""
+        settings = Settings()
+        settings.rag_context_similarity_threshold = -0.1
+        with pytest.raises(ValueError, match="rag_context_similarity_threshold"):
+            settings.validate()
+
+    def test_validate_raises_on_rag_similarity_threshold_too_high(self):
+        """Should reject rag_context_similarity_threshold above 1.0."""
+        settings = Settings()
+        settings.rag_context_similarity_threshold = 1.5
+        with pytest.raises(ValueError, match="rag_context_similarity_threshold"):
+            settings.validate()
+
+    def test_validate_raises_on_rag_graph_depth_too_low(self):
+        """Should reject rag_context_graph_depth below 1."""
+        settings = Settings()
+        settings.rag_context_graph_depth = 0
+        with pytest.raises(ValueError, match="rag_context_graph_depth"):
+            settings.validate()
+
+    def test_validate_raises_on_rag_graph_depth_too_high(self):
+        """Should reject rag_context_graph_depth above 3."""
+        settings = Settings()
+        settings.rag_context_graph_depth = 4
+        with pytest.raises(ValueError, match="rag_context_graph_depth"):
+            settings.validate()
+
+    def test_validate_auto_disables_rag_when_no_embedding_model(self):
+        """Should auto-disable rag_context_enabled when embedding_model is empty."""
+        from src.settings._validation import _validate_rag_context
+
+        settings = Settings()
+        settings.rag_context_enabled = True
+        settings.embedding_model = ""
+        result = _validate_rag_context(settings)
+        assert settings.rag_context_enabled is False
+        assert result is True
+
+    def test_validate_keeps_rag_enabled_when_embedding_model_set(self):
+        """Should not disable rag_context_enabled when embedding_model is configured."""
+        from src.settings._validation import _validate_rag_context
+
+        settings = Settings()
+        settings.rag_context_enabled = True
+        settings.embedding_model = "mxbai-embed-large"
+        result = _validate_rag_context(settings)
+        assert settings.rag_context_enabled is True
+        assert result is False

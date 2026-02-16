@@ -2020,3 +2020,511 @@ class TestWorldDatabaseWorldSettings:
             assert rel_by_id["r2"].relation_type == "rivals"
             # "knows" is already correct — unchanged
             assert rel_by_id["r3"].relation_type == "knows"
+
+
+class TestVecAvailableProperty:
+    """Tests for the vec_available property on WorldDatabase."""
+
+    def test_vec_available_returns_true_when_extension_loaded(self, db):
+        """Test vec_available returns True when _vec_available is True."""
+        db._vec_available = True
+        assert db.vec_available is True
+
+    def test_vec_available_returns_false_when_extension_not_loaded(self, db):
+        """Test vec_available returns False when _vec_available is False."""
+        db._vec_available = False
+        assert db.vec_available is False
+
+
+class TestContentCallbacks:
+    """Tests for attach/detach content changed and deleted callbacks."""
+
+    def test_attach_content_changed_callback(self, db):
+        """Test attaching a content changed callback stores the callback."""
+        callback = MagicMock()
+        db.attach_content_changed_callback(callback)
+        assert db._on_content_changed is callback
+
+    def test_detach_content_changed_callback(self, db):
+        """Test detaching a content changed callback by passing None."""
+        callback = MagicMock()
+        db.attach_content_changed_callback(callback)
+        assert db._on_content_changed is callback
+
+        db.attach_content_changed_callback(None)
+        assert db._on_content_changed is None
+
+    def test_attach_content_deleted_callback(self, db):
+        """Test attaching a content deleted callback stores the callback."""
+        callback = MagicMock()
+        db.attach_content_deleted_callback(callback)
+        assert db._on_content_deleted is callback
+
+    def test_detach_content_deleted_callback(self, db):
+        """Test detaching a content deleted callback by passing None."""
+        callback = MagicMock()
+        db.attach_content_deleted_callback(callback)
+        assert db._on_content_deleted is callback
+
+        db.attach_content_deleted_callback(None)
+        assert db._on_content_deleted is None
+
+
+class TestEmbeddingDelegation:
+    """Tests for embedding delegation methods that forward to _embeddings module."""
+
+    @patch("src.memory.world_database._embeddings.upsert_embedding")
+    def test_upsert_embedding_delegates(self, mock_upsert, db):
+        """Test upsert_embedding delegates to _embeddings module function."""
+        mock_upsert.return_value = True
+        result = db.upsert_embedding("src1", "entity", "text", [0.1] * 1024, "model")
+        assert result is True
+        mock_upsert.assert_called_once_with(
+            db, "src1", "entity", "text", [0.1] * 1024, "model", "", None
+        )
+
+    @patch("src.memory.world_database._embeddings.upsert_embedding")
+    def test_upsert_embedding_delegates_with_optional_args(self, mock_upsert, db):
+        """Test upsert_embedding passes optional entity_type and chapter_number."""
+        mock_upsert.return_value = True
+        result = db.upsert_embedding(
+            "src1",
+            "entity",
+            "text",
+            [0.1] * 1024,
+            "model",
+            entity_type="character",
+            chapter_number=3,
+        )
+        assert result is True
+        mock_upsert.assert_called_once_with(
+            db, "src1", "entity", "text", [0.1] * 1024, "model", "character", 3
+        )
+
+    @patch("src.memory.world_database._embeddings.delete_embedding")
+    def test_delete_embedding_delegates(self, mock_delete, db):
+        """Test delete_embedding delegates to _embeddings module function."""
+        mock_delete.return_value = True
+        result = db.delete_embedding("src1")
+        assert result is True
+        mock_delete.assert_called_once_with(db, "src1")
+
+    @patch("src.memory.world_database._embeddings.search_similar")
+    def test_search_similar_delegates(self, mock_search, db):
+        """Test search_similar delegates to _embeddings module function."""
+        mock_search.return_value = [{"source_id": "x", "distance": 0.1}]
+        result = db.search_similar([0.1] * 1024, k=5, content_type="entity")
+        assert len(result) == 1
+        mock_search.assert_called_once_with(db, [0.1] * 1024, 5, "entity", None, None)
+
+    @patch("src.memory.world_database._embeddings.search_similar")
+    def test_search_similar_delegates_with_all_filters(self, mock_search, db):
+        """Test search_similar passes all optional filter arguments."""
+        mock_search.return_value = []
+        result = db.search_similar(
+            [0.1] * 1024,
+            k=3,
+            content_type="event",
+            entity_type="character",
+            chapter_number=2,
+        )
+        assert result == []
+        mock_search.assert_called_once_with(db, [0.1] * 1024, 3, "event", "character", 2)
+
+    @patch("src.memory.world_database._embeddings.get_embedding_stats")
+    def test_get_embedding_stats_delegates(self, mock_stats, db):
+        """Test get_embedding_stats delegates to _embeddings module function."""
+        mock_stats.return_value = {"total": 5, "vec_available": True}
+        result = db.get_embedding_stats()
+        assert result["total"] == 5
+        mock_stats.assert_called_once_with(db)
+
+    @patch("src.memory.world_database._embeddings.needs_reembedding")
+    def test_needs_reembedding_delegates(self, mock_needs, db):
+        """Test needs_reembedding delegates to _embeddings module function."""
+        mock_needs.return_value = True
+        result = db.needs_reembedding("new-model")
+        assert result is True
+        mock_needs.assert_called_once_with(db, "new-model")
+
+    @patch("src.memory.world_database._embeddings.clear_all_embeddings")
+    def test_clear_all_embeddings_delegates(self, mock_clear, db):
+        """Test clear_all_embeddings delegates to _embeddings module function."""
+        db.clear_all_embeddings()
+        mock_clear.assert_called_once_with(db)
+
+    @patch("src.memory.world_database._embeddings.recreate_vec_table")
+    def test_recreate_vec_table_delegates(self, mock_recreate, db):
+        """Test recreate_vec_table delegates to _embeddings module function."""
+        db.recreate_vec_table(768)
+        mock_recreate.assert_called_once_with(db, 768)
+
+
+class TestEntityCallbacks:
+    """Tests for entity CRUD operations firing content changed/deleted callbacks."""
+
+    def test_add_entity_fires_content_changed_callback(self, db):
+        """Test add_entity invokes _on_content_changed with entity details."""
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        entity_id = db.add_entity("character", "TestChar", description="A test")
+
+        callback.assert_called_once_with(entity_id, "entity", "TestChar: A test")
+
+    def test_add_entity_no_callback_when_not_attached(self, db):
+        """Test add_entity does not fail when no callback is attached."""
+        assert db._on_content_changed is None
+        # Should succeed without error
+        entity_id = db.add_entity("character", "TestChar", description="A test")
+        assert entity_id is not None
+
+    def test_update_entity_fires_content_changed_callback(self, db):
+        """Test update_entity invokes _on_content_changed after successful update."""
+        entity_id = db.add_entity("character", "OrigName", description="Orig desc")
+
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        db.update_entity(entity_id, name="NewName", description="New desc")
+
+        callback.assert_called_once_with(entity_id, "entity", "NewName: New desc")
+
+    def test_update_entity_no_callback_on_failure(self, db):
+        """Test update_entity does not fire callback when entity not found."""
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        result = db.update_entity("non-existent-id", name="Irrelevant")
+
+        assert result is False
+        callback.assert_not_called()
+
+    def test_delete_entity_fires_content_deleted_callback(self, db):
+        """Test delete_entity invokes _on_content_deleted with entity id."""
+        entity_id = db.add_entity("character", "Doomed", description="About to be deleted")
+
+        callback = MagicMock()
+        db._on_content_deleted = callback
+
+        result = db.delete_entity(entity_id)
+
+        assert result is True
+        callback.assert_called_once_with(entity_id)
+
+    def test_delete_entity_no_callback_on_failure(self, db):
+        """Test delete_entity does not fire callback when entity not found."""
+        callback = MagicMock()
+        db._on_content_deleted = callback
+
+        result = db.delete_entity("non-existent-id")
+
+        assert result is False
+        callback.assert_not_called()
+
+    def test_delete_entity_no_callback_when_not_attached(self, db):
+        """Test delete_entity succeeds when no deleted callback is attached."""
+        entity_id = db.add_entity("character", "Doomed")
+        assert db._on_content_deleted is None
+
+        result = db.delete_entity(entity_id)
+        assert result is True
+
+
+class TestRelationshipCallbacks:
+    """Tests for relationship CRUD operations firing content changed/deleted callbacks."""
+
+    def test_add_relationship_fires_content_changed_callback_with_validation(self, db):
+        """Test add_relationship fires callback with entity names when validate=True."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        rel_id = db.add_relationship(
+            alice_id, bob_id, "knows", description="They are friends", validate=True
+        )
+
+        callback.assert_called_once_with(
+            rel_id, "relationship", "Alice knows Bob: They are friends"
+        )
+
+    def test_add_relationship_fires_content_changed_callback_without_validation(self, db):
+        """Test add_relationship fires callback with raw IDs when validate=False."""
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        rel_id = db.add_relationship(
+            "fake-source",
+            "fake-target",
+            "knows",
+            description="A relationship",
+            validate=False,
+        )
+
+        callback.assert_called_once_with(
+            rel_id, "relationship", "fake-source knows fake-target: A relationship"
+        )
+
+    def test_add_relationship_no_callback_when_not_attached(self, db):
+        """Test add_relationship succeeds when no callback is attached."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        assert db._on_content_changed is None
+
+        rel_id = db.add_relationship(alice_id, bob_id, "knows")
+        assert rel_id is not None
+
+    def test_delete_relationship_fires_content_deleted_callback(self, db):
+        """Test delete_relationship invokes _on_content_deleted with relationship id."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        rel_id = db.add_relationship(alice_id, bob_id, "knows")
+
+        callback = MagicMock()
+        db._on_content_deleted = callback
+
+        result = db.delete_relationship(rel_id)
+
+        assert result is True
+        callback.assert_called_once_with(rel_id)
+
+    def test_delete_relationship_no_callback_on_not_found(self, db):
+        """Test delete_relationship does not fire callback when relationship not found."""
+        callback = MagicMock()
+        db._on_content_deleted = callback
+
+        result = db.delete_relationship("non-existent-id")
+
+        assert result is False
+        callback.assert_not_called()
+
+    def test_delete_relationship_no_callback_when_not_attached(self, db):
+        """Test delete_relationship succeeds when no deleted callback is attached."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        rel_id = db.add_relationship(alice_id, bob_id, "knows")
+        assert db._on_content_deleted is None
+
+        result = db.delete_relationship(rel_id)
+        assert result is True
+
+    def test_update_relationship_fires_content_changed_callback(self, db):
+        """Test update_relationship fires callback with updated relationship text."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        rel_id = db.add_relationship(alice_id, bob_id, "knows", description="Acquaintances")
+
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        result = db.update_relationship(rel_id, relation_type="friend", description="Best friends")
+
+        assert result is True
+        callback.assert_called_once_with(rel_id, "relationship", "Alice friend Bob: Best friends")
+
+    def test_update_relationship_no_callback_on_not_found(self, db):
+        """Test update_relationship does not fire callback when relationship not found."""
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        result = db.update_relationship("non-existent-id", relation_type="friend")
+
+        assert result is False
+        callback.assert_not_called()
+
+    def test_update_relationship_callback_uses_ids_when_entities_deleted(self, db):
+        """Test update_relationship callback falls back to IDs when entities are gone."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        rel_id = db.add_relationship(alice_id, bob_id, "knows", validate=False)
+
+        # Delete entities but keep the relationship (via direct SQL)
+        cursor = db.conn.cursor()
+        cursor.execute("DELETE FROM entities WHERE id = ?", (alice_id,))
+        cursor.execute("DELETE FROM entities WHERE id = ?", (bob_id,))
+        db.conn.commit()
+
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        result = db.update_relationship(rel_id, relation_type="enemy", description="Foes")
+
+        assert result is True
+        # Should fall back to using raw IDs since entities are gone
+        callback.assert_called_once_with(rel_id, "relationship", f"{alice_id} enemy {bob_id}: Foes")
+
+
+class TestEventCallbacks:
+    """Tests for event add_event firing content changed callbacks."""
+
+    def test_add_event_fires_content_changed_callback_with_chapter(self, db):
+        """Test add_event fires callback with chapter number included in text."""
+        char_id = db.add_entity("character", "Alice")
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        event_id = db.add_event(
+            description="Alice discovers a secret",
+            participants=[(char_id, "protagonist")],
+            chapter_number=3,
+        )
+
+        callback.assert_called_once_with(
+            event_id, "event", "Event: Alice discovers a secret (Chapter 3)"
+        )
+
+    def test_add_event_fires_content_changed_callback_without_chapter(self, db):
+        """Test add_event fires callback without chapter part when chapter_number is None."""
+        callback = MagicMock()
+        db._on_content_changed = callback
+
+        event_id = db.add_event(
+            description="A natural disaster strikes",
+            chapter_number=None,
+        )
+
+        callback.assert_called_once_with(event_id, "event", "Event: A natural disaster strikes")
+
+    def test_add_event_no_callback_when_not_attached(self, db):
+        """Test add_event succeeds when no callback is attached."""
+        assert db._on_content_changed is None
+
+        event_id = db.add_event(
+            description="Something happens",
+            chapter_number=1,
+        )
+        assert event_id is not None
+
+
+class TestV4ToV5Migration:
+    """Tests for the v4 to v5 schema migration (vec_embeddings table)."""
+
+    def test_migration_v4_to_v5_vec_available_creates_vec_table(self, tmp_path):
+        """Test that migration creates vec_embeddings when sqlite-vec is available."""
+        import sqlite3
+
+        db_path = tmp_path / "test_migration_v4v5.db"
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Create a v4 schema manually
+        cursor.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
+        cursor.execute("INSERT INTO schema_version VALUES (4)")
+        cursor.execute(
+            """CREATE TABLE entities (
+                id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT NOT NULL,
+                description TEXT DEFAULT '', attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )"""
+        )
+        cursor.execute(
+            """CREATE TABLE entity_versions (
+                id TEXT PRIMARY KEY, entity_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL, data_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+                change_reason TEXT DEFAULT '', quality_score REAL DEFAULT NULL,
+                FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+            )"""
+        )
+        conn.commit()
+        conn.close()
+
+        # Open with WorldDatabase - should trigger v4->v5 migration
+        with WorldDatabase(db_path) as wdb:
+            # embedding_metadata table should exist
+            cursor = wdb.conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='embedding_metadata'"
+            )
+            assert cursor.fetchone() is not None
+
+    def test_migration_v4_to_v5_vec_creation_failure_sets_vec_unavailable(self, tmp_path):
+        """Test that vec_embeddings creation failure marks vec as unavailable."""
+        import sqlite3
+
+        db_path = tmp_path / "test_migration_v4v5_fail.db"
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Create a v4 schema manually
+        cursor.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
+        cursor.execute("INSERT INTO schema_version VALUES (4)")
+        cursor.execute(
+            """CREATE TABLE entities (
+                id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT NOT NULL,
+                description TEXT DEFAULT '', attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )"""
+        )
+        cursor.execute(
+            """CREATE TABLE entity_versions (
+                id TEXT PRIMARY KEY, entity_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL, data_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+                change_reason TEXT DEFAULT '', quality_score REAL DEFAULT NULL,
+                FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+            )"""
+        )
+        conn.commit()
+        conn.close()
+
+        # Patch load_vec_extension to return True (pretend vec loaded)
+        # but the actual CREATE VIRTUAL TABLE will fail because vec0 is not really loaded
+        with patch("src.utils.sqlite_vec_loader.load_vec_extension", return_value=True):
+            with WorldDatabase(db_path) as wdb:
+                # vec should be set to False after the creation failure
+                assert wdb.vec_available is False
+
+    def test_migration_v4_to_v5_vec_not_available(self, tmp_path):
+        """Test that migration creates only embedding_metadata when vec is not available."""
+        import sqlite3
+
+        db_path = tmp_path / "test_migration_v4v5_novec.db"
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Create a v4 schema manually
+        cursor.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
+        cursor.execute("INSERT INTO schema_version VALUES (4)")
+        cursor.execute(
+            """CREATE TABLE entities (
+                id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT NOT NULL,
+                description TEXT DEFAULT '', attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )"""
+        )
+        cursor.execute(
+            """CREATE TABLE entity_versions (
+                id TEXT PRIMARY KEY, entity_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL, data_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
+                change_reason TEXT DEFAULT '', quality_score REAL DEFAULT NULL,
+                FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+            )"""
+        )
+        conn.commit()
+        conn.close()
+
+        # Patch load_vec_extension to return False (vec not available)
+        with patch("src.utils.sqlite_vec_loader.load_vec_extension", return_value=False):
+            with WorldDatabase(db_path) as wdb:
+                assert wdb.vec_available is False
+
+                # embedding_metadata should still exist
+                cursor = wdb.conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name='embedding_metadata'"
+                )
+                assert cursor.fetchone() is not None
+
+                # vec_embeddings should NOT exist
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_embeddings'"
+                )
+                assert cursor.fetchone() is None
