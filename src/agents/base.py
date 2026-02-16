@@ -5,6 +5,7 @@ import threading
 import time
 from typing import TypeVar
 
+import httpx
 import ollama
 from pydantic import BaseModel, ValidationError
 
@@ -16,6 +17,7 @@ from src.utils.exceptions import CircuitOpenError, LLMConnectionError, LLMError,
 from src.utils.json_parser import clean_llm_text
 from src.utils.logging_config import log_performance
 from src.utils.prompt_registry import PromptRegistry
+from src.utils.streaming import consume_stream
 from src.utils.validation import validate_not_empty
 
 # Type variable for generic structured output
@@ -235,7 +237,7 @@ class BaseAgent:
                         )
 
                         start_time = time.time()
-                        response = self.client.chat(
+                        stream = self.client.chat(
                             model=self.model,
                             messages=messages,
                             format=json_schema,
@@ -243,10 +245,12 @@ class BaseAgent:
                                 "temperature": use_temp,
                                 "num_ctx": self.settings.context_size,
                             },
+                            stream=True,
                         )
+                        response = consume_stream(stream)
                         duration = time.time() - start_time
 
-                        # Extract token counts from native Ollama response
+                        # Extract token counts from streamed response
                         prompt_tokens = response.get("prompt_eval_count")
                         completion_tokens = response.get("eval_count")
                         total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
@@ -285,7 +289,12 @@ class BaseAgent:
                         if attempt < max_retries - 1:
                             continue  # Retry with same prompt
 
-                    except (ConnectionError, TimeoutError) as e:
+                    except (
+                        ConnectionError,
+                        TimeoutError,
+                        httpx.TimeoutException,
+                        httpx.TransportError,
+                    ) as e:
                         last_error = e
                         circuit_breaker.record_failure(e)
                         logger.warning(
@@ -450,7 +459,7 @@ class BaseAgent:
                         )
 
                         start_time = time.time()
-                        response = self.client.chat(
+                        stream = self.client.chat(
                             model=use_model,
                             messages=messages,
                             options={
@@ -458,12 +467,14 @@ class BaseAgent:
                                 "num_predict": self.settings.max_tokens,
                                 "num_ctx": self.settings.context_size,
                             },
+                            stream=True,
                         )
+                        response = consume_stream(stream)
                         duration = time.time() - start_time
 
                         content: str = response["message"]["content"]
 
-                        # Extract token counts from Ollama response for cost tracking
+                        # Extract token counts from streamed response
                         prompt_tokens = response.get("prompt_eval_count")
                         completion_tokens = response.get("eval_count")
                         total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
@@ -511,27 +522,27 @@ class BaseAgent:
                         circuit_breaker.record_success()
                         return cleaned_content
 
-                    except ConnectionError as e:
-                        last_error = e
-                        circuit_breaker.record_failure(e)
-                        logger.warning(
-                            f"{self.name}: Connection error on attempt {attempt + 1}: {e}"
-                        )
-                        if attempt < max_retries - 1:
-                            logger.info(f"{self.name}: Retrying in {delay}s...")
-                            time.sleep(delay)
-                            delay *= self.settings.llm_retry_backoff
-
                     except ollama.ResponseError as e:
                         # Model-specific errors (model not found, etc.) - don't retry
                         logger.error(f"{self.name}: Ollama response error: {e}")
                         circuit_breaker.record_failure(e)
                         raise LLMGenerationError(f"Model error: {e}") from e
 
-                    except TimeoutError as e:
+                    except (
+                        ConnectionError,
+                        TimeoutError,
+                        httpx.TimeoutException,
+                        httpx.TransportError,
+                    ) as e:
                         last_error = e
                         circuit_breaker.record_failure(e)
-                        logger.warning(f"{self.name}: Timeout on attempt {attempt + 1}: {e}")
+                        logger.warning(
+                            "%s: Connection/timeout error on attempt %d/%d: %s",
+                            self.name,
+                            attempt + 1,
+                            max_retries,
+                            e,
+                        )
                         if attempt < max_retries - 1:
                             logger.info(f"{self.name}: Retrying in {delay}s...")
                             time.sleep(delay)

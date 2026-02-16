@@ -11,6 +11,7 @@ from src.memory.entities import Entity
 from src.memory.story_state import StoryBrief
 from src.memory.world_quality import RefinementConfig
 from src.utils.json_parser import clean_llm_text, extract_json
+from src.utils.streaming import consume_stream
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ NO quotes, NO formatting, NO preambles — just the summary text in the "summary
         )
         messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
         start_time = time.perf_counter()
-        response = svc.client.chat(
+        stream = svc.client.chat(
             model=model,
             messages=messages,
             format=MiniDescription.model_json_schema(),
@@ -72,7 +73,9 @@ NO quotes, NO formatting, NO preambles — just the summary text in the "summary
                 "temperature": svc.settings.world_quality_judge_temp,
                 "num_predict": svc.settings.llm_tokens_mini_description,
             },
+            stream=True,
         )
+        response = consume_stream(stream)
         duration = time.perf_counter() - start_time
         prompt_tokens = response.get("prompt_eval_count")
         completion_tokens = response.get("eval_count")

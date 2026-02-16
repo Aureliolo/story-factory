@@ -26,6 +26,7 @@ from pydantic import ValidationError
 
 from src.memory.world_quality._entity_scores import FactionQualityScores
 from src.services.world_quality_service._common import JUDGE_CALIBRATION_BLOCK
+from src.utils.streaming import consume_stream
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +75,14 @@ def run_constrained(client: ollama.Client, model: str, rounds: int) -> list[dict
     for i in range(rounds):
         try:
             start = time.time()
-            resp = client.chat(
+            stream = client.chat(
                 model=model,
                 messages=[{"role": "user", "content": JUDGE_PROMPT}],
                 format=schema,
                 options={"temperature": 0.1, "num_ctx": 4096},
+                stream=True,
             )
+            resp = consume_stream(stream)
             elapsed = time.time() - start
             content = resp["message"]["content"]
             scores = FactionQualityScores.model_validate_json(content)
@@ -106,12 +109,14 @@ def run_unconstrained(client: ollama.Client, model: str, rounds: int) -> list[di
     for i in range(rounds):
         try:
             start = time.time()
-            resp = client.chat(
+            stream = client.chat(
                 model=model,
                 messages=[{"role": "user", "content": JUDGE_PROMPT}],
                 format="json",
                 options={"temperature": 0.1, "num_ctx": 4096},
+                stream=True,
             )
+            resp = consume_stream(stream)
             elapsed = time.time() - start
             content = resp["message"]["content"]
             data = json.loads(content)

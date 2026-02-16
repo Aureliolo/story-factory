@@ -5,6 +5,7 @@ a running Ollama instance.
 """
 
 import json
+from collections.abc import Iterator
 from unittest.mock import MagicMock
 
 import ollama
@@ -17,6 +18,7 @@ from scripts.investigate_structured_output_quantization import (
     run_constrained,
     run_unconstrained,
 )
+from tests.shared.mock_ollama import MockStreamChunk
 
 
 # =====================================================================
@@ -41,9 +43,20 @@ def _make_result(
     }
 
 
-def _make_chat_response(content: str) -> dict:
-    """Build a dict mimicking an Ollama chat response."""
-    return {"message": {"content": content}}
+def _make_chat_response(content: str) -> Iterator[MockStreamChunk]:
+    """Build a mock streaming Ollama chat response compatible with consume_stream().
+
+    Args:
+        content: Response content string.
+
+    Returns:
+        Iterator of MockStreamChunk matching the Ollama streaming format.
+    """
+    return iter(
+        [
+            MockStreamChunk(content=content, done=True, prompt_eval_count=10, eval_count=5),
+        ]
+    )
 
 
 # =====================================================================
@@ -373,7 +386,8 @@ class TestRunConstrained:
                 "feedback": "OK",
             }
         )
-        mock_client.chat.return_value = _make_chat_response(content)
+        # Use side_effect callable for fresh iterator on each round
+        mock_client.chat.side_effect = lambda *a, **kw: _make_chat_response(content)
 
         results = run_constrained(mock_client, "test-model:8b", rounds=3)
 
@@ -431,16 +445,16 @@ class TestRunConstrained:
         assert results[0]["round"] == 1
         assert results[1]["round"] == 3
 
-    def test_key_error_handling(self, mock_client):
-        """KeyError (e.g., missing 'message' key) should be caught."""
-        mock_client.chat.return_value = {"bad_key": "no message"}
+    def test_empty_json_handling(self, mock_client):
+        """Empty JSON object should fail Pydantic validation and be caught."""
+        mock_client.chat.return_value = _make_chat_response("{}")
 
         results = run_constrained(mock_client, "test-model:8b", rounds=1)
 
         assert len(results) == 0
 
     def test_chat_called_with_correct_params(self, mock_client):
-        """Verify chat is called with format=schema and correct options."""
+        """Verify chat is called with format=schema, stream=True, and correct options."""
         content = json.dumps(
             {
                 "coherence": 7.0,
@@ -459,6 +473,7 @@ class TestRunConstrained:
         assert call_kwargs.kwargs["options"] == {"temperature": 0.1, "num_ctx": 4096}
         # format should be a JSON schema dict (from Pydantic)
         assert isinstance(call_kwargs.kwargs["format"], dict)
+        assert call_kwargs.kwargs["stream"] is True
 
 
 # =====================================================================
@@ -505,7 +520,8 @@ class TestRunUnconstrained:
                 "distinctiveness": 5.0,
             }
         )
-        mock_client.chat.return_value = _make_chat_response(content)
+        # Use side_effect callable for fresh iterator on each round
+        mock_client.chat.side_effect = lambda *a, **kw: _make_chat_response(content)
 
         results = run_unconstrained(mock_client, "test-model:8b", rounds=3)
 
@@ -618,6 +634,7 @@ class TestRunUnconstrained:
         call_kwargs = mock_client.chat.call_args
         assert call_kwargs.kwargs["model"] == "test-model:8b"
         assert call_kwargs.kwargs["format"] == "json"
+        assert call_kwargs.kwargs["stream"] is True
 
     def test_none_dimension_value_skipped(self, mock_client):
         """Dimension with None value should cause the round to be skipped."""
@@ -636,9 +653,9 @@ class TestRunUnconstrained:
         # None is filtered by `if val is not None`, so only 3 dims found -> skipped
         assert len(results) == 0
 
-    def test_key_error_handling(self, mock_client):
-        """KeyError (e.g., missing 'message' key) should be caught."""
-        mock_client.chat.return_value = {"bad_key": "no message"}
+    def test_empty_json_handling(self, mock_client):
+        """Empty JSON object should result in missing dimensions and be skipped."""
+        mock_client.chat.return_value = _make_chat_response("{}")
 
         results = run_unconstrained(mock_client, "test-model:8b", rounds=1)
 

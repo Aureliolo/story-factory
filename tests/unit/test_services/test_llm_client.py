@@ -1,6 +1,7 @@
 """Tests for services/llm_client.py."""
 
 import logging
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import ollama
@@ -38,21 +39,29 @@ def clear_client_cache():
     llm_client._ollama_clients.clear()
 
 
-def _make_chat_response(json_content: str) -> dict:
-    """Create a mock Ollama chat response.
+def _make_chat_response(json_content: str) -> Iterator:
+    """Create a mock streaming Ollama chat response.
+
+    Returns an iterator of MockStreamChunk objects compatible with consume_stream().
 
     Args:
         json_content: JSON string for the response content.
 
     Returns:
-        Dict matching Ollama ChatResponse format.
+        Iterator of stream chunks matching Ollama streaming format.
     """
-    return {
-        "message": {"content": json_content, "role": "assistant"},
-        "done": True,
-        "prompt_eval_count": 100,
-        "eval_count": 50,
-    }
+    from tests.shared.mock_ollama import MockStreamChunk
+
+    return iter(
+        [
+            MockStreamChunk(
+                content=json_content,
+                done=True,
+                prompt_eval_count=100,
+                eval_count=50,
+            ),
+        ]
+    )
 
 
 class TestGetOllamaClient:
@@ -321,6 +330,52 @@ class TestGenerateStructured:
         mock_client = MagicMock()
         mock_client.chat.side_effect = [
             TimeoutError("Request timed out"),
+            _make_chat_response('{"name": "test", "value": 42}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model",
+            prompt="User prompt",
+            response_model=SampleModel,
+            max_retries=2,
+        )
+
+        assert result.name == "test"
+        assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_httpx_timeout(self, mock_get_client, mock_settings):
+        """Test that httpx.TimeoutException triggers retries (mid-stream read timeout)."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            _make_chat_response('{"name": "test", "value": 42}'),
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model",
+            prompt="User prompt",
+            response_model=SampleModel,
+            max_retries=2,
+        )
+
+        assert result.name == "test"
+        assert mock_client.chat.call_count == 2
+
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_retries_on_httpx_transport_error(self, mock_get_client, mock_settings):
+        """Test that httpx.TransportError triggers retries (mid-stream disconnect)."""
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.chat.side_effect = [
+            httpx.RemoteProtocolError("Server disconnected"),
             _make_chat_response('{"name": "test", "value": 42}'),
         ]
         mock_get_client.return_value = mock_client

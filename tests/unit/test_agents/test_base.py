@@ -1,6 +1,7 @@
 """Tests for the base agent class."""
 
 import threading
+from collections.abc import Iterator
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
@@ -12,7 +13,36 @@ from src.agents.base import BaseAgent
 from src.settings import Settings
 from src.utils.circuit_breaker import reset_global_circuit_breaker
 from src.utils.exceptions import CircuitOpenError, LLMGenerationError
-from tests.shared.mock_ollama import TEST_MODEL
+from tests.shared.mock_ollama import TEST_MODEL, MockStreamChunk
+
+
+def _make_stream_response(
+    content: str, prompt_eval_count: int = 10, eval_count: int = 5
+) -> Iterator[MockStreamChunk]:
+    """Create a mock streaming response compatible with consume_stream().
+
+    Returns a fresh iterator of MockStreamChunk each time it's called.
+    Use this for agent.client.chat.return_value (single-call tests)
+    or in side_effect lists (multi-call tests).
+
+    Args:
+        content: Response content string.
+        prompt_eval_count: Simulated prompt token count.
+        eval_count: Simulated completion token count.
+
+    Returns:
+        Iterator of MockStreamChunk compatible with consume_stream().
+    """
+    return iter(
+        [
+            MockStreamChunk(
+                content=content,
+                done=True,
+                prompt_eval_count=prompt_eval_count,
+                eval_count=eval_count,
+            ),
+        ]
+    )
 
 
 # Test model for structured output tests
@@ -244,7 +274,7 @@ class TestBaseAgentGenerate:
     def test_generate_returns_content(self):
         """Test generate returns response content."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Test response"}}
+        agent.client.chat.return_value = _make_stream_response("Test response")
 
         result = agent.generate("Test prompt")
 
@@ -253,7 +283,7 @@ class TestBaseAgentGenerate:
     def test_generate_includes_context(self):
         """Test generate includes context in messages."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
+        agent.client.chat.return_value = _make_stream_response("Valid response content")
 
         agent.generate("Prompt", context="Story context here")
 
@@ -265,7 +295,7 @@ class TestBaseAgentGenerate:
     def test_generate_uses_custom_model(self):
         """Test generate uses custom model when provided."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
+        agent.client.chat.return_value = _make_stream_response("Valid response content")
 
         agent.generate("Prompt", model="custom-model:7b")
 
@@ -275,7 +305,7 @@ class TestBaseAgentGenerate:
     def test_generate_uses_custom_temperature(self):
         """Test generate uses custom temperature when provided."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
+        agent.client.chat.return_value = _make_stream_response("Valid response content")
 
         agent.generate("Prompt", temperature=0.9)
 
@@ -288,7 +318,7 @@ class TestBaseAgentGenerate:
         agent = create_mock_agent()
         agent.client.chat.side_effect = [
             ConnectionError("First failure"),
-            {"message": {"content": "Success after retry"}},
+            _make_stream_response("Success after retry"),
         ]
 
         result = agent.generate("Prompt")
@@ -303,12 +333,44 @@ class TestBaseAgentGenerate:
         agent = create_mock_agent()
         agent.client.chat.side_effect = [
             TimeoutError("Timeout"),
-            {"message": {"content": "Success after retry"}},
+            _make_stream_response("Success after retry"),
         ]
 
         result = agent.generate("Prompt")
 
         assert result == "Success after retry"
+        assert agent.client.chat.call_count == 2
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_retries_on_httpx_timeout(self, mock_sleep):
+        """Test generate retries on httpx.TimeoutException (mid-stream read timeout)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            _make_stream_response("Success after httpx retry"),
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Success after httpx retry"
+        assert agent.client.chat.call_count == 2
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_retries_on_httpx_transport_error(self, mock_sleep):
+        """Test generate retries on httpx.TransportError (mid-stream disconnect)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.RemoteProtocolError("Server disconnected"),
+            _make_stream_response("Success after transport retry"),
+        ]
+
+        result = agent.generate("Prompt")
+
+        assert result == "Success after transport retry"
         assert agent.client.chat.call_count == 2
 
     @patch("src.agents.base.time.sleep")
@@ -339,8 +401,8 @@ class TestBaseAgentQwenNoThink:
 
     def test_generate_no_think_not_added_for_qwen_model(self):
         """Test /no_think is NOT added to system prompt for Qwen models."""
-        agent = create_mock_agent(model="huihui_ai/qwen3-abliterated:8b")
-        agent.client.chat.return_value = {"message": {"content": "Valid response text"}}
+        agent = create_mock_agent(model="fake-qwen:8b")
+        agent.client.chat.return_value = _make_stream_response("Valid response text")
 
         agent.generate("Test prompt")
 
@@ -352,8 +414,8 @@ class TestBaseAgentQwenNoThink:
 
     def test_generate_no_think_not_added_for_non_qwen(self):
         """Test /no_think is NOT added for non-Qwen models."""
-        agent = create_mock_agent(model="huihui_ai/dolphin3-abliterated:8b")
-        agent.client.chat.return_value = {"message": {"content": "Valid response text"}}
+        agent = create_mock_agent(model="fake-dolphin:8b")
+        agent.client.chat.return_value = _make_stream_response("Valid response text")
 
         agent.generate("Test prompt")
 
@@ -372,8 +434,8 @@ class TestBaseAgentShortResponseValidation:
         """Test generate retries when response is too short after cleaning."""
         agent = create_mock_agent()
         agent.client.chat.side_effect = [
-            {"message": {"content": "<think>"}},  # Too short after cleaning
-            {"message": {"content": "Valid response with enough content"}},
+            _make_stream_response("<think>"),  # Too short after cleaning
+            _make_stream_response("Valid response with enough content"),
         ]
 
         result = agent.generate("Prompt")
@@ -387,8 +449,8 @@ class TestBaseAgentShortResponseValidation:
         from src.utils.exceptions import LLMGenerationError
 
         agent = create_mock_agent()
-        # All attempts return short response
-        agent.client.chat.return_value = {"message": {"content": "<think>"}}
+        # All attempts return short response — use side_effect callable for fresh iterators
+        agent.client.chat.side_effect = lambda *a, **kw: _make_stream_response("<think>")
 
         with pytest.raises(LLMGenerationError, match="Response too short"):
             agent.generate("Prompt")
@@ -402,11 +464,9 @@ class TestBaseAgentShortResponseValidation:
         contamination. These should be stripped before returning to callers.
         """
         agent = create_mock_agent()
-        agent.client.chat.return_value = {
-            "message": {
-                "content": "<think>Let me think about this carefully...</think>The actual response"
-            }
-        }
+        agent.client.chat.return_value = _make_stream_response(
+            "<think>Let me think about this carefully...</think>The actual response"
+        )
 
         result = agent.generate("Prompt")
 
@@ -421,7 +481,10 @@ class TestBaseAgentRateLimiting:
     def test_generate_respects_rate_limit(self):
         """Test generate uses semaphore for rate limiting."""
         agent = create_mock_agent()
-        agent.client.chat.return_value = {"message": {"content": "Valid response content"}}
+        # Use side_effect callable for fresh iterator on each call (3 concurrent threads)
+        agent.client.chat.side_effect = lambda *a, **kw: _make_stream_response(
+            "Valid response content"
+        )
 
         # Verify semaphore is used (indirectly by checking concurrent calls)
         results = []
@@ -490,21 +553,16 @@ class TestBaseAgentGenerateStructured:
     """Tests for generate_structured method with native Ollama format parameter."""
 
     @staticmethod
-    def _make_chat_response(json_content: str) -> dict:
-        """Create a mock Ollama chat response with JSON content.
+    def _make_chat_response(json_content: str) -> Iterator[MockStreamChunk]:
+        """Create a mock streaming Ollama chat response with JSON content.
 
         Args:
             json_content: JSON string for the response content.
 
         Returns:
-            Dict matching Ollama ChatResponse format.
+            Iterator of MockStreamChunk compatible with consume_stream().
         """
-        return {
-            "message": {"content": json_content, "role": "assistant"},
-            "done": True,
-            "prompt_eval_count": 100,
-            "eval_count": 50,
-        }
+        return _make_stream_response(json_content, prompt_eval_count=100, eval_count=50)
 
     def test_generate_structured_returns_model_instance(self):
         """Test generate_structured returns validated Pydantic model instance."""
@@ -638,6 +696,40 @@ class TestBaseAgentGenerateStructured:
         assert result.name == "Recovered"
         assert agent.client.chat.call_count == 2
         mock_sleep.assert_called_once_with(1)  # min(2**0, 10) = 1
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_httpx_timeout(self, mock_sleep):
+        """Test generate_structured retries on httpx.TimeoutException (mid-stream)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            self._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+
+    @patch("src.agents.base.time.sleep")
+    def test_generate_structured_retries_on_httpx_transport_error(self, mock_sleep):
+        """Test generate_structured retries on httpx.TransportError (mid-stream disconnect)."""
+        import httpx
+
+        agent = create_mock_agent()
+        agent.client.chat.side_effect = [
+            httpx.RemoteProtocolError("Server disconnected"),
+            self._make_chat_response('{"name": "Recovered"}'),
+        ]
+
+        result = agent.generate_structured("Test prompt", SampleOutputModel, max_retries=2)
+
+        assert result.name == "Recovered"
+        assert agent.client.chat.call_count == 2
+        mock_sleep.assert_called_once_with(1)
 
     @patch("src.agents.base.time.sleep")
     def test_generate_structured_exhausts_retries_raises(self, mock_sleep):
@@ -861,7 +953,7 @@ class TestCircuitBreakerIntegration:
 
         agent = create_mock_agent()
         agent.settings = Settings(circuit_breaker_enabled=True)
-        agent.client.chat.return_value = {"message": {"content": "test response"}}
+        agent.client.chat.return_value = _make_stream_response("test response")
 
         result = agent.generate("test prompt")
 
