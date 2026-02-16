@@ -14,14 +14,14 @@ from src.memory.conflict_types import (
 )
 from src.memory.story_state import StoryState
 from src.memory.world_quality import RelationshipQualityScores
-from src.services.llm_client import generate_structured
+from src.services.llm_client import generate_structured, warn_if_prompt_too_large
 from src.services.world_quality_service._common import (
     JUDGE_CALIBRATION_BLOCK,
     judge_with_averaging,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
 from src.utils.exceptions import WorldGenerationError, summarize_llm_error
-from src.utils.json_parser import extract_json
+from src.utils.json_parser import extract_json, unwrap_single_json
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +62,17 @@ def generate_relationship_with_quality(
     rejected_pairs: list[tuple[str, str, str]] = []
 
     def _create(retries: int) -> dict[str, Any]:
-        """Create a new relationship, passing rejected pairs to avoid duplicates."""
+        """Create a new relationship, passing rejected pairs to avoid duplicates.
+
+        Uses stable temperature (no escalation) because escalating temperature
+        degrades JSON compliance for relationship generation.
+        """
         combined_rels = existing_rels + rejected_pairs
         result: dict[str, Any] = svc._create_relationship(
             story_state,
             entity_names,
             combined_rels,
-            config.creator_temperature,
+            config.creator_temperature,  # Stable: no escalation for relationships
         )
         return result
 
@@ -215,7 +219,8 @@ def _create_relationship(
     if not brief:
         return {}
 
-    existing_rel_strs = [f"- {s} <-> {t}" for s, t, _rt in existing_rels]
+    # Build forbidden pairs block with direction and type for clarity
+    existing_rel_strs = [f"- {s} -> {t} ({rt})" for s, t, rt in existing_rels]
     existing_pairs_block = "\n".join(existing_rel_strs) if existing_rel_strs else "None"
 
     type_list = ", ".join(VALID_RELATIONSHIP_TYPES)
@@ -224,6 +229,27 @@ def _create_relationship(
     existing_types = [rel_type for _s, _t, rel_type in existing_rels if rel_type]
     diversity_hint = _compute_diversity_hint(existing_types)
 
+    # For small entity sets, compute and list valid unused pairs
+    unused_pairs_block = ""
+    if len(entity_names) <= 20:
+        from itertools import permutations
+
+        existing_pair_set = set()
+        for s, t, _rt in existing_rels:
+            existing_pair_set.add((s, t))
+            existing_pair_set.add((t, s))
+
+        unused_pairs = [
+            f"- {a} -> {b}"
+            for a, b in permutations(entity_names, 2)
+            if (a, b) not in existing_pair_set
+        ][:30]  # Cap at 30 to avoid prompt bloat
+
+        if unused_pairs:
+            unused_pairs_block = (
+                "\n\nAVAILABLE UNUSED PAIRS (choose ONLY from these):\n" + "\n".join(unused_pairs)
+            )
+
     prompt = f"""Create a compelling relationship between entities for a {brief.genre} story.
 
 STORY PREMISE: {brief.premise}
@@ -231,8 +257,9 @@ TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
 
 AVAILABLE ENTITIES: {", ".join(entity_names)}
-DO NOT create any of these entity pairs (already exist or rejected):
-{existing_pairs_block}
+
+FORBIDDEN ENTITY PAIRS (you MUST NOT use any of these pairs in either direction):
+{existing_pairs_block}{unused_pairs_block}
 
 Create a relationship with:
 1. Tension - conflict potential
@@ -252,6 +279,12 @@ Output ONLY valid JSON (all text in {brief.language}):
 
     try:
         model = svc._get_creator_model(entity_type="relationship")
+
+        # Warn proactively if prompt may exceed context window
+        warn_if_prompt_too_large(
+            prompt, model, svc.settings.context_size, svc.settings.llm_tokens_relationship_create
+        )
+
         response = svc.client.generate(
             model=model,
             prompt=prompt,
@@ -263,12 +296,7 @@ Output ONLY valid JSON (all text in {brief.language}):
 
         raw_response = response["response"]
         data = extract_json(raw_response, strict=False)
-        if data and isinstance(data, list):
-            logger.warning(
-                "Relationship creation returned array of %d relationships, taking first",
-                len(data),
-            )
-            data = data[0] if data and isinstance(data[0], dict) else None
+        data = unwrap_single_json(data)
         if data and isinstance(data, dict):
             # Normalize relation_type to controlled vocabulary
             raw_type = data.get("relation_type", "related_to")
@@ -460,6 +488,12 @@ Output ONLY valid JSON:
 
     try:
         model = svc._get_creator_model(entity_type="relationship")
+
+        # Warn proactively if prompt may exceed context window
+        warn_if_prompt_too_large(
+            prompt, model, svc.settings.context_size, svc.settings.llm_tokens_relationship_refine
+        )
+
         response = svc.client.generate(
             model=model,
             prompt=prompt,

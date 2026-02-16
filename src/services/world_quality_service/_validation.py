@@ -27,20 +27,29 @@ def generate_mini_description(
     name: str,
     entity_type: str,
     full_description: str,
+    cached_mini_description: str | None = None,
 ) -> str:
     """Generate a short 10-15 word mini description for hover tooltips.
 
     Uses a fast model with low temperature for consistent, concise output.
+    If a cached mini description is provided, returns it immediately without
+    making an LLM call.
 
     Args:
         svc: WorldQualityService instance.
         name: Entity name.
         entity_type: Type of entity (character, location, etc.).
         full_description: Full description to summarize.
+        cached_mini_description: Previously generated mini description to reuse.
 
     Returns:
         A short summary (configured word limit).
     """
+    # Return cached value if available
+    if cached_mini_description:
+        logger.debug("Using cached mini description for %s '%s'", entity_type, name)
+        return cached_mini_description
+
     max_words = svc.settings.mini_description_words_max
     description_words = full_description.split()
     if not full_description or len(description_words) <= max_words:
@@ -134,10 +143,26 @@ def generate_mini_descriptions_batch(
     start_time = time.time()
 
     results = {}
+    skipped = 0
     for i, entity in enumerate(entities_with_desc):
         name = entity.get("name", "Unknown")
         entity_type = entity.get("type", "entity")
         description = entity.get("description", "")
+
+        # Skip entities that already have a cached mini description
+        attributes = entity.get("attributes", {}) or {}
+        cached = attributes.get("mini_description")
+        if cached:
+            logger.debug(
+                "Skipping mini description %d/%d: %s '%s' (cached)",
+                i + 1,
+                total_count,
+                entity_type,
+                name,
+            )
+            results[name] = cached
+            skipped += 1
+            continue
 
         logger.debug(f"Generating mini description {i + 1}/{total_count}: {entity_type} '{name}'")
 
@@ -146,11 +171,15 @@ def generate_mini_descriptions_batch(
         logger.debug(f"Generated mini description for {name}: {mini_desc[:50]}...")
 
     elapsed = time.time() - start_time
-    avg_time = elapsed / max(len(results), 1)
+    generated = len(results) - skipped
+    avg_time = elapsed / max(generated, 1)
     logger.info(
-        "Completed mini description batch: %d descriptions in %.2fs (%.2fs avg per entity)",
+        "Completed mini description batch: %d descriptions in %.2fs "
+        "(%d generated, %d cached, %.2fs avg per generated entity)",
         len(results),
         elapsed,
+        generated,
+        skipped,
         avg_time,
     )
 

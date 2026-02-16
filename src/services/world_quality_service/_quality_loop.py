@@ -345,7 +345,61 @@ def quality_refinement_loop[T, S: BaseQualityScores](
             f"Last error: {last_error}"
         )
 
+    # Hail-mary: try one fresh creation if threshold not met and loop ran multiple iterations
     best_entity_data = history.get_best_entity()
+    threshold_met_pre_hail_mary = round(history.peak_score, 1) >= entity_threshold
+
+    if not threshold_met_pre_hail_mary and config.max_iterations > 1:
+        logger.info(
+            "%s '%s': threshold not met (best=%.1f < %.1f), attempting hail-mary fresh creation",
+            entity_type.capitalize(),
+            history.entity_name,
+            history.peak_score,
+            entity_threshold,
+        )
+        try:
+            fresh_entity = create_fn(creation_retries + 1)
+            if fresh_entity is not None and not is_empty(fresh_entity):
+                fresh_scores = judge_fn(fresh_entity)
+                scoring_rounds += 1
+                logger.info(
+                    "%s hail-mary scored %.1f (previous best: %.1f)",
+                    entity_type.capitalize(),
+                    fresh_scores.average,
+                    history.peak_score,
+                )
+                if fresh_scores.average > history.peak_score:
+                    logger.info(
+                        "%s hail-mary beats previous best! Using fresh entity.",
+                        entity_type.capitalize(),
+                    )
+                    # Add to history and use as best
+                    history.add_iteration(
+                        entity_data=serialize(fresh_entity),
+                        scores=fresh_scores.to_dict(),
+                        average_score=fresh_scores.average,
+                        feedback=fresh_scores.feedback,
+                    )
+                    # Update best entity data
+                    best_entity_data = history.get_best_entity()
+                    entity = fresh_entity
+                    scores = fresh_scores
+                else:
+                    logger.info(
+                        "%s hail-mary did not beat best score, keeping original",
+                        entity_type.capitalize(),
+                    )
+            else:
+                logger.info(
+                    "%s hail-mary returned empty entity, keeping original",
+                    entity_type.capitalize(),
+                )
+        except Exception as e:
+            logger.warning(
+                "%s hail-mary failed: %s. Keeping original best.",
+                entity_type.capitalize(),
+                str(e)[:200],
+            )
 
     if best_entity_data and history.iterations[-1].average_score < history.peak_score:
         logger.warning(

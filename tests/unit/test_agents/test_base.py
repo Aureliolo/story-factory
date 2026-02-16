@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from src.agents.base import BaseAgent
 from src.settings import Settings
 from src.utils.circuit_breaker import reset_global_circuit_breaker
-from src.utils.exceptions import CircuitOpenError, LLMGenerationError
+from src.utils.exceptions import CircuitOpenError, LLMError, LLMGenerationError
 from tests.shared.mock_ollama import TEST_MODEL, MockStreamChunk
 
 
@@ -904,8 +904,9 @@ class TestCircuitBreakerIntegration:
         agent = create_mock_agent()
         agent.settings = settings
 
-        # Open the circuit breaker
+        # Open the circuit breaker for the agent's model
         cb = get_circuit_breaker(
+            name=agent.model,
             failure_threshold=2,
             timeout_seconds=60.0,
             enabled=True,
@@ -930,8 +931,9 @@ class TestCircuitBreakerIntegration:
         agent = create_mock_agent()
         agent.settings = settings
 
-        # Open the circuit breaker
+        # Open the circuit breaker for the agent's model
         cb = get_circuit_breaker(
+            name=agent.model,
             failure_threshold=2,
             timeout_seconds=60.0,
             enabled=True,
@@ -947,12 +949,13 @@ class TestCircuitBreakerIntegration:
         """Test that generate() works normally when circuit is closed."""
         from src.utils.circuit_breaker import get_circuit_breaker
 
-        # Ensure circuit is closed
-        cb = get_circuit_breaker(enabled=True)
-        cb.reset()
-
         agent = create_mock_agent()
         agent.settings = Settings(circuit_breaker_enabled=True)
+
+        # Ensure circuit for this model is closed
+        cb = get_circuit_breaker(name=agent.model, enabled=True)
+        cb.reset()
+
         agent.client.chat.return_value = _make_stream_response("test response")
 
         result = agent.generate("test prompt")
@@ -968,3 +971,31 @@ class TestBaseAgentGenerationMetrics:
         agent = create_mock_agent()
 
         assert agent.last_generation_metrics is None
+
+
+class TestSemaphoreTimeout:
+    """Tests for semaphore acquisition timeout in generate and generate_structured."""
+
+    def test_generate_raises_error_on_semaphore_timeout(self):
+        """Test generate raises LLMError when semaphore acquisition times out."""
+        agent = create_mock_agent()
+        mock_semaphore = MagicMock()
+        mock_semaphore.acquire.return_value = False
+
+        with patch("src.agents.base._get_llm_semaphore", return_value=mock_semaphore):
+            with pytest.raises(LLMError, match="LLM request queue timeout"):
+                agent.generate("Test prompt")
+
+        mock_semaphore.acquire.assert_called_once()
+
+    def test_generate_structured_raises_error_on_semaphore_timeout(self):
+        """Test generate_structured raises LLMError when semaphore acquisition times out."""
+        agent = create_mock_agent()
+        mock_semaphore = MagicMock()
+        mock_semaphore.acquire.return_value = False
+
+        with patch("src.agents.base._get_llm_semaphore", return_value=mock_semaphore):
+            with pytest.raises(LLMError, match="LLM request queue timeout"):
+                agent.generate_structured("Test prompt", SampleOutputModel)
+
+        mock_semaphore.acquire.assert_called_once()

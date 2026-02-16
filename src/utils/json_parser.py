@@ -30,6 +30,40 @@ class ParseResult:
         return self.success
 
 
+def unwrap_single_json(data: Any) -> dict[str, Any] | None:
+    """Unwrap a JSON value to a single dict, handling common LLM response quirks.
+
+    LLMs sometimes return a single-element array instead of a bare object.
+    This helper normalizes that pattern so callers always get a dict or None.
+
+    Args:
+        data: Parsed JSON data (dict, list, None, or other).
+
+    Returns:
+        A dict if one could be extracted, None otherwise.
+    """
+    if data is None:
+        logger.debug("unwrap_single_json: received None")
+        return None
+
+    if isinstance(data, dict):
+        return data
+
+    if isinstance(data, list):
+        dicts = [item for item in data if isinstance(item, dict)]
+        if not dicts:
+            logger.error("unwrap_single_json: list of %d items contains no dicts", len(data))
+            return None
+        if len(dicts) > 1:
+            logger.warning(
+                "unwrap_single_json: list contains %d dicts, returning first", len(dicts)
+            )
+        return dicts[0]
+
+    logger.debug("unwrap_single_json: unsupported type %s", type(data).__name__)
+    return None
+
+
 def convert_list_to_dict(
     data: list[Any],
     context_hint: str | None = None,

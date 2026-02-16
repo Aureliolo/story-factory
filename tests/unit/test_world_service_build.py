@@ -1673,3 +1673,179 @@ class TestRelationshipQualityRefinement:
         world_service._generate_relationships(sample_story_state, mock_world_db, mock_services)
 
         mock_services.world_quality.generate_relationships_with_quality.assert_called_once()
+
+
+class TestRecoverOrphans:
+    """Tests for _recover_orphans function."""
+
+    def test_recover_orphans_no_orphans_returns_zero(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test returns 0 when there are no orphan entities."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 entities with a relationship between them
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 0
+
+    def test_recover_orphans_generates_relationship(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test generates a relationship for an orphan entity."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 entities; only first two are connected, third is orphan
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        # Mock generate_relationship_with_quality to return a relationship
+        # connecting the orphan to one of the connected entities
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Charlie",
+                    "target": "Alice",
+                    "relation_type": "friends",
+                    "description": "Charlie befriends Alice on the road",
+                },
+                mock_scores,
+                2,
+            )
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 1
+        # Verify Charlie now has a relationship
+        charlie = mock_world_db.search_entities("Charlie", entity_type="character")[0]
+        rels = mock_world_db.get_relationships(charlie.id)
+        assert len(rels) == 1
+        assert rels[0].relation_type == "friends"
+
+    def test_recover_orphans_handles_generation_failure(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test returns 0 when relationship generation raises an error."""
+        from src.services.world_service._build import _recover_orphans
+        from src.utils.exceptions import WorldGenerationError
+
+        # Add 2 entities with no relationships (both are orphans)
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        # Mock generate_relationship_with_quality to raise WorldGenerationError
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=WorldGenerationError("test failure")
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 0
+
+
+class TestHealthScoreCircularPenalty:
+    """Tests for the split circular penalty in health score calculation."""
+
+    def test_health_score_hierarchical_cycle_heavy_penalty(self):
+        """Test hierarchical cycles receive a heavy penalty of 5 per cycle."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=2,
+            mutual_circular_count=0,
+            average_quality=8.0,
+            relationship_density=1.5,
+        )
+        score = metrics.calculate_health_score()
+        # hierarchical_penalty = 2 * 5 = 10
+        # structural = 100 - 10 + 10 (density bonus) = 100.0
+        # quality = 8.0 * 10 = 80.0
+        # final = 100.0 * 0.6 + 80.0 * 0.4 = 60.0 + 32.0 = 92.0
+        assert score == 92.0
+
+    def test_health_score_mutual_cycle_light_penalty(self):
+        """Test mutual cycles receive a light penalty of 1 per cycle."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=0,
+            mutual_circular_count=3,
+            average_quality=8.0,
+            relationship_density=1.5,
+        )
+        score = metrics.calculate_health_score()
+        # mutual_penalty = 3 * 1 = 3
+        # structural = 100 - 3 + 10 = 107 -> capped at 100.0
+        # quality = 8.0 * 10 = 80.0
+        # final = 100.0 * 0.6 + 80.0 * 0.4 = 92.0
+        assert score == 92.0
+
+    def test_health_score_mixed_cycles(self):
+        """Test combined hierarchical and mutual cycle penalties."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=1,
+            mutual_circular_count=2,
+            average_quality=8.0,
+            relationship_density=1.5,
+        )
+        score = metrics.calculate_health_score()
+        # hierarchical_penalty = 1 * 5 = 5, mutual_penalty = 2 * 1 = 2, total = 7
+        # structural = 100 - 7 + 10 = 103 -> capped at 100.0
+        # quality = 8.0 * 10 = 80.0
+        # final = 100.0 * 0.6 + 80.0 * 0.4 = 92.0
+        assert score == 92.0
+
+    def test_health_score_many_hierarchical_cycles_capped(self):
+        """Test hierarchical penalty is capped at 25."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=10,
+            mutual_circular_count=0,
+            average_quality=8.0,
+            relationship_density=1.5,
+        )
+        score = metrics.calculate_health_score()
+        # hierarchical_penalty = min(10 * 5, 25) = 25
+        # structural = 100 - 25 + 10 = 85.0
+        # quality = 8.0 * 10 = 80.0
+        # final = 85.0 * 0.6 + 80.0 * 0.4 = 51.0 + 32.0 = 83.0
+        assert score == 83.0
+
+    def test_health_score_no_cycles_no_penalty(self):
+        """Test no circular penalty when there are no cycles."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=0,
+            mutual_circular_count=0,
+            average_quality=8.0,
+            relationship_density=1.5,
+        )
+        score = metrics.calculate_health_score()
+        # no circular penalty
+        # structural = 100 + 10 = 110 -> capped at 100.0
+        # quality = 8.0 * 10 = 80.0
+        # final = 100.0 * 0.6 + 80.0 * 0.4 = 92.0
+        assert score == 92.0

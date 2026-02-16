@@ -544,6 +544,11 @@ def _validate_llm_request_limits(settings: Settings) -> None:
         raise ValueError(
             f"llm_max_retries must be between 1 and 10, got {settings.llm_max_retries}"
         )
+    if not 30 <= settings.llm_semaphore_timeout <= 600:
+        raise ValueError(
+            f"llm_semaphore_timeout must be between 30 and 600, "
+            f"got {settings.llm_semaphore_timeout}"
+        )
 
 
 def _validate_content_truncation(settings: Settings) -> None:

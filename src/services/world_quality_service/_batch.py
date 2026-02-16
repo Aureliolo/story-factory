@@ -156,6 +156,7 @@ def _generate_batch[T, S: BaseQualityScores](
     batch_start_time = time.time()
     completed_times: list[float] = []
     consecutive_failures = 0
+    shuffles_remaining = 1  # Allow one recovery attempt after consecutive failures
 
     for i in range(count):
         if cancel_check and cancel_check():
@@ -222,15 +223,33 @@ def _generate_batch[T, S: BaseQualityScores](
             logger.error("Failed to generate %s %d/%d: %s", entity_type, i + 1, count, error_msg)
 
             if consecutive_failures >= MAX_CONSECUTIVE_BATCH_FAILURES:
-                logger.warning(
-                    "%s batch early termination: %d consecutive failures. "
-                    "Generated %d/%d successfully before stopping.",
-                    entity_type.capitalize(),
-                    consecutive_failures,
-                    len(results),
-                    count,
-                )
-                break
+                if shuffles_remaining > 0:
+                    shuffles_remaining -= 1
+                    logger.warning(
+                        "%s batch: %d consecutive failures. "
+                        "Attempting recovery by continuing with different pairs "
+                        "(generated %d/%d so far).",
+                        entity_type.capitalize(),
+                        consecutive_failures,
+                        len(results),
+                        count,
+                    )
+                    consecutive_failures = 0
+                    # Continue the loop — the next generate_fn call will
+                    # naturally produce different entity pairs because
+                    # on_success callbacks have already populated the
+                    # deduplication lists from earlier successes.
+                else:
+                    logger.warning(
+                        "%s batch early termination: %d consecutive failures "
+                        "after recovery attempt. "
+                        "Generated %d/%d successfully before stopping.",
+                        entity_type.capitalize(),
+                        consecutive_failures,
+                        len(results),
+                        count,
+                    )
+                    break
 
     if not results and errors:
         raise WorldGenerationError(

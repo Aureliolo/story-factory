@@ -185,6 +185,7 @@ class BaseAgent:
 
         # Check circuit breaker before proceeding
         circuit_breaker = get_circuit_breaker(
+            name=self.model,
             failure_threshold=self.settings.circuit_breaker_failure_threshold,
             success_threshold=self.settings.circuit_breaker_success_threshold,
             timeout_seconds=self.settings.circuit_breaker_timeout,
@@ -224,7 +225,12 @@ class BaseAgent:
         json_schema = response_model.model_json_schema()
 
         # Acquire semaphore to limit concurrent requests
-        with _get_llm_semaphore(self.settings):
+        semaphore_timeout = getattr(self.settings, "llm_semaphore_timeout", 300)
+        semaphore = _get_llm_semaphore(self.settings)
+        acquired = semaphore.acquire(timeout=semaphore_timeout)
+        if not acquired:
+            raise LLMError(f"LLM request queue timeout after {semaphore_timeout}s — all slots busy")
+        try:
             with log_performance(logger, f"{self.name} structured generation"):
                 last_error: Exception | None = None
 
@@ -327,6 +333,8 @@ class BaseAgent:
                 raise LLMGenerationError(
                     f"Structured generation failed for {response_model.__name__}: {last_error}"
                 ) from last_error
+        finally:
+            semaphore.release()
 
     @classmethod
     @handle_ollama_errors(default_return=(False, "Ollama connection failed"), raise_on_error=False)
@@ -410,8 +418,11 @@ class BaseAgent:
         """
         validate_not_empty(prompt, "prompt")
 
+        use_model = model or self.model
+
         # Check circuit breaker before proceeding
         circuit_breaker = get_circuit_breaker(
+            name=use_model,
             failure_threshold=self.settings.circuit_breaker_failure_threshold,
             success_threshold=self.settings.circuit_breaker_success_threshold,
             timeout_seconds=self.settings.circuit_breaker_timeout,
@@ -431,7 +442,6 @@ class BaseAgent:
                 time_until_retry=time_until_retry,
             )
 
-        use_model = model or self.model
         system_content = self.system_prompt
         messages = [{"role": "system", "content": system_content}]
 
@@ -450,7 +460,12 @@ class BaseAgent:
         max_retries = self.settings.llm_max_retries
 
         # Acquire semaphore to limit concurrent requests
-        with _get_llm_semaphore(self.settings):
+        semaphore_timeout = getattr(self.settings, "llm_semaphore_timeout", 300)
+        semaphore = _get_llm_semaphore(self.settings)
+        acquired = semaphore.acquire(timeout=semaphore_timeout)
+        if not acquired:
+            raise LLMError(f"LLM request queue timeout after {semaphore_timeout}s — all slots busy")
+        try:
             with log_performance(logger, f"{self.name} generation"):
                 for attempt in range(max_retries):
                     try:
@@ -553,6 +568,8 @@ class BaseAgent:
                 raise LLMGenerationError(
                     f"Failed to generate after {max_retries} attempts: {last_error}"
                 ) from last_error
+        finally:
+            semaphore.release()
 
     def get_model_info(self) -> ModelInfo:
         """Get information about the current model."""

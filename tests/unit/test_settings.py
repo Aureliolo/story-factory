@@ -2274,10 +2274,15 @@ class TestSettingsMigration:
         assert "embedding" in settings.agent_temperatures
         assert settings.agent_temperatures["embedding"] == 0.0
 
-    def test_relationship_token_limit_default_is_800(self):
-        """Default llm_tokens_relationship_create should be 800 (increased from 500)."""
+    def test_relationship_token_limit_default_is_1200(self):
+        """Default llm_tokens_relationship_create should be 1200 (increased from 800)."""
         settings = Settings()
-        assert settings.llm_tokens_relationship_create == 800
+        assert settings.llm_tokens_relationship_create == 1200
+
+    def test_semaphore_timeout_default_is_300(self):
+        """Default llm_semaphore_timeout should be 300 seconds."""
+        settings = Settings()
+        assert settings.llm_semaphore_timeout == 300
 
 
 class TestWP1WP2SettingsValidation:

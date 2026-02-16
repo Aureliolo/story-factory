@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.memory.world_quality import CharacterQualityScores, FactionQualityScores
+from src.memory.world_quality import BaseQualityScores, CharacterQualityScores, FactionQualityScores
 from src.services.model_mode_service import ModelModeService
 from src.services.world_quality_service import (
     EntityGenerationProgress,
@@ -1087,3 +1087,303 @@ class TestPlateauWarningFix:
         assert "best_iteration != len(history.iterations)" not in source, (
             "quality_loop: still uses old broken iteration number comparison"
         )
+
+
+class TestRetryTemperature:
+    """Tests for the temperature strategy feature in _common.py."""
+
+    def test_retry_temperature_stable_strategy(self):
+        """Stable strategy returns base temperature regardless of retries."""
+        from src.services.world_quality_service._common import retry_temperature
+
+        config = MagicMock()
+        config.creator_temperature = 0.7
+        result = retry_temperature(config, creation_retries=5, temperature_strategy="stable")
+        assert result == 0.7
+
+    def test_retry_temperature_escalating_strategy(self):
+        """Escalating strategy increases temperature by 0.15 per retry."""
+        from src.services.world_quality_service._common import retry_temperature
+
+        config = MagicMock()
+        config.creator_temperature = 0.7
+        result = retry_temperature(config, creation_retries=2, temperature_strategy="escalating")
+        assert result == pytest.approx(1.0)
+
+    def test_retry_temperature_escalating_is_default(self):
+        """Default strategy is escalating when no strategy is specified."""
+        from src.services.world_quality_service._common import retry_temperature
+
+        config = MagicMock()
+        config.creator_temperature = 0.7
+        result = retry_temperature(config, creation_retries=1)
+        assert result == pytest.approx(0.85)
+
+
+class TestMiniDescriptionCaching:
+    """Tests for mini description caching (#13)."""
+
+    def test_mini_description_cached_returns_early(self, world_quality_service):
+        """Cached mini description is returned immediately without LLM call."""
+        from src.services.world_quality_service._validation import generate_mini_description
+
+        result = generate_mini_description(
+            world_quality_service,
+            "Alice",
+            "character",
+            "A very long description that would normally require LLM summarization",
+            cached_mini_description="A brave hero",
+        )
+        assert result == "A brave hero"
+
+    def test_mini_description_batch_skips_cached(self, caplog, world_quality_service):
+        """Batch generation skips entities with cached mini descriptions."""
+        with patch.object(
+            world_quality_service,
+            "generate_mini_description",
+            return_value="Generated description",
+        ) as mock_gen:
+            entities = [
+                {
+                    "name": "CachedEntity",
+                    "type": "character",
+                    "description": "Some description",
+                    "attributes": {"mini_description": "Already summarized"},
+                },
+                {
+                    "name": "UncachedEntity",
+                    "type": "character",
+                    "description": "Another description",
+                    "attributes": {},
+                },
+            ]
+            result = world_quality_service.generate_mini_descriptions_batch(entities)
+
+        # Only the uncached entity should trigger a generate call
+        assert mock_gen.call_count == 1
+        assert result["CachedEntity"] == "Already summarized"
+        assert result["UncachedEntity"] == "Generated description"
+
+
+class TestBatchFailureRecovery:
+    """Tests for batch shuffle recovery (#15)."""
+
+    def test_batch_recovery_after_consecutive_failures(self):
+        """Batch continues after 3 consecutive failures via recovery mechanism."""
+        from src.services.world_quality_service._batch import _generate_batch
+        from src.utils.exceptions import WorldGenerationError
+
+        mock_svc = MagicMock()
+        mock_svc._calculate_eta.return_value = None
+        mock_svc.get_config.return_value.get_threshold.return_value = 7.5
+
+        call_count = [0]
+
+        def mock_generate_fn(i):
+            """Fail 3 times, then succeed."""
+            call_count[0] += 1
+            if call_count[0] <= 3:
+                raise WorldGenerationError(f"Generation failed (attempt {call_count[0]})")
+            mock_scores = MagicMock()
+            mock_scores.average = 8.0
+            return {"name": f"Entity_{call_count[0]}"}, mock_scores, 1
+
+        results = _generate_batch(
+            svc=mock_svc,
+            count=5,
+            entity_type="test",
+            generate_fn=mock_generate_fn,
+            get_name=lambda e: e["name"],
+        )
+
+        # After 3 failures the batch recovers and the 4th call succeeds
+        assert len(results) >= 1
+        entity_names = [e["name"] for e, _ in results]
+        assert any("Entity_" in name for name in entity_names)
+
+    def test_batch_no_infinite_retry_after_recovery(self):
+        """After one recovery, 3 more consecutive failures terminate the batch."""
+        from src.services.world_quality_service._batch import _generate_batch
+        from src.utils.exceptions import WorldGenerationError
+
+        mock_svc = MagicMock()
+        mock_svc._calculate_eta.return_value = None
+        mock_svc.get_config.return_value.get_threshold.return_value = 7.5
+
+        def always_fail(i):
+            """Always raise WorldGenerationError."""
+            raise WorldGenerationError("Persistent failure")
+
+        # With enough count, the loop should terminate after recovery + second round of failures
+        with pytest.raises(WorldGenerationError, match="Failed to generate any"):
+            _generate_batch(
+                svc=mock_svc,
+                count=10,
+                entity_type="test",
+                generate_fn=always_fail,
+                get_name=lambda e: e.get("name", "Unknown"),
+            )
+
+
+class _TestScores(BaseQualityScores):
+    """Test quality scores for hail-mary tests."""
+
+    dim_a: float = 0.0
+    dim_b: float = 0.0
+    feedback: str = ""
+
+    @property
+    def average(self) -> float:
+        """Calculate average score across dimensions."""
+        return (self.dim_a + self.dim_b) / 2
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for storage."""
+        return {"dim_a": self.dim_a, "dim_b": self.dim_b, "feedback": self.feedback}
+
+    def weak_dimensions(self, threshold: float = 7.0) -> list[str]:
+        """List dimension names with scores below threshold."""
+        weak = []
+        if self.dim_a < threshold:
+            weak.append("dim_a")
+        if self.dim_b < threshold:
+            weak.append("dim_b")
+        return weak
+
+
+class TestHailMaryFreshCreation:
+    """Tests for hail-mary fresh creation in quality_refinement_loop (#7)."""
+
+    def _make_loop_args(self, create_fn, judge_fn, max_iterations=2, threshold=9.0):
+        """Build common keyword arguments for quality_refinement_loop.
+
+        Args:
+            create_fn: Entity creation callable.
+            judge_fn: Entity judging callable.
+            max_iterations: Maximum loop iterations.
+            threshold: Quality threshold.
+
+        Returns:
+            Dict of keyword arguments for quality_refinement_loop.
+        """
+        from src.memory.world_quality import RefinementConfig
+
+        config = RefinementConfig(
+            max_iterations=max_iterations,
+            quality_threshold=threshold,
+            quality_thresholds={"test": threshold},
+            creator_temperature=0.9,
+            judge_temperature=0.1,
+            refinement_temperature=0.7,
+        )
+        mock_svc = MagicMock()
+        mock_svc._log_refinement_analytics = MagicMock()
+
+        return {
+            "entity_type": "test",
+            "create_fn": create_fn,
+            "judge_fn": judge_fn,
+            "refine_fn": lambda entity, scores, iteration: entity,
+            "get_name": lambda e: e.get("name", "Unknown") if isinstance(e, dict) else "Unknown",
+            "serialize": lambda e: e if isinstance(e, dict) else {},
+            "is_empty": lambda e: e is None or (isinstance(e, dict) and not e),
+            "score_cls": _TestScores,
+            "config": config,
+            "svc": mock_svc,
+            "story_id": "test-story",
+        }
+
+    def test_hail_mary_beats_best_score(self):
+        """Hail-mary fresh creation replaces original when it scores higher."""
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        create_calls = [0]
+
+        def create_fn(retries):
+            """Return 'Original' first, then 'Fresh' for hail-mary."""
+            create_calls[0] += 1
+            if create_calls[0] == 1:
+                return {"name": "Original", "data": "first"}
+            return {"name": "Fresh", "data": "second"}
+
+        def judge_fn(entity):
+            """Score 'Original' at 6.0, 'Fresh' at 8.0."""
+            if entity.get("name") == "Original":
+                return _TestScores(dim_a=6.0, dim_b=6.0, feedback="OK")
+            return _TestScores(dim_a=8.0, dim_b=8.0, feedback="Great")
+
+        kwargs = self._make_loop_args(create_fn, judge_fn, max_iterations=2, threshold=9.0)
+        entity, scores, _iterations = quality_refinement_loop(**kwargs)
+
+        assert entity["name"] == "Fresh"
+        assert scores.average == 8.0
+
+    def test_hail_mary_does_not_beat(self):
+        """Hail-mary is discarded when it scores lower than the original."""
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        create_calls = [0]
+
+        def create_fn(retries):
+            """Return 'Original' first, then 'Worse' for hail-mary."""
+            create_calls[0] += 1
+            if create_calls[0] == 1:
+                return {"name": "Original", "data": "first"}
+            return {"name": "Worse", "data": "second"}
+
+        def judge_fn(entity):
+            """Score 'Original' at 6.0, 'Worse' at 5.0."""
+            if entity.get("name") == "Original":
+                return _TestScores(dim_a=6.0, dim_b=6.0, feedback="OK")
+            return _TestScores(dim_a=5.0, dim_b=5.0, feedback="Bad")
+
+        kwargs = self._make_loop_args(create_fn, judge_fn, max_iterations=2, threshold=9.0)
+        entity, scores, _iterations = quality_refinement_loop(**kwargs)
+
+        assert entity["name"] == "Original"
+        assert scores.average == 6.0
+
+    def test_no_hail_mary_when_threshold_met(self):
+        """No hail-mary attempted when entity meets quality threshold immediately."""
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        create_calls = [0]
+
+        def create_fn(retries):
+            """Return entity on first call; should not be called again."""
+            create_calls[0] += 1
+            return {"name": "GoodEntity", "data": "good"}
+
+        def judge_fn(entity):
+            """Score above threshold."""
+            return _TestScores(dim_a=6.0, dim_b=6.0, feedback="Good enough")
+
+        kwargs = self._make_loop_args(create_fn, judge_fn, max_iterations=3, threshold=5.0)
+        entity, _scores, _iterations = quality_refinement_loop(**kwargs)
+
+        assert entity["name"] == "GoodEntity"
+        # Only one create call — no hail-mary needed
+        assert create_calls[0] == 1
+
+    def test_hail_mary_creation_fails_gracefully(self):
+        """Original entity is returned when hail-mary creation raises an exception."""
+        from src.services.world_quality_service._quality_loop import quality_refinement_loop
+
+        create_calls = [0]
+
+        def create_fn(retries):
+            """Return 'Original' first, then raise on hail-mary."""
+            create_calls[0] += 1
+            if create_calls[0] == 1:
+                return {"name": "Original", "data": "first"}
+            raise RuntimeError("Hail-mary creation exploded")
+
+        def judge_fn(entity):
+            """Score below threshold."""
+            return _TestScores(dim_a=6.0, dim_b=6.0, feedback="OK")
+
+        kwargs = self._make_loop_args(create_fn, judge_fn, max_iterations=2, threshold=9.0)
+        entity, scores, _iterations = quality_refinement_loop(**kwargs)
+
+        assert entity["name"] == "Original"
+        assert scores.average == 6.0

@@ -24,6 +24,116 @@ logger = logging.getLogger(__name__)
 _ollama_clients: dict[tuple[str, float], ollama.Client] = {}
 _ollama_clients_lock = threading.Lock()
 
+# Cache for model context sizes (keyed by model name)
+_model_context_cache: dict[str, int | None] = {}
+_model_context_cache_lock = threading.Lock()
+
+
+def estimate_token_count(text: str) -> int:
+    """Estimate token count for a text string.
+
+    Uses the rough heuristic of ~4 characters per token, which is a reasonable
+    approximation for English text with most tokenizers.
+
+    Args:
+        text: Input text to estimate tokens for.
+
+    Returns:
+        Estimated number of tokens.
+    """
+    return len(text) // 4
+
+
+def warn_if_prompt_too_large(prompt: str, model: str, context_size: int, max_tokens: int) -> None:
+    """Log a warning if the prompt + max_tokens may exceed the context window.
+
+    Uses a 90% threshold to account for system prompt overhead and formatting
+    tokens that are not included in the prompt text.
+
+    Args:
+        prompt: The prompt text to check.
+        model: Model identifier (for log message).
+        context_size: Configured context window size in tokens.
+        max_tokens: Maximum tokens to generate (num_predict).
+    """
+    estimated_prompt_tokens = estimate_token_count(prompt)
+    total_estimated = estimated_prompt_tokens + max_tokens
+    threshold = int(context_size * 0.9)
+
+    if total_estimated > threshold:
+        logger.warning(
+            "Prompt (~%d tokens) + max_tokens (%d) may exceed context_size (%d) "
+            "for model %s. Output may be truncated.",
+            estimated_prompt_tokens,
+            max_tokens,
+            context_size,
+            model,
+        )
+
+
+def get_model_context_size(client: ollama.Client, model: str) -> int | None:
+    """Query and cache the context size for a model.
+
+    Args:
+        client: Ollama client instance.
+        model: Model identifier.
+
+    Returns:
+        Context size in tokens, or None if unavailable.
+    """
+    if model in _model_context_cache:
+        return _model_context_cache[model]
+
+    with _model_context_cache_lock:
+        # Double-check after acquiring lock
+        if model in _model_context_cache:
+            return _model_context_cache[model]
+
+        try:
+            info = client.show(model)
+            # Extract context length from model info
+            model_info = info.get("model_info", {})
+            context_length = None
+            for key, value in model_info.items():
+                if "context_length" in key:
+                    context_length = int(value)
+                    break
+            _model_context_cache[model] = context_length
+            if context_length:
+                logger.debug("Model %s context size: %d tokens", model, context_length)
+            return context_length
+        except Exception as e:
+            logger.debug("Could not query context size for model %s: %s", model, e)
+            _model_context_cache[model] = None
+            return None
+
+
+def validate_context_size(client: ollama.Client, model: str, configured_context_size: int) -> int:
+    """Validate configured context size against the model's actual limit.
+
+    If the model's native context limit is smaller than the configured value,
+    logs a warning and returns the model's limit to prevent silent truncation.
+
+    Args:
+        client: Ollama client instance.
+        model: Model identifier.
+        configured_context_size: The context size from settings.
+
+    Returns:
+        The effective context size to use (min of configured and model limit).
+    """
+    model_limit = get_model_context_size(client, model)
+    if model_limit is not None and model_limit < configured_context_size:
+        logger.warning(
+            "Model %s has context limit of %d tokens, but configured context_size "
+            "is %d. Capping to model limit to prevent truncation.",
+            model,
+            model_limit,
+            configured_context_size,
+        )
+        return model_limit
+    return configured_context_size
+
 
 def get_ollama_client(settings: Settings, model_id: str | None = None) -> ollama.Client:
     """Get or create an Ollama client for the given settings.
@@ -105,6 +215,9 @@ def generate_structured[T: BaseModel](
     if max_retries < 1:
         raise ValueError(f"max_retries must be >= 1, got {max_retries}")
 
+    # Validate context size against model's actual limit
+    effective_context_size = validate_context_size(client, model, settings.context_size)
+
     last_error: Exception | None = None
 
     for attempt in range(max_retries):
@@ -116,7 +229,7 @@ def generate_structured[T: BaseModel](
                 format=json_schema,
                 options={
                     "temperature": temperature,
-                    "num_ctx": settings.context_size,
+                    "num_ctx": effective_context_size,
                 },
                 stream=True,
             )

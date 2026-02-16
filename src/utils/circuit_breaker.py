@@ -259,53 +259,67 @@ class CircuitBreaker:
             return status
 
 
-# Global circuit breaker instance for LLM calls
-_global_circuit_breaker: CircuitBreaker | None = None
+# Per-model circuit breaker instances for LLM calls
+_circuit_breakers: dict[str, CircuitBreaker] = {}
 _circuit_breaker_lock = threading.Lock()
 
 
 def get_circuit_breaker(
+    name: str = "default",
     failure_threshold: int = 5,
     success_threshold: int = 2,
     timeout_seconds: float = 60.0,
     enabled: bool = True,
 ) -> CircuitBreaker:
-    """Get or create the global circuit breaker for LLM calls.
+    """Get or create a named circuit breaker for LLM calls.
 
-    The circuit breaker is lazily initialized on first access.
+    Each unique name gets its own CircuitBreaker instance, created on first
+    access using double-checked locking. This allows per-model circuit breakers
+    so that failures in one model don't block requests to other models.
 
     Args:
+        name: Identifier for this circuit breaker (e.g. model name).
         failure_threshold: Failures before opening (used on creation only).
         success_threshold: Successes to close from half-open (used on creation only).
         timeout_seconds: Timeout before half-open (used on creation only).
         enabled: Whether circuit breaker is active (used on creation only).
 
     Returns:
-        The global CircuitBreaker instance.
+        The CircuitBreaker instance for the given name.
     """
-    global _global_circuit_breaker
-
-    if _global_circuit_breaker is None:
+    if name not in _circuit_breakers:
         with _circuit_breaker_lock:
-            if _global_circuit_breaker is None:
-                _global_circuit_breaker = CircuitBreaker(
-                    name="llm",
+            if name not in _circuit_breakers:
+                _circuit_breakers[name] = CircuitBreaker(
+                    name=name,
                     failure_threshold=failure_threshold,
                     success_threshold=success_threshold,
                     timeout_seconds=timeout_seconds,
                     enabled=enabled,
                 )
+                logger.debug("Created circuit breaker for '%s'", name)
 
-    return _global_circuit_breaker
+    return _circuit_breakers[name]
 
 
-def reset_global_circuit_breaker() -> None:
-    """Reset the global circuit breaker.
+def reset_global_circuit_breaker(name: str | None = None) -> None:
+    """Reset circuit breaker(s).
 
-    Useful for testing to ensure a clean state.
+    If name is None, reset ALL circuit breakers and clear the dict.
+    If name is provided, reset and remove only that specific one.
+
+    Args:
+        name: Optional name of a specific circuit breaker to reset.
+            If None, all circuit breakers are reset and cleared.
     """
-    global _global_circuit_breaker
     with _circuit_breaker_lock:
-        if _global_circuit_breaker is not None:
-            _global_circuit_breaker.reset()
-        _global_circuit_breaker = None
+        if name is None:
+            for cb in _circuit_breakers.values():
+                cb.reset()
+            _circuit_breakers.clear()
+            logger.debug("Reset all circuit breakers")
+        else:
+            if name in _circuit_breakers:
+                _circuit_breakers[name].reset()
+                del _circuit_breakers[name]
+                logger.debug("Reset circuit breaker for '%s'", name)

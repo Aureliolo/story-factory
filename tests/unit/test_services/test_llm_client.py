@@ -9,7 +9,15 @@ import pytest
 from pydantic import BaseModel
 
 from src.services import llm_client
-from src.services.llm_client import generate_structured, get_ollama_client
+from src.services.llm_client import (
+    _model_context_cache,
+    estimate_token_count,
+    generate_structured,
+    get_model_context_size,
+    get_ollama_client,
+    validate_context_size,
+    warn_if_prompt_too_large,
+)
 from src.settings import Settings
 from src.utils.exceptions import LLMError
 
@@ -33,10 +41,12 @@ def mock_settings():
 
 @pytest.fixture(autouse=True)
 def clear_client_cache():
-    """Clear the Ollama client cache before each test."""
+    """Clear the Ollama client and model context caches before each test."""
     llm_client._ollama_clients.clear()
+    _model_context_cache.clear()
     yield
     llm_client._ollama_clients.clear()
+    _model_context_cache.clear()
 
 
 def _make_chat_response(json_content: str) -> Iterator:
@@ -442,3 +452,171 @@ class TestGenerateStructured:
         assert any("test-model:8b" in r.message for r in info_records)
         assert any("tokens:" in r.message.lower() for r in info_records)
         assert any("SampleModel" in r.message for r in info_records)
+
+    @patch("src.services.llm_client.consume_stream")
+    @patch("src.services.llm_client.validate_context_size", return_value=4096)
+    @patch("src.services.llm_client.get_ollama_client")
+    def test_generate_structured_uses_validated_context_size(
+        self, mock_get_client, mock_validate, mock_consume, mock_settings
+    ):
+        """Test that generate_structured passes the validated context size as num_ctx."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_consume.return_value = {
+            "message": {"content": '{"name": "test", "value": 42}'},
+            "prompt_eval_count": 10,
+            "eval_count": 5,
+        }
+
+        class TestResponse(BaseModel):
+            name: str
+            value: int
+
+        result = generate_structured(
+            settings=mock_settings,
+            model="test-model:7b",
+            prompt="test prompt",
+            response_model=TestResponse,
+        )
+
+        assert result.name == "test"
+        assert result.value == 42
+
+        # Verify num_ctx was set to 4096 (the value returned by validate_context_size)
+        call_kwargs = mock_client.chat.call_args.kwargs
+        assert call_kwargs["options"]["num_ctx"] == 4096
+
+        # Verify validate_context_size was called with the client, model, and configured size
+        mock_validate.assert_called_once_with(
+            mock_client, "test-model:7b", mock_settings.context_size
+        )
+
+
+class TestEstimateTokenCount:
+    """Tests for estimate_token_count function."""
+
+    def test_estimate_token_count_basic(self):
+        """Test token estimation for a basic string (11 chars -> 2 tokens)."""
+        result = estimate_token_count("hello world")
+        assert result == 2
+
+    def test_estimate_token_count_empty(self):
+        """Test token estimation for an empty string returns 0."""
+        result = estimate_token_count("")
+        assert result == 0
+
+
+class TestWarnIfPromptTooLarge:
+    """Tests for warn_if_prompt_too_large function."""
+
+    def test_warn_if_prompt_too_large_logs_warning(self, caplog):
+        """Test that a warning is logged when prompt + max_tokens exceed the threshold."""
+        # 100,000 chars -> ~25,000 tokens estimated
+        # 25,000 + 4,096 = ~29,096 >> 8192 * 0.9 = 7,372 threshold
+        large_prompt = "x" * 100_000
+
+        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
+            warn_if_prompt_too_large(
+                prompt=large_prompt,
+                model="test-model:8b",
+                context_size=8192,
+                max_tokens=4096,
+            )
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) >= 1
+        assert any("may exceed context_size" in r.message for r in warning_records)
+
+    def test_warn_if_prompt_too_large_no_warning_when_fits(self, caplog):
+        """Test that no warning is logged when prompt + max_tokens fit within the threshold."""
+        # 100 chars -> ~25 tokens estimated
+        # 25 + 4,096 = ~4,121 << 32,768 * 0.9 = 29,491 threshold
+        short_prompt = "x" * 100
+
+        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
+            warn_if_prompt_too_large(
+                prompt=short_prompt,
+                model="test-model:8b",
+                context_size=32768,
+                max_tokens=4096,
+            )
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) == 0
+
+
+class TestGetModelContextSize:
+    """Tests for get_model_context_size function."""
+
+    def test_get_model_context_size_returns_context_length(self):
+        """Test that the context length is extracted from model_info."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = {
+            "model_info": {"some.context_length": 8192},
+        }
+
+        result = get_model_context_size(mock_client, "test-model:8b")
+
+        assert result == 8192
+
+    def test_get_model_context_size_caches_result(self):
+        """Test that the context size is cached and client.show is called only once."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = {
+            "model_info": {"llama.context_length": 4096},
+        }
+
+        result1 = get_model_context_size(mock_client, "cached-model:8b")
+        result2 = get_model_context_size(mock_client, "cached-model:8b")
+
+        assert result1 == 4096
+        assert result2 == 4096
+        mock_client.show.assert_called_once()
+
+    def test_get_model_context_size_returns_none_on_error(self):
+        """Test that None is returned when client.show raises an exception."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = Exception("Connection refused")
+
+        result = get_model_context_size(mock_client, "error-model:8b")
+
+        assert result is None
+
+
+class TestValidateContextSize:
+    """Tests for validate_context_size function."""
+
+    def test_validate_context_size_caps_to_model_limit(self, caplog):
+        """Test that configured value is capped to model limit when model limit is smaller."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = {
+            "model_info": {"llama.context_length": 4096},
+        }
+
+        with caplog.at_level(logging.WARNING, logger="src.services.llm_client"):
+            result = validate_context_size(mock_client, "small-model:8b", 32768)
+
+        assert result == 4096
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) >= 1
+        assert any("Capping to model limit" in r.message for r in warning_records)
+
+    def test_validate_context_size_returns_configured_when_larger(self):
+        """Test that configured value is returned when model limit is larger."""
+        mock_client = MagicMock()
+        mock_client.show.return_value = {
+            "model_info": {"llama.context_length": 131072},
+        }
+
+        result = validate_context_size(mock_client, "big-model:8b", 32768)
+
+        assert result == 32768
+
+    def test_validate_context_size_returns_configured_when_none(self):
+        """Test that configured value is returned when model limit is unknown (None)."""
+        mock_client = MagicMock()
+        mock_client.show.side_effect = Exception("Model not found")
+
+        result = validate_context_size(mock_client, "unknown-model:8b", 32768)
+
+        assert result == 32768
