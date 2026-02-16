@@ -196,7 +196,8 @@ class TestWorldHealthMetrics:
         metrics = WorldHealthMetrics(
             total_entities=10,
             orphan_count=0,
-            circular_count=3,  # -5 per cycle = -15
+            circular_count=3,
+            hierarchical_circular_count=3,  # -5 per cycle = -15
             average_quality=10.0,
             relationship_density=0.5,
         )
@@ -229,7 +230,8 @@ class TestWorldHealthMetrics:
         metrics = WorldHealthMetrics(
             total_entities=100,
             orphan_count=100,  # Would be -200 but capped at -20
-            circular_count=100,  # Would be -500 but capped at -25
+            circular_count=100,
+            hierarchical_circular_count=100,  # Would be -500 but capped at -25
             contradiction_count=100,  # Would be -500 but capped at -25
             average_quality=0.0,
             relationship_density=0.0,

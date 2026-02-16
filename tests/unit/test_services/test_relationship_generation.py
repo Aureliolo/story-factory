@@ -61,8 +61,9 @@ class TestExistingPairsNotCapped:
 
         prompt_arg = svc.client.generate.call_args[1]["prompt"]
         # Every pair must appear in the prompt
-        for src, tgt, _type in existing_rels:
-            assert f"{src} <-> {tgt}" in prompt_arg, f"Pair {src} <-> {tgt} missing from prompt"
+        for src, tgt, rel_type in existing_rels:
+            expected = f"- {src} -> {tgt} ({rel_type})"
+            assert expected in prompt_arg, f"Pair {expected} missing from prompt"
 
 
 class TestConsecutiveFailureEarlyTermination:
@@ -92,8 +93,8 @@ class TestConsecutiveFailureEarlyTermination:
                 get_name=lambda r: "test",
             )
 
-        # Should stop after MAX_CONSECUTIVE_BATCH_FAILURES, not try all 10
-        assert call_count == MAX_CONSECUTIVE_BATCH_FAILURES
+        # Batch recovery allows one shuffle attempt, so it takes 3 + 3 = 6 calls
+        assert call_count == MAX_CONSECUTIVE_BATCH_FAILURES * 2
 
     def test_consecutive_failures_reset_on_success(self):
         """Failures counter resets after a success, allowing batch to continue."""

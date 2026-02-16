@@ -333,6 +333,10 @@ class TestFactionGenerationEarlyStopping:
             FactionQualityScores(
                 coherence=7.6, influence=7.6, conflict_potential=7.6, distinctiveness=7.6
             ),
+            # Extra score for hail-mary fresh creation judge call
+            FactionQualityScores(
+                coherence=7.0, influence=7.0, conflict_potential=7.0, distinctiveness=7.0
+            ),
         ]
         mock_judge.side_effect = scores
 
@@ -341,9 +345,10 @@ class TestFactionGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        assert mock_judge.call_count == 3
-        # Returns total iteration count (3) and best scores (8.2)
-        assert iterations == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.2)
+        assert iterations == 4
         assert final_scores.average == 8.2
 
     @patch.object(WorldQualityService, "_create_faction")
@@ -416,7 +421,7 @@ class TestFactionGenerationEarlyStopping:
             FactionQualityScores(
                 coherence=7.0, influence=7.0, conflict_potential=7.0, distinctiveness=7.0
             ),
-            # These should not be reached due to early stopping
+            # Hail-mary fresh creation judge call (threshold not met after early stop)
             FactionQualityScores(
                 coherence=6.5, influence=6.5, conflict_potential=6.5, distinctiveness=6.5
             ),
@@ -427,10 +432,11 @@ class TestFactionGenerationEarlyStopping:
             story_state, existing_names=[], existing_locations=[]
         )
 
-        # Should only run 3 iterations (early stopping saves compute)
-        assert mock_judge.call_count == 3
-        # Returns total iteration count (3) and best scores (8.0)
-        assert iterations == 3
+        # Should only run 3 iterations in loop (early stopping saves compute)
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.0)
+        assert iterations == 4
         assert final_scores.average == 8.0
 
 
@@ -467,7 +473,8 @@ class TestCharacterGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        assert mock_judge.call_count == 2
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 3
         # Returns last iteration since best_character was never set (peak_score never exceeded)
         assert char.name == "ZeroChar"
         assert final_scores.average == 0
@@ -498,6 +505,10 @@ class TestCharacterGenerationEarlyStopping:
             CharacterQualityScores(
                 depth=7.6, goals=7.6, flaws=7.6, uniqueness=7.6, arc_potential=7.6
             ),
+            # Extra score for hail-mary fresh creation judge call
+            CharacterQualityScores(
+                depth=7.0, goals=7.0, flaws=7.0, uniqueness=7.0, arc_potential=7.0
+            ),
         ]
         mock_judge.side_effect = scores
 
@@ -506,9 +517,10 @@ class TestCharacterGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        assert mock_judge.call_count == 3
-        # Returns total iteration count (3) and best scores (8.2)
-        assert iterations == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.2)
+        assert iterations == 4
         assert final_scores.average == 8.2
 
     @patch.object(WorldQualityService, "_create_character")
@@ -577,7 +589,8 @@ class TestLocationGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        assert mock_judge.call_count == 2
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 3
         assert loc["name"] == "ZeroLoc"
         assert final_scores.average == 0
 
@@ -605,6 +618,10 @@ class TestLocationGenerationEarlyStopping:
             LocationQualityScores(
                 atmosphere=7.0, significance=7.0, story_relevance=7.0, distinctiveness=7.0
             ),
+            # Extra score for hail-mary fresh creation judge call
+            LocationQualityScores(
+                atmosphere=6.5, significance=6.5, story_relevance=6.5, distinctiveness=6.5
+            ),
         ]
         mock_judge.side_effect = scores
 
@@ -613,9 +630,10 @@ class TestLocationGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        assert mock_judge.call_count == 3
-        # Returns total iteration count (3) and best scores (8.0)
-        assert iterations == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.0)
+        assert iterations == 4
         assert final_scores.average == 8.0
 
 
@@ -655,7 +673,8 @@ class TestRelationshipGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        assert mock_judge.call_count == 2
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 3
         assert rel["source"] == "Alice"
         assert final_scores.average == 0
 
@@ -693,6 +712,10 @@ class TestRelationshipGenerationEarlyStopping:
             RelationshipQualityScores(
                 tension=7.0, dynamics=7.0, story_potential=7.0, authenticity=7.0
             ),
+            # Extra score for hail-mary fresh creation judge call
+            RelationshipQualityScores(
+                tension=6.5, dynamics=6.5, story_potential=6.5, authenticity=6.5
+            ),
         ]
         mock_judge.side_effect = scores
 
@@ -701,9 +724,10 @@ class TestRelationshipGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        assert mock_judge.call_count == 3
-        # Returns total iteration count (3) and best scores (8.0)
-        assert iterations == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.0)
+        assert iterations == 4
         assert final_scores.average == 8.0
 
 
@@ -733,7 +757,8 @@ class TestItemGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        assert mock_judge.call_count == 2
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 3
         assert item["name"] == "ZeroItem"
         assert final_scores.average == 0
 
@@ -761,6 +786,10 @@ class TestItemGenerationEarlyStopping:
             ItemQualityScores(
                 significance=7.0, uniqueness=7.0, narrative_potential=7.0, integration=7.0
             ),
+            # Extra score for hail-mary fresh creation judge call
+            ItemQualityScores(
+                significance=6.5, uniqueness=6.5, narrative_potential=6.5, integration=6.5
+            ),
         ]
         mock_judge.side_effect = scores
 
@@ -769,9 +798,10 @@ class TestItemGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        assert mock_judge.call_count == 3
-        # Returns total iteration count (3) and best scores (8.0)
-        assert iterations == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.0)
+        assert iterations == 4
         assert final_scores.average == 8.0
 
 
@@ -799,7 +829,8 @@ class TestConceptGenerationEarlyStopping:
         )
 
         # Score-plateau early-stop (#328) triggers after 2 consecutive identical scores
-        assert mock_judge.call_count == 2
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 3
         assert concept["name"] == "ZeroConcept"
         assert final_scores.average == 0
 
@@ -821,6 +852,8 @@ class TestConceptGenerationEarlyStopping:
             ConceptQualityScores(relevance=8.0, depth=8.0, manifestation=8.0, resonance=8.0),
             ConceptQualityScores(relevance=7.5, depth=7.5, manifestation=7.5, resonance=7.5),
             ConceptQualityScores(relevance=7.0, depth=7.0, manifestation=7.0, resonance=7.0),
+            # Extra score for hail-mary fresh creation judge call
+            ConceptQualityScores(relevance=6.5, depth=6.5, manifestation=6.5, resonance=6.5),
         ]
         mock_judge.side_effect = scores
 
@@ -829,9 +862,10 @@ class TestConceptGenerationEarlyStopping:
         )
 
         # Should have run 3 iterations (2 consecutive degradations from peak at iteration 1)
-        assert mock_judge.call_count == 3
-        # Returns total iteration count (3) and best scores (8.0)
-        assert iterations == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert mock_judge.call_count == 4
+        # Returns total iteration count and best scores (8.0)
+        assert iterations == 4
         assert final_scores.average == 8.0
 
 

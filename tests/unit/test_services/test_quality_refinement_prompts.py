@@ -177,9 +177,9 @@ class TestRelationshipArrayHandling:
     """Test that relationship creation handles array responses."""
 
     def test_create_relationship_has_array_defense(self):
-        """_create_relationship source handles list results from extract_json."""
+        """_create_relationship source handles list results via unwrap_single_json."""
         source = inspect.getsource(_relationship._create_relationship)
-        assert "isinstance(data, list)" in source
+        assert "unwrap_single_json" in source
 
     def test_create_relationship_prompt_requests_single_object(self):
         """Creation prompt instructs LLM to return single object, not array."""
