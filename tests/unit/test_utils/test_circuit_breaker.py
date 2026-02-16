@@ -1,5 +1,6 @@
 """Tests for the circuit breaker module."""
 
+import logging
 import threading
 import time
 from typing import cast
@@ -286,7 +287,7 @@ class TestCircuitBreaker:
 
 
 class TestGlobalCircuitBreaker:
-    """Tests for the global circuit breaker functions."""
+    """Tests for the per-model circuit breaker functions."""
 
     def setup_method(self):
         """Reset global state before each test."""
@@ -296,25 +297,145 @@ class TestGlobalCircuitBreaker:
         """Clean up global state after each test."""
         reset_global_circuit_breaker()
 
-    def test_get_circuit_breaker_creates_singleton(self):
-        """get_circuit_breaker returns the same instance."""
+    def test_get_circuit_breaker_creates_singleton_per_name(self):
+        """get_circuit_breaker returns the same instance for the same name."""
+        cb1 = get_circuit_breaker(name="model-a")
+        cb2 = get_circuit_breaker(name="model-a")
+        assert cb1 is cb2
+
+    def test_get_circuit_breaker_different_names_different_instances(self):
+        """get_circuit_breaker returns different instances for different names."""
+        cb1 = get_circuit_breaker(name="model-a")
+        cb2 = get_circuit_breaker(name="model-b")
+        assert cb1 is not cb2
+
+    def test_get_circuit_breaker_uses_parameters_on_creation(self):
+        """Parameters are used when creating the circuit breaker."""
+        cb = get_circuit_breaker(name="test-model", failure_threshold=10, timeout_seconds=120.0)
+        assert cb.failure_threshold == 10
+        assert cb.timeout_seconds == 120.0
+
+    def test_get_circuit_breaker_default_name(self):
+        """get_circuit_breaker uses 'default' name when none specified."""
         cb1 = get_circuit_breaker()
         cb2 = get_circuit_breaker()
         assert cb1 is cb2
 
-    def test_get_circuit_breaker_uses_parameters_on_creation(self):
-        """Parameters are used when creating the circuit breaker."""
-        cb = get_circuit_breaker(failure_threshold=10, timeout_seconds=120.0)
-        assert cb.failure_threshold == 10
-        assert cb.timeout_seconds == 120.0
-
-    def test_reset_global_circuit_breaker(self):
-        """reset_global_circuit_breaker clears the singleton."""
-        cb1 = get_circuit_breaker(failure_threshold=5)
-        cb1.record_failure(Exception("test"))
+    def test_reset_global_circuit_breaker_all(self):
+        """reset_global_circuit_breaker with no name clears all circuit breakers."""
+        cb_a = get_circuit_breaker(name="model-a", failure_threshold=5)
+        cb_b = get_circuit_breaker(name="model-b", failure_threshold=5)
+        cb_a.record_failure(Exception("test"))
+        cb_b.record_failure(Exception("test"))
 
         reset_global_circuit_breaker()
 
-        cb2 = get_circuit_breaker(failure_threshold=10)
-        assert cb2._failure_count == 0
-        assert cb2.failure_threshold == 10
+        cb_a2 = get_circuit_breaker(name="model-a", failure_threshold=10)
+        cb_b2 = get_circuit_breaker(name="model-b", failure_threshold=10)
+        assert cb_a2._failure_count == 0
+        assert cb_a2.failure_threshold == 10
+        assert cb_b2._failure_count == 0
+        assert cb_b2.failure_threshold == 10
+
+    def test_reset_global_circuit_breaker_specific_name(self):
+        """reset_global_circuit_breaker with a name resets only that one."""
+        cb_a = get_circuit_breaker(name="model-a", failure_threshold=5)
+        cb_b = get_circuit_breaker(name="model-b", failure_threshold=5)
+        cb_a.record_failure(Exception("test"))
+        cb_b.record_failure(Exception("test"))
+
+        reset_global_circuit_breaker(name="model-a")
+
+        # model-a should be recreated fresh
+        cb_a2 = get_circuit_breaker(name="model-a", failure_threshold=10)
+        assert cb_a2._failure_count == 0
+        assert cb_a2.failure_threshold == 10
+
+        # model-b should still have its failure
+        cb_b2 = get_circuit_breaker(name="model-b")
+        assert cb_b2 is cb_b
+        assert cb_b2._failure_count == 1
+
+    def test_per_model_isolation(self):
+        """Failures in one model's circuit breaker don't affect another."""
+        cb_a = get_circuit_breaker(name="model-a", failure_threshold=2)
+        cb_b = get_circuit_breaker(name="model-b", failure_threshold=2)
+
+        # Open circuit for model-a
+        cb_a.record_failure(Exception("test 1"))
+        cb_a.record_failure(Exception("test 2"))
+
+        # model-a should be open, model-b should still be closed
+        assert cb_a.is_open
+        assert cb_b.is_closed
+        assert cb_b.allow_request()
+
+
+class TestCircuitBreakerStateTransitionLogging:
+    """Tests for circuit breaker state transition logging (#14)."""
+
+    def test_state_transition_closed_to_open_logs_warning(self, caplog):
+        """Transition CLOSED -> OPEN logs a warning."""
+        cb = CircuitBreaker(name="test-log-c2o", failure_threshold=2)
+        with caplog.at_level(logging.WARNING):
+            cb.record_failure(Exception("test 1"))
+            cb.record_failure(Exception("test 2"))
+        assert any(
+            "CLOSED -> OPEN" in r.message for r in caplog.records if r.levelno >= logging.WARNING
+        )
+
+    def test_state_transition_half_open_to_closed_logs_info(self, caplog, monkeypatch):
+        """Transition HALF_OPEN -> CLOSED logs info."""
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
+        cb = CircuitBreaker(
+            name="test-log-ho2c",
+            failure_threshold=2,
+            success_threshold=2,
+            timeout_seconds=60.0,
+        )
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+        current_time["t"] += 61.0
+        assert cb.state == CircuitState.HALF_OPEN
+
+        with caplog.at_level(logging.INFO):
+            cb.record_success()
+            cb.record_success()
+        assert any(
+            "HALF_OPEN -> CLOSED" in r.message for r in caplog.records if r.levelno >= logging.INFO
+        )
+
+    def test_state_transition_open_to_half_open_logs_info(self, caplog, monkeypatch):
+        """Transition OPEN -> HALF_OPEN logs info."""
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
+        cb = CircuitBreaker(name="test-log-o2ho", failure_threshold=2, timeout_seconds=60.0)
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+
+        with caplog.at_level(logging.INFO):
+            current_time["t"] += 61.0
+            _ = cb.state  # Triggers _check_timeout
+        assert any(
+            "OPEN -> HALF_OPEN" in r.message for r in caplog.records if r.levelno >= logging.INFO
+        )
+
+    def test_state_transition_half_open_to_open_logs_warning(self, caplog, monkeypatch):
+        """Transition HALF_OPEN -> OPEN on probe failure logs warning."""
+        current_time = {"t": 1000.0}
+        monkeypatch.setattr(time, "time", lambda: current_time["t"])
+
+        cb = CircuitBreaker(name="test-log-ho2o", failure_threshold=2, timeout_seconds=60.0)
+        cb.record_failure(Exception("test 1"))
+        cb.record_failure(Exception("test 2"))
+        current_time["t"] += 61.0
+        assert cb.state == CircuitState.HALF_OPEN
+
+        with caplog.at_level(logging.WARNING):
+            cb.record_failure(Exception("probe failed"))
+        assert any(
+            "HALF_OPEN -> OPEN" in r.message for r in caplog.records if r.levelno >= logging.WARNING
+        )

@@ -259,6 +259,17 @@ def build_world(
         counts["relationships"] = rel_count
         logger.info(f"Generated {rel_count} relationships")
 
+    # Step 8a: Recover orphan entities by generating additional relationships
+    if options.generate_relationships:
+        check_cancelled()
+        report_progress("Recovering orphan entities...")
+        orphan_count = _recover_orphans(
+            svc, state, world_db, services, cancel_check=options.is_cancelled
+        )
+        if orphan_count > 0:
+            counts["relationships"] += orphan_count
+            logger.info(f"Orphan recovery added {orphan_count} relationships")
+
     report_progress("World build complete!")
     total_rels = counts["relationships"] + counts["implicit_relationships"]
     logger.info(
@@ -290,6 +301,8 @@ def _calculate_total_steps(options: WorldBuildOptions) -> int:
     if options.generate_concepts:
         steps += 1
     if options.generate_relationships:
+        steps += 1
+        # +1 for orphan recovery step after relationship generation
         steps += 1
     return steps
 
@@ -694,6 +707,143 @@ def _generate_relationships(
         else:
             logger.warning(f"Skipping invalid relationship: {rel}")
 
+    return added_count
+
+
+def _recover_orphans(
+    svc: WorldService,
+    state: StoryState,
+    world_db: WorldDatabase,
+    services: ServiceContainer,
+    cancel_check: Callable[[], bool] | None = None,
+    max_attempts: int = 5,
+) -> int:
+    """Attempt to connect orphan entities by generating additional relationships.
+
+    After the main relationship generation pass, some entities may have zero
+    connections. This function identifies them and tries to generate relationships
+    to connect them to the world.
+
+    Args:
+        svc: WorldService instance.
+        state: Current story state.
+        world_db: World database.
+        services: Service container.
+        cancel_check: Optional cancellation check.
+        max_attempts: Maximum relationship generation attempts (caps at 5).
+
+    Returns:
+        Number of relationships successfully added.
+    """
+    # Enforce max_attempts cap
+    max_attempts = min(max_attempts, 5)
+
+    orphans = world_db.find_orphans()
+    if not orphans:
+        logger.debug("No orphan entities found, skipping recovery")
+        return 0
+
+    logger.info(
+        "Orphan recovery: found %d orphan entities: %s",
+        len(orphans),
+        [o.name for o in orphans],
+    )
+
+    all_entities = world_db.list_entities()
+    entity_names = [e.name for e in all_entities]
+    entity_by_id = {e.id: e.name for e in all_entities}
+
+    # Build existing relationships list
+    existing_rels: list[tuple[str, str, str]] = []
+    for r in world_db.list_relationships():
+        source_name = entity_by_id.get(r.source_id)
+        target_name = entity_by_id.get(r.target_id)
+        if source_name and target_name:
+            existing_rels.append((source_name, target_name, r.relation_type))
+
+    # Track orphan names for validation
+    orphan_names = {o.name.lower() for o in orphans}
+
+    added_count = 0
+    attempts = min(len(orphans), max_attempts)
+
+    for i in range(attempts):
+        if cancel_check and cancel_check():
+            logger.info("Orphan recovery cancelled after %d attempts", i)
+            break
+
+        try:
+            rel, scores, _iterations = services.world_quality.generate_relationship_with_quality(
+                state, entity_names, existing_rels
+            )
+
+            if not rel or not rel.get("source") or not rel.get("target"):
+                logger.warning("Orphan recovery attempt %d: empty relationship generated", i + 1)
+                continue
+
+            # Find entities and add to database
+            source_entity = _find_entity_by_name(all_entities, rel["source"])
+            target_entity = _find_entity_by_name(all_entities, rel["target"])
+
+            if source_entity and target_entity:
+                # Verify at least one endpoint is an orphan
+                source_is_orphan = source_entity.name.lower() in orphan_names
+                target_is_orphan = target_entity.name.lower() in orphan_names
+                if not source_is_orphan and not target_is_orphan:
+                    logger.warning(
+                        "Orphan recovery: skipping relationship %s -> %s (neither is an orphan)",
+                        rel["source"],
+                        rel["target"],
+                    )
+                    continue
+
+                relation_type = rel.get("relation_type")
+                if not relation_type:
+                    logger.debug(
+                        "Orphan recovery: no relation_type in generated relationship,"
+                        " defaulting to 'related_to'"
+                    )
+                    relation_type = "related_to"
+                world_db.add_relationship(
+                    source_id=source_entity.id,
+                    target_id=target_entity.id,
+                    relation_type=relation_type,
+                    description=rel.get("description", ""),
+                )
+                existing_rels.append((rel["source"], rel["target"], relation_type))
+                added_count += 1
+                logger.info(
+                    "Orphan recovery: added %s -> %s (%s), quality: %.1f",
+                    rel["source"],
+                    rel["target"],
+                    relation_type,
+                    scores.average,
+                )
+
+                # Remove connected orphan(s) from tracking set
+                if source_is_orphan:
+                    orphan_names.discard(source_entity.name.lower())
+                if target_is_orphan:
+                    orphan_names.discard(target_entity.name.lower())
+                if not orphan_names:
+                    logger.info("Orphan recovery: all orphans now have relationships")
+                    break
+            else:
+                logger.warning(
+                    "Orphan recovery: could not resolve entities for %s -> %s",
+                    rel.get("source"),
+                    rel.get("target"),
+                )
+
+        except Exception as e:
+            logger.warning("Orphan recovery attempt %d failed: %s", i + 1, e)
+            continue
+
+    logger.info(
+        "Orphan recovery complete: generated %d relationships for %d orphan entities",
+        added_count,
+        len(orphans),
+    )
     return added_count
 
 

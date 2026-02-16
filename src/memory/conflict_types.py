@@ -102,6 +102,29 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
 # Sorted list of all valid relationship types for constraining LLM prompts
 VALID_RELATIONSHIP_TYPES: list[str] = sorted(RELATION_CONFLICT_MAPPING.keys())
 
+# Hierarchical relationship types where circular references indicate real structural problems
+# (e.g., A parent_of B parent_of A is clearly wrong, vs A knows B knows A which is fine)
+HIERARCHICAL_RELATIONSHIP_TYPES: frozenset[str] = frozenset(
+    {
+        "parent_of",
+        "child_of",
+        "mentors",
+        "works_for",
+        "leads",
+        "leader_of",
+        "serves",
+        "follows",
+        "rules",
+        "controls",
+        "enforces",
+        "teaches",
+        "studies",
+        "created",
+        "owns",
+        "contains",
+    }
+)
+
 # Keys sorted by length descending for substring matching (prefer longer matches first)
 _SORTED_KEYS_BY_LENGTH: list[str] = sorted(RELATION_CONFLICT_MAPPING.keys(), key=len, reverse=True)
 

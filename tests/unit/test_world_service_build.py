@@ -214,8 +214,8 @@ class TestCalculateTotalSteps:
         # Base (2: character extraction + completion)
         # + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) = 11
-        assert world_service._calculate_total_steps(options) == 11
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 12
+        assert world_service._calculate_total_steps(options) == 12
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
@@ -223,8 +223,8 @@ class TestCalculateTotalSteps:
         # Base (2: character extraction + completion)
         # + clear (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) = 12
-        assert world_service._calculate_total_steps(options) == 12
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 13
+        assert world_service._calculate_total_steps(options) == 13
 
     def test_custom_options(self, world_service):
         """Test step count for custom options."""
@@ -1673,3 +1673,400 @@ class TestRelationshipQualityRefinement:
         world_service._generate_relationships(sample_story_state, mock_world_db, mock_services)
 
         mock_services.world_quality.generate_relationships_with_quality.assert_called_once()
+
+
+class TestRecoverOrphans:
+    """Tests for _recover_orphans function."""
+
+    def test_recover_orphans_no_orphans_returns_zero(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test returns 0 when there are no orphan entities."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 entities with a relationship between them
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 0
+
+    def test_recover_orphans_generates_relationship(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test generates a relationship for an orphan entity."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 entities; only first two are connected, third is orphan
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        # Mock generate_relationship_with_quality to return a relationship
+        # connecting the orphan to one of the connected entities
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Charlie",
+                    "target": "Alice",
+                    "relation_type": "friends",
+                    "description": "Charlie befriends Alice on the road",
+                },
+                mock_scores,
+                2,
+            )
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 1
+        # Verify Charlie now has a relationship
+        charlie = mock_world_db.search_entities("Charlie", entity_type="character")[0]
+        rels = mock_world_db.get_relationships(charlie.id)
+        assert len(rels) == 1
+        assert rels[0].relation_type == "friends"
+
+    def test_recover_orphans_handles_generation_failure(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test returns 0 when relationship generation raises an error."""
+        from src.services.world_service._build import _recover_orphans
+        from src.utils.exceptions import WorldGenerationError
+
+        # Add 2 entities with no relationships (both are orphans)
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        # Mock generate_relationship_with_quality to raise WorldGenerationError
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=WorldGenerationError("test failure")
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 0
+
+    def test_recover_orphans_cancel_check_stops_iteration(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test cancel_check breaks the recovery loop after first iteration."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 orphan entities (no relationships) so attempts > 1
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+
+        call_count = 0
+
+        def cancel_after_first():
+            """Return True after the first call to cancel."""
+            nonlocal call_count
+            call_count += 1
+            return call_count > 1
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Alice",
+                    "target": "Bob",
+                    "relation_type": "friends",
+                    "description": "They are friends",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.INFO):
+            result = _recover_orphans(
+                world_service,
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                cancel_check=cancel_after_first,
+            )
+
+        # First iteration succeeds (cancel_check returns False), then second
+        # iteration is cancelled (cancel_check returns True) before generating
+        assert result == 1
+        assert "Orphan recovery cancelled after" in caplog.text
+
+    def test_recover_orphans_empty_relationship_continues(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test empty or missing source/target in generated relationship logs warning and continues."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 orphan entities (no relationships)
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 5.0
+
+        # Return an empty dict (no "source" or "target" keys)
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=({}, mock_scores, 1)
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 0
+        assert "empty relationship generated" in caplog.text
+
+    def test_recover_orphans_unresolvable_entities_logs_warning(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test unresolvable entity names in generated relationship logs warning."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 orphan entities (no relationships)
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+
+        # Return a relationship with names that don't exist in the world db
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Nonexistent Hero",
+                    "target": "Unknown Villain",
+                    "relation_type": "enemies",
+                    "description": "They are enemies",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 0
+        assert "could not resolve entities for" in caplog.text
+
+    def test_recover_orphans_skips_non_orphan_relationship(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test skips relationships where neither endpoint is an orphan."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 entities: Alice and Bob are connected, Charlie is the orphan
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+
+        # Return a relationship between already-connected entities (neither is an orphan)
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Alice",
+                    "target": "Bob",
+                    "relation_type": "rivals",
+                    "description": "They become rivals",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.WARNING):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 0
+        assert "neither is an orphan" in caplog.text
+
+    def test_recover_orphans_missing_relation_type_defaults(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Test missing relation_type defaults to 'related_to' with debug log."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 2 orphan entities
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.0
+
+        # Return relationship without relation_type key
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            return_value=(
+                {
+                    "source": "Alice",
+                    "target": "Bob",
+                    "description": "They meet on the road",
+                },
+                mock_scores,
+                1,
+            )
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 1
+        assert "defaulting to 'related_to'" in caplog.text
+
+
+class TestBuildWorldOrphanRecovery:
+    """Tests for orphan recovery integration in build_world."""
+
+    def test_build_world_orphan_recovery_adds_to_relationship_count(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test build_world adds orphan recovery count to relationships total."""
+        from unittest.mock import patch
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        # Patch _recover_orphans to return a positive count
+        with patch(
+            "src.services.world_service._build._recover_orphans",
+            return_value=3,
+        ):
+            counts = world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                WorldBuildOptions.full(),
+            )
+
+        # Relationships should include the orphan recovery count
+        assert counts["relationships"] == 3
+
+
+class TestHealthScoreCircularPenalty:
+    """Tests for the split circular penalty in health score calculation."""
+
+    def test_health_score_hierarchical_cycle_heavy_penalty(self):
+        """Test hierarchical cycles receive a heavy penalty of 5 per cycle."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=2,
+            mutual_circular_count=0,
+            average_quality=8.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # hierarchical_penalty = 2 * 5 = 10
+        # structural = 100 - 10 = 90.0 (no density bonus at 0.5)
+        # quality = 8.0 * 10 = 80.0
+        # final = 90.0 * 0.6 + 80.0 * 0.4 = 54.0 + 32.0 = 86.0
+        assert score == 86.0
+
+    def test_health_score_mutual_cycle_light_penalty(self):
+        """Test mutual cycles receive a light penalty of 1 per cycle."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=0,
+            mutual_circular_count=3,
+            average_quality=8.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # mutual_penalty = 3 * 1 = 3
+        # structural = 100 - 3 = 97.0 (no density bonus at 0.5)
+        # quality = 8.0 * 10 = 80.0
+        # final = 97.0 * 0.6 + 80.0 * 0.4 = 58.2 + 32.0 = 90.2
+        assert score == pytest.approx(90.2)
+
+    def test_health_score_mixed_cycles(self):
+        """Test combined hierarchical and mutual cycle penalties."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=1,
+            mutual_circular_count=2,
+            average_quality=8.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # hierarchical_penalty = 1 * 5 = 5, mutual_penalty = 2 * 1 = 2, total = 7
+        # structural = 100 - 7 = 93.0 (no density bonus at 0.5)
+        # quality = 8.0 * 10 = 80.0
+        # final = 93.0 * 0.6 + 80.0 * 0.4 = 55.8 + 32.0 = 87.8
+        assert score == pytest.approx(87.8)
+
+    def test_health_score_many_hierarchical_cycles_capped(self):
+        """Test hierarchical penalty is capped at 25."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=10,
+            mutual_circular_count=0,
+            average_quality=8.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # hierarchical_penalty = min(10 * 5, 25) = 25
+        # structural = 100 - 25 = 75.0 (no density bonus at 0.5)
+        # quality = 8.0 * 10 = 80.0
+        # final = 75.0 * 0.6 + 80.0 * 0.4 = 45.0 + 32.0 = 77.0
+        assert score == 77.0
+
+    def test_health_score_no_cycles_no_penalty(self):
+        """Test no circular penalty when there are no cycles."""
+        from src.memory.world_health import WorldHealthMetrics
+
+        metrics = WorldHealthMetrics(
+            total_entities=10,
+            total_relationships=15,
+            hierarchical_circular_count=0,
+            mutual_circular_count=0,
+            average_quality=8.0,
+            relationship_density=0.5,
+        )
+        score = metrics.calculate_health_score()
+        # no circular penalty
+        # structural = 100.0 (no density bonus at 0.5)
+        # quality = 8.0 * 10 = 80.0
+        # final = 100.0 * 0.6 + 80.0 * 0.4 = 60.0 + 32.0 = 92.0
+        assert score == 92.0

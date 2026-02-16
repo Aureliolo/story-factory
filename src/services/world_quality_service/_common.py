@@ -22,19 +22,35 @@ JUDGE_CALIBRATION_BLOCK = """Score each dimension 0-10 with one decimal place.
 Differentiate between dimensions — scores should vary based on actual quality."""
 
 
-def retry_temperature(config: Any, creation_retries: int) -> float:
-    """Calculate escalating temperature for creation retries.
+def retry_temperature(
+    config: Any, creation_retries: int, temperature_strategy: str = "escalating"
+) -> float:
+    """Calculate temperature for creation retries.
 
-    Each retry increases temperature by 0.15 above the configured creator
-    temperature, capped at 1.5, to encourage the model to produce different names.
+    Supports two strategies:
+    - "escalating": increases temperature by 0.15 per retry above the configured
+      creator temperature, capped at 1.5, to encourage the model to produce
+      different names.
+    - "stable": returns the configured creator temperature unchanged regardless
+      of retries. Useful for relationship generation where escalating temperature
+      produces worse JSON compliance.
 
     Args:
         config: RefinementConfig with creator_temperature.
         creation_retries: Number of retries so far.
+        temperature_strategy: Strategy to use ("escalating" or "stable").
 
     Returns:
         Temperature value for the next creation attempt.
     """
+    if temperature_strategy == "stable":
+        logger.debug(
+            "retry_temperature: stable strategy, returning base=%.2f (retries=%d ignored)",
+            config.creator_temperature,
+            creation_retries,
+        )
+        return float(config.creator_temperature)
+
     computed = config.creator_temperature + (creation_retries * _RETRY_TEMP_INCREMENT)
     capped = computed > _RETRY_TEMP_MAX
     result = float(min(computed, _RETRY_TEMP_MAX))

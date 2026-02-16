@@ -107,6 +107,15 @@ class WorldHealthMetrics(BaseModel):
         default_factory=list, description="Details of circular relationship chains"
     )
 
+    # Circular relationship breakdown
+    hierarchical_circular_count: int = Field(
+        default=0, description="Circular chains involving hierarchical relationships"
+    )
+    mutual_circular_count: int = Field(
+        default=0,
+        description="Circular chains involving only mutual/non-hierarchical relationships",
+    )
+
     # Quality metrics
     average_quality: float = Field(
         default=0.0, ge=0.0, le=10.0, description="Average quality score across entities"
@@ -170,7 +179,8 @@ class WorldHealthMetrics(BaseModel):
         Structural scoring (0-100):
         - Base score: 100
         - Orphan penalty: -2 per orphan (max -20)
-        - Circular penalty: -5 per circular chain (max -25)
+        - Hierarchical circular penalty: -5 per chain (max -25)
+        - Mutual circular penalty: -1 per chain (max -5)
         - Contradiction penalty: -5 per contradiction (max -25)
         - Temporal error penalty: -3 per error (max -15)
         - Temporal warning penalty: -1 per warning (max -5)
@@ -196,8 +206,10 @@ class WorldHealthMetrics(BaseModel):
         orphan_penalty = min(self.orphan_count * 2, 20)
         structural_score -= orphan_penalty
 
-        # Circular relationship penalty
-        circular_penalty = min(self.circular_count * 5, 25)
+        # Circular relationship penalty — hierarchical cycles are much worse than mutual ones
+        hierarchical_penalty = min(self.hierarchical_circular_count * 5, 25)
+        mutual_penalty = min(self.mutual_circular_count * 1, 5)
+        circular_penalty = hierarchical_penalty + mutual_penalty
         structural_score -= circular_penalty
 
         # Contradiction penalty
@@ -229,7 +241,7 @@ class WorldHealthMetrics(BaseModel):
         logger.debug(
             f"Calculated health score: {self.health_score:.1f} "
             f"(structural={structural_score:.1f}, quality={quality_score:.1f}, "
-            f"orphan_penalty={orphan_penalty}, circular_penalty={circular_penalty}, "
+            f"orphan_penalty={orphan_penalty}, circular_penalty={circular_penalty} (hier={hierarchical_penalty}, mutual={mutual_penalty}), "
             f"contradiction_penalty={contradiction_penalty}, "
             f"temporal_penalty={temporal_error_penalty + temporal_warning_penalty})"
         )

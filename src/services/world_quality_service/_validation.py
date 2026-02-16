@@ -134,10 +134,26 @@ def generate_mini_descriptions_batch(
     start_time = time.time()
 
     results = {}
+    skipped = 0
     for i, entity in enumerate(entities_with_desc):
         name = entity.get("name", "Unknown")
         entity_type = entity.get("type", "entity")
         description = entity.get("description", "")
+
+        # Skip entities that already have a cached mini description
+        attributes = entity.get("attributes", {}) or {}
+        cached = attributes.get("mini_description")
+        if cached:
+            logger.debug(
+                "Skipping mini description %d/%d: %s '%s' (cached)",
+                i + 1,
+                total_count,
+                entity_type,
+                name,
+            )
+            results[name] = cached
+            skipped += 1
+            continue
 
         logger.debug(f"Generating mini description {i + 1}/{total_count}: {entity_type} '{name}'")
 
@@ -146,11 +162,15 @@ def generate_mini_descriptions_batch(
         logger.debug(f"Generated mini description for {name}: {mini_desc[:50]}...")
 
     elapsed = time.time() - start_time
-    avg_time = elapsed / max(len(results), 1)
+    generated = len(results) - skipped
+    avg_time = elapsed / max(generated, 1)
     logger.info(
-        "Completed mini description batch: %d descriptions in %.2fs (%.2fs avg per entity)",
+        "Completed mini description batch: %d descriptions in %.2fs "
+        "(%d generated, %d cached, %.2fs avg per generated entity)",
         len(results),
         elapsed,
+        generated,
+        skipped,
         avg_time,
     )
 
@@ -553,7 +573,7 @@ IMPORTANT: Respond with ONLY the JSON object below. No markdown code blocks, no 
                 raw_confidence = suggestion.get("confidence", 0.5)
                 try:
                     confidence = float(raw_confidence)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):  # fmt: skip
                     confidence = 0.5
                 confidence = max(0.0, min(1.0, confidence))
 
@@ -768,7 +788,7 @@ Return JSON:
             # Coerce confidence to float with fallback and clamping
             try:
                 confidence = float(result.get("confidence", 0.5))
-            except TypeError, ValueError:
+            except (TypeError, ValueError):  # fmt: skip
                 confidence = 0.5
             confidence = max(0.0, min(1.0, confidence))
 

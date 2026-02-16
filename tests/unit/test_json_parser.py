@@ -1,5 +1,7 @@
 """Tests for the JSON parsing utility."""
 
+import logging
+
 import pytest
 from pydantic import BaseModel
 
@@ -14,6 +16,7 @@ from src.utils.json_parser import (
     extract_json_with_info,
     parse_json_list_to_models,
     parse_json_to_model,
+    unwrap_single_json,
 )
 
 
@@ -766,3 +769,51 @@ class TestExtractJsonWithInfo:
         assert result.data == {"key": "value"}
         assert result.repair_applied == "fallback_pattern"
         assert "fallback_pattern" in result.strategies_tried
+
+
+class TestUnwrapSingleJson:
+    """Tests for unwrap_single_json function (#11)."""
+
+    def test_unwrap_single_json_dict(self):
+        """Should return dict as-is."""
+        data = {"name": "test", "value": 42}
+        result = unwrap_single_json(data)
+        assert result == data
+
+    def test_unwrap_single_json_list_one(self):
+        """Should return the single dict from a one-element list."""
+        data = [{"name": "test"}]
+        result = unwrap_single_json(data)
+        assert result == {"name": "test"}
+
+    def test_unwrap_single_json_list_multiple(self, caplog):
+        """Should return first dict from multi-element list with warning."""
+        data = [{"name": "first"}, {"name": "second"}]
+        with caplog.at_level(logging.WARNING):
+            result = unwrap_single_json(data)
+        assert result == {"name": "first"}
+        assert any("2 dicts" in r.message for r in caplog.records)
+
+    def test_unwrap_single_json_list_no_dicts(self, caplog):
+        """Should return None when list contains no dicts."""
+        data = ["string", 42, True]
+        with caplog.at_level(logging.ERROR):
+            result = unwrap_single_json(data)
+        assert result is None
+        assert any("no dicts" in r.message for r in caplog.records)
+
+    def test_unwrap_single_json_none(self):
+        """Should return None for None input."""
+        result = unwrap_single_json(None)
+        assert result is None
+
+    def test_unwrap_single_json_unsupported_type(self):
+        """Should return None for unsupported types like int or str."""
+        assert unwrap_single_json(42) is None
+        assert unwrap_single_json("not a dict") is None
+
+    def test_unwrap_single_json_list_mixed_types(self):
+        """Should extract first dict from list with mixed types."""
+        data = ["string", 42, {"name": "found"}, True]
+        result = unwrap_single_json(data)
+        assert result == {"name": "found"}

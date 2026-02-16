@@ -1787,6 +1787,15 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="llm_max_retries must be between"):
             settings.validate()
 
+    # --- LLM semaphore timeout validation (line 548) ---
+
+    def test_validate_raises_on_invalid_llm_semaphore_timeout(self):
+        """Should raise ValueError for llm_semaphore_timeout out of range."""
+        settings = Settings()
+        settings.llm_semaphore_timeout = 10  # Below 30
+        with pytest.raises(ValueError, match="llm_semaphore_timeout must be between 30 and 600"):
+            settings.validate()
+
     # --- Content truncation validation (line 645) ---
 
     def test_validate_raises_on_invalid_content_truncation_for_judgment(self):
@@ -2274,10 +2283,15 @@ class TestSettingsMigration:
         assert "embedding" in settings.agent_temperatures
         assert settings.agent_temperatures["embedding"] == 0.0
 
-    def test_relationship_token_limit_default_is_800(self):
-        """Default llm_tokens_relationship_create should be 800 (increased from 500)."""
+    def test_relationship_token_limit_default_is_1200(self):
+        """Default llm_tokens_relationship_create should be 1200 (increased from 800)."""
         settings = Settings()
-        assert settings.llm_tokens_relationship_create == 800
+        assert settings.llm_tokens_relationship_create == 1200
+
+    def test_semaphore_timeout_default_is_300(self):
+        """Default llm_semaphore_timeout should be 300 seconds."""
+        settings = Settings()
+        assert settings.llm_semaphore_timeout == 300
 
 
 class TestWP1WP2SettingsValidation:

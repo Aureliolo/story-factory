@@ -888,6 +888,27 @@ class TestWorldHealthMethods:
         # Should NOT detect circular relationships (friends_with not in the list)
         assert metrics.circular_count == 0
 
+    def test_get_world_health_metrics_hierarchical_circular_classification(self, world_db):
+        """Test that cycles with hierarchical types are classified as hierarchical."""
+        settings = Settings()
+        settings.circular_detection_enabled = True
+        settings.circular_check_all_types = True
+        service = WorldService(settings)
+
+        # Create a cycle using parent_of, which is in HIERARCHICAL_RELATIONSHIP_TYPES
+        a_id = world_db.add_entity("character", "A")
+        b_id = world_db.add_entity("character", "B")
+        c_id = world_db.add_entity("character", "C")
+        world_db.add_relationship(a_id, b_id, "parent_of", validate=False)
+        world_db.add_relationship(b_id, c_id, "parent_of", validate=False)
+        world_db.add_relationship(c_id, a_id, "parent_of", validate=False)
+
+        metrics = service.get_world_health_metrics(world_db)
+
+        assert metrics.circular_count > 0
+        assert metrics.hierarchical_circular_count > 0
+        assert metrics.mutual_circular_count == 0
+
     def test_get_world_health_metrics_quality_scores_dict_format(self, world_service, world_db):
         """Test health metrics correctly extracts quality_scores in dict format."""
         # Create entity with quality_scores dict (new format)

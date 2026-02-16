@@ -22,6 +22,7 @@ from src.utils.exceptions import WorldGenerationError, summarize_llm_error
 logger = logging.getLogger(__name__)
 
 MAX_CONSECUTIVE_BATCH_FAILURES = 3
+MAX_BATCH_SHUFFLE_RETRIES = 1
 
 
 def _log_batch_summary(
@@ -156,6 +157,7 @@ def _generate_batch[T, S: BaseQualityScores](
     batch_start_time = time.time()
     completed_times: list[float] = []
     consecutive_failures = 0
+    shuffles_remaining = MAX_BATCH_SHUFFLE_RETRIES
 
     for i in range(count):
         if cancel_check and cancel_check():
@@ -222,15 +224,32 @@ def _generate_batch[T, S: BaseQualityScores](
             logger.error("Failed to generate %s %d/%d: %s", entity_type, i + 1, count, error_msg)
 
             if consecutive_failures >= MAX_CONSECUTIVE_BATCH_FAILURES:
-                logger.warning(
-                    "%s batch early termination: %d consecutive failures. "
-                    "Generated %d/%d successfully before stopping.",
-                    entity_type.capitalize(),
-                    consecutive_failures,
-                    len(results),
-                    count,
-                )
-                break
+                if shuffles_remaining > 0:
+                    shuffles_remaining -= 1
+                    logger.warning(
+                        "%s batch: %d consecutive failures. "
+                        "Attempting recovery by continuing with different pairs "
+                        "(generated %d/%d so far).",
+                        entity_type.capitalize(),
+                        consecutive_failures,
+                        len(results),
+                        count,
+                    )
+                    consecutive_failures = 0
+                    # Continue generating — if prior successes populated the deduplication
+                    # lists, subsequent calls will naturally target different entity pairs.
+                    # Otherwise, the second round of failures will trigger termination.
+                else:
+                    logger.warning(
+                        "%s batch early termination: %d consecutive failures "
+                        "after recovery attempt. "
+                        "Generated %d/%d successfully before stopping.",
+                        entity_type.capitalize(),
+                        consecutive_failures,
+                        len(results),
+                        count,
+                    )
+                    break
 
     if not results and errors:
         raise WorldGenerationError(

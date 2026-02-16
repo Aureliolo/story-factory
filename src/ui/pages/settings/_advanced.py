@@ -352,6 +352,21 @@ def build_circuit_breaker_section(page: SettingsPage) -> None:
                         width="w-16",
                     )
 
+        ui.separator().classes("my-3")
+        _subsection_header("Request Queue", "queue")
+
+        with ui.row().classes("items-center gap-3 flex-wrap"):
+            with ui.column().classes("gap-1"):
+                ui.label("Queue Timeout").classes("text-xs text-gray-500")
+                page._llm_semaphore_timeout_input = page._build_number_input(
+                    value=page.settings.llm_semaphore_timeout,
+                    min_val=30,
+                    max_val=600,
+                    step=30,
+                    tooltip_text="Seconds to wait for LLM queue slot (30-600)",
+                    width="w-16",
+                )
+
     logger.debug("Circuit breaker section built")
 
 
@@ -728,6 +743,7 @@ def save_to_settings(page: SettingsPage) -> None:
         ("_judge_outlier_detection_switch", "judge_outlier_detection", None),
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold", float),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy", None),
+        ("_llm_semaphore_timeout_input", "llm_semaphore_timeout", int),
     ]
 
     for ui_attr, setting_attr, type_conv in advanced_llm_settings_map:
@@ -805,6 +821,7 @@ def refresh_from_settings(page: SettingsPage) -> None:
         ("_judge_outlier_detection_switch", "judge_outlier_detection"),
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold"),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy"),
+        ("_llm_semaphore_timeout_input", "llm_semaphore_timeout"),
     ]
 
     for ui_attr, setting_attr in advanced_llm_ui_map:

@@ -256,7 +256,7 @@ class Settings:
     llm_tokens_concept_create: int = 500
     llm_tokens_concept_judge: int = 200
     llm_tokens_concept_refine: int = 500
-    llm_tokens_relationship_create: int = 800
+    llm_tokens_relationship_create: int = 1200
     llm_tokens_relationship_judge: int = 200
     llm_tokens_relationship_refine: int = 500
     llm_tokens_mini_description: int = 50
@@ -277,6 +277,7 @@ class Settings:
     # LLM request limits
     llm_max_concurrent_requests: int = 2
     llm_max_retries: int = 3
+    llm_semaphore_timeout: int = 300  # Timeout in seconds for semaphore acquisition
 
     # Content truncation limits
     content_truncation_for_judgment: int = 3000

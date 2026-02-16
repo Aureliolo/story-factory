@@ -144,7 +144,8 @@ class TestQualityLoopBasicFlow:
         config.early_stopping_patience = 5  # Disable early stopping
 
         entities = [{"name": "v1"}, {"name": "v2"}, {"name": "v3"}]
-        scores_list = [_make_scores(6.0), _make_scores(7.5), _make_scores(5.0)]
+        # 4th score is for the hail-mary judge call (below peak, so best stays v2)
+        scores_list = [_make_scores(6.0), _make_scores(7.5), _make_scores(5.0), _make_scores(4.0)]
         iteration_idx = 0
 
         def create_fn(retries):
@@ -152,7 +153,7 @@ class TestQualityLoopBasicFlow:
             return entities[0]
 
         def judge_fn(entity):
-            """Return scores in sequence: 6.0, 7.5, 5.0."""
+            """Return scores in sequence: 6.0, 7.5, 5.0, 4.0 (hail-mary)."""
             nonlocal iteration_idx
             result = scores_list[iteration_idx]
             iteration_idx += 1
@@ -180,10 +181,11 @@ class TestQualityLoopBasicFlow:
             story_id="test-story",
         )
 
-        # Best iteration was iteration 2 (score 7.5), total iterations = 3
+        # Best iteration was iteration 2 (score 7.5), total iterations = 4
+        # (3 regular iterations + 1 hail-mary attempt that scored below peak)
         assert result_entity == {"name": "v2"}
         assert _result_scores.average == 7.5
-        assert iterations == 3
+        assert iterations == 4
 
     def test_returns_best_when_all_scores_equal(self, mock_svc, config):
         """When all scores are equal, returns earliest (best_iteration=1)."""
@@ -598,9 +600,10 @@ class TestQualityLoopUnchangedOutput:
             story_id="test-story",
         )
 
-        # Judge should only be called once (iteration 0), then refine returns
-        # unchanged output on iteration 1 and loop breaks before re-judging
-        assert judge_calls == 1
+        # Judge should only be called once in the loop (iteration 0), then refine
+        # returns unchanged output on iteration 1 and loop breaks before re-judging.
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert judge_calls == 2
         assert result_scores.average == 6.0
         # Analytics should record early_stop_triggered=True
         analytics_call = mock_svc._log_refinement_analytics.call_args
@@ -650,7 +653,8 @@ class TestQualityLoopUnchangedOutput:
         # Iteration 0: create v1 → judge (6.0, below threshold)
         # Iteration 1: refine → v2 (different) → judge (6.0)
         # Iteration 2: refine → v2 (same as iteration 1) → unchanged detection → break
-        assert judge_calls == 2
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert judge_calls == 3
 
     def test_unchanged_output_different_entities_continues(self, mock_svc, config):
         """Different dicts from refine don't trigger unchanged detection."""
@@ -694,7 +698,8 @@ class TestQualityLoopUnchangedOutput:
         )
 
         # All 3 iterations should run (no unchanged detection)
-        assert judge_idx == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert judge_idx == 4
 
     def test_unchanged_output_logs_info(self, mock_svc, config, caplog):
         """Verify log message is emitted when unchanged output is detected."""
@@ -766,10 +771,11 @@ class TestQualityLoopB10SkipRedundantJudge:
         # Iteration 1: refine raises → scores preserved, no judge → refine_calls=1
         # Iteration 2: refine succeeds (v2) → judge (5.0) → judge_calls=2, refine_calls=2
         # Iteration 3: refine succeeds (v3) → judge (5.0) → judge_calls=3, refine_calls=3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
         # judge should NOT have been called after iteration 1's refinement error
-        assert judge_calls == 3  # Not 4 (would be 4 if re-judged unchanged entity)
+        assert judge_calls == 4  # 3 in loop + 1 hail-mary
         assert refine_calls == 3
-        assert scoring_rounds == 3
+        assert scoring_rounds == 4
 
     def test_judge_error_allows_re_judge_on_next_iteration(self, mock_svc, config):
         """After judge error, the same entity IS re-judged (not skipped)."""
@@ -835,8 +841,8 @@ class TestQualityLoopB10SkipRedundantJudge:
         # Iteration 0: create → judge (5.0) → scoring_rounds=1
         # Iteration 1: refine raises → failed_refinements=1, scores preserved
         # Iteration 2: refine raises → failed_refinements=2, scores preserved
-        # Post-loop: return best from history
-        assert scoring_rounds == 1
+        # Post-loop: hail-mary fires (5.0 < 8.0, max_iterations=3 > 1) → scoring_rounds=2
+        assert scoring_rounds == 2
         # Verify analytics was called with the history tracking failed refinements
         analytics_call = mock_svc._log_refinement_analytics.call_args
         history = analytics_call[0][0]
@@ -1638,8 +1644,9 @@ class TestScorePlateauEarlyStop:
             story_id="test-story",
         )
 
-        # Should stop after 2 scoring rounds (7.0 → 7.0)
-        assert scoring_rounds == 2
+        # Should stop after 2 scoring rounds in loop (7.0 → 7.0)
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert scoring_rounds == 3
         analytics_call = mock_svc._log_refinement_analytics.call_args
         assert analytics_call.kwargs["early_stop_triggered"] is True
 
@@ -1683,7 +1690,8 @@ class TestScorePlateauEarlyStop:
             story_id="test-story",
         )
 
-        assert scoring_rounds == 2
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert scoring_rounds == 3
         analytics_call = mock_svc._log_refinement_analytics.call_args
         assert analytics_call.kwargs["early_stop_triggered"] is True
 
@@ -1724,7 +1732,8 @@ class TestScorePlateauEarlyStop:
         # With min_iterations=3, needs at least 3 scoring rounds
         # Scoring round 2 has only 2 iterations, doesn't meet min 3
         # Scoring round 3: len(history) == 3 >= max(2, 3), triggers
-        assert scoring_rounds == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert scoring_rounds == 4
 
     def test_improving_scores_do_not_trigger_plateau(self, mock_svc, config):
         """Steadily improving scores never trigger score-plateau early-stop."""
@@ -1767,7 +1776,8 @@ class TestScorePlateauEarlyStop:
         )
 
         # All 3 iterations should run (no plateau)
-        assert scoring_rounds == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert scoring_rounds == 4
 
     def test_plateau_logs_info_message(self, mock_svc, config, caplog):
         """Score-plateau early-stop logs an info message."""
@@ -1842,4 +1852,5 @@ class TestScorePlateauEarlyStop:
         )
 
         # All 3 iterations should run (0.2 difference > 0.1 tolerance)
-        assert scoring_rounds == 3
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert scoring_rounds == 4

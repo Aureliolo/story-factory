@@ -114,6 +114,8 @@ def get_world_health_metrics(
 
     # Circular relationship detection (respects settings toggle)
     circular_relationships: list[dict] = []
+    hierarchical_circular_count = 0
+    mutual_circular_count = 0
     if svc.settings.circular_detection_enabled:
         circular = world_db.find_circular_relationships(
             relation_types=None
@@ -140,6 +142,24 @@ def get_world_health_metrics(
             }
             circular_relationships.append(cycle_info)
         logger.debug(f"Circular detection enabled: found {len(circular_relationships)} cycles")
+
+        # Classify cycles as hierarchical vs mutual
+        from src.memory.conflict_types import HIERARCHICAL_RELATIONSHIP_TYPES
+
+        for cycle_info in circular_relationships:
+            edges: list[dict] = cycle_info.get("edges", [])  # type: ignore[assignment]
+            is_hierarchical = any(
+                edge.get("type", "") in HIERARCHICAL_RELATIONSHIP_TYPES for edge in edges
+            )
+            if is_hierarchical:
+                hierarchical_circular_count += 1
+            else:
+                mutual_circular_count += 1
+        logger.debug(
+            "Circular classification: %d hierarchical, %d mutual",
+            hierarchical_circular_count,
+            mutual_circular_count,
+        )
     else:
         logger.debug("Circular detection disabled by settings")
     quality_scores = []
@@ -209,6 +229,8 @@ def get_world_health_metrics(
         orphan_entities=orphan_entities,
         circular_count=len(circular_relationships),
         circular_relationships=circular_relationships,
+        hierarchical_circular_count=hierarchical_circular_count,
+        mutual_circular_count=mutual_circular_count,
         average_quality=average_quality,
         quality_distribution=quality_distribution,
         low_quality_entities=low_quality_entities,

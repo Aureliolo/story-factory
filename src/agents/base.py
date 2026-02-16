@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from contextlib import contextmanager
 from typing import TypeVar
 
 import httpx
@@ -50,6 +51,23 @@ def _get_llm_semaphore(settings: Settings) -> threading.Semaphore:
                     f"Initialized LLM semaphore with limit {settings.llm_max_concurrent_requests}"
                 )
     return _llm_semaphore
+
+
+@contextmanager
+def _acquire_llm_semaphore(settings: Settings):
+    """Acquire the LLM semaphore with configurable timeout.
+
+    Raises LLMError if the semaphore cannot be acquired within the timeout.
+    """
+    semaphore = _get_llm_semaphore(settings)
+    timeout = settings.llm_semaphore_timeout
+    acquired = semaphore.acquire(timeout=timeout)
+    if not acquired:
+        raise LLMError(f"LLM request queue timeout after {timeout}s — all slots busy")
+    try:
+        yield
+    finally:
+        semaphore.release()
 
 
 # Re-export exceptions for backward compatibility
@@ -185,6 +203,7 @@ class BaseAgent:
 
         # Check circuit breaker before proceeding
         circuit_breaker = get_circuit_breaker(
+            name=self.model,
             failure_threshold=self.settings.circuit_breaker_failure_threshold,
             success_threshold=self.settings.circuit_breaker_success_threshold,
             timeout_seconds=self.settings.circuit_breaker_timeout,
@@ -224,7 +243,7 @@ class BaseAgent:
         json_schema = response_model.model_json_schema()
 
         # Acquire semaphore to limit concurrent requests
-        with _get_llm_semaphore(self.settings):
+        with _acquire_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} structured generation"):
                 last_error: Exception | None = None
 
@@ -236,6 +255,14 @@ class BaseAgent:
                             f"attempt={attempt + 1}/{max_retries})"
                         )
 
+                        # Validate context size against model limits (lazy import
+                        # to avoid circular dependency with llm_client)
+                        from src.services.llm_client import validate_context_size
+
+                        validated_context = validate_context_size(
+                            self.client, self.model, self.settings.context_size
+                        )
+
                         start_time = time.time()
                         stream = self.client.chat(
                             model=self.model,
@@ -243,7 +270,7 @@ class BaseAgent:
                             format=json_schema,
                             options={
                                 "temperature": use_temp,
-                                "num_ctx": self.settings.context_size,
+                                "num_ctx": validated_context,
                             },
                             stream=True,
                         )
@@ -410,8 +437,11 @@ class BaseAgent:
         """
         validate_not_empty(prompt, "prompt")
 
+        use_model = model or self.model
+
         # Check circuit breaker before proceeding
         circuit_breaker = get_circuit_breaker(
+            name=use_model,
             failure_threshold=self.settings.circuit_breaker_failure_threshold,
             success_threshold=self.settings.circuit_breaker_success_threshold,
             timeout_seconds=self.settings.circuit_breaker_timeout,
@@ -431,7 +461,6 @@ class BaseAgent:
                 time_until_retry=time_until_retry,
             )
 
-        use_model = model or self.model
         system_content = self.system_prompt
         messages = [{"role": "system", "content": system_content}]
 
@@ -450,7 +479,7 @@ class BaseAgent:
         max_retries = self.settings.llm_max_retries
 
         # Acquire semaphore to limit concurrent requests
-        with _get_llm_semaphore(self.settings):
+        with _acquire_llm_semaphore(self.settings):
             with log_performance(logger, f"{self.name} generation"):
                 for attempt in range(max_retries):
                     try:

@@ -1099,7 +1099,8 @@ class TestGenerateCharacterWithQuality:
         assert char.name == "Low Quality"
         assert scores.average < 7.0
         # Returns best iteration (1) since all scores are equal
-        assert iterations == 1
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert iterations == 2
 
     @patch.object(WorldQualityService, "_create_character")
     def test_generate_character_raises_error_when_creation_fails(
@@ -2915,7 +2916,8 @@ class TestEdgeCases:
         assert loc["name"] == "Basic"
         assert scores.average < 7.0
         # Returns best iteration (1) since all scores are equal
-        assert iterations == 1
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert iterations == 2
 
     def test_empty_description_mini_description(self, service):
         """Test mini description with empty full description."""
@@ -3677,7 +3679,8 @@ class TestRefinementLoopEdgeCases:
         assert rel["source"] == "Alice"
         assert scores.average < 7.0
         # Returns best iteration (iteration 1 since all scores are equal)
-        assert iterations == 1
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert iterations == 2
 
     # ========== Faction Loop Edge Cases ==========
 
@@ -3754,7 +3757,8 @@ class TestRefinementLoopEdgeCases:
         assert scores.average < 7.0
         # Returns scoring rounds count (only 1 successful judge call, refinement
         # errors don't trigger redundant re-judging of unchanged entities #266)
-        assert iterations == 1
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert iterations == 2
 
     # ========== Item Loop Edge Cases ==========
 
@@ -3835,7 +3839,8 @@ class TestRefinementLoopEdgeCases:
         assert item["name"] == "Test Item"
         assert scores.average < 7.0
         # Returns best iteration (1) since all scores are equal
-        assert iterations == 1
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert iterations == 2
 
     # ========== Concept Loop Edge Cases ==========
 
@@ -3916,7 +3921,8 @@ class TestRefinementLoopEdgeCases:
         assert concept["name"] == "Test Concept"
         assert scores.average < 7.0
         # Returns best iteration (1) since all scores are equal
-        assert iterations == 1
+        # +1 for hail-mary fresh creation judge call (threshold not met)
+        assert iterations == 2
 
 
 class TestBatchOperationsPartialFailure:
