@@ -1852,7 +1852,12 @@ class TestRecoverOrphans:
         mock_scores.average = 7.5
 
         def return_orphan_rel(state, entity_names, existing_rels, required_entity=None):
-            """Return a relationship involving the required_entity."""
+            """Return a relationship involving the required_entity.
+
+            Uses required_entity as source (falls back to entity_names[0] when
+            None) and picks a *different* entity as target so the generated
+            relationship always connects two distinct nodes.
+            """
             return (
                 {
                     "source": required_entity or entity_names[0],
