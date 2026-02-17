@@ -12,7 +12,10 @@ from src.services.world_quality_service import (
     EntityGenerationProgress,
     WorldQualityService,
 )
-from src.services.world_quality_service._relationship import _is_duplicate_relationship
+from src.services.world_quality_service._relationship import (
+    _compute_entity_frequency_hint,
+    _is_duplicate_relationship,
+)
 from tests.shared.mock_ollama import TEST_MODEL
 
 
@@ -1238,6 +1241,162 @@ class _TestScores(BaseQualityScores):
         return weak
 
 
+class TestChapterRefinePromptDimensionInstructions:
+    """Tests for dimension-specific instructions in chapter refinement prompts."""
+
+    def test_chapter_refine_prompt_includes_dimension_instructions(
+        self, world_quality_service, sample_story_state
+    ):
+        """Refinement prompt includes dimension-specific text when scores are below threshold."""
+        from src.memory.story_state import Chapter
+        from src.memory.world_quality import ChapterQualityScores as ChapterScores
+
+        chapter = Chapter(number=1, title="The Beginning", outline="A hero leaves home.")
+        scores = ChapterScores(
+            purpose=4.0,
+            pacing=3.0,
+            hook=5.0,
+            coherence=4.5,
+            feedback="Needs work on all fronts.",
+        )
+        sample_story_state.plot_summary = "An epic quest to save the world."
+
+        captured_prompts = []
+
+        def capture_generate_structured(settings, model, prompt, response_model, temperature):
+            """Capture the prompt sent to generate_structured."""
+            captured_prompts.append(prompt)
+            return Chapter(number=1, title="The Refined Beginning", outline="Improved outline.")
+
+        with patch(
+            "src.services.world_quality_service._chapter_quality.generate_structured",
+            side_effect=capture_generate_structured,
+        ):
+            world_quality_service._refine_chapter_outline(
+                chapter, scores, sample_story_state, temperature=0.7
+            )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+
+        # All four dimensions are below the default threshold (7.0), so all should appear
+        assert "PURPOSE: Clarify what this chapter accomplishes" in prompt
+        assert "PACING: Vary the rhythm" in prompt
+        assert "HOOK: Start with an immediate question or conflict" in prompt
+        assert "COHERENCE: Ensure each scene leads logically" in prompt
+        assert "Make SUBSTANTIAL changes to the outline" in prompt
+        assert "DIMENSION-SPECIFIC INSTRUCTIONS:" in prompt
+
+    def test_chapter_refine_prompt_only_includes_weak_dimensions(
+        self, world_quality_service, sample_story_state
+    ):
+        """Refinement prompt only includes instructions for dimensions below threshold."""
+        from src.memory.story_state import Chapter
+        from src.memory.world_quality import ChapterQualityScores as ChapterScores
+
+        chapter = Chapter(number=2, title="Rising Action", outline="Conflict intensifies.")
+        # Only purpose and hook are below default threshold (7.0)
+        scores = ChapterScores(
+            purpose=5.0,
+            pacing=8.0,
+            hook=4.0,
+            coherence=9.0,
+            feedback="Purpose and hook need improvement.",
+        )
+        sample_story_state.plot_summary = "A mystery unfolds."
+
+        captured_prompts = []
+
+        def capture_generate_structured(settings, model, prompt, response_model, temperature):
+            """Capture the prompt sent to generate_structured."""
+            captured_prompts.append(prompt)
+            return Chapter(number=2, title="Rising Action Refined", outline="Better outline.")
+
+        with patch(
+            "src.services.world_quality_service._chapter_quality.generate_structured",
+            side_effect=capture_generate_structured,
+        ):
+            world_quality_service._refine_chapter_outline(
+                chapter, scores, sample_story_state, temperature=0.7
+            )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+
+        # Only purpose and hook should have instructions
+        assert "PURPOSE: Clarify what this chapter accomplishes" in prompt
+        assert "HOOK: Start with an immediate question or conflict" in prompt
+        # Pacing and coherence scored above threshold, should NOT appear
+        assert "PACING: Vary the rhythm" not in prompt
+        assert "COHERENCE: Ensure each scene leads logically" not in prompt
+
+    def test_chapter_refine_prompt_no_weak_dimensions(
+        self, world_quality_service, sample_story_state
+    ):
+        """Refinement prompt shows minor improvements note when no dimensions are weak."""
+        from src.memory.story_state import Chapter
+        from src.memory.world_quality import ChapterQualityScores as ChapterScores
+
+        chapter = Chapter(number=3, title="Climax", outline="The final battle.")
+        # All dimensions above threshold
+        scores = ChapterScores(
+            purpose=8.0,
+            pacing=8.5,
+            hook=9.0,
+            coherence=8.0,
+            feedback="Good overall.",
+        )
+        sample_story_state.plot_summary = "The hero prevails."
+
+        captured_prompts = []
+
+        def capture_generate_structured(settings, model, prompt, response_model, temperature):
+            """Capture the prompt sent to generate_structured."""
+            captured_prompts.append(prompt)
+            return Chapter(number=3, title="Climax Refined", outline="Polished outline.")
+
+        with patch(
+            "src.services.world_quality_service._chapter_quality.generate_structured",
+            side_effect=capture_generate_structured,
+        ):
+            world_quality_service._refine_chapter_outline(
+                chapter, scores, sample_story_state, temperature=0.7
+            )
+
+        assert len(captured_prompts) == 1
+        prompt = captured_prompts[0]
+
+        # No dimension-specific instructions, just the minor note
+        assert "No critical weaknesses" in prompt
+        assert "minor improvements" in prompt
+        assert "PURPOSE: Clarify" not in prompt
+        assert "PACING: Vary" not in prompt
+        assert "HOOK: Start" not in prompt
+        assert "COHERENCE: Ensure" not in prompt
+
+    def test_build_dimension_instructions_all_dimensions(self):
+        """_build_dimension_instructions returns all four instructions when all are weak."""
+        from src.services.world_quality_service._chapter_quality import (
+            _build_dimension_instructions,
+        )
+
+        result = _build_dimension_instructions(["purpose", "pacing", "hook", "coherence"])
+        assert "PURPOSE:" in result
+        assert "PACING:" in result
+        assert "HOOK:" in result
+        assert "COHERENCE:" in result
+
+    def test_build_dimension_instructions_empty_list(self):
+        """_build_dimension_instructions returns minor improvements note for empty list."""
+        from src.services.world_quality_service._chapter_quality import (
+            _build_dimension_instructions,
+        )
+
+        result = _build_dimension_instructions([])
+        assert "No critical weaknesses" in result
+        assert "minor improvements" in result
+
+
 class TestHailMaryFreshCreation:
     """Tests for hail-mary fresh creation in quality_refinement_loop (#7)."""
 
@@ -1398,3 +1557,115 @@ class TestHailMaryFreshCreation:
 
         assert entity["name"] == "Original"
         assert scores.average == 6.0
+
+
+class TestEntityFrequencyHint:
+    """Tests for _compute_entity_frequency_hint focal-character bias reduction."""
+
+    def test_entity_frequency_hint_empty_for_few_entities(self):
+        """Returns empty string when fewer than 3 entities or no rels."""
+        # Fewer than 3 entities
+        assert _compute_entity_frequency_hint(["Alice", "Bob"], [("Alice", "Bob", "knows")]) == ""
+        # 3 entities but no relationships
+        assert _compute_entity_frequency_hint(["Alice", "Bob", "Carol"], []) == ""
+        # Single entity
+        assert _compute_entity_frequency_hint(["Alice"], [("Alice", "Bob", "knows")]) == ""
+
+    def test_entity_frequency_hint_highlights_under_connected(self):
+        """Entities with 0-1 connections are listed as PRIORITY."""
+        entities = ["Alice", "Bob", "Carol", "Dave"]
+        # Alice has 2 connections, Bob has 1, Carol has 1, Dave has 0
+        existing_rels = [
+            ("Alice", "Bob", "knows"),
+            ("Alice", "Carol", "rivals"),
+        ]
+        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        assert "PRIORITY" in hint
+        # Bob has 1, Carol has 1, Dave has 0 — all under-connected
+        assert "Bob" in hint
+        assert "Carol" in hint
+        assert "Dave" in hint
+
+    def test_entity_frequency_hint_warns_over_connected(self):
+        """Entities with 4+ connections are listed as AVOID."""
+        entities = ["Alice", "Bob", "Carol", "Dave", "Eve"]
+        # Alice appears in 4 relationships — over-connected
+        existing_rels = [
+            ("Alice", "Bob", "knows"),
+            ("Alice", "Carol", "rivals"),
+            ("Alice", "Dave", "mentors"),
+            ("Alice", "Eve", "betrays"),
+        ]
+        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        assert "AVOID" in hint
+        assert "Alice" in hint
+
+    def test_entity_frequency_hint_balanced_returns_empty(self):
+        """Returns empty string when all entities have 2-3 connections (balanced)."""
+        entities = ["Alice", "Bob", "Carol"]
+        # Each entity has exactly 2 connections
+        existing_rels = [
+            ("Alice", "Bob", "knows"),
+            ("Bob", "Carol", "rivals"),
+            ("Carol", "Alice", "mentors"),
+        ]
+        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        assert hint == ""
+
+    def test_entity_frequency_hint_ignores_unknown_entities(self):
+        """Entities in rels but not in entity_names are not counted."""
+        entities = ["Alice", "Bob", "Carol"]
+        # "Zoe" is in rels but not in entity_names
+        existing_rels = [
+            ("Alice", "Zoe", "knows"),
+            ("Zoe", "Bob", "rivals"),
+        ]
+        hint = _compute_entity_frequency_hint(entities, existing_rels)
+        # Alice and Bob have 1 connection each, Carol has 0 — all under-connected
+        assert "PRIORITY" in hint
+        assert "Carol" in hint
+
+
+class TestUnusedPairsSortedByFrequency:
+    """Tests for unused pairs sorting by connection frequency in _create_relationship."""
+
+    def test_unused_pairs_sorted_by_frequency(self):
+        """Verify unused pairs are sorted so under-connected entities appear first."""
+        from collections import Counter
+        from itertools import permutations
+
+        entity_names = ["Alice", "Bob", "Carol", "Dave", "Eve"]
+        # Alice: 4 connections (over-connected), Bob: 3, Carol: 1, Dave: 0, Eve: 0
+        existing_rels = [
+            ("Alice", "Bob", "knows"),
+            ("Alice", "Carol", "rivals"),
+            ("Alice", "Bob", "mentors"),
+            ("Alice", "Bob", "betrays"),
+        ]
+
+        existing_pair_set = set()
+        for s, t, _rt in existing_rels:
+            existing_pair_set.add((s, t))
+            existing_pair_set.add((t, s))
+
+        entity_freq: Counter[str] = Counter()
+        for s, t, _rt in existing_rels:
+            if s in entity_names:
+                entity_freq[s] += 1
+            if t in entity_names:
+                entity_freq[t] += 1
+
+        raw_unused = [
+            (a, b) for a, b in permutations(entity_names, 2) if (a, b) not in existing_pair_set
+        ]
+        raw_unused.sort(key=lambda pair: entity_freq[pair[0]] + entity_freq[pair[1]])
+
+        # Dave (0) and Eve (0) have the lowest frequency — pairs between them come first
+        first_pair = raw_unused[0]
+        assert first_pair[0] in ("Dave", "Eve") and first_pair[1] in ("Dave", "Eve"), (
+            f"Expected pair of under-connected entities first, got {first_pair}"
+        )
+
+        # Last pairs should involve the most connected entity (Alice=4)
+        last_pair = raw_unused[-1]
+        assert "Alice" in last_pair, f"Expected Alice (4 connections) in last pair, got {last_pair}"

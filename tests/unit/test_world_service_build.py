@@ -1990,6 +1990,99 @@ class TestRecoverOrphans:
         assert result == 1
         assert "defaulting to 'related_to'" in caplog.text
 
+    def test_recover_orphans_puts_orphan_first_in_entity_list(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Verify the constrained entity list puts the target orphan first."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 entities: Alice and Bob are connected, Charlie is the orphan
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        # Capture the entity_names argument passed to generate_relationship_with_quality
+        captured_entity_names = []
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+
+        def capture_and_return(state, entity_names, existing_rels):
+            """Capture entity_names and return a valid orphan relationship."""
+            captured_entity_names.append(list(entity_names))
+            return (
+                {
+                    "source": "Charlie",
+                    "target": "Alice",
+                    "relation_type": "friends",
+                    "description": "Charlie befriends Alice",
+                },
+                mock_scores,
+                1,
+            )
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=capture_and_return
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 1
+        assert len(captured_entity_names) == 1
+        # Charlie (the orphan) must be first in the entity list
+        assert captured_entity_names[0][0] == "Charlie"
+        # Non-orphan entities (Alice, Bob) should appear after the orphan
+        assert "Alice" in captured_entity_names[0]
+        assert "Bob" in captured_entity_names[0]
+
+    def test_recover_orphans_rotates_target_orphan(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Different orphans are targeted on different iterations via round-robin."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 4 entities: only Alice and Bob are connected; Charlie and Diana are orphans
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_entity("character", "Diana", "A mysterious stranger")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        # Capture first element of entity_names on each call
+        first_names = []
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+
+        def capture_and_return(state, entity_names, existing_rels):
+            """Capture the first entity name and return a valid relationship."""
+            first_names.append(entity_names[0])
+            # Return a relationship involving the first (target) orphan
+            target_orphan_name = entity_names[0]
+            return (
+                {
+                    "source": target_orphan_name,
+                    "target": "Alice",
+                    "relation_type": "friends",
+                    "description": f"{target_orphan_name} befriends Alice",
+                },
+                mock_scores,
+                1,
+            )
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=capture_and_return
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 2
+        # Two orphans means two attempts; each should target a different orphan
+        assert len(first_names) == 2
+        # The two targeted orphans must be different (round-robin rotation)
+        assert first_names[0] != first_names[1]
+        # Both orphan names should appear as first element across the two calls
+        assert set(first_names) == {"Charlie", "Diana"}
+
 
 class TestBuildWorldOrphanRecovery:
     """Tests for orphan recovery integration in build_world."""

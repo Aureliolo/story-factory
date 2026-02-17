@@ -608,18 +608,55 @@ class TestSettingsSaveLoad:
         assert settings.ollama_url == "http://localhost:11434"
 
     def test_load_handles_unknown_fields(self, tmp_path, monkeypatch):
-        """Test load handles unknown fields in settings file."""
+        """Test load filters out unknown fields and preserves known ones."""
         settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
 
-        # Create a settings file with unknown field
-        data = {"ollama_url": "http://localhost:11434", "unknown_field": "value"}
+        # Create a settings file with known + unknown fields
+        data = {
+            "ollama_url": "http://custom:11434",
+            "semantic_duplicate_enabled": True,
+            "world_quality_enabled": False,
+            "unknown_field": "value",
+            "removed_setting": 42,
+        }
         with open(settings_file, "w") as f:
             json.dump(data, f)
 
-        # Should use partial recovery
+        # Should drop unknown fields and preserve all known ones
         settings = Settings.load()
-        assert settings.ollama_url == "http://localhost:11434"
+        assert settings.ollama_url == "http://custom:11434"
+        assert settings.semantic_duplicate_enabled is True
+        assert settings.world_quality_enabled is False
+
+        # Saved file should have unknown fields removed
+        with open(settings_file) as f:
+            saved = json.load(f)
+        assert "unknown_field" not in saved
+        assert "removed_setting" not in saved
+        assert saved["ollama_url"] == "http://custom:11434"
+
+    def test_load_adds_defaults_for_new_fields(self, tmp_path, monkeypatch):
+        """Test load uses defaults for fields missing from JSON."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+
+        # Create a minimal settings file missing most fields
+        data = {"ollama_url": "http://custom:11434"}
+        with open(settings_file, "w") as f:
+            json.dump(data, f)
+
+        settings = Settings.load()
+        assert settings.ollama_url == "http://custom:11434"
+        # Missing fields get their defaults
+        assert settings.semantic_duplicate_enabled is True
+        assert settings.context_size == 32768
+
+        # Saved file should now include all fields
+        with open(settings_file) as f:
+            saved = json.load(f)
+        assert "semantic_duplicate_enabled" in saved
+        assert "context_size" in saved
 
     def test_load_handles_invalid_values(self, tmp_path, monkeypatch):
         """Test load handles invalid setting values."""

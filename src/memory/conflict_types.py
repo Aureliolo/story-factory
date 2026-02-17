@@ -48,6 +48,19 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "collaborates_with": ConflictCategory.ALLIANCE,
     "friends_with": ConflictCategory.ALLIANCE,
     "friends": ConflictCategory.ALLIANCE,
+    # Alliance - LLM-generated compound types
+    "mutual_respect": ConflictCategory.ALLIANCE,
+    "admiring_friendship": ConflictCategory.ALLIANCE,
+    "mentor_like_bond": ConflictCategory.ALLIANCE,
+    "bonded_with": ConflictCategory.ALLIANCE,
+    "devoted_to": ConflictCategory.ALLIANCE,
+    "loyal_to": ConflictCategory.ALLIANCE,
+    "respects": ConflictCategory.ALLIANCE,
+    "cares_for": ConflictCategory.ALLIANCE,
+    "inspires": ConflictCategory.ALLIANCE,
+    "guided_by": ConflictCategory.ALLIANCE,
+    "sibling_of": ConflictCategory.ALLIANCE,
+    "grateful_to": ConflictCategory.ALLIANCE,
     # Rivalry - active opposition, hostility
     "hates": ConflictCategory.RIVALRY,
     "enemy_of": ConflictCategory.RIVALRY,
@@ -60,6 +73,13 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "hunts": ConflictCategory.RIVALRY,
     "destroys": ConflictCategory.RIVALRY,
     "attacks": ConflictCategory.RIVALRY,
+    # Rivalry - LLM-generated compound types
+    "sworn_enemy": ConflictCategory.RIVALRY,
+    "bitter_rivals": ConflictCategory.RIVALRY,
+    "nemesis_of": ConflictCategory.RIVALRY,
+    "despises": ConflictCategory.RIVALRY,
+    "undermines": ConflictCategory.RIVALRY,
+    "seeks_revenge": ConflictCategory.RIVALRY,
     # Tension - potential conflict, negative but not active hostility
     "distrusts": ConflictCategory.TENSION,
     "competes_with": ConflictCategory.TENSION,
@@ -72,6 +92,18 @@ RELATION_CONFLICT_MAPPING: dict[str, ConflictCategory] = {
     "manipulates": ConflictCategory.TENSION,
     "envies": ConflictCategory.TENSION,
     "owes_debt_to": ConflictCategory.TENSION,
+    # Tension - LLM-generated compound types
+    "friendly_rivalry": ConflictCategory.TENSION,
+    "uneasy_alliance": ConflictCategory.TENSION,
+    "reluctant_allies": ConflictCategory.TENSION,
+    "wary_of": ConflictCategory.TENSION,
+    "indebted_to": ConflictCategory.TENSION,
+    "conflicted_about": ConflictCategory.TENSION,
+    "intimidated_by": ConflictCategory.TENSION,
+    "obsessed_with": ConflictCategory.TENSION,
+    "haunted_by": ConflictCategory.TENSION,
+    "dependent_on": ConflictCategory.TENSION,
+    "bound_to": ConflictCategory.TENSION,
     # Neutral - informational, no inherent conflict
     "knows": ConflictCategory.NEUTRAL,
     "works_with": ConflictCategory.NEUTRAL,
@@ -128,6 +160,54 @@ HIERARCHICAL_RELATIONSHIP_TYPES: frozenset[str] = frozenset(
 # Keys sorted by length descending for substring matching (prefer longer matches first)
 _SORTED_KEYS_BY_LENGTH: list[str] = sorted(RELATION_CONFLICT_MAPPING.keys(), key=len, reverse=True)
 
+# Word-level lookup: individual words that strongly signal a known relationship type.
+# Used as a last-resort fallback when substring matching fails on novel compound types.
+# Maps a single word (found after splitting on underscores) to the canonical relation type.
+_WORD_TO_RELATION: dict[str, str] = {
+    # Alliance signals
+    "mentor": "mentors",
+    "friend": "friends",
+    "friendship": "friends",
+    "ally": "ally_of",
+    "allies": "allies_with",
+    "loyal": "loyal_to",
+    "devoted": "devoted_to",
+    "protects": "protects",
+    "trust": "trusts",
+    "trusts": "trusts",
+    "love": "loves",
+    "loves": "loves",
+    "admires": "admires",
+    "respects": "respects",
+    "sibling": "sibling_of",
+    "bonded": "bonded_with",
+    "inspires": "inspires",
+    # Rivalry signals
+    "enemy": "enemy_of",
+    "enemies": "enemies_with",
+    "rivalry": "rivals",
+    "rivals": "rivals",
+    "nemesis": "nemesis_of",
+    "revenge": "seeks_revenge",
+    "despises": "despises",
+    "betrayed": "betrayed",
+    "hates": "hates",
+    # Tension signals
+    "fears": "fears",
+    "fear": "fears",
+    "wary": "wary_of",
+    "reluctant": "reluctant_allies",
+    "uneasy": "uneasy_alliance",
+    "obsessed": "obsessed_with",
+    "haunted": "haunted_by",
+    "intimidated": "intimidated_by",
+    "conflicted": "conflicted_about",
+    "jealous": "jealous_of",
+    "envies": "envies",
+    "distrusts": "distrusts",
+    "suspects": "suspects",
+}
+
 
 def normalize_relation_type(raw_type: str) -> str:
     """Normalize a free-form relationship type to the controlled vocabulary.
@@ -179,6 +259,21 @@ def normalize_relation_type(raw_type: str) -> str:
                 key,
             )
             return key
+
+    # Word-level match: split on underscores and check individual words against
+    # a priority lookup. This catches novel compound types like "deep_rivalry_bond"
+    # where no full key appears as a substring but a single word signals the category.
+    words = normalized.split("_")
+    for word in words:
+        if word in _WORD_TO_RELATION:
+            matched_type = _WORD_TO_RELATION[word]
+            logger.debug(
+                "Normalized novel type '%s' -> '%s' (word-level match on '%s')",
+                raw_type,
+                matched_type,
+                word,
+            )
+            return matched_type
 
     logger.debug("No normalization match for '%s', returning as-is: '%s'", raw_type, normalized)
     return normalized

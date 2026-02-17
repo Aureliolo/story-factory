@@ -13,7 +13,7 @@ from typing import Any
 
 import ollama
 
-from src.memory.mode_database import ModeDatabase
+from src.memory.mode_database import DEFAULT_DB_PATH, ModeDatabase
 from src.memory.mode_models import (
     GenerationMode,
     LearningSettings,
@@ -52,9 +52,7 @@ class ModelModeService:
         """
         logger.debug(f"Initializing ModelModeService: db_path={db_path}")
         self.settings = settings
-        # Default to output/model_scores.db at project root
-        default_db = Path(__file__).parent.parent.parent / "output" / "model_scores.db"
-        self._db_path = Path(db_path) if db_path else default_db
+        self._db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
         self._db = ModeDatabase(self._db_path)
 
         # Current mode
