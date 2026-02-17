@@ -6,6 +6,7 @@ Ollama's embedding API. Supports incremental embedding after every meaningful
 change and batch re-embedding when the model changes.
 """
 
+import hashlib
 import logging
 import threading
 from typing import Any
@@ -53,6 +54,9 @@ class EmbeddingService:
 
     def _get_client(self) -> ollama.Client:
         """Get or create the Ollama client.
+
+        Note: This method is not thread-safe on its own. It must be called
+        within self._lock to avoid TOCTOU races on self._client.
 
         Returns:
             An initialized Ollama client.
@@ -105,7 +109,7 @@ class EmbeddingService:
                 client = self._get_client()
                 response = client.embeddings(model=model, prompt=prompt)
 
-            embedding: list[float] = response.get("embedding", [])
+            embedding: list[float] = response["embedding"]
             if not embedding:
                 logger.warning("Empty embedding returned for text: '%s...'", text[:40])
                 return []
@@ -237,8 +241,6 @@ class EmbeddingService:
         # Embed established facts
         if hasattr(story_state, "established_facts") and story_state.established_facts:
             for fact in story_state.established_facts:
-                import hashlib
-
                 fact_hash = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:12]
                 source_id = f"fact:{fact_hash}"
                 text = f"Established fact: {fact}"
@@ -255,8 +257,9 @@ class EmbeddingService:
 
         # Embed world rules
         if hasattr(story_state, "world_rules") and story_state.world_rules:
-            for idx, rule in enumerate(story_state.world_rules):
-                source_id = f"rule:{idx}"
+            for rule in story_state.world_rules:
+                rule_hash = hashlib.sha256(rule.encode("utf-8")).hexdigest()[:12]
+                source_id = f"rule:{rule_hash}"
                 text = f"World rule: {rule}"
                 embedding = self.embed_text(text)
                 if embedding:
@@ -403,11 +406,15 @@ class EmbeddingService:
             logger.info("Model changed, clearing and re-embedding all content")
             # Get a sample embedding to detect dimension changes
             sample = self.embed_text("dimension check")
-            if sample:
-                db.recreate_vec_table(len(sample))
-            else:
-                db.clear_all_embeddings()
+            if not sample:
+                logger.warning(
+                    "Cannot re-embed: embedding model '%s' is unreachable. "
+                    "Keeping existing embeddings until model becomes available.",
+                    model,
+                )
+                return False
 
+            db.recreate_vec_table(len(sample))
             self.embed_all_world_data(db, story_state)
             return True
 

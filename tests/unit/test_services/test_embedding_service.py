@@ -391,7 +391,7 @@ class TestEmbedStoryStateData:
 
         assert count == 1
         call_kwargs = mock_db.upsert_embedding.call_args_list[0].kwargs
-        assert call_kwargs["source_id"] == "rule:0"
+        assert call_kwargs["source_id"].startswith("rule:")
         assert call_kwargs["content_type"] == "rule"
         assert "No magic after midnight" in call_kwargs["text"]
 
@@ -690,7 +690,7 @@ class TestCheckAndReembedIfNeeded:
         mock_batch.assert_called_once_with(mock_db, story_state)
 
     def test_check_and_reembed_if_needed_model_changed_sample_fails(self, service, mock_db):
-        """Falls back to clear_all_embeddings when dimension check sample fails."""
+        """Keeps existing embeddings when model is unreachable (sample embed fails)."""
         mock_db.needs_reembedding.return_value = True
         story_state = SimpleNamespace()
 
@@ -700,10 +700,10 @@ class TestCheckAndReembedIfNeeded:
         ):
             result = service.check_and_reembed_if_needed(mock_db, story_state)
 
-        assert result is True
-        mock_db.clear_all_embeddings.assert_called_once()
+        assert result is False
+        mock_db.clear_all_embeddings.assert_not_called()
         mock_db.recreate_vec_table.assert_not_called()
-        mock_batch.assert_called_once_with(mock_db, story_state)
+        mock_batch.assert_not_called()
 
     def test_check_and_reembed_if_needed_not_needed(self, service, mock_db):
         """Returns False when the model has not changed."""

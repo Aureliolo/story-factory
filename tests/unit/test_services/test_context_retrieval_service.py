@@ -720,8 +720,14 @@ class TestContextRetrievalService:
         call_kwargs = world_db.search_similar.call_args[1]
         assert call_kwargs["entity_type"] == "character"
 
-    def test_retrieve_context_no_content_type_with_entity_types(self, sample_story_state) -> None:
-        """Entity type filter is passed when no content_types are specified."""
+    def test_retrieve_context_no_content_type_ignores_entity_types(
+        self, sample_story_state
+    ) -> None:
+        """Entity type filter is NOT passed when no content_types are specified.
+
+        entity_type filtering only makes sense for entity content, so when no
+        content_types are specified the search is unfiltered.
+        """
         search_results = [
             _make_search_result("ent-1", "entity", "A location", distance=0.1),
         ]
@@ -738,7 +744,7 @@ class TestContextRetrievalService:
         )
 
         call_kwargs = world_db.search_similar.call_args[1]
-        assert call_kwargs["entity_type"] == "location"
+        assert "entity_type" not in call_kwargs
 
     def test_retrieve_context_multiple_entity_types_no_filter(self, sample_story_state) -> None:
         """Multiple entity types result in entity_type=None in the query."""
@@ -756,7 +762,7 @@ class TestContextRetrievalService:
         )
 
         call_kwargs = world_db.search_similar.call_args[1]
-        assert call_kwargs["entity_type"] is None
+        assert "entity_type" not in call_kwargs
 
     def test_retrieve_context_embed_failure_fallback(self, sample_story_state) -> None:
         """Falls back to legacy context when embed_text returns empty list."""

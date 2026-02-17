@@ -10,6 +10,7 @@ enabling graceful degradation when sqlite-vec is not installed.
 
 import hashlib
 import logging
+import struct
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -80,48 +81,50 @@ def upsert_embedding(
             logger.debug("Embedding unchanged for %s, skipping upsert", source_id)
             return False
 
-        # Delete existing embedding if present (vec0 doesn't support UPDATE)
-        if existing:
+        try:
+            # Delete existing embedding if present (vec0 doesn't support UPDATE)
+            if existing:
+                cursor.execute(
+                    "DELETE FROM vec_embeddings WHERE source_id = ? AND content_type = ?",
+                    (source_id, content_type),
+                )
+
+            # Insert new embedding into vec0
+            embedding_blob = struct.pack(f"{len(embedding)}f", *embedding)
             cursor.execute(
-                "DELETE FROM vec_embeddings WHERE source_id = ? AND content_type = ?",
-                (source_id, content_type),
+                """
+                INSERT INTO vec_embeddings (
+                    embedding, content_type, source_id, entity_type,
+                    chapter_number, display_text, embedding_model, embedded_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    embedding_blob,
+                    content_type,
+                    source_id,
+                    entity_type,
+                    chapter_number,
+                    text[:500],  # Truncate display text for storage efficiency
+                    model,
+                    now,
+                ),
             )
 
-        # Insert new embedding into vec0
-        import struct
-
-        embedding_blob = struct.pack(f"{len(embedding)}f", *embedding)
-        cursor.execute(
-            """
-            INSERT INTO vec_embeddings (
-                embedding, content_type, source_id, entity_type,
-                chapter_number, display_text, embedding_model, embedded_at
+            # Update metadata tracking table
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO embedding_metadata
+                (source_id, content_type, content_hash, embedding_model, embedded_at, embedding_dim)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (source_id, content_type, content_hash_val, model, now, len(embedding)),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                embedding_blob,
-                content_type,
-                source_id,
-                entity_type,
-                chapter_number,
-                text[:500],  # Truncate display text for storage efficiency
-                model,
-                now,
-            ),
-        )
 
-        # Update metadata tracking table
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO embedding_metadata
-            (source_id, content_type, content_hash, embedding_model, embedded_at, embedding_dim)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (source_id, content_type, content_hash_val, model, now, len(embedding)),
-        )
-
-        db.conn.commit()
+            db.conn.commit()
+        except Exception:
+            db.conn.rollback()
+            raise
 
     logger.debug("Upserted embedding for %s (%s, %d dims)", source_id, content_type, len(embedding))
     return True
@@ -141,15 +144,29 @@ def delete_embedding(db: WorldDatabase, source_id: str) -> bool:
         db._ensure_open()
         cursor = db.conn.cursor()
 
-        # Always clean up metadata (it's a regular table)
+        # Query content_type BEFORE deleting metadata (needed for vec0 partition key)
+        content_type = None
+        cursor.execute(
+            "SELECT content_type FROM embedding_metadata WHERE source_id = ?", (source_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            content_type = row[0]
+
+        # Clean up metadata (regular table)
         cursor.execute("DELETE FROM embedding_metadata WHERE source_id = ?", (source_id,))
         metadata_deleted = cursor.rowcount > 0
 
         # Clean up vec0 table if available
         vec_deleted = False
-        if db.vec_available:
-            # Need content_type to delete from partitioned vec0 table
-            # Since metadata may already be deleted, query vec_embeddings directly
+        if db.vec_available and content_type:
+            cursor.execute(
+                "DELETE FROM vec_embeddings WHERE source_id = ? AND content_type = ?",
+                (source_id, content_type),
+            )
+            vec_deleted = cursor.rowcount > 0
+        elif db.vec_available:
+            # Fallback: try without partition key if metadata was missing
             cursor.execute(
                 "DELETE FROM vec_embeddings WHERE source_id = ?",
                 (source_id,),
@@ -195,9 +212,10 @@ def search_similar(
         logger.debug("search_similar skipped: empty query embedding")
         return []
 
-    import struct
-
     query_blob = struct.pack(f"{len(query_embedding)}f", *query_embedding)
+
+    # Over-fetch when post-query filters will reduce results below requested k
+    fetch_k = k * 3 if (entity_type or chapter_number is not None) else k
 
     with db._lock:
         db._ensure_open()
@@ -214,7 +232,7 @@ def search_similar(
                 WHERE embedding MATCH ? AND k = ? AND content_type = ?
                 ORDER BY distance
                 """,
-                (query_blob, k, content_type),
+                (query_blob, fetch_k, content_type),
             )
         else:
             cursor.execute(
@@ -225,7 +243,7 @@ def search_similar(
                 WHERE embedding MATCH ? AND k = ?
                 ORDER BY distance
                 """,
-                (query_blob, k),
+                (query_blob, fetch_k),
             )
 
         results = []
@@ -246,6 +264,9 @@ def search_similar(
                     "distance": row[5],
                 }
             )
+            # Stop once we have enough results after filtering
+            if len(results) >= k:
+                break
 
     logger.debug(
         "search_similar: found %d results (k=%d, content_type=%s)",
@@ -343,12 +364,17 @@ def clear_all_embeddings(db: WorldDatabase) -> None:
         metadata_count = cursor.rowcount
 
         if db.vec_available:
+            # Query actual dimensions from metadata before dropping table
+            cursor.execute("SELECT DISTINCT embedding_dim FROM embedding_metadata LIMIT 1")
+            dim_row = cursor.fetchone()
+            dimensions = dim_row[0] if dim_row else 1024
+
             # Drop and recreate vec0 table (most reliable way to clear it)
             cursor.execute("DROP TABLE IF EXISTS vec_embeddings")
             cursor.execute(
-                """
+                f"""
                 CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-                    embedding float[1024],
+                    embedding float[{int(dimensions)}],
                     content_type text partition key,
                     +source_id text,
                     +entity_type text,
@@ -387,7 +413,7 @@ def recreate_vec_table(db: WorldDatabase, dimensions: int) -> None:
         cursor.execute(
             f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-                embedding float[{dimensions}],
+                embedding float[{int(dimensions)}],
                 content_type text partition key,
                 +source_id text,
                 +entity_type text,

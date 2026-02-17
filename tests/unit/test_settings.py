@@ -3025,16 +3025,16 @@ class TestRagContextValidation:
         with pytest.raises(ValueError, match="rag_context_graph_depth"):
             settings.validate()
 
-    def test_validate_auto_disables_rag_when_no_embedding_model(self):
-        """Should auto-disable rag_context_enabled when embedding_model is empty."""
+    def test_validate_raises_on_rag_enabled_without_embedding_model(self):
+        """Should raise ConfigError when rag_context_enabled is True but embedding_model is empty."""
         from src.settings._validation import _validate_rag_context
+        from src.utils.exceptions import ConfigError
 
         settings = Settings()
         settings.rag_context_enabled = True
         settings.embedding_model = ""
-        result = _validate_rag_context(settings)
-        assert settings.rag_context_enabled is False
-        assert result is True
+        with pytest.raises(ConfigError, match="rag_context_enabled requires an embedding_model"):
+            _validate_rag_context(settings)
 
     def test_validate_keeps_rag_enabled_when_embedding_model_set(self):
         """Should not disable rag_context_enabled when embedding_model is configured."""

@@ -4,6 +4,7 @@ import json
 import logging
 import sqlite3
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -155,13 +156,11 @@ class WorldDatabase:
         self._closed = False
 
         # Optional callback for embedding service to hook into content changes.
-        # Signature: (source_id: str, content_type: str, text_to_embed: str) -> None
         # Set via attach_content_changed_callback().
-        self._on_content_changed: Any = None
+        self._on_content_changed: Callable[[str, str, str], None] | None = None
 
         # Optional callback for embedding deletions.
-        # Signature: (source_id: str) -> None
-        self._on_content_deleted: Any = None
+        self._on_content_deleted: Callable[[str], None] | None = None
 
     def __del__(self) -> None:
         """Safety net for resource cleanup."""
@@ -746,7 +745,9 @@ class WorldDatabase:
         """Whether the sqlite-vec extension is loaded and vector search is available."""
         return self._vec_available
 
-    def attach_content_changed_callback(self, callback) -> None:
+    def attach_content_changed_callback(
+        self, callback: Callable[[str, str, str], None] | None
+    ) -> None:
         """Register a callback to be invoked when content changes.
 
         The callback receives (source_id, content_type, text_to_embed) and is
@@ -758,7 +759,7 @@ class WorldDatabase:
         self._on_content_changed = callback
         logger.debug("Content changed callback %s", "attached" if callback else "detached")
 
-    def attach_content_deleted_callback(self, callback) -> None:
+    def attach_content_deleted_callback(self, callback: Callable[[str], None] | None) -> None:
         """Register a callback to be invoked when content is deleted.
 
         The callback receives (source_id,) and is called after delete operations.

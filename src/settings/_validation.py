@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from src.memory.mode_models import VramStrategy
 from src.settings._types import AGENT_ROLES, LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
+from src.utils.exceptions import ConfigError
 
 if TYPE_CHECKING:
     from src.settings._settings import Settings
@@ -850,14 +851,12 @@ def _validate_world_health(settings: Settings) -> None:
 def _validate_rag_context(settings: Settings) -> bool:
     """Validate RAG context retrieval settings.
 
-    Auto-disables rag_context_enabled when embedding_model is empty,
-    since vector search cannot function without embeddings.
-
     Returns:
-        True if settings were mutated (auto-disabled), False otherwise.
+        Always False (no mutation).
 
     Raises:
         ValueError: If any RAG setting is out of range.
+        ConfigError: If rag_context_enabled is True but no embedding_model is set.
     """
     if not 100 <= settings.rag_context_max_tokens <= 16000:
         raise ValueError(
@@ -879,13 +878,11 @@ def _validate_rag_context(settings: Settings) -> bool:
             f"got {settings.rag_context_graph_depth}"
         )
 
-    # Auto-disable RAG when no embedding model is configured
     if settings.rag_context_enabled and not settings.embedding_model.strip():
-        logger.warning(
-            "rag_context_enabled requires an embedding_model; auto-disabling RAG context retrieval"
+        raise ConfigError(
+            "rag_context_enabled requires an embedding_model to be configured. "
+            "Either set an embedding_model or disable rag_context_enabled."
         )
-        settings.rag_context_enabled = False
-        return True
     return False
 
 

@@ -60,9 +60,12 @@ def add_event(
 
     # Notify embedding service of new event (outside lock)
     if db._on_content_changed:
-        chapter_part = f" (Chapter {chapter_number})" if chapter_number else ""
-        text = f"Event: {description}{chapter_part}"
-        db._on_content_changed(event_id, "event", text)
+        try:
+            chapter_part = f" (Chapter {chapter_number})" if chapter_number else ""
+            text = f"Event: {description}{chapter_part}"
+            db._on_content_changed(event_id, "event", text)
+        except Exception as e:
+            logger.warning("Embedding callback failed for event %s: %s", event_id, e)
 
     return event_id
 

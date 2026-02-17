@@ -94,7 +94,10 @@ def add_entity(
 
     # Notify embedding service of new content (outside lock to avoid deadlock)
     if db._on_content_changed:
-        db._on_content_changed(entity_id, "entity", f"{name}: {description}")
+        try:
+            db._on_content_changed(entity_id, "entity", f"{name}: {description}")
+        except Exception as e:
+            logger.warning("Embedding callback failed for entity %s: %s", entity_id, e)
 
     return entity_id
 
@@ -261,10 +264,13 @@ def update_entity(db: WorldDatabase, entity_id: str, **updates: Any) -> bool:
 
     # Notify embedding service of updated content (outside lock)
     if updated and db._on_content_changed:
-        # Fetch current entity to get full name/description for embedding
-        entity = get_entity(db, entity_id)
-        if entity:
-            db._on_content_changed(entity_id, "entity", f"{entity.name}: {entity.description}")
+        try:
+            # Fetch current entity to get full name/description for embedding
+            entity = get_entity(db, entity_id)
+            if entity:
+                db._on_content_changed(entity_id, "entity", f"{entity.name}: {entity.description}")
+        except Exception as e:
+            logger.warning("Embedding callback failed for entity %s: %s", entity_id, e)
 
     return updated
 
@@ -293,7 +299,10 @@ def delete_entity(db: WorldDatabase, entity_id: str) -> bool:
 
     # Notify embedding service of deletion (outside lock)
     if deleted and db._on_content_deleted:
-        db._on_content_deleted(entity_id)
+        try:
+            db._on_content_deleted(entity_id)
+        except Exception as e:
+            logger.warning("Embedding delete callback failed for entity %s: %s", entity_id, e)
 
     return deleted
 

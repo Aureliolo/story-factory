@@ -87,7 +87,8 @@ class RetrievedContext:
             lines = [f"- {item.text}" for item in items]
             sections.append(f"{title}:\n" + "\n".join(lines))
 
-        return "\n\n".join(sections)
+        context_body = "\n\n".join(sections)
+        return f"<retrieved-context>\n{context_body}\n</retrieved-context>"
 
 
 class ContextRetrievalService:
@@ -153,8 +154,10 @@ class ContextRetrievalService:
             logger.debug("RAG context disabled, returning empty context")
             return RetrievedContext(retrieval_method="disabled")
 
-        effective_max_tokens = max_tokens or self.settings.rag_context_max_tokens
-        effective_k = k or self.settings.rag_context_max_items
+        effective_max_tokens = (
+            self.settings.rag_context_max_tokens if max_tokens is None else max_tokens
+        )
+        effective_k = self.settings.rag_context_max_items if k is None else k
 
         # Try vector retrieval first
         if self.embedding_service.is_available and world_db.vec_available:
@@ -206,25 +209,29 @@ class ContextRetrievalService:
 
         # Step 2: KNN search with optional content type filter
         all_results: list[dict] = []
-        if content_types:
-            for ct in content_types:
-                results = world_db.search_similar(
+        try:
+            if content_types:
+                for ct in content_types:
+                    results = world_db.search_similar(
+                        query_embedding=query_embedding,
+                        k=k,
+                        content_type=ct,
+                        # Only apply entity_type filter for entity content type
+                        entity_type=entity_types[0]
+                        if entity_types and len(entity_types) == 1 and ct == "entity"
+                        else None,
+                        chapter_number=chapter_number,
+                    )
+                    all_results.extend(results)
+            else:
+                all_results = world_db.search_similar(
                     query_embedding=query_embedding,
                     k=k,
-                    content_type=ct,
-                    entity_type=entity_types[0]
-                    if entity_types and len(entity_types) == 1
-                    else None,
                     chapter_number=chapter_number,
                 )
-                all_results.extend(results)
-        else:
-            all_results = world_db.search_similar(
-                query_embedding=query_embedding,
-                k=k,
-                entity_type=entity_types[0] if entity_types and len(entity_types) == 1 else None,
-                chapter_number=chapter_number,
-            )
+        except Exception as e:
+            logger.warning("Vector search failed, falling back to legacy context: %s", e)
+            return self._retrieve_fallback(world_db, story_state, max_tokens)
 
         # Convert to ContextItems with relevance scores
         items_by_id: dict[str, ContextItem] = {}
@@ -272,7 +279,7 @@ class ContextRetrievalService:
                                 text=f"{neighbor.name}: {neighbor.description}",
                             )
 
-                    # Also add relationships for expanded entities
+                    # Also add relationships for the original search result entity
                     relationships = world_db.get_relationships(item.source_id)
                     for rel in relationships:
                         if rel.id not in items_by_id:

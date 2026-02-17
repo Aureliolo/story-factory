@@ -119,10 +119,13 @@ def add_relationship(
 
     # Notify embedding service of new relationship (outside lock)
     if db._on_content_changed:
-        source_name = source_entity.name if validate and source_entity else source_id
-        target_name = target_entity.name if validate and target_entity else target_id
-        text = f"{source_name} {relation_type} {target_name}: {description}"
-        db._on_content_changed(rel_id, "relationship", text)
+        try:
+            source_name = source_entity.name if validate and source_entity else source_id
+            target_name = target_entity.name if validate and target_entity else target_id
+            text = f"{source_name} {relation_type} {target_name}: {description}"
+            db._on_content_changed(rel_id, "relationship", text)
+        except Exception as e:
+            logger.warning("Embedding callback failed for relationship %s: %s", rel_id, e)
 
     return rel_id
 
@@ -218,7 +221,10 @@ def delete_relationship(db: WorldDatabase, rel_id: str) -> bool:
 
     # Notify embedding service of deletion (outside lock)
     if db._on_content_deleted:
-        db._on_content_deleted(rel_id)
+        try:
+            db._on_content_deleted(rel_id)
+        except Exception as e:
+            logger.warning("Embedding delete callback failed for relationship %s: %s", rel_id, e)
 
     return True
 
@@ -304,12 +310,15 @@ def update_relationship(
 
     # Notify embedding service of updated relationship (outside lock)
     if updated and db._on_content_changed:
-        source = db.get_entity(source_id)
-        target = db.get_entity(target_id)
-        source_name = source.name if source else source_id
-        target_name = target.name if target else target_id
-        text = f"{source_name} {new_type} {target_name}: {new_desc}"
-        db._on_content_changed(relationship_id, "relationship", text)
+        try:
+            source = db.get_entity(source_id)
+            target = db.get_entity(target_id)
+            source_name = source.name if source else source_id
+            target_name = target.name if target else target_id
+            text = f"{source_name} {new_type} {target_name}: {new_desc}"
+            db._on_content_changed(relationship_id, "relationship", text)
+        except Exception as e:
+            logger.warning("Embedding callback failed for relationship %s: %s", relationship_id, e)
 
     return updated
 
