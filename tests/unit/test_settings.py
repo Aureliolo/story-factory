@@ -2860,3 +2860,12 @@ class TestRagContextValidation:
         result = _validate_rag_context(settings)
         assert settings.rag_context_enabled is True
         assert result is False
+
+    def test_validate_full_raises_config_error_on_empty_embedding_model(self):
+        """Should raise ConfigError when settings.validate() encounters empty embedding_model."""
+        from src.utils.exceptions import ConfigError
+
+        settings = Settings()
+        settings.embedding_model = ""
+        with pytest.raises(ConfigError, match="embedding_model must be set"):
+            settings.validate()

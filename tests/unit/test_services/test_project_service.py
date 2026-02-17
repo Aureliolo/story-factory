@@ -22,7 +22,8 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings, _mock_embedding_service())
+        mock_embed = _mock_embedding_service()
+        service = ProjectService(tmp_settings, mock_embed)
         state, world_db = service.create_project("Test Story")
 
         assert isinstance(state.id, str) and len(state.id) > 0
@@ -30,6 +31,7 @@ class TestProjectService:
         assert state.status == "interview"
         assert isinstance(world_db, WorldDatabase)
         assert world_db.db_path.exists()
+        mock_embed.attach_to_database.assert_called_once_with(world_db)
 
     def test_create_project_default_name(self, tmp_settings, monkeypatch, tmp_path):
         """Test creating a project with default name."""
@@ -76,11 +78,15 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings, _mock_embedding_service())
+        mock_embed = _mock_embedding_service()
+        service = ProjectService(tmp_settings, mock_embed)
 
         # Create a project
         state, _ = service.create_project("Test Project")
         project_id = state.id
+
+        # Reset call tracking to only observe load_project
+        mock_embed.reset_mock()
 
         # Load it
         loaded_state, loaded_db = service.load_project(project_id)
@@ -89,6 +95,7 @@ class TestProjectService:
         assert loaded_state.project_name == "Test Project"
         assert isinstance(loaded_db, WorldDatabase)
         assert loaded_db.db_path.exists()
+        mock_embed.attach_to_database.assert_called_once_with(loaded_db)
 
     def test_load_nonexistent_project(self, tmp_settings, monkeypatch, tmp_path):
         """Test loading a project that doesn't exist."""
@@ -130,10 +137,14 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings, _mock_embedding_service())
+        mock_embed = _mock_embedding_service()
+        service = ProjectService(tmp_settings, mock_embed)
 
         # Create original project
         original, _ = service.create_project("Original")
+
+        # Reset to track only duplicate_project calls
+        mock_embed.reset_mock()
 
         # Duplicate it
         duplicate, _dup_db = service.duplicate_project(original.id)
@@ -141,6 +152,8 @@ class TestProjectService:
         assert duplicate.id != original.id
         assert duplicate.project_name == "Copy of Original"
         assert len(service.list_projects()) == 2
+        # attach_to_database should be called for both load (original) and new (duplicate)
+        assert mock_embed.attach_to_database.call_count == 2
 
 
 class TestValidatePath:

@@ -995,6 +995,28 @@ class TestBuildWorldEmbedding:
         assert counts["characters"] >= 0
         mock_services.embedding.embed_all_world_data.assert_called_once()
 
+    def test_embedding_called_on_successful_build(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that embed_all_world_data is called during a successful build."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert counts["characters"] >= 0
+        mock_services.embedding.embed_all_world_data.assert_called_once_with(
+            mock_world_db, sample_story_state
+        )
+
 
 class TestWorldBuildCancellation:
     """Tests for world build cancellation."""
