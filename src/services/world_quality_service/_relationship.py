@@ -186,6 +186,87 @@ def _compute_diversity_hint(existing_types: list[str]) -> str:
     return ""
 
 
+def _count_entity_frequencies(
+    entity_names: list[str],
+    existing_rels: list[tuple[str, str, str]],
+) -> Counter[str]:
+    """Count how many relationships each entity participates in (as source or target).
+
+    Args:
+        entity_names: Entity names to count frequencies for.
+        existing_rels: Existing (source, target, relation_type) 3-tuples.
+
+    Returns:
+        Counter mapping entity name to number of relationship appearances.
+    """
+    freq: Counter[str] = Counter()
+    entity_set = set(entity_names)
+    for source, target, _rel_type in existing_rels:
+        if source in entity_set:
+            freq[source] += 1
+        if target in entity_set:
+            freq[target] += 1
+    logger.debug("Entity frequencies: %s", dict(freq))
+    return freq
+
+
+def _compute_entity_frequency_hint(
+    entity_names: list[str],
+    existing_rels: list[tuple[str, str, str]],
+) -> str:
+    """Compute a prompt hint highlighting under-connected and over-connected entities.
+
+    Counts how many relationships each entity already appears in (as source or target)
+    and generates guidance for the LLM to prioritize under-connected entities and avoid
+    over-connected ones, reducing focal-character bias.
+
+    Args:
+        entity_names: All entity names available for relationships.
+        existing_rels: Existing (source, target, relation_type) 3-tuples.
+
+    Returns:
+        A prompt hint string, or empty string if fewer than 3 entities or no relationships.
+    """
+    if len(entity_names) < 3 or not existing_rels:
+        logger.debug(
+            "Skipping entity frequency hint: %d entities, %d existing rels",
+            len(entity_names),
+            len(existing_rels),
+        )
+        return ""
+
+    freq = _count_entity_frequencies(entity_names, existing_rels)
+
+    # Identify under-connected (0-1 rels) and over-connected (4+) entities
+    under_connected = sorted(name for name in entity_names if freq[name] <= 1)
+    over_connected = sorted(name for name in entity_names if freq[name] >= 4)
+
+    if not under_connected and not over_connected:
+        logger.debug("Entity frequency distribution is balanced, no hint needed")
+        return ""
+
+    parts: list[str] = ["\nENTITY CONNECTION BALANCE:"]
+    if under_connected:
+        logger.debug(
+            "Under-connected entities (PRIORITY): %s",
+            ", ".join(under_connected),
+        )
+        parts.append(
+            "PRIORITY — these entities have few connections, prefer using them: "
+            + ", ".join(under_connected)
+        )
+    if over_connected:
+        logger.debug(
+            "Over-connected entities (AVOID): %s",
+            ", ".join(over_connected),
+        )
+        parts.append(
+            "AVOID — these entities already have many connections: " + ", ".join(over_connected)
+        )
+
+    return "\n".join(parts)
+
+
 def _create_relationship(
     svc,
     story_state: StoryState,
@@ -229,6 +310,9 @@ def _create_relationship(
     existing_types = [rel_type for _s, _t, rel_type in existing_rels if rel_type]
     diversity_hint = _compute_diversity_hint(existing_types)
 
+    # Compute entity frequency hint to reduce focal-character bias
+    frequency_hint = _compute_entity_frequency_hint(entity_names, existing_rels)
+
     # For small entity sets, compute and list valid unused pairs
     unused_pairs_block = ""
     if len(entity_names) <= 20:
@@ -239,11 +323,15 @@ def _create_relationship(
             existing_pair_set.add((s, t))
             existing_pair_set.add((t, s))
 
-        unused_pairs = [
-            f"- {a} -> {b}"
-            for a, b in permutations(entity_names, 2)
-            if (a, b) not in existing_pair_set
-        ][:30]  # Cap at 30 to avoid prompt bloat
+        # Reuse shared frequency counter for sorting
+        entity_freq = _count_entity_frequencies(entity_names, existing_rels)
+
+        # Sort unused pairs so under-connected entities appear first
+        raw_unused = [
+            (a, b) for a, b in permutations(entity_names, 2) if (a, b) not in existing_pair_set
+        ]
+        raw_unused.sort(key=lambda pair: entity_freq[pair[0]] + entity_freq[pair[1]])
+        unused_pairs = [f"- {a} -> {b}" for a, b in raw_unused[:30]]
 
         if unused_pairs:
             unused_pairs_block = (
@@ -275,7 +363,7 @@ Output ONLY valid JSON (all text in {brief.language}):
     "target": "Entity Name 2",
     "relation_type": "One of: {type_list}",
     "description": "Description of the relationship with history and dynamics"
-}}{diversity_hint}"""
+}}{diversity_hint}{frequency_hint}"""
 
     try:
         model = svc._get_creator_model(entity_type="relationship")

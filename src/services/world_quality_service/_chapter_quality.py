@@ -196,6 +196,49 @@ OUTPUT FORMAT - Return ONLY a flat JSON object with these exact fields:
 DO NOT wrap in "properties" or "description" - return ONLY the flat scores object with YOUR OWN assessment."""
 
 
+def _build_dimension_instructions(weak: list[str]) -> str:
+    """Build dimension-specific, actionable refinement instructions.
+
+    Maps each weak dimension name to a concrete, actionable instruction that
+    tells the LLM exactly what to fix rather than relying on generic guidance.
+
+    Args:
+        weak: List of dimension names that scored below threshold.
+
+    Returns:
+        Formatted instruction block for the weak dimensions, or a minor
+        improvements note if no dimensions are weak.
+    """
+    dimension_guidance = {
+        "purpose": (
+            "PURPOSE: Clarify what this chapter accomplishes for the overall story arc. "
+            "Add a specific character revelation, plot turning point, or thematic statement."
+        ),
+        "pacing": (
+            "PACING: Vary the rhythm — if all beats are action, add reflection. "
+            "If all beats are dialogue, add movement or tension. Balance tension and release."
+        ),
+        "hook": (
+            "HOOK: Start with an immediate question or conflict, not setup. "
+            "End on unresolved tension that compels the reader to continue."
+        ),
+        "coherence": (
+            "COHERENCE: Ensure each scene leads logically to the next. "
+            "Remove contradictions and tighten cause-and-effect connections."
+        ),
+    }
+
+    if not weak:
+        logger.debug("No weak dimensions found; requesting minor improvements only")
+        return "No critical weaknesses — make minor improvements to polish the outline."
+
+    instructions = []
+    for dim in weak:
+        instructions.append(f"- {dimension_guidance[dim]}")
+    logger.debug("Built dimension instructions for weak areas: %s", weak)
+    return "\n".join(instructions)
+
+
 def _refine_chapter_outline(
     svc,
     chapter: Chapter,
@@ -224,6 +267,19 @@ def _refine_chapter_outline(
     if story_state.plot_summary:
         plot_summary = story_state.plot_summary
 
+    dimension_instructions = _build_dimension_instructions(weak)
+
+    # Scale change intensity to match the severity of weaknesses
+    change_directive = (
+        "IMPORTANT: Make SUBSTANTIAL changes to the outline — do NOT simply reword the "
+        "original. Restructure scenes, add new story beats, change the dramatic arc, or "
+        "introduce new elements. The refined outline must be meaningfully different from "
+        "the original."
+        if weak
+        else "Polish the outline with minor improvements while preserving its overall structure."
+    )
+    logger.debug("Change directive: %s", "substantial" if weak else "minor polish")
+
     prompt = f"""Improve this chapter outline based on quality feedback.
 
 STORY ARC CONTEXT:
@@ -242,10 +298,12 @@ QUALITY SCORES (0-10):
 
 FEEDBACK: {scores.feedback}
 
-WEAK AREAS TO IMPROVE: {", ".join(weak) if weak else "None - minor improvements only"}
+DIMENSION-SPECIFIC INSTRUCTIONS:
+{dimension_instructions}
+
+{change_directive}
 
 Keep the chapter number {chapter.number} and maintain consistency with the overall story arc.
-Enhance the weak areas to create a more compelling chapter outline.
 Write all text in {brief.language if brief else "English"}."""
 
     try:

@@ -28,6 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Always update existing documentation.** When making changes that affect architecture, services, key files, settings, or workflows, update the relevant sections of existing documentation (this CLAUDE.md, README.md, etc.) to reflect those changes. Never create new standalone documentation files unless explicitly requested, but always keep existing docs accurate and up to date.
 
+**Pre-existing issues are not exempt.** "Pre-existing" is never an excuse to skip fixing something. If you encounter a bug, code smell, or incorrect code while working on a task — fix it. This applies to review feedback too: if a reviewer flags a pre-existing issue, fix it in the same PR.
+
 ## Project Overview
 
 Story Factory is a local AI-powered multi-agent system for generating stories using Ollama. Five specialized agents (Interviewer, Architect, Writer, Editor, Continuity Checker) collaborate through an iterative write-edit-check loop.

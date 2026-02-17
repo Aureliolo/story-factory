@@ -760,7 +760,8 @@ def _recover_orphans(
     )
 
     all_entities = world_db.list_entities()
-    entity_names = [e.name for e in all_entities]
+    orphan_ids = {o.id for o in orphans}
+    non_orphan_names = [e.name for e in all_entities if e.id not in orphan_ids]
     entity_by_id = {e.id: e.name for e in all_entities}
 
     # Build existing relationships list
@@ -773,6 +774,8 @@ def _recover_orphans(
 
     # Track orphan names for validation
     orphan_names = {o.name.lower() for o in orphans}
+    # Maintain an ordered list of remaining orphan entities for round-robin targeting
+    remaining_orphans = list(orphans)
 
     added_count = 0
     attempts = min(len(orphans), max_attempts)
@@ -782,9 +785,28 @@ def _recover_orphans(
             logger.info("Orphan recovery cancelled after %d attempts", i)
             break
 
+        # Filter to orphans still needing connections
+        active_orphans = [o for o in remaining_orphans if o.name.lower() in orphan_names]
+        if not active_orphans:
+            logger.info("Orphan recovery: all orphans now have relationships (pre-check)")
+            break
+
+        # Rotate through active orphans so each attempt targets a different one.
+        # Place the target orphan first in the entity list to exploit LLM primacy
+        # bias, making it much more likely to appear in the generated relationship.
+        target_orphan = active_orphans[i % len(active_orphans)]
+        other_orphan_names = [o.name for o in active_orphans if o is not target_orphan]
+        constrained_names = [target_orphan.name, *other_orphan_names, *non_orphan_names]
+        logger.debug(
+            "Orphan recovery attempt %d: targeting '%s' (list size: %d)",
+            i + 1,
+            target_orphan.name,
+            len(constrained_names),
+        )
+
         try:
             rel, scores, _iterations = services.world_quality.generate_relationship_with_quality(
-                state, entity_names, existing_rels
+                state, constrained_names, existing_rels
             )
 
             if not rel or not rel.get("source") or not rel.get("target"):
@@ -835,9 +857,6 @@ def _recover_orphans(
                     orphan_names.discard(source_entity.name.lower())
                 if target_is_orphan:
                     orphan_names.discard(target_entity.name.lower())
-                if not orphan_names:
-                    logger.info("Orphan recovery: all orphans now have relationships")
-                    break
             else:
                 logger.warning(
                     "Orphan recovery: could not resolve entities for %s -> %s",

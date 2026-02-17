@@ -13,6 +13,7 @@ from src.memory.conflict_types import (
     _warned_types,
     classify_relationship,
     get_conflict_color,
+    normalize_relation_type,
 )
 from src.memory.entities import Entity, Relationship
 from src.services.conflict_analysis_service import ConflictAnalysisService
@@ -157,6 +158,81 @@ class TestConflictCategory:
         assert unique_type not in _warned_types
         classify_relationship(unique_type)
         assert unique_type in _warned_types
+
+    def test_classify_llm_compound_types(self):
+        """Test classification of all LLM-generated compound relationship types."""
+        # Alliance compound types
+        alliance_compound = [
+            "mutual_respect",
+            "admiring_friendship",
+            "mentor_like_bond",
+            "bonded_with",
+            "devoted_to",
+            "loyal_to",
+            "respects",
+            "cares_for",
+            "inspires",
+            "guided_by",
+            "sibling_of",
+            "grateful_to",
+        ]
+        for rel_type in alliance_compound:
+            assert classify_relationship(rel_type) == ConflictCategory.ALLIANCE, (
+                f"{rel_type} should be ALLIANCE"
+            )
+
+        # Tension compound types
+        tension_compound = [
+            "friendly_rivalry",
+            "uneasy_alliance",
+            "reluctant_allies",
+            "wary_of",
+            "indebted_to",
+            "conflicted_about",
+            "intimidated_by",
+            "obsessed_with",
+            "haunted_by",
+            "dependent_on",
+            "bound_to",
+        ]
+        for rel_type in tension_compound:
+            assert classify_relationship(rel_type) == ConflictCategory.TENSION, (
+                f"{rel_type} should be TENSION"
+            )
+
+        # Rivalry compound types
+        rivalry_compound = [
+            "sworn_enemy",
+            "bitter_rivals",
+            "nemesis_of",
+            "despises",
+            "undermines",
+            "seeks_revenge",
+        ]
+        for rel_type in rivalry_compound:
+            assert classify_relationship(rel_type) == ConflictCategory.RIVALRY, (
+                f"{rel_type} should be RIVALRY"
+            )
+
+    def test_normalize_word_level_matching(self):
+        """Test word-level fallback for novel compound types not in the direct mapping."""
+        # Novel types where no full key matches as substring, but a word signals the category
+        assert normalize_relation_type("deep_rivalry_bond") == "rivals"
+        assert normalize_relation_type("strong_mentor_figure") == "mentors"
+        assert normalize_relation_type("childhood_friend_turned") == "friends"
+        assert normalize_relation_type("sworn_nemesis_forever") == "nemesis_of"
+        assert normalize_relation_type("growing_fear_towards") == "fears"
+        assert normalize_relation_type("reluctant_partnership") == "reluctant_allies"
+        assert normalize_relation_type("deep_jealous_streak") == "jealous_of"
+        assert normalize_relation_type("old_enemy_reborn") == "enemy_of"
+
+        # Direct-match types should still resolve directly (not hit word-level fallback)
+        assert normalize_relation_type("loves") == "loves"
+        assert normalize_relation_type("hates") == "hates"
+        assert normalize_relation_type("mentors") == "mentors"
+
+        # Completely unknown types with no word matches return as-is
+        assert normalize_relation_type("xyzzy_qwop") == "xyzzy_qwop"
 
 
 class TestConflictColors:

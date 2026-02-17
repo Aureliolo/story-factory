@@ -5,7 +5,7 @@ Settings are stored in settings.json and can be modified via the web UI.
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any, ClassVar
 
 from src.memory.mode_models import LearningTrigger
@@ -177,7 +177,7 @@ class Settings:
     retry_simplify_on_attempt: int = 3  # Attempt number to start simplifying prompts
 
     # Semantic duplicate detection settings (#176)
-    semantic_duplicate_enabled: bool = False  # Opt-in: use embedding-based similarity
+    semantic_duplicate_enabled: bool = True  # Embedding-based similarity detection
     semantic_duplicate_threshold: float = 0.85  # Cosine similarity threshold for duplicates
     embedding_model: str = (
         "mxbai-embed-large"  # Model for generating embeddings (must support embedding tag)
@@ -387,11 +387,22 @@ class Settings:
             try:
                 with open(SETTINGS_FILE) as f:
                     data = json.load(f)
-                settings = cls(**data)
+
+                # Filter to known fields: drop removed keys, let new keys use defaults
+                known_fields = {f.name for f in fields(cls)}
+                unknown = set(data.keys()) - known_fields
+                if unknown:
+                    logger.info(f"Dropping unknown settings fields: {unknown}")
+                filtered_data = {k: v for k, v in data.items() if k in known_fields}
+                missing = known_fields - set(data.keys())
+                if missing:
+                    logger.info(f"New settings using defaults: {missing}")
+
+                settings = cls(**filtered_data)
                 # Validate loaded settings (may auto-migrate stale values)
                 changed = settings.validate()
-                if changed:
-                    logger.info("Settings migrated during validation, saving to disk")
+                if changed or unknown or missing:
+                    logger.info("Settings changed during load, saving to disk")
                     with open(SETTINGS_FILE, "w") as f:
                         json.dump(asdict(settings), f, indent=2)
                 cls._cached_instance = settings
@@ -400,12 +411,8 @@ class Settings:
                 logger.error(f"Corrupted settings file (invalid JSON): {e}")
                 logger.warning("Creating backup and using default settings")
                 cls._backup_corrupted_settings()
-            except TypeError as e:
-                logger.warning(f"Unknown fields in settings file: {e}")
-                # Try partial recovery - use only known fields
-                return cls._recover_partial_settings(data)
-            except ValueError as e:
-                logger.warning(f"Invalid setting values: {e}")
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Invalid setting values or types: {e}")
                 # Try partial recovery - use valid fields
                 return cls._recover_partial_settings(data)
 

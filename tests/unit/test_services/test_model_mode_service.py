@@ -1,7 +1,8 @@
 """Unit tests for ModelModeService."""
 
+import logging
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -18,6 +19,31 @@ from src.memory.mode_models import (
 )
 from src.services.model_mode_service import ModelModeService
 from src.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+
+class TestDefaultDbPath:
+    """Tests for the default database path resolution."""
+
+    def test_default_db_path_does_not_contain_src_output(self) -> None:
+        """Verify ModelModeService default db_path resolves to output/, not src/output/."""
+        mock_settings = MagicMock(spec=Settings)
+        mock_settings.ollama_url = "http://localhost:11434"
+        mock_settings.ollama_generate_timeout = 60.0
+
+        # Mock ModeDatabase to avoid creating a real SQLite file as a side effect
+        with patch("src.services.model_mode_service.ModeDatabase"):
+            service = ModelModeService(mock_settings)
+
+        path_str = str(service._db_path)
+        logger.debug("Default db_path resolved to: %s", path_str)
+        assert "src/output" not in path_str.replace("\\", "/"), (
+            f"Default db_path should NOT contain 'src/output/', got: {path_str}"
+        )
+        assert path_str.replace("\\", "/").endswith("output/model_scores.db"), (
+            f"Default db_path should end with 'output/model_scores.db', got: {path_str}"
+        )
 
 
 class TestModelModeService:
