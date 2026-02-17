@@ -276,6 +276,48 @@ class TestUpsertEmbedding:
         assert row is not None
         assert len(row[0]) == 500
 
+    def test_upsert_embedding_rollback_on_failure(self, db_with_vec):
+        """Upsert rolls back the transaction and re-raises on database error."""
+        embedding = _make_embedding(dims=4, value=0.5)
+
+        # Insert one embedding successfully first
+        _embeddings.upsert_embedding(
+            db_with_vec,
+            source_id="entity-ok",
+            content_type="entity",
+            text="Good entity",
+            embedding=embedding,
+            model="fake-embed:latest",
+        )
+
+        # Force a failure by closing the connection to the vec table
+        # Use a mock to simulate INSERT failure after metadata deletion
+        original_execute = db_with_vec.conn.execute
+
+        call_count = 0
+
+        def failing_execute(sql, *args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Let metadata operations pass, fail on vec INSERT
+            if "INSERT INTO vec_embeddings" in sql:
+                raise RuntimeError("simulated vec insert failure")
+            return original_execute(sql, *args, **kwargs)
+
+        db_with_vec.conn.execute = failing_execute
+
+        with pytest.raises(RuntimeError, match="simulated vec insert failure"):
+            _embeddings.upsert_embedding(
+                db_with_vec,
+                source_id="entity-fail",
+                content_type="entity",
+                text="Will fail",
+                embedding=embedding,
+                model="fake-embed:latest",
+            )
+
+        db_with_vec.conn.execute = original_execute
+
 
 class TestDeleteEmbedding:
     """Tests for the delete_embedding function."""
@@ -455,6 +497,32 @@ class TestSearchSimilar:
 
         assert len(results) == 2
         assert all(r["chapter_number"] == 1 for r in results)
+
+    def test_search_similar_entity_type_filter_early_break(self):
+        """Search with entity_type filter stops after collecting k matching results."""
+        mock_db = _make_mock_db(vec_available=True)
+        mock_cursor = mock_db.conn.cursor.return_value
+        # Over-fetch returns 6 rows (k*3 for k=2), but only 3 are characters
+        mock_cursor.fetchall.return_value = [
+            ("e-1", "entity", "character", None, "Warrior", 0.1),
+            ("e-2", "entity", "location", None, "Forest", 0.2),
+            ("e-3", "entity", "character", None, "Rogue", 0.3),
+            ("e-4", "entity", "location", None, "Castle", 0.4),
+            ("e-5", "entity", "character", None, "Mage", 0.5),
+            ("e-6", "entity", "location", None, "Village", 0.6),
+        ]
+
+        results = _embeddings.search_similar(
+            mock_db,
+            query_embedding=_make_embedding(dims=4),
+            k=2,
+            entity_type="character",
+        )
+
+        # Should return exactly k=2 character results, stopping at the early break
+        assert len(results) == 2
+        assert results[0]["source_id"] == "e-1"
+        assert results[1]["source_id"] == "e-3"
 
 
 class TestGetEmbeddingStats:

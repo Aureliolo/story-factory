@@ -789,6 +789,32 @@ class TestContextRetrievalService:
         source_ids = {item.source_id for item in result.items}
         assert "fallback:char:Alice" in source_ids
 
+    def test_retrieve_context_vector_search_exception_fallback(self, sample_story_state) -> None:
+        """Falls back to legacy context when search_similar raises an exception."""
+        settings = _make_settings()
+        embedding_svc = _make_embedding_service(available=True, embed_result=FAKE_VECTOR)
+        world_db = _make_world_db(
+            vec_available=True,
+            context_for_agents={
+                "characters": [{"name": "Bob", "description": "Fallback char"}],
+                "locations": [],
+                "key_relationships": [],
+                "recent_events": [],
+            },
+        )
+        world_db.search_similar.side_effect = RuntimeError("vec table corrupted")
+
+        service = ContextRetrievalService(settings, embedding_svc)
+        result = service.retrieve_context(
+            task_description="Write chapter 1",
+            world_db=world_db,
+            story_state=sample_story_state,
+        )
+
+        assert result.retrieval_method == "fallback"
+        source_ids = {item.source_id for item in result.items}
+        assert "fallback:char:Bob" in source_ids
+
     def test_get_project_info_no_brief(self) -> None:
         """_get_project_info_items returns empty list when story state has no brief."""
         settings = _make_settings()

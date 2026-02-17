@@ -2179,6 +2179,16 @@ class TestEntityCallbacks:
         entity_id = db.add_entity("character", "TestChar", description="A test")
         assert entity_id is not None
 
+    def test_add_entity_callback_exception_is_swallowed(self, db):
+        """Test add_entity swallows callback exceptions and still returns entity_id."""
+        callback = MagicMock(side_effect=RuntimeError("embedding failed"))
+        db._on_content_changed = callback
+
+        entity_id = db.add_entity("character", "TestChar", description="A test")
+
+        assert entity_id is not None
+        callback.assert_called_once()
+
     def test_update_entity_fires_content_changed_callback(self, db):
         """Test update_entity invokes _on_content_changed after successful update."""
         entity_id = db.add_entity("character", "OrigName", description="Orig desc")
@@ -2199,6 +2209,18 @@ class TestEntityCallbacks:
 
         assert result is False
         callback.assert_not_called()
+
+    def test_update_entity_callback_exception_is_swallowed(self, db):
+        """Test update_entity swallows callback exceptions and still returns True."""
+        entity_id = db.add_entity("character", "OrigName", description="Orig desc")
+
+        callback = MagicMock(side_effect=RuntimeError("embedding failed"))
+        db._on_content_changed = callback
+
+        result = db.update_entity(entity_id, name="NewName")
+
+        assert result is True
+        callback.assert_called_once()
 
     def test_delete_entity_fires_content_deleted_callback(self, db):
         """Test delete_entity invokes _on_content_deleted with entity id."""
@@ -2229,6 +2251,18 @@ class TestEntityCallbacks:
 
         result = db.delete_entity(entity_id)
         assert result is True
+
+    def test_delete_entity_callback_exception_is_swallowed(self, db):
+        """Test delete_entity swallows callback exceptions and still returns True."""
+        entity_id = db.add_entity("character", "Doomed")
+
+        callback = MagicMock(side_effect=RuntimeError("embedding delete failed"))
+        db._on_content_deleted = callback
+
+        result = db.delete_entity(entity_id)
+
+        assert result is True
+        callback.assert_called_once_with(entity_id)
 
 
 class TestRelationshipCallbacks:
@@ -2355,6 +2389,47 @@ class TestRelationshipCallbacks:
         # Should fall back to using raw IDs since entities are gone
         callback.assert_called_once_with(rel_id, "relationship", f"{alice_id} enemy {bob_id}: Foes")
 
+    def test_add_relationship_callback_exception_is_swallowed(self, db):
+        """Test add_relationship swallows callback exceptions and still returns rel_id."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+
+        callback = MagicMock(side_effect=RuntimeError("embedding failed"))
+        db._on_content_changed = callback
+
+        rel_id = db.add_relationship(alice_id, bob_id, "knows")
+
+        assert rel_id is not None
+        callback.assert_called_once()
+
+    def test_delete_relationship_callback_exception_is_swallowed(self, db):
+        """Test delete_relationship swallows callback exceptions and still returns True."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        rel_id = db.add_relationship(alice_id, bob_id, "knows")
+
+        callback = MagicMock(side_effect=RuntimeError("embedding delete failed"))
+        db._on_content_deleted = callback
+
+        result = db.delete_relationship(rel_id)
+
+        assert result is True
+        callback.assert_called_once_with(rel_id)
+
+    def test_update_relationship_callback_exception_is_swallowed(self, db):
+        """Test update_relationship swallows callback exceptions and still returns True."""
+        alice_id = db.add_entity("character", "Alice")
+        bob_id = db.add_entity("character", "Bob")
+        rel_id = db.add_relationship(alice_id, bob_id, "knows")
+
+        callback = MagicMock(side_effect=RuntimeError("embedding failed"))
+        db._on_content_changed = callback
+
+        result = db.update_relationship(rel_id, description="Close friends")
+
+        assert result is True
+        callback.assert_called_once()
+
 
 class TestEventCallbacks:
     """Tests for event add_event firing content changed callbacks."""
@@ -2396,6 +2471,19 @@ class TestEventCallbacks:
             chapter_number=1,
         )
         assert event_id is not None
+
+    def test_add_event_callback_exception_is_swallowed(self, db):
+        """Test add_event swallows callback exceptions and still returns event_id."""
+        callback = MagicMock(side_effect=RuntimeError("embedding failed"))
+        db._on_content_changed = callback
+
+        event_id = db.add_event(
+            description="Something important",
+            chapter_number=1,
+        )
+
+        assert event_id is not None
+        callback.assert_called_once()
 
 
 class TestV4ToV5Migration:
