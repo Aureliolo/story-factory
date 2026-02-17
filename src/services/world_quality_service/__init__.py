@@ -499,6 +499,7 @@ class WorldQualityService:
         story_state: StoryState,
         entity_names: list[str],
         existing_rels: list[tuple[str, str, str]],
+        required_entity: str | None = None,
     ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
         """Generate a relationship using the creator-judge refine loop.
 
@@ -506,11 +507,15 @@ class WorldQualityService:
             story_state: The current story/world brief used to ground generation.
             entity_names: Names of entities to consider when creating the relationship.
             existing_rels: Existing (source, target, relation_type) 3-tuples to avoid duplicating.
+            required_entity: If set, one of source/target MUST be this entity.
+                The quality loop rejects (retries) any relationship that omits it.
 
         Returns:
             Tuple of (relationship_dict, quality_scores, iterations_used).
         """
-        return _generate_relationship_with_quality(self, story_state, entity_names, existing_rels)
+        return _generate_relationship_with_quality(
+            self, story_state, entity_names, existing_rels, required_entity
+        )
 
     # -- Batch operations --
     def generate_factions_with_quality(
@@ -693,9 +698,11 @@ class WorldQualityService:
     def _is_duplicate_relationship(source_name, target_name, existing_rels):
         return _relationship._is_duplicate_relationship(source_name, target_name, existing_rels)
 
-    def _create_relationship(self, story_state, entity_names, existing_rels, temperature):
+    def _create_relationship(
+        self, story_state, entity_names, existing_rels, temperature, required_entity=None
+    ):
         return _relationship._create_relationship(
-            self, story_state, entity_names, existing_rels, temperature
+            self, story_state, entity_names, existing_rels, temperature, required_entity
         )
 
     def _judge_relationship_quality(self, relationship, story_state, temperature):

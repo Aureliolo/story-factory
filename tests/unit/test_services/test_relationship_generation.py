@@ -447,6 +447,28 @@ class TestRelationTypeNormalizedInBuild:
             world_db.close()
 
 
+class TestCreateRelationshipNoBriefLogging:
+    """Verify _create_relationship logs warning when brief is None."""
+
+    def test_create_relationship_no_brief_logs_warning(self, caplog):
+        """_create_relationship should log a warning and return {} when brief is None."""
+        import logging
+
+        from src.services.world_quality_service._relationship import _create_relationship
+
+        svc = MagicMock()
+        story_state = MagicMock()
+        story_state.brief = None
+        story_state.id = "test-story-id"
+
+        with caplog.at_level(logging.WARNING):
+            result = _create_relationship(svc, story_state, ["A", "B"], [], 0.9)
+
+        assert result == {}
+        assert "no brief" in caplog.text
+        assert "test-story-id" in caplog.text
+
+
 # =========================================================================
 # Group 3: Diversity & Refinement
 # =========================================================================
@@ -616,3 +638,272 @@ class TestExistingRelsIncludeTypes:
         gamma_pos = pairs_section.find("Gamma")
         alpha_pos = pairs_section.find("Alpha")
         assert gamma_pos < alpha_pos, "Under-connected entities should appear first in unused pairs"
+
+
+# =========================================================================
+# Group 4: Required Entity Constraint (orphan recovery)
+# =========================================================================
+
+
+class TestRequiredEntityConstraint:
+    """Tests for required_entity parameter in relationship generation."""
+
+    def test_generate_with_required_entity_rejects_missing(self, story_state):
+        """_is_empty rejects relationships where required_entity is not in source/target."""
+        from src.memory.world_quality import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 3
+        config.early_stop_patience = 2
+        svc.get_config.return_value = config
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
+
+        call_count = 0
+
+        def fake_create(
+            story_state, entity_names, existing_rels, temperature, required_entity=None
+        ):
+            """First call ignores required_entity; second call includes it."""
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # LLM ignores the constraint — will be rejected by _is_empty
+                return {
+                    "source": "Alpha",
+                    "target": "Beta",
+                    "relation_type": "knows",
+                    "description": "They know each other",
+                }
+            # Second call respects the constraint
+            return {
+                "source": "Charlie",
+                "target": "Alpha",
+                "relation_type": "friends",
+                "description": "Charlie befriends Alpha",
+            }
+
+        svc._create_relationship = MagicMock(side_effect=fake_create)
+
+        # Judge returns passing scores using real Pydantic model
+        judge_scores = RelationshipQualityScores(
+            tension=8.0,
+            dynamics=8.0,
+            story_potential=8.0,
+            authenticity=8.0,
+            feedback="Good",
+        )
+        svc._judge_relationship_quality = MagicMock(return_value=judge_scores)
+
+        entity_names = ["Alpha", "Beta", "Charlie"]
+        rel, _scores, _iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, [], required_entity="Charlie"
+        )
+
+        # First attempt rejected (no Charlie), second accepted
+        assert call_count >= 2
+        assert rel["source"] == "Charlie" or rel["target"] == "Charlie"
+
+    def test_create_relationship_prompt_includes_required_entity(self, story_state):
+        """Prompt should contain REQUIRED ENTITY directive when required_entity is set."""
+        from src.services.world_quality_service._relationship import _create_relationship
+
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_create = 800
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {
+            "response": '{"source": "Charlie", "target": "Beta", '
+            '"relation_type": "knows", "description": "They met"}'
+        }
+
+        entity_names = ["Alpha", "Beta", "Charlie"]
+        _create_relationship(svc, story_state, entity_names, [], 0.9, required_entity="Charlie")
+
+        prompt_arg = svc.client.generate.call_args[1]["prompt"]
+        assert "REQUIRED ENTITY" in prompt_arg
+        assert '"Charlie"' in prompt_arg
+
+    def test_create_relationship_prompt_no_required_entity(self, story_state):
+        """Prompt should NOT contain REQUIRED ENTITY when required_entity is None."""
+        from src.services.world_quality_service._relationship import _create_relationship
+
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_create = 800
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {
+            "response": '{"source": "Alpha", "target": "Beta", '
+            '"relation_type": "knows", "description": "They met"}'
+        }
+
+        entity_names = ["Alpha", "Beta", "Charlie"]
+        _create_relationship(svc, story_state, entity_names, [], 0.9)
+
+        prompt_arg = svc.client.generate.call_args[1]["prompt"]
+        assert "REQUIRED ENTITY" not in prompt_arg
+
+    def test_create_relationship_filters_unused_pairs_for_required_entity(self, story_state):
+        """When required_entity is set, unused pairs should only include that entity."""
+        from src.services.world_quality_service._relationship import _create_relationship
+
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_create = 800
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {
+            "response": '{"source": "Charlie", "target": "Alpha", '
+            '"relation_type": "knows", "description": "They met"}'
+        }
+
+        entity_names = ["Alpha", "Beta", "Charlie", "Delta"]
+        _create_relationship(svc, story_state, entity_names, [], 0.9, required_entity="Charlie")
+
+        prompt_arg = svc.client.generate.call_args[1]["prompt"]
+        # Check the unused pairs section exists
+        pairs_start = prompt_arg.find("AVAILABLE UNUSED PAIRS")
+        assert pairs_start != -1, "Unused pairs section should be in the prompt"
+        pairs_section = prompt_arg[pairs_start:]
+
+        # Every pair line should involve Charlie
+        pair_lines = [
+            line.strip() for line in pairs_section.split("\n") if line.strip().startswith("- ")
+        ]
+        for line in pair_lines:
+            assert "Charlie" in line, f"Pair line should involve Charlie: {line}"
+
+        # Alpha -> Beta (no Charlie) should NOT appear
+        assert "Alpha -> Beta" not in pairs_section
+        assert "Beta -> Alpha" not in pairs_section
+
+    def test_create_relationship_no_filter_without_required_entity(self, story_state):
+        """Without required_entity, unused pairs include all combinations."""
+        from src.services.world_quality_service._relationship import _create_relationship
+
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_create = 800
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {
+            "response": '{"source": "Alpha", "target": "Beta", '
+            '"relation_type": "knows", "description": "They met"}'
+        }
+
+        entity_names = ["Alpha", "Beta", "Charlie"]
+        _create_relationship(svc, story_state, entity_names, [], 0.9)
+
+        prompt_arg = svc.client.generate.call_args[1]["prompt"]
+        pairs_start = prompt_arg.find("AVAILABLE UNUSED PAIRS")
+        assert pairs_start != -1
+        pairs_section = prompt_arg[pairs_start:]
+
+        # Without required_entity, all pairs should appear (including Alpha -> Beta)
+        assert "Alpha -> Beta" in pairs_section or "Beta -> Alpha" in pairs_section
+
+    def test_is_empty_accepts_case_insensitive_required_entity(self, story_state):
+        """_is_empty accepts relationships where required_entity casing differs from endpoints."""
+        from src.memory.world_quality import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 3
+        config.early_stop_patience = 2
+        svc.get_config.return_value = config
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
+
+        # LLM returns the entity with different casing than required_entity
+        svc._create_relationship = MagicMock(
+            return_value={
+                "source": "CHARLIE",
+                "target": "Alpha",
+                "relation_type": "knows",
+                "description": "They know each other",
+            }
+        )
+
+        judge_scores = RelationshipQualityScores(
+            tension=8.0,
+            dynamics=8.0,
+            story_potential=8.0,
+            authenticity=8.0,
+            feedback="Good",
+        )
+        svc._judge_relationship_quality = MagicMock(return_value=judge_scores)
+
+        entity_names = ["Alpha", "Beta", "Charlie"]
+        # required_entity is lowercase but LLM returns UPPERCASE — should still match
+        rel, _scores, _iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, [], required_entity="charlie"
+        )
+
+        # Should accept on first try (no rejection for case mismatch)
+        assert svc._create_relationship.call_count == 1
+        assert rel["source"] == "CHARLIE"
+
+    def test_is_empty_accepts_required_entity_with_leading_article(self, story_state):
+        """_is_empty accepts when LLM adds 'The' prefix to required_entity name."""
+        from src.memory.world_quality import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import (
+            generate_relationship_with_quality,
+        )
+
+        svc = MagicMock()
+        config = MagicMock()
+        config.creator_temperature = 0.9
+        config.judge_temperature = 0.1
+        config.get_threshold.return_value = 7.0
+        config.get_refinement_temperature.return_value = 0.7
+        config.max_iterations = 3
+        config.early_stop_patience = 2
+        svc.get_config.return_value = config
+
+        judge_config = MagicMock()
+        judge_config.enabled = False
+        judge_config.multi_call_enabled = False
+        svc.get_judge_config.return_value = judge_config
+
+        # LLM adds "The" prefix to the entity name
+        svc._create_relationship = MagicMock(
+            return_value={
+                "source": "The Echoes of the Network",
+                "target": "Alpha",
+                "relation_type": "knows",
+                "description": "Connected",
+            }
+        )
+
+        judge_scores = RelationshipQualityScores(
+            tension=8.0,
+            dynamics=8.0,
+            story_potential=8.0,
+            authenticity=8.0,
+            feedback="Good",
+        )
+        svc._judge_relationship_quality = MagicMock(return_value=judge_scores)
+
+        entity_names = ["Alpha", "Beta", "Echoes of the Network"]
+        rel, _scores, _iterations = generate_relationship_with_quality(
+            svc, story_state, entity_names, [], required_entity="Echoes of the Network"
+        )
+
+        # Should accept — "The Echoes of the Network" normalizes to "echoes of the network"
+        assert svc._create_relationship.call_count == 1
+        assert rel["source"] == "The Echoes of the Network"
