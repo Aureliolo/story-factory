@@ -41,8 +41,8 @@ class TestNormalizeRelationType:
         assert normalize_relation_type("allies_with") == "allies_with"
 
     def test_prose_extraction_rivals(self):
-        """Prose like 'bitter rivals who fought' should extract 'rivals'."""
-        assert normalize_relation_type("bitter rivals who fought") == "rivals"
+        """Prose like 'bitter rivals who fought' should extract 'bitter_rivals'."""
+        assert normalize_relation_type("bitter rivals who fought") == "bitter_rivals"
 
     def test_with_hyphens(self):
         """Hyphens should be normalized to underscores."""
@@ -90,9 +90,9 @@ class TestNormalizeRelationType:
     def test_pipe_delimited_no_recognized_falls_through_to_substring(self):
         """Pipe-delimited with no recognized parts falls through to substring matching."""
         # "foo|bitter_rivals_bar" — neither "foo" nor "bitter_rivals_bar" is a direct match,
-        # but substring matching should find "rivals" inside "foo|bitter_rivals_bar"
+        # but word-level matching finds "rivals" inside "bitter_rivals_bar"
         result = normalize_relation_type("foo|bitter_rivals_bar")
-        assert result == "rivals"
+        assert result == "bitter_rivals"
 
     def test_pipe_delimited_no_recognized_no_substring(self):
         """Pipe-delimited with no recognized parts and no substring match returns normalized."""

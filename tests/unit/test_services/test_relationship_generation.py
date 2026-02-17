@@ -261,8 +261,8 @@ class TestRelationTypeNormalizedBeforeStorage:
         entity_names = ["Alpha", "Beta"]
         result = _create_relationship(svc, story_state, entity_names, [], 0.9)
 
-        # "bitter rivals who fought for years" should normalize to "rivals"
-        assert result["relation_type"] == "rivals"
+        # "bitter rivals who fought for years" should normalize to "bitter_rivals"
+        assert result["relation_type"] == "bitter_rivals"
 
     def test_relation_type_stored_from_service(self, story_state, tmp_path):
         """Relation type from the service should be stored as-is (service normalizes)."""
@@ -585,3 +585,34 @@ class TestExistingRelsIncludeTypes:
         prompt_arg = svc.client.generate.call_args[1]["prompt"]
         assert "HINT" in prompt_arg
         assert "rivalry" in prompt_arg.lower()
+
+    def test_unused_pairs_sorted_by_entity_frequency(self, story_state):
+        """Under-connected entity pairs should appear before over-connected ones."""
+        from src.services.world_quality_service._relationship import _create_relationship
+
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_create = 800
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {
+            "response": '{"source": "Alpha", "target": "Delta", '
+            '"relation_type": "knows", "description": "New acquaintance"}'
+        }
+
+        # Alpha has 3 connections, Beta has 2, Gamma and Delta have 0
+        entity_names = ["Alpha", "Beta", "Gamma", "Delta"]
+        existing_rels = [
+            ("Alpha", "Beta", "allies_with"),
+            ("Alpha", "Beta", "trusts"),
+            ("Alpha", "Beta", "mentors"),
+        ]
+        _create_relationship(svc, story_state, entity_names, existing_rels, 0.9)
+
+        prompt_arg = svc.client.generate.call_args[1]["prompt"]
+        # Extract the unused pairs section from the prompt
+        pairs_start = prompt_arg.find("AVAILABLE UNUSED PAIRS")
+        assert pairs_start != -1, "Unused pairs section should be in the prompt"
+        pairs_section = prompt_arg[pairs_start:]
+        # Gamma and Delta (0 connections) pairs should appear before Alpha (3) pairs
+        gamma_pos = pairs_section.find("Gamma")
+        alpha_pos = pairs_section.find("Alpha")
+        assert gamma_pos < alpha_pos, "Under-connected entities should appear first in unused pairs"
