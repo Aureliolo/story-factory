@@ -5,9 +5,12 @@ sqlite-vec + embedding pipeline.
 """
 
 import logging
+import sqlite3
+import struct
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Literal
 
+from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
 from src.services.embedding_service import EmbeddingService
 from src.settings import Settings
@@ -62,7 +65,7 @@ class RetrievedContext:
 
     items: list[ContextItem] = field(default_factory=list)
     total_tokens: int = 0
-    retrieval_method: str = "vector"
+    retrieval_method: Literal["vector", "disabled"] = "vector"
 
     def format_for_prompt(self) -> str:
         """Format all context items as a structured text block for prompt injection.
@@ -116,7 +119,7 @@ class ContextRetrievalService:
         self,
         task_description: str,
         world_db: WorldDatabase,
-        story_state: Any,
+        story_state: StoryState,
         max_tokens: int | None = None,
         content_types: list[str] | None = None,
         entity_types: list[str] | None = None,
@@ -170,7 +173,7 @@ class ContextRetrievalService:
         self,
         task_description: str,
         world_db: WorldDatabase,
-        story_state: Any,
+        story_state: StoryState,
         max_tokens: int,
         content_types: list[str] | None,
         entity_types: list[str] | None,
@@ -223,7 +226,7 @@ class ContextRetrievalService:
                     k=k,
                     chapter_number=chapter_number,
                 )
-        except Exception as e:
+        except (sqlite3.Error, struct.error) as e:
             logger.warning("Vector search failed: %s", e)
             return RetrievedContext(retrieval_method="vector")
 
@@ -287,7 +290,7 @@ class ContextRetrievalService:
                                     text=f"{source.name} {rel.relation_type} {target.name}: {rel.description}",
                                 )
                 except Exception as e:
-                    logger.debug("Graph expansion failed for %s: %s", item.source_id, e)
+                    logger.warning("Graph expansion failed for %s: %s", item.source_id, e)
 
         # Step 4: Add base project info (always included)
         project_items = self._get_project_info_items(story_state)
@@ -319,7 +322,7 @@ class ContextRetrievalService:
             retrieval_method="vector",
         )
 
-    def _get_project_info_items(self, story_state: Any) -> list[ContextItem]:
+    def _get_project_info_items(self, story_state: StoryState | None) -> list[ContextItem]:
         """Extract base project info as high-priority context items.
 
         Always included regardless of vector search results. Provides

@@ -6,6 +6,7 @@ expansion, token budgeting, deduplication, similarity threshold filtering,
 and content type filtering.
 """
 
+import sqlite3
 from unittest.mock import MagicMock
 
 import pytest
@@ -660,7 +661,7 @@ class TestContextRetrievalService:
         settings = _make_settings()
         embedding_svc = _make_embedding_service(embed_result=FAKE_VECTOR)
         world_db = _make_world_db()
-        world_db.search_similar.side_effect = RuntimeError("vec table corrupted")
+        world_db.search_similar.side_effect = sqlite3.OperationalError("vec table corrupted")
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(

@@ -47,7 +47,7 @@ def _retrieve_world_context(orc: StoryOrchestrator, task_description: str) -> st
             )
         return formatted
     except Exception as e:
-        logger.warning("RAG context retrieval failed (non-fatal): %s", e)
+        logger.error("RAG context retrieval failed (non-fatal): %s", e)
         return ""
 
 

@@ -277,7 +277,8 @@ def build_world(
         embed_counts = services.embedding.embed_all_world_data(world_db, state)
         logger.info("World embedding complete: %s", embed_counts)
     except Exception as e:
-        logger.warning("World embedding failed (non-fatal): %s", e)
+        logger.error("World embedding failed (non-fatal): %s", e)
+        report_progress("Warning: World embedding failed. RAG context will be unavailable.")
 
     report_progress("World build complete!")
     total_rels = counts["relationships"] + counts["implicit_relationships"]
