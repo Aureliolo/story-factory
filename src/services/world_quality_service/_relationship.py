@@ -25,6 +25,22 @@ from src.utils.json_parser import extract_json, unwrap_single_json
 
 logger = logging.getLogger(__name__)
 
+_LEADING_ARTICLES = ("the ", "a ", "an ")
+
+
+def _normalize_entity_name(name: str) -> str:
+    """Normalize an entity name for fuzzy comparison.
+
+    Collapses whitespace, lowercases, and strips common English articles
+    ("The", "A", "An") that LLMs frequently prepend, causing mismatches.
+    """
+    normalized = " ".join(name.split()).lower()
+    for article in _LEADING_ARTICLES:
+        if normalized.startswith(article):
+            normalized = normalized[len(article) :]
+            break
+    return normalized
+
 
 def generate_relationship_with_quality(
     svc,
@@ -91,10 +107,10 @@ def generate_relationship_with_quality(
             return True
         # Reject immediately if required_entity constraint is violated
         if required_entity:
-            source_lower = rel.get("source", "").lower()
-            target_lower = rel.get("target", "").lower()
-            required_lower = required_entity.lower()
-            if source_lower != required_lower and target_lower != required_lower:
+            source_norm = _normalize_entity_name(rel.get("source", ""))
+            target_norm = _normalize_entity_name(rel.get("target", ""))
+            required_norm = _normalize_entity_name(required_entity)
+            if source_norm != required_norm and target_norm != required_norm:
                 logger.warning(
                     "Required entity '%s' not in relationship %s -> %s, rejecting",
                     required_entity,
@@ -319,6 +335,10 @@ def _create_relationship(
     )
     brief = story_state.brief
     if not brief:
+        logger.warning(
+            "_create_relationship called with no brief for story %s, returning empty",
+            story_state.id,
+        )
         return {}
 
     # Build forbidden pairs block with direction and type for clarity
@@ -353,9 +373,11 @@ def _create_relationship(
         ]
         # When a required_entity is set, only show pairs involving that entity
         if required_entity:
-            req_lower = required_entity.lower()
+            req_norm = _normalize_entity_name(required_entity)
             raw_unused = [
-                (a, b) for a, b in raw_unused if a.lower() == req_lower or b.lower() == req_lower
+                (a, b)
+                for a, b in raw_unused
+                if _normalize_entity_name(a) == req_norm or _normalize_entity_name(b) == req_norm
             ]
         raw_unused.sort(key=lambda pair: entity_freq[pair[0]] + entity_freq[pair[1]])
         unused_pairs = [f"- {a} -> {b}" for a, b in raw_unused[:30]]
@@ -368,8 +390,11 @@ def _create_relationship(
     # Build optional required entity directive
     required_entity_block = ""
     if required_entity:
+        # Sanitize to prevent prompt injection via entity names containing
+        # quotes or newlines (entity names originate from LLM or user input)
+        safe_entity = required_entity.replace('"', "").replace("\n", " ")
         required_entity_block = (
-            f'\nREQUIRED ENTITY: One of source or target MUST be "{required_entity}".'
+            f'\nREQUIRED ENTITY: One of source or target MUST be "{safe_entity}".'
             "\nChoose a compelling partner from the other available entities.\n"
         )
 

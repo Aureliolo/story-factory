@@ -803,6 +803,12 @@ class TestBuildWorld:
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
         mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        # Orphan recovery uses the singular method — mock to fail gracefully
+        from src.utils.exceptions import WorldGenerationError
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=WorldGenerationError("test")
+        )
 
         counts = world_service.build_world(
             sample_story_state,
@@ -854,6 +860,12 @@ class TestBuildWorld:
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
         mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        # Orphan recovery uses the singular method — mock to fail gracefully
+        from src.utils.exceptions import WorldGenerationError
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=WorldGenerationError("test")
+        )
 
         world_service.build_world(
             sample_story_state,
@@ -883,6 +895,12 @@ class TestBuildWorld:
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
         mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        # Orphan recovery uses the singular method — mock to fail gracefully
+        from src.utils.exceptions import WorldGenerationError
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=WorldGenerationError("test")
+        )
 
         counts = world_service.build_world(
             sample_story_state,
@@ -2294,6 +2312,97 @@ class TestRecoverOrphans:
 
         assert result == 0
         assert "cancelled during retries" in caplog.text
+
+    def test_recover_orphans_single_entity_skips(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Orphan recovery skips when only one entity exists (no partners)."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+
+        # Add a single entity — it's an orphan but has no partners
+        mock_world_db.add_entity("character", "Alice", "The only entity")
+
+        with caplog.at_level(logging.WARNING):
+            result = _recover_orphans(
+                world_service, sample_story_state, mock_world_db, mock_services
+            )
+
+        assert result == 0
+        assert "only one entity" in caplog.text
+        # Should never attempt generation
+        mock_services.world_quality.generate_relationship_with_quality.assert_not_called()
+
+    def test_recover_orphans_reraises_cancelled_error(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """GenerationCancelledError is not swallowed by the except block."""
+        import pytest
+
+        from src.services.world_service._build import _recover_orphans
+        from src.utils.exceptions import GenerationCancelledError
+
+        # Add 2 entities with no relationships (both are orphans)
+        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        mock_world_db.add_entity("character", "Bob", "A wise mage")
+
+        # Mock generate_relationship_with_quality to raise GenerationCancelledError
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=GenerationCancelledError("cancelled")
+        )
+
+        with pytest.raises(GenerationCancelledError):
+            _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+    def test_recover_orphans_uses_canonical_names_in_existing_rels(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """existing_rels should contain canonical DB names, not raw LLM names."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Add 3 entities: Alice and Bob connected, Charlie and Diana are orphans
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_entity("character", "Diana", "A mysterious stranger")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        captured_existing_rels = []
+
+        def capture_and_return(state, entity_names, existing_rels, required_entity=None):
+            """Capture existing_rels and return a valid relationship."""
+            captured_existing_rels.append(list(existing_rels))
+            return (
+                {
+                    "source": required_entity,
+                    "target": "Alice",
+                    "relation_type": "friends",
+                    "description": "They are friends",
+                },
+                mock_scores,
+                1,
+            )
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=capture_and_return
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 2
+        # Second call should see the first relationship with canonical DB names
+        assert len(captured_existing_rels) == 2
+        # The added relationship should use canonical names (from entity lookup),
+        # not raw LLM output
+        second_call_rels = captured_existing_rels[1]
+        added_rel = [r for r in second_call_rels if r not in captured_existing_rels[0]]
+        assert len(added_rel) == 1
+        # Canonical names come from _find_entity_by_name, which resolves to DB names
+        assert added_rel[0][0] == "Charlie"  # source_entity.name
+        assert added_rel[0][1] == "Alice"  # target_entity.name
 
 
 class TestBuildWorldOrphanRecovery:

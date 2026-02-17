@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from src.memory.story_state import PlotOutline, StoryState
 from src.memory.world_database import WorldDatabase
-from src.utils.exceptions import GenerationCancelledError
+from src.utils.exceptions import GenerationCancelledError, WorldGenerationError
 from src.utils.validation import validate_not_none, validate_type
 
 if TYPE_CHECKING:
@@ -793,6 +793,9 @@ def _recover_orphans(
 
         # Build entity list with orphan first (primacy bias) + all potential partners
         partner_names = [e.name for e in all_entities if e.id != orphan.id]
+        if not partner_names:
+            logger.warning("Orphan recovery: only one entity '%s' available; skipping", orphan.name)
+            continue
         constrained_names = [orphan.name, *partner_names]
 
         for attempt in range(MAX_RETRIES_PER_ORPHAN + 1):
@@ -856,7 +859,7 @@ def _recover_orphans(
                         relation_type=relation_type,
                         description=rel.get("description", ""),
                     )
-                    existing_rels.append((rel["source"], rel["target"], relation_type))
+                    existing_rels.append((source_entity.name, target_entity.name, relation_type))
                     added_count += 1
                     logger.info(
                         "Orphan recovery: added %s -> %s (%s), quality: %.1f",
@@ -879,7 +882,9 @@ def _recover_orphans(
                         rel.get("target"),
                     )
 
-            except Exception as e:
+            except GenerationCancelledError:
+                raise
+            except WorldGenerationError as e:
                 logger.warning(
                     "Orphan recovery: attempt %d for '%s' failed: %s",
                     attempt + 1,
