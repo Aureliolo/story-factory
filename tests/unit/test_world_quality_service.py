@@ -1373,6 +1373,9 @@ class TestChapterRefinePromptDimensionInstructions:
         assert "PACING: Vary" not in prompt
         assert "HOOK: Start" not in prompt
         assert "COHERENCE: Ensure" not in prompt
+        # No weak dims → no "SUBSTANTIAL changes" directive (contradictory with "minor")
+        assert "Make SUBSTANTIAL changes" not in prompt
+        assert "Polish the outline with minor improvements" in prompt
 
     def test_build_dimension_instructions_all_dimensions(self):
         """_build_dimension_instructions returns all four instructions when all are weak."""

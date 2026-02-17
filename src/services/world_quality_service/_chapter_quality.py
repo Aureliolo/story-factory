@@ -269,6 +269,17 @@ def _refine_chapter_outline(
 
     dimension_instructions = _build_dimension_instructions(weak)
 
+    # Scale change intensity to match the severity of weaknesses
+    change_directive = (
+        "IMPORTANT: Make SUBSTANTIAL changes to the outline — do NOT simply reword the "
+        "original. Restructure scenes, add new story beats, change the dramatic arc, or "
+        "introduce new elements. The refined outline must be meaningfully different from "
+        "the original."
+        if weak
+        else "Polish the outline with minor improvements while preserving its overall structure."
+    )
+    logger.debug("Change directive: %s", "substantial" if weak else "minor polish")
+
     prompt = f"""Improve this chapter outline based on quality feedback.
 
 STORY ARC CONTEXT:
@@ -290,9 +301,7 @@ FEEDBACK: {scores.feedback}
 DIMENSION-SPECIFIC INSTRUCTIONS:
 {dimension_instructions}
 
-IMPORTANT: Make SUBSTANTIAL changes to the outline — do NOT simply reword the original. \
-Restructure scenes, add new story beats, change the dramatic arc, or introduce new elements. \
-The refined outline must be meaningfully different from the original.
+{change_directive}
 
 Keep the chapter number {chapter.number} and maintain consistency with the overall story arc.
 Write all text in {brief.language if brief else "English"}."""

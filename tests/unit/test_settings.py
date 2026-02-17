@@ -611,6 +611,7 @@ class TestSettingsSaveLoad:
         """Test load filters out unknown fields and preserves known ones."""
         settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
 
         # Create a settings file with known + unknown fields
         data = {
@@ -640,6 +641,7 @@ class TestSettingsSaveLoad:
         """Test load uses defaults for fields missing from JSON."""
         settings_file = tmp_path / "settings.json"
         monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
 
         # Create a minimal settings file missing most fields
         data = {"ollama_url": "http://custom:11434"}

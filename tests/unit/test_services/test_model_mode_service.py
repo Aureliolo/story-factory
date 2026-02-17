@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,7 +32,9 @@ class TestDefaultDbPath:
         mock_settings.ollama_url = "http://localhost:11434"
         mock_settings.ollama_generate_timeout = 60.0
 
-        service = ModelModeService(mock_settings)
+        # Mock ModeDatabase to avoid creating a real SQLite file as a side effect
+        with patch("src.services.model_mode_service.ModeDatabase"):
+            service = ModelModeService(mock_settings)
 
         path_str = str(service._db_path)
         logger.debug("Default db_path resolved to: %s", path_str)

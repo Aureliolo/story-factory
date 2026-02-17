@@ -760,7 +760,8 @@ def _recover_orphans(
     )
 
     all_entities = world_db.list_entities()
-    non_orphan_names = [e.name for e in all_entities if e not in orphans]
+    orphan_ids = {o.id for o in orphans}
+    non_orphan_names = [e.name for e in all_entities if e.id not in orphan_ids]
     entity_by_id = {e.id: e.name for e in all_entities}
 
     # Build existing relationships list
@@ -784,11 +785,17 @@ def _recover_orphans(
             logger.info("Orphan recovery cancelled after %d attempts", i)
             break
 
-        # Rotate through remaining orphans so each attempt targets a different one.
+        # Filter to orphans still needing connections
+        active_orphans = [o for o in remaining_orphans if o.name.lower() in orphan_names]
+        if not active_orphans:
+            logger.info("Orphan recovery: all orphans now have relationships (pre-check)")
+            break
+
+        # Rotate through active orphans so each attempt targets a different one.
         # Place the target orphan first in the entity list to exploit LLM primacy
         # bias, making it much more likely to appear in the generated relationship.
-        target_orphan = remaining_orphans[i % len(remaining_orphans)]
-        other_orphan_names = [o.name for o in remaining_orphans if o is not target_orphan]
+        target_orphan = active_orphans[i % len(active_orphans)]
+        other_orphan_names = [o.name for o in active_orphans if o is not target_orphan]
         constrained_names = [target_orphan.name, *other_orphan_names, *non_orphan_names]
         logger.debug(
             "Orphan recovery attempt %d: targeting '%s' (list size: %d)",

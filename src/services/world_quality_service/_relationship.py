@@ -186,6 +186,30 @@ def _compute_diversity_hint(existing_types: list[str]) -> str:
     return ""
 
 
+def _count_entity_frequencies(
+    entity_names: list[str],
+    existing_rels: list[tuple[str, str, str]],
+) -> Counter[str]:
+    """Count how many relationships each entity participates in (as source or target).
+
+    Args:
+        entity_names: Entity names to count frequencies for.
+        existing_rels: Existing (source, target, relation_type) 3-tuples.
+
+    Returns:
+        Counter mapping entity name to number of relationship appearances.
+    """
+    freq: Counter[str] = Counter()
+    entity_set = set(entity_names)
+    for source, target, _rel_type in existing_rels:
+        if source in entity_set:
+            freq[source] += 1
+        if target in entity_set:
+            freq[target] += 1
+    logger.debug("Entity frequencies: %s", dict(freq))
+    return freq
+
+
 def _compute_entity_frequency_hint(
     entity_names: list[str],
     existing_rels: list[tuple[str, str, str]],
@@ -211,13 +235,7 @@ def _compute_entity_frequency_hint(
         )
         return ""
 
-    # Count how many relationships each entity participates in
-    freq: Counter[str] = Counter()
-    for source, target, _rel_type in existing_rels:
-        if source in entity_names:
-            freq[source] += 1
-        if target in entity_names:
-            freq[target] += 1
+    freq = _count_entity_frequencies(entity_names, existing_rels)
 
     # Identify under-connected (0-1 rels) and over-connected (4+) entities
     under_connected = sorted(name for name in entity_names if freq[name] <= 1)
@@ -305,13 +323,8 @@ def _create_relationship(
             existing_pair_set.add((s, t))
             existing_pair_set.add((t, s))
 
-        # Count connections per entity for sorting
-        entity_freq: Counter[str] = Counter()
-        for s, t, _rt in existing_rels:
-            if s in entity_names:
-                entity_freq[s] += 1
-            if t in entity_names:
-                entity_freq[t] += 1
+        # Reuse shared frequency counter for sorting
+        entity_freq = _count_entity_frequencies(entity_names, existing_rels)
 
         # Sort unused pairs so under-connected entities appear first
         raw_unused = [
