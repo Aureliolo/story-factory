@@ -793,6 +793,28 @@ class TestSettingsGetModelForAgent:
 
         assert result == "huihui_ai/qwen3-abliterated:30b"
 
+    def test_selects_model_matched_by_base_name_prefix(self, monkeypatch):
+        """Test quality lookup works for models matched by base-name prefix.
+
+        When an installed model has a tag like ':latest' that doesn't match
+        any exact key in RECOMMENDED_MODELS, the base-name prefix fallback
+        should still resolve quality correctly.
+        """
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda timeout=None: {
+                "huihui_ai/qwen3-abliterated:latest": 9.0,
+            },
+        )
+
+        settings = Settings()
+        settings.use_per_agent_models = True
+        settings.agent_models = {"architect": "auto"}
+
+        # :latest matches qwen3-abliterated:30b by prefix — should get its tags
+        result = settings.get_model_for_agent("architect", available_vram=24)
+        assert result == "huihui_ai/qwen3-abliterated:latest"
+
     def test_raises_error_when_no_tagged_model_available(self, monkeypatch):
         """Test raises error when no installed model has the required tag."""
         # Mock installed models with no matching tags
@@ -2514,6 +2536,21 @@ class TestGetModelsForRole:
         # embed-model should be skipped because it has "embedding" tag
         assert "pure-writer:8b" in result
         assert "embed-model:8b" not in result
+
+    def test_resolves_quality_via_base_name_prefix(self, monkeypatch):
+        """Quality lookup falls back to base-name prefix when no exact key match."""
+        monkeypatch.setattr(
+            "src.settings._settings.get_installed_models_with_sizes",
+            lambda timeout=None: {
+                "huihui_ai/qwen3-abliterated:latest": 9.0,
+            },
+        )
+
+        settings = Settings()
+        result = settings.get_models_for_role("architect")
+
+        # :latest matches qwen3-abliterated:30b by prefix, gets architect tag
+        assert "huihui_ai/qwen3-abliterated:latest" in result
 
 
 class TestMinimumRoleQuality:
