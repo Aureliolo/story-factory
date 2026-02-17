@@ -286,6 +286,7 @@ class TestUpsertEmbedding:
         call_count = 0
 
         def side_effect_execute(sql, params=None):
+            """Raise on vec INSERT to simulate database failure."""
             nonlocal call_count
             call_count += 1
             if "INSERT INTO vec_embeddings" in sql:
@@ -346,6 +347,31 @@ class TestDeleteEmbedding:
         """Delete returns False when the source_id does not exist."""
         result = _embeddings.delete_embedding(db_with_vec, "nonexistent-id")
         assert result is False
+
+    def test_delete_embedding_rollback_on_failure(self):
+        """Delete rolls back the transaction and re-raises on database error."""
+        mock_db = _make_mock_db(vec_available=True)
+        mock_cursor = mock_db.conn.cursor.return_value
+
+        # Return a content_type from metadata query, then fail on vec DELETE
+        mock_cursor.fetchone.return_value = ("entity",)
+
+        call_count = 0
+
+        def side_effect_execute(sql, params=None):
+            """Raise on vec DELETE to simulate database failure."""
+            nonlocal call_count
+            call_count += 1
+            if "DELETE FROM vec_embeddings" in sql:
+                raise RuntimeError("simulated vec delete failure")
+
+        mock_cursor.execute.side_effect = side_effect_execute
+        mock_cursor.rowcount = 1
+
+        with pytest.raises(RuntimeError, match="simulated vec delete failure"):
+            _embeddings.delete_embedding(mock_db, "entity-fail")
+
+        mock_db.conn.rollback.assert_called_once()
 
     def test_delete_embedding_metadata_only_when_vec_unavailable(self, db):
         """Delete removes metadata even when vec is unavailable."""

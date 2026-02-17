@@ -21,6 +21,7 @@ class _FakeRetryException(Exception):
     """Simulates InstructorRetryException with n_attempts and last_exception."""
 
     def __init__(self, message: str, n_attempts: int, last_exception: Exception | None = None):
+        """Initialize with message, attempt count, and optional last exception."""
         super().__init__(message)
         self.n_attempts = n_attempts
         self.last_exception = last_exception
