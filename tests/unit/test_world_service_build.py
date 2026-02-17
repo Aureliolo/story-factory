@@ -2253,6 +2253,48 @@ class TestRecoverOrphans:
         assert result == 1
         assert call_count == 1
 
+    def test_recover_orphans_cancel_during_retry(
+        self, world_service, mock_world_db, sample_story_state, mock_services, caplog
+    ):
+        """Cancel check fires mid-retry for a single orphan."""
+        import logging
+
+        from src.services.world_service._build import _recover_orphans
+        from src.utils.exceptions import WorldGenerationError
+
+        # Add 1 orphan
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        cancel_call_count = 0
+
+        def cancel_on_retry():
+            """Return True on the 3rd cancel check (inner retry loop, attempt 2)."""
+            nonlocal cancel_call_count
+            cancel_call_count += 1
+            # Outer loop check (1) = False, inner attempt 1 (2) = False,
+            # inner attempt 2 (3) = True → cancel during retry
+            return cancel_call_count > 2
+
+        # First attempt fails, second would fail too but cancel fires first
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=WorldGenerationError("LLM error")
+        )
+
+        with caplog.at_level(logging.INFO):
+            result = _recover_orphans(
+                world_service,
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                cancel_check=cancel_on_retry,
+            )
+
+        assert result == 0
+        assert "cancelled during retries" in caplog.text
+
 
 class TestBuildWorldOrphanRecovery:
     """Tests for orphan recovery integration in build_world."""
