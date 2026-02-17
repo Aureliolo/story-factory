@@ -81,7 +81,8 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
         list_stories: If True, list saved stories and exit.
     """
     if list_stories:
-        # List stories without creating orchestrator/agents (avoids Ollama connection)
+        # List stories without creating orchestrator/agents
+        # (EmbeddingService is required by ProjectService but connects lazily, not at init)
         from src.services.embedding_service import EmbeddingService
         from src.services.project_service import ProjectService
         from src.settings import Settings

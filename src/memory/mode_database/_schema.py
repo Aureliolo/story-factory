@@ -198,4 +198,31 @@ def init_db(db) -> None:
                     ON generation_runs(started_at);
             """)
             conn.commit()
+
+            # Add columns that may be missing in existing world_entity_scores tables.
+            # ALTER TABLE ADD COLUMN is a no-op if the column already exists (SQLite
+            # raises "duplicate column name" which we catch and ignore).
+            _new_columns = [
+                ("early_stop_triggered", "INTEGER DEFAULT 0"),
+                ("threshold_met", "INTEGER DEFAULT 0"),
+                ("peak_score", "REAL"),
+                ("final_score", "REAL"),
+                ("score_progression_json", "TEXT"),
+                ("consecutive_degradations", "INTEGER DEFAULT 0"),
+                ("best_iteration", "INTEGER DEFAULT 0"),
+                ("quality_threshold", "REAL"),
+                ("max_iterations", "INTEGER"),
+                ("temporal_consistency_score", "REAL"),
+                ("temporal_validation_errors", "TEXT"),
+            ]
+            for col_name, col_type in _new_columns:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE world_entity_scores ADD COLUMN {col_name} {col_type}"
+                    )
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column name" not in str(exc):
+                        raise
+            conn.commit()
+
             logger.debug("ModeDatabase schema initialized: %s", db.db_path)

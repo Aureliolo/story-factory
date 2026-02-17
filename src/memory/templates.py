@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-def _normalize_traits(v: Any) -> Any:
+def normalize_traits(v: Any) -> Any:
     """Normalize plain-string personality traits to PersonalityTrait dicts.
 
     YAML templates use plain strings like ["brave", "clever"]; this converts
@@ -111,7 +111,7 @@ class CharacterTemplate(BaseModel):
     @classmethod
     def normalize_personality_traits(cls, v: Any) -> Any:
         """Normalize plain-string personality traits from YAML templates."""
-        return _normalize_traits(v)
+        return normalize_traits(v)
 
 
 class PlotPointTemplate(BaseModel):

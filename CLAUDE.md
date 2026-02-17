@@ -102,7 +102,7 @@ User Input → Interviewer → Architect → [Writer → Editor → Continuity] 
 **RAG Context Pipeline:**
 
 The writing agents receive semantically relevant world context via a RAG pipeline:
-```
+```text
 WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → StoryOrchestrator → Agent prompts
 ```
 - `EmbeddingService` generates vector embeddings via Ollama and attaches auto-embedding callbacks to `WorldDatabase`

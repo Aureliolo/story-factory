@@ -1,7 +1,5 @@
 """Writing phase functions for StoryOrchestrator."""
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Callable, Generator
 from datetime import datetime

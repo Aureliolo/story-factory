@@ -128,6 +128,11 @@ class WriterAgent(BaseAgent):
         builder.add_text(f"STORY CONTEXT:\n{context}")
 
         if world_context:
+            logger.debug(
+                "Injecting world context into chapter %d prompt (%d chars)",
+                chapter.number,
+                len(world_context),
+            )
             builder.add_text(f"WORLD CONTEXT:\n{world_context}")
 
         if prev_chapter_summary:
@@ -248,6 +253,11 @@ class WriterAgent(BaseAgent):
         builder.add_text(f"STORY CONTEXT:\n{context}")
 
         if world_context:
+            logger.debug(
+                "Injecting world context into scene %d prompt (%d chars)",
+                scene_num,
+                len(world_context),
+            )
             builder.add_text(f"WORLD CONTEXT:\n{world_context}")
 
         if prev_context:
@@ -300,6 +310,10 @@ class WriterAgent(BaseAgent):
         builder.add_section("PLOT OUTLINE", story_state.plot_summary)
 
         if world_context:
+            logger.debug(
+                "Injecting world context into short story prompt (%d chars)",
+                len(world_context),
+            )
             builder.add_text(f"WORLD CONTEXT:\n{world_context}")
 
         builder.add_revision_notes(revision_feedback or "")

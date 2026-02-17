@@ -852,7 +852,7 @@ def _validate_rag_context(settings: Settings) -> bool:
 
     Raises:
         ValueError: If any RAG setting is out of range.
-        ConfigError: If rag_context_enabled is True but no embedding_model is set.
+        ConfigError: If embedding_model is empty (vector search requires it).
     """
     if not 100 <= settings.rag_context_max_tokens <= 16000:
         raise ValueError(

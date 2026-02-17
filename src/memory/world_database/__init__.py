@@ -143,6 +143,7 @@ class WorldDatabase:
 
         # Connection with WAL mode for better concurrency
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._closed = False  # Initialize immediately so __del__ can always clean up
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
 
@@ -151,13 +152,14 @@ class WorldDatabase:
 
         self._vec_available: bool = load_vec_extension(self.conn)
         if not self._vec_available:
+            self.conn.close()
+            self._closed = True
             raise RuntimeError(
                 "sqlite-vec extension failed to load. Install it with: pip install sqlite-vec"
             )
 
         self._init_schema()
         self._graph: DiGraph[Any] | None = None
-        self._closed = False
 
         # Optional callback for embedding service to hook into content changes.
         # Set via attach_content_changed_callback().

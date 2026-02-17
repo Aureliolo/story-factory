@@ -2368,9 +2368,9 @@ class TestWP1WP2SettingsValidation:
         settings = Settings()
         settings.semantic_duplicate_enabled = True
         settings.embedding_model = ""
-        # Empty embedding model triggers ConfigError from _validate_rag_context
-        # before reaching _validate_semantic_duplicate, so test the semantic
-        # validation in isolation
+        # _validate_semantic_duplicate runs first (line 45) and auto-disables,
+        # but _validate_rag_context (line 69) raises ConfigError for empty
+        # embedding_model, so test the semantic validation in isolation
         from src.settings._validation import _validate_semantic_duplicate
 
         changed = _validate_semantic_duplicate(settings)

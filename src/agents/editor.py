@@ -77,6 +77,9 @@ class EditorAgent(BaseAgent):
 
         world_context_block = ""
         if world_context:
+            logger.debug(
+                "Injecting world context into editor prompt (%d chars)", len(world_context)
+            )
             world_context_block = (
                 f"\nWORLD CONTEXT (use for consistency checks):\n{world_context}\n"
             )
