@@ -159,7 +159,7 @@ class ContextRetrievalService:
         1. Embed the task_description via EmbeddingService
         2. KNN search in vec_embeddings with optional filters (deduplicates
            inline by source_id, keeping highest relevance)
-        3. Graph expansion: for entity results, fetch 1-hop neighbors
+        3. Graph expansion: for entity results, fetch neighbors (depth from settings)
         4. Always include base project info (premise, genre, tone, setting)
         5. Token budgeting: sort by relevance, pack greedily
 

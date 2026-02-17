@@ -76,7 +76,7 @@ main.py
 ```
 
 **Layer responsibilities:**
-- **src/services/**: Business logic layer - no UI imports, receives settings via DI; includes orchestrator.py
+- **src/services/**: Business logic layer - no UI imports, receives settings via DI; includes orchestrator/
 - **src/ui/**: NiceGUI components - only calls services, manages UI state via AppState
 - **src/agents/**: AI agent implementations - extend BaseAgent, use retry logic
 - **src/memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX + sqlite-vec)
