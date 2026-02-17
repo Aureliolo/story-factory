@@ -239,7 +239,7 @@ ollama pull huihui_ai/dolphin3-abliterated:8b
 ```bash
 # Balanced quality and speed
 ollama pull huihui_ai/dolphin3-abliterated:8b         # Fast, versatile
-ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0 # Creative writing
+ollama pull huihui_ai/qwen2.5-1m-abliterated:14b      # Creative writing
 ```
 
 #### For 24GB VRAM (Premium - February 2026 Update)
@@ -247,7 +247,7 @@ ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0 # Creative writing
 ```bash
 # Best quality multi-agent setup with MoE efficiency
 ollama pull huihui_ai/dolphin3-abliterated:8b           # Interviewer
-ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0   # Writer/Editor
+ollama pull huihui_ai/mistral-small-abliterated:24b      # Writer/Editor
 ollama pull huihui_ai/qwen3-abliterated:30b             # Architect/Continuity (MoE: 30B/3B active)
 ```
 
@@ -436,7 +436,7 @@ Edit `settings.json` to customize:
   "default_model": "huihui_ai/dolphin3-abliterated:8b",
   "use_per_agent_models": true,
   "agent_models": {
-    "writer": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+    "writer": "huihui_ai/mistral-small-abliterated:24b",
     "architect": "huihui_ai/qwen3-abliterated:30b"
   },
   "agent_temperatures": {

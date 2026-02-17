@@ -558,9 +558,9 @@ You can approve to switch models or dismiss to keep current settings.
   "default_model": "huihui_ai/dolphin3-abliterated:8b",
   "use_per_agent_models": true,
   "agent_models": {
-    "writer": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+    "writer": "huihui_ai/mistral-small-abliterated:24b",
     "architect": "huihui_ai/qwen3-abliterated:30b",
-    "editor": "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+    "editor": "huihui_ai/mistral-small-abliterated:24b",
     "continuity": "deepseek-r1-14b",
     "interviewer": "huihui_ai/dolphin3-abliterated:8b",
   }
@@ -594,7 +594,7 @@ You can approve to switch models or dismiss to keep current settings.
 - Consider sequential mode (unload models between agents)
 
 ### Poor creative writing quality
-- Try Celeste, Lyra-Gutenberg, or Midnight-Miqu
+- Try Mistral Small 24B, Qwen 2.5 14B, or Midnight-Miqu
 - Increase temperature to 0.9-1.0
 - Use longer context for better coherence
 - Check that you're using Q5_K_M or better quantization

@@ -499,7 +499,7 @@ python --version
 **Solutions**:
 
 1. **Use better models**:
-   - Celeste V1.9 for creative writing
+   - Mistral Small 24B or Qwen 2.5 14B for creative writing
    - Larger models (14B+) for quality
    - See [docs/MODELS.md](docs/MODELS.md)
 
