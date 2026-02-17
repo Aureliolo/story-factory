@@ -196,19 +196,19 @@ class TestModelModeServiceModelSelection:
     ):
         """LARGEST preference should select largest available model."""
         mock_get_models.return_value = {
-            "huihui_ai/dolphin3-abliterated:8b": 3.0,
-            "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": 8.0,
-            "qwen2.5:32b": 20.0,
+            "fake-small:8b": 3.0,
+            "fake-medium:14b": 9.0,
+            "fake-large:32b": 20.0,
         }
         service.settings.custom_model_tags = {
-            "huihui_ai/dolphin3-abliterated:8b": ["writer"],
-            "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": ["writer"],
-            "qwen2.5:32b": ["writer"],
+            "fake-small:8b": ["writer"],
+            "fake-medium:14b": ["writer"],
+            "fake-large:32b": ["writer"],
         }
 
         result = service._select_model_with_size_preference("writer", SizePreference.LARGEST, 48)
 
-        assert result == "qwen2.5:32b"
+        assert result == "fake-large:32b"
 
     @patch("src.settings.get_installed_models_with_sizes")
     def test_select_smallest_for_draft_fast(
@@ -646,8 +646,8 @@ class TestPendingRecommendations:
         # Insert a recommendation directly into the database
         service._db.record_recommendation(
             recommendation_type="model_swap",
-            current_value="huihui_ai/dolphin3-abliterated:8b",
-            suggested_value="vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+            current_value="fake-current:8b",
+            suggested_value="fake-writer:14b",
             affected_role="writer",
             reason="Better quality observed",
             confidence=0.85,
@@ -659,8 +659,8 @@ class TestPendingRecommendations:
         assert len(recs) == 1
         rec = recs[0]
         assert rec.recommendation_type == RecommendationType.MODEL_SWAP
-        assert rec.current_value == "huihui_ai/dolphin3-abliterated:8b"
-        assert rec.suggested_value == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+        assert rec.current_value == "fake-current:8b"
+        assert rec.suggested_value == "fake-writer:14b"
         assert rec.affected_role == "writer"
         assert rec.confidence == 0.85
 

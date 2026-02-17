@@ -504,11 +504,14 @@ class Settings:
         """
         tags: set[str] = set()
 
-        # Check RECOMMENDED_MODELS (exact match and base name match)
-        for rec_id, info in RECOMMENDED_MODELS.items():
-            if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
-                tags.update(info.get("tags", []))
-                break
+        # Check RECOMMENDED_MODELS — prefer exact key match, fall back to base name
+        if model_id in RECOMMENDED_MODELS:
+            tags.update(RECOMMENDED_MODELS[model_id].get("tags", []))
+        else:
+            for rec_id, info in RECOMMENDED_MODELS.items():
+                if model_id.startswith(rec_id.split(":")[0]):
+                    tags.update(info.get("tags", []))
+                    break
 
         # Add custom tags
         if model_id in self.custom_model_tags:
@@ -587,10 +590,13 @@ class Settings:
                 estimated_vram = int(size_gb * 1.2)
                 # Get quality from RECOMMENDED_MODELS if available, else default to 5
                 quality = 5.0
-                for rec_id, info in RECOMMENDED_MODELS.items():
-                    if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
-                        quality = info["quality"]
-                        break
+                if model_id in RECOMMENDED_MODELS:
+                    quality = RECOMMENDED_MODELS[model_id]["quality"]
+                else:
+                    for rec_id, info in RECOMMENDED_MODELS.items():
+                        if model_id.startswith(rec_id.split(":")[0]):
+                            quality = info["quality"]
+                            break
                 tagged_models_all.append((model_id, size_gb, quality))
                 if estimated_vram <= available_vram:
                     tagged_models_fit.append((model_id, size_gb, quality))
@@ -648,10 +654,13 @@ class Settings:
                 if role != "embedding" and "embedding" in tags:
                     continue
                 quality = 5.0
-                for rec_id, info in RECOMMENDED_MODELS.items():
-                    if model_id == rec_id or model_id.startswith(rec_id.split(":")[0]):
-                        quality = info["quality"]
-                        break
+                if model_id in RECOMMENDED_MODELS:
+                    quality = RECOMMENDED_MODELS[model_id]["quality"]
+                else:
+                    for rec_id, info in RECOMMENDED_MODELS.items():
+                        if model_id.startswith(rec_id.split(":")[0]):
+                            quality = info["quality"]
+                            break
                 tagged.append((model_id, quality))
 
         # Sort by quality descending
