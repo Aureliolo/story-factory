@@ -2,7 +2,7 @@
 
 import sqlite3
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1880,6 +1880,45 @@ class TestModeDatabaseMigrations:
             assert "temporal_validation_errors" in columns
         finally:
             conn.close()
+
+    def test_alter_table_reraises_non_duplicate_errors(self, tmp_path: Path) -> None:
+        """Test that unexpected OperationalErrors during ALTER TABLE are re-raised."""
+        db_path = tmp_path / "broken.db"
+
+        # Create a full database first (so all tables exist), then verify
+        # that ALTER TABLE errors other than "duplicate column" are re-raised.
+        ModeDatabase(db_path)
+
+        # Now patch sqlite3.connect to return a mock that raises on ALTER TABLE
+        real_conn = sqlite3.connect(db_path)
+        mock_conn = MagicMock()
+        mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+        mock_conn.__exit__ = MagicMock(return_value=False)
+        mock_conn.executescript = real_conn.executescript
+        mock_conn.commit = real_conn.commit
+
+        def execute_side_effect(sql, *args, **kwargs):
+            if "ALTER TABLE" in str(sql):
+                raise sqlite3.OperationalError("database is locked")
+            return real_conn.execute(sql, *args, **kwargs)
+
+        mock_conn.execute = MagicMock(side_effect=execute_side_effect)
+
+        mock_db = MagicMock()
+        mock_db.db_path = str(db_path)
+
+        with (
+            patch(
+                "src.memory.mode_database._schema.sqlite3.connect",
+                return_value=mock_conn,
+            ),
+            pytest.raises(sqlite3.OperationalError, match="database is locked"),
+        ):
+            from src.memory.mode_database._schema import init_db
+
+            init_db(mock_db)
+
+        real_conn.close()
 
 
 class TestRefinementEffectivenessTracking:
