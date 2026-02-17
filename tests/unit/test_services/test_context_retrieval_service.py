@@ -7,6 +7,7 @@ and content type filtering.
 """
 
 import sqlite3
+import struct
 from unittest.mock import MagicMock
 
 import pytest
@@ -674,6 +675,24 @@ class TestContextRetrievalService:
         assert result.items == ()
         assert result.total_tokens == 0
 
+    def test_retrieve_context_struct_error_returns_empty(self, sample_story_state) -> None:
+        """Returns empty context when search_similar raises struct.error."""
+        settings = _make_settings()
+        embedding_svc = _make_embedding_service(embed_result=FAKE_VECTOR)
+        world_db = _make_world_db()
+        world_db.search_similar.side_effect = struct.error("bad byte count for 'f'")
+
+        service = ContextRetrievalService(settings, embedding_svc)
+        result = service.retrieve_context(
+            task_description="Write chapter 1",
+            world_db=world_db,
+            story_state=sample_story_state,
+        )
+
+        assert result.retrieval_method == "vector"
+        assert result.items == ()
+        assert result.total_tokens == 0
+
     def test_get_project_info_no_brief(self) -> None:
         """_get_project_info_items returns empty list when story state has no brief."""
         settings = _make_settings()
@@ -973,3 +992,17 @@ class TestRetrievedContextFrozen:
         """RetrievedContext.items defaults to an empty tuple, not a list."""
         ctx = RetrievedContext()
         assert isinstance(ctx.items, tuple)
+
+    def test_retrieved_context_coerces_list_to_tuple(self) -> None:
+        """RetrievedContext coerces a list of items to a tuple for immutability."""
+        item = ContextItem(
+            source_type="entity",
+            source_id="ent-1",
+            relevance_score=0.9,
+            text="A character",
+        )
+        # Pass a list — __post_init__ should coerce to tuple
+        ctx = RetrievedContext(items=[item])  # type: ignore[arg-type]
+        assert isinstance(ctx.items, tuple)
+        assert len(ctx.items) == 1
+        assert ctx.items[0] is item

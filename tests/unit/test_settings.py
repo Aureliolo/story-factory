@@ -2837,11 +2837,10 @@ class TestRagContextValidation:
             settings.validate()
 
     def test_validate_auto_migrates_empty_embedding_model(self):
-        """Should auto-migrate empty embedding_model to default when RAG is enabled."""
+        """Should auto-migrate empty embedding_model to default."""
         from src.settings._validation import _validate_rag_context
 
         settings = Settings()
-        settings.rag_context_enabled = True
         settings.embedding_model = ""
         changed = _validate_rag_context(settings)
         assert changed is True
@@ -2866,6 +2865,22 @@ class TestRagContextValidation:
         changed = settings.validate()
         assert changed is True
         assert settings.embedding_model == "mxbai-embed-large"
+
+    def test_validate_preserves_semantic_duplicate_after_embedding_migration(self):
+        """Ordering: rag_context migration runs before semantic_duplicate check.
+
+        When a stale settings file has embedding_model="" and
+        semantic_duplicate_enabled=True, the auto-migration must populate the
+        embedding model BEFORE the semantic duplicate validator inspects it.
+        Otherwise the user's preference is silently lost.
+        """
+        settings = Settings()
+        settings.embedding_model = ""
+        settings.semantic_duplicate_enabled = True
+        changed = settings.validate()
+        assert changed is True
+        assert settings.embedding_model == "mxbai-embed-large"
+        assert settings.semantic_duplicate_enabled is True
 
     def test_validate_auto_migrates_whitespace_only_embedding_model(self):
         """Should auto-migrate whitespace-only embedding_model to default."""

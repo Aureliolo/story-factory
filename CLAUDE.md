@@ -107,9 +107,9 @@ WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → 
 ```
 - `EmbeddingService` generates vector embeddings via Ollama and attaches auto-embedding callbacks to `WorldDatabase`. Fails fast at construction if `embedding_model` is empty.
 - `ContextRetrievalService` performs KNN vector search to retrieve relevant entities/relationships for the current writing task. `ContextItem` and `RetrievedContext` are frozen dataclasses — use `dataclasses.replace()` to derive modified instances. `relevance_score` is clamped to [0.0, 1.0] on construction.
-- `StoryOrchestrator.set_project_context(world_db, story_state)` bundles the per-project mutable state into a single call (used by `StoryService` before each writing session)
+- `StoryOrchestrator.set_project_context(world_db, story_state)` bundles the per-project mutable state into a single call (used by `StoryService._writing` functions that require both world_db and story_state)
 - RAG retrieval failures are non-fatal — agents proceed with empty context if retrieval fails
-- Stale `settings.json` files with empty `embedding_model` are auto-migrated to the default model during validation
+- Stale `settings.json` files with empty `embedding_model` are auto-migrated to the default model during validation.
 
 ## Threading Model
 

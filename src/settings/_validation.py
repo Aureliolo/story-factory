@@ -41,6 +41,7 @@ def validate(settings: Settings) -> bool:
     _validate_early_stopping(settings)
     _validate_circuit_breaker(settings)
     _validate_retry_strategy(settings)
+    changed = _validate_rag_context(settings) or changed
     changed = _validate_semantic_duplicate(settings) or changed
     _validate_temperature_decay_semantics(settings)
     _validate_judge_consistency(settings)
@@ -65,7 +66,6 @@ def validate(settings: Settings) -> bool:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
-    changed = _validate_rag_context(settings) or changed
     return changed
 
 

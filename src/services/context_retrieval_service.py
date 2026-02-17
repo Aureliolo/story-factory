@@ -1,7 +1,7 @@
 """Context retrieval service for smart RAG-based context injection.
 
-Uses vector-similarity-based retrieval for all LLM calls via the mandatory
-sqlite-vec + embedding pipeline.
+Uses vector-similarity-based retrieval via the sqlite-vec + embedding pipeline
+to enrich writing-agent prompts with relevant world context.
 """
 
 import logging
@@ -51,7 +51,12 @@ class ContextItem:
     token_estimate: int = 0
 
     def __post_init__(self) -> None:
-        """Clamp relevance_score to [0.0, 1.0] and calculate token estimate."""
+        """Clamp relevance_score to [0.0, 1.0] and calculate token estimate.
+
+        Uses ``object.__setattr__`` to bypass the frozen constraint during
+        initialization (the standard pattern for post-init fixups on frozen
+        dataclasses).
+        """
         clamped = max(0.0, min(1.0, self.relevance_score))
         if clamped != self.relevance_score:
             logger.debug(
@@ -72,7 +77,7 @@ class RetrievedContext:
     Frozen dataclass — constructed once with final values.
 
     Attributes:
-        items: List of retrieved context items (tuple for true immutability).
+        items: Tuple of retrieved context items (immutable after construction).
         total_tokens: Sum of token estimates across all items.
         retrieval_method: How context was retrieved ('vector' or 'disabled').
     """
@@ -80,6 +85,14 @@ class RetrievedContext:
     items: tuple[ContextItem, ...] = ()
     total_tokens: int = 0
     retrieval_method: Literal["vector", "disabled"] = "vector"
+
+    def __post_init__(self) -> None:
+        """Normalize items to a tuple to guarantee immutability at runtime.
+
+        Callers may pass a list at runtime despite the type annotation; this
+        ensures the stored value is always a tuple.
+        """
+        object.__setattr__(self, "items", tuple(self.items))
 
     def format_for_prompt(self) -> str:
         """Format all context items as a structured text block for prompt injection.
@@ -144,11 +157,11 @@ class ContextRetrievalService:
 
         Algorithm:
         1. Embed the task_description via EmbeddingService
-        2. KNN search in vec_embeddings with optional filters
+        2. KNN search in vec_embeddings with optional filters (deduplicates
+           inline by source_id, keeping highest relevance)
         3. Graph expansion: for entity results, fetch 1-hop neighbors
-        4. Deduplicate by source_id (keep highest relevance)
-        5. Always include base project info (premise, genre, tone, setting)
-        6. Token budgeting: sort by relevance, pack greedily
+        4. Always include base project info (premise, genre, tone, setting)
+        5. Token budgeting: sort by relevance, pack greedily
 
         Args:
             task_description: Description of what the agent is about to do.
@@ -259,7 +272,7 @@ class ContextRetrievalService:
 
             source_id = result["source_id"]
             if source_id in items_by_id:
-                # Keep highest relevance (replace frozen item)
+                # Keep highest relevance
                 if relevance > items_by_id[source_id].relevance_score:
                     items_by_id[source_id] = replace(
                         items_by_id[source_id], relevance_score=relevance

@@ -1963,18 +1963,21 @@ class TestResetState:
         monkeypatch.setattr("src.services.orchestrator._persistence.STORIES_DIR", stories_dir)
 
     def test_reset_state_clears_everything(self):
-        """Test reset_state clears story and events."""
+        """Test reset_state clears story, world_db, and events."""
         orchestrator = StoryOrchestrator()
         orchestrator.create_new_story()
+        orchestrator.world_db = MagicMock()
         orchestrator._emit("test", "Agent", "Message")
 
         assert orchestrator.story_state is not None
+        assert orchestrator.world_db is not None
         assert len(orchestrator.events) > 0
 
         orchestrator.reset_state()
 
         assert orchestrator.story_state is None
-        assert len(orchestrator.events) == 0  # type: ignore[unreachable]
+        assert orchestrator.world_db is None  # type: ignore[unreachable]
+        assert len(orchestrator.events) == 0
 
     def test_reset_state_clears_conversation_history(self):
         """Test reset_state clears interviewer conversation history."""
@@ -3109,10 +3112,10 @@ class TestRAGContextIntegration:
         assert orc.world_db is None
 
     def test_orchestrator_world_db_can_be_set(self):
-        """Test world_db can be set after construction."""
+        """Test world_db can be set after construction via set_project_context."""
         mock_db = MagicMock()
         orc = StoryOrchestrator()
-        orc.world_db = mock_db
+        orc.set_project_context(world_db=mock_db, story_state=None)
         assert orc.world_db is mock_db
 
 

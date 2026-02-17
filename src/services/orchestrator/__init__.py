@@ -103,8 +103,8 @@ class StoryOrchestrator:
         """Set project-specific context for the current writing session.
 
         Bundles the world database and story state assignment into a single
-        explicit call, replacing direct attribute mutations scattered across
-        callers.
+        explicit call.  Preferred over direct attribute mutation for callers
+        that need to set both world_db and story_state.
 
         Args:
             world_db: WorldDatabase for RAG context retrieval (may be None).
@@ -736,6 +736,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
     def reset_state(self) -> None:
         """Reset the orchestrator state for a new story."""
         self.story_state = None
+        self.world_db = None
         self.events.clear()
         # Reset agent conversation histories
         self.interviewer.conversation_history = []
