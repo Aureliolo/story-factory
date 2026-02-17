@@ -153,27 +153,31 @@ def delete_embedding(db: WorldDatabase, source_id: str) -> bool:
         if row:
             content_type = row[0]
 
-        # Clean up metadata (regular table)
-        cursor.execute("DELETE FROM embedding_metadata WHERE source_id = ?", (source_id,))
-        metadata_deleted = cursor.rowcount > 0
+        try:
+            # Clean up metadata (regular table)
+            cursor.execute("DELETE FROM embedding_metadata WHERE source_id = ?", (source_id,))
+            metadata_deleted = cursor.rowcount > 0
 
-        # Clean up vec0 table if available
-        vec_deleted = False
-        if db.vec_available and content_type:
-            cursor.execute(
-                "DELETE FROM vec_embeddings WHERE source_id = ? AND content_type = ?",
-                (source_id, content_type),
-            )
-            vec_deleted = cursor.rowcount > 0
-        elif db.vec_available:
-            # Fallback: try without partition key if metadata was missing
-            cursor.execute(
-                "DELETE FROM vec_embeddings WHERE source_id = ?",
-                (source_id,),
-            )
-            vec_deleted = cursor.rowcount > 0
+            # Clean up vec0 table if available
+            vec_deleted = False
+            if db.vec_available and content_type:
+                cursor.execute(
+                    "DELETE FROM vec_embeddings WHERE source_id = ? AND content_type = ?",
+                    (source_id, content_type),
+                )
+                vec_deleted = cursor.rowcount > 0
+            elif db.vec_available:
+                # Fallback: try without partition key if metadata was missing
+                cursor.execute(
+                    "DELETE FROM vec_embeddings WHERE source_id = ?",
+                    (source_id,),
+                )
+                vec_deleted = cursor.rowcount > 0
 
-        db.conn.commit()
+            db.conn.commit()
+        except Exception:
+            db.conn.rollback()
+            raise
 
     deleted = metadata_deleted or vec_deleted
     if deleted:
@@ -309,6 +313,12 @@ def get_embedding_stats(db: WorldDatabase) -> dict[str, Any]:
         cursor.execute("SELECT DISTINCT embedding_dim FROM embedding_metadata")
         dimensions = [row[0] for row in cursor.fetchall()]
 
+    logger.debug(
+        "Embedding stats: %d total, %d models, vec_available=%s",
+        total,
+        len(models),
+        db.vec_available,
+    )
     return {
         "total": total,
         "by_content_type": counts_by_type,
@@ -360,15 +370,16 @@ def clear_all_embeddings(db: WorldDatabase) -> None:
         db._ensure_open()
         cursor = db.conn.cursor()
 
-        cursor.execute("DELETE FROM embedding_metadata")
-        metadata_count = cursor.rowcount
-
         if db.vec_available:
-            # Query actual dimensions from metadata before dropping table
+            # Query actual dimensions BEFORE deleting metadata
             cursor.execute("SELECT DISTINCT embedding_dim FROM embedding_metadata LIMIT 1")
             dim_row = cursor.fetchone()
             dimensions = dim_row[0] if dim_row else 1024
 
+        cursor.execute("DELETE FROM embedding_metadata")
+        metadata_count = cursor.rowcount
+
+        if db.vec_available:
             # Drop and recreate vec0 table (most reliable way to clear it)
             cursor.execute("DROP TABLE IF EXISTS vec_embeddings")
             cursor.execute(

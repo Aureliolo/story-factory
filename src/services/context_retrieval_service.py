@@ -58,7 +58,7 @@ class RetrievedContext:
     Attributes:
         items: List of retrieved context items.
         total_tokens: Sum of token estimates across all items.
-        retrieval_method: How context was retrieved ('vector' or 'fallback').
+        retrieval_method: How context was retrieved ('vector', 'fallback', or 'disabled').
     """
 
     items: list[ContextItem] = field(default_factory=list)
@@ -210,6 +210,9 @@ class ContextRetrievalService:
         # Step 2: KNN search with optional content type filter
         all_results: list[dict] = []
         try:
+            # Default to entity content type when entity_types filter is provided
+            if not content_types and entity_types:
+                content_types = ["entity"]
             if content_types:
                 for ct in content_types:
                     results = world_db.search_similar(

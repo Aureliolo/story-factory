@@ -161,7 +161,11 @@ class TestEmbedText:
     def test_embed_text_success(self, service):
         """Successfully generates an embedding vector via the Ollama client."""
         mock_client = MagicMock()
-        mock_client.embeddings.return_value = {"embedding": FAKE_EMBEDDING}
+        # Support both dict and attribute access per CLAUDE.md guidelines
+        response = MagicMock()
+        response.__getitem__ = lambda self, key: FAKE_EMBEDDING if key == "embedding" else None
+        response.embedding = FAKE_EMBEDDING
+        mock_client.embeddings.return_value = response
 
         with patch.object(service, "_get_client", return_value=mock_client):
             result = service.embed_text("Hello world")
@@ -839,9 +843,13 @@ class TestInternalMethods:
 
     def test_get_client_creates_once(self, service):
         """The Ollama client is lazily created and reused on subsequent calls."""
-        client1 = service._get_client()
-        client2 = service._get_client()
-        assert client1 is client2
+        with patch("src.services.embedding_service.ollama.Client") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            service._client = None  # Reset to force creation
+            client1 = service._get_client()
+            client2 = service._get_client()
+            assert client1 is client2
+            mock_cls.assert_called_once()
 
     def test_get_model_returns_stripped_name(self, service):
         """Returns the embedding model name with whitespace stripped."""
