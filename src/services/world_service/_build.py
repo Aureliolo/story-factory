@@ -857,9 +857,6 @@ def _recover_orphans(
                     orphan_names.discard(source_entity.name.lower())
                 if target_is_orphan:
                     orphan_names.discard(target_entity.name.lower())
-                if not orphan_names:
-                    logger.info("Orphan recovery: all orphans now have relationships")
-                    break
             else:
                 logger.warning(
                     "Orphan recovery: could not resolve entities for %s -> %s",
