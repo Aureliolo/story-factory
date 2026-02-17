@@ -20,6 +20,7 @@ from src.services.world_service import (
     WorldService,
 )
 from src.settings import Settings
+from src.utils.exceptions import WorldGenerationError
 
 
 class TestWorldBuildOptions:
@@ -771,6 +772,18 @@ class TestGenerateRelationships:
         assert call_kwargs.kwargs["cancel_check"] is my_cancel_check
 
 
+def _mock_orphan_recovery_failure(mock_services):
+    """Mock the singular generate_relationship_with_quality to fail gracefully.
+
+    Orphan recovery uses this method (not the batch plural version).
+    Without this mock, the default MagicMock return value can't be unpacked
+    into the expected 3-tuple, causing ValueError.
+    """
+    mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+        side_effect=WorldGenerationError("test")
+    )
+
+
 class TestBuildWorld:
     """Tests for build_world method."""
 
@@ -803,12 +816,7 @@ class TestBuildWorld:
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
         mock_services.world_quality.generate_relationships_with_quality.return_value = []
-        # Orphan recovery uses the singular method — mock to fail gracefully
-        from src.utils.exceptions import WorldGenerationError
-
-        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
-            side_effect=WorldGenerationError("test")
-        )
+        _mock_orphan_recovery_failure(mock_services)
 
         counts = world_service.build_world(
             sample_story_state,
@@ -860,12 +868,7 @@ class TestBuildWorld:
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
         mock_services.world_quality.generate_relationships_with_quality.return_value = []
-        # Orphan recovery uses the singular method — mock to fail gracefully
-        from src.utils.exceptions import WorldGenerationError
-
-        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
-            side_effect=WorldGenerationError("test")
-        )
+        _mock_orphan_recovery_failure(mock_services)
 
         world_service.build_world(
             sample_story_state,
@@ -895,12 +898,7 @@ class TestBuildWorld:
         mock_services.world_quality.generate_items_with_quality.return_value = []
         mock_services.world_quality.generate_concepts_with_quality.return_value = []
         mock_services.world_quality.generate_relationships_with_quality.return_value = []
-        # Orphan recovery uses the singular method — mock to fail gracefully
-        from src.utils.exceptions import WorldGenerationError
-
-        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
-            side_effect=WorldGenerationError("test")
-        )
+        _mock_orphan_recovery_failure(mock_services)
 
         counts = world_service.build_world(
             sample_story_state,
@@ -1807,7 +1805,6 @@ class TestRecoverOrphans:
     ):
         """Test returns 0 when relationship generation always raises an error."""
         from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
-        from src.utils.exceptions import WorldGenerationError
 
         # Add 2 entities with no relationships (both are orphans)
         mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2190,7 +2187,6 @@ class TestRecoverOrphans:
     ):
         """Verify each orphan gets its own retry budget."""
         from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
-        from src.utils.exceptions import WorldGenerationError
 
         # Add 3 entities: Alice and Bob connected, Charlie is orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2278,7 +2274,6 @@ class TestRecoverOrphans:
         import logging
 
         from src.services.world_service._build import _recover_orphans
-        from src.utils.exceptions import WorldGenerationError
 
         # Add 1 orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -2338,8 +2333,6 @@ class TestRecoverOrphans:
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
         """GenerationCancelledError is not swallowed by the except block."""
-        import pytest
-
         from src.services.world_service._build import _recover_orphans
         from src.utils.exceptions import GenerationCancelledError
 

@@ -392,7 +392,7 @@ def _create_relationship(
     if required_entity:
         # Sanitize to prevent prompt injection via entity names containing
         # quotes or newlines (entity names originate from LLM or user input)
-        safe_entity = required_entity.replace('"', "").replace("\n", " ")
+        safe_entity = required_entity.replace('"', "").replace("\n", " ").replace("\r", " ")
         required_entity_block = (
             f'\nREQUIRED ENTITY: One of source or target MUST be "{safe_entity}".'
             "\nChoose a compelling partner from the other available entities.\n"
