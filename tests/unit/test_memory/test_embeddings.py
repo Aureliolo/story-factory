@@ -276,39 +276,29 @@ class TestUpsertEmbedding:
         assert row is not None
         assert len(row[0]) == 500
 
-    def test_upsert_embedding_rollback_on_failure(self, db_with_vec):
+    def test_upsert_embedding_rollback_on_failure(self):
         """Upsert rolls back the transaction and re-raises on database error."""
-        embedding = _make_embedding(dims=4, value=0.5)
+        mock_db = _make_mock_db(vec_available=True)
+        mock_cursor = mock_db.conn.cursor.return_value
 
-        # Insert one embedding successfully first
-        _embeddings.upsert_embedding(
-            db_with_vec,
-            source_id="entity-ok",
-            content_type="entity",
-            text="Good entity",
-            embedding=embedding,
-            model="fake-embed:latest",
-        )
-
-        # Force a failure by closing the connection to the vec table
-        # Use a mock to simulate INSERT failure after metadata deletion
-        original_execute = db_with_vec.conn.execute
-
+        # Make fetchone return None (no existing embedding) on first call,
+        # then raise on the INSERT INTO vec_embeddings
         call_count = 0
 
-        def failing_execute(sql, *args, **kwargs):
+        def side_effect_execute(sql, params=None):
             nonlocal call_count
             call_count += 1
-            # Let metadata operations pass, fail on vec INSERT
             if "INSERT INTO vec_embeddings" in sql:
                 raise RuntimeError("simulated vec insert failure")
-            return original_execute(sql, *args, **kwargs)
 
-        db_with_vec.conn.execute = failing_execute
+        mock_cursor.fetchone.return_value = None
+        mock_cursor.execute.side_effect = side_effect_execute
+
+        embedding = _make_embedding(dims=4, value=0.5)
 
         with pytest.raises(RuntimeError, match="simulated vec insert failure"):
             _embeddings.upsert_embedding(
-                db_with_vec,
+                mock_db,
                 source_id="entity-fail",
                 content_type="entity",
                 text="Will fail",
@@ -316,7 +306,7 @@ class TestUpsertEmbedding:
                 model="fake-embed:latest",
             )
 
-        db_with_vec.conn.execute = original_execute
+        mock_db.conn.rollback.assert_called_once()
 
 
 class TestDeleteEmbedding:
