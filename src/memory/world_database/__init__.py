@@ -146,10 +146,14 @@ class WorldDatabase:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
 
-        # Load sqlite-vec extension for vector search
+        # Load sqlite-vec extension — mandatory for RAG pipeline
         from src.utils.sqlite_vec_loader import load_vec_extension
 
         self._vec_available: bool = load_vec_extension(self.conn)
+        if not self._vec_available:
+            raise RuntimeError(
+                "sqlite-vec extension failed to load. Install it with: pip install sqlite-vec"
+            )
 
         self._init_schema()
         self._graph: DiGraph[Any] | None = None
@@ -234,13 +238,81 @@ class WorldDatabase:
                 "ON entity_versions(entity_id, version_number)"
             )
 
-            # Run migrations if needed
+            # Set schema version
             if current_version < SCHEMA_VERSION:
-                self._run_migrations(cursor, current_version, SCHEMA_VERSION)
                 cursor.execute(
                     "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
                     (SCHEMA_VERSION,),
                 )
+
+            # World settings table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS world_settings (
+                    id TEXT PRIMARY KEY,
+                    calendar_json TEXT,
+                    timeline_start_year INTEGER,
+                    timeline_end_year INTEGER,
+                    validate_temporal_consistency INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS historical_eras (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    start_year INTEGER NOT NULL,
+                    end_year INTEGER,
+                    description TEXT DEFAULT '',
+                    display_order INTEGER DEFAULT 0
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_historical_eras_start "
+                "ON historical_eras(start_year)"
+            )
+
+            # Embedding metadata table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS embedding_metadata (
+                    source_id TEXT PRIMARY KEY,
+                    content_type TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    embedding_model TEXT NOT NULL,
+                    embedded_at TEXT NOT NULL,
+                    embedding_dim INTEGER NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_type "
+                "ON embedding_metadata(content_type)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_model "
+                "ON embedding_metadata(embedding_model)"
+            )
+
+            # vec_embeddings virtual table (sqlite-vec is mandatory)
+            cursor.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                    embedding float[1024],
+                    content_type text partition key,
+                    +source_id text,
+                    +entity_type text,
+                    +chapter_number integer,
+                    +display_text text,
+                    +embedding_model text,
+                    +embedded_at text
+                )
+                """
+            )
 
             # Relationships table
             cursor.execute(
@@ -300,165 +372,6 @@ class WorldDatabase:
 
             self.conn.commit()
             logger.debug(f"Database schema initialized: {self.db_path}")
-
-    def _run_migrations(self, cursor: sqlite3.Cursor, from_version: int, to_version: int) -> None:
-        """Run database migrations.
-
-        Args:
-            cursor: Database cursor.
-            from_version: Current schema version.
-            to_version: Target schema version.
-        """
-        logger.info(f"Migrating database schema from v{from_version} to v{to_version}")
-
-        # Migration from v1 to v2: Add entity_versions table
-        if from_version < 2:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS entity_versions (
-                    id TEXT PRIMARY KEY,
-                    entity_id TEXT NOT NULL,
-                    version_number INTEGER NOT NULL,
-                    data_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    change_type TEXT NOT NULL CHECK(change_type IN ('created', 'refined', 'edited', 'regenerated')),
-                    change_reason TEXT DEFAULT '',
-                    quality_score REAL DEFAULT NULL,
-                    FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
-                )
-            """
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_entity_versions_entity_id ON entity_versions(entity_id)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_entity_versions_created_at ON entity_versions(created_at)"
-            )
-            cursor.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_versions_entity_version "
-                "ON entity_versions(entity_id, version_number)"
-            )
-            logger.info("Migration v1->v2: Added entity_versions table")
-
-        # Migration from v2 to v3: Add world_settings and historical_eras tables
-        if from_version < 3:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS world_settings (
-                    id TEXT PRIMARY KEY,
-                    calendar_json TEXT,
-                    timeline_start_year INTEGER,
-                    timeline_end_year INTEGER,
-                    validate_temporal_consistency INTEGER DEFAULT 1,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS historical_eras (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    start_year INTEGER NOT NULL,
-                    end_year INTEGER,
-                    description TEXT DEFAULT '',
-                    display_order INTEGER DEFAULT 0
-                )
-                """
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_historical_eras_start ON historical_eras(start_year)"
-            )
-            logger.info("Migration v2->v3: Added world_settings and historical_eras tables")
-
-        # Migration from v3 to v4: Normalize legacy free-form relationship types
-        if from_version < 4:
-            # Only normalize if the relationships table already exists
-            # (new databases create it after migrations run)
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='relationships'"
-            )
-            if cursor.fetchone():
-                from src.memory.conflict_types import normalize_relation_type
-
-                cursor.execute("SELECT id, relation_type FROM relationships")
-                rows = cursor.fetchall()
-                updates = [
-                    (normalized, row_id)
-                    for row_id, raw_type in rows
-                    if (normalized := normalize_relation_type(raw_type)) != raw_type
-                ]
-                if updates:
-                    cursor.executemany(
-                        "UPDATE relationships SET relation_type = ? WHERE id = ?",
-                        updates,
-                    )
-                updated = len(updates)
-                logger.info(
-                    "Migration v3->v4: Normalized %d/%d relationship types",
-                    updated,
-                    len(rows),
-                )
-            else:
-                logger.info("Migration v3->v4: Skipped (relationships table not yet created)")
-
-        # Migration from v4 to v5: Add vec_embeddings and embedding_metadata tables
-        if from_version < 5:
-            # embedding_metadata is always created (regular table for tracking)
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS embedding_metadata (
-                    source_id TEXT PRIMARY KEY,
-                    content_type TEXT NOT NULL,
-                    content_hash TEXT NOT NULL,
-                    embedding_model TEXT NOT NULL,
-                    embedded_at TEXT NOT NULL,
-                    embedding_dim INTEGER NOT NULL
-                )
-                """
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_type "
-                "ON embedding_metadata(content_type)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_model "
-                "ON embedding_metadata(embedding_model)"
-            )
-
-            # vec_embeddings virtual table requires sqlite-vec extension
-            if self._vec_available:
-                try:
-                    cursor.execute(
-                        """
-                        CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-                            embedding float[1024],
-                            content_type text partition key,
-                            +source_id text,
-                            +entity_type text,
-                            +chapter_number integer,
-                            +display_text text,
-                            +embedding_model text,
-                            +embedded_at text
-                        )
-                        """
-                    )
-                    logger.info("Migration v4->v5: Created vec_embeddings and embedding_metadata")
-                except Exception as e:
-                    logger.warning(
-                        "Migration v4->v5: Failed to create vec_embeddings table: %s. "
-                        "Vector search will be unavailable.",
-                        e,
-                    )
-                    self._vec_available = False
-            else:
-                logger.info(
-                    "Migration v4->v5: Created embedding_metadata table only "
-                    "(sqlite-vec not available for vec_embeddings)"
-                )
-
-        logger.info("Database migration complete")
 
     def _ensure_open(self) -> None:
         """Check that the database connection is still open.
@@ -673,16 +586,6 @@ class WorldDatabase:
         max_cycle_length: int = 10,
     ) -> list[list[tuple[str, str, str]]]:
         return _graph.find_circular_relationships(self, relation_types, max_cycle_length)
-
-    # =========================================================================
-    # Context for Agents (delegated to _relationships)
-    # =========================================================================
-
-    def get_context_for_agents(self, max_entities: int = 50) -> dict[str, Any]:
-        return _relationships.get_context_for_agents(self, max_entities)
-
-    def _get_important_relationships(self, limit: int = 30) -> list[dict[str, Any]]:
-        return _relationships.get_important_relationships(self, limit)
 
     # =========================================================================
     # Export/Import (delegated to _io)

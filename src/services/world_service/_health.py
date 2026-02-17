@@ -168,16 +168,11 @@ def get_world_health_metrics(
     for entity in all_entities:
         # Get quality score from attributes if available
         # Quality scores are stored as a dict with 'average' key (e.g., quality_scores.average)
-        # Also support legacy 'quality_score' key for backwards compatibility
         attrs = entity.attributes or {}
         quality_score = 0.0
 
-        # Try new format: quality_scores dict with average
         if "quality_scores" in attrs and isinstance(attrs["quality_scores"], dict):
             quality_score = attrs["quality_scores"].get("average", 0.0)
-        # Fallback to legacy format: direct quality_score
-        elif "quality_score" in attrs:
-            quality_score = attrs.get("quality_score", 0.0)
 
         if isinstance(quality_score, (int, float)) and not isinstance(quality_score, bool):
             score_float = float(quality_score)

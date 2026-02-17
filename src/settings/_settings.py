@@ -147,11 +147,9 @@ class Settings:
     # World quality refinement settings
     world_quality_enabled: bool = True  # Enable quality refinement for world generation
     world_quality_max_iterations: int = 3  # Maximum refinement iterations per entity
-    world_quality_threshold: float = (
-        7.5  # Min score (0-10) to pass quality review (legacy fallback)
-    )
+    world_quality_threshold: float = 7.5  # Default threshold for quality review
     world_quality_thresholds: dict[str, float] = field(
-        default_factory=dict  # Empty → migration fills from world_quality_threshold; backfills missing from PER_ENTITY_QUALITY_DEFAULTS
+        default_factory=PER_ENTITY_QUALITY_DEFAULTS.copy
     )
     world_quality_creator_temp: float = 0.9  # Temperature for creative generation
     world_quality_judge_temp: float = 0.1  # Temperature for quality judgment
@@ -181,10 +179,12 @@ class Settings:
     # Semantic duplicate detection settings (#176)
     semantic_duplicate_enabled: bool = False  # Opt-in: use embedding-based similarity
     semantic_duplicate_threshold: float = 0.85  # Cosine similarity threshold for duplicates
-    embedding_model: str = ""  # Model for generating embeddings (must be set when semantic duplicate detection is enabled)
+    embedding_model: str = (
+        "mxbai-embed-large"  # Model for generating embeddings (must support embedding tag)
+    )
 
     # RAG context retrieval settings (smart context via vector search)
-    rag_context_enabled: bool = False  # Enable vector-similarity context retrieval for LLM calls
+    rag_context_enabled: bool = True  # Enable vector-similarity context retrieval for LLM calls
     rag_context_max_tokens: int = 2000  # Maximum tokens for retrieved context per LLM call
     rag_context_max_items: int = 20  # Maximum items to retrieve per query
     rag_context_similarity_threshold: float = 0.3  # Min relevance score (0-1) to include item

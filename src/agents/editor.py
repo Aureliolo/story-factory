@@ -56,8 +56,16 @@ class EditorAgent(BaseAgent):
             settings=settings,
         )
 
-    def edit_chapter(self, story_state: StoryState, chapter_content: str) -> str:
-        """Edit and polish a chapter."""
+    def edit_chapter(
+        self, story_state: StoryState, chapter_content: str, world_context: str = ""
+    ) -> str:
+        """Edit and polish a chapter.
+
+        Args:
+            story_state: Current story state.
+            chapter_content: Raw chapter content to edit.
+            world_context: Optional RAG-retrieved world context for consistency.
+        """
         validate_not_none(story_state, "story_state")
         validate_type(story_state, "story_state", StoryState)
         validate_not_empty(chapter_content, "chapter_content")
@@ -67,10 +75,16 @@ class EditorAgent(BaseAgent):
         if not brief:
             raise ValueError("Story brief is required to edit a chapter")
 
+        world_context_block = ""
+        if world_context:
+            world_context_block = (
+                f"\nWORLD CONTEXT (use for consistency checks):\n{world_context}\n"
+            )
+
         prompt = f"""Edit and polish this chapter.
 
 LANGUAGE: {brief.language} - Keep ALL text in {brief.language}. Do not translate.
-
+{world_context_block}
 ---
 {chapter_content}
 ---

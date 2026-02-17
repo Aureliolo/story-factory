@@ -84,14 +84,19 @@ class ServiceContainer:
         t0 = time.perf_counter()
         logger.info("Initializing ServiceContainer...")
         self.settings = settings or Settings.load()
-        self.project = ProjectService(self.settings)
+        self.embedding = EmbeddingService(self.settings)
+        self.project = ProjectService(self.settings, self.embedding)
         self.world = WorldService(self.settings)
         self.model = ModelService(self.settings)
         self.export = ExportService(self.settings)
         self.mode = ModelModeService(self.settings)
         self.scoring = ScoringService(self.mode)
+        self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
         # StoryService needs mode_service for adaptive learning hooks
-        self.story = StoryService(self.settings, mode_service=self.mode)
+        # and context_retrieval for RAG-based prompt enrichment
+        self.story = StoryService(
+            self.settings, mode_service=self.mode, context_retrieval=self.context_retrieval
+        )
         self.world_quality = WorldQualityService(self.settings, self.mode)
         self.suggestion = SuggestionService(self.settings)
         self.template = TemplateService(self.settings)
@@ -104,8 +109,6 @@ class ServiceContainer:
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
         self.temporal_validation = TemporalValidationService(self.settings)
-        self.embedding = EmbeddingService(self.settings)
-        self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
         service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",

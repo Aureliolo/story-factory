@@ -4,8 +4,9 @@ from unittest.mock import patch
 
 import pytest
 
-from src.agents.base import BaseAgent, LLMConnectionError
+from src.agents.base import BaseAgent
 from src.utils.error_handling import ErrorBoundary, handle_ollama_errors, retry_with_fallback
+from src.utils.exceptions import LLMConnectionError
 
 
 class TestHandleOllamaErrors:

@@ -3,10 +3,7 @@
 Centralized colors, styles, and visual constants.
 """
 
-from src.utils.constants import ENTITY_COLORS, get_entity_color
-
-# Re-export for backwards compatibility
-__all__ = ["ENTITY_COLORS", "get_entity_color"]
+from src.utils.constants import get_entity_color
 
 # ========== Entity Type Icons ==========
 # Material Design icon names

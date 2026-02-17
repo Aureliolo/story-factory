@@ -17,6 +17,42 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _retrieve_world_context(orc: StoryOrchestrator, task_description: str) -> str:
+    """Retrieve RAG world context for prompt enrichment.
+
+    Uses the orchestrator's context_retrieval service and world_db to perform
+    vector-similarity-based retrieval. Returns empty string if RAG is not
+    configured or retrieval fails.
+
+    Args:
+        orc: StoryOrchestrator instance with optional context_retrieval and world_db.
+        task_description: Description of the current agent task for query embedding.
+
+    Returns:
+        Formatted world context string, or empty string if unavailable.
+    """
+    if not orc.context_retrieval or not orc.world_db or not orc.story_state:
+        return ""
+
+    try:
+        retrieved = orc.context_retrieval.retrieve_context(
+            task_description=task_description,
+            world_db=orc.world_db,
+            story_state=orc.story_state,
+        )
+        formatted = retrieved.format_for_prompt()
+        if formatted:
+            logger.debug(
+                "Retrieved RAG context: %d items, ~%d tokens",
+                len(retrieved.items),
+                retrieved.total_tokens,
+            )
+        return formatted
+    except Exception as e:
+        logger.warning("RAG context retrieval failed (non-fatal): %s", e)
+        return ""
+
+
 def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, str]:
     """Write a short story with revision loop.
 
@@ -41,11 +77,14 @@ def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, 
     )
     orc.story_state.chapters = [short_story_chapter]
 
+    # Retrieve RAG context for writer
+    world_context = _retrieve_world_context(orc, "Write a complete short story")
+
     # Write initial draft
     orc._emit("agent_start", "Writer", "Writing story...")
     yield orc.events[-1]
 
-    content = orc.writer.write_short_story(orc.story_state)
+    content = orc.writer.write_short_story(orc.story_state, world_context=world_context)
 
     # Validate language/correctness
     try:
@@ -59,7 +98,7 @@ def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, 
     orc._emit("agent_start", "Editor", "Editing story...")
     yield orc.events[-1]
 
-    edited_content = orc.editor.edit_chapter(orc.story_state, content)
+    edited_content = orc.editor.edit_chapter(orc.story_state, content, world_context=world_context)
     short_story_chapter.content = edited_content
     short_story_chapter.status = "edited"
 
@@ -70,7 +109,9 @@ def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, 
     revision_count = 0
     while revision_count < orc.settings.max_revision_iterations:
         # Check for continuity issues
-        issues = orc.continuity.check_chapter(orc.story_state, short_story_chapter.content, 1)
+        issues = orc.continuity.check_chapter(
+            orc.story_state, short_story_chapter.content, 1, world_context=world_context
+        )
 
         # Also validate against plot outline
         outline_issues = orc.continuity.validate_against_outline(
@@ -95,8 +136,12 @@ def write_short_story(orc: StoryOrchestrator) -> Generator[WorkflowEvent, None, 
         yield orc.events[-1]
 
         # Pass revision feedback to writer
-        revised = orc.writer.write_short_story(orc.story_state, revision_feedback=feedback)
-        short_story_chapter.content = orc.editor.edit_chapter(orc.story_state, revised)
+        revised = orc.writer.write_short_story(
+            orc.story_state, revision_feedback=feedback, world_context=world_context
+        )
+        short_story_chapter.content = orc.editor.edit_chapter(
+            orc.story_state, revised, world_context=world_context
+        )
 
     # Extract new facts from the story
     new_facts = orc.continuity.extract_new_facts(short_story_chapter.content, orc.story_state)
@@ -186,6 +231,12 @@ def write_chapter(
     if orc._total_chapters == 0:
         orc._total_chapters = len(orc.story_state.chapters)
 
+    # Retrieve RAG context for this chapter
+    world_context = _retrieve_world_context(
+        orc,
+        f"Write chapter {chapter_number}: {chapter.title}. Outline: {chapter.outline[:200]}",
+    )
+
     # Write
     orc._set_phase("writer")
     write_msg = f"Writing Chapter {chapter_number}..."
@@ -223,7 +274,9 @@ def write_chapter(
             )
             orc._current_score_id = None
 
-    content = orc.writer.write_chapter(orc.story_state, chapter, revision_feedback=feedback)
+    content = orc.writer.write_chapter(
+        orc.story_state, chapter, revision_feedback=feedback, world_context=world_context
+    )
 
     # Validate language/correctness
     try:
@@ -238,7 +291,7 @@ def write_chapter(
     orc._emit("agent_start", "Editor", f"Editing Chapter {chapter_number}...")
     yield orc.events[-1]
 
-    edited_content = orc.editor.edit_chapter(orc.story_state, content)
+    edited_content = orc.editor.edit_chapter(orc.story_state, content, world_context=world_context)
 
     # Ensure consistency with previous chapter
     if chapter_number > 1:
@@ -261,7 +314,9 @@ def write_chapter(
     revision_count = 0
     while revision_count < orc.settings.max_revision_iterations:
         # Check for continuity issues
-        issues = orc.continuity.check_chapter(orc.story_state, chapter.content, chapter_number)
+        issues = orc.continuity.check_chapter(
+            orc.story_state, chapter.content, chapter_number, world_context=world_context
+        )
 
         # Also validate against outline
         outline_issues = orc.continuity.validate_against_outline(
@@ -283,8 +338,12 @@ def write_chapter(
         )
         yield orc.events[-1]
 
-        content = orc.writer.write_chapter(orc.story_state, chapter, revision_feedback=feedback)
-        edited_content = orc.editor.edit_chapter(orc.story_state, content)
+        content = orc.writer.write_chapter(
+            orc.story_state, chapter, revision_feedback=feedback, world_context=world_context
+        )
+        edited_content = orc.editor.edit_chapter(
+            orc.story_state, content, world_context=world_context
+        )
 
         # Ensure consistency in revisions too
         if chapter_number > 1:

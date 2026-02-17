@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.memory.world_database import WorldDatabase
+    from src.services.context_retrieval_service import ContextRetrievalService
     from src.services.model_mode_service import ModelModeService
 
 from src.agents import (
@@ -56,6 +58,7 @@ class StoryOrchestrator:
         settings: Settings | None = None,
         model_override: str | None = None,  # Force specific model for all agents
         mode_service: ModelModeService | None = None,  # ModelModeService for learning hooks
+        context_retrieval: ContextRetrievalService | None = None,
     ):
         """Create a StoryOrchestrator and initialize agents, persistent state, and progress tracking.
 
@@ -63,10 +66,13 @@ class StoryOrchestrator:
             settings (Settings | None): Application settings; when None the default settings are loaded.
             model_override (str | None): Model identifier to force for all agents; when None agents use their configured models.
             mode_service (ModelModeService | None): Optional ModelModeService instance for adaptive learning hooks.
+            context_retrieval (ContextRetrievalService | None): Optional context retrieval service for RAG-based prompt enrichment.
         """
         self.settings = settings or Settings.load()
         self.model_override = model_override
         self.mode_service = mode_service  # For learning hooks
+        self.context_retrieval = context_retrieval  # For RAG context injection
+        self.world_db: WorldDatabase | None = None  # Set per-project by StoryService
 
         # Initialize agents with settings
         self.interviewer = InterviewerAgent(model=model_override, settings=self.settings)

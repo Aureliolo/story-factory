@@ -43,15 +43,6 @@ class EmbeddingService:
         self._client: ollama.Client | None = None
         logger.info("EmbeddingService initialized")
 
-    @property
-    def is_available(self) -> bool:
-        """Whether embedding is available (model configured and RAG enabled).
-
-        Returns:
-            True if the embedding model is set and RAG context is enabled.
-        """
-        return bool(self.settings.rag_context_enabled and self.settings.embedding_model.strip())
-
     def _get_client(self) -> ollama.Client:
         """Get or create the Ollama client.
 
@@ -141,9 +132,6 @@ class EmbeddingService:
         Returns:
             True if the embedding was stored, False otherwise.
         """
-        if not self.is_available:
-            return False
-
         text = f"{entity.name}: {entity.description}"
         embedding = self.embed_text(text)
         if not embedding:
@@ -176,9 +164,6 @@ class EmbeddingService:
         Returns:
             True if the embedding was stored, False otherwise.
         """
-        if not self.is_available:
-            return False
-
         text = f"{source_name} {rel.relation_type} {target_name}: {rel.description}"
         embedding = self.embed_text(text)
         if not embedding:
@@ -202,9 +187,6 @@ class EmbeddingService:
         Returns:
             True if the embedding was stored, False otherwise.
         """
-        if not self.is_available:
-            return False
-
         chapter_part = f" (Chapter {event.chapter_number})" if event.chapter_number else ""
         text = f"Event: {event.description}{chapter_part}"
         embedding = self.embed_text(text)
@@ -232,9 +214,6 @@ class EmbeddingService:
         Returns:
             Number of items successfully embedded.
         """
-        if not self.is_available:
-            return 0
-
         embedded_count = 0
         model = self._get_model()
 
@@ -336,10 +315,6 @@ class EmbeddingService:
         Returns:
             Dict mapping content_type to count of items embedded.
         """
-        if not self.is_available:
-            logger.debug("embed_all_world_data skipped: embedding not available")
-            return {}
-
         counts: dict[str, int] = {}
 
         # Embed all entities
@@ -397,9 +372,6 @@ class EmbeddingService:
         Returns:
             True if re-embedding was performed, False if not needed.
         """
-        if not self.is_available:
-            return False
-
         model = self._get_model()
 
         if db.needs_reembedding(model):
@@ -429,9 +401,6 @@ class EmbeddingService:
         Args:
             db: WorldDatabase instance to attach callbacks to.
         """
-        if not self.is_available:
-            logger.debug("attach_to_database skipped: embedding not available")
-            return
 
         def on_content_changed(source_id: str, content_type: str, text: str) -> None:
             """Handle content changes by embedding the new/updated content."""

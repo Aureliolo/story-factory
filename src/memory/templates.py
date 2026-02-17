@@ -1,12 +1,20 @@
 """Template models for story structures and presets."""
 
-import logging
 from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-logger = logging.getLogger(__name__)
+
+def _normalize_traits(v: Any) -> Any:
+    """Normalize plain-string personality traits to PersonalityTrait dicts.
+
+    YAML templates use plain strings like ["brave", "clever"]; this converts
+    them to ``{"trait": "brave", "category": "core"}`` for Pydantic.
+    """
+    if not isinstance(v, list):
+        return v
+    return [{"trait": item, "category": "core"} if isinstance(item, str) else item for item in v]
 
 
 class PersonalityTrait(BaseModel):
@@ -19,32 +27,6 @@ class PersonalityTrait(BaseModel):
 
     trait: str
     category: Literal["core", "flaw", "quirk"] = "core"
-
-
-def normalize_personality_traits_list(v: Any) -> Any:
-    """Normalize a list of personality traits from plain strings to dicts.
-
-    Handles backward compatibility with old project JSON files and builtin
-    YAML templates that use plain string lists like ["brave", "clever"].
-    Converts them to PersonalityTrait dicts with category defaulting to "core".
-    """
-    if not isinstance(v, list):
-        return v
-    normalized: list[dict[str, str]] = []
-    has_plain_strings = False
-    for item in v:
-        if isinstance(item, str):
-            normalized.append({"trait": item, "category": "core"})
-            has_plain_strings = True
-        else:
-            normalized.append(item)
-    if has_plain_strings:
-        logger.debug(
-            "Normalized %d personality traits (%d from plain strings)",
-            len(normalized),
-            sum(1 for i in v if isinstance(i, str)),
-        )
-    return normalized
 
 
 # Shared type for target length across templates and story briefs
@@ -128,8 +110,8 @@ class CharacterTemplate(BaseModel):
     @field_validator("personality_traits", mode="before")
     @classmethod
     def normalize_personality_traits(cls, v: Any) -> Any:
-        """Normalize personality traits from plain strings or dicts."""
-        return normalize_personality_traits_list(v)
+        """Normalize plain-string personality traits from YAML templates."""
+        return _normalize_traits(v)
 
 
 class PlotPointTemplate(BaseModel):

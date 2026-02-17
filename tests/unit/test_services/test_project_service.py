@@ -1,9 +1,16 @@
 """Tests for ProjectService."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from src.memory.world_database import WorldDatabase
 from src.services.project_service import ProjectService, _validate_path
+
+
+def _mock_embedding_service():
+    """Create a mock EmbeddingService for ProjectService tests."""
+    return MagicMock()
 
 
 class TestProjectService:
@@ -15,7 +22,7 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
         state, world_db = service.create_project("Test Story")
 
         assert isinstance(state.id, str) and len(state.id) > 0
@@ -29,7 +36,7 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
         state, _ = service.create_project()
 
         assert state.project_name.startswith("New Story")
@@ -41,7 +48,7 @@ class TestProjectService:
 
         (tmp_path / "stories").mkdir(parents=True, exist_ok=True)
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
         projects = service.list_projects()
 
         assert projects == []
@@ -51,7 +58,7 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create some projects
         service.create_project("Project 1")
@@ -69,7 +76,7 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         state, _ = service.create_project("Test Project")
@@ -90,7 +97,7 @@ class TestProjectService:
 
         (tmp_path / "stories").mkdir(parents=True, exist_ok=True)
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         with pytest.raises(FileNotFoundError):
             service.load_project("nonexistent-id")
@@ -100,7 +107,7 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         state, world_db = service.create_project("To Delete")
@@ -123,7 +130,7 @@ class TestProjectService:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create original project
         original, _ = service.create_project("Original")
@@ -208,7 +215,7 @@ class TestProjectServiceAdditional:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", nonexistent)
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Now delete the directory to simulate it not existing
         import shutil
@@ -228,7 +235,7 @@ class TestProjectServiceAdditional:
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
         # Create a valid project first
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
         service.create_project("Valid Project")
 
         # Create a corrupt JSON file
@@ -264,7 +271,7 @@ class TestProjectServiceAdditional:
         project_file = stories_dir / f"{project_id}.json"
         project_file.write_text(json.dumps(legacy_data), encoding="utf-8")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
         state, world_db = service.load_project(project_id)
 
         # Should create world DB path
@@ -278,7 +285,7 @@ class TestProjectServiceAdditional:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         state, _ = service.create_project("Original Name")
@@ -299,7 +306,7 @@ class TestProjectServiceAdditional:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
         path = service.get_project_path("test-uuid-123")
 
         assert path == stories_dir / "test-uuid-123.json"
@@ -310,7 +317,7 @@ class TestProjectServiceAdditional:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", worlds_dir)
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
         path = service.get_world_db_path("test-uuid-123")
 
         assert path == worlds_dir / "test-uuid-123.db"
@@ -328,7 +335,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Use a built-in template
         state, _world_db = service.create_project("Templated Story", template_id="fantasy-epic")
@@ -345,7 +352,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Use a nonexistent template ID
         state, _world_db = service.create_project(
@@ -363,7 +370,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Mock WorldDatabase to raise an exception
         def mock_world_db_init(*args, **kwargs):
@@ -399,7 +406,7 @@ class TestProjectServiceExceptionHandling:
         project_file = stories_dir / f"{project_id}.json"
         project_file.write_text(json.dumps(valid_data), encoding="utf-8")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Mock WorldDatabase to raise an exception (after JSON is loaded)
         def mock_world_db_init(*args, **kwargs):
@@ -416,7 +423,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         state, _ = service.create_project("Test Project")
@@ -441,7 +448,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         state, world_db = service.create_project("Test Project")
@@ -467,7 +474,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         original, _ = service.create_project("Original Project")
@@ -487,7 +494,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         state, _ = service.create_project("Original Name")
@@ -508,7 +515,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create original project
         original, _ = service.create_project("Original")
@@ -524,7 +531,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         result = service.delete_project("nonexistent-project-id")
 
@@ -537,7 +544,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Attempt path traversal
         with pytest.raises(ValueError, match="outside"):
@@ -550,7 +557,7 @@ class TestProjectServiceExceptionHandling:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", stories_dir)
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Attempt path traversal
         with pytest.raises(ValueError, match="outside"):
@@ -565,7 +572,7 @@ class TestProjectServiceGetByName:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         state, _ = service.create_project("My Unique Story")
@@ -582,7 +589,7 @@ class TestProjectServiceGetByName:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create some projects
         service.create_project("Project A")
@@ -600,7 +607,7 @@ class TestProjectServiceGetByName:
 
         (tmp_path / "stories").mkdir(parents=True, exist_ok=True)
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         found = service.get_project_by_name("Any Name")
 
@@ -611,7 +618,7 @@ class TestProjectServiceGetByName:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         with pytest.raises(ValueError, match="name"):
             service.get_project_by_name("")
@@ -621,7 +628,7 @@ class TestProjectServiceGetByName:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create projects
         _state1, world_db1 = service.create_project("Delete Me")
@@ -642,7 +649,7 @@ class TestProjectServiceGetByName:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         # Create a project
         service.create_project("Existing Project")
@@ -658,7 +665,7 @@ class TestProjectServiceGetByName:
         monkeypatch.setattr("src.services.project_service.STORIES_DIR", tmp_path / "stories")
         monkeypatch.setattr("src.services.project_service.WORLDS_DIR", tmp_path / "worlds")
 
-        service = ProjectService(tmp_settings)
+        service = ProjectService(tmp_settings, _mock_embedding_service())
 
         with pytest.raises(ValueError, match="name"):
             service.delete_project_by_name("")

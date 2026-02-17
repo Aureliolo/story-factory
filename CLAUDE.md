@@ -70,14 +70,16 @@ main.py
        ├── TemplateService        # Story template management
        ├── BackupService          # Project backup/restore
        ├── ImportService          # Import entities from text
-       └── ComparisonService      # Model comparison testing
+       ├── ComparisonService      # Model comparison testing
+       ├── EmbeddingService       # Vector embeddings via Ollama
+       └── ContextRetrievalService # RAG context retrieval for agent prompts
 ```
 
 **Layer responsibilities:**
 - **src/services/**: Business logic layer - no UI imports, receives settings via DI; includes orchestrator.py
 - **src/ui/**: NiceGUI components - only calls services, manages UI state via AppState
 - **src/agents/**: AI agent implementations - extend BaseAgent, use retry logic
-- **src/memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX)
+- **src/memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX + sqlite-vec)
 - **src/prompts/**: YAML prompt templates loaded at runtime
 
 **Key patterns:**
@@ -96,6 +98,17 @@ main.py
 User Input → Interviewer → Architect → [Writer → Editor → Continuity] × N → Final Story
                                             └────── revision loop ───────┘
 ```
+
+**RAG Context Pipeline:**
+
+The writing agents receive semantically relevant world context via a RAG pipeline:
+```
+WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → StoryOrchestrator → Agent prompts
+```
+- `EmbeddingService` generates vector embeddings via Ollama and attaches auto-embedding callbacks to `WorldDatabase`
+- `ContextRetrievalService` performs KNN vector search to retrieve relevant entities/relationships for the current writing task
+- `StoryOrchestrator` retrieves RAG context before each agent call and passes it as `world_context` to Writer, Editor, and Continuity agents
+- RAG retrieval failures are non-fatal — agents proceed with empty context if retrieval fails
 
 ## Threading Model
 
@@ -133,11 +146,13 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - `src/settings.json`: User configuration (gitignored, copy from `src/settings.example.json`)
 - `src/ui/state.py`: Centralized UI state (AppState)
 - `src/services/__init__.py`: ServiceContainer for dependency injection
-- `src/services/orchestrator.py`: StoryOrchestrator coordinates agents through the story creation pipeline
+- `src/services/orchestrator/`: StoryOrchestrator coordinates agents through the story creation pipeline
 - `src/agents/base.py`: BaseAgent with retry logic, rate limiting, configurable timeout
 - `src/utils/exceptions.py`: Centralized exception hierarchy (StoryFactoryError, LLMError, etc.)
 - `src/utils/constants.py`: Shared constants (language codes, etc.)
-- `src/memory/world_database.py`: SQLite + NetworkX with thread safety and schema migrations
+- `src/memory/world_database.py`: SQLite + NetworkX + sqlite-vec with thread safety
+- `src/services/context_retrieval_service.py`: RAG context retrieval via vector similarity search
+- `src/services/embedding_service.py`: Vector embedding generation via Ollama
 
 ## Testing
 

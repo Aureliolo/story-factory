@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.memory.content_guidelines import ContentProfile
-from src.memory.templates import PersonalityTrait, TargetLength, normalize_personality_traits_list
+from src.memory.templates import PersonalityTrait, TargetLength, _normalize_traits
 
 if TYPE_CHECKING:
     from src.memory._chapter_versions import ChapterVersionManager
@@ -32,8 +32,8 @@ class Character(BaseModel):
     @field_validator("personality_traits", mode="before")
     @classmethod
     def normalize_personality_traits(cls, v: Any) -> Any:
-        """Normalize personality traits from plain strings or dicts."""
-        return normalize_personality_traits_list(v)
+        """Normalize plain-string personality traits from old project JSONs."""
+        return _normalize_traits(v)
 
     @field_validator("arc_progress", mode="before")
     @classmethod
@@ -704,8 +704,8 @@ class CharacterCreation(BaseModel):
     @field_validator("personality_traits", mode="before")
     @classmethod
     def normalize_personality_traits(cls, v: Any) -> Any:
-        """Normalize personality traits from plain strings or dicts."""
-        return normalize_personality_traits_list(v)
+        """Normalize plain-string personality traits from old project JSONs."""
+        return _normalize_traits(v)
 
     def to_character(self) -> Character:
         """Convert to a full Character with default runtime fields."""

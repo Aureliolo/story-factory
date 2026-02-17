@@ -1,12 +1,12 @@
 """Unit tests for ContextRetrievalService.
 
 Tests the RAG-based context retrieval service that provides semantically
-relevant world context for LLM prompts. Covers vector retrieval, fallback
-to legacy context, graph expansion, token budgeting, deduplication,
-similarity threshold filtering, and content type filtering.
+relevant world context for LLM prompts. Covers vector retrieval, graph
+expansion, token budgeting, deduplication, similarity threshold filtering,
+and content type filtering.
 """
 
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -85,41 +85,22 @@ def _make_settings(**overrides) -> Settings:
     return settings
 
 
-def _make_embedding_service(available: bool = True, embed_result: list | None = None):
+def _make_embedding_service(embed_result: list | None = None):
     """Create a mock EmbeddingService."""
     mock = MagicMock()
-    type(mock).is_available = PropertyMock(return_value=available)
     mock.embed_text.return_value = embed_result if embed_result is not None else FAKE_VECTOR
     return mock
 
 
 def _make_world_db(
-    vec_available: bool = True,
     search_results: list | None = None,
-    context_for_agents: dict | None = None,
     connected_entities: list | None = None,
     relationships: list | None = None,
     entity_map: dict | None = None,
 ):
     """Create a mock WorldDatabase with configurable return values."""
     mock = MagicMock()
-    type(mock).vec_available = PropertyMock(return_value=vec_available)
     mock.search_similar.return_value = search_results if search_results is not None else []
-    mock.get_context_for_agents.return_value = context_for_agents or {
-        "characters": [],
-        "locations": [],
-        "items": [],
-        "factions": [],
-        "key_relationships": [],
-        "recent_events": [],
-        "entity_counts": {
-            "characters": 0,
-            "locations": 0,
-            "items": 0,
-            "factions": 0,
-            "concepts": 0,
-        },
-    }
     mock.get_connected_entities.return_value = connected_entities or []
     mock.get_relationships.return_value = relationships or []
 
@@ -284,8 +265,8 @@ class TestContextRetrievalService:
             _make_search_result("ent-bob", "entity", "Bob: A friend", distance=0.3),
         ]
         settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=True, embed_result=FAKE_VECTOR)
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        embedding_svc = _make_embedding_service(embed_result=FAKE_VECTOR)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -304,124 +285,6 @@ class TestContextRetrievalService:
         assert "ent-bob" in source_ids
         assert "project:brief" in source_ids
 
-    def test_retrieve_context_fallback_path(self, sample_story_state) -> None:
-        """Falls back to legacy context when vec is not available."""
-        settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=False)
-        world_db = _make_world_db(
-            vec_available=False,
-            context_for_agents={
-                "characters": [{"name": "Alice", "description": "Hero"}],
-                "locations": [],
-                "key_relationships": [],
-                "recent_events": [],
-            },
-        )
-
-        service = ContextRetrievalService(settings, embedding_svc)
-        result = service.retrieve_context(
-            task_description="Write chapter 1",
-            world_db=world_db,
-            story_state=sample_story_state,
-        )
-
-        assert result.retrieval_method == "fallback"
-        world_db.get_context_for_agents.assert_called_once()
-
-        # Should have the character item plus project info
-        source_ids = {item.source_id for item in result.items}
-        assert "fallback:char:Alice" in source_ids
-        assert "project:brief" in source_ids
-
-    def test_retrieve_context_fallback_legacy_data(self, sample_story_state) -> None:
-        """Legacy data (characters, locations, relationships, events) is converted correctly."""
-        legacy_data = {
-            "characters": [
-                {"name": "Alice", "description": "The protagonist"},
-                {"name": "Bob", "description": "A friend"},
-            ],
-            "locations": [
-                {"name": "Forest", "description": "A dark forest"},
-            ],
-            "key_relationships": [
-                {
-                    "from": "Alice",
-                    "to": "Bob",
-                    "type": "knows",
-                    "description": "Best friends",
-                },
-            ],
-            "recent_events": [
-                {"chapter": 1, "description": "Alice discovered her powers"},
-            ],
-        }
-        settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=False)
-        world_db = _make_world_db(vec_available=False, context_for_agents=legacy_data)
-
-        service = ContextRetrievalService(settings, embedding_svc)
-        result = service.retrieve_context(
-            task_description="Write chapter 2",
-            world_db=world_db,
-            story_state=sample_story_state,
-        )
-
-        assert result.retrieval_method == "fallback"
-
-        items_by_id = {item.source_id: item for item in result.items}
-
-        # Characters converted
-        alice_item = items_by_id["fallback:char:Alice"]
-        assert alice_item.source_type == "entity"
-        assert "Alice: The protagonist" in alice_item.text
-        assert alice_item.relevance_score == 0.5
-
-        bob_item = items_by_id["fallback:char:Bob"]
-        assert "Bob: A friend" in bob_item.text
-
-        # Location converted
-        forest_item = items_by_id["fallback:loc:Forest"]
-        assert forest_item.source_type == "entity"
-        assert "Forest: A dark forest" in forest_item.text
-        assert forest_item.relevance_score == 0.4
-
-        # Relationship converted
-        rel_item = items_by_id["fallback:rel:Alice:Bob"]
-        assert rel_item.source_type == "relationship"
-        assert "Alice knows Bob: Best friends" in rel_item.text
-        assert rel_item.relevance_score == 0.4
-
-        # Event converted
-        evt_item = items_by_id["fallback:evt:Alice discovered her powers"]
-        assert evt_item.source_type == "event"
-        assert "Event (Ch.1): Alice discovered her powers" in evt_item.text
-        assert evt_item.relevance_score == 0.3
-
-    def test_retrieve_context_fallback_event_no_chapter(self, sample_story_state) -> None:
-        """Legacy events without a chapter key display '?' as the chapter number."""
-        legacy_data = {
-            "characters": [],
-            "locations": [],
-            "key_relationships": [],
-            "recent_events": [
-                {"description": "Something happened"},
-            ],
-        }
-        settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=False)
-        world_db = _make_world_db(vec_available=False, context_for_agents=legacy_data)
-
-        service = ContextRetrievalService(settings, embedding_svc)
-        result = service.retrieve_context(
-            task_description="Continue the story",
-            world_db=world_db,
-            story_state=sample_story_state,
-        )
-
-        event_items = [i for i in result.items if i.source_type == "event"]
-        assert len(event_items) == 1
-        assert "Event (Ch.?)" in event_items[0].text
-
     def test_retrieve_context_vector_with_graph_expansion(self, sample_story_state) -> None:
         """Graph expansion adds neighbors and relationships for entity results."""
         search_results = [
@@ -435,7 +298,6 @@ class TestContextRetrievalService:
         settings = _make_settings(rag_context_graph_expansion=True, rag_context_graph_depth=1)
         embedding_svc = _make_embedding_service()
         world_db = _make_world_db(
-            vec_available=True,
             search_results=search_results,
             connected_entities=[neighbor],
             relationships=[relationship],
@@ -482,7 +344,6 @@ class TestContextRetrievalService:
         settings = _make_settings(rag_context_graph_expansion=True)
         embedding_svc = _make_embedding_service()
         world_db = _make_world_db(
-            vec_available=True,
             search_results=search_results,
             connected_entities=[neighbor],
             relationships=[],
@@ -507,7 +368,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings(rag_context_graph_expansion=True)
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
         world_db.get_connected_entities.side_effect = RuntimeError("Graph error")
 
         service = ContextRetrievalService(settings, embedding_svc)
@@ -537,7 +398,6 @@ class TestContextRetrievalService:
         settings = _make_settings(rag_context_graph_expansion=True)
         embedding_svc = _make_embedding_service()
         world_db = _make_world_db(
-            vec_available=True,
             search_results=search_results,
             connected_entities=[],
             relationships=[relationship],
@@ -565,7 +425,7 @@ class TestContextRetrievalService:
 
         settings = _make_settings(rag_context_max_tokens=60)  # Budget for ~2 items + brief
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -591,7 +451,7 @@ class TestContextRetrievalService:
         # ent-bad: relevance = 0.1 (filtered out)
         settings = _make_settings(rag_context_similarity_threshold=0.3)
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -612,7 +472,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -637,7 +497,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -658,7 +518,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -689,7 +549,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True)
+        world_db = _make_world_db()
         # Return different results per call
         world_db.search_similar.side_effect = [entity_results, event_results]
 
@@ -717,7 +577,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         service.retrieve_context(
@@ -743,7 +603,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         service.retrieve_context(
@@ -762,7 +622,7 @@ class TestContextRetrievalService:
         search_results: list[dict] = []
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         service.retrieve_context(
@@ -776,19 +636,11 @@ class TestContextRetrievalService:
         # Multiple entity_types → entity_type=None (can't filter to one)
         assert call_kwargs["entity_type"] is None
 
-    def test_retrieve_context_embed_failure_fallback(self, sample_story_state) -> None:
-        """Falls back to legacy context when embed_text returns empty list."""
+    def test_retrieve_context_embed_failure_returns_empty(self, sample_story_state) -> None:
+        """Returns empty context when embed_text returns empty list."""
         settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=True, embed_result=[])
-        world_db = _make_world_db(
-            vec_available=True,
-            context_for_agents={
-                "characters": [{"name": "Alice", "description": "Fallback hero"}],
-                "locations": [],
-                "key_relationships": [],
-                "recent_events": [],
-            },
-        )
+        embedding_svc = _make_embedding_service(embed_result=[])
+        world_db = _make_world_db()
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -797,23 +649,17 @@ class TestContextRetrievalService:
             story_state=sample_story_state,
         )
 
-        assert result.retrieval_method == "fallback"
-        source_ids = {item.source_id for item in result.items}
-        assert "fallback:char:Alice" in source_ids
+        assert result.retrieval_method == "vector"
+        assert result.items == []
+        assert result.total_tokens == 0
 
-    def test_retrieve_context_vector_search_exception_fallback(self, sample_story_state) -> None:
-        """Falls back to legacy context when search_similar raises an exception."""
+    def test_retrieve_context_vector_search_exception_returns_empty(
+        self, sample_story_state
+    ) -> None:
+        """Returns empty context when search_similar raises an exception."""
         settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=True, embed_result=FAKE_VECTOR)
-        world_db = _make_world_db(
-            vec_available=True,
-            context_for_agents={
-                "characters": [{"name": "Bob", "description": "Fallback char"}],
-                "locations": [],
-                "key_relationships": [],
-                "recent_events": [],
-            },
-        )
+        embedding_svc = _make_embedding_service(embed_result=FAKE_VECTOR)
+        world_db = _make_world_db()
         world_db.search_similar.side_effect = RuntimeError("vec table corrupted")
 
         service = ContextRetrievalService(settings, embedding_svc)
@@ -823,9 +669,9 @@ class TestContextRetrievalService:
             story_state=sample_story_state,
         )
 
-        assert result.retrieval_method == "fallback"
-        source_ids = {item.source_id for item in result.items}
-        assert "fallback:char:Bob" in source_ids
+        assert result.retrieval_method == "vector"
+        assert result.items == []
+        assert result.total_tokens == 0
 
     def test_get_project_info_no_brief(self) -> None:
         """_get_project_info_items returns empty list when story state has no brief."""
@@ -910,7 +756,7 @@ class TestContextRetrievalService:
         """max_tokens and k default to settings values when not provided."""
         settings = _make_settings(rag_context_max_tokens=500, rag_context_max_items=5)
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=[])
+        world_db = _make_world_db(search_results=[])
 
         service = ContextRetrievalService(settings, embedding_svc)
         service.retrieve_context(
@@ -926,7 +772,7 @@ class TestContextRetrievalService:
         """Explicit max_tokens and k parameters override settings defaults."""
         settings = _make_settings(rag_context_max_tokens=500, rag_context_max_items=5)
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=[])
+        world_db = _make_world_db(search_results=[])
 
         service = ContextRetrievalService(settings, embedding_svc)
         service.retrieve_context(
@@ -944,7 +790,7 @@ class TestContextRetrievalService:
         """chapter_number is passed through to search_similar."""
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=[])
+        world_db = _make_world_db(search_results=[])
 
         service = ContextRetrievalService(settings, embedding_svc)
         service.retrieve_context(
@@ -964,7 +810,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings(rag_context_similarity_threshold=0.3)
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -976,50 +822,6 @@ class TestContextRetrievalService:
         # The entity with distance > 1.0 should be filtered (relevance = max(0, 1-1.5) = 0.0)
         entity_ids = {i.source_id for i in result.items if i.source_type == "entity"}
         assert "ent-far" not in entity_ids
-
-    def test_retrieve_fallback_legacy_exception(self, sample_story_state) -> None:
-        """Fallback returns empty context when get_context_for_agents raises."""
-        settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=False)
-        world_db = _make_world_db(vec_available=False)
-        world_db.get_context_for_agents.side_effect = RuntimeError("DB error")
-
-        service = ContextRetrievalService(settings, embedding_svc)
-        result = service.retrieve_context(
-            task_description="Write chapter 1",
-            world_db=world_db,
-            story_state=sample_story_state,
-        )
-
-        assert result.retrieval_method == "fallback"
-        assert result.items == []
-        assert result.total_tokens == 0
-
-    def test_retrieve_context_fallback_token_budgeting(self, sample_story_state) -> None:
-        """Fallback respects token budget, skipping items that would exceed it."""
-        # Each character text "Name: Description" is about 5-10 tokens
-        # Create enough characters to exceed a tiny budget
-        chars = [{"name": f"Char{i}", "description": "A" * 200} for i in range(20)]
-        legacy_data = {
-            "characters": chars,
-            "locations": [],
-            "key_relationships": [],
-            "recent_events": [],
-        }
-        settings = _make_settings()
-        embedding_svc = _make_embedding_service(available=False)
-        world_db = _make_world_db(vec_available=False, context_for_agents=legacy_data)
-
-        service = ContextRetrievalService(settings, embedding_svc)
-        result = service.retrieve_context(
-            task_description="Write chapter 1",
-            world_db=world_db,
-            story_state=sample_story_state,
-            max_tokens=100,
-        )
-
-        assert result.total_tokens <= 100
-        assert len(result.items) < 20
 
     def test_retrieve_context_display_text_none_handled(self, sample_story_state) -> None:
         """Search results with display_text=None are converted to empty string."""
@@ -1034,7 +836,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(
@@ -1058,7 +860,7 @@ class TestContextRetrievalService:
         ]
         settings = _make_settings()
         embedding_svc = _make_embedding_service()
-        world_db = _make_world_db(vec_available=True, search_results=search_results)
+        world_db = _make_world_db(search_results=search_results)
 
         service = ContextRetrievalService(settings, embedding_svc)
         result = service.retrieve_context(

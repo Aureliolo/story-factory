@@ -130,27 +130,6 @@ FAKE_EMBEDDING = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 
 # ---------------------------------------------------------------------------
-# is_available property tests
-# ---------------------------------------------------------------------------
-
-
-class TestIsAvailable:
-    """Tests for the is_available property."""
-
-    def test_is_available_true(self, service):
-        """Service is available when RAG is enabled and embedding model is set."""
-        assert service.is_available is True
-
-    def test_is_available_false_disabled(self, disabled_service):
-        """Service is not available when RAG context is disabled."""
-        assert disabled_service.is_available is False
-
-    def test_is_available_false_no_model(self, no_model_service):
-        """Service is not available when embedding model is empty string."""
-        assert no_model_service.is_available is False
-
-
-# ---------------------------------------------------------------------------
 # embed_text tests
 # ---------------------------------------------------------------------------
 
@@ -630,14 +609,17 @@ class TestEmbedAllWorldData:
         assert counts["event"] == 1
         assert counts["story_state"] == 1
 
-    def test_embed_all_world_data_not_available(self, disabled_service, mock_db):
-        """Returns empty dict when the embedding service is not available."""
+    def test_embed_all_world_data_empty_world(self, service, mock_db):
+        """Returns zero counts when the world has no entities, relationships, or events."""
         story_state = SimpleNamespace()
 
-        counts = disabled_service.embed_all_world_data(mock_db, story_state)
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            counts = service.embed_all_world_data(mock_db, story_state)
 
-        assert counts == {}
-        mock_db.list_entities.assert_not_called()
+        assert counts["entity"] == 0
+        assert counts["relationship"] == 0
+        assert counts["event"] == 0
+        assert counts["story_state"] == 0
 
     def test_embed_all_world_data_with_progress_callback(self, service, mock_db, sample_entity):
         """Calls progress callback for each entity during batch embedding."""
@@ -720,14 +702,12 @@ class TestCheckAndReembedIfNeeded:
         mock_db.recreate_vec_table.assert_not_called()
         mock_db.clear_all_embeddings.assert_not_called()
 
-    def test_check_and_reembed_if_needed_not_available(self, disabled_service, mock_db):
-        """Returns False when the embedding service is not available."""
+    def test_check_and_reembed_if_needed_no_model(self, no_model_service, mock_db):
+        """Raises ValueError when no embedding model is configured."""
         story_state = SimpleNamespace()
 
-        result = disabled_service.check_and_reembed_if_needed(mock_db, story_state)
-
-        assert result is False
-        mock_db.needs_reembedding.assert_not_called()
+        with pytest.raises(ValueError, match="No embedding model configured"):
+            no_model_service.check_and_reembed_if_needed(mock_db, story_state)
 
 
 # ---------------------------------------------------------------------------
@@ -751,12 +731,12 @@ class TestAttachToDatabase:
         assert callable(on_changed)
         assert callable(on_deleted)
 
-    def test_attach_to_database_not_available(self, disabled_service, mock_db):
-        """Skips callback registration when embedding is not available."""
+    def test_attach_to_database_always_registers(self, disabled_service, mock_db):
+        """Registers callbacks even when rag_context_enabled is False (embedding is mandatory)."""
         disabled_service.attach_to_database(mock_db)
 
-        mock_db.attach_content_changed_callback.assert_not_called()
-        mock_db.attach_content_deleted_callback.assert_not_called()
+        mock_db.attach_content_changed_callback.assert_called_once()
+        mock_db.attach_content_deleted_callback.assert_called_once()
 
     def test_attached_on_content_changed_callback_embeds(self, service, mock_db):
         """The content changed callback embeds new content and upserts it."""

@@ -14,7 +14,7 @@ from src.memory.cost_models import GenerationMetrics
 from src.settings import ModelInfo, Settings, get_model_info
 from src.utils.circuit_breaker import get_circuit_breaker
 from src.utils.error_handling import handle_ollama_errors
-from src.utils.exceptions import CircuitOpenError, LLMConnectionError, LLMError, LLMGenerationError
+from src.utils.exceptions import CircuitOpenError, LLMError, LLMGenerationError
 from src.utils.json_parser import clean_llm_text
 from src.utils.logging_config import log_performance
 from src.utils.prompt_registry import PromptRegistry
@@ -70,8 +70,7 @@ def _acquire_llm_semaphore(settings: Settings):
         semaphore.release()
 
 
-# Re-export exceptions for backward compatibility
-__all__ = ["BaseAgent", "CircuitOpenError", "LLMConnectionError", "LLMError", "LLMGenerationError"]
+__all__ = ["BaseAgent"]
 
 # Class-level singleton for prompt registry
 _prompt_registry: PromptRegistry | None = None

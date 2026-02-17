@@ -478,24 +478,6 @@ class WorldService:
         """
         return _graph.get_most_connected(self, world_db, limit)
 
-    # ========== CONTEXT FOR AGENTS ==========
-
-    def get_context_for_agents(
-        self,
-        world_db: WorldDatabase,
-        max_entities: int = 50,
-    ) -> dict[str, Any]:
-        """Get world context formatted for AI agents.
-
-        Args:
-            world_db: WorldDatabase instance.
-            max_entities: Maximum entities per type to include.
-
-        Returns:
-            Dictionary with world context (characters, locations, items, etc.).
-        """
-        return _graph.get_context_for_agents(self, world_db, max_entities)
-
     def get_entity_summary(self, world_db: WorldDatabase) -> dict[str, int]:
         """Get a summary count of entities by type.
 

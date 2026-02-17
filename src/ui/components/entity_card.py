@@ -6,7 +6,8 @@ from typing import Any
 from nicegui import ui
 
 from src.memory.entities import Entity
-from src.ui.theme import get_entity_color, get_entity_icon, get_role_border_style
+from src.ui.theme import get_entity_icon, get_role_border_style
+from src.utils.constants import get_entity_color
 
 
 def _get_quality_badge_color(score: float) -> str:

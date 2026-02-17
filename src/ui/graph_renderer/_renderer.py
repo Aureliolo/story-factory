@@ -12,7 +12,8 @@ from src.ui.graph_renderer._layout import (
     calculate_grid_positions,
     get_layout_options,
 )
-from src.ui.theme import ENTITY_COLORS, RELATION_COLORS, get_role_graph_style
+from src.ui.theme import RELATION_COLORS, get_role_graph_style
+from src.utils.constants import ENTITY_COLORS
 
 logger = logging.getLogger(__name__)
 

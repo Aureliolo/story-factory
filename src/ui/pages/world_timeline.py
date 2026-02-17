@@ -11,7 +11,7 @@ from nicegui import ui
 from src.services import ServiceContainer
 from src.ui.components.world_timeline import WorldTimelineComponent
 from src.ui.state import AppState
-from src.ui.theme import ENTITY_COLORS
+from src.utils.constants import ENTITY_COLORS
 
 logger = logging.getLogger(__name__)
 
