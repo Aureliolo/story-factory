@@ -453,9 +453,10 @@ class TestEmbedStoryStateData:
         assert "Chapter 1:" in call_kwargs["text"]
 
     def test_embed_story_state_data_scene_no_title(self, service, mock_db):
-        """Embeds scene outline where scene has no title attribute."""
+        """Embeds scene outline where scene has an empty title."""
         scene = SimpleNamespace(
             outline="Something happens here.",
+            title="",
         )
         chapter = SimpleNamespace(
             number=1,
@@ -475,7 +476,7 @@ class TestEmbedStoryStateData:
         # 1 chapter + 1 scene
         assert count == 2
         scene_call = mock_db.upsert_embedding.call_args_list[1].kwargs
-        # No title in scene text since scene has no title attr
+        # No title in scene text since scene title is empty
         assert "'" not in scene_call["text"]
 
     def test_embed_story_state_data_chapter_no_outline(self, service, mock_db):
@@ -548,7 +549,11 @@ class TestEmbedStoryStateData:
 
     def test_embed_story_state_data_no_facts_or_rules_or_chapters(self, service, mock_db):
         """Handles story state with no embeddable content attributes."""
-        story_state = SimpleNamespace()
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
 
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
             count = service.embed_story_state_data(mock_db, story_state)
@@ -611,7 +616,11 @@ class TestEmbedAllWorldData:
 
     def test_embed_all_world_data_empty_world(self, service, mock_db):
         """Returns zero counts when the world has no entities, relationships, or events."""
-        story_state = SimpleNamespace()
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
 
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
             counts = service.embed_all_world_data(mock_db, story_state)
@@ -627,7 +636,11 @@ class TestEmbedAllWorldData:
         mock_db.list_relationships.return_value = []
         mock_db.list_events.return_value = []
 
-        story_state = SimpleNamespace()
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
         progress_cb = MagicMock()
 
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
@@ -644,7 +657,11 @@ class TestEmbedAllWorldData:
         mock_db.list_events.return_value = []
         mock_db.get_entity.return_value = None
 
-        story_state = SimpleNamespace()
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
 
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
             counts = service.embed_all_world_data(mock_db, story_state)

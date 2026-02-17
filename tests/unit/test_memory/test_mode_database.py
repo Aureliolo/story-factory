@@ -1829,6 +1829,8 @@ class TestModeDatabaseMigrations:
             assert "best_iteration" in columns
             assert "quality_threshold" in columns
             assert "max_iterations" in columns
+            assert "temporal_consistency_score" in columns
+            assert "temporal_validation_errors" in columns
         finally:
             conn.close()
 

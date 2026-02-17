@@ -25,6 +25,7 @@ def validate(settings: Settings) -> bool:
 
     Raises:
         ValueError: If any field contains an invalid value.
+        ConfigError: If RAG context settings are inconsistent (e.g. empty embedding_model).
     """
     _validate_log_level(settings)
     _validate_url(settings)
