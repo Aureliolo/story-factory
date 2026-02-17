@@ -720,19 +720,26 @@ def _generate_relationships(
     return added_count
 
 
+MAX_RETRIES_PER_ORPHAN = 2  # Up to 3 total attempts per orphan (1 + 2 retries)
+
+
 def _recover_orphans(
     svc: WorldService,
     state: StoryState,
     world_db: WorldDatabase,
     services: ServiceContainer,
     cancel_check: Callable[[], bool] | None = None,
-    max_attempts: int = 5,
 ) -> int:
     """Attempt to connect orphan entities by generating additional relationships.
 
     After the main relationship generation pass, some entities may have zero
     connections. This function identifies them and tries to generate relationships
-    to connect them to the world.
+    to connect them to the world using a per-orphan loop with retry budget.
+
+    Each orphan gets up to ``MAX_RETRIES_PER_ORPHAN + 1`` attempts. The
+    ``required_entity`` constraint tells the LLM to include the orphan; the
+    quality loop rejects relationships that omit it *before* the expensive
+    judge/refine cycle, eliminating wasted LLM calls.
 
     Args:
         svc: WorldService instance.
@@ -740,14 +747,10 @@ def _recover_orphans(
         world_db: World database.
         services: Service container.
         cancel_check: Optional cancellation check.
-        max_attempts: Maximum relationship generation attempts (caps at 5).
 
     Returns:
         Number of relationships successfully added.
     """
-    # Enforce max_attempts cap
-    max_attempts = min(max_attempts, 5)
-
     orphans = world_db.find_orphans()
     if not orphans:
         logger.debug("No orphan entities found, skipping recovery")
@@ -760,8 +763,6 @@ def _recover_orphans(
     )
 
     all_entities = world_db.list_entities()
-    orphan_ids = {o.id for o in orphans}
-    non_orphan_names = [e.name for e in all_entities if e.id not in orphan_ids]
     entity_by_id = {e.id: e.name for e in all_entities}
 
     # Build existing relationships list
@@ -772,101 +773,120 @@ def _recover_orphans(
         if source_name and target_name:
             existing_rels.append((source_name, target_name, r.relation_type))
 
-    # Track orphan names for validation
+    # Track orphan names still needing connections (mutable set for fast lookup)
     orphan_names = {o.name.lower() for o in orphans}
-    # Maintain an ordered list of remaining orphan entities for round-robin targeting
-    remaining_orphans = list(orphans)
 
     added_count = 0
-    attempts = min(len(orphans), max_attempts)
 
-    for i in range(attempts):
+    for orphan in orphans:
         if cancel_check and cancel_check():
-            logger.info("Orphan recovery cancelled after %d attempts", i)
+            logger.info("Orphan recovery cancelled")
             break
 
-        # Filter to orphans still needing connections
-        active_orphans = [o for o in remaining_orphans if o.name.lower() in orphan_names]
-        if not active_orphans:
-            logger.info("Orphan recovery: all orphans now have relationships (pre-check)")
-            break
+        # Skip if this orphan was already connected by a previous orphan's relationship
+        if orphan.name.lower() not in orphan_names:
+            logger.debug(
+                "Orphan '%s' already connected by a previous relationship, skipping",
+                orphan.name,
+            )
+            continue
 
-        # Rotate through active orphans so each attempt targets a different one.
-        # Place the target orphan first in the entity list to exploit LLM primacy
-        # bias, making it much more likely to appear in the generated relationship.
-        target_orphan = active_orphans[i % len(active_orphans)]
-        other_orphan_names = [o.name for o in active_orphans if o is not target_orphan]
-        constrained_names = [target_orphan.name, *other_orphan_names, *non_orphan_names]
-        logger.debug(
-            "Orphan recovery attempt %d: targeting '%s' (list size: %d)",
-            i + 1,
-            target_orphan.name,
-            len(constrained_names),
-        )
+        # Build entity list with orphan first (primacy bias) + all potential partners
+        partner_names = [e.name for e in all_entities if e.id != orphan.id]
+        constrained_names = [orphan.name, *partner_names]
 
-        try:
-            rel, scores, _iterations = services.world_quality.generate_relationship_with_quality(
-                state, constrained_names, existing_rels
+        for attempt in range(MAX_RETRIES_PER_ORPHAN + 1):
+            if cancel_check and cancel_check():
+                logger.info("Orphan recovery cancelled during retries for '%s'", orphan.name)
+                break
+
+            logger.debug(
+                "Orphan recovery: orphan '%s' attempt %d/%d",
+                orphan.name,
+                attempt + 1,
+                MAX_RETRIES_PER_ORPHAN + 1,
             )
 
-            if not rel or not rel.get("source") or not rel.get("target"):
-                logger.warning("Orphan recovery attempt %d: empty relationship generated", i + 1)
-                continue
+            try:
+                rel, scores, _iterations = (
+                    services.world_quality.generate_relationship_with_quality(
+                        state,
+                        constrained_names,
+                        existing_rels,
+                        required_entity=orphan.name,
+                    )
+                )
 
-            # Find entities and add to database
-            source_entity = _find_entity_by_name(all_entities, rel["source"])
-            target_entity = _find_entity_by_name(all_entities, rel["target"])
-
-            if source_entity and target_entity:
-                # Verify at least one endpoint is an orphan
-                source_is_orphan = source_entity.name.lower() in orphan_names
-                target_is_orphan = target_entity.name.lower() in orphan_names
-                if not source_is_orphan and not target_is_orphan:
+                if not rel or not rel.get("source") or not rel.get("target"):
                     logger.warning(
-                        "Orphan recovery: skipping relationship %s -> %s (neither is an orphan)",
-                        rel["source"],
-                        rel["target"],
+                        "Orphan recovery: empty relationship for '%s' (attempt %d)",
+                        orphan.name,
+                        attempt + 1,
                     )
                     continue
 
-                relation_type = rel.get("relation_type")
-                if not relation_type:
-                    logger.debug(
-                        "Orphan recovery: no relation_type in generated relationship,"
-                        " defaulting to 'related_to'"
+                # Find entities and add to database
+                source_entity = _find_entity_by_name(all_entities, rel["source"])
+                target_entity = _find_entity_by_name(all_entities, rel["target"])
+
+                if source_entity and target_entity:
+                    # Safety check: verify at least one endpoint is an orphan
+                    # (should always pass due to required_entity constraint in quality loop)
+                    source_is_orphan = source_entity.name.lower() in orphan_names
+                    target_is_orphan = target_entity.name.lower() in orphan_names
+                    if not source_is_orphan and not target_is_orphan:
+                        logger.warning(
+                            "Orphan recovery: skipping relationship %s -> %s"
+                            " (neither is an orphan)",
+                            rel["source"],
+                            rel["target"],
+                        )
+                        continue
+
+                    relation_type = rel.get("relation_type")
+                    if not relation_type:
+                        logger.debug(
+                            "Orphan recovery: no relation_type in generated relationship,"
+                            " defaulting to 'related_to'"
+                        )
+                        relation_type = "related_to"
+                    world_db.add_relationship(
+                        source_id=source_entity.id,
+                        target_id=target_entity.id,
+                        relation_type=relation_type,
+                        description=rel.get("description", ""),
                     )
-                    relation_type = "related_to"
-                world_db.add_relationship(
-                    source_id=source_entity.id,
-                    target_id=target_entity.id,
-                    relation_type=relation_type,
-                    description=rel.get("description", ""),
-                )
-                existing_rels.append((rel["source"], rel["target"], relation_type))
-                added_count += 1
-                logger.info(
-                    "Orphan recovery: added %s -> %s (%s), quality: %.1f",
-                    rel["source"],
-                    rel["target"],
-                    relation_type,
-                    scores.average,
-                )
+                    existing_rels.append((rel["source"], rel["target"], relation_type))
+                    added_count += 1
+                    logger.info(
+                        "Orphan recovery: added %s -> %s (%s), quality: %.1f",
+                        rel["source"],
+                        rel["target"],
+                        relation_type,
+                        scores.average,
+                    )
 
-                # Remove connected orphan(s) from tracking set
-                if source_is_orphan:
-                    orphan_names.discard(source_entity.name.lower())
-                if target_is_orphan:
-                    orphan_names.discard(target_entity.name.lower())
-            else:
+                    # Remove connected orphan(s) from tracking set
+                    if source_is_orphan:
+                        orphan_names.discard(source_entity.name.lower())
+                    if target_is_orphan:
+                        orphan_names.discard(target_entity.name.lower())
+                    break  # Success — move to the next orphan
+                else:
+                    logger.warning(
+                        "Orphan recovery: could not resolve entities for %s -> %s",
+                        rel.get("source"),
+                        rel.get("target"),
+                    )
+
+            except Exception as e:
                 logger.warning(
-                    "Orphan recovery: could not resolve entities for %s -> %s",
-                    rel.get("source"),
-                    rel.get("target"),
+                    "Orphan recovery: attempt %d for '%s' failed: %s",
+                    attempt + 1,
+                    orphan.name,
+                    e,
                 )
-
-        except Exception as e:
-            logger.warning("Orphan recovery attempt %d failed: %s", i + 1, e)
-            continue
+                continue
 
     logger.info(
         "Orphan recovery complete: generated %d relationships for %d orphan entities",

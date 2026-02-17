@@ -1725,7 +1725,7 @@ class TestRelationshipQualityRefinement:
 
 
 class TestRecoverOrphans:
-    """Tests for _recover_orphans function."""
+    """Tests for _recover_orphans function (per-orphan loop with required_entity)."""
 
     def test_recover_orphans_no_orphans_returns_zero(
         self, world_service, mock_world_db, sample_story_state, mock_services
@@ -1745,7 +1745,7 @@ class TestRecoverOrphans:
     def test_recover_orphans_generates_relationship(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
-        """Test generates a relationship for an orphan entity."""
+        """Test generates a relationship for an orphan entity with required_entity."""
         from src.services.world_service._build import _recover_orphans
 
         # Add 3 entities; only first two are connected, third is orphan
@@ -1780,11 +1780,15 @@ class TestRecoverOrphans:
         assert len(rels) == 1
         assert rels[0].relation_type == "friends"
 
+        # Verify required_entity was passed
+        call_kwargs = mock_services.world_quality.generate_relationship_with_quality.call_args
+        assert call_kwargs[1]["required_entity"] == "Charlie"
+
     def test_recover_orphans_handles_generation_failure(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
-        """Test returns 0 when relationship generation raises an error."""
-        from src.services.world_service._build import _recover_orphans
+        """Test returns 0 when relationship generation always raises an error."""
+        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
         from src.utils.exceptions import WorldGenerationError
 
         # Add 2 entities with no relationships (both are orphans)
@@ -1799,41 +1803,54 @@ class TestRecoverOrphans:
         result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
 
         assert result == 0
+        # 2 orphans x (MAX_RETRIES_PER_ORPHAN + 1) attempts each
+        expected_calls = 2 * (MAX_RETRIES_PER_ORPHAN + 1)
+        assert (
+            mock_services.world_quality.generate_relationship_with_quality.call_count
+            == expected_calls
+        )
 
     def test_recover_orphans_cancel_check_stops_iteration(
         self, world_service, mock_world_db, sample_story_state, mock_services, caplog
     ):
-        """Test cancel_check breaks the recovery loop after first iteration."""
+        """Test cancel_check breaks the recovery loop."""
         import logging
 
         from src.services.world_service._build import _recover_orphans
 
-        # Add 3 orphan entities (no relationships) so attempts > 1
+        # Add 3 orphan entities (no relationships) so we have multiple orphans
         mock_world_db.add_entity("character", "Alice", "A brave adventurer")
         mock_world_db.add_entity("character", "Bob", "A wise mage")
         mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
 
-        call_count = 0
+        cancel_call_count = 0
 
-        def cancel_after_first():
-            """Return True after the first call to cancel."""
-            nonlocal call_count
-            call_count += 1
-            return call_count > 1
+        def cancel_after_two():
+            """Return True after the second cancel check (allowing first orphan through)."""
+            nonlocal cancel_call_count
+            cancel_call_count += 1
+            # First orphan: outer loop check (1) + inner retry check (2) = False
+            # Second orphan: outer loop check (3) = True → cancelled
+            return cancel_call_count > 2
 
         mock_scores = MagicMock()
         mock_scores.average = 7.5
-        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
-            return_value=(
+
+        def return_orphan_rel(state, entity_names, existing_rels, required_entity=None):
+            """Return a relationship involving the required_entity."""
+            return (
                 {
-                    "source": "Alice",
-                    "target": "Bob",
+                    "source": required_entity or entity_names[0],
+                    "target": "Bob" if required_entity != "Bob" else "Alice",
                     "relation_type": "friends",
                     "description": "They are friends",
                 },
                 mock_scores,
                 1,
             )
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=return_orphan_rel
         )
 
         with caplog.at_level(logging.INFO):
@@ -1842,30 +1859,32 @@ class TestRecoverOrphans:
                 sample_story_state,
                 mock_world_db,
                 mock_services,
-                cancel_check=cancel_after_first,
+                cancel_check=cancel_after_two,
             )
 
-        # First iteration succeeds (cancel_check returns False), then second
-        # iteration is cancelled (cancel_check returns True) before generating
+        # First orphan succeeds (cancel returns False for first 2 checks),
+        # then cancel fires before the next orphan
         assert result == 1
-        assert "Orphan recovery cancelled after" in caplog.text
+        assert "Orphan recovery cancelled" in caplog.text
 
     def test_recover_orphans_empty_relationship_continues(
         self, world_service, mock_world_db, sample_story_state, mock_services, caplog
     ):
-        """Test empty or missing source/target in generated relationship logs warning and continues."""
+        """Test empty relationship triggers retry within per-orphan budget."""
         import logging
 
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
 
-        # Add 2 orphan entities (no relationships)
-        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
-        mock_world_db.add_entity("character", "Bob", "A wise mage")
+        # Add 1 orphan entity connected to nobody
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_relationship(id1, id2, "allies")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
 
         mock_scores = MagicMock()
         mock_scores.average = 5.0
 
-        # Return an empty dict (no "source" or "target" keys)
+        # Return empty dicts for all attempts
         mock_services.world_quality.generate_relationship_with_quality = MagicMock(
             return_value=({}, mock_scores, 1)
         )
@@ -1876,19 +1895,26 @@ class TestRecoverOrphans:
             )
 
         assert result == 0
-        assert "empty relationship generated" in caplog.text
+        # Should exhaust all retries for the single orphan
+        assert (
+            mock_services.world_quality.generate_relationship_with_quality.call_count
+            == MAX_RETRIES_PER_ORPHAN + 1
+        )
+        assert "empty relationship" in caplog.text
 
     def test_recover_orphans_unresolvable_entities_logs_warning(
         self, world_service, mock_world_db, sample_story_state, mock_services, caplog
     ):
-        """Test unresolvable entity names in generated relationship logs warning."""
+        """Test unresolvable entity names in generated relationship logs warning and retries."""
         import logging
 
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
 
-        # Add 2 orphan entities (no relationships)
-        mock_world_db.add_entity("character", "Alice", "A brave adventurer")
-        mock_world_db.add_entity("character", "Bob", "A wise mage")
+        # Add 2 connected + 1 orphan entity
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
 
         mock_scores = MagicMock()
         mock_scores.average = 7.0
@@ -1914,14 +1940,19 @@ class TestRecoverOrphans:
 
         assert result == 0
         assert "could not resolve entities for" in caplog.text
+        # All retries for the single orphan should be exhausted
+        assert (
+            mock_services.world_quality.generate_relationship_with_quality.call_count
+            == MAX_RETRIES_PER_ORPHAN + 1
+        )
 
     def test_recover_orphans_skips_non_orphan_relationship(
         self, world_service, mock_world_db, sample_story_state, mock_services, caplog
     ):
-        """Test skips relationships where neither endpoint is an orphan."""
+        """Test skips relationships where neither endpoint is an orphan and retries."""
         import logging
 
-        from src.services.world_service._build import _recover_orphans
+        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
 
         # Add 3 entities: Alice and Bob are connected, Charlie is the orphan
         id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
@@ -1953,6 +1984,11 @@ class TestRecoverOrphans:
 
         assert result == 0
         assert "neither is an orphan" in caplog.text
+        # All retry attempts for the single orphan should be exhausted
+        assert (
+            mock_services.world_quality.generate_relationship_with_quality.call_count
+            == MAX_RETRIES_PER_ORPHAN + 1
+        )
 
     def test_recover_orphans_missing_relation_type_defaults(
         self, world_service, mock_world_db, sample_story_state, mock_services, caplog
@@ -2002,14 +2038,16 @@ class TestRecoverOrphans:
         mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
         mock_world_db.add_relationship(id1, id2, "allies")
 
-        # Capture the entity_names argument passed to generate_relationship_with_quality
+        # Capture the entity_names and required_entity arguments
         captured_entity_names = []
+        captured_required = []
         mock_scores = MagicMock()
         mock_scores.average = 7.5
 
-        def capture_and_return(state, entity_names, existing_rels):
-            """Capture entity_names and return a valid orphan relationship."""
+        def capture_and_return(state, entity_names, existing_rels, required_entity=None):
+            """Capture entity_names/required_entity and return a valid orphan relationship."""
             captured_entity_names.append(list(entity_names))
+            captured_required.append(required_entity)
             return (
                 {
                     "source": "Charlie",
@@ -2034,11 +2072,13 @@ class TestRecoverOrphans:
         # Non-orphan entities (Alice, Bob) should appear after the orphan
         assert "Alice" in captured_entity_names[0]
         assert "Bob" in captured_entity_names[0]
+        # required_entity must be the orphan name
+        assert captured_required[0] == "Charlie"
 
-    def test_recover_orphans_rotates_target_orphan(
+    def test_recover_orphans_per_orphan_iteration(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
-        """Different orphans are targeted on different iterations via round-robin."""
+        """Each orphan is targeted individually in the per-orphan loop."""
         from src.services.world_service._build import _recover_orphans
 
         # Add 4 entities: only Alice and Bob are connected; Charlie and Diana are orphans
@@ -2048,15 +2088,16 @@ class TestRecoverOrphans:
         mock_world_db.add_entity("character", "Diana", "A mysterious stranger")
         mock_world_db.add_relationship(id1, id2, "allies")
 
-        # Capture first element of entity_names on each call
+        # Capture first element of entity_names and required_entity on each call
         first_names = []
+        required_entities = []
         mock_scores = MagicMock()
         mock_scores.average = 7.5
 
-        def capture_and_return(state, entity_names, existing_rels):
+        def capture_and_return(state, entity_names, existing_rels, required_entity=None):
             """Capture the first entity name and return a valid relationship."""
             first_names.append(entity_names[0])
-            # Return a relationship involving the first (target) orphan
+            required_entities.append(required_entity)
             target_orphan_name = entity_names[0]
             return (
                 {
@@ -2076,12 +2117,13 @@ class TestRecoverOrphans:
         result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
 
         assert result == 2
-        # Two orphans means two attempts; each should target a different orphan
+        # Two orphans means two calls; each targets a different orphan
         assert len(first_names) == 2
-        # The two targeted orphans must be different (round-robin rotation)
         assert first_names[0] != first_names[1]
-        # Both orphan names should appear as first element across the two calls
         assert set(first_names) == {"Charlie", "Diana"}
+        # required_entity matches the first entity name for each call
+        assert required_entities[0] == first_names[0]
+        assert required_entities[1] == first_names[1]
 
     def test_recover_orphans_stops_when_all_connected_mid_loop(
         self, world_service, mock_world_db, sample_story_state, mock_services
@@ -2100,7 +2142,7 @@ class TestRecoverOrphans:
         mock_scores.average = 7.5
         call_count = 0
 
-        def connect_both_orphans(state, entity_names, existing_rels):
+        def connect_both_orphans(state, entity_names, existing_rels, required_entity=None):
             """First call connects both orphans to each other."""
             nonlocal call_count
             call_count += 1
@@ -2122,6 +2164,92 @@ class TestRecoverOrphans:
         result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
 
         # Both orphans connected in one relationship, so only 1 call needed
+        assert result == 1
+        assert call_count == 1
+
+    def test_recover_orphans_retries_per_orphan(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Verify each orphan gets its own retry budget."""
+        from src.services.world_service._build import MAX_RETRIES_PER_ORPHAN, _recover_orphans
+        from src.utils.exceptions import WorldGenerationError
+
+        # Add 3 entities: Alice and Bob connected, Charlie is orphan
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        call_count = 0
+
+        def fail_then_succeed(state, entity_names, existing_rels, required_entity=None):
+            """Fail on first attempts, succeed on the last retry."""
+            nonlocal call_count
+            call_count += 1
+            if call_count < MAX_RETRIES_PER_ORPHAN + 1:
+                raise WorldGenerationError("LLM error")
+            return (
+                {
+                    "source": "Charlie",
+                    "target": "Alice",
+                    "relation_type": "friends",
+                    "description": "Charlie befriends Alice",
+                },
+                mock_scores,
+                1,
+            )
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=fail_then_succeed
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        assert result == 1
+        # All attempts for the single orphan should have been used
+        assert call_count == MAX_RETRIES_PER_ORPHAN + 1
+
+    def test_recover_orphans_skips_already_connected_orphan(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """If orphan B is connected via orphan A's relationship, B is skipped."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Alice and Bob are orphans; Charlie and Diana are connected
+        mock_world_db.add_entity("character", "Alice", "Orphan A")
+        mock_world_db.add_entity("character", "Bob", "Orphan B")
+        id3 = mock_world_db.add_entity("character", "Charlie", "Connected entity")
+        id4 = mock_world_db.add_entity("character", "Diana", "Another connected entity")
+        mock_world_db.add_relationship(id3, id4, "knows")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        call_count = 0
+
+        def connect_alice_and_bob(state, entity_names, existing_rels, required_entity=None):
+            """Connect Alice to Bob (both orphans) on first call."""
+            nonlocal call_count
+            call_count += 1
+            return (
+                {
+                    "source": "Alice",
+                    "target": "Bob",
+                    "relation_type": "allies",
+                    "description": "Alice allies with Bob",
+                },
+                mock_scores,
+                1,
+            )
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=connect_alice_and_bob
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        # Only 1 call needed: Alice's relationship also connects Bob
         assert result == 1
         assert call_count == 1
 

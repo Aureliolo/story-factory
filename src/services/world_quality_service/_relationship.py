@@ -31,6 +31,7 @@ def generate_relationship_with_quality(
     story_state: StoryState,
     entity_names: list[str],
     existing_rels: list[tuple[str, str, str]],
+    required_entity: str | None = None,
 ) -> tuple[dict[str, Any], RelationshipQualityScores, int]:
     """Generate a relationship with iterative quality refinement.
 
@@ -42,6 +43,8 @@ def generate_relationship_with_quality(
         story_state: Current story state with brief.
         entity_names: Names of entities that can have relationships.
         existing_rels: Existing (source, target, relation_type) 3-tuples to avoid.
+        required_entity: If set, one of source/target MUST be this entity.
+            The quality loop rejects (retries) any relationship that omits it.
 
     Returns:
         Tuple of (relationship_dict, quality_scores, iterations_used).
@@ -73,17 +76,32 @@ def generate_relationship_with_quality(
             entity_names,
             combined_rels,
             config.creator_temperature,  # Stable: no escalation for relationships
+            required_entity=required_entity,
         )
         return result
 
     def _is_empty(rel: dict[str, Any]) -> bool:
-        """Check if relationship is empty or a duplicate that should be rejected.
+        """Check if relationship is empty, missing required entity, or a duplicate.
 
-        Returns True if source/target missing or if the pair already exists,
-        tracking rejected pairs to avoid regenerating them.
+        Returns True if source/target missing, if ``required_entity`` is set and
+        neither endpoint matches it (case-insensitive), or if the pair already
+        exists, tracking rejected pairs to avoid regenerating them.
         """
         if not rel.get("source") or not rel.get("target"):
             return True
+        # Reject immediately if required_entity constraint is violated
+        if required_entity:
+            source_lower = rel.get("source", "").lower()
+            target_lower = rel.get("target", "").lower()
+            required_lower = required_entity.lower()
+            if source_lower != required_lower and target_lower != required_lower:
+                logger.warning(
+                    "Required entity '%s' not in relationship %s -> %s, rejecting",
+                    required_entity,
+                    rel.get("source"),
+                    rel.get("target"),
+                )
+                return True
         # Check for duplicate relationship (includes previously rejected pairs)
         source = rel.get("source", "")
         target = rel.get("target", "")
@@ -273,6 +291,7 @@ def _create_relationship(
     entity_names: list[str],
     existing_rels: list[tuple[str, str, str]],
     temperature: float,
+    required_entity: str | None = None,
 ) -> dict[str, Any]:
     """Create a new relationship using the creator model.
 
@@ -283,6 +302,8 @@ def _create_relationship(
         existing_rels: Existing (source, target, relation_type) 3-tuples used to
             avoid duplicates and inform diversity hints.
         temperature: Sampling temperature for the creator model.
+        required_entity: If set, the prompt instructs the LLM to include this
+            entity as one of the endpoints.
 
     Returns:
         Relationship dict with keys ``source``, ``target``, ``relation_type``
@@ -330,6 +351,12 @@ def _create_relationship(
         raw_unused = [
             (a, b) for a, b in permutations(entity_names, 2) if (a, b) not in existing_pair_set
         ]
+        # When a required_entity is set, only show pairs involving that entity
+        if required_entity:
+            req_lower = required_entity.lower()
+            raw_unused = [
+                (a, b) for a, b in raw_unused if a.lower() == req_lower or b.lower() == req_lower
+            ]
         raw_unused.sort(key=lambda pair: entity_freq[pair[0]] + entity_freq[pair[1]])
         unused_pairs = [f"- {a} -> {b}" for a, b in raw_unused[:30]]
 
@@ -337,6 +364,14 @@ def _create_relationship(
             unused_pairs_block = (
                 "\n\nAVAILABLE UNUSED PAIRS (choose ONLY from these):\n" + "\n".join(unused_pairs)
             )
+
+    # Build optional required entity directive
+    required_entity_block = ""
+    if required_entity:
+        required_entity_block = (
+            f'\nREQUIRED ENTITY: One of source or target MUST be "{required_entity}".'
+            "\nChoose a compelling partner from the other available entities.\n"
+        )
 
     prompt = f"""Create a compelling relationship between entities for a {brief.genre} story.
 
@@ -348,7 +383,7 @@ AVAILABLE ENTITIES: {", ".join(entity_names)}
 
 FORBIDDEN ENTITY PAIRS (you MUST NOT use any of these pairs in either direction):
 {existing_pairs_block}{unused_pairs_block}
-
+{required_entity_block}
 Create a relationship with:
 1. Tension - conflict potential
 2. Complex dynamics - power balance, history
