@@ -1182,8 +1182,8 @@ class TestStoryServiceLearning:
         mock_mode_service = MagicMock()
         mock_rec = TuningRecommendation(
             recommendation_type=RecommendationType.MODEL_SWAP,
-            current_value="huihui_ai/dolphin3-abliterated:8b",
-            suggested_value="huihui_ai/qwen2.5-1m-abliterated:14b",
+            current_value="fake-current:8b",
+            suggested_value="fake-writer:14b",
             reason="Better quality",
             confidence=0.9,
             affected_role="writer",

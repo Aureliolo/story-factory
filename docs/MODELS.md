@@ -31,7 +31,7 @@ This document provides comprehensive guidance on selecting the best LLM models f
 │  ┌──────────────────── Revision Loop ─────────────────────┐ │
 │  │                                                          │ │
 │  │  ✍️  Writer (Creative, Vivid)                           │ │
-│  │   │ Temp: 0.9  │  Model: Celeste 12B                    │ │
+│  │   │ Temp: 0.9  │  Model: Mistral Small 24B              │ │
 │  │   └──────┬──────────────────────────────────────────    │ │
 │  │          ▼                                                │ │
 │  │  📝 Editor (Precise, Polished)                          │ │
@@ -57,9 +57,10 @@ This document provides comprehensive guidance on selecting the best LLM models f
            │ Speed │ Quality │ Creativity │ VRAM  │ Best For
 ───────────┼───────┼─────────┼────────────┼───────┼─────────────
 Dolphin 8B │  ⚡⚡⚡  │   ⭐⭐⭐   │     ⭐⭐     │  8GB  │ Interviewer
-Celeste12B │  ⚡⚡   │  ⭐⭐⭐⭐  │    ⭐⭐⭐⭐    │ 14GB  │ Writer
+DeepSeek-R1│  ⚡⚡⚡  │  ⭐⭐⭐⭐  │      ⭐     │  8GB  │ Reasoning
+Qwen2.5 14B│  ⚡⚡   │  ⭐⭐⭐⭐  │    ⭐⭐⭐⭐    │ 12GB  │ Writer
 Qwen3-30B  │  ⚡⚡   │  ⭐⭐⭐⭐⭐ │     ⭐⭐     │ 18GB  │ Architect
-DeepSeek-R1│   ⚡   │  ⭐⭐⭐⭐⭐ │      ⭐     │ 10GB  │ Continuity
+Mistral 24B│  ⚡⚡   │  ⭐⭐⭐⭐⭐ │    ⭐⭐⭐     │ 16GB  │ All-rounder
 Llama 3.3  │   ⚡   │  ⭐⭐⭐⭐⭐ │     ⭐⭐     │ 42GB+ │ Premium
 ```
 
@@ -79,10 +80,11 @@ Llama 3.3  │   ⚡   │  ⭐⭐⭐⭐⭐ │     ⭐⭐     │ 42GB+ │ Pre
 ## Quick Start
 
 ```bash
-# Essential models for 24GB VRAM setup (January 2026)
-ollama pull huihui_ai/qwen3-abliterated:30b       # NEW: Best reasoning (MoE, 18GB)
+# Essential models for 24GB VRAM setup (February 2026)
+ollama pull huihui_ai/qwen3-abliterated:30b       # Best reasoning (MoE, 18GB)
 ollama pull huihui_ai/dolphin3-abliterated:8b     # Fast default, interviewer
-ollama pull vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0  # Creative writing
+ollama pull huihui_ai/mistral-small-abliterated:24b  # All-rounder writer/editor (16GB)
+ollama pull huihui_ai/deepseek-r1-abliterated:7b  # Top reasoning small model (8GB)
 ```
 
 ---
@@ -104,24 +106,25 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 
 ## Recommended Model Stack
 
-### For 24GB VRAM (RTX 4090) - January 2026 Update
+### For 24GB VRAM (RTX 4090) - February 2026 Update
 
 | Role | Model | Source | VRAM | Why This Model |
 |------|-------|--------|------|----------------|
-| **Architect** | Qwen3-30B-A3B Abliterated | Ollama | 18GB | **NEW**: MoE (30B/3B active), matches 70B reasoning at half VRAM |
-| **Writer** | Celeste V1.9 12B | Ollama | 14GB | Purpose-built for fiction, OOC steering, excellent NSFW |
-| **Writer (Alt)** | Dark Champion 21B MOE V2 | HuggingFace | 14GB | "OFF THE SCALE" prose, adjustable experts |
+| **Architect** | Qwen3-30B-A3B Abliterated | Ollama | 18GB | MoE (30B/3B active), matches 70B reasoning at half VRAM |
+| **Writer** | Mistral Small 24B Abliterated | Ollama | 16GB | **NEW**: Largest model that fits comfortably, all agent roles |
+| **Writer (Alt)** | Qwen 2.5 14B Abliterated (1M ctx) | Ollama | 12GB | **NEW**: General-purpose, up to 1M context window |
 | **Editor** | Same as Writer (temp 0.5) | - | - | Maintains voice consistency |
-| **Continuity** | DeepSeek-R1-Distill-Qwen-14B | HuggingFace | 10GB | **NEW**: Explicit `<think>` reasoning chains |
+| **Continuity** | DeepSeek R1 7B Abliterated | Ollama | 8GB | **NEW**: Top llmfit score (83), strong reasoning, 128K context |
+| **Continuity (Alt)** | Qwen3 14B Abliterated | Ollama | 12GB | **NEW**: Mid-range reasoning, 40K context |
 | **Interviewer** | Dolphin 3.0 8B | Ollama | 5GB | Fast, compliant, highly steerable |
 
-**Key Change from 2025:** Qwen3-30B-A3B replaces Llama 3.3 70B for reasoning tasks - same quality at half the VRAM, enabling parallel model loading.
+**Key Changes from January 2026:** Removed Celeste 12B and Dark Champion 18B (niche/unvalidated). Added models selected via [llmfit](https://github.com/AlexsJones/llmfit) hardware analysis for RTX 4090.
 
 ### For 16GB VRAM
 
 | Role | Model | VRAM |
 |------|-------|------|
-| **Writer** | Celeste V1.9 12B or Lyra-Gutenberg 12B | 10GB |
+| **Writer** | Qwen 2.5 14B Abliterated or Dolphin Mistral Nemo 12B | 10-12GB |
 | **Architect** | Qwen3-14B (hybrid thinking) | 10GB |
 | **Continuity** | DeepSeek-R1-Qwen3-8B | 5GB |
 | **Interviewer** | Dolphin 3.0 8B | 5GB |
@@ -139,26 +142,19 @@ Story Factory uses 6 specialized agents, each with different model requirements:
 
 ### Creative Writing Models (Writer Role)
 
-#### Celeste V1.9 (MN-12B-Celeste)
-- **Base:** Mistral NeMo 12B
-- **Training:** Reddit Writing Prompts, Kalo's Opus 25K Instruct
-- **Strengths:** OOC steering ("OOC: character should be more assertive"), excellent NSFW, steerable at any point
-- **Context:** 8K native, extendable to 16K+
-- **Ollama:** `vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0`
+#### Mistral Small 24B Abliterated
+- **Base:** Mistral Small 24B Instruct (2501)
+- **Strengths:** Largest model fitting comfortably in 24GB VRAM, strong prose and reasoning, all agent roles
+- **Context:** 32K tokens
+- **VRAM:** 16GB required
+- **Ollama:** `huihui_ai/mistral-small-abliterated:24b`
 
-#### Lyra-Gutenberg 12B (NEW)
-- **Base:** Mistral NeMo 12B
-- **Training:** Gutenberg literature + Sao10K's Lyra improvements
-- **Strengths:** "Peak of Gutenberg lineage", literary prose style, top UGI ranking
-- **Note:** Use Mistral chat format, NOT ChatML
-- **HuggingFace:** `nbeerbower/Lyra-Gutenberg-mistral-nemo-12B`
-
-#### Dark Champion 21B MOE V2 (NEW)
-- **Architecture:** 8x4B Mixture of Experts (21B total, was 18B in V1)
-- **Strengths:** "OFF THE SCALE" prose quality, 50+ tok/s at 2 experts
-- **Feature:** Adjustable expert count (2-8) for quality/speed tradeoff
-- **Cons:** MOE can be inconsistent, occasional verbosity
-- **HuggingFace:** `DavidAU/Llama-3.2-8X4B-MOE-V2-Dark-Champion-Instruct-uncensored-abliterated-21B-GGUF`
+#### Qwen 2.5 14B Abliterated (1M ctx)
+- **Base:** Qwen 2.5 14B long-context variant
+- **Strengths:** General-purpose with up to 1M context window, good prose and reasoning
+- **Context:** Up to 1M tokens
+- **VRAM:** 12GB required
+- **Ollama:** `huihui_ai/qwen2.5-1m-abliterated:14b`
 
 #### Midnight-Miqu 70B v1.5 (Premium)
 - **Base:** Miqu (Mistral-based)

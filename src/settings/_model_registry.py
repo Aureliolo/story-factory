@@ -88,7 +88,8 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "description": "Mid-range reasoning, 40K context, fills gap between 8B and 30B",
         "tags": ["architect", "continuity", "interviewer", "suggestion"],
     },
-    # Mistral Small 24B: large model that still fits in 24GB VRAM (~51% usage).
+    # === GENERAL PURPOSE LARGE ===
+    # Mistral Small 24B: largest model that fits comfortably in 24GB VRAM (~67% at 16GB required).
     "huihui_ai/mistral-small-abliterated:24b": {
         "name": "Mistral Small 24B Abliterated",
         "size_gb": 14,
