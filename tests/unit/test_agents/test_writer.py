@@ -439,3 +439,49 @@ class TestWriterSceneAware:
         # First scene should include previous chapter context
         first_call_prompt = writer.generate.call_args_list[0][0][0]
         assert "PREVIOUS CHAPTER" in first_call_prompt or "ending text" in first_call_prompt
+
+
+class TestWorldContextInjection:
+    """Tests for world_context parameter in writing methods."""
+
+    def test_write_chapter_includes_world_context(self, writer, sample_story_state):
+        """Test world_context is included in chapter writing prompt."""
+        writer.generate = MagicMock(return_value="Chapter content...")
+        chapter = sample_story_state.chapters[0]
+        world_ctx = "<retrieved-context>Relevant world info</retrieved-context>"
+
+        writer.write_chapter(sample_story_state, chapter, world_context=world_ctx)
+
+        prompt = writer.generate.call_args[0][0]
+        assert "WORLD CONTEXT" in prompt
+        assert "Relevant world info" in prompt
+
+    def test_write_scene_includes_world_context(self, writer, sample_story_state):
+        """Test world_context is included in scene writing prompt."""
+        writer.generate = MagicMock(return_value="Scene content...")
+        chapter = sample_story_state.chapters[0]
+        scene = Scene(
+            id="scene-1",
+            title="Test Scene",
+            goal="Test goal",
+            beats=["beat 1"],
+            order=0,
+        )
+        world_ctx = "<retrieved-context>Scene world info</retrieved-context>"
+
+        writer.write_scene(sample_story_state, chapter, scene, world_context=world_ctx)
+
+        prompt = writer.generate.call_args[0][0]
+        assert "WORLD CONTEXT" in prompt
+        assert "Scene world info" in prompt
+
+    def test_write_short_story_includes_world_context(self, writer, sample_story_state):
+        """Test world_context is included in short story writing prompt."""
+        writer.generate = MagicMock(return_value="Short story content...")
+        world_ctx = "<retrieved-context>Story world info</retrieved-context>"
+
+        writer.write_short_story(sample_story_state, world_context=world_ctx)
+
+        prompt = writer.generate.call_args[0][0]
+        assert "WORLD CONTEXT" in prompt
+        assert "Story world info" in prompt

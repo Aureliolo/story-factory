@@ -1941,6 +1941,12 @@ class TestVecAvailableProperty:
         db._vec_available = False
         assert db.vec_available is False
 
+    def test_raises_when_vec_extension_fails_to_load(self, tmp_path):
+        """Test WorldDatabase raises RuntimeError when sqlite-vec fails to load."""
+        with patch("src.utils.sqlite_vec_loader.load_vec_extension", return_value=False):
+            with pytest.raises(RuntimeError, match="sqlite-vec extension failed to load"):
+                WorldDatabase(tmp_path / "no_vec.db")
+
 
 class TestContentCallbacks:
     """Tests for attach/detach content changed and deleted callbacks."""
