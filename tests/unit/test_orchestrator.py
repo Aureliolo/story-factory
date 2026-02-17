@@ -2955,23 +2955,20 @@ class TestRAGContextIntegration:
 
         mock_cr = MagicMock()
         mock_cr.retrieve_context.return_value = RetrievedContext(
-            items=[
+            items=(
                 ContextItem(
                     source_type="entity",
                     source_id="char-1",
                     relevance_score=0.9,
                     text="Hero: A brave warrior",
                 ),
-            ],
+            ),
             total_tokens=10,
             retrieval_method="vector",
         )
 
         mock_world_db = MagicMock()
-
-        orc = StoryOrchestrator(context_retrieval=mock_cr)
-        orc.world_db = mock_world_db
-        orc.story_state = StoryState(
+        story_state = StoryState(
             id="test-rag",
             status="writing",
             brief=StoryBrief(
@@ -2988,6 +2985,9 @@ class TestRAGContextIntegration:
             chapters=[Chapter(number=1, title="Ch1", outline="Beginning")],
             plot_summary="An epic tale",
         )
+
+        orc = StoryOrchestrator(context_retrieval=mock_cr)
+        orc.set_project_context(world_db=mock_world_db, story_state=story_state)
 
         # Mock agent methods
         object.__setattr__(
@@ -3114,3 +3114,59 @@ class TestRAGContextIntegration:
         orc = StoryOrchestrator()
         orc.world_db = mock_db
         assert orc.world_db is mock_db
+
+
+class TestSetProjectContext:
+    """Tests for the set_project_context() method."""
+
+    def test_set_project_context_sets_both_fields(self):
+        """set_project_context sets world_db and story_state together."""
+        orc = StoryOrchestrator()
+        mock_db = MagicMock()
+        state = StoryState(
+            id="ctx-test",
+            status="writing",
+            brief=StoryBrief(
+                premise="A story",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="short_story",
+                content_rating="general",
+            ),
+        )
+
+        orc.set_project_context(world_db=mock_db, story_state=state)
+
+        assert orc.world_db is mock_db
+        assert orc.story_state is state
+
+    def test_set_project_context_clears_with_none(self):
+        """set_project_context can clear both fields by passing None."""
+        orc = StoryOrchestrator()
+        mock_db = MagicMock()
+        state = StoryState(id="old", status="complete")
+        orc.set_project_context(world_db=mock_db, story_state=state)
+
+        # Now clear
+        orc.set_project_context(world_db=None, story_state=None)
+
+        # Verify both are cleared (use getattr to avoid mypy narrowing issues)
+        assert orc.world_db is None
+        assert orc.story_state is None
+
+    def test_set_project_context_replaces_existing(self):
+        """set_project_context replaces previously set context."""
+        orc = StoryOrchestrator()
+
+        db1 = MagicMock()
+        state1 = StoryState(id="first", status="writing")
+        orc.set_project_context(world_db=db1, story_state=state1)
+        assert orc.world_db is db1
+
+        db2 = MagicMock()
+        state2 = StoryState(id="second", status="writing")
+        orc.set_project_context(world_db=db2, story_state=state2)
+        assert orc.world_db is db2
+        assert orc.story_state is state2

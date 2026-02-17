@@ -7,7 +7,7 @@ sqlite-vec + embedding pipeline.
 import logging
 import sqlite3
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from src.memory.story_state import StoryState
@@ -29,9 +29,12 @@ _SECTION_TITLES: dict[str, str] = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class ContextItem:
     """A single piece of retrieved context for prompt injection.
+
+    Frozen dataclass — instances are immutable after creation.  Use
+    ``dataclasses.replace()`` to derive a new item with different field values.
 
     Attributes:
         source_type: Content type (entity, relationship, event, fact, rule, etc.).
@@ -48,22 +51,33 @@ class ContextItem:
     token_estimate: int = 0
 
     def __post_init__(self) -> None:
-        """Calculate token estimate from text length."""
+        """Clamp relevance_score to [0.0, 1.0] and calculate token estimate."""
+        clamped = max(0.0, min(1.0, self.relevance_score))
+        if clamped != self.relevance_score:
+            logger.debug(
+                "Clamped relevance_score %.4f -> %.4f for %s",
+                self.relevance_score,
+                clamped,
+                self.source_id,
+            )
+            object.__setattr__(self, "relevance_score", clamped)
         if not self.token_estimate:
-            self.token_estimate = max(1, len(self.text) // 4)
+            object.__setattr__(self, "token_estimate", max(1, len(self.text) // 4))
 
 
-@dataclass
+@dataclass(frozen=True)
 class RetrievedContext:
     """Container for context items retrieved via vector search.
 
+    Frozen dataclass — constructed once with final values.
+
     Attributes:
-        items: List of retrieved context items.
+        items: List of retrieved context items (tuple for true immutability).
         total_tokens: Sum of token estimates across all items.
         retrieval_method: How context was retrieved ('vector' or 'disabled').
     """
 
-    items: list[ContextItem] = field(default_factory=list)
+    items: tuple[ContextItem, ...] = ()
     total_tokens: int = 0
     retrieval_method: Literal["vector", "disabled"] = "vector"
 
@@ -245,9 +259,11 @@ class ContextRetrievalService:
 
             source_id = result["source_id"]
             if source_id in items_by_id:
-                # Keep highest relevance
+                # Keep highest relevance (replace frozen item)
                 if relevance > items_by_id[source_id].relevance_score:
-                    items_by_id[source_id].relevance_score = relevance
+                    items_by_id[source_id] = replace(
+                        items_by_id[source_id], relevance_score=relevance
+                    )
                 continue
 
             items_by_id[source_id] = ContextItem(
@@ -317,7 +333,7 @@ class ContextRetrievalService:
         )
 
         return RetrievedContext(
-            items=packed_items,
+            items=tuple(packed_items),
             total_tokens=total_tokens,
             retrieval_method="vector",
         )

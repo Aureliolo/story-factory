@@ -95,6 +95,29 @@ class StoryOrchestrator:
         self._completed_chapters: int = 0
         self._current_score_id: int | None = None  # For learning tracking
 
+    def set_project_context(
+        self,
+        world_db: WorldDatabase | None,
+        story_state: StoryState | None,
+    ) -> None:
+        """Set project-specific context for the current writing session.
+
+        Bundles the world database and story state assignment into a single
+        explicit call, replacing direct attribute mutations scattered across
+        callers.
+
+        Args:
+            world_db: WorldDatabase for RAG context retrieval (may be None).
+            story_state: Story state to operate on (may be None when clearing).
+        """
+        self.world_db = world_db
+        self.story_state = story_state
+        logger.debug(
+            "Project context set: world_db=%s, story_state=%s",
+            "present" if world_db else "None",
+            story_state.id[:8] if story_state else "None",
+        )
+
     # ========== INTERNAL HELPERS (inline) ==========
 
     def _validate_response(self, response: str, task: str = "") -> str:

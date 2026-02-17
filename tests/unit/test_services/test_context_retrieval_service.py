@@ -165,12 +165,12 @@ class TestRetrievedContext:
 
     def test_retrieved_context_format_empty(self) -> None:
         """format_for_prompt returns empty string when no items exist."""
-        ctx = RetrievedContext(items=[])
+        ctx = RetrievedContext(items=())
         assert ctx.format_for_prompt() == ""
 
     def test_retrieved_context_format_groups_by_type(self) -> None:
         """format_for_prompt groups items by source_type with section headers."""
-        items = [
+        items = (
             ContextItem(
                 source_type="entity",
                 source_id="e1",
@@ -195,7 +195,7 @@ class TestRetrievedContext:
                 relevance_score=0.6,
                 text="The battle began",
             ),
-        ]
+        )
         ctx = RetrievedContext(items=items)
         result = ctx.format_for_prompt()
 
@@ -214,14 +214,14 @@ class TestRetrievedContext:
 
     def test_retrieved_context_format_unknown_type_uses_uppercase(self) -> None:
         """format_for_prompt uses uppercased source_type when no title mapping exists."""
-        items = [
+        items = (
             ContextItem(
                 source_type="custom_thing",
                 source_id="c1",
                 relevance_score=0.5,
                 text="Something custom",
             ),
-        ]
+        )
         ctx = RetrievedContext(items=items)
         result = ctx.format_for_prompt()
         assert "CUSTOM_THING:" in result
@@ -229,7 +229,7 @@ class TestRetrievedContext:
     def test_retrieved_context_default_values(self) -> None:
         """RetrievedContext has correct default values."""
         ctx = RetrievedContext()
-        assert ctx.items == []
+        assert ctx.items == ()
         assert ctx.total_tokens == 0
         assert ctx.retrieval_method == "vector"
 
@@ -256,7 +256,7 @@ class TestContextRetrievalService:
         )
 
         assert result.retrieval_method == "disabled"
-        assert result.items == []
+        assert result.items == ()
         assert result.total_tokens == 0
 
     def test_retrieve_context_vector_path(self, sample_story_state) -> None:
@@ -651,7 +651,7 @@ class TestContextRetrievalService:
         )
 
         assert result.retrieval_method == "vector"
-        assert result.items == []
+        assert result.items == ()
         assert result.total_tokens == 0
 
     def test_retrieve_context_vector_search_exception_returns_empty(
@@ -671,7 +671,7 @@ class TestContextRetrievalService:
         )
 
         assert result.retrieval_method == "vector"
-        assert result.items == []
+        assert result.items == ()
         assert result.total_tokens == 0
 
     def test_get_project_info_no_brief(self) -> None:
@@ -877,16 +877,15 @@ class TestContextRetrievalService:
         """All known section titles in _SECTION_TITLES are used correctly."""
         from src.services.context_retrieval_service import _SECTION_TITLES
 
-        items = []
-        for content_type, _title in _SECTION_TITLES.items():
-            items.append(
-                ContextItem(
-                    source_type=content_type,
-                    source_id=f"test-{content_type}",
-                    relevance_score=0.5,
-                    text=f"Test {content_type} content",
-                )
+        items = tuple(
+            ContextItem(
+                source_type=content_type,
+                source_id=f"test-{content_type}",
+                relevance_score=0.5,
+                text=f"Test {content_type} content",
             )
+            for content_type in _SECTION_TITLES
+        )
 
         ctx = RetrievedContext(items=items)
         result = ctx.format_for_prompt()
@@ -894,3 +893,83 @@ class TestContextRetrievalService:
         for content_type, title in _SECTION_TITLES.items():
             assert f"{title}:" in result
             assert f"- Test {content_type} content" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests for frozen dataclass behavior and relevance_score validation
+# ---------------------------------------------------------------------------
+
+
+class TestContextItemFrozen:
+    """Tests for ContextItem frozen dataclass and relevance_score clamping."""
+
+    def test_context_item_is_immutable(self) -> None:
+        """ContextItem fields cannot be reassigned after creation."""
+        from dataclasses import FrozenInstanceError
+
+        item = ContextItem(
+            source_type="entity",
+            source_id="ent-1",
+            relevance_score=0.5,
+            text="Test",
+        )
+        with pytest.raises(FrozenInstanceError):
+            item.relevance_score = 0.9  # type: ignore[misc]
+
+    def test_context_item_clamps_relevance_above_one(self) -> None:
+        """Relevance scores above 1.0 are clamped to 1.0."""
+        item = ContextItem(
+            source_type="entity",
+            source_id="ent-1",
+            relevance_score=1.5,
+            text="Over-relevant",
+        )
+        assert item.relevance_score == 1.0
+
+    def test_context_item_clamps_relevance_below_zero(self) -> None:
+        """Relevance scores below 0.0 are clamped to 0.0."""
+        item = ContextItem(
+            source_type="entity",
+            source_id="ent-1",
+            relevance_score=-0.3,
+            text="Negative",
+        )
+        assert item.relevance_score == 0.0
+
+    def test_context_item_preserves_valid_relevance(self) -> None:
+        """Valid relevance scores in [0.0, 1.0] are preserved unchanged."""
+        item = ContextItem(
+            source_type="entity",
+            source_id="ent-1",
+            relevance_score=0.75,
+            text="Normal",
+        )
+        assert item.relevance_score == 0.75
+
+    def test_context_item_boundary_values(self) -> None:
+        """Boundary values 0.0 and 1.0 are preserved without clamping."""
+        item_zero = ContextItem(
+            source_type="entity", source_id="e-0", relevance_score=0.0, text="Zero"
+        )
+        item_one = ContextItem(
+            source_type="entity", source_id="e-1", relevance_score=1.0, text="One"
+        )
+        assert item_zero.relevance_score == 0.0
+        assert item_one.relevance_score == 1.0
+
+
+class TestRetrievedContextFrozen:
+    """Tests for RetrievedContext frozen dataclass."""
+
+    def test_retrieved_context_is_immutable(self) -> None:
+        """RetrievedContext fields cannot be reassigned after creation."""
+        from dataclasses import FrozenInstanceError
+
+        ctx = RetrievedContext()
+        with pytest.raises(FrozenInstanceError):
+            ctx.total_tokens = 42  # type: ignore[misc]
+
+    def test_retrieved_context_items_is_tuple(self) -> None:
+        """RetrievedContext.items defaults to an empty tuple, not a list."""
+        ctx = RetrievedContext()
+        assert isinstance(ctx.items, tuple)

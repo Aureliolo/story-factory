@@ -2368,9 +2368,8 @@ class TestWP1WP2SettingsValidation:
         settings = Settings()
         settings.semantic_duplicate_enabled = True
         settings.embedding_model = ""
-        # _validate_semantic_duplicate runs first (line 45) and auto-disables,
-        # but _validate_rag_context (line 69) raises ConfigError for empty
-        # embedding_model, so test the semantic validation in isolation
+        # _validate_semantic_duplicate auto-disables semantic duplicate,
+        # _validate_rag_context auto-migrates empty embedding_model to default
         from src.settings._validation import _validate_semantic_duplicate
 
         changed = _validate_semantic_duplicate(settings)
@@ -2837,21 +2836,19 @@ class TestRagContextValidation:
         with pytest.raises(ValueError, match="rag_context_graph_depth"):
             settings.validate()
 
-    def test_validate_raises_on_rag_enabled_without_embedding_model(self):
-        """Should raise ConfigError when rag_context_enabled is True but embedding_model is empty."""
+    def test_validate_auto_migrates_empty_embedding_model(self):
+        """Should auto-migrate empty embedding_model to default when RAG is enabled."""
         from src.settings._validation import _validate_rag_context
-        from src.utils.exceptions import ConfigError
 
         settings = Settings()
         settings.rag_context_enabled = True
         settings.embedding_model = ""
-        with pytest.raises(
-            ConfigError, match="embedding_model must be set to a valid embedding model"
-        ):
-            _validate_rag_context(settings)
+        changed = _validate_rag_context(settings)
+        assert changed is True
+        assert settings.embedding_model == "mxbai-embed-large"
 
     def test_validate_keeps_rag_enabled_when_embedding_model_set(self):
-        """Should not disable rag_context_enabled when embedding_model is configured."""
+        """Should not change embedding_model when it is already configured."""
         from src.settings._validation import _validate_rag_context
 
         settings = Settings()
@@ -2859,13 +2856,23 @@ class TestRagContextValidation:
         settings.embedding_model = "mxbai-embed-large"
         result = _validate_rag_context(settings)
         assert settings.rag_context_enabled is True
+        assert settings.embedding_model == "mxbai-embed-large"
         assert result is False
 
-    def test_validate_full_raises_config_error_on_empty_embedding_model(self):
-        """Should raise ConfigError when settings.validate() encounters empty embedding_model."""
-        from src.utils.exceptions import ConfigError
-
+    def test_validate_full_auto_migrates_empty_embedding_model(self):
+        """Full validate() auto-migrates empty embedding_model instead of raising."""
         settings = Settings()
         settings.embedding_model = ""
-        with pytest.raises(ConfigError, match="embedding_model must be set"):
-            settings.validate()
+        changed = settings.validate()
+        assert changed is True
+        assert settings.embedding_model == "mxbai-embed-large"
+
+    def test_validate_auto_migrates_whitespace_only_embedding_model(self):
+        """Should auto-migrate whitespace-only embedding_model to default."""
+        from src.settings._validation import _validate_rag_context
+
+        settings = Settings()
+        settings.embedding_model = "   "
+        changed = _validate_rag_context(settings)
+        assert changed is True
+        assert settings.embedding_model == "mxbai-embed-large"

@@ -38,11 +38,23 @@ class EmbeddingService:
 
         Args:
             settings: Application settings for Ollama connection and model config.
+
+        Raises:
+            ValueError: If no embedding model is configured in settings.
         """
+        if not settings.embedding_model.strip():
+            raise ValueError(
+                "EmbeddingService requires a configured embedding_model. "
+                "Set embedding_model in Settings to a valid model name "
+                "(e.g. 'mxbai-embed-large')."
+            )
         self.settings = settings
         self._lock = threading.RLock()
         self._client: ollama.Client | None = None
-        logger.info("EmbeddingService initialized")
+        logger.info(
+            "EmbeddingService initialized with model '%s'",
+            settings.embedding_model,
+        )
 
     def _get_client(self) -> ollama.Client:
         """Get or create the Ollama client.

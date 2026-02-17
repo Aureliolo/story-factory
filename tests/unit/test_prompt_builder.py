@@ -279,7 +279,7 @@ class TestAddRetrievedContext:
 
     def test_add_retrieved_context_empty_items(self):
         """Context with no items should not add any sections."""
-        context = RetrievedContext(items=[], total_tokens=0)
+        context = RetrievedContext(items=(), total_tokens=0)
         builder = PromptBuilder()
         result = builder.add_retrieved_context(context)
         assert result is builder
@@ -287,14 +287,14 @@ class TestAddRetrievedContext:
 
     def test_add_retrieved_context_with_items(self):
         """Context with items should add a WORLD CONTEXT section."""
-        items = [
+        items = (
             ContextItem(
                 source_type="entity",
                 source_id="e1",
                 relevance_score=0.9,
                 text="Alice: The protagonist",
             ),
-        ]
+        )
         context = RetrievedContext(items=items, total_tokens=10, retrieval_method="vector")
         builder = PromptBuilder()
         result = builder.add_retrieved_context(context)
@@ -304,14 +304,14 @@ class TestAddRetrievedContext:
 
     def test_add_retrieved_context_returns_self_for_chaining(self):
         """Method should return self for chaining."""
-        items = [
+        items = (
             ContextItem(
                 source_type="entity",
                 source_id="e1",
                 relevance_score=0.9,
                 text="Alice: The protagonist",
             ),
-        ]
+        )
         context = RetrievedContext(items=items, total_tokens=10)
         builder = PromptBuilder()
         result = builder.add_retrieved_context(context)

@@ -1261,7 +1261,7 @@ class TestStoryServiceRAGIntegration:
         assert orc.context_retrieval is mock_cr
 
     def test_write_chapter_passes_world_db(self, settings, sample_story_state):
-        """Test write_chapter accepts and threads world_db parameter."""
+        """Test write_chapter uses set_project_context to thread world_db."""
         svc = StoryService(settings)
         mock_world_db = MagicMock()
 
@@ -1279,11 +1279,13 @@ class TestStoryServiceRAGIntegration:
             events = list(svc.write_chapter(sample_story_state, 1, world_db=mock_world_db))
 
             assert len(events) > 0
-            # Verify world_db was set on orchestrator
-            assert mock_orc.world_db == mock_world_db
+            # Verify set_project_context was called with world_db
+            mock_orc.set_project_context.assert_called_once_with(
+                world_db=mock_world_db, story_state=sample_story_state
+            )
 
     def test_write_all_chapters_passes_world_db(self, settings, sample_story_state):
-        """Test write_all_chapters accepts and threads world_db parameter."""
+        """Test write_all_chapters uses set_project_context to thread world_db."""
         svc = StoryService(settings)
         mock_world_db = MagicMock()
 
@@ -1300,10 +1302,12 @@ class TestStoryServiceRAGIntegration:
             events = list(svc.write_all_chapters(sample_story_state, world_db=mock_world_db))
 
             assert len(events) > 0
-            assert mock_orc.world_db == mock_world_db
+            mock_orc.set_project_context.assert_called_once_with(
+                world_db=mock_world_db, story_state=sample_story_state
+            )
 
     def test_write_short_story_passes_world_db(self, settings, sample_story_state):
-        """Test write_short_story accepts and threads world_db parameter."""
+        """Test write_short_story uses set_project_context to thread world_db."""
         svc = StoryService(settings)
         mock_world_db = MagicMock()
 
@@ -1320,10 +1324,12 @@ class TestStoryServiceRAGIntegration:
             events = list(svc.write_short_story(sample_story_state, world_db=mock_world_db))
 
             assert len(events) > 0
-            assert mock_orc.world_db == mock_world_db
+            mock_orc.set_project_context.assert_called_once_with(
+                world_db=mock_world_db, story_state=sample_story_state
+            )
 
     def test_regenerate_chapter_passes_world_db(self, settings, sample_story_state):
-        """Test regenerate_chapter_with_feedback threads world_db to orchestrator."""
+        """Test regenerate_chapter_with_feedback uses set_project_context."""
         svc = StoryService(settings)
         mock_world_db = MagicMock()
 
@@ -1350,4 +1356,6 @@ class TestStoryServiceRAGIntegration:
                 )
             )
 
-            assert mock_orc.world_db == mock_world_db
+            mock_orc.set_project_context.assert_called_once_with(
+                world_db=mock_world_db, story_state=sample_story_state
+            )
