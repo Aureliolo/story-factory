@@ -969,6 +969,33 @@ class TestBuildWorld:
         mock_services.world_quality.review_plot_quality.assert_called_once()
 
 
+class TestBuildWorldEmbedding:
+    """Tests for embedding step during world build."""
+
+    def test_embedding_failure_is_non_fatal(
+        self, world_service, sample_story_state, mock_world_db, mock_services
+    ):
+        """Test that embedding failure during build does not block the build."""
+        mock_services.embedding.embed_all_world_data.side_effect = RuntimeError("Embed failed")
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+
+        # Build should complete despite embedding failure
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert counts["characters"] >= 0
+        mock_services.embedding.embed_all_world_data.assert_called_once()
+
+
 class TestWorldBuildCancellation:
     """Tests for world build cancellation."""
 
