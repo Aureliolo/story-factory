@@ -1183,7 +1183,7 @@ class TestStoryServiceLearning:
         mock_rec = TuningRecommendation(
             recommendation_type=RecommendationType.MODEL_SWAP,
             current_value="huihui_ai/dolphin3-abliterated:8b",
-            suggested_value="vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+            suggested_value="huihui_ai/qwen2.5-1m-abliterated:14b",
             reason="Better quality",
             confidence=0.9,
             affected_role="writer",

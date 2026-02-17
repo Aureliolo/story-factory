@@ -197,12 +197,12 @@ class TestModelModeServiceModelSelection:
         """LARGEST preference should select largest available model."""
         mock_get_models.return_value = {
             "huihui_ai/dolphin3-abliterated:8b": 3.0,
-            "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": 8.0,
+            "huihui_ai/qwen2.5-1m-abliterated:14b": 9.0,
             "qwen2.5:32b": 20.0,
         }
         service.settings.custom_model_tags = {
             "huihui_ai/dolphin3-abliterated:8b": ["writer"],
-            "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": ["writer"],
+            "huihui_ai/qwen2.5-1m-abliterated:14b": ["writer"],
             "qwen2.5:32b": ["writer"],
         }
 
@@ -647,7 +647,7 @@ class TestPendingRecommendations:
         service._db.record_recommendation(
             recommendation_type="model_swap",
             current_value="huihui_ai/dolphin3-abliterated:8b",
-            suggested_value="vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0",
+            suggested_value="huihui_ai/qwen2.5-1m-abliterated:14b",
             affected_role="writer",
             reason="Better quality observed",
             confidence=0.85,
@@ -660,7 +660,7 @@ class TestPendingRecommendations:
         rec = recs[0]
         assert rec.recommendation_type == RecommendationType.MODEL_SWAP
         assert rec.current_value == "huihui_ai/dolphin3-abliterated:8b"
-        assert rec.suggested_value == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+        assert rec.suggested_value == "huihui_ai/qwen2.5-1m-abliterated:14b"
         assert rec.affected_role == "writer"
         assert rec.confidence == 0.85
 

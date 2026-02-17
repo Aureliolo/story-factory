@@ -756,7 +756,7 @@ class TestSettingsGetModelForAgent:
         monkeypatch.setattr(
             "src.settings._settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": 13.0,  # Tagged for writer
+                "huihui_ai/qwen2.5-1m-abliterated:14b": 9.0,  # Tagged for writer
                 "huihui_ai/dolphin3-abliterated:8b": 5.0,  # Tagged for interviewer
             },
         )
@@ -767,8 +767,8 @@ class TestSettingsGetModelForAgent:
 
         result = settings.get_model_for_agent("writer", available_vram=24)
 
-        # Should select Celeste (tagged for writer)
-        assert result == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+        # Should select Qwen 2.5 14B (tagged for writer)
+        assert result == "huihui_ai/qwen2.5-1m-abliterated:14b"
 
     def test_selects_architect_model(self, monkeypatch):
         """Test selects high-reasoning model for architect role."""
@@ -841,7 +841,7 @@ class TestSettingsGetModelForAgent:
 
         # Should return first recommended model and log warning
         result = settings.get_model_for_agent("writer", available_vram=24)
-        assert result == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"  # First in RECOMMENDED_MODELS
+        assert result == "huihui_ai/deepseek-r1-abliterated:7b"  # First in RECOMMENDED_MODELS
         assert "No models installed in Ollama" in caplog.text
 
     def test_selects_smallest_tagged_when_nothing_fits_vram(self, monkeypatch):
@@ -1893,7 +1893,7 @@ class TestWriterModelSelection:
         monkeypatch.setattr(
             "src.settings._settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": 13.0,  # Tagged for writer
+                "huihui_ai/qwen2.5-1m-abliterated:14b": 9.0,  # Tagged for writer
                 "other-model:8b": 5.0,
             },
         )
@@ -1904,15 +1904,15 @@ class TestWriterModelSelection:
 
         result = settings.get_model_for_agent("writer", available_vram=24)
 
-        # Should select the Celeste creative model (tagged for writer)
-        assert result == "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+        # Should select the Qwen 2.5 14B model (tagged for writer)
+        assert result == "huihui_ai/qwen2.5-1m-abliterated:14b"
 
     def test_selects_alternative_tagged_writer_model(self, monkeypatch):
         """Test selects alternative tagged model when first isn't available."""
         monkeypatch.setattr(
             "src.settings._settings.get_installed_models_with_sizes",
             lambda timeout=None: {
-                "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit": 11.0,
+                "huihui_ai/mistral-small-abliterated:24b": 14.0,
             },
         )
 
@@ -1922,8 +1922,8 @@ class TestWriterModelSelection:
 
         result = settings.get_model_for_agent("writer", available_vram=24)
 
-        # Should select the Dark Champion model (tagged for writer)
-        assert result == "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit"
+        # Should select the Mistral Small 24B model (tagged for writer)
+        assert result == "huihui_ai/mistral-small-abliterated:24b"
 
 
 class TestTagBasedModelSelection:
@@ -2070,14 +2070,14 @@ class TestModelTags:
         """Test returns tags from RECOMMENDED_MODELS for known models."""
         settings = Settings()
         # Use a model from RECOMMENDED_MODELS that has tags
-        tags = settings.get_model_tags("vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0")
+        tags = settings.get_model_tags("huihui_ai/qwen2.5-1m-abliterated:14b")
         assert "writer" in tags
 
     def test_get_model_tags_matches_by_base_name(self):
         """Test matches model by base name prefix."""
         settings = Settings()
         # Match by base name (without the tag suffix)
-        tags = settings.get_model_tags("vanilj/mistral-nemo-12b-celeste-v1.9:latest")
+        tags = settings.get_model_tags("huihui_ai/qwen2.5-1m-abliterated:latest")
         assert "writer" in tags
 
     def test_get_model_tags_returns_custom_tags(self):
@@ -2092,7 +2092,7 @@ class TestModelTags:
         """Test merges tags from RECOMMENDED_MODELS and custom tags."""
         settings = Settings()
         # Add a custom tag to a recommended model
-        model_id = "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0"
+        model_id = "huihui_ai/qwen2.5-1m-abliterated:14b"
         settings.custom_model_tags = {model_id: ["validator"]}
         tags = settings.get_model_tags(model_id)
         # Should have both recommended tags (writer) and custom tag (validator)

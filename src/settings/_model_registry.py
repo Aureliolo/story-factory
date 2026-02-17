@@ -15,27 +15,29 @@ Judge tag policy (Issue #228, updated #294, Feb 2026):
 from src.settings._types import ModelInfo
 
 RECOMMENDED_MODELS: dict[str, ModelInfo] = {
-    # === CREATIVE WRITING SPECIALISTS ===
-    # Prose-optimized models: writer, editor, suggestion, interviewer. NOT architect.
-    "vanilj/mistral-nemo-12b-celeste-v1.9:Q8_0": {
-        "name": "Celeste V1.9 12B",
-        "size_gb": 13,
-        "vram_required": 14,
-        "quality": 9,
-        "speed": 7,
+    # === REASONING / HIGH-QUALITY SMALL ===
+    # DeepSeek R1 Distill: highest llmfit score (83) of any Perfect-fit model on RTX 4090.
+    "huihui_ai/deepseek-r1-abliterated:7b": {
+        "name": "DeepSeek R1 7B Abliterated",
+        "size_gb": 4.7,
+        "vram_required": 8,
+        "quality": 8,
+        "speed": 9,
         "uncensored": True,
-        "description": "Purpose-built for fiction writing, excellent prose quality",
-        "tags": ["writer", "editor", "suggestion", "interviewer"],
+        "description": "Top-scored small model (llmfit 83), strong reasoning, 128K context",
+        "tags": ["architect", "continuity", "interviewer", "suggestion"],
     },
-    "TheAzazel/l3.2-moe-dark-champion-inst-18.4b-uncen-ablit": {
-        "name": "Dark Champion 18B MOE",
-        "size_gb": 11,
-        "vram_required": 14,
-        "quality": 9,
+    # === GENERAL PURPOSE 14B ===
+    # Qwen2.5 14B: general-purpose abliterated with 1M context, good prose and reasoning.
+    "huihui_ai/qwen2.5-1m-abliterated:14b": {
+        "name": "Qwen 2.5 14B Abliterated (1M ctx)",
+        "size_gb": 9,
+        "vram_required": 12,
+        "quality": 8,
         "speed": 7,
         "uncensored": True,
-        "description": "Exceptional fiction/RP, outstanding prose quality",
-        "tags": ["writer", "editor", "suggestion", "interviewer"],
+        "description": "General-purpose 14B, up to 1M context, strong prose and reasoning",
+        "tags": ["writer", "editor", "architect", "continuity", "interviewer", "suggestion"],
     },
     # === GENERAL PURPOSE ===
     # Quality 7: continuity, interviewer, suggestion. No writer/editor/architect (need Q8+).
@@ -74,6 +76,28 @@ RECOMMENDED_MODELS: dict[str, ModelInfo] = {
         "description": "MoE (30B/3B active), strong reasoning - excellent for architect",
         # Judge: MAE=2.12, rank=0.96 parametric (Issue #294).
         "tags": ["architect", "continuity", "interviewer", "suggestion", "judge"],
+    },
+    # Qwen3 14B: fills the gap between 8B and 30B, strong reasoning at moderate size.
+    "huihui_ai/qwen3-abliterated:14b": {
+        "name": "Qwen3 14B Abliterated",
+        "size_gb": 9,
+        "vram_required": 12,
+        "quality": 8,
+        "speed": 8,
+        "uncensored": True,
+        "description": "Mid-range reasoning, 40K context, fills gap between 8B and 30B",
+        "tags": ["architect", "continuity", "interviewer", "suggestion"],
+    },
+    # Mistral Small 24B: large model that still fits in 24GB VRAM (~51% usage).
+    "huihui_ai/mistral-small-abliterated:24b": {
+        "name": "Mistral Small 24B Abliterated",
+        "size_gb": 14,
+        "vram_required": 16,
+        "quality": 9,
+        "speed": 7,
+        "uncensored": True,
+        "description": "Largest model that fits comfortably in 24GB VRAM, 32K context",
+        "tags": ["writer", "editor", "architect", "continuity", "interviewer", "suggestion"],
     },
     # === GOOGLE GEMMA ===
     # Gemma3 12B: best empirical judge model (Issue #294).
