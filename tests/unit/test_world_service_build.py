@@ -2083,6 +2083,48 @@ class TestRecoverOrphans:
         # Both orphan names should appear as first element across the two calls
         assert set(first_names) == {"Charlie", "Diana"}
 
+    def test_recover_orphans_stops_when_all_connected_mid_loop(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Orphan recovery exits early when all orphans are connected before attempts run out."""
+        from src.services.world_service._build import _recover_orphans
+
+        # Two orphans: Charlie and Diana
+        id1 = mock_world_db.add_entity("character", "Alice", "A brave adventurer")
+        id2 = mock_world_db.add_entity("character", "Bob", "A wise mage")
+        mock_world_db.add_entity("character", "Charlie", "A lonely wanderer")
+        mock_world_db.add_entity("character", "Diana", "A mysterious stranger")
+        mock_world_db.add_relationship(id1, id2, "allies")
+
+        mock_scores = MagicMock()
+        mock_scores.average = 7.5
+        call_count = 0
+
+        def connect_both_orphans(state, entity_names, existing_rels):
+            """First call connects both orphans to each other."""
+            nonlocal call_count
+            call_count += 1
+            return (
+                {
+                    "source": "Charlie",
+                    "target": "Diana",
+                    "relation_type": "friends",
+                    "description": "Charlie befriends Diana",
+                },
+                mock_scores,
+                1,
+            )
+
+        mock_services.world_quality.generate_relationship_with_quality = MagicMock(
+            side_effect=connect_both_orphans
+        )
+
+        result = _recover_orphans(world_service, sample_story_state, mock_world_db, mock_services)
+
+        # Both orphans connected in one relationship, so only 1 call needed
+        assert result == 1
+        assert call_count == 1
+
 
 class TestBuildWorldOrphanRecovery:
     """Tests for orphan recovery integration in build_world."""
