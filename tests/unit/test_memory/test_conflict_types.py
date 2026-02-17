@@ -90,7 +90,7 @@ class TestNormalizeRelationType:
     def test_pipe_delimited_no_recognized_falls_through_to_substring(self):
         """Pipe-delimited with no recognized parts falls through to substring matching."""
         # "foo|bitter_rivals_bar" — neither "foo" nor "bitter_rivals_bar" is a direct match,
-        # but word-level matching finds "rivals" inside "bitter_rivals_bar"
+        # but substring matching finds "bitter_rivals" inside "foo|bitter_rivals_bar"
         result = normalize_relation_type("foo|bitter_rivals_bar")
         assert result == "bitter_rivals"
 

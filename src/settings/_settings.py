@@ -411,8 +411,8 @@ class Settings:
                 logger.error(f"Corrupted settings file (invalid JSON): {e}")
                 logger.warning("Creating backup and using default settings")
                 cls._backup_corrupted_settings()
-            except ValueError as e:
-                logger.warning(f"Invalid setting values: {e}")
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Invalid setting values or types: {e}")
                 # Try partial recovery - use valid fields
                 return cls._recover_partial_settings(data)
 

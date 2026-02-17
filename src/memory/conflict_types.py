@@ -279,6 +279,13 @@ def normalize_relation_type(raw_type: str) -> str:
     return normalized
 
 
+# Load-time assertion: every _WORD_TO_RELATION value must be a key in RELATION_CONFLICT_MAPPING
+_invalid_word_targets = set(_WORD_TO_RELATION.values()) - set(RELATION_CONFLICT_MAPPING)
+assert not _invalid_word_targets, (
+    f"_WORD_TO_RELATION references unknown types: {_invalid_word_targets}"
+)
+
+
 # Colors for conflict visualization (consistent with theme.py patterns)
 CONFLICT_COLORS: dict[str, str] = {
     "alliance": "#4CAF50",  # Green
