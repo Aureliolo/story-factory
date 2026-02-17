@@ -1,5 +1,6 @@
 """SQLite-backed worldbuilding database with NetworkX integration."""
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -21,7 +22,7 @@ from . import _embeddings, _entities, _events, _graph, _io, _relationships, _ver
 logger = logging.getLogger(__name__)
 
 # Schema version stamped on new databases (all tables created fresh in _init_schema)
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # Valid entity types (whitelist)
 VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
@@ -363,6 +364,16 @@ class WorldDatabase:
             """
             )
 
+            # Accepted cycles table (for dismissing circular chains as intentional)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS accepted_cycles (
+                    cycle_hash TEXT PRIMARY KEY,
+                    accepted_at TEXT NOT NULL
+                )
+            """
+            )
+
             # Indexes for fast queries
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_rel_target ON relationships(target_id)")
@@ -588,6 +599,80 @@ class WorldDatabase:
         max_cycle_length: int = 10,
     ) -> list[list[tuple[str, str, str]]]:
         return _graph.find_circular_relationships(self, relation_types, max_cycle_length)
+
+    # =========================================================================
+    # Accepted Cycles (dismiss circular chains as intentional)
+    # =========================================================================
+
+    @staticmethod
+    def compute_cycle_hash(cycle_edges: list[tuple[str, str, str]]) -> str:
+        """Compute a deterministic hash for a cycle regardless of traversal start point.
+
+        Sorts edges by (source, type, target), joins as a string, and returns a
+        truncated SHA-256 hash.
+
+        Args:
+            cycle_edges: List of (source_id, relation_type, target_id) tuples.
+
+        Returns:
+            16-character hex hash string.
+        """
+        sorted_edges = sorted(cycle_edges, key=lambda e: (e[0], e[1], e[2]))
+        edge_str = "|".join(f"{s},{t},{r}" for s, t, r in sorted_edges)
+        return hashlib.sha256(edge_str.encode()).hexdigest()[:16]
+
+    def accept_cycle(self, cycle_hash: str) -> None:
+        """Mark a circular chain as accepted/intentional.
+
+        Args:
+            cycle_hash: Hash of the cycle (from compute_cycle_hash).
+        """
+        from datetime import datetime
+
+        logger.info("Accepting cycle with hash: %s", cycle_hash)
+        with self._lock:
+            self._ensure_open()
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO accepted_cycles (cycle_hash, accepted_at) VALUES (?, ?)",
+                (cycle_hash, datetime.now().isoformat()),
+            )
+            self.conn.commit()
+
+    def remove_accepted_cycle(self, cycle_hash: str) -> bool:
+        """Remove a previously accepted cycle.
+
+        Args:
+            cycle_hash: Hash of the cycle to un-accept.
+
+        Returns:
+            True if the cycle was removed, False if it wasn't found.
+        """
+        logger.info("Removing accepted cycle with hash: %s", cycle_hash)
+        with self._lock:
+            self._ensure_open()
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM accepted_cycles WHERE cycle_hash = ?", (cycle_hash,))
+            self.conn.commit()
+            removed = cursor.rowcount > 0
+        logger.debug("Cycle %s removal result: %s", cycle_hash, removed)
+        return removed
+
+    def get_accepted_cycles(self) -> set[str]:
+        """Get all accepted cycle hashes.
+
+        Returns:
+            Set of accepted cycle hash strings.
+        """
+        logger.debug("Loading accepted cycles from database")
+        with self._lock:
+            self._ensure_open()
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT cycle_hash FROM accepted_cycles")
+            rows = cursor.fetchall()
+        accepted = {row[0] for row in rows}
+        logger.debug("Loaded %d accepted cycles", len(accepted))
+        return accepted
 
     # =========================================================================
     # Export/Import (delegated to _io)

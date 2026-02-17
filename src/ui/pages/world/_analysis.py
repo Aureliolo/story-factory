@@ -54,6 +54,7 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
             metrics=metrics,
             on_fix_orphan=page._handle_fix_orphan,
             on_view_circular=page._handle_view_circular,
+            on_dismiss_circular=page._handle_dismiss_circular,
             on_improve_quality=page._handle_improve_quality,
             # User-initiated refresh from dashboard button should show toast
             on_refresh=lambda: refresh_health_dashboard(page, notify=True),
@@ -118,6 +119,48 @@ async def handle_view_circular(page, cycle: dict) -> None:
 
     logger.info(f"Displaying circular chain: {cycle_desc}")
     ui.notify(f"Circular chain: {cycle_desc}", type="warning", timeout=10000)
+
+
+async def handle_dismiss_circular(page, cycle: dict) -> None:
+    """Handle dismiss/accept circular relationship chain request.
+
+    Marks the cycle as intentional so it is excluded from future health checks.
+
+    Args:
+        page: WorldPage instance.
+        cycle: Dictionary containing circular chain edge data.
+    """
+    logger.debug(f"_handle_dismiss_circular called with cycle keys={list(cycle.keys())}")
+    if not page.state.world_db:
+        return
+
+    edges = cycle.get("edges", [])
+    if not edges:
+        logger.warning("Cannot dismiss cycle with no edges")
+        return
+
+    # Build the (source_id, relation_type, target_id) tuples for hashing
+    cycle_tuples = [
+        (edge.get("source", ""), edge.get("type", ""), edge.get("target", "")) for edge in edges
+    ]
+    cycle_hash = page.state.world_db.compute_cycle_hash(cycle_tuples)
+    page.state.world_db.accept_cycle(cycle_hash)
+
+    # Build readable description for the notification
+    cycle_names: list[str] = []
+    for edge in edges:
+        source_name = edge.get("source_name", edge.get("source", "?"))
+        if not cycle_names or cycle_names[-1] != source_name:
+            cycle_names.append(source_name)
+    cycle_desc = " -> ".join(cycle_names[:4])
+    if len(cycle_names) > 4:
+        cycle_desc += " -> ..."
+
+    logger.info(f"Accepted circular chain as intentional: {cycle_desc} (hash={cycle_hash})")
+    ui.notify(f"Accepted circular chain: {cycle_desc}", type="positive")
+
+    # Refresh dashboard to reflect the change
+    refresh_health_dashboard(page, notify=False)
 
 
 async def handle_improve_quality(page, entity_id: str) -> None:

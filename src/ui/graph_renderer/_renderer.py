@@ -32,7 +32,7 @@ ENTITY_SHAPES = {
 ENTITY_ICON_CODES = {
     "character": "\ue7fd",  # person
     "location": "\ue55f",  # place
-    "item": "\ue1a8",  # inventory_2
+    "item": "\ue1a1",  # inventory_2
     "faction": "\uf233",  # groups
     "concept": "\ue0f0",  # lightbulb
 }

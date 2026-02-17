@@ -36,6 +36,7 @@ from src.ui.components.graph import GraphComponent
 from src.ui.pages.world._analysis import (
     build_analysis_section,
     build_health_section,
+    handle_dismiss_circular,
     handle_fix_orphan,
     handle_improve_quality,
     handle_view_circular,
@@ -334,6 +335,10 @@ class WorldPage:
     async def _handle_view_circular(self, cycle: dict) -> None:
         """Handle view circular relationship chain request."""
         await handle_view_circular(self, cycle)
+
+    async def _handle_dismiss_circular(self, cycle: dict) -> None:
+        """Handle dismiss/accept circular relationship chain request."""
+        await handle_dismiss_circular(self, cycle)
 
     async def _handle_improve_quality(self, entity_id: str) -> None:
         """Handle improve entity quality request."""

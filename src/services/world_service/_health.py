@@ -122,6 +122,20 @@ def get_world_health_metrics(
             if svc.settings.circular_check_all_types
             else svc.settings.circular_relationship_types,
         )
+        # Filter out accepted cycles
+        accepted_hashes = world_db.get_accepted_cycles()
+        if accepted_hashes:
+            original_count = len(circular)
+            circular = [
+                c for c in circular if world_db.compute_cycle_hash(c) not in accepted_hashes
+            ]
+            filtered_count = original_count - len(circular)
+            if filtered_count > 0:
+                logger.debug(
+                    "Filtered %d accepted cycles from %d total",
+                    filtered_count,
+                    original_count,
+                )
         for cycle in circular:
             # Include entity names for human-readable display
             edges_with_names = []
