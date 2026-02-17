@@ -4,6 +4,7 @@ import json
 import logging
 import sqlite3
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -15,12 +16,12 @@ if TYPE_CHECKING:
 from src.memory.entities import Entity, EntityVersion, EventParticipant, Relationship, WorldEvent
 from src.utils.exceptions import DatabaseClosedError, RelationshipValidationError
 
-from . import _entities, _events, _graph, _io, _relationships, _versions
+from . import _embeddings, _entities, _events, _graph, _io, _relationships, _versions
 
 logger = logging.getLogger(__name__)
 
 # Schema version for migration support
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Valid entity types (whitelist)
 VALID_ENTITY_TYPES = frozenset({"character", "location", "item", "faction", "concept"})
@@ -145,9 +146,21 @@ class WorldDatabase:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
 
+        # Load sqlite-vec extension for vector search
+        from src.utils.sqlite_vec_loader import load_vec_extension
+
+        self._vec_available: bool = load_vec_extension(self.conn)
+
         self._init_schema()
         self._graph: DiGraph[Any] | None = None
         self._closed = False
+
+        # Optional callback for embedding service to hook into content changes.
+        # Set via attach_content_changed_callback().
+        self._on_content_changed: Callable[[str, str, str], None] | None = None
+
+        # Optional callback for embedding deletions.
+        self._on_content_deleted: Callable[[str], None] | None = None
 
     def __del__(self) -> None:
         """Safety net for resource cleanup."""
@@ -389,6 +402,61 @@ class WorldDatabase:
                 )
             else:
                 logger.info("Migration v3->v4: Skipped (relationships table not yet created)")
+
+        # Migration from v4 to v5: Add vec_embeddings and embedding_metadata tables
+        if from_version < 5:
+            # embedding_metadata is always created (regular table for tracking)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS embedding_metadata (
+                    source_id TEXT PRIMARY KEY,
+                    content_type TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    embedding_model TEXT NOT NULL,
+                    embedded_at TEXT NOT NULL,
+                    embedding_dim INTEGER NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_type "
+                "ON embedding_metadata(content_type)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_embedding_metadata_model "
+                "ON embedding_metadata(embedding_model)"
+            )
+
+            # vec_embeddings virtual table requires sqlite-vec extension
+            if self._vec_available:
+                try:
+                    cursor.execute(
+                        """
+                        CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                            embedding float[1024],
+                            content_type text partition key,
+                            +source_id text,
+                            +entity_type text,
+                            +chapter_number integer,
+                            +display_text text,
+                            +embedding_model text,
+                            +embedded_at text
+                        )
+                        """
+                    )
+                    logger.info("Migration v4->v5: Created vec_embeddings and embedding_metadata")
+                except Exception as e:
+                    logger.warning(
+                        "Migration v4->v5: Failed to create vec_embeddings table: %s. "
+                        "Vector search will be unavailable.",
+                        e,
+                    )
+                    self._vec_available = False
+            else:
+                logger.info(
+                    "Migration v4->v5: Created embedding_metadata table only "
+                    "(sqlite-vec not available for vec_embeddings)"
+                )
 
         logger.info("Database migration complete")
 
@@ -671,6 +739,81 @@ class WorldDatabase:
             f"Loaded world settings: id={row[0]}, has_calendar={calendar_data is not None}"
         )
         return WorldSettings.from_dict(settings_data)
+
+    @property
+    def vec_available(self) -> bool:
+        """Whether the sqlite-vec extension is loaded and vector search is available."""
+        return self._vec_available
+
+    def attach_content_changed_callback(
+        self, callback: Callable[[str, str, str], None] | None
+    ) -> None:
+        """Register a callback to be invoked when content changes.
+
+        The callback receives (source_id, content_type, text_to_embed) and is
+        called after entity/relationship/event CRUD operations commit.
+
+        Args:
+            callback: Callable with signature (str, str, str) -> None, or None to detach.
+        """
+        self._on_content_changed = callback
+        logger.debug("Content changed callback %s", "attached" if callback else "detached")
+
+    def attach_content_deleted_callback(self, callback: Callable[[str], None] | None) -> None:
+        """Register a callback to be invoked when content is deleted.
+
+        The callback receives (source_id,) and is called after delete operations.
+
+        Args:
+            callback: Callable with signature (str,) -> None, or None to detach.
+        """
+        self._on_content_deleted = callback
+        logger.debug("Content deleted callback %s", "attached" if callback else "detached")
+
+    # =========================================================================
+    # Embedding Operations (delegated to _embeddings)
+    # =========================================================================
+
+    def upsert_embedding(
+        self,
+        source_id: str,
+        content_type: str,
+        text: str,
+        embedding: list[float],
+        model: str,
+        entity_type: str = "",
+        chapter_number: int | None = None,
+    ) -> bool:
+        return _embeddings.upsert_embedding(
+            self, source_id, content_type, text, embedding, model, entity_type, chapter_number
+        )
+
+    def delete_embedding(self, source_id: str) -> bool:
+        return _embeddings.delete_embedding(self, source_id)
+
+    def search_similar(
+        self,
+        query_embedding: list[float],
+        k: int = 10,
+        content_type: str | None = None,
+        entity_type: str | None = None,
+        chapter_number: int | None = None,
+    ) -> list[dict[str, Any]]:
+        return _embeddings.search_similar(
+            self, query_embedding, k, content_type, entity_type, chapter_number
+        )
+
+    def get_embedding_stats(self) -> dict[str, Any]:
+        return _embeddings.get_embedding_stats(self)
+
+    def needs_reembedding(self, current_model: str) -> bool:
+        return _embeddings.needs_reembedding(self, current_model)
+
+    def clear_all_embeddings(self) -> None:
+        _embeddings.clear_all_embeddings(self)
+
+    def recreate_vec_table(self, dimensions: int) -> None:
+        _embeddings.recreate_vec_table(self, dimensions)
 
     def save_world_settings(self, settings: WorldSettings) -> None:
         """Save or update world settings.

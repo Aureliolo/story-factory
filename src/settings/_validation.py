@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from src.memory.mode_models import VramStrategy
 from src.settings._types import AGENT_ROLES, LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
+from src.utils.exceptions import ConfigError
 
 if TYPE_CHECKING:
     from src.settings._settings import Settings
@@ -69,6 +70,7 @@ def validate(settings: Settings) -> bool:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
+    changed = _validate_rag_context(settings) or changed
     return changed
 
 
@@ -844,6 +846,44 @@ def _validate_world_health(settings: Settings) -> None:
             f"validate_temporal_consistency must be a boolean, "
             f"got {type(settings.validate_temporal_consistency)}"
         )
+
+
+def _validate_rag_context(settings: Settings) -> bool:
+    """Validate RAG context retrieval settings.
+
+    Returns:
+        Always False (no mutation).
+
+    Raises:
+        ValueError: If any RAG setting is out of range.
+        ConfigError: If rag_context_enabled is True but no embedding_model is set.
+    """
+    if not 100 <= settings.rag_context_max_tokens <= 16000:
+        raise ValueError(
+            f"rag_context_max_tokens must be between 100 and 16000, "
+            f"got {settings.rag_context_max_tokens}"
+        )
+    if not 1 <= settings.rag_context_max_items <= 100:
+        raise ValueError(
+            f"rag_context_max_items must be between 1 and 100, got {settings.rag_context_max_items}"
+        )
+    if not 0.0 <= settings.rag_context_similarity_threshold <= 1.0:
+        raise ValueError(
+            f"rag_context_similarity_threshold must be between 0.0 and 1.0, "
+            f"got {settings.rag_context_similarity_threshold}"
+        )
+    if not 1 <= settings.rag_context_graph_depth <= 3:
+        raise ValueError(
+            f"rag_context_graph_depth must be between 1 and 3, "
+            f"got {settings.rag_context_graph_depth}"
+        )
+
+    if settings.rag_context_enabled and not settings.embedding_model.strip():
+        raise ConfigError(
+            "rag_context_enabled requires an embedding_model to be configured. "
+            "Either set an embedding_model or disable rag_context_enabled."
+        )
+    return False
 
 
 def _validate_world_quality_thresholds_migration(settings: Settings) -> bool:

@@ -91,6 +91,14 @@ def add_entity(
         _graph.add_entity_to_graph(db, entity_id, name, entity_type, description, attrs)
 
     logger.debug(f"Added entity: {name} ({entity_type}) id={entity_id}")
+
+    # Notify embedding service of new content (outside lock to avoid deadlock)
+    if db._on_content_changed:
+        try:
+            db._on_content_changed(entity_id, "entity", f"{name}: {description}")
+        except Exception as e:
+            logger.warning("Embedding callback failed for entity %s: %s", entity_id, e)
+
     return entity_id
 
 
@@ -254,6 +262,16 @@ def update_entity(db: WorldDatabase, entity_id: str, **updates: Any) -> bool:
                 json.loads(update_fields["attributes"]) if "attributes" in update_fields else None,
             )
 
+    # Notify embedding service of updated content (outside lock)
+    if updated and db._on_content_changed:
+        try:
+            # Fetch current entity to get full name/description for embedding
+            entity = get_entity(db, entity_id)
+            if entity:
+                db._on_content_changed(entity_id, "entity", f"{entity.name}: {entity.description}")
+        except Exception as e:
+            logger.warning("Embedding callback failed for entity %s: %s", entity_id, e)
+
     return updated
 
 
@@ -278,6 +296,14 @@ def delete_entity(db: WorldDatabase, entity_id: str) -> bool:
             from . import _graph
 
             _graph.remove_entity_from_graph(db, entity_id)
+
+    # Notify embedding service of deletion (outside lock)
+    if deleted and db._on_content_deleted:
+        try:
+            db._on_content_deleted(entity_id)
+        except Exception as e:
+            logger.warning("Embedding delete callback failed for entity %s: %s", entity_id, e)
+
     return deleted
 
 

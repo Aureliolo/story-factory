@@ -469,6 +469,8 @@ class TestGenerateStructured:
         }
 
         class TestResponse(BaseModel):
+            """Test Pydantic model for structured generation."""
+
             name: str
             value: int
 
@@ -607,6 +609,7 @@ class TestGetModelContextSize:
                 return real_lock.__enter__()
 
             def __exit__(self, *args):
+                """Release the underlying lock."""
                 return real_lock.__exit__(*args)
 
         with patch.object(llm_client, "_model_context_cache_lock", InjectingLock()):

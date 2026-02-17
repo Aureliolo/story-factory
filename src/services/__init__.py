@@ -15,6 +15,8 @@ from .calendar_service import CalendarService
 from .comparison_service import ComparisonService
 from .conflict_analysis_service import ConflictAnalysisService
 from .content_guidelines_service import ContentGuidelinesService
+from .context_retrieval_service import ContextRetrievalService
+from .embedding_service import EmbeddingService
 from .export_service import ExportService
 from .import_service import ImportService
 from .model_mode_service import ModelModeService
@@ -66,6 +68,8 @@ class ServiceContainer:
     content_guidelines: ContentGuidelinesService
     calendar: CalendarService
     temporal_validation: TemporalValidationService
+    embedding: EmbeddingService
+    context_retrieval: ContextRetrievalService
 
     def __init__(self, settings: Settings | None = None):
         """
@@ -100,6 +104,8 @@ class ServiceContainer:
         self.content_guidelines = ContentGuidelinesService(self.settings)
         self.calendar = CalendarService(self.settings)
         self.temporal_validation = TemporalValidationService(self.settings)
+        self.embedding = EmbeddingService(self.settings)
+        self.context_retrieval = ContextRetrievalService(self.settings, self.embedding)
         service_count = len(self.__class__.__annotations__) - 1  # exclude 'settings'
         logger.info(
             "ServiceContainer initialized: %d services in %.2fs",
@@ -114,6 +120,8 @@ __all__ = [
     "ComparisonService",
     "ConflictAnalysisService",
     "ContentGuidelinesService",
+    "ContextRetrievalService",
+    "EmbeddingService",
     "ExportService",
     "ImportService",
     "ModelModeService",

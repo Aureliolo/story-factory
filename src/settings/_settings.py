@@ -183,6 +183,14 @@ class Settings:
     semantic_duplicate_threshold: float = 0.85  # Cosine similarity threshold for duplicates
     embedding_model: str = ""  # Model for generating embeddings (must be set when semantic duplicate detection is enabled)
 
+    # RAG context retrieval settings (smart context via vector search)
+    rag_context_enabled: bool = False  # Enable vector-similarity context retrieval for LLM calls
+    rag_context_max_tokens: int = 2000  # Maximum tokens for retrieved context per LLM call
+    rag_context_max_items: int = 20  # Maximum items to retrieve per query
+    rag_context_similarity_threshold: float = 0.3  # Min relevance score (0-1) to include item
+    rag_context_graph_expansion: bool = True  # Expand results with 1-hop graph neighbors
+    rag_context_graph_depth: int = 1  # Depth for graph neighbor expansion (1-3)
+
     # Content guidelines checking settings
     content_check_enabled: bool = True  # Enable content guideline checking for generated content
     content_check_use_llm: bool = False  # Use LLM for more accurate checking (slower)

@@ -465,6 +465,89 @@ def build_duplicate_detection_section(page: SettingsPage) -> None:
     logger.debug("Duplicate detection section built")
 
 
+def build_rag_context_section(page: SettingsPage) -> None:
+    """Build RAG (smart context retrieval) settings card.
+
+    Args:
+        page: The SettingsPage instance.
+    """
+    with ui.card().classes("w-full"):
+        page._section_header(
+            "Smart Context (RAG)",
+            "psychology",
+            "Use vector similarity search to retrieve relevant world context "
+            "for every LLM call. Requires an embedding model.",
+        )
+
+        with ui.row().classes("items-center gap-3 mb-3"):
+            page._rag_context_enabled_switch = ui.switch(
+                "Enable RAG Context",
+                value=page.settings.rag_context_enabled,
+            ).tooltip(
+                "When enabled, agents receive semantically relevant world "
+                "context instead of a fixed slice of entities"
+            )
+
+        with ui.element("div").bind_visibility_from(page._rag_context_enabled_switch, "value"):
+            with ui.row().classes("items-center gap-3 flex-wrap mb-3"):
+                with ui.column().classes("gap-1"):
+                    ui.label("Max Tokens").classes("text-xs text-gray-500")
+                    page._rag_context_max_tokens_input = page._build_number_input(
+                        value=page.settings.rag_context_max_tokens,
+                        min_val=100,
+                        max_val=16000,
+                        step=100,
+                        tooltip_text="Maximum tokens of context per LLM call (100-16000)",
+                        width="w-20",
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Max Items").classes("text-xs text-gray-500")
+                    page._rag_context_max_items_input = page._build_number_input(
+                        value=page.settings.rag_context_max_items,
+                        min_val=1,
+                        max_val=100,
+                        step=5,
+                        tooltip_text="Maximum items to retrieve per query (1-100)",
+                        width="w-16",
+                    )
+
+                with ui.column().classes("gap-1"):
+                    ui.label("Threshold").classes("text-xs text-gray-500")
+                    page._rag_context_threshold_input = page._build_number_input(
+                        value=page.settings.rag_context_similarity_threshold,
+                        min_val=0.0,
+                        max_val=1.0,
+                        step=0.05,
+                        tooltip_text="Min relevance score to include an item (0.0-1.0)",
+                        width="w-16",
+                    )
+
+            ui.separator().classes("my-2")
+            _subsection_header("Graph Expansion", "hub")
+
+            with ui.row().classes("items-center gap-3 mb-3"):
+                page._rag_graph_expansion_switch = ui.switch(
+                    "Expand with neighbors",
+                    value=page.settings.rag_context_graph_expansion,
+                ).tooltip("Include related entities from the world graph")
+
+            with ui.element("div").bind_visibility_from(page._rag_graph_expansion_switch, "value"):
+                with ui.row().classes("items-center gap-3"):
+                    with ui.column().classes("gap-1"):
+                        ui.label("Depth").classes("text-xs text-gray-500")
+                        page._rag_graph_depth_input = page._build_number_input(
+                            value=page.settings.rag_context_graph_depth,
+                            min_val=1,
+                            max_val=3,
+                            step=1,
+                            tooltip_text="Graph neighbor expansion depth (1-3)",
+                            width="w-16",
+                        )
+
+    logger.debug("RAG context section built")
+
+
 def build_refinement_stopping_section(page: SettingsPage) -> None:
     """Build refinement temperature and early stopping settings card.
 
@@ -744,6 +827,13 @@ def save_to_settings(page: SettingsPage) -> None:
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold", float),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy", None),
         ("_llm_semaphore_timeout_input", "llm_semaphore_timeout", int),
+        # RAG context settings
+        ("_rag_context_enabled_switch", "rag_context_enabled", None),
+        ("_rag_context_max_tokens_input", "rag_context_max_tokens", int),
+        ("_rag_context_max_items_input", "rag_context_max_items", int),
+        ("_rag_context_threshold_input", "rag_context_similarity_threshold", float),
+        ("_rag_graph_expansion_switch", "rag_context_graph_expansion", None),
+        ("_rag_graph_depth_input", "rag_context_graph_depth", int),
     ]
 
     for ui_attr, setting_attr, type_conv in advanced_llm_settings_map:
@@ -822,6 +912,13 @@ def refresh_from_settings(page: SettingsPage) -> None:
         ("_judge_outlier_std_threshold_input", "judge_outlier_std_threshold"),
         ("_judge_outlier_strategy_select", "judge_outlier_strategy"),
         ("_llm_semaphore_timeout_input", "llm_semaphore_timeout"),
+        # RAG context settings
+        ("_rag_context_enabled_switch", "rag_context_enabled"),
+        ("_rag_context_max_tokens_input", "rag_context_max_tokens"),
+        ("_rag_context_max_items_input", "rag_context_max_items"),
+        ("_rag_context_threshold_input", "rag_context_similarity_threshold"),
+        ("_rag_graph_expansion_switch", "rag_context_graph_expansion"),
+        ("_rag_graph_depth_input", "rag_context_graph_depth"),
     ]
 
     for ui_attr, setting_attr in advanced_llm_ui_map:
