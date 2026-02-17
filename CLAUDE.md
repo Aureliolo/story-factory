@@ -76,7 +76,7 @@ main.py
 ```
 
 **Layer responsibilities:**
-- **src/services/**: Business logic layer - no UI imports, receives settings via DI; includes orchestrator.py
+- **src/services/**: Business logic layer - no UI imports, receives settings via DI; includes orchestrator/
 - **src/ui/**: NiceGUI components - only calls services, manages UI state via AppState
 - **src/agents/**: AI agent implementations - extend BaseAgent, use retry logic
 - **src/memory/**: Pydantic models (StoryState, Character, Chapter) and WorldDatabase (SQLite + NetworkX + sqlite-vec)
@@ -105,10 +105,11 @@ The writing agents receive semantically relevant world context via a RAG pipelin
 ```text
 WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → StoryOrchestrator → Agent prompts
 ```
-- `EmbeddingService` generates vector embeddings via Ollama and attaches auto-embedding callbacks to `WorldDatabase`
-- `ContextRetrievalService` performs KNN vector search to retrieve relevant entities/relationships for the current writing task
-- `StoryOrchestrator` retrieves RAG context before each agent call and passes it as `world_context` to Writer, Editor, and Continuity agents
+- `EmbeddingService` generates vector embeddings via Ollama and attaches auto-embedding callbacks to `WorldDatabase`. Fails fast at construction if `embedding_model` is empty.
+- `ContextRetrievalService` performs KNN vector search to retrieve relevant entities/relationships for the current writing task. `ContextItem` and `RetrievedContext` are frozen dataclasses — use `dataclasses.replace()` to derive modified instances. `relevance_score` is clamped to [0.0, 1.0] on construction.
+- `StoryOrchestrator.set_project_context(world_db, story_state)` bundles the per-project mutable state into a single call (used by `StoryService._writing` functions that require both world_db and story_state)
 - RAG retrieval failures are non-fatal — agents proceed with empty context if retrieval fails
+- Stale `settings.json` files with empty `embedding_model` are auto-migrated to the default model during validation.
 
 ## Threading Model
 

@@ -95,6 +95,29 @@ class StoryOrchestrator:
         self._completed_chapters: int = 0
         self._current_score_id: int | None = None  # For learning tracking
 
+    def set_project_context(
+        self,
+        world_db: WorldDatabase | None,
+        story_state: StoryState | None,
+    ) -> None:
+        """Set project-specific context for the current writing session.
+
+        Bundles the world database and story state assignment into a single
+        explicit call.  Preferred over direct attribute mutation for callers
+        that need to set both world_db and story_state.
+
+        Args:
+            world_db: WorldDatabase for RAG context retrieval (may be None).
+            story_state: Story state to operate on (may be None when clearing).
+        """
+        self.world_db = world_db
+        self.story_state = story_state
+        logger.debug(
+            "Project context set: world_db=%s, story_state=%s",
+            "present" if world_db else "None",
+            story_state.id[:8] if story_state else "None",
+        )
+
     # ========== INTERNAL HELPERS (inline) ==========
 
     def _validate_response(self, response: str, task: str = "") -> str:
@@ -713,6 +736,7 @@ Example format: ["Title One", "Title Two", "Title Three", "Title Four", "Title F
     def reset_state(self) -> None:
         """Reset the orchestrator state for a new story."""
         self.story_state = None
+        self.world_db = None
         self.events.clear()
         # Reset agent conversation histories
         self.interviewer.conversation_history = []

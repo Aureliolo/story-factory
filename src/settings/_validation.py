@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from src.memory.mode_models import VramStrategy
 from src.settings._types import AGENT_ROLES, LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
-from src.utils.exceptions import ConfigError
 
 if TYPE_CHECKING:
     from src.settings._settings import Settings
@@ -25,7 +24,6 @@ def validate(settings: Settings) -> bool:
 
     Raises:
         ValueError: If any field contains an invalid value.
-        ConfigError: If RAG context settings are inconsistent (e.g. empty embedding_model).
     """
     _validate_log_level(settings)
     _validate_url(settings)
@@ -43,6 +41,7 @@ def validate(settings: Settings) -> bool:
     _validate_early_stopping(settings)
     _validate_circuit_breaker(settings)
     _validate_retry_strategy(settings)
+    changed = _validate_rag_context(settings) or changed
     changed = _validate_semantic_duplicate(settings) or changed
     _validate_temperature_decay_semantics(settings)
     _validate_judge_consistency(settings)
@@ -67,7 +66,6 @@ def validate(settings: Settings) -> bool:
     _validate_token_multipliers(settings)
     _validate_content_check(settings)
     _validate_world_health(settings)
-    changed = _validate_rag_context(settings) or changed
     return changed
 
 
@@ -848,12 +846,15 @@ def _validate_world_health(settings: Settings) -> None:
 def _validate_rag_context(settings: Settings) -> bool:
     """Validate RAG context retrieval settings.
 
+    Auto-migrates empty ``embedding_model`` (a stale default from pre-RAG
+    settings files) to the current default rather than raising an error.  This
+    prevents existing users from hitting an opaque ``ConfigError`` on upgrade.
+
     Returns:
-        Always False (no mutation).
+        True if ``embedding_model`` was migrated, False otherwise.
 
     Raises:
         ValueError: If any RAG setting is out of range.
-        ConfigError: If embedding_model is empty (vector search requires it).
     """
     if not 100 <= settings.rag_context_max_tokens <= 16000:
         raise ValueError(
@@ -876,10 +877,17 @@ def _validate_rag_context(settings: Settings) -> bool:
         )
 
     if not settings.embedding_model.strip():
-        raise ConfigError(
-            "embedding_model must be set to a valid embedding model. "
-            "RAG context retrieval and vector search require an embedding model."
+        from src.settings._settings import Settings as _Settings
+
+        default_model = _Settings().embedding_model
+        logger.warning(
+            "embedding_model is empty (stale settings file from before RAG pipeline). "
+            "Auto-migrating to default '%s'. "
+            "Change this in Settings > RAG if you prefer a different model.",
+            default_model,
         )
+        settings.embedding_model = default_model
+        return True
     return False
 
 

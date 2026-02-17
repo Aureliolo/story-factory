@@ -40,15 +40,6 @@ def disabled_settings():
 
 
 @pytest.fixture
-def no_model_settings():
-    """Create a Settings instance with RAG enabled but no embedding model."""
-    settings = Settings()
-    settings.rag_context_enabled = True
-    settings.embedding_model = ""
-    return settings
-
-
-@pytest.fixture
 def service(embedding_settings):
     """Create an EmbeddingService with RAG enabled."""
     return EmbeddingService(embedding_settings)
@@ -58,12 +49,6 @@ def service(embedding_settings):
 def disabled_service(disabled_settings):
     """Create an EmbeddingService with RAG disabled."""
     return EmbeddingService(disabled_settings)
-
-
-@pytest.fixture
-def no_model_service(no_model_settings):
-    """Create an EmbeddingService with no embedding model configured."""
-    return EmbeddingService(no_model_settings)
 
 
 @pytest.fixture
@@ -167,9 +152,10 @@ class TestEmbedText:
 
         assert result == []
 
-    def test_embed_text_no_model_configured(self, no_model_service):
-        """Returns empty list when no embedding model is configured (ValueError path)."""
-        result = no_model_service.embed_text("Some text")
+    def test_embed_text_no_model_configured(self, service):
+        """Returns empty list when embedding model is cleared after construction (ValueError path)."""
+        service.settings.embedding_model = ""
+        result = service.embed_text("Some text")
         assert result == []
 
     def test_embed_text_timeout_error(self, service):
@@ -719,12 +705,13 @@ class TestCheckAndReembedIfNeeded:
         mock_db.recreate_vec_table.assert_not_called()
         mock_db.clear_all_embeddings.assert_not_called()
 
-    def test_check_and_reembed_if_needed_no_model(self, no_model_service, mock_db):
-        """Raises ValueError when no embedding model is configured."""
+    def test_check_and_reembed_if_needed_no_model(self, service, mock_db):
+        """Raises ValueError when embedding model is cleared after construction."""
+        service.settings.embedding_model = ""
         story_state = SimpleNamespace()
 
         with pytest.raises(ValueError, match="No embedding model configured"):
-            no_model_service.check_and_reembed_if_needed(mock_db, story_state)
+            service.check_and_reembed_if_needed(mock_db, story_state)
 
 
 # ---------------------------------------------------------------------------
@@ -853,7 +840,26 @@ class TestInternalMethods:
         service.settings.embedding_model = "  test-embed:latest  "
         assert service._get_model() == "test-embed:latest"
 
-    def test_get_model_raises_when_empty(self, no_model_service):
-        """Raises ValueError when no embedding model is configured."""
+    def test_get_model_raises_when_empty(self, service):
+        """Raises ValueError when embedding model is cleared after construction."""
+        service.settings.embedding_model = ""
         with pytest.raises(ValueError, match="No embedding model configured"):
-            no_model_service._get_model()
+            service._get_model()
+
+    def test_constructor_fails_fast_on_empty_model(self):
+        """Constructor raises ValueError when embedding_model is empty."""
+        settings = Settings()
+        settings.embedding_model = ""
+        with pytest.raises(
+            ValueError, match="EmbeddingService requires a configured embedding_model"
+        ):
+            EmbeddingService(settings)
+
+    def test_constructor_fails_fast_on_whitespace_model(self):
+        """Constructor raises ValueError when embedding_model is whitespace-only."""
+        settings = Settings()
+        settings.embedding_model = "   "
+        with pytest.raises(
+            ValueError, match="EmbeddingService requires a configured embedding_model"
+        ):
+            EmbeddingService(settings)

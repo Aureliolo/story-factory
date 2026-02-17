@@ -53,8 +53,7 @@ def write_chapter(
     validate_type(state, "state", StoryState)
     validate_positive(chapter_num, "chapter_num")
     orchestrator = svc._get_orchestrator(state)
-    orchestrator.story_state = state
-    orchestrator.world_db = world_db
+    orchestrator.set_project_context(world_db=world_db, story_state=state)
 
     # Write the chapter
     content = ""
@@ -101,8 +100,7 @@ def write_all_chapters(
     from src.services.story_service import GenerationCancelled
 
     orchestrator = svc._get_orchestrator(state)
-    orchestrator.story_state = state
-    orchestrator.world_db = world_db
+    orchestrator.set_project_context(world_db=world_db, story_state=state)
 
     for event in orchestrator.write_all_chapters():
         # Check for cancellation
@@ -137,8 +135,7 @@ def write_short_story(
         The completed story content from chapter 1, or an empty string if no chapter was produced.
     """
     orchestrator = svc._get_orchestrator(state)
-    orchestrator.story_state = state
-    orchestrator.world_db = world_db
+    orchestrator.set_project_context(world_db=world_db, story_state=state)
 
     content = ""
     for event in orchestrator.write_short_story():
@@ -207,8 +204,7 @@ def regenerate_chapter_with_feedback(
 
     # Get orchestrator and regenerate with feedback
     orchestrator = svc._get_orchestrator(state)
-    orchestrator.story_state = state
-    orchestrator.world_db = world_db
+    orchestrator.set_project_context(world_db=world_db, story_state=state)
 
     # Write the chapter with feedback
     content = ""
