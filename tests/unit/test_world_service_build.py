@@ -211,20 +211,20 @@ class TestCalculateTotalSteps:
     def test_full_options(self, world_service):
         """Test step count for full options."""
         options = WorldBuildOptions.full()
-        # Base (2: character extraction + completion)
+        # Base (3: character extraction + embedding + completion)
         # + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 12
-        assert world_service._calculate_total_steps(options) == 12
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 13
+        assert world_service._calculate_total_steps(options) == 13
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
         options = WorldBuildOptions.full_rebuild()
-        # Base (2: character extraction + completion)
+        # Base (3: character extraction + embedding + completion)
         # + clear (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
-        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 13
-        assert world_service._calculate_total_steps(options) == 13
+        # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 14
+        assert world_service._calculate_total_steps(options) == 14
 
     def test_custom_options(self, world_service):
         """Test step count for custom options."""
@@ -237,8 +237,8 @@ class TestCalculateTotalSteps:
             generate_concepts=True,
             generate_relationships=False,
         )
-        # Clear (1) + characters (1) + locations (1) + concepts (1) + completion (1) = 5
-        assert world_service._calculate_total_steps(options) == 5
+        # Clear (1) + characters (1) + embedding (1) + locations (1) + concepts (1) + completion (1) = 6
+        assert world_service._calculate_total_steps(options) == 6
 
 
 class TestClearWorldDb:

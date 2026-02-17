@@ -82,11 +82,13 @@ def run_cli(load_story: str | None = None, list_stories: bool = False) -> None:
     """
     if list_stories:
         # List stories without creating orchestrator/agents (avoids Ollama connection)
+        from src.services.embedding_service import EmbeddingService
         from src.services.project_service import ProjectService
         from src.settings import Settings
 
         settings = Settings.load()
-        project_service = ProjectService(settings)
+        embedding_service = EmbeddingService(settings)
+        project_service = ProjectService(settings, embedding_service)
         stories = project_service.list_projects()
         if not stories:
             print("No saved stories found.")

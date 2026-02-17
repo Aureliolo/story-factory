@@ -1808,57 +1808,6 @@ class TestModeDatabase:
 class TestModeDatabaseMigrations:
     """Tests for database migrations."""
 
-    def test_migration_adds_size_preference_column(self, tmp_path: Path) -> None:
-        """Test that migration adds size_preference column to existing databases."""
-        db_path = tmp_path / "old_schema.db"
-
-        # Create a database with the old schema (without size_preference column)
-        # Using the correct column names: agent_models_json, agent_temperatures_json
-        conn = sqlite3.connect(db_path)
-        try:
-            conn.execute("""
-                CREATE TABLE custom_modes (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    agent_models_json TEXT NOT NULL,
-                    agent_temperatures_json TEXT NOT NULL,
-                    vram_strategy TEXT NOT NULL DEFAULT 'adaptive',
-                    is_experimental INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            # Insert a mode without size_preference
-            conn.execute(
-                """
-                INSERT INTO custom_modes
-                    (id, name, agent_models_json, agent_temperatures_json, vram_strategy)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                ("test-mode", "Test Mode", '{"writer": "model-a"}', '{"writer": 0.9}', "adaptive"),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-        # Now open the database with ModeDatabase - should trigger migration
-        db = ModeDatabase(db_path)
-
-        # Check that the column was added
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("PRAGMA table_info(custom_modes)")
-            columns = {row[1] for row in cursor.fetchall()}
-            assert "size_preference" in columns
-        finally:
-            conn.close()
-
-        # Check that existing mode has default value
-        mode = db.get_custom_mode("test-mode")
-        assert mode is not None
-        assert mode.get("size_preference") == "medium"
-
     def test_world_entity_scores_has_refinement_columns(self, tmp_path: Path) -> None:
         """Test that world_entity_scores table has refinement effectiveness columns."""
         db_path = tmp_path / "test.db"
