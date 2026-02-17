@@ -1,4 +1,4 @@
-"""Schema initialization and migration functions for ModeDatabase."""
+"""Schema initialization for ModeDatabase."""
 
 import logging
 import sqlite3
@@ -10,8 +10,7 @@ def init_db(db) -> None:
     """Create and initialize the SQLite schema required by the ModeDatabase.
 
     Creates tables for generation scores, aggregated model performance, recommendations,
-    world entity scores, prompt metrics, and custom modes, along with relevant indexes,
-    then applies any pending schema migrations.
+    world entity scores, prompt metrics, and custom modes, along with relevant indexes.
 
     Args:
         db: ModeDatabase instance.
@@ -98,7 +97,7 @@ def init_db(db) -> None:
                 CREATE INDEX IF NOT EXISTS idx_recommendations_type
                     ON recommendations(recommendation_type);
 
-                -- World entity quality scores
+                -- World entity quality scores (with refinement effectiveness tracking)
                 CREATE TABLE IF NOT EXISTS world_entity_scores (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -114,7 +113,18 @@ def init_db(db) -> None:
                     average_score REAL,
                     iterations_used INTEGER,
                     generation_time_seconds REAL,
-                    feedback TEXT
+                    feedback TEXT,
+                    early_stop_triggered INTEGER DEFAULT 0,
+                    threshold_met INTEGER DEFAULT 0,
+                    peak_score REAL,
+                    final_score REAL,
+                    score_progression_json TEXT,
+                    consecutive_degradations INTEGER DEFAULT 0,
+                    best_iteration INTEGER DEFAULT 0,
+                    quality_threshold REAL,
+                    max_iterations INTEGER,
+                    temporal_consistency_score REAL,
+                    temporal_validation_errors TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_world_entity_project
                     ON world_entity_scores(project_id);
@@ -189,55 +199,30 @@ def init_db(db) -> None:
             """)
             conn.commit()
 
-            # Run migrations for schema updates
-            run_migrations(db, conn)
+            # Add columns that may be missing in existing world_entity_scores tables.
+            # ALTER TABLE ADD COLUMN is a no-op if the column already exists (SQLite
+            # raises "duplicate column name" which we catch and ignore).
+            _new_columns = [
+                ("early_stop_triggered", "INTEGER DEFAULT 0"),
+                ("threshold_met", "INTEGER DEFAULT 0"),
+                ("peak_score", "REAL"),
+                ("final_score", "REAL"),
+                ("score_progression_json", "TEXT"),
+                ("consecutive_degradations", "INTEGER DEFAULT 0"),
+                ("best_iteration", "INTEGER DEFAULT 0"),
+                ("quality_threshold", "REAL"),
+                ("max_iterations", "INTEGER"),
+                ("temporal_consistency_score", "REAL"),
+                ("temporal_validation_errors", "TEXT"),
+            ]
+            for col_name, col_type in _new_columns:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE world_entity_scores ADD COLUMN {col_name} {col_type}"
+                    )
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column name" not in str(exc):
+                        raise
+            conn.commit()
 
-
-def run_migrations(db, conn: sqlite3.Connection) -> None:
-    """Apply pending schema migrations to the connected SQLite database.
-
-    Ensures the custom_modes table contains the `size_preference` column and adds it
-    with a default value of "medium" if missing. Also adds refinement effectiveness
-    tracking columns to world_entity_scores.
-
-    Args:
-        db: ModeDatabase instance.
-        conn: Active SQLite connection whose schema may be modified.
-    """
-    # Migration: custom_modes size_preference
-    cursor = conn.execute("PRAGMA table_info(custom_modes)")
-    custom_modes_columns = {row[1] for row in cursor.fetchall()}
-
-    if "size_preference" not in custom_modes_columns:
-        logger.info("Migrating custom_modes: adding size_preference column")
-        conn.execute(
-            "ALTER TABLE custom_modes ADD COLUMN size_preference TEXT NOT NULL DEFAULT 'medium'"
-        )
-        conn.commit()
-
-    # Migration: world_entity_scores refinement effectiveness tracking
-    cursor = conn.execute("PRAGMA table_info(world_entity_scores)")
-    world_entity_columns = {row[1] for row in cursor.fetchall()}
-
-    # New columns for refinement effectiveness tracking
-    refinement_columns = [
-        ("early_stop_triggered", "INTEGER DEFAULT 0"),
-        ("threshold_met", "INTEGER DEFAULT 0"),
-        ("peak_score", "REAL"),
-        ("final_score", "REAL"),
-        ("score_progression_json", "TEXT"),
-        ("consecutive_degradations", "INTEGER DEFAULT 0"),
-        ("best_iteration", "INTEGER DEFAULT 0"),
-        ("quality_threshold", "REAL"),
-        ("max_iterations", "INTEGER"),
-        # Temporal consistency tracking columns (added in calendar feature)
-        ("temporal_consistency_score", "REAL"),
-        ("temporal_validation_errors", "TEXT"),
-    ]
-
-    for col_name, col_def in refinement_columns:
-        if col_name not in world_entity_columns:
-            logger.info(f"Migrating world_entity_scores: adding {col_name} column")
-            conn.execute(f"ALTER TABLE world_entity_scores ADD COLUMN {col_name} {col_def}")
-
-    conn.commit()
+            logger.debug("ModeDatabase schema initialized: %s", db.db_path)

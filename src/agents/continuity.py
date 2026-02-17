@@ -130,6 +130,7 @@ class ContinuityAgent(BaseAgent):
         chapter_number: int,
         check_voice: bool = True,
         established_patterns: dict[str, DialoguePattern] | None = None,
+        world_context: str = "",
     ) -> list[ContinuityIssue]:
         """Check a chapter for continuity issues.
 
@@ -139,6 +140,7 @@ class ContinuityAgent(BaseAgent):
             chapter_number: Chapter number being checked
             check_voice: Whether to perform voice consistency checks (default: True)
             established_patterns: Previously established dialogue patterns (optional)
+            world_context: Optional RAG-retrieved world context for richer consistency checks.
 
         Returns:
             List of continuity issues found.
@@ -160,6 +162,14 @@ class ContinuityAgent(BaseAgent):
             for c in story_state.characters
         )
 
+        world_context_block = ""
+        if world_context:
+            logger.debug(
+                "Injecting world context into continuity check prompt (%d chars)",
+                len(world_context),
+            )
+            world_context_block = f"\nRETRIEVED WORLD CONTEXT:\n{world_context}\n"
+
         brief = story_state.brief
         if not brief:
             raise ValueError("Story brief is required to check chapter continuity")
@@ -175,7 +185,7 @@ ESTABLISHED FACTS:
 
 WORLD RULES:
 {chr(10).join(story_state.world_rules)}
-
+{world_context_block}
 PREVIOUS CHAPTER ENDINGS:
 {previous_content}
 

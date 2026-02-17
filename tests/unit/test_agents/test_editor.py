@@ -256,3 +256,18 @@ class TestEditorIntegration:
         editor.ensure_consistency(edited_content, previous, sample_story_state)
 
         assert editor.generate.call_count == 1  # Reset between calls
+
+
+class TestWorldContextInjection:
+    """Tests for world_context parameter in editing methods."""
+
+    def test_edit_chapter_includes_world_context(self, editor, sample_story_state):
+        """Test world_context is included in chapter editing prompt."""
+        editor.generate = MagicMock(return_value="Edited with context...")
+        world_ctx = "<retrieved-context>World consistency info</retrieved-context>"
+
+        editor.edit_chapter(sample_story_state, "Original content...", world_context=world_ctx)
+
+        prompt = editor.generate.call_args[0][0]
+        assert "WORLD CONTEXT" in prompt
+        assert "World consistency info" in prompt

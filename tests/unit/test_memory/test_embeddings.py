@@ -105,21 +105,6 @@ def _make_mock_db(vec_available: bool = True) -> MagicMock:
 class TestUpsertEmbedding:
     """Tests for the upsert_embedding function."""
 
-    def test_upsert_embedding_vec_unavailable(self, db):
-        """Upsert returns False when sqlite-vec is not available."""
-        db._vec_available = False
-
-        result = _embeddings.upsert_embedding(
-            db,
-            source_id="entity-001",
-            content_type="entity",
-            text="A brave warrior",
-            embedding=_make_embedding(),
-            model="fake-embed:latest",
-        )
-
-        assert result is False
-
     def test_upsert_embedding_success(self, db_with_vec):
         """Upsert inserts a new embedding and returns True."""
         result = _embeddings.upsert_embedding(
@@ -402,17 +387,6 @@ class TestDeleteEmbedding:
 
 class TestSearchSimilar:
     """Tests for the search_similar function."""
-
-    def test_search_similar_vec_unavailable(self, db):
-        """Search returns empty list when sqlite-vec is not available."""
-        db._vec_available = False
-
-        results = _embeddings.search_similar(
-            db,
-            query_embedding=_make_embedding(),
-        )
-
-        assert results == []
 
     def test_search_similar_empty_query(self, db_with_vec):
         """Search returns empty list when query_embedding is empty."""
@@ -787,24 +761,6 @@ class TestClearAllEmbeddings:
 
 class TestRecreateVecTable:
     """Tests for the recreate_vec_table function."""
-
-    def test_recreate_vec_table_vec_unavailable(self, db):
-        """Recreate is a no-op when sqlite-vec is not available."""
-        # Drop the vec_embeddings table if it was created during __init__
-        # (happens when sqlite-vec is installed in the test environment)
-        try:
-            db.conn.execute("DROP TABLE IF EXISTS vec_embeddings")
-        except Exception:
-            pass
-        db._vec_available = False
-
-        # Should not raise any errors
-        _embeddings.recreate_vec_table(db, dimensions=512)
-
-        # Verify no vec_embeddings table was created
-        cursor = db.conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE name='vec_embeddings'")
-        assert cursor.fetchone() is None
 
     def test_recreate_vec_table_success(self):
         """Recreate drops and recreates the vec table with new dimensions."""

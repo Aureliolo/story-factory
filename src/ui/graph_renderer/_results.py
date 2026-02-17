@@ -4,7 +4,7 @@ import html
 import logging
 
 from src.memory.world_database import WorldDatabase
-from src.ui.theme import ENTITY_COLORS
+from src.utils.constants import ENTITY_COLORS
 
 logger = logging.getLogger(__name__)
 

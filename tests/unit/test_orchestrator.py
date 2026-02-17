@@ -912,7 +912,7 @@ class TestWritingMethods:
         # First call returns issues, second call returns empty (revision fixes it)
         check_calls = [0]
 
-        def mock_check(*args):
+        def mock_check(*args, **kwargs):
             """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
@@ -1061,7 +1061,7 @@ class TestWritingMethods:
 
         check_calls = [0]
 
-        def mock_check(*args):
+        def mock_check(*args, **kwargs):
             """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
@@ -1207,7 +1207,7 @@ class TestWritingMethods:
         ]
         check_calls = [0]
 
-        def mock_check(*args):
+        def mock_check(*args, **kwargs):
             """Return continuity issues on first call, empty list on subsequent calls."""
             check_calls[0] += 1
             if check_calls[0] == 1:
@@ -2943,3 +2943,174 @@ class TestOrchestratorLearningIntegration:
         orchestrator_with_mode_service.settings.get_model_for_agent.assert_called_with("writer")
         call_args = mock_mode_service.record_generation.call_args
         assert call_args.kwargs["model_id"] == "huihui_ai/dolphin3-abliterated:8b"
+
+
+class TestRAGContextIntegration:
+    """Tests for RAG context retrieval wiring into the writing pipeline."""
+
+    @pytest.fixture
+    def orchestrator_with_rag(self):
+        """Create an orchestrator with mock context retrieval and world DB."""
+        from src.services.context_retrieval_service import ContextItem, RetrievedContext
+
+        mock_cr = MagicMock()
+        mock_cr.retrieve_context.return_value = RetrievedContext(
+            items=[
+                ContextItem(
+                    source_type="entity",
+                    source_id="char-1",
+                    relevance_score=0.9,
+                    text="Hero: A brave warrior",
+                ),
+            ],
+            total_tokens=10,
+            retrieval_method="vector",
+        )
+
+        mock_world_db = MagicMock()
+
+        orc = StoryOrchestrator(context_retrieval=mock_cr)
+        orc.world_db = mock_world_db
+        orc.story_state = StoryState(
+            id="test-rag",
+            status="writing",
+            brief=StoryBrief(
+                premise="A test story",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="short_story",
+                language="English",
+                content_rating="general",
+            ),
+            characters=[Character(name="Hero", role="protagonist", description="Main char")],
+            chapters=[Chapter(number=1, title="Ch1", outline="Beginning")],
+            plot_summary="An epic tale",
+        )
+
+        # Mock agent methods
+        object.__setattr__(
+            orc.writer, "write_chapter", MagicMock(return_value="Chapter content...")
+        )
+        object.__setattr__(
+            orc.writer, "write_short_story", MagicMock(return_value="Story content...")
+        )
+        object.__setattr__(orc.editor, "edit_chapter", MagicMock(return_value="Edited content..."))
+        object.__setattr__(orc.editor, "ensure_consistency", MagicMock(return_value="Consistent"))
+        object.__setattr__(orc.continuity, "check_chapter", MagicMock(return_value=[]))
+        object.__setattr__(orc.continuity, "validate_against_outline", MagicMock(return_value=[]))
+        object.__setattr__(orc.continuity, "extract_new_facts", MagicMock(return_value=[]))
+        object.__setattr__(orc.continuity, "extract_character_arcs", MagicMock(return_value={}))
+        object.__setattr__(
+            orc.continuity, "check_plot_points_completed", MagicMock(return_value=[])
+        )
+        object.__setattr__(orc.validator, "validate_response", MagicMock(return_value=None))
+
+        return orc, mock_cr
+
+    def test_write_chapter_retrieves_rag_context(self, orchestrator_with_rag):
+        """Test that write_chapter retrieves and passes RAG context to agents."""
+        orc, mock_cr = orchestrator_with_rag
+
+        events = list(orc.write_chapter(1))
+
+        assert len(events) > 0
+        # Verify context retrieval was called
+        mock_cr.retrieve_context.assert_called_once()
+        call_kwargs = mock_cr.retrieve_context.call_args.kwargs
+        assert call_kwargs["world_db"] is orc.world_db
+        assert call_kwargs["story_state"] is orc.story_state
+
+        # Verify world_context was passed to writer
+        writer_call = orc.writer.write_chapter.call_args
+        assert "world_context" in writer_call.kwargs
+        assert "<retrieved-context>" in writer_call.kwargs["world_context"]
+
+        # Verify world_context was passed to editor
+        editor_call = orc.editor.edit_chapter.call_args
+        assert "world_context" in editor_call.kwargs
+        assert "<retrieved-context>" in editor_call.kwargs["world_context"]
+
+    def test_write_short_story_retrieves_rag_context(self, orchestrator_with_rag):
+        """Test that write_short_story retrieves and passes RAG context to agents."""
+        orc, mock_cr = orchestrator_with_rag
+
+        events = list(orc.write_short_story())
+
+        assert len(events) > 0
+        # Verify context retrieval was called
+        mock_cr.retrieve_context.assert_called_once()
+
+        # Verify world_context was passed to writer
+        writer_call = orc.writer.write_short_story.call_args
+        assert "world_context" in writer_call.kwargs
+        assert "<retrieved-context>" in writer_call.kwargs["world_context"]
+
+    def test_write_chapter_without_rag_passes_empty_context(self):
+        """Test write_chapter works without RAG (empty world_context)."""
+        orc = StoryOrchestrator()
+        orc.story_state = StoryState(
+            id="test-no-rag",
+            status="writing",
+            brief=StoryBrief(
+                premise="A test",
+                genre="Fantasy",
+                tone="Epic",
+                setting_time="Medieval",
+                setting_place="Kingdom",
+                target_length="short_story",
+                language="English",
+                content_rating="general",
+            ),
+            characters=[Character(name="Hero", role="protagonist", description="Main")],
+            chapters=[Chapter(number=1, title="Ch1", outline="Begin")],
+            plot_summary="A tale",
+        )
+
+        object.__setattr__(
+            orc.writer, "write_chapter", MagicMock(return_value="Chapter content...")
+        )
+        object.__setattr__(orc.editor, "edit_chapter", MagicMock(return_value="Edited content..."))
+        object.__setattr__(orc.continuity, "check_chapter", MagicMock(return_value=[]))
+        object.__setattr__(orc.continuity, "validate_against_outline", MagicMock(return_value=[]))
+        object.__setattr__(orc.continuity, "extract_new_facts", MagicMock(return_value=[]))
+        object.__setattr__(orc.continuity, "extract_character_arcs", MagicMock(return_value={}))
+        object.__setattr__(
+            orc.continuity, "check_plot_points_completed", MagicMock(return_value=[])
+        )
+        object.__setattr__(orc.validator, "validate_response", MagicMock(return_value=None))
+
+        events = list(orc.write_chapter(1))
+
+        assert len(events) > 0
+        # Without RAG, world_context should be empty string
+        mock_write: MagicMock = orc.writer.write_chapter  # type: ignore[assignment]
+        writer_call = mock_write.call_args
+        assert writer_call.kwargs["world_context"] == ""
+
+    def test_rag_retrieval_failure_is_non_fatal(self, orchestrator_with_rag):
+        """Test that RAG retrieval failure doesn't block writing."""
+        orc, mock_cr = orchestrator_with_rag
+        mock_cr.retrieve_context.side_effect = RuntimeError("Embedding model offline")
+
+        # Should still succeed with empty world_context
+        events = list(orc.write_chapter(1))
+
+        assert len(events) > 0
+        writer_call = orc.writer.write_chapter.call_args
+        assert writer_call.kwargs["world_context"] == ""
+
+    def test_orchestrator_accepts_context_retrieval(self):
+        """Test StoryOrchestrator constructor accepts context_retrieval."""
+        mock_cr = MagicMock()
+        orc = StoryOrchestrator(context_retrieval=mock_cr)
+        assert orc.context_retrieval is mock_cr
+        assert orc.world_db is None
+
+    def test_orchestrator_world_db_can_be_set(self):
+        """Test world_db can be set after construction."""
+        mock_db = MagicMock()
+        orc = StoryOrchestrator()
+        orc.world_db = mock_db
+        assert orc.world_db is mock_db

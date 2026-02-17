@@ -130,27 +130,6 @@ FAKE_EMBEDDING = [0.1, 0.2, 0.3, 0.4, 0.5]
 
 
 # ---------------------------------------------------------------------------
-# is_available property tests
-# ---------------------------------------------------------------------------
-
-
-class TestIsAvailable:
-    """Tests for the is_available property."""
-
-    def test_is_available_true(self, service):
-        """Service is available when RAG is enabled and embedding model is set."""
-        assert service.is_available is True
-
-    def test_is_available_false_disabled(self, disabled_service):
-        """Service is not available when RAG context is disabled."""
-        assert disabled_service.is_available is False
-
-    def test_is_available_false_no_model(self, no_model_service):
-        """Service is not available when embedding model is empty string."""
-        assert no_model_service.is_available is False
-
-
-# ---------------------------------------------------------------------------
 # embed_text tests
 # ---------------------------------------------------------------------------
 
@@ -474,9 +453,10 @@ class TestEmbedStoryStateData:
         assert "Chapter 1:" in call_kwargs["text"]
 
     def test_embed_story_state_data_scene_no_title(self, service, mock_db):
-        """Embeds scene outline where scene has no title attribute."""
+        """Embeds scene outline where scene has an empty title."""
         scene = SimpleNamespace(
             outline="Something happens here.",
+            title="",
         )
         chapter = SimpleNamespace(
             number=1,
@@ -496,7 +476,7 @@ class TestEmbedStoryStateData:
         # 1 chapter + 1 scene
         assert count == 2
         scene_call = mock_db.upsert_embedding.call_args_list[1].kwargs
-        # No title in scene text since scene has no title attr
+        # No title in scene text since scene title is empty
         assert "'" not in scene_call["text"]
 
     def test_embed_story_state_data_chapter_no_outline(self, service, mock_db):
@@ -569,7 +549,11 @@ class TestEmbedStoryStateData:
 
     def test_embed_story_state_data_no_facts_or_rules_or_chapters(self, service, mock_db):
         """Handles story state with no embeddable content attributes."""
-        story_state = SimpleNamespace()
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
 
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
             count = service.embed_story_state_data(mock_db, story_state)
@@ -630,14 +614,21 @@ class TestEmbedAllWorldData:
         assert counts["event"] == 1
         assert counts["story_state"] == 1
 
-    def test_embed_all_world_data_not_available(self, disabled_service, mock_db):
-        """Returns empty dict when the embedding service is not available."""
-        story_state = SimpleNamespace()
+    def test_embed_all_world_data_empty_world(self, service, mock_db):
+        """Returns zero counts when the world has no entities, relationships, or events."""
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
 
-        counts = disabled_service.embed_all_world_data(mock_db, story_state)
+        with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
+            counts = service.embed_all_world_data(mock_db, story_state)
 
-        assert counts == {}
-        mock_db.list_entities.assert_not_called()
+        assert counts["entity"] == 0
+        assert counts["relationship"] == 0
+        assert counts["event"] == 0
+        assert counts["story_state"] == 0
 
     def test_embed_all_world_data_with_progress_callback(self, service, mock_db, sample_entity):
         """Calls progress callback for each entity during batch embedding."""
@@ -645,7 +636,11 @@ class TestEmbedAllWorldData:
         mock_db.list_relationships.return_value = []
         mock_db.list_events.return_value = []
 
-        story_state = SimpleNamespace()
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
         progress_cb = MagicMock()
 
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
@@ -662,7 +657,11 @@ class TestEmbedAllWorldData:
         mock_db.list_events.return_value = []
         mock_db.get_entity.return_value = None
 
-        story_state = SimpleNamespace()
+        story_state = SimpleNamespace(
+            established_facts=[],
+            world_rules=[],
+            chapters=[],
+        )
 
         with patch.object(service, "embed_text", return_value=FAKE_EMBEDDING):
             counts = service.embed_all_world_data(mock_db, story_state)
@@ -720,14 +719,12 @@ class TestCheckAndReembedIfNeeded:
         mock_db.recreate_vec_table.assert_not_called()
         mock_db.clear_all_embeddings.assert_not_called()
 
-    def test_check_and_reembed_if_needed_not_available(self, disabled_service, mock_db):
-        """Returns False when the embedding service is not available."""
+    def test_check_and_reembed_if_needed_no_model(self, no_model_service, mock_db):
+        """Raises ValueError when no embedding model is configured."""
         story_state = SimpleNamespace()
 
-        result = disabled_service.check_and_reembed_if_needed(mock_db, story_state)
-
-        assert result is False
-        mock_db.needs_reembedding.assert_not_called()
+        with pytest.raises(ValueError, match="No embedding model configured"):
+            no_model_service.check_and_reembed_if_needed(mock_db, story_state)
 
 
 # ---------------------------------------------------------------------------
@@ -751,12 +748,12 @@ class TestAttachToDatabase:
         assert callable(on_changed)
         assert callable(on_deleted)
 
-    def test_attach_to_database_not_available(self, disabled_service, mock_db):
-        """Skips callback registration when embedding is not available."""
+    def test_attach_to_database_always_registers(self, disabled_service, mock_db):
+        """Registers callbacks even when rag_context_enabled is False (embedding is mandatory)."""
         disabled_service.attach_to_database(mock_db)
 
-        mock_db.attach_content_changed_callback.assert_not_called()
-        mock_db.attach_content_deleted_callback.assert_not_called()
+        mock_db.attach_content_changed_callback.assert_called_once()
+        mock_db.attach_content_deleted_callback.assert_called_once()
 
     def test_attached_on_content_changed_callback_embeds(self, service, mock_db):
         """The content changed callback embeds new content and upserts it."""

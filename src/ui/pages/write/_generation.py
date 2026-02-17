@@ -68,7 +68,10 @@ async def write_current_chapter(page: WritePage) -> None:
                     """Execute the blocking chapter generation and collect all events."""
                     return list(
                         page.services.story.write_chapter(
-                            project, chapter_num, cancel_check=should_cancel
+                            project,
+                            chapter_num,
+                            cancel_check=should_cancel,
+                            world_db=page.state.world_db,
                         )
                     )
 
@@ -167,7 +170,11 @@ async def write_all_chapters(page: WritePage) -> None:
                 def write_all_blocking():
                     """Execute the blocking generation for all chapters and collect events."""
                     return list(
-                        page.services.story.write_all_chapters(project, cancel_check=should_cancel)
+                        page.services.story.write_all_chapters(
+                            project,
+                            cancel_check=should_cancel,
+                            world_db=page.state.world_db,
+                        )
                     )
 
                 events = await run.io_bound(write_all_blocking)
@@ -411,7 +418,11 @@ async def regenerate_with_feedback(page: WritePage) -> None:
                     """Execute the blocking chapter regeneration with feedback and collect events."""
                     return list(
                         page.services.story.regenerate_chapter_with_feedback(
-                            project, chapter_num, feedback, cancel_check=should_cancel
+                            project,
+                            chapter_num,
+                            feedback,
+                            cancel_check=should_cancel,
+                            world_db=page.state.world_db,
                         )
                     )
 

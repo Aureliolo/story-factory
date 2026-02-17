@@ -16,6 +16,8 @@ from collections.abc import Callable, Generator
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.memory.world_database import WorldDatabase
+    from src.services.context_retrieval_service import ContextRetrievalService
     from src.services.model_mode_service import ModelModeService
 
 from src.agents.continuity import ContinuityIssue
@@ -38,7 +40,12 @@ class StoryService:
     chapter writing workflows.
     """
 
-    def __init__(self, settings: Settings, mode_service: ModelModeService | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        mode_service: ModelModeService | None = None,
+        context_retrieval: ContextRetrievalService | None = None,
+    ):
         """Create a StoryService configured with application settings and an optional mode service.
 
         Parameters:
@@ -46,12 +53,15 @@ class StoryService:
                 Settings instance.
             mode_service (ModelModeService | None): Optional service that provides adaptive
                 learning hooks; stored on the instance for use by orchestrators.
+            context_retrieval (ContextRetrievalService | None): Optional context retrieval service
+                for RAG-based prompt enrichment in agent calls.
         """
         validate_not_none(settings, "settings")
         validate_type(settings, "settings", Settings)
         logger.debug("Initializing StoryService")
         self.settings = settings
         self.mode_service = mode_service  # For learning hooks
+        self.context_retrieval = context_retrieval  # For RAG context injection
         # Use OrderedDict for LRU cache behavior
         self._orchestrators: OrderedDict[str, StoryOrchestrator] = OrderedDict()
         logger.debug("StoryService initialized successfully")
@@ -78,6 +88,7 @@ class StoryService:
         orchestrator = StoryOrchestrator(
             settings=self.settings,
             mode_service=self.mode_service,
+            context_retrieval=self.context_retrieval,
         )
         orchestrator.story_state = state
         self._orchestrators[state.id] = orchestrator
@@ -247,19 +258,25 @@ class StoryService:
         chapter_num: int,
         feedback: str | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        world_db: WorldDatabase | None = None,
     ) -> Generator[WorkflowEvent, None, str]:
         """Write a single chapter with streaming events."""
-        return _writing.write_chapter(self, state, chapter_num, feedback, cancel_check)
+        return _writing.write_chapter(self, state, chapter_num, feedback, cancel_check, world_db)
 
     def write_all_chapters(
-        self, state: StoryState, cancel_check: Callable[[], bool] | None = None
+        self,
+        state: StoryState,
+        cancel_check: Callable[[], bool] | None = None,
+        world_db: WorldDatabase | None = None,
     ) -> Generator[WorkflowEvent]:
         """Stream the generation of every chapter, yielding workflow events."""
-        return _writing.write_all_chapters(self, state, cancel_check)
+        return _writing.write_all_chapters(self, state, cancel_check, world_db)
 
-    def write_short_story(self, state: StoryState) -> Generator[WorkflowEvent, None, str]:
+    def write_short_story(
+        self, state: StoryState, world_db: WorldDatabase | None = None
+    ) -> Generator[WorkflowEvent, None, str]:
         """Generate a single-chapter short story while streaming progress events."""
-        return _writing.write_short_story(self, state)
+        return _writing.write_short_story(self, state, world_db)
 
     def get_full_story(self, state: StoryState) -> str:
         """Get the complete story text."""
@@ -287,10 +304,11 @@ class StoryService:
         chapter_num: int,
         feedback: str,
         cancel_check: Callable[[], bool] | None = None,
+        world_db: WorldDatabase | None = None,
     ) -> Generator[WorkflowEvent, None, str]:
         """Regenerate a chapter incorporating user feedback."""
         return _writing.regenerate_chapter_with_feedback(
-            self, state, chapter_num, feedback, cancel_check
+            self, state, chapter_num, feedback, cancel_check, world_db
         )
 
     # ========== CONTINUATION & EDITING ==========

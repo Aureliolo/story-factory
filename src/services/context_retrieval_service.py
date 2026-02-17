@@ -1,14 +1,16 @@
 """Context retrieval service for smart RAG-based context injection.
 
-Replaces the existing dumb context slicing (get_context_for_agents) with
-vector-similarity-based retrieval for all LLM calls. Falls back to the
-legacy method when vector search is unavailable.
+Uses vector-similarity-based retrieval for all LLM calls via the mandatory
+sqlite-vec + embedding pipeline.
 """
 
 import logging
+import sqlite3
+import struct
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Literal
 
+from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
 from src.services.embedding_service import EmbeddingService
 from src.settings import Settings
@@ -53,17 +55,17 @@ class ContextItem:
 
 @dataclass
 class RetrievedContext:
-    """Container for context items retrieved via vector search or fallback.
+    """Container for context items retrieved via vector search.
 
     Attributes:
         items: List of retrieved context items.
         total_tokens: Sum of token estimates across all items.
-        retrieval_method: How context was retrieved ('vector', 'fallback', or 'disabled').
+        retrieval_method: How context was retrieved ('vector' or 'disabled').
     """
 
     items: list[ContextItem] = field(default_factory=list)
     total_tokens: int = 0
-    retrieval_method: str = "vector"
+    retrieval_method: Literal["vector", "disabled"] = "vector"
 
     def format_for_prompt(self) -> str:
         """Format all context items as a structured text block for prompt injection.
@@ -94,9 +96,8 @@ class RetrievedContext:
 class ContextRetrievalService:
     """Retrieves semantically relevant world context for LLM prompts.
 
-    Uses vector similarity search when available, with graph expansion to
-    include related entities. Falls back to the legacy get_context_for_agents()
-    method when vectors are unavailable.
+    Uses vector similarity search with graph expansion to include related
+    entities.
 
     Attributes:
         settings: Application settings.
@@ -118,7 +119,7 @@ class ContextRetrievalService:
         self,
         task_description: str,
         world_db: WorldDatabase,
-        story_state: Any,
+        story_state: StoryState,
         max_tokens: int | None = None,
         content_types: list[str] | None = None,
         entity_types: list[str] | None = None,
@@ -134,8 +135,6 @@ class ContextRetrievalService:
         4. Deduplicate by source_id (keep highest relevance)
         5. Always include base project info (premise, genre, tone, setting)
         6. Token budgeting: sort by relevance, pack greedily
-
-        Falls back to legacy context when vectors are unavailable.
 
         Args:
             task_description: Description of what the agent is about to do.
@@ -159,27 +158,22 @@ class ContextRetrievalService:
         )
         effective_k = self.settings.rag_context_max_items if k is None else k
 
-        # Try vector retrieval first
-        if self.embedding_service.is_available and world_db.vec_available:
-            return self._retrieve_vector(
-                task_description=task_description,
-                world_db=world_db,
-                story_state=story_state,
-                max_tokens=effective_max_tokens,
-                content_types=content_types,
-                entity_types=entity_types,
-                chapter_number=chapter_number,
-                k=effective_k,
-            )
-
-        # Fallback to legacy context
-        return self._retrieve_fallback(world_db, story_state, effective_max_tokens)
+        return self._retrieve_vector(
+            task_description=task_description,
+            world_db=world_db,
+            story_state=story_state,
+            max_tokens=effective_max_tokens,
+            content_types=content_types,
+            entity_types=entity_types,
+            chapter_number=chapter_number,
+            k=effective_k,
+        )
 
     def _retrieve_vector(
         self,
         task_description: str,
         world_db: WorldDatabase,
-        story_state: Any,
+        story_state: StoryState,
         max_tokens: int,
         content_types: list[str] | None,
         entity_types: list[str] | None,
@@ -204,8 +198,8 @@ class ContextRetrievalService:
         # Step 1: Embed the task description
         query_embedding = self.embedding_service.embed_text(task_description)
         if not query_embedding:
-            logger.warning("Failed to embed task description, falling back")
-            return self._retrieve_fallback(world_db, story_state, max_tokens)
+            logger.warning("Failed to embed task description, returning empty context")
+            return RetrievedContext(retrieval_method="vector")
 
         # Step 2: KNN search with optional content type filter
         all_results: list[dict] = []
@@ -232,9 +226,9 @@ class ContextRetrievalService:
                     k=k,
                     chapter_number=chapter_number,
                 )
-        except Exception as e:
-            logger.warning("Vector search failed, falling back to legacy context: %s", e)
-            return self._retrieve_fallback(world_db, story_state, max_tokens)
+        except (sqlite3.Error, struct.error) as e:
+            logger.warning("Vector search failed: %s", e)
+            return RetrievedContext(retrieval_method="vector")
 
         # Convert to ContextItems with relevance scores
         items_by_id: dict[str, ContextItem] = {}
@@ -296,7 +290,7 @@ class ContextRetrievalService:
                                     text=f"{source.name} {rel.relation_type} {target.name}: {rel.description}",
                                 )
                 except Exception as e:
-                    logger.debug("Graph expansion failed for %s: %s", item.source_id, e)
+                    logger.warning("Graph expansion failed for %s: %s", item.source_id, e)
 
         # Step 4: Add base project info (always included)
         project_items = self._get_project_info_items(story_state)
@@ -328,99 +322,7 @@ class ContextRetrievalService:
             retrieval_method="vector",
         )
 
-    def _retrieve_fallback(
-        self,
-        world_db: WorldDatabase,
-        story_state: Any,
-        max_tokens: int,
-    ) -> RetrievedContext:
-        """Retrieve context using the legacy get_context_for_agents method.
-
-        Args:
-            world_db: WorldDatabase instance.
-            story_state: Current story state.
-            max_tokens: Token budget for context.
-
-        Returns:
-            RetrievedContext with fallback-retrieved items.
-        """
-        items: list[ContextItem] = []
-        total_tokens = 0
-
-        # Get legacy context
-        try:
-            context = world_db.get_context_for_agents()
-        except Exception as e:
-            logger.warning("Failed to get legacy context: %s", e)
-            return RetrievedContext(retrieval_method="fallback")
-
-        # Convert characters
-        for char in context.get("characters", []):
-            text = f"{char['name']}: {char['description']}"
-            item = ContextItem(
-                source_type="entity",
-                source_id=f"fallback:char:{char['name']}",
-                relevance_score=0.5,
-                text=text,
-            )
-            if total_tokens + item.token_estimate <= max_tokens:
-                items.append(item)
-                total_tokens += item.token_estimate
-
-        # Convert locations
-        for loc in context.get("locations", []):
-            text = f"{loc['name']}: {loc['description']}"
-            item = ContextItem(
-                source_type="entity",
-                source_id=f"fallback:loc:{loc['name']}",
-                relevance_score=0.4,
-                text=text,
-            )
-            if total_tokens + item.token_estimate <= max_tokens:
-                items.append(item)
-                total_tokens += item.token_estimate
-
-        # Convert relationships
-        for rel in context.get("key_relationships", []):
-            text = f"{rel['from']} {rel['type']} {rel['to']}: {rel['description']}"
-            item = ContextItem(
-                source_type="relationship",
-                source_id=f"fallback:rel:{rel['from']}:{rel['to']}",
-                relevance_score=0.4,
-                text=text,
-            )
-            if total_tokens + item.token_estimate <= max_tokens:
-                items.append(item)
-                total_tokens += item.token_estimate
-
-        # Convert events
-        for evt in context.get("recent_events", []):
-            text = f"Event (Ch.{evt.get('chapter', '?')}): {evt['description']}"
-            item = ContextItem(
-                source_type="event",
-                source_id=f"fallback:evt:{evt['description'][:30]}",
-                relevance_score=0.3,
-                text=text,
-            )
-            if total_tokens + item.token_estimate <= max_tokens:
-                items.append(item)
-                total_tokens += item.token_estimate
-
-        # Add project info
-        project_items = self._get_project_info_items(story_state)
-        for pi in project_items:
-            if total_tokens + pi.token_estimate <= max_tokens:
-                items.append(pi)
-                total_tokens += pi.token_estimate
-
-        logger.info("Fallback retrieval: %d items, ~%d tokens", len(items), total_tokens)
-        return RetrievedContext(
-            items=items,
-            total_tokens=total_tokens,
-            retrieval_method="fallback",
-        )
-
-    def _get_project_info_items(self, story_state: Any) -> list[ContextItem]:
+    def _get_project_info_items(self, story_state: StoryState | None) -> list[ContextItem]:
         """Extract base project info as high-priority context items.
 
         Always included regardless of vector search results. Provides

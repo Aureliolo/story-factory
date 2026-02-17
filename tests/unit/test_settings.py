@@ -42,10 +42,10 @@ class TestSettings:
         assert "judge" in settings.agent_temperatures
         assert settings.agent_temperatures["judge"] == 0.1
 
-    def test_embedding_model_defaults_to_empty(self):
-        """Embedding model should default to empty string (no hardcoded model)."""
+    def test_embedding_model_defaults_to_mxbai(self):
+        """Embedding model should default to mxbai-embed-large."""
         settings = Settings()
-        assert settings.embedding_model == ""
+        assert settings.embedding_model == "mxbai-embed-large"
 
     def test_get_temperature_for_agent(self):
         """Should return correct temperature for each agent role."""
@@ -1517,12 +1517,12 @@ class TestMissingValidationCoverage:
     # --- Per-entity quality thresholds ---
 
     def test_validate_per_entity_thresholds_default(self):
-        """Default (empty) thresholds should be migrated from single threshold on validate."""
+        """Default thresholds should come from PER_ENTITY_QUALITY_DEFAULTS."""
         settings = Settings()
         settings.validate()
-        # Empty default → migration fills all types from world_quality_threshold (7.5)
+        # Default factory is PER_ENTITY_QUALITY_DEFAULTS.copy, already populated
         assert settings.world_quality_thresholds["character"] == 7.5
-        assert settings.world_quality_thresholds["item"] == 7.5
+        assert settings.world_quality_thresholds["item"] == 8.0  # Items have higher default
         assert len(settings.world_quality_thresholds) == 8
 
     def test_validate_raises_on_per_entity_threshold_out_of_range(self):
@@ -1559,8 +1559,8 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match=r"world_quality_thresholds\[item\] must be between"):
             settings.validate()
 
-    def test_migration_backfills_single_missing_entity_type(self):
-        """Missing entity type should be backfilled by migration, not raise."""
+    def test_validate_raises_on_missing_entity_type_in_thresholds(self):
+        """Missing entity type should raise ValueError (no migration)."""
         settings = Settings()
         settings.world_quality_thresholds = {
             "character": 7.5,
@@ -1572,12 +1572,8 @@ class TestMissingValidationCoverage:
             "chapter": 7.5,
             # missing: faction
         }
-        changed = settings.validate()
-        assert changed is True
-        assert "faction" in settings.world_quality_thresholds
-        assert (
-            settings.world_quality_thresholds["faction"] == 7.5
-        )  # from PER_ENTITY_QUALITY_DEFAULTS
+        with pytest.raises(ValueError, match="world_quality_thresholds missing entity types"):
+            settings.validate()
 
     def test_validate_raises_on_unknown_entity_type_in_thresholds(self):
         """Should raise ValueError when an unknown entity type is present."""
@@ -1596,23 +1592,15 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="world_quality_thresholds has unknown entity types"):
             settings.validate()
 
-    def test_migration_from_empty_thresholds(self):
-        """Empty thresholds dict should be migrated from single threshold."""
+    def test_validate_raises_on_empty_thresholds(self):
+        """Empty thresholds dict should raise ValueError (no migration)."""
         settings = Settings()
         settings.world_quality_thresholds = {}
-        settings.world_quality_threshold = 6.0
-        changed = settings.validate()
-        assert changed is True
-        assert settings.world_quality_thresholds["character"] == 6.0
-        assert settings.world_quality_thresholds["item"] == 6.0
-        assert settings.world_quality_thresholds["faction"] == 6.0
-        assert settings.world_quality_thresholds["relationship"] == 6.0
-        assert settings.world_quality_thresholds["plot"] == 6.0
-        assert settings.world_quality_thresholds["chapter"] == 6.0
-        assert len(settings.world_quality_thresholds) == 8
+        with pytest.raises(ValueError, match="world_quality_thresholds missing entity types"):
+            settings.validate()
 
-    def test_migration_backfills_missing_entity_types(self):
-        """Missing entity types should be backfilled from PER_ENTITY_QUALITY_DEFAULTS."""
+    def test_validate_raises_on_partial_thresholds(self):
+        """Partial thresholds dict should raise ValueError (no migration)."""
         settings = Settings()
         settings.world_quality_thresholds = {
             "character": 8.0,
@@ -1620,15 +1608,8 @@ class TestMissingValidationCoverage:
             "faction": 7.5,
             # missing: item, concept, relationship, plot, chapter
         }
-        changed = settings.validate()
-        assert changed is True
-        assert settings.world_quality_thresholds["item"] == 8.0  # from PER_ENTITY_QUALITY_DEFAULTS
-        assert (
-            settings.world_quality_thresholds["concept"] == 7.5
-        )  # from PER_ENTITY_QUALITY_DEFAULTS
-        assert settings.world_quality_thresholds["relationship"] == 7.5
-        assert settings.world_quality_thresholds["plot"] == 7.5
-        assert settings.world_quality_thresholds["chapter"] == 7.5
+        with pytest.raises(ValueError, match="world_quality_thresholds missing entity types"):
+            settings.validate()
 
     def test_no_migration_when_all_types_present(self):
         """No threshold migration needed when all entity types are present."""
@@ -2373,30 +2354,26 @@ class TestWP1WP2SettingsValidation:
         with pytest.raises(ValueError, match="semantic_duplicate_threshold must be between"):
             settings.validate()
 
-    def test_validate_auto_migrates_embedding_when_semantic_enabled(self):
-        """Enabling semantic duplicate with empty model auto-migrates embedding model."""
+    def test_validate_keeps_semantic_enabled_with_default_embedding(self):
+        """Semantic duplicate stays enabled when default embedding model is set."""
         settings = Settings()
         settings.semantic_duplicate_enabled = True
-        settings.embedding_model = ""  # Empty model
-        changed = settings.validate()
-        # Embedding model migration runs first, setting a valid model
-        assert changed is True
+        # embedding_model defaults to "mxbai-embed-large" so no auto-disable
+        settings.validate()
         assert settings.semantic_duplicate_enabled is True
-        assert settings.embedding_model != ""
+        assert settings.embedding_model == "mxbai-embed-large"
 
-    def test_validate_auto_disables_semantic_when_no_embedding_available(self):
-        """Should auto-disable semantic_duplicate_enabled when no embedding model exists."""
-        from unittest.mock import patch
-
+    def test_validate_auto_disables_semantic_when_embedding_cleared(self):
+        """Should auto-disable semantic_duplicate_enabled when embedding_model is cleared."""
         settings = Settings()
         settings.semantic_duplicate_enabled = True
         settings.embedding_model = ""
-        # Patch registry to have no embedding models (import is inside the function)
-        with patch(
-            "src.settings._model_registry.RECOMMENDED_MODELS",
-            {"some-model:8b": {"tags": ["writer"]}},
-        ):
-            changed = settings.validate()
+        # _validate_semantic_duplicate runs first (line 45) and auto-disables,
+        # but _validate_rag_context (line 69) raises ConfigError for empty
+        # embedding_model, so test the semantic validation in isolation
+        from src.settings._validation import _validate_semantic_duplicate
+
+        changed = _validate_semantic_duplicate(settings)
         assert changed is True
         assert settings.semantic_duplicate_enabled is False
 
@@ -2423,171 +2400,6 @@ class TestWP1WP2SettingsValidation:
         )
         # Should not raise
         settings.validate()
-
-
-class TestEmbeddingModelMigration:
-    """Tests for stale embedding model migration during validation."""
-
-    def test_valid_embedding_model_unchanged(self):
-        """Valid embedding model should not be changed by validation."""
-        settings = Settings()
-        settings.embedding_model = "mxbai-embed-large"
-        settings.validate()
-        assert settings.embedding_model == "mxbai-embed-large"
-
-    def test_stale_embedding_model_migrated(self):
-        """Removed embedding model should be migrated to first valid one."""
-        settings = Settings()
-        settings.embedding_model = "nomic-embed-text"
-        settings.validate()
-        # Should have been migrated to a model with "embedding" tag
-        assert settings.embedding_model != "nomic-embed-text"
-        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
-        assert model_info is not None
-        assert "embedding" in model_info["tags"]
-
-    def test_unknown_embedding_model_migrated(self):
-        """Completely unknown embedding model should be migrated."""
-        settings = Settings()
-        settings.embedding_model = "some-nonexistent-model:latest"
-        settings.validate()
-        assert settings.embedding_model != "some-nonexistent-model:latest"
-        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
-        assert model_info is not None
-        assert "embedding" in model_info["tags"]
-
-    def test_non_embedding_model_migrated(self):
-        """A model in the registry but without embedding tag should be migrated."""
-        settings = Settings()
-        settings.embedding_model = "huihui_ai/dolphin3-abliterated:8b"
-        settings.validate()
-        assert settings.embedding_model != "huihui_ai/dolphin3-abliterated:8b"
-        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
-        assert model_info is not None
-        assert "embedding" in model_info["tags"]
-
-    def test_empty_embedding_model_migrated(self):
-        """Empty embedding model string should be migrated to a valid one."""
-        settings = Settings()
-        settings.embedding_model = ""
-        settings.validate()
-        # Empty string is not in the registry, so it should be migrated
-        model_info = RECOMMENDED_MODELS.get(settings.embedding_model)
-        assert model_info is not None
-        assert "embedding" in model_info["tags"]
-
-    def test_migration_logs_warning(self, caplog):
-        """Migration should log a warning message."""
-        import logging
-
-        settings = Settings()
-        settings.embedding_model = "nomic-embed-text"
-        with caplog.at_level(logging.WARNING):
-            settings.validate()
-        assert "not in registry" in caplog.text
-        assert "migrating to" in caplog.text
-
-    def test_migration_persists_to_disk_on_load(self, tmp_path, monkeypatch):
-        """Loading settings with a stale embedding model should auto-save the fix."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
-
-        # Write settings with stale embedding model
-        defaults = Settings()
-        defaults.embedding_model = "nomic-embed-text"
-        from dataclasses import asdict
-
-        with open(settings_file, "w") as f:
-            json.dump(asdict(defaults), f)
-
-        # Clear cache so load() reads from disk
-        Settings.clear_cache()
-
-        loaded = Settings.load(use_cache=False)
-
-        # In-memory value should be migrated
-        assert loaded.embedding_model != "nomic-embed-text"
-        assert "embedding" in RECOMMENDED_MODELS[loaded.embedding_model]["tags"]
-
-        # On-disk value should also be updated
-        with open(settings_file) as f:
-            on_disk = json.load(f)
-        assert on_disk["embedding_model"] == loaded.embedding_model
-
-    def test_no_embedding_models_in_registry_keeps_current(self, monkeypatch, caplog):
-        """When registry has no embedding-tagged models, keep current model and warn."""
-        import logging
-
-        # Mock RECOMMENDED_MODELS to have no embedding-tagged models
-        fake_registry = {
-            "some-chat-model:8b": {
-                "size_gb": 4.0,
-                "tags": ["world_creator"],
-            },
-        }
-        monkeypatch.setattr(
-            "src.settings._model_registry.RECOMMENDED_MODELS",
-            fake_registry,
-        )
-
-        settings = Settings()
-        settings.embedding_model = "some-old-model"
-        with caplog.at_level(logging.WARNING):
-            settings.validate()
-
-        # Model should be unchanged since no valid alternative exists
-        assert settings.embedding_model == "some-old-model"
-        assert "No embedding models found in registry" in caplog.text
-
-    def test_validate_returns_true_when_migrated(self):
-        """validate() should return True when embedding model is migrated."""
-        settings = Settings()
-        settings.embedding_model = "nomic-embed-text"
-        changed = settings.validate()
-        assert changed is True
-
-    def test_validate_returns_false_when_no_changes(self):
-        """validate() should return False when no settings are mutated."""
-        settings = Settings()
-        settings.embedding_model = "mxbai-embed-large"  # Already valid, no migration
-        # Populate per-entity thresholds so migration doesn't trigger
-        settings.world_quality_thresholds = {
-            "character": 7.5,
-            "location": 7.5,
-            "faction": 7.5,
-            "item": 8.0,
-            "concept": 7.5,
-            "relationship": 7.5,
-            "plot": 7.5,
-            "chapter": 7.5,
-        }
-        changed = settings.validate()
-        assert changed is False
-
-    def test_validate_returns_false_no_embedding_models_in_registry(self, monkeypatch):
-        """validate() returns False when no embedding models exist (keeps current, no change)."""
-        fake_registry = {
-            "some-chat-model:8b": {"size_gb": 4.0, "tags": ["world_creator"]},
-        }
-        monkeypatch.setattr(
-            "src.settings._model_registry.RECOMMENDED_MODELS",
-            fake_registry,
-        )
-        settings = Settings()
-        settings.embedding_model = "some-old-model"
-        # Populate per-entity thresholds so migration doesn't trigger
-        settings.world_quality_thresholds = {
-            "character": 7.5,
-            "location": 7.5,
-            "faction": 7.5,
-            "item": 8.0,
-            "concept": 7.5,
-            "relationship": 7.5,
-            "plot": 7.5,
-            "chapter": 7.5,
-        }
-        changed = settings.validate()
-        assert changed is False
 
 
 class TestGetModelsForRole:
@@ -3033,7 +2845,9 @@ class TestRagContextValidation:
         settings = Settings()
         settings.rag_context_enabled = True
         settings.embedding_model = ""
-        with pytest.raises(ConfigError, match="rag_context_enabled requires an embedding_model"):
+        with pytest.raises(
+            ConfigError, match="embedding_model must be set to a valid embedding model"
+        ):
             _validate_rag_context(settings)
 
     def test_validate_keeps_rag_enabled_when_embedding_model_set(self):
@@ -3046,3 +2860,12 @@ class TestRagContextValidation:
         result = _validate_rag_context(settings)
         assert settings.rag_context_enabled is True
         assert result is False
+
+    def test_validate_full_raises_config_error_on_empty_embedding_model(self):
+        """Should raise ConfigError when settings.validate() encounters empty embedding_model."""
+        from src.utils.exceptions import ConfigError
+
+        settings = Settings()
+        settings.embedding_model = ""
+        with pytest.raises(ConfigError, match="embedding_model must be set"):
+            settings.validate()

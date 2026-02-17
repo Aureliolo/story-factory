@@ -14,6 +14,7 @@ from typing import Any
 import ollama
 
 from src.memory.entities import Entity, Relationship, WorldEvent
+from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
 from src.settings import Settings
 from src.settings._model_registry import get_embedding_prefix
@@ -25,8 +26,8 @@ class EmbeddingService:
     """Generates and manages vector embeddings for world content.
 
     Thread-safe implementation using RLock for concurrent embedding operations.
-    Gracefully degrades when embedding model is not configured or Ollama is
-    unreachable.
+    Individual embedding calls handle Ollama connection failures gracefully,
+    but a configured embedding model is required (raises ValueError otherwise).
 
     Attributes:
         settings: Application settings instance.
@@ -42,15 +43,6 @@ class EmbeddingService:
         self._lock = threading.RLock()
         self._client: ollama.Client | None = None
         logger.info("EmbeddingService initialized")
-
-    @property
-    def is_available(self) -> bool:
-        """Whether embedding is available (model configured and RAG enabled).
-
-        Returns:
-            True if the embedding model is set and RAG context is enabled.
-        """
-        return bool(self.settings.rag_context_enabled and self.settings.embedding_model.strip())
 
     def _get_client(self) -> ollama.Client:
         """Get or create the Ollama client.
@@ -141,9 +133,7 @@ class EmbeddingService:
         Returns:
             True if the embedding was stored, False otherwise.
         """
-        if not self.is_available:
-            return False
-
+        model = self._get_model()
         text = f"{entity.name}: {entity.description}"
         embedding = self.embed_text(text)
         if not embedding:
@@ -154,7 +144,7 @@ class EmbeddingService:
             content_type="entity",
             text=text,
             embedding=embedding,
-            model=self._get_model(),
+            model=model,
             entity_type=entity.type,
         )
 
@@ -176,9 +166,7 @@ class EmbeddingService:
         Returns:
             True if the embedding was stored, False otherwise.
         """
-        if not self.is_available:
-            return False
-
+        model = self._get_model()
         text = f"{source_name} {rel.relation_type} {target_name}: {rel.description}"
         embedding = self.embed_text(text)
         if not embedding:
@@ -189,7 +177,7 @@ class EmbeddingService:
             content_type="relationship",
             text=text,
             embedding=embedding,
-            model=self._get_model(),
+            model=model,
         )
 
     def embed_event(self, db: WorldDatabase, event: WorldEvent) -> bool:
@@ -202,9 +190,7 @@ class EmbeddingService:
         Returns:
             True if the embedding was stored, False otherwise.
         """
-        if not self.is_available:
-            return False
-
+        model = self._get_model()
         chapter_part = f" (Chapter {event.chapter_number})" if event.chapter_number else ""
         text = f"Event: {event.description}{chapter_part}"
         embedding = self.embed_text(text)
@@ -216,11 +202,11 @@ class EmbeddingService:
             content_type="event",
             text=text,
             embedding=embedding,
-            model=self._get_model(),
+            model=model,
             chapter_number=event.chapter_number,
         )
 
-    def embed_story_state_data(self, db: WorldDatabase, story_state: Any) -> int:
+    def embed_story_state_data(self, db: WorldDatabase, story_state: StoryState) -> int:
         """Embed established facts, world rules, chapter outlines, and scene outlines.
 
         Uses synthetic source IDs to track these non-entity content types.
@@ -232,14 +218,11 @@ class EmbeddingService:
         Returns:
             Number of items successfully embedded.
         """
-        if not self.is_available:
-            return 0
-
         embedded_count = 0
         model = self._get_model()
 
         # Embed established facts
-        if hasattr(story_state, "established_facts") and story_state.established_facts:
+        if story_state.established_facts:
             for fact in story_state.established_facts:
                 fact_hash = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:12]
                 source_id = f"fact:{fact_hash}"
@@ -256,7 +239,7 @@ class EmbeddingService:
                         embedded_count += 1
 
         # Embed world rules
-        if hasattr(story_state, "world_rules") and story_state.world_rules:
+        if story_state.world_rules:
             for rule in story_state.world_rules:
                 rule_hash = hashlib.sha256(rule.encode("utf-8")).hexdigest()[:12]
                 source_id = f"rule:{rule_hash}"
@@ -273,7 +256,7 @@ class EmbeddingService:
                         embedded_count += 1
 
         # Embed chapter outlines
-        if hasattr(story_state, "chapters") and story_state.chapters:
+        if story_state.chapters:
             for chapter in story_state.chapters:
                 if chapter.outline:
                     source_id = f"chapter:{chapter.number}"
@@ -292,15 +275,11 @@ class EmbeddingService:
                             embedded_count += 1
 
                 # Embed scene outlines if available
-                if hasattr(chapter, "scenes") and chapter.scenes:
+                if chapter.scenes:
                     for scene_idx, scene in enumerate(chapter.scenes):
-                        if hasattr(scene, "outline") and scene.outline:
+                        if scene.outline:
                             source_id = f"scene:{chapter.number}:{scene_idx}"
-                            scene_title = (
-                                f" '{scene.title}'"
-                                if hasattr(scene, "title") and scene.title
-                                else ""
-                            )
+                            scene_title = f" '{scene.title}'" if scene.title else ""
                             text = (
                                 f"Chapter {chapter.number} Scene {scene_idx + 1}"
                                 f"{scene_title}: {scene.outline}"
@@ -323,7 +302,7 @@ class EmbeddingService:
     def embed_all_world_data(
         self,
         db: WorldDatabase,
-        story_state: Any,
+        story_state: StoryState,
         progress_callback: Any = None,
     ) -> dict[str, int]:
         """Batch-embed all world content: entities, relationships, events, and story state.
@@ -336,10 +315,6 @@ class EmbeddingService:
         Returns:
             Dict mapping content_type to count of items embedded.
         """
-        if not self.is_available:
-            logger.debug("embed_all_world_data skipped: embedding not available")
-            return {}
-
         counts: dict[str, int] = {}
 
         # Embed all entities
@@ -382,7 +357,7 @@ class EmbeddingService:
     def check_and_reembed_if_needed(
         self,
         db: WorldDatabase,
-        story_state: Any,
+        story_state: StoryState,
     ) -> bool:
         """Check if re-embedding is needed and perform it if so.
 
@@ -397,9 +372,6 @@ class EmbeddingService:
         Returns:
             True if re-embedding was performed, False if not needed.
         """
-        if not self.is_available:
-            return False
-
         model = self._get_model()
 
         if db.needs_reembedding(model):
@@ -429,9 +401,6 @@ class EmbeddingService:
         Args:
             db: WorldDatabase instance to attach callbacks to.
         """
-        if not self.is_available:
-            logger.debug("attach_to_database skipped: embedding not available")
-            return
 
         def on_content_changed(source_id: str, content_type: str, text: str) -> None:
             """Handle content changes by embedding the new/updated content."""

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from src.memory.story_state import StoryState
 from src.memory.world_database import WorldDatabase
+from src.services.embedding_service import EmbeddingService
 from src.settings import STORIES_DIR, WORLDS_DIR, Settings
 from src.utils.validation import validate_not_empty, validate_not_none, validate_type
 
@@ -60,16 +61,19 @@ class ProjectService:
     an associated WorldDatabase SQLite file.
     """
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, embedding_service: EmbeddingService) -> None:
         """Initialize project service.
 
         Args:
             settings: Application settings.
+            embedding_service: Embedding service for auto-embedding on CRUD operations.
         """
         validate_not_none(settings, "settings")
         validate_type(settings, "settings", Settings)
+        validate_not_none(embedding_service, "embedding_service")
         logger.debug("Initializing ProjectService")
         self.settings = settings
+        self.embedding_service = embedding_service
         self._ensure_directories()
         logger.debug("ProjectService initialized successfully")
 
@@ -104,6 +108,7 @@ class ProjectService:
             # Create world database
             world_db_path = WORLDS_DIR / f"{project_id}.db"
             world_db = WorldDatabase(world_db_path)
+            self.embedding_service.attach_to_database(world_db)
 
             # Create story state
             story_state = StoryState(
@@ -179,6 +184,7 @@ class ProjectService:
             world_db_path_obj = Path(world_db_path)
             world_db_path_obj = _validate_path(world_db_path_obj, WORLDS_DIR)
             world_db = WorldDatabase(world_db_path_obj)
+            self.embedding_service.attach_to_database(world_db)
 
             logger.info(f"Loaded project: {project_id} - {story_state.project_name}")
             return story_state, world_db
@@ -348,6 +354,7 @@ class ProjectService:
                 shutil.copy2(original_state.world_db_path, new_world_path)
                 logger.debug(f"Copied world database to {new_world_path}")
             new_world = WorldDatabase(new_world_path)
+            self.embedding_service.attach_to_database(new_world)
 
             # Create new state based on original
             new_state = original_state.model_copy(deep=True)

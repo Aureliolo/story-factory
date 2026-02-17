@@ -16,7 +16,7 @@ from nicegui.elements.html import Html
 from src.memory.timeline_types import TimelineItem
 from src.memory.world_calendar import WorldCalendar
 from src.ui.local_prefs import load_prefs_deferred, save_pref
-from src.ui.theme import ENTITY_COLORS
+from src.utils.constants import ENTITY_COLORS
 
 if TYPE_CHECKING:
     from src.memory.world_database import WorldDatabase

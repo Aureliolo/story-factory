@@ -16,7 +16,7 @@ from src.ui.graph_renderer._results import (
     render_entity_summary_html,
     render_path_result,
 )
-from src.ui.theme import ENTITY_COLORS
+from src.utils.constants import ENTITY_COLORS
 
 __all__ = [
     "ENTITY_COLORS",

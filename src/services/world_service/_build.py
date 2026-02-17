@@ -270,6 +270,16 @@ def build_world(
             counts["relationships"] += orphan_count
             logger.info(f"Orphan recovery added {orphan_count} relationships")
 
+    # Step 9: Batch-embed all world content for RAG context retrieval
+    check_cancelled()
+    report_progress("Embedding world content for RAG...")
+    try:
+        embed_counts = services.embedding.embed_all_world_data(world_db, state)
+        logger.info("World embedding complete: %s", embed_counts)
+    except Exception as e:
+        logger.error("World embedding failed (non-fatal): %s", e)
+        report_progress("Warning: World embedding failed. RAG context will be unavailable.")
+
     report_progress("World build complete!")
     total_rels = counts["relationships"] + counts["implicit_relationships"]
     logger.info(
@@ -285,7 +295,7 @@ def build_world(
 
 def _calculate_total_steps(options: WorldBuildOptions) -> int:
     """Calculate total number of steps for progress reporting."""
-    steps = 2  # Character extraction + completion
+    steps = 3  # Character extraction + embedding + completion
     if options.clear_existing:
         steps += 1
     if options.generate_structure:

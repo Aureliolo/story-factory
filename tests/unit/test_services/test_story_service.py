@@ -1237,3 +1237,117 @@ class TestStoryServiceLearning:
         """Test complete_project validates state is StoryState."""
         with pytest.raises(TypeError, match="'state' must be StoryState"):
             story_service.complete_project({"id": "fake"})
+
+
+class TestStoryServiceRAGIntegration:
+    """Tests for StoryService RAG context_retrieval wiring."""
+
+    def test_init_with_context_retrieval(self, settings):
+        """Test StoryService accepts context_retrieval parameter."""
+        mock_cr = MagicMock()
+        svc = StoryService(settings, context_retrieval=mock_cr)
+        assert svc.context_retrieval is mock_cr
+
+    def test_init_without_context_retrieval(self, settings):
+        """Test StoryService works without context_retrieval (default None)."""
+        svc = StoryService(settings)
+        assert svc.context_retrieval is None
+
+    def test_orchestrator_gets_context_retrieval(self, settings, sample_story_state):
+        """Test _get_orchestrator passes context_retrieval to orchestrator."""
+        mock_cr = MagicMock()
+        svc = StoryService(settings, context_retrieval=mock_cr)
+        orc = svc._get_orchestrator(sample_story_state)
+        assert orc.context_retrieval is mock_cr
+
+    def test_write_chapter_passes_world_db(self, settings, sample_story_state):
+        """Test write_chapter accepts and threads world_db parameter."""
+        svc = StoryService(settings)
+        mock_world_db = MagicMock()
+
+        # Mock the orchestrator's write_chapter to return events
+        event = WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="System",
+            message="Done",
+        )
+        with patch.object(svc, "_get_orchestrator") as mock_get_orc:
+            mock_orc = MagicMock()
+            mock_orc.write_chapter.return_value = iter([event])
+            mock_get_orc.return_value = mock_orc
+
+            events = list(svc.write_chapter(sample_story_state, 1, world_db=mock_world_db))
+
+            assert len(events) > 0
+            # Verify world_db was set on orchestrator
+            assert mock_orc.world_db == mock_world_db
+
+    def test_write_all_chapters_passes_world_db(self, settings, sample_story_state):
+        """Test write_all_chapters accepts and threads world_db parameter."""
+        svc = StoryService(settings)
+        mock_world_db = MagicMock()
+
+        event = WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="System",
+            message="Done",
+        )
+        with patch.object(svc, "_get_orchestrator") as mock_get_orc:
+            mock_orc = MagicMock()
+            mock_orc.write_all_chapters.return_value = iter([event])
+            mock_get_orc.return_value = mock_orc
+
+            events = list(svc.write_all_chapters(sample_story_state, world_db=mock_world_db))
+
+            assert len(events) > 0
+            assert mock_orc.world_db == mock_world_db
+
+    def test_write_short_story_passes_world_db(self, settings, sample_story_state):
+        """Test write_short_story accepts and threads world_db parameter."""
+        svc = StoryService(settings)
+        mock_world_db = MagicMock()
+
+        event = WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="System",
+            message="Done",
+        )
+        with patch.object(svc, "_get_orchestrator") as mock_get_orc:
+            mock_orc = MagicMock()
+            mock_orc.write_short_story.return_value = iter([event])
+            mock_get_orc.return_value = mock_orc
+
+            events = list(svc.write_short_story(sample_story_state, world_db=mock_world_db))
+
+            assert len(events) > 0
+            assert mock_orc.world_db == mock_world_db
+
+    def test_regenerate_chapter_passes_world_db(self, settings, sample_story_state):
+        """Test regenerate_chapter_with_feedback threads world_db to orchestrator."""
+        svc = StoryService(settings)
+        mock_world_db = MagicMock()
+
+        # Give the story state a chapter with content to regenerate
+        sample_story_state.chapters.append(
+            Chapter(
+                number=1, title="Test Chapter", outline="Test outline", content="Original content"
+            )
+        )
+
+        event = WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="System",
+            message="Done",
+        )
+        with patch.object(svc, "_get_orchestrator") as mock_get_orc:
+            mock_orc = MagicMock()
+            mock_orc.write_chapter.return_value = iter([event])
+            mock_get_orc.return_value = mock_orc
+
+            list(
+                svc.regenerate_chapter_with_feedback(
+                    sample_story_state, 1, "make it better", world_db=mock_world_db
+                )
+            )
+
+            assert mock_orc.world_db == mock_world_db

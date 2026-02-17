@@ -870,3 +870,22 @@ class TestContinuityWrapperValidators:
 
         assert len(result.patterns) == 1
         assert result.patterns[0].character_name == "Bob"
+
+
+class TestWorldContextInjection:
+    """Tests for world_context parameter in continuity checking."""
+
+    def test_check_chapter_includes_world_context(self, continuity, sample_story_state):
+        """Test world_context is included in continuity check prompt."""
+        result = ContinuityIssueList(issues=[])
+        continuity.generate_structured = MagicMock(return_value=result)
+        world_ctx = "<retrieved-context>Continuity world info</retrieved-context>"
+
+        continuity.check_chapter(
+            sample_story_state, "Chapter content...", chapter_number=1, world_context=world_ctx
+        )
+
+        # First call is the main continuity check (contains world_context)
+        first_call_prompt = continuity.generate_structured.call_args_list[0][0][0]
+        assert "RETRIEVED WORLD CONTEXT" in first_call_prompt
+        assert "Continuity world info" in first_call_prompt

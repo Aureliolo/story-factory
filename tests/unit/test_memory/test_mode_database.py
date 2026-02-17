@@ -2,7 +2,7 @@
 
 import sqlite3
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1808,57 +1808,6 @@ class TestModeDatabase:
 class TestModeDatabaseMigrations:
     """Tests for database migrations."""
 
-    def test_migration_adds_size_preference_column(self, tmp_path: Path) -> None:
-        """Test that migration adds size_preference column to existing databases."""
-        db_path = tmp_path / "old_schema.db"
-
-        # Create a database with the old schema (without size_preference column)
-        # Using the correct column names: agent_models_json, agent_temperatures_json
-        conn = sqlite3.connect(db_path)
-        try:
-            conn.execute("""
-                CREATE TABLE custom_modes (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    agent_models_json TEXT NOT NULL,
-                    agent_temperatures_json TEXT NOT NULL,
-                    vram_strategy TEXT NOT NULL DEFAULT 'adaptive',
-                    is_experimental INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            # Insert a mode without size_preference
-            conn.execute(
-                """
-                INSERT INTO custom_modes
-                    (id, name, agent_models_json, agent_temperatures_json, vram_strategy)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                ("test-mode", "Test Mode", '{"writer": "model-a"}', '{"writer": 0.9}', "adaptive"),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-        # Now open the database with ModeDatabase - should trigger migration
-        db = ModeDatabase(db_path)
-
-        # Check that the column was added
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("PRAGMA table_info(custom_modes)")
-            columns = {row[1] for row in cursor.fetchall()}
-            assert "size_preference" in columns
-        finally:
-            conn.close()
-
-        # Check that existing mode has default value
-        mode = db.get_custom_mode("test-mode")
-        assert mode is not None
-        assert mode.get("size_preference") == "medium"
-
     def test_world_entity_scores_has_refinement_columns(self, tmp_path: Path) -> None:
         """Test that world_entity_scores table has refinement effectiveness columns."""
         db_path = tmp_path / "test.db"
@@ -1880,8 +1829,98 @@ class TestModeDatabaseMigrations:
             assert "best_iteration" in columns
             assert "quality_threshold" in columns
             assert "max_iterations" in columns
+            assert "temporal_consistency_score" in columns
+            assert "temporal_validation_errors" in columns
         finally:
             conn.close()
+
+    def test_alter_table_adds_columns_to_existing_database(self, tmp_path: Path) -> None:
+        """Test that init_db adds missing columns to existing world_entity_scores tables."""
+        db_path = tmp_path / "legacy.db"
+
+        # Create an old-schema database with only the original columns
+        conn = sqlite3.connect(db_path)
+        conn.executescript("""
+            CREATE TABLE world_entity_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                project_id TEXT NOT NULL,
+                entity_id TEXT,
+                entity_type TEXT NOT NULL,
+                entity_name TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                score_1 REAL,
+                score_2 REAL,
+                score_3 REAL,
+                score_4 REAL,
+                average_score REAL,
+                iterations_used INTEGER,
+                generation_time_seconds REAL,
+                feedback TEXT
+            );
+        """)
+        conn.commit()
+        conn.close()
+
+        # Now open with ModeDatabase — should add missing columns via ALTER TABLE
+        ModeDatabase(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("PRAGMA table_info(world_entity_scores)")
+            columns = {row[1] for row in cursor.fetchall()}
+            assert "early_stop_triggered" in columns
+            assert "threshold_met" in columns
+            assert "peak_score" in columns
+            assert "final_score" in columns
+            assert "score_progression_json" in columns
+            assert "consecutive_degradations" in columns
+            assert "best_iteration" in columns
+            assert "quality_threshold" in columns
+            assert "max_iterations" in columns
+            assert "temporal_consistency_score" in columns
+            assert "temporal_validation_errors" in columns
+        finally:
+            conn.close()
+
+    def test_alter_table_reraises_non_duplicate_errors(self, tmp_path: Path) -> None:
+        """Test that unexpected OperationalErrors during ALTER TABLE are re-raised."""
+        db_path = tmp_path / "broken.db"
+
+        # Create a full database first (so all tables exist), then verify
+        # that ALTER TABLE errors other than "duplicate column" are re-raised.
+        ModeDatabase(db_path)
+
+        # Now patch sqlite3.connect to return a mock that raises on ALTER TABLE
+        real_conn = sqlite3.connect(db_path)
+        mock_conn = MagicMock()
+        mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+        mock_conn.__exit__ = MagicMock(return_value=False)
+        mock_conn.executescript = real_conn.executescript
+        mock_conn.commit = real_conn.commit
+
+        def execute_side_effect(sql, *args, **kwargs):
+            if "ALTER TABLE" in str(sql):
+                raise sqlite3.OperationalError("database is locked")
+            return real_conn.execute(sql, *args, **kwargs)
+
+        mock_conn.execute = MagicMock(side_effect=execute_side_effect)
+
+        mock_db = MagicMock()
+        mock_db.db_path = str(db_path)
+
+        with (
+            patch(
+                "src.memory.mode_database._schema.sqlite3.connect",
+                return_value=mock_conn,
+            ),
+            pytest.raises(sqlite3.OperationalError, match="database is locked"),
+        ):
+            from src.memory.mode_database._schema import init_db
+
+            init_db(mock_db)
+
+        real_conn.close()
 
 
 class TestRefinementEffectivenessTracking:

@@ -25,6 +25,7 @@ def validate(settings: Settings) -> bool:
 
     Raises:
         ValueError: If any field contains an invalid value.
+        ConfigError: If RAG context settings are inconsistent (e.g. empty embedding_model).
     """
     _validate_log_level(settings)
     _validate_url(settings)
@@ -37,15 +38,11 @@ def validate(settings: Settings) -> bool:
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
     _validate_timeouts(settings)
-    changed = _validate_world_quality_thresholds_migration(settings) or changed
     _validate_world_quality(settings)
     _validate_dynamic_temperature(settings)
     _validate_early_stopping(settings)
     _validate_circuit_breaker(settings)
     _validate_retry_strategy(settings)
-    # Embedding model migration must run before semantic duplicate check so that
-    # an auto-migrated model satisfies the "embedding_model required" constraint.
-    changed = _validate_embedding_model(settings) or changed
     changed = _validate_semantic_duplicate(settings) or changed
     _validate_temperature_decay_semantics(settings)
     _validate_judge_consistency(settings)
@@ -856,7 +853,7 @@ def _validate_rag_context(settings: Settings) -> bool:
 
     Raises:
         ValueError: If any RAG setting is out of range.
-        ConfigError: If rag_context_enabled is True but no embedding_model is set.
+        ConfigError: If embedding_model is empty (vector search requires it).
     """
     if not 100 <= settings.rag_context_max_tokens <= 16000:
         raise ValueError(
@@ -878,50 +875,11 @@ def _validate_rag_context(settings: Settings) -> bool:
             f"got {settings.rag_context_graph_depth}"
         )
 
-    if settings.rag_context_enabled and not settings.embedding_model.strip():
+    if not settings.embedding_model.strip():
         raise ConfigError(
-            "rag_context_enabled requires an embedding_model to be configured. "
-            "Either set an embedding_model or disable rag_context_enabled."
+            "embedding_model must be set to a valid embedding model. "
+            "RAG context retrieval and vector search require an embedding model."
         )
-    return False
-
-
-def _validate_world_quality_thresholds_migration(settings: Settings) -> bool:
-    """Migrate old single world_quality_threshold to per-entity thresholds dict.
-
-    If the thresholds dict is empty (e.g. loaded from old settings.json that
-    didn't have it), populate it from the single threshold value.
-
-    Returns:
-        True if migration occurred, False otherwise.
-    """
-    from src.settings._settings import PER_ENTITY_QUALITY_DEFAULTS
-
-    expected_types = set(PER_ENTITY_QUALITY_DEFAULTS)
-
-    if not settings.world_quality_thresholds:
-        # Empty dict — migrate from single threshold
-        threshold = settings.world_quality_threshold
-        settings.world_quality_thresholds = dict.fromkeys(expected_types, threshold)
-        logger.warning(
-            "Migrated single world_quality_threshold (%.1f) to per-entity thresholds",
-            threshold,
-        )
-        return True
-
-    # Backfill any missing entity types from defaults
-    current_types = set(settings.world_quality_thresholds)
-    missing = expected_types - current_types
-    if missing:
-        for et in sorted(missing):
-            settings.world_quality_thresholds[et] = PER_ENTITY_QUALITY_DEFAULTS[et]
-            logger.warning(
-                "Added missing quality threshold for entity type '%s': %.1f",
-                et,
-                PER_ENTITY_QUALITY_DEFAULTS[et],
-            )
-        return True
-
     return False
 
 
@@ -958,37 +916,3 @@ def _validate_world_quality_thresholds(settings: Settings) -> None:
                 f"world_quality_thresholds[{entity_type}] must be between 0.0 and 10.0, "
                 f"got {threshold}"
             )
-
-
-def _validate_embedding_model(settings: Settings) -> bool:
-    """Validate that the configured embedding model is in the registry with an embedding tag.
-
-    If the model is not found or lacks the "embedding" tag, auto-migrate to the first
-    valid embedding model from the registry. This handles stale settings left over from
-    removed models (e.g. nomic-embed-text).
-
-    Returns:
-        True if the embedding model was migrated, False otherwise.
-    """
-    from src.settings._model_registry import RECOMMENDED_MODELS
-
-    model = settings.embedding_model
-    info = RECOMMENDED_MODELS.get(model)
-    if info is not None and "embedding" in info.get("tags", []):
-        return False
-
-    for model_id, model_info in RECOMMENDED_MODELS.items():
-        if "embedding" in model_info.get("tags", []):
-            logger.warning(
-                "Embedding model '%s' not in registry, migrating to '%s'",
-                model,
-                model_id,
-            )
-            settings.embedding_model = model_id
-            return True
-
-    logger.warning(
-        "No embedding models found in registry; keeping current embedding_model '%s'",
-        model,
-    )
-    return False

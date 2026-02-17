@@ -65,11 +65,18 @@ class WriterAgent(BaseAgent):
         story_state: StoryState,
         chapter: Chapter,
         revision_feedback: str | None = None,
+        world_context: str = "",
     ) -> str:
         """Write or revise a single chapter.
 
         If the chapter has scenes defined, generates content scene-by-scene.
         Otherwise, generates the entire chapter at once.
+
+        Args:
+            story_state: Current story state.
+            chapter: Chapter to write.
+            revision_feedback: Optional revision feedback.
+            world_context: Optional RAG-retrieved world context for prompt enrichment.
         """
         validate_not_none(story_state, "story_state")
         validate_type(story_state, "story_state", StoryState)
@@ -85,16 +92,19 @@ class WriterAgent(BaseAgent):
             logger.info(
                 f"Chapter {chapter.number} has {len(chapter.scenes)} scenes, writing scene-by-scene"
             )
-            return self._write_chapter_with_scenes(story_state, chapter, revision_feedback)
+            return self._write_chapter_with_scenes(
+                story_state, chapter, revision_feedback, world_context
+            )
         else:
             logger.info(f"Chapter {chapter.number} has no scenes, writing as single unit")
-            return self._write_chapter_whole(story_state, chapter, revision_feedback)
+            return self._write_chapter_whole(story_state, chapter, revision_feedback, world_context)
 
     def _write_chapter_whole(
         self,
         story_state: StoryState,
         chapter: Chapter,
         revision_feedback: str | None = None,
+        world_context: str = "",
     ) -> str:
         """Write chapter as a single unit (original behavior)."""
         brief = PromptBuilder.ensure_brief(story_state, self.name)
@@ -116,6 +126,14 @@ class WriterAgent(BaseAgent):
         builder.add_language_requirement(brief.language)
         builder.add_section("CHAPTER OUTLINE", chapter.outline)
         builder.add_text(f"STORY CONTEXT:\n{context}")
+
+        if world_context:
+            logger.debug(
+                "Injecting world context into chapter %d prompt (%d chars)",
+                chapter.number,
+                len(world_context),
+            )
+            builder.add_text(f"WORLD CONTEXT:\n{world_context}")
 
         if prev_chapter_summary:
             builder.add_text(prev_chapter_summary)
@@ -148,6 +166,7 @@ class WriterAgent(BaseAgent):
         story_state: StoryState,
         chapter: Chapter,
         revision_feedback: str | None = None,
+        world_context: str = "",
     ) -> str:
         """Write chapter scene-by-scene when scenes are defined."""
         scene_contents: list[str] = []
@@ -178,6 +197,7 @@ class WriterAgent(BaseAgent):
                 scene=scene,
                 prev_context=prev_scene_context,
                 revision_feedback=revision_feedback if scene.order == 0 else None,
+                world_context=world_context,
             )
             scene_contents.append(scene_content)
 
@@ -200,6 +220,7 @@ class WriterAgent(BaseAgent):
         scene: Scene,
         prev_context: str = "",
         revision_feedback: str | None = None,
+        world_context: str = "",
     ) -> str:
         """Write a single scene within a chapter."""
         scene_num = scene.order + 1  # 1-indexed for display
@@ -231,6 +252,14 @@ class WriterAgent(BaseAgent):
         builder.add_section("CHAPTER CONTEXT", chapter.outline)
         builder.add_text(f"STORY CONTEXT:\n{context}")
 
+        if world_context:
+            logger.debug(
+                "Injecting world context into scene %d prompt (%d chars)",
+                scene_num,
+                len(world_context),
+            )
+            builder.add_text(f"WORLD CONTEXT:\n{world_context}")
+
         if prev_context:
             builder.add_text(prev_context)
 
@@ -261,6 +290,7 @@ class WriterAgent(BaseAgent):
         self,
         story_state: StoryState,
         revision_feedback: str | None = None,
+        world_context: str = "",
     ) -> str:
         """Write a complete short story in one pass."""
         validate_not_none(story_state, "story_state")
@@ -278,6 +308,14 @@ class WriterAgent(BaseAgent):
         builder.add_text(f"SETTING: {brief.setting_place}, {brief.setting_time}")
         builder.add_character_summary(story_state.characters)
         builder.add_section("PLOT OUTLINE", story_state.plot_summary)
+
+        if world_context:
+            logger.debug(
+                "Injecting world context into short story prompt (%d chars)",
+                len(world_context),
+            )
+            builder.add_text(f"WORLD CONTEXT:\n{world_context}")
+
         builder.add_revision_notes(revision_feedback or "")
 
         builder.add_text(

@@ -3,9 +3,6 @@
 Provides functions to store, search, and manage vector embeddings in the
 vec_embeddings virtual table (sqlite-vec) alongside the embedding_metadata
 tracking table.
-
-All functions check db.vec_available first and return empty/no-op if False,
-enabling graceful degradation when sqlite-vec is not installed.
 """
 
 import hashlib
@@ -58,12 +55,8 @@ def upsert_embedding(
         chapter_number: Optional chapter number for filtered queries.
 
     Returns:
-        True if the embedding was upserted, False if skipped (unchanged) or unavailable.
+        True if the embedding was upserted, False if skipped (unchanged).
     """
-    if not db.vec_available:
-        logger.debug("upsert_embedding skipped: sqlite-vec not available")
-        return False
-
     content_hash_val = _content_hash(text)
     now = datetime.now().isoformat()
 
@@ -158,15 +151,15 @@ def delete_embedding(db: WorldDatabase, source_id: str) -> bool:
             cursor.execute("DELETE FROM embedding_metadata WHERE source_id = ?", (source_id,))
             metadata_deleted = cursor.rowcount > 0
 
-            # Clean up vec0 table if available
+            # Clean up vec0 table
             vec_deleted = False
-            if db.vec_available and content_type:
+            if content_type:
                 cursor.execute(
                     "DELETE FROM vec_embeddings WHERE source_id = ? AND content_type = ?",
                     (source_id, content_type),
                 )
                 vec_deleted = cursor.rowcount > 0
-            elif db.vec_available:
+            else:
                 # Fallback: try without partition key if metadata was missing
                 cursor.execute(
                     "DELETE FROM vec_embeddings WHERE source_id = ?",
@@ -206,12 +199,7 @@ def search_similar(
     Returns:
         List of dicts with keys: source_id, content_type, entity_type,
         display_text, distance. Sorted by distance ascending (most similar first).
-        Returns empty list if vec is unavailable.
     """
-    if not db.vec_available:
-        logger.debug("search_similar skipped: sqlite-vec not available")
-        return []
-
     if not query_embedding:
         logger.debug("search_similar skipped: empty query embedding")
         return []
@@ -314,17 +302,16 @@ def get_embedding_stats(db: WorldDatabase) -> dict[str, Any]:
         dimensions = [row[0] for row in cursor.fetchall()]
 
     logger.debug(
-        "Embedding stats: %d total, %d models, vec_available=%s",
+        "Embedding stats: %d total, %d models",
         total,
         len(models),
-        db.vec_available,
     )
     return {
         "total": total,
         "by_content_type": counts_by_type,
         "models": models,
         "dimensions": dimensions,
-        "vec_available": db.vec_available,
+        "vec_available": True,  # Always True — sqlite-vec is mandatory
     }
 
 
@@ -370,32 +357,30 @@ def clear_all_embeddings(db: WorldDatabase) -> None:
         db._ensure_open()
         cursor = db.conn.cursor()
 
-        if db.vec_available:
-            # Query actual dimensions BEFORE deleting metadata
-            cursor.execute("SELECT DISTINCT embedding_dim FROM embedding_metadata LIMIT 1")
-            dim_row = cursor.fetchone()
-            dimensions = dim_row[0] if dim_row else 1024
+        # Query actual dimensions BEFORE deleting metadata
+        cursor.execute("SELECT DISTINCT embedding_dim FROM embedding_metadata LIMIT 1")
+        dim_row = cursor.fetchone()
+        dimensions = dim_row[0] if dim_row else 1024
 
         cursor.execute("DELETE FROM embedding_metadata")
         metadata_count = cursor.rowcount
 
-        if db.vec_available:
-            # Drop and recreate vec0 table (most reliable way to clear it)
-            cursor.execute("DROP TABLE IF EXISTS vec_embeddings")
-            cursor.execute(
-                f"""
-                CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-                    embedding float[{int(dimensions)}],
-                    content_type text partition key,
-                    +source_id text,
-                    +entity_type text,
-                    +chapter_number integer,
-                    +display_text text,
-                    +embedding_model text,
-                    +embedded_at text
-                )
-                """
+        # Drop and recreate vec0 table (most reliable way to clear it)
+        cursor.execute("DROP TABLE IF EXISTS vec_embeddings")
+        cursor.execute(
+            f"""
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                embedding float[{int(dimensions)}],
+                content_type text partition key,
+                +source_id text,
+                +entity_type text,
+                +chapter_number integer,
+                +display_text text,
+                +embedding_model text,
+                +embedded_at text
             )
+            """
+        )
 
         db.conn.commit()
 
@@ -412,10 +397,6 @@ def recreate_vec_table(db: WorldDatabase, dimensions: int) -> None:
         db: WorldDatabase instance.
         dimensions: New embedding dimension size.
     """
-    if not db.vec_available:
-        logger.debug("recreate_vec_table skipped: sqlite-vec not available")
-        return
-
     with db._lock:
         db._ensure_open()
         cursor = db.conn.cursor()

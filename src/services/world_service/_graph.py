@@ -1,7 +1,7 @@
 """Graph analysis and context functions for WorldService."""
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from src.memory.entities import Entity, Relationship
 from src.memory.world_database import WorldDatabase
@@ -81,24 +81,6 @@ def get_most_connected(
         List of (Entity, connection_count) tuples.
     """
     return world_db.get_most_connected(limit=limit)
-
-
-def get_context_for_agents(
-    svc: WorldService,
-    world_db: WorldDatabase,
-    max_entities: int = 50,
-) -> dict[str, Any]:
-    """Get world context formatted for AI agents.
-
-    Args:
-        svc: WorldService instance.
-        world_db: WorldDatabase instance.
-        max_entities: Maximum entities per type to include.
-
-    Returns:
-        Dictionary with world context (characters, locations, items, etc.).
-    """
-    return world_db.get_context_for_agents(max_entities=max_entities)
 
 
 def get_entity_summary(svc: WorldService, world_db: WorldDatabase) -> dict[str, int]:

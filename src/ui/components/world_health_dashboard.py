@@ -7,7 +7,8 @@ from typing import Any
 from nicegui import ui
 
 from src.memory.world_health import WorldHealthMetrics
-from src.ui.theme import get_entity_color, get_entity_icon
+from src.ui.theme import get_entity_icon
+from src.utils.constants import get_entity_color
 
 logger = logging.getLogger(__name__)
 

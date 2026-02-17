@@ -14,6 +14,7 @@ from src.utils.validation import (
 )
 
 if TYPE_CHECKING:
+    from src.memory.world_database import WorldDatabase
     from src.services.story_service import StoryService
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ def write_chapter(
     chapter_num: int,
     feedback: str | None = None,
     cancel_check: Callable[[], bool] | None = None,
+    world_db: WorldDatabase | None = None,
 ) -> Generator[WorkflowEvent, None, str]:
     """Write a single chapter with streaming events.
 
@@ -34,6 +36,7 @@ def write_chapter(
         chapter_num: Chapter number to write.
         feedback: Optional feedback to incorporate.
         cancel_check: Optional callable that returns True if cancellation is requested.
+        world_db: Optional world database for RAG context retrieval.
 
     Yields:
         WorkflowEvent objects for progress updates.
@@ -51,6 +54,7 @@ def write_chapter(
     validate_positive(chapter_num, "chapter_num")
     orchestrator = svc._get_orchestrator(state)
     orchestrator.story_state = state
+    orchestrator.world_db = world_db
 
     # Write the chapter
     content = ""
@@ -78,6 +82,7 @@ def write_all_chapters(
     svc: StoryService,
     state: StoryState,
     cancel_check: Callable[[], bool] | None = None,
+    world_db: WorldDatabase | None = None,
 ) -> Generator[WorkflowEvent]:
     """Stream the generation of every chapter, yielding workflow events as progress is produced.
 
@@ -85,6 +90,7 @@ def write_all_chapters(
         svc: The StoryService instance.
         state: The story state to write into.
         cancel_check: Optional callable invoked between events; return True to request cancellation.
+        world_db: Optional world database for RAG context retrieval.
 
     Yields:
         WorkflowEvent: Progress events emitted during chapter generation.
@@ -96,6 +102,7 @@ def write_all_chapters(
 
     orchestrator = svc._get_orchestrator(state)
     orchestrator.story_state = state
+    orchestrator.world_db = world_db
 
     for event in orchestrator.write_all_chapters():
         # Check for cancellation
@@ -111,12 +118,17 @@ def write_all_chapters(
     svc._on_story_complete(state)
 
 
-def write_short_story(svc: StoryService, state: StoryState) -> Generator[WorkflowEvent, None, str]:
+def write_short_story(
+    svc: StoryService,
+    state: StoryState,
+    world_db: WorldDatabase | None = None,
+) -> Generator[WorkflowEvent, None, str]:
     """Generate a single-chapter short story while streaming progress events.
 
     Parameters:
         svc: The StoryService instance.
         state: Story state to use and update during generation.
+        world_db: Optional world database for RAG context retrieval.
 
     Yields:
         WorkflowEvent: Progress events emitted by the orchestrator during generation.
@@ -126,6 +138,7 @@ def write_short_story(svc: StoryService, state: StoryState) -> Generator[Workflo
     """
     orchestrator = svc._get_orchestrator(state)
     orchestrator.story_state = state
+    orchestrator.world_db = world_db
 
     content = ""
     for event in orchestrator.write_short_story():
@@ -144,6 +157,7 @@ def regenerate_chapter_with_feedback(
     chapter_num: int,
     feedback: str,
     cancel_check: Callable[[], bool] | None = None,
+    world_db: WorldDatabase | None = None,
 ) -> Generator[WorkflowEvent, None, str]:
     """Regenerate a chapter incorporating user feedback.
 
@@ -158,6 +172,7 @@ def regenerate_chapter_with_feedback(
         chapter_num: Chapter number to regenerate.
         feedback: User feedback to incorporate into the regeneration.
         cancel_check: Optional callable that returns True if cancellation is requested.
+        world_db: Optional world database for RAG context retrieval.
 
     Yields:
         WorkflowEvent objects for progress updates.
@@ -193,6 +208,7 @@ def regenerate_chapter_with_feedback(
     # Get orchestrator and regenerate with feedback
     orchestrator = svc._get_orchestrator(state)
     orchestrator.story_state = state
+    orchestrator.world_db = world_db
 
     # Write the chapter with feedback
     content = ""

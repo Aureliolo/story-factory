@@ -374,15 +374,6 @@ class TestWorldServiceGraphAnalysis:
 class TestWorldServiceContextForAgents:
     """Tests for agent context generation."""
 
-    def test_get_context_for_agents(self, world_service, world_db):
-        """Test getting context formatted for AI agents."""
-        world_db.add_entity(entity_type="character", name="Hero", description="The protagonist")
-        world_db.add_entity(entity_type="location", name="Castle", description="A grand castle")
-
-        context = world_service.get_context_for_agents(world_db)
-
-        assert isinstance(context, dict)
-
     def test_get_entity_summary(self, world_service, world_db):
         """Test getting entity count summary."""
         world_db.add_entity(entity_type="character", name="Char1", description="")
@@ -601,10 +592,14 @@ class TestWorldHealthMethods:
     def test_get_world_health_metrics(self, world_service, world_db):
         """Test getting world health metrics."""
         # Create some entities
-        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 8.0})
-        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 7.0})
-        world_db.add_entity("location", "Town", attributes={"quality_score": 6.0})
-        world_db.add_entity("character", "Orphan", attributes={"quality_score": 3.0})
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_scores": {"average": 8.0}}
+        )
+        bob_id = world_db.add_entity(
+            "character", "Bob", attributes={"quality_scores": {"average": 7.0}}
+        )
+        world_db.add_entity("location", "Town", attributes={"quality_scores": {"average": 6.0}})
+        world_db.add_entity("character", "Orphan", attributes={"quality_scores": {"average": 3.0}})
 
         # Add a relationship
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
@@ -740,11 +735,11 @@ class TestWorldHealthMethods:
     def test_get_world_health_metrics_quality_distribution(self, world_service, world_db):
         """Test health metrics quality distribution covers all buckets."""
         # Create entities with quality scores in different buckets
-        world_db.add_entity("character", "Low1", attributes={"quality_score": 1.0})
-        world_db.add_entity("character", "Low2", attributes={"quality_score": 3.0})
-        world_db.add_entity("character", "Mid", attributes={"quality_score": 5.0})
-        world_db.add_entity("character", "High1", attributes={"quality_score": 7.0})
-        world_db.add_entity("character", "High2", attributes={"quality_score": 9.0})
+        world_db.add_entity("character", "Low1", attributes={"quality_scores": {"average": 1.0}})
+        world_db.add_entity("character", "Low2", attributes={"quality_scores": {"average": 3.0}})
+        world_db.add_entity("character", "Mid", attributes={"quality_scores": {"average": 5.0}})
+        world_db.add_entity("character", "High1", attributes={"quality_scores": {"average": 7.0}})
+        world_db.add_entity("character", "High2", attributes={"quality_scores": {"average": 9.0}})
 
         metrics = world_service.get_world_health_metrics(world_db)
 
@@ -911,14 +906,14 @@ class TestWorldHealthMethods:
 
     def test_get_world_health_metrics_quality_scores_dict_format(self, world_service, world_db):
         """Test health metrics correctly extracts quality_scores in dict format."""
-        # Create entity with quality_scores dict (new format)
+        # Create entity with quality_scores dict including extra sub-scores
         world_db.add_entity(
             "character",
             "Alice",
             attributes={"quality_scores": {"average": 8.5, "depth": 8.0, "clarity": 9.0}},
         )
-        # Create entity with legacy quality_score (old format)
-        world_db.add_entity("character", "Bob", attributes={"quality_score": 7.0})
+        # Create entity with quality_scores dict (average only)
+        world_db.add_entity("character", "Bob", attributes={"quality_scores": {"average": 7.0}})
 
         metrics = world_service.get_world_health_metrics(world_db)
 
@@ -931,8 +926,12 @@ class TestWorldHealthMethods:
     def test_health_score_weighted_structural_and_quality(self, world_service, world_db):
         """Test health score is a weighted blend of structural (60%) and quality (40%)."""
         # Create entities with perfect quality (10.0) and no structural issues
-        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 10.0})
-        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 10.0})
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_scores": {"average": 10.0}}
+        )
+        bob_id = world_db.add_entity(
+            "character", "Bob", attributes={"quality_scores": {"average": 10.0}}
+        )
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
         metrics = world_service.get_world_health_metrics(world_db)
@@ -962,7 +961,9 @@ class TestWorldHealthMethods:
 
     def test_health_score_mixed_scored_and_unscored(self, world_service, world_db):
         """Test health score with mix of scored and unscored entities."""
-        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 8.0})
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_scores": {"average": 8.0}}
+        )
         bob_id = world_db.add_entity("character", "Bob")  # Unscored
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
@@ -978,9 +979,13 @@ class TestWorldHealthMethods:
         """Test that boolean quality scores are excluded from quality average."""
         import logging
 
-        # Create entity with bool quality_score (corrupt data)
-        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": True})
-        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        # Create entity with bool quality_scores average (corrupt data)
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_scores": {"average": True}}
+        )
+        bob_id = world_db.add_entity(
+            "character", "Bob", attributes={"quality_scores": {"average": 8.0}}
+        )
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
         with caplog.at_level(logging.DEBUG, logger="src.services.world_service._health"):
@@ -994,8 +999,12 @@ class TestWorldHealthMethods:
 
     def test_health_score_negative_quality_clamped(self, world_service, world_db):
         """Test that negative quality scores are clamped to 0."""
-        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": -5.0})
-        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_scores": {"average": -5.0}}
+        )
+        bob_id = world_db.add_entity(
+            "character", "Bob", attributes={"quality_scores": {"average": 8.0}}
+        )
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
         metrics = world_service.get_world_health_metrics(world_db)
@@ -1007,9 +1016,11 @@ class TestWorldHealthMethods:
     def test_health_score_nan_quality_treated_as_zero(self, world_service, world_db):
         """Test that NaN quality scores are treated as 0."""
         alice_id = world_db.add_entity(
-            "character", "Alice", attributes={"quality_score": float("nan")}
+            "character", "Alice", attributes={"quality_scores": {"average": float("nan")}}
         )
-        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        bob_id = world_db.add_entity(
+            "character", "Bob", attributes={"quality_scores": {"average": 8.0}}
+        )
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
         metrics = world_service.get_world_health_metrics(world_db)
@@ -1020,8 +1031,12 @@ class TestWorldHealthMethods:
 
     def test_health_score_overflow_quality_clamped(self, world_service, world_db):
         """Test that quality scores above 10 are clamped to 10."""
-        alice_id = world_db.add_entity("character", "Alice", attributes={"quality_score": 15.0})
-        bob_id = world_db.add_entity("character", "Bob", attributes={"quality_score": 8.0})
+        alice_id = world_db.add_entity(
+            "character", "Alice", attributes={"quality_scores": {"average": 15.0}}
+        )
+        bob_id = world_db.add_entity(
+            "character", "Bob", attributes={"quality_scores": {"average": 8.0}}
+        )
         world_db.add_relationship(alice_id, bob_id, "knows", validate=False)
 
         metrics = world_service.get_world_health_metrics(world_db)
@@ -1036,7 +1051,7 @@ class TestHealthMetricsCache:
 
     def test_cache_hit_returns_same_object(self, world_service, world_db):
         """Calling get_world_health_metrics twice returns the cached object."""
-        world_db.add_entity("character", "Alice", attributes={"quality_score": 8.0})
+        world_db.add_entity("character", "Alice", attributes={"quality_scores": {"average": 8.0}})
 
         first = world_service.get_world_health_metrics(world_db)
         second = world_service.get_world_health_metrics(world_db)
@@ -1065,7 +1080,7 @@ class TestHealthMetricsCache:
 
     def test_cache_miss_on_different_threshold(self, world_service, world_db):
         """Different quality_threshold triggers fresh computation."""
-        world_db.add_entity("character", "Alice", attributes={"quality_score": 5.0})
+        world_db.add_entity("character", "Alice", attributes={"quality_scores": {"average": 5.0}})
 
         first = world_service.get_world_health_metrics(world_db, quality_threshold=6.0)
         second = world_service.get_world_health_metrics(world_db, quality_threshold=4.0)
