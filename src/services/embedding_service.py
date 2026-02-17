@@ -25,8 +25,8 @@ class EmbeddingService:
     """Generates and manages vector embeddings for world content.
 
     Thread-safe implementation using RLock for concurrent embedding operations.
-    Gracefully degrades when embedding model is not configured or Ollama is
-    unreachable.
+    Individual embedding calls handle Ollama connection failures gracefully,
+    but a configured embedding model is required (raises ValueError otherwise).
 
     Attributes:
         settings: Application settings instance.

@@ -302,17 +302,16 @@ def get_embedding_stats(db: WorldDatabase) -> dict[str, Any]:
         dimensions = [row[0] for row in cursor.fetchall()]
 
     logger.debug(
-        "Embedding stats: %d total, %d models, vec_available=%s",
+        "Embedding stats: %d total, %d models",
         total,
         len(models),
-        db.vec_available,
     )
     return {
         "total": total,
         "by_content_type": counts_by_type,
         "models": models,
         "dimensions": dimensions,
-        "vec_available": db.vec_available,
+        "vec_available": True,  # Always True — sqlite-vec is mandatory
     }
 
 

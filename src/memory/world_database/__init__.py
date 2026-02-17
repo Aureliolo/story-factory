@@ -20,7 +20,7 @@ from . import _embeddings, _entities, _events, _graph, _io, _relationships, _ver
 
 logger = logging.getLogger(__name__)
 
-# Schema version for migration support
+# Schema version stamped on new databases (all tables created fresh in _init_schema)
 SCHEMA_VERSION = 5
 
 # Valid entity types (whitelist)
@@ -647,7 +647,11 @@ class WorldDatabase:
 
     @property
     def vec_available(self) -> bool:
-        """Whether the sqlite-vec extension is loaded and vector search is available."""
+        """Whether the sqlite-vec extension is loaded and vector search is available.
+
+        Always True on a live instance since __init__ raises RuntimeError if
+        sqlite-vec fails to load.  Retained for interface stability.
+        """
         return self._vec_available
 
     def attach_content_changed_callback(
