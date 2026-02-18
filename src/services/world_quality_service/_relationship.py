@@ -1,12 +1,17 @@
 """Relationship generation, judgment, and refinement functions."""
 
 import logging
+import threading
 from collections import Counter
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import ollama
 
+if TYPE_CHECKING:
+    from src.services.world_quality_service import WorldQualityService
+
 from src.memory.conflict_types import (
+    RELATION_CONFLICT_MAPPING,
     VALID_RELATIONSHIP_TYPES,
     ConflictCategory,
     classify_relationship,
@@ -26,6 +31,126 @@ from src.utils.json_parser import extract_json, unwrap_single_json
 logger = logging.getLogger(__name__)
 
 _LEADING_ARTICLES = ("the ", "a ", "an ")
+
+# Module-level cache for LLM-based relationship type classification.
+# Maps free-form description -> classified valid type. Thread-safe via lock.
+# Bounded to _LLM_CACHE_MAX_SIZE entries; cleared entirely when full.
+_LLM_CACHE_MAX_SIZE = 256
+_llm_classification_cache: dict[str, str] = {}
+_llm_classification_cache_lock = threading.Lock()
+
+
+def _classify_relation_type_with_llm(svc: WorldQualityService, raw_type: str) -> str | None:
+    """Classify a free-form relationship description into a valid type using the LLM.
+
+    Used as a last-resort fallback when normalize_relation_type() cannot match the
+    raw type string to the controlled vocabulary. Caches results to avoid repeated
+    LLM calls for the same description.
+
+    Args:
+        svc: WorldQualityService instance for model selection and LLM calls.
+        raw_type: The raw relationship type string that failed normalization.
+
+    Returns:
+        A valid relationship type string, or None if classification failed.
+    """
+    # Check cache first (empty string sentinel means "previously failed to classify")
+    cache_key = raw_type.lower().strip()
+    with _llm_classification_cache_lock:
+        if cache_key in _llm_classification_cache:
+            cached = _llm_classification_cache[cache_key]
+            if cached == "":
+                logger.debug("LLM classification negative cache hit for '%s'", raw_type)
+                return None
+            logger.debug("LLM classification cache hit: '%s' -> '%s'", raw_type, cached)
+            return cached
+
+    type_list = ", ".join(VALID_RELATIONSHIP_TYPES)
+    prompt = (
+        f"Classify this relationship description into exactly ONE valid type.\n\n"
+        f"Description: {raw_type}\n\n"
+        f"Valid types: {type_list}\n\n"
+        f"Reply with ONLY the type name, nothing else."
+    )
+
+    try:
+        model = svc._get_creator_model(entity_type="relationship")
+        response = svc.client.generate(
+            model=model,
+            prompt=prompt,
+            options={
+                "temperature": 0.1,
+                "num_predict": 50,
+            },
+        )
+
+        result: str = response["response"].strip().lower().replace("-", "_").replace(" ", "_")
+        # Validate that the LLM returned a known type
+        if result in RELATION_CONFLICT_MAPPING:
+            logger.info("LLM classified unknown relation type '%s' -> '%s'", raw_type, result)
+            with _llm_classification_cache_lock:
+                if len(_llm_classification_cache) >= _LLM_CACHE_MAX_SIZE:
+                    _llm_classification_cache.clear()
+                _llm_classification_cache[cache_key] = result
+            return result
+
+        logger.warning(
+            "LLM returned invalid relation type '%s' for input '%s', ignoring",
+            result,
+            raw_type,
+        )
+        # Cache negative result to avoid repeated LLM calls for same input
+        with _llm_classification_cache_lock:
+            if len(_llm_classification_cache) >= _LLM_CACHE_MAX_SIZE:
+                _llm_classification_cache.clear()
+            _llm_classification_cache[cache_key] = ""
+        return None
+    except (ollama.ResponseError, ConnectionError, TimeoutError) as e:
+        logger.warning("LLM relation type classification failed for '%s': %s", raw_type, e)
+        with _llm_classification_cache_lock:
+            if len(_llm_classification_cache) >= _LLM_CACHE_MAX_SIZE:
+                _llm_classification_cache.clear()
+            _llm_classification_cache[cache_key] = ""
+        return None
+    except (KeyError, ValueError) as e:
+        logger.warning(
+            "LLM relation type classification returned unparsable result for '%s': %s",
+            raw_type,
+            e,
+        )
+        return None
+
+
+def _normalize_with_llm_fallback(svc: WorldQualityService, raw_type: str) -> str:
+    """Normalize a relationship type, falling back to LLM classification if needed.
+
+    First tries the standard normalize_relation_type(). If the result is not in the
+    controlled vocabulary, attempts LLM-based classification as a fallback.
+
+    Args:
+        svc: WorldQualityService instance for LLM access.
+        raw_type: Raw relationship type string.
+
+    Returns:
+        Normalized relationship type string (always from controlled vocabulary if possible).
+    """
+    normalized = normalize_relation_type(raw_type)
+    if normalized in RELATION_CONFLICT_MAPPING:
+        return normalized
+
+    # The normalized result is not a known type — try LLM classification
+    logger.debug(
+        "normalize_relation_type returned unknown '%s' for '%s', trying LLM fallback",
+        normalized,
+        raw_type,
+    )
+    llm_result = _classify_relation_type_with_llm(svc, raw_type)
+    if llm_result:
+        return llm_result
+
+    # LLM failed too — return the original normalized result
+    logger.debug("LLM fallback failed for '%s', returning normalized: '%s'", raw_type, normalized)
+    return normalized
 
 
 def _normalize_entity_name(name: str) -> str:
@@ -446,9 +571,9 @@ Output ONLY valid JSON (all text in {brief.language}):
         data = extract_json(raw_response, strict=False)
         data = unwrap_single_json(data)
         if data and isinstance(data, dict):
-            # Normalize relation_type to controlled vocabulary
+            # Normalize relation_type to controlled vocabulary, with LLM fallback
             raw_type = data.get("relation_type", "related_to")
-            data["relation_type"] = normalize_relation_type(raw_type)
+            data["relation_type"] = _normalize_with_llm_fallback(svc, raw_type)
             result: dict[str, Any] = data
             return result
         else:
@@ -655,7 +780,7 @@ Output ONLY valid JSON:
         data = extract_json(response["response"], strict=False)
         if data and isinstance(data, dict):
             raw_type = data.get("relation_type", "related_to")
-            data["relation_type"] = normalize_relation_type(raw_type)
+            data["relation_type"] = _normalize_with_llm_fallback(svc, raw_type)
             result: dict[str, Any] = data
             return result
         else:

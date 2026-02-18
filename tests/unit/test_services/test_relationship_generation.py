@@ -907,3 +907,314 @@ class TestRequiredEntityConstraint:
         # Should accept — "The Echoes of the Network" normalizes to "echoes of the network"
         assert svc._create_relationship.call_count == 1
         assert rel["source"] == "The Echoes of the Network"
+
+
+# =========================================================================
+# Group 5: LLM Relationship Type Classification
+# =========================================================================
+
+
+class TestLLMRelationTypeClassification:
+    """Tests for LLM-based fallback classification of unknown relationship types."""
+
+    def setup_method(self):
+        """Clear the LLM classification cache before each test."""
+        from src.services.world_quality_service._relationship import (
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        with _llm_classification_cache_lock:
+            _llm_classification_cache.clear()
+
+    def test_cache_hit_skips_llm_call(self):
+        """Cached result should be returned without calling the LLM."""
+        from src.services.world_quality_service._relationship import (
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+
+        # Pre-populate cache
+        with _llm_classification_cache_lock:
+            _llm_classification_cache["a close friend"] = "friends"
+
+        result = _classify_relation_type_with_llm(svc, "A close friend")
+
+        assert result == "friends"
+        # LLM should not have been called
+        svc.client.generate.assert_not_called()
+
+    def test_valid_llm_result_cached_and_returned(self):
+        """Valid LLM classification should be cached and returned."""
+        from src.services.world_quality_service._relationship import (
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {"response": "rivals"}
+
+        result = _classify_relation_type_with_llm(
+            svc, "A close friend and fellow scientist who often challenges his views"
+        )
+
+        assert result == "rivals"
+        # Verify it was cached
+        with _llm_classification_cache_lock:
+            cache_key = "a close friend and fellow scientist who often challenges his views"
+            assert _llm_classification_cache[cache_key] == "rivals"
+
+    def test_invalid_llm_result_returns_none(self):
+        """LLM returning an unknown type should return None."""
+        from src.services.world_quality_service._relationship import (
+            _classify_relation_type_with_llm,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {"response": "some_invalid_type_xyz"}
+
+        result = _classify_relation_type_with_llm(svc, "a cosmic bond of destiny")
+
+        assert result is None
+
+    def test_llm_failure_returns_none(self):
+        """LLM error should return None (non-fatal fallback)."""
+        from src.services.world_quality_service._relationship import (
+            _classify_relation_type_with_llm,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.side_effect = ConnectionError("Ollama offline")
+
+        result = _classify_relation_type_with_llm(svc, "complicated friendship")
+
+        assert result is None
+
+    def test_normalize_with_llm_fallback_known_type(self):
+        """Known types should be returned directly without LLM call."""
+        from src.services.world_quality_service._relationship import (
+            _normalize_with_llm_fallback,
+        )
+
+        svc = MagicMock()
+
+        result = _normalize_with_llm_fallback(svc, "allies_with")
+        assert result == "allies_with"
+        svc.client.generate.assert_not_called()
+
+    def test_normalize_with_llm_fallback_uses_llm(self):
+        """Unknown types should trigger LLM classification."""
+        from src.services.world_quality_service._relationship import (
+            _normalize_with_llm_fallback,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {"response": "friends"}
+
+        result = _normalize_with_llm_fallback(
+            svc, "a dear companion who has been through thick and thin"
+        )
+        assert result == "friends"
+
+    def test_normalize_with_llm_fallback_returns_normalized_on_failure(self):
+        """When LLM also fails, the original normalized result should be returned."""
+        from src.services.world_quality_service._relationship import (
+            _normalize_with_llm_fallback,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.side_effect = ConnectionError("Ollama offline")
+
+        result = _normalize_with_llm_fallback(svc, "cosmic destiny bond of the ancients")
+        # Should return the original normalized form
+        assert result == "cosmic_destiny_bond_of_the_ancients"
+
+    def test_create_relationship_uses_llm_fallback(self, story_state):
+        """_create_relationship should use LLM fallback for unrecognized types."""
+        from src.services.world_quality_service._relationship import _create_relationship
+
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_create = 800
+        svc._get_creator_model.return_value = "test-model:8b"
+
+        # First call: create returns a prose-style type
+        # Second call (LLM classification): returns a valid type
+        svc.client.generate.side_effect = [
+            {
+                "response": '{"source": "Alpha", "target": "Beta", '
+                '"relation_type": "A close friend and fellow scientist", '
+                '"description": "They are friends"}'
+            },
+            {"response": "friends"},
+        ]
+
+        entity_names = ["Alpha", "Beta"]
+        result = _create_relationship(svc, story_state, entity_names, [], 0.9)
+
+        assert result["relation_type"] == "friends"
+
+    def test_refine_relationship_uses_llm_fallback(self, story_state):
+        """_refine_relationship should use LLM fallback for unrecognized types."""
+        from src.memory.world_quality import RelationshipQualityScores
+        from src.services.world_quality_service._relationship import _refine_relationship
+
+        svc = MagicMock()
+        svc.settings.llm_tokens_relationship_refine = 800
+        svc.settings.context_size = 32768
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.get_config.return_value.get_threshold.return_value = 5.0
+
+        # Refinement returns a prose-style type
+        svc.client.generate.side_effect = [
+            # First call: the refinement itself
+            {
+                "response": '{"source": "Alpha", "target": "Beta", '
+                '"relation_type": "blood brothers sworn by fire", '
+                '"description": "They are inseparable"}'
+            },
+            # Second call: LLM classification fallback
+            {"response": "allies_with"},
+        ]
+
+        relationship = {
+            "source": "Alpha",
+            "target": "Beta",
+            "relation_type": "friends",
+            "description": "They are friends",
+        }
+        scores = RelationshipQualityScores(
+            tension=3.0,
+            dynamics=3.0,
+            story_potential=3.0,
+            authenticity=3.0,
+            feedback="Needs more depth",
+        )
+
+        result = _refine_relationship(svc, relationship, scores, story_state, 0.7)
+        assert result["relation_type"] == "allies_with"
+
+    def test_negative_cache_hit_returns_none(self):
+        """Negative cache entry (empty string) should return None without LLM call."""
+        from src.services.world_quality_service._relationship import (
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+
+        # Pre-populate cache with negative sentinel
+        with _llm_classification_cache_lock:
+            _llm_classification_cache["unknown bond"] = ""
+
+        result = _classify_relation_type_with_llm(svc, "Unknown bond")
+
+        assert result is None
+        svc.client.generate.assert_not_called()
+
+    def test_cache_overflow_clears_on_valid_result(self):
+        """When cache is full, it should be cleared before storing a valid result."""
+        from src.services.world_quality_service._relationship import (
+            _LLM_CACHE_MAX_SIZE,
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {"response": "rivals"}
+
+        # Fill cache to capacity
+        with _llm_classification_cache_lock:
+            for i in range(_LLM_CACHE_MAX_SIZE):
+                _llm_classification_cache[f"filler_{i}"] = "friends"
+
+        result = _classify_relation_type_with_llm(svc, "nemesis of the realm")
+        assert result == "rivals"
+
+        # Cache should have been cleared and now contain only the new entry
+        with _llm_classification_cache_lock:
+            assert len(_llm_classification_cache) == 1
+            assert _llm_classification_cache["nemesis of the realm"] == "rivals"
+
+    def test_cache_overflow_clears_on_invalid_result(self):
+        """When cache is full and LLM returns invalid type, cache should be cleared."""
+        from src.services.world_quality_service._relationship import (
+            _LLM_CACHE_MAX_SIZE,
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.return_value = {"response": "totally_invalid_xyz"}
+
+        # Fill cache to capacity
+        with _llm_classification_cache_lock:
+            for i in range(_LLM_CACHE_MAX_SIZE):
+                _llm_classification_cache[f"filler_{i}"] = "friends"
+
+        result = _classify_relation_type_with_llm(svc, "mystical cosmic bond")
+        assert result is None
+
+        # Cache should have been cleared and now contain the negative entry
+        with _llm_classification_cache_lock:
+            assert len(_llm_classification_cache) == 1
+            assert _llm_classification_cache["mystical cosmic bond"] == ""
+
+    def test_cache_overflow_clears_on_llm_error(self):
+        """When cache is full and LLM fails, cache should be cleared."""
+        from src.services.world_quality_service._relationship import (
+            _LLM_CACHE_MAX_SIZE,
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        svc.client.generate.side_effect = ConnectionError("Ollama offline")
+
+        # Fill cache to capacity
+        with _llm_classification_cache_lock:
+            for i in range(_LLM_CACHE_MAX_SIZE):
+                _llm_classification_cache[f"filler_{i}"] = "friends"
+
+        result = _classify_relation_type_with_llm(svc, "deep ancestral link")
+        assert result is None
+
+        # Cache should have been cleared and now contain the negative entry
+        with _llm_classification_cache_lock:
+            assert len(_llm_classification_cache) == 1
+            assert _llm_classification_cache["deep ancestral link"] == ""
+
+    def test_key_error_returns_none_without_caching(self):
+        """KeyError from response parsing should return None without caching."""
+        from src.services.world_quality_service._relationship import (
+            _classify_relation_type_with_llm,
+            _llm_classification_cache,
+            _llm_classification_cache_lock,
+        )
+
+        svc = MagicMock()
+        svc._get_creator_model.return_value = "test-model:8b"
+        # Return dict missing the "response" key
+        svc.client.generate.return_value = {"unexpected_key": "value"}
+
+        result = _classify_relation_type_with_llm(svc, "arcane connection")
+        assert result is None
+
+        # Should NOT be cached (parsing errors are not cached)
+        with _llm_classification_cache_lock:
+            assert "arcane connection" not in _llm_classification_cache

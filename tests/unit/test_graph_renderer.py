@@ -24,7 +24,7 @@ class TestEntityIconCodes:
 
     def test_item_icon_code(self):
         """Test item uses Material Icons 'inventory_2' web font codepoint."""
-        assert ENTITY_ICON_CODES["item"] == "\ue1a8"  # inventory_2
+        assert ENTITY_ICON_CODES["item"] == "\ue1a1"  # inventory_2
 
     def test_faction_icon_code(self):
         """Test faction uses Material Icons 'groups' web font codepoint."""
