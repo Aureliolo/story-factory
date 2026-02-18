@@ -7,6 +7,7 @@ import pytest
 from src.memory.story_state import StoryBrief, StoryState
 from src.memory.world_quality import CalendarQualityScores, RefinementConfig
 from src.services.calendar_service import GeneratedCalendarData
+from src.services.world_quality_service import WorldQualityService
 from src.services.world_quality_service._calendar import (
     _create_calendar,
     _generated_data_to_world_calendar,
@@ -369,11 +370,143 @@ class TestCalendarContext:
 
     def test_get_calendar_context_returns_formatted_block(self, mock_svc, sample_calendar_dict):
         """Test that get_calendar_context returns a formatted prompt block."""
-        from src.services.world_quality_service import WorldQualityService
-
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         result = WorldQualityService.get_calendar_context(svc)
         assert "CALENDAR & TIMELINE:" in result
         assert "Age of Legends" in result
+
+
+class TestServiceWrapperMethods:
+    """Tests that exercise the WorldQualityService wrapper methods for calendar."""
+
+    def test_generate_calendar_with_quality_wrapper(self, settings, story_state):
+        """Test the public generate_calendar_with_quality delegates correctly."""
+        mode_service = MagicMock()
+        svc = WorldQualityService(settings, mode_service)
+
+        expected_scores = CalendarQualityScores(
+            internal_consistency=8.0,
+            thematic_fit=8.0,
+            completeness=8.0,
+            uniqueness=8.0,
+            feedback="Good.",
+        )
+        sample_data = GeneratedCalendarData(
+            era_name="Test",
+            era_abbreviation="T",
+            current_year=100,
+            months=[{"name": "M1", "days": 30, "description": ""}],
+            day_names=["D1"],
+            historical_eras=[
+                {"name": "Test", "start_year": 1, "end_year": None, "description": ""}
+            ],
+        )
+
+        with patch("src.services.world_quality_service._calendar.generate_structured") as mock_gen:
+            mock_gen.side_effect = [sample_data, expected_scores]
+            result_dict, result_scores, _iterations = svc.generate_calendar_with_quality(
+                story_state
+            )
+
+        assert isinstance(result_dict, dict)
+        assert isinstance(result_scores, CalendarQualityScores)
+
+    def test_create_calendar_wrapper(self, settings, story_state):
+        """Test the _create_calendar private delegate on the service."""
+        mode_service = MagicMock()
+        svc = WorldQualityService(settings, mode_service)
+
+        sample_data = GeneratedCalendarData(
+            era_name="Test",
+            era_abbreviation="T",
+            current_year=100,
+            months=[{"name": "M1", "days": 30, "description": ""}],
+            day_names=["D1"],
+            historical_eras=[
+                {"name": "Test", "start_year": 1, "end_year": None, "description": ""}
+            ],
+        )
+
+        with patch(
+            "src.services.world_quality_service._calendar.generate_structured",
+            return_value=sample_data,
+        ):
+            result = svc._create_calendar(story_state, 0.9)
+        assert isinstance(result, dict)
+
+    def test_judge_calendar_quality_wrapper(self, settings, story_state, sample_calendar_dict):
+        """Test the _judge_calendar_quality private delegate on the service."""
+        mode_service = MagicMock()
+        svc = WorldQualityService(settings, mode_service)
+
+        expected = CalendarQualityScores(
+            internal_consistency=7.0,
+            thematic_fit=8.0,
+            completeness=7.0,
+            uniqueness=6.0,
+            feedback="OK.",
+        )
+        with patch(
+            "src.services.world_quality_service._calendar.generate_structured",
+            return_value=expected,
+        ):
+            result = svc._judge_calendar_quality(sample_calendar_dict, story_state, 0.1)
+        assert isinstance(result, CalendarQualityScores)
+
+    def test_refine_calendar_wrapper(self, settings, story_state, sample_calendar_dict):
+        """Test the _refine_calendar private delegate on the service."""
+        mode_service = MagicMock()
+        svc = WorldQualityService(settings, mode_service)
+
+        scores = CalendarQualityScores(
+            internal_consistency=6.0,
+            thematic_fit=6.0,
+            completeness=6.0,
+            uniqueness=5.0,
+            feedback="Needs work.",
+        )
+        refined_data = GeneratedCalendarData(
+            era_name="Refined",
+            era_abbreviation="R",
+            current_year=200,
+            months=[{"name": "RM1", "days": 30, "description": ""}],
+            day_names=["RD1"],
+            historical_eras=[
+                {"name": "Refined", "start_year": 1, "end_year": None, "description": ""}
+            ],
+        )
+        with patch(
+            "src.services.world_quality_service._calendar.generate_structured",
+            return_value=refined_data,
+        ):
+            result = svc._refine_calendar(sample_calendar_dict, scores, story_state, 0.7)
+        assert isinstance(result, dict)
+
+
+class TestJudgeMultiCallBranch:
+    """Tests for the multi-call judge failure warning branch."""
+
+    def test_multi_call_judge_failure_raises_with_warning(
+        self, story_state, sample_calendar_dict, settings
+    ):
+        """Test that judge failure in multi-call mode logs a warning and raises."""
+        svc = MagicMock()
+        svc.settings = settings
+        svc._get_judge_model.return_value = "test-model:8b"
+        # Enable multi-call judging
+        svc.get_judge_config.return_value = MagicMock(
+            enabled=True,
+            multi_call_enabled=True,
+            multi_call_count=3,
+        )
+
+        with (
+            patch(
+                "src.services.world_quality_service._calendar.generate_structured",
+                side_effect=RuntimeError("LLM error"),
+            ),
+            pytest.raises(WorldGenerationError, match="Calendar quality judgment failed"),
+        ):
+            _judge_calendar_quality(svc, sample_calendar_dict, story_state, 0.1)

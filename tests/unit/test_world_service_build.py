@@ -1126,6 +1126,37 @@ class TestBuildWorld:
         # But other steps should have run
         assert counts["characters"] >= 2
 
+    def test_build_world_calendar_saves_to_existing_world_settings(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test calendar is saved to existing WorldSettings when one already exists."""
+        from src.memory.world_settings import WorldSettings
+
+        # Pre-create world settings so get_world_settings() returns non-None
+        existing_settings = WorldSettings()
+        mock_world_db.save_world_settings(existing_settings)
+
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert counts["calendar"] == 1
+        # Verify calendar was saved to the existing world settings
+        saved_settings = mock_world_db.get_world_settings()
+        assert saved_settings is not None
+        assert saved_settings.calendar is not None
+        assert saved_settings.calendar.current_era_name == "Test Era"
+
     def test_build_world_sets_calendar_context_for_downstream(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
