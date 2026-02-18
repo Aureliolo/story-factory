@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.memory.mode_models import VramStrategy
-from src.settings._types import AGENT_ROLES, LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
+from src.settings._types import LOG_LEVELS, REFINEMENT_TEMP_DECAY_CURVES
 
 if TYPE_CHECKING:
     from src.settings._settings import Settings
@@ -30,8 +30,7 @@ def validate(settings: Settings) -> bool:
     _validate_numeric_ranges(settings)
     _validate_interaction_mode(settings)
     _validate_vram_strategy(settings)
-    changed = _validate_temperatures(settings)
-    changed = _validate_agent_models(settings) or changed
+    _validate_temperatures(settings)
     _validate_task_temperatures(settings)
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
@@ -41,7 +40,7 @@ def validate(settings: Settings) -> bool:
     _validate_early_stopping(settings)
     _validate_circuit_breaker(settings)
     _validate_retry_strategy(settings)
-    changed = _validate_rag_context(settings) or changed
+    changed = _validate_rag_context(settings)
     changed = _validate_semantic_duplicate(settings) or changed
     _validate_temperature_decay_semantics(settings)
     _validate_judge_consistency(settings)
@@ -132,83 +131,15 @@ def _validate_vram_strategy(settings: Settings) -> None:
         )
 
 
-def _validate_temperatures(settings: Settings) -> bool:
-    """Validate agent temperature settings.
+def _validate_temperatures(settings: Settings) -> None:
+    """Validate agent temperature values are within range.
 
-    Returns:
-        True if missing agent temperatures were backfilled, False otherwise.
+    Structural checks (missing/extra keys) are handled by the merge step in
+    Settings.load(), so this only validates value ranges.
     """
-    expected_agents = set(AGENT_ROLES)
-
-    unknown_temp_agents = set(settings.agent_temperatures) - expected_agents
-    if unknown_temp_agents:
-        raise ValueError(
-            f"Unknown agent(s) in agent_temperatures: {sorted(unknown_temp_agents)}; "
-            f"expected only: {sorted(expected_agents)}"
-        )
-
-    # Backfill missing agents from defaults (e.g., "embedding" added after settings file saved)
-    from src.settings._settings import Settings as _Settings
-
-    default_temps = _Settings().agent_temperatures
-    missing_agents = expected_agents - set(settings.agent_temperatures)
-    changed = bool(missing_agents)
-    for agent in sorted(missing_agents):
-        settings.agent_temperatures[agent] = default_temps[agent]
-        logger.warning("Added missing agent temperature: %s=%.1f", agent, default_temps[agent])
-
     for agent, temp in settings.agent_temperatures.items():
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
-
-    return changed
-
-
-def _validate_agent_models(settings: Settings) -> bool:
-    """Validate agent_models dict — all expected roles must be present.
-
-    Raises on truly unknown roles and on missing roles (per "No default
-    fallbacks" rule).  Roles that use separate config fields (e.g.
-    "embedding") are silently removed if found — older UI/settings files
-    may have written them here by mistake.
-
-    Returns:
-        True if stale entries were removed, False otherwise.
-
-    Raises:
-        ValueError: If unknown or missing agent roles are found.
-    """
-    from src.settings._settings import Settings as _Settings
-
-    default_models = _Settings().agent_models
-    expected_agents = set(default_models)
-
-    # Roles that legitimately exist in AGENT_ROLES but belong in separate
-    # config fields — not an error, just a stale entry to clean up.
-    separate_config_roles = {"embedding"}
-
-    current_agents = set(settings.agent_models)
-    stale_roles = current_agents & separate_config_roles
-    changed = bool(stale_roles)
-    for role in stale_roles:
-        del settings.agent_models[role]
-        logger.warning("Removed '%s' from agent_models — it uses a separate config field", role)
-
-    unknown_model_agents = set(settings.agent_models) - expected_agents - separate_config_roles
-    if unknown_model_agents:
-        raise ValueError(
-            f"Unknown agent(s) in agent_models: {sorted(unknown_model_agents)}; "
-            f"expected only: {sorted(expected_agents)}"
-        )
-
-    missing_agents = expected_agents - set(settings.agent_models)
-    if missing_agents:
-        raise ValueError(
-            f"Missing agent(s) in agent_models: {sorted(missing_agents)}; "
-            f"expected: {sorted(expected_agents)}"
-        )
-
-    return changed
 
 
 def _validate_task_temperatures(settings: Settings) -> None:
@@ -892,32 +823,14 @@ def _validate_rag_context(settings: Settings) -> bool:
 
 
 def _validate_world_quality_thresholds(settings: Settings) -> None:
-    """Validate per-entity quality thresholds dict.
+    """Validate per-entity quality threshold values are within range.
 
-    Checks that all required entity types are present and values are in 0-10 range.
+    Structural checks (missing/extra keys) are handled by the merge step in
+    Settings.load(), so this only validates value ranges.
 
     Raises:
-        ValueError: If thresholds are invalid.
+        ValueError: If any threshold is out of range.
     """
-    from src.settings._settings import PER_ENTITY_QUALITY_DEFAULTS
-
-    expected_types = set(PER_ENTITY_QUALITY_DEFAULTS)
-    current_types = set(settings.world_quality_thresholds)
-
-    missing = expected_types - current_types
-    if missing:
-        raise ValueError(
-            f"world_quality_thresholds missing entity types: {sorted(missing)}; "
-            f"expected: {sorted(expected_types)}"
-        )
-
-    unknown = current_types - expected_types
-    if unknown:
-        raise ValueError(
-            f"world_quality_thresholds has unknown entity types: {sorted(unknown)}; "
-            f"expected only: {sorted(expected_types)}"
-        )
-
     for entity_type, threshold in settings.world_quality_thresholds.items():
         if not 0.0 <= threshold <= 10.0:
             raise ValueError(
