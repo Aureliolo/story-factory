@@ -4,6 +4,7 @@ import logging
 
 from nicegui import ui
 
+from src.memory.world_health import CycleInfo
 from src.ui.components.world_health_dashboard import WorldHealthDashboard
 from src.ui.graph_renderer import (
     render_centrality_result,
@@ -54,7 +55,7 @@ def refresh_health_dashboard(page, notify: bool = True) -> None:
             metrics=metrics,
             on_fix_orphan=page._handle_fix_orphan,
             on_view_circular=page._handle_view_circular,
-            on_dismiss_circular=page._handle_dismiss_circular,
+            on_accept_circular=page._handle_accept_circular,
             on_improve_quality=page._handle_improve_quality,
             # User-initiated refresh from dashboard button should show toast
             on_refresh=lambda: refresh_health_dashboard(page, notify=True),
@@ -98,24 +99,24 @@ async def handle_fix_orphan(page, entity_id: str) -> None:
         logger.warning(f"Could not find entity with id={entity_id} for orphan fix")
 
 
-async def handle_view_circular(page, cycle: dict) -> None:
+async def handle_view_circular(page, cycle: CycleInfo) -> None:
     """Handle view circular relationship chain request.
 
     Args:
         page: WorldPage instance.
-        cycle: Dictionary containing circular chain edge data.
+        cycle: CycleInfo containing circular chain edge data.
     """
     logger.debug(f"handle_view_circular called with cycle keys={list(cycle.keys())}")
-    edges = cycle.get("edges", [])
+    edges = cycle["edges"]
     if not edges:
         return
 
     # Build description of the cycle with source and target names for clarity
     hop_descriptions = []
     for edge in edges:
-        source = edge.get("source_name", edge.get("source", "?"))
-        target = edge.get("target_name", edge.get("target", "?"))
-        rel_type = edge.get("type", "?")
+        source = edge["source_name"]
+        target = edge["target_name"]
+        rel_type = edge["type"]
         hop_descriptions.append(f"{source} -[{rel_type}]-> {target}")
     cycle_desc = " ; ".join(hop_descriptions)
 
@@ -123,51 +124,47 @@ async def handle_view_circular(page, cycle: dict) -> None:
     ui.notify(f"Circular chain: {cycle_desc}", type="warning", timeout=10000)
 
 
-async def handle_dismiss_circular(page, cycle: dict) -> None:
-    """Handle dismiss/accept circular relationship chain request.
+async def handle_accept_circular(page, cycle: CycleInfo) -> None:
+    """Handle accept circular relationship chain as intentional.
 
     Marks the cycle as intentional so it is excluded from future health checks.
 
     Args:
         page: WorldPage instance.
-        cycle: Dictionary containing circular chain edge data.
+        cycle: CycleInfo containing circular chain edge data.
     """
-    logger.debug(f"handle_dismiss_circular called with cycle keys={list(cycle.keys())}")
+    logger.debug(f"handle_accept_circular called with cycle keys={list(cycle.keys())}")
     if not page.state.world_db:
-        logger.warning("Cannot dismiss circular chain: no world database loaded")
+        logger.warning("Cannot accept circular chain: no world database loaded")
         ui.notify("No world loaded. Open a project first.", type="warning")
         return
 
-    edges = cycle.get("edges", [])
+    edges = cycle["edges"]
     if not edges:
-        logger.warning("Cannot dismiss cycle with no edges")
+        logger.warning("Cannot accept cycle with no edges")
         return
 
     # Validate edge data before hashing
-    incomplete = [
-        e for e in edges if not e.get("source") or not e.get("type") or not e.get("target")
-    ]
+    incomplete = [e for e in edges if not e["source"] or not e["type"] or not e["target"]]
     if incomplete:
-        logger.warning("Cannot dismiss cycle with incomplete edge data: %s", incomplete)
+        logger.warning("Cannot accept cycle with incomplete edge data: %s", incomplete)
         ui.notify("Cycle data is incomplete. Refresh and try again.", type="warning")
         return
 
     # Build the (source_id, relation_type, target_id) tuples for hashing
-    cycle_tuples = [
-        (edge.get("source", ""), edge.get("type", ""), edge.get("target", "")) for edge in edges
-    ]
+    cycle_tuples = [(edge["source"], edge["type"], edge["target"]) for edge in edges]
     try:
         cycle_hash = page.state.world_db.compute_cycle_hash(cycle_tuples)
         page.state.world_db.accept_cycle(cycle_hash)
     except Exception as e:
         logger.error("Failed to accept circular chain: %s", e)
-        ui.notify(f"Failed to dismiss cycle: {e}", type="negative")
+        ui.notify(f"Failed to accept cycle: {e}", type="negative")
         return
 
     # Build readable description for the notification
     cycle_names: list[str] = []
     for edge in edges:
-        source_name = edge.get("source_name", edge.get("source", "?"))
+        source_name = edge["source_name"]
         if not cycle_names or cycle_names[-1] != source_name:
             cycle_names.append(source_name)
     cycle_desc = " -> ".join(cycle_names[:4])

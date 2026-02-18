@@ -224,11 +224,11 @@ class TestHealthMetricsFilterAcceptedCycles:
             db.close()
 
 
-class TestDismissHandlerHashConsistency:
-    """Test that the dismiss handler builds hashes consistent with health metrics."""
+class TestAcceptHandlerHashConsistency:
+    """Test that the accept handler builds hashes consistent with health metrics."""
 
     def test_hash_from_edge_dicts_matches_raw_tuples(self, tmp_path):
-        """Hash computed from edge dicts (UI dismiss path) must match raw tuple hash
+        """Hash computed from edge dicts (UI accept path) must match raw tuple hash
         (health metrics path) for the same cycle."""
         from src.services.world_service import WorldService
         from src.services.world_service._health import get_world_health_metrics
@@ -252,27 +252,24 @@ class TestDismissHandlerHashConsistency:
             metrics = get_world_health_metrics(svc, db)
             assert metrics.circular_count > 0
 
-            # Simulate what handle_dismiss_circular does: build tuples from edge dicts
+            # Simulate what handle_accept_circular does: build tuples from edge dicts
             cycle_dict = metrics.circular_relationships[0]
-            edges = cycle_dict.get("edges", [])
-            dismiss_tuples = [
-                (edge.get("source", ""), edge.get("type", ""), edge.get("target", ""))
-                for edge in edges
-            ]
-            dismiss_hash = db.compute_cycle_hash(dismiss_tuples)
+            edges = cycle_dict["edges"]
+            accept_tuples = [(edge["source"], edge["type"], edge["target"]) for edge in edges]
+            accept_hash = db.compute_cycle_hash(accept_tuples)
 
             # Get the raw cycle tuples (as health metrics filtering uses them)
             raw_cycles = db.find_circular_relationships()
             raw_hash = db.compute_cycle_hash(raw_cycles[0])
 
-            # These must match for the dismiss → filter chain to work
-            assert dismiss_hash == raw_hash, (
-                f"Hash mismatch: dismiss handler produces {dismiss_hash}, "
+            # These must match for the accept → filter chain to work
+            assert accept_hash == raw_hash, (
+                f"Hash mismatch: accept handler produces {accept_hash}, "
                 f"health metrics uses {raw_hash}"
             )
 
             # Verify it actually filters when accepted
-            db.accept_cycle(dismiss_hash)
+            db.accept_cycle(accept_hash)
             metrics_after = get_world_health_metrics(svc, db)
             assert metrics_after.circular_count == 0
         finally:
@@ -332,6 +329,202 @@ class TestImportExportAcceptedCycles:
             db.import_from_json(data)
             accepted = db.get_accepted_cycles()
             assert accepted == {valid_hash}
+        finally:
+            db.close()
+
+
+class TestSchemaV5ToV6Migration:
+    """Tests for schema migration from v5 (no accepted_cycles) to v6."""
+
+    def _create_v5_database(self, db_path):
+        """Create a raw SQLite database with v5 schema (no accepted_cycles table).
+
+        Args:
+            db_path: Path to the SQLite database file.
+        """
+        import sqlite3
+
+        from src.utils.sqlite_vec_loader import load_vec_extension
+
+        conn = sqlite3.connect(str(db_path))
+        load_vec_extension(conn)
+        cursor = conn.cursor()
+
+        # Schema version table with version 5
+        cursor.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
+        cursor.execute("INSERT INTO schema_version (version) VALUES (5)")
+
+        # Core entity table
+        cursor.execute("""
+            CREATE TABLE entities (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+        # Entity versions table
+        cursor.execute("""
+            CREATE TABLE entity_versions (
+                id TEXT PRIMARY KEY,
+                entity_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL,
+                data_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                change_type TEXT NOT NULL,
+                change_reason TEXT DEFAULT '',
+                quality_score REAL DEFAULT NULL,
+                FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Relationships table
+        cursor.execute("""
+            CREATE TABLE relationships (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                relation_type TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                strength REAL DEFAULT 1.0,
+                bidirectional INTEGER DEFAULT 0,
+                attributes TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (source_id) REFERENCES entities(id) ON DELETE CASCADE,
+                FOREIGN KEY (target_id) REFERENCES entities(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Events table
+        cursor.execute("""
+            CREATE TABLE events (
+                id TEXT PRIMARY KEY,
+                description TEXT NOT NULL,
+                chapter_number INTEGER,
+                timestamp_in_story TEXT DEFAULT '',
+                consequences TEXT DEFAULT '[]',
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        # Event participants
+        cursor.execute("""
+            CREATE TABLE event_participants (
+                event_id TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                PRIMARY KEY (event_id, entity_id),
+                FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+                FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+            )
+        """)
+
+        # World settings table
+        cursor.execute("""
+            CREATE TABLE world_settings (
+                id TEXT PRIMARY KEY,
+                calendar_json TEXT,
+                timeline_start_year INTEGER,
+                timeline_end_year INTEGER,
+                validate_temporal_consistency INTEGER DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+        # Historical eras table
+        cursor.execute("""
+            CREATE TABLE historical_eras (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                start_year INTEGER NOT NULL,
+                end_year INTEGER,
+                description TEXT DEFAULT '',
+                display_order INTEGER DEFAULT 0
+            )
+        """)
+
+        # Embedding metadata table
+        cursor.execute("""
+            CREATE TABLE embedding_metadata (
+                source_id TEXT PRIMARY KEY,
+                content_type TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                embedding_model TEXT NOT NULL,
+                embedded_at TEXT NOT NULL,
+                embedding_dim INTEGER NOT NULL
+            )
+        """)
+
+        # vec_embeddings virtual table
+        cursor.execute("""
+            CREATE VIRTUAL TABLE vec_embeddings USING vec0(
+                embedding float[1024],
+                content_type text partition key,
+                +source_id text,
+                +entity_type text,
+                +chapter_number integer,
+                +display_text text,
+                +embedding_model text,
+                +embedded_at text
+            )
+        """)
+
+        conn.commit()
+        conn.close()
+
+    def test_v5_database_upgraded_to_v6(self, tmp_path):
+        """Opening a v5 database should upgrade it to v6 with accepted_cycles table."""
+        db_path = tmp_path / "v5.db"
+        self._create_v5_database(db_path)
+
+        # Opening with WorldDatabase triggers _init_schema()
+        db = WorldDatabase(db_path)
+        try:
+            # Check schema version is now 6
+            cursor = db.conn.cursor()
+            cursor.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
+            row = cursor.fetchone()
+            assert row[0] == 6, f"Expected schema version 6, got {row[0]}"
+
+            # Check accepted_cycles table exists
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='accepted_cycles'"
+            )
+            assert cursor.fetchone() is not None, "accepted_cycles table should exist"
+
+            # Verify the table is functional
+            cycle_hash = "abcdef0123456789"
+            db.accept_cycle(cycle_hash)
+            accepted = db.get_accepted_cycles()
+            assert cycle_hash in accepted
+        finally:
+            db.close()
+
+    def test_v6_database_not_double_upgraded(self, tmp_path):
+        """Re-running _init_schema on a v6 database should preserve existing data."""
+        db = WorldDatabase(tmp_path / "v6.db")
+        try:
+            # Accept a cycle
+            cycle_hash = "1234567890abcdef"
+            db.accept_cycle(cycle_hash)
+            assert cycle_hash in db.get_accepted_cycles()
+
+            # Re-run schema init (simulates re-opening the database)
+            db._init_schema()
+
+            # Accepted cycle should still be present
+            assert cycle_hash in db.get_accepted_cycles()
+
+            # Schema version should still be 6
+            cursor = db.conn.cursor()
+            cursor.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
+            row = cursor.fetchone()
+            assert row[0] == 6
         finally:
             db.close()
 
