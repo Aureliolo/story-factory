@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 def init_schema(db: WorldDatabase) -> None:
     """Initialize database schema with versioning.
 
-    Creates all tables if they don't exist and handles version upgrades.
-    Currently supports migration from v5 (no accepted_cycles) to v6.
+    Creates all tables if they don't exist and bumps the schema version
+    if needed. The accepted_cycles table was added in v6.
 
     Args:
         db: WorldDatabase instance.

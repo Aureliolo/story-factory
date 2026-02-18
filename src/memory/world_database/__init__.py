@@ -31,7 +31,7 @@ from . import (
 
 logger = logging.getLogger(__name__)
 
-# Schema version stamped on new databases (all tables created fresh in _init_schema)
+# Schema version for new databases and migration target for existing ones
 SCHEMA_VERSION = 6
 
 # Valid entity types (whitelist)
@@ -337,7 +337,7 @@ class WorldDatabase:
 
         Args:
             entity_id: The entity to snapshot.
-            change_type: Type of change (e.g. 'created', 'updated', 'quality_improved').
+            change_type: Type of change ('created', 'refined', 'edited', or 'regenerated').
             change_reason: Optional human-readable reason for the change.
             quality_score: Optional quality score at time of snapshot.
 
@@ -368,7 +368,10 @@ class WorldDatabase:
             version_number: The version number to revert to.
 
         Returns:
-            True if reverted successfully, False if entity or version not found.
+            True if reverted successfully.
+
+        Raises:
+            ValueError: If the version or entity is not found.
         """
         return _versions.revert_entity_to_version(self, entity_id, version_number)
 
@@ -696,19 +699,50 @@ class WorldDatabase:
 
     @staticmethod
     def compute_cycle_hash(cycle_edges: list[tuple[str, str, str]]) -> str:
-        """Compute a deterministic hash for a cycle independent of traversal start."""
+        """Compute a deterministic hash for a cycle independent of traversal start.
+
+        Edges are sorted lexicographically to produce a canonical order,
+        so any permutation of the same edge set produces the same hash.
+
+        Args:
+            cycle_edges: List of (source_id, relation_type, target_id) tuples.
+
+        Returns:
+            16-character hex hash string.
+        """
         return _cycles.compute_cycle_hash(cycle_edges)
 
     def accept_cycle(self, cycle_hash: str) -> None:
-        """Mark a circular chain as accepted/intentional."""
+        """Mark a circular chain as accepted/intentional.
+
+        Args:
+            cycle_hash: Hash of the cycle (from compute_cycle_hash).
+
+        Raises:
+            ValueError: If cycle_hash is not exactly 16 hex characters.
+        """
         _cycles.accept_cycle(self, cycle_hash)
 
     def remove_accepted_cycle(self, cycle_hash: str) -> bool:
-        """Remove a previously accepted cycle, returning True if it was found."""
+        """Remove a previously accepted cycle.
+
+        Args:
+            cycle_hash: Hash of the cycle to un-accept.
+
+        Returns:
+            True if the cycle was removed, False if it wasn't found.
+
+        Raises:
+            ValueError: If cycle_hash is not exactly 16 hex characters.
+        """
         return _cycles.remove_accepted_cycle(self, cycle_hash)
 
     def get_accepted_cycles(self) -> set[str]:
-        """Get all accepted cycle hashes."""
+        """Get all accepted cycle hashes.
+
+        Returns:
+            Set of accepted cycle hash strings.
+        """
         return _cycles.get_accepted_cycles(self)
 
     # =========================================================================
@@ -803,7 +837,7 @@ class WorldDatabase:
     def attach_content_deleted_callback(self, callback: Callable[[str], None] | None) -> None:
         """Register a callback to be invoked when content is deleted.
 
-        The callback receives (source_id,) and is called after delete operations.
+        The callback receives the source_id string and is called after delete operations.
 
         Args:
             callback: Callable with signature (str,) -> None, or None to detach.

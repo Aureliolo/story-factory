@@ -20,7 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 class CycleEdge(TypedDict):
-    """A single edge in a circular relationship chain."""
+    """A single edge in a circular relationship chain.
+
+    Attributes:
+        source: Source entity ID.
+        source_name: Human-readable source entity name.
+        type: Relationship type (e.g. 'leads', 'parent_of').
+        target: Target entity ID.
+        target_name: Human-readable target entity name.
+    """
 
     source: str
     source_name: str
@@ -30,7 +38,12 @@ class CycleEdge(TypedDict):
 
 
 class CycleInfo(TypedDict):
-    """A circular relationship chain with its edges and length."""
+    """A circular relationship chain with its edges and length.
+
+    Attributes:
+        edges: Ordered list of edges forming the cycle.
+        length: Number of edges in the cycle.
+    """
 
     edges: list[CycleEdge]
     length: int
