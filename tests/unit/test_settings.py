@@ -451,29 +451,28 @@ class TestSettingsValidation:
         """Should raise ValueError for relationship_minimums with non-string keys."""
         settings = Settings()
         settings.relationship_minimums = {123: {"protagonist": 5}}  # type: ignore[dict-item]
-        with pytest.raises(ValueError, match="relationship_minimums keys must be strings"):
+        with pytest.raises(ValueError, match="Unknown keys in relationship_minimums"):
             settings.validate()
 
     def test_validate_raises_on_relationship_minimums_value_not_dict(self):
         """Should raise ValueError for relationship_minimums with non-dict values."""
         settings = Settings()
-        settings.relationship_minimums = {"character": [("protagonist", 5)]}  # type: ignore[dict-item]
+        # Set only the "character" value to non-dict, keep others intact
+        settings.relationship_minimums["character"] = [("protagonist", 5)]  # type: ignore[assignment]
         with pytest.raises(ValueError, match=r"relationship_minimums\[character\] must be a dict"):
             settings.validate()
 
     def test_validate_raises_on_relationship_minimums_role_not_string(self):
         """Should raise ValueError for relationship_minimums with non-string role keys."""
         settings = Settings()
-        settings.relationship_minimums = {"character": {123: 5}}  # type: ignore[dict-item]
-        with pytest.raises(
-            ValueError, match=r"relationship_minimums\[character\] keys must be strings"
-        ):
+        settings.relationship_minimums["character"] = {123: 5}  # type: ignore[dict-item]
+        with pytest.raises(ValueError, match=r"Unknown keys in relationship_minimums\[character\]"):
             settings.validate()
 
     def test_validate_raises_on_relationship_minimums_count_not_int(self):
         """Should raise ValueError for relationship_minimums with non-int min_count."""
         settings = Settings()
-        settings.relationship_minimums = {"character": {"protagonist": "five"}}  # type: ignore[dict-item]
+        settings.relationship_minimums["character"]["protagonist"] = "five"  # type: ignore[assignment]
         with pytest.raises(
             ValueError,
             match=r"relationship_minimums\[character\]\[protagonist\] must be a non-negative integer",
@@ -483,7 +482,7 @@ class TestSettingsValidation:
     def test_validate_raises_on_relationship_minimums_count_negative(self):
         """Should raise ValueError for relationship_minimums with negative min_count."""
         settings = Settings()
-        settings.relationship_minimums = {"character": {"protagonist": -1}}
+        settings.relationship_minimums["character"]["protagonist"] = -1
         with pytest.raises(
             ValueError,
             match=r"relationship_minimums\[character\]\[protagonist\] must be a non-negative integer",
@@ -494,7 +493,7 @@ class TestSettingsValidation:
         """Should raise ValueError when minimum exceeds max_relationships_per_entity."""
         settings = Settings()
         settings.max_relationships_per_entity = 5
-        settings.relationship_minimums = {"character": {"protagonist": 10}}  # Exceeds max of 5
+        settings.relationship_minimums["character"]["protagonist"] = 10  # Exceeds max of 5
         with pytest.raises(
             ValueError,
             match=r"relationship_minimums\[character\]\[protagonist\] \(10\) exceeds "
@@ -689,6 +688,37 @@ class TestSettingsSaveLoad:
         with pytest.raises(ValueError, match="context_size must be between"):
             Settings.load()
 
+    def test_load_wraps_wrong_type_scalar_as_value_error(self, tmp_path, monkeypatch):
+        """Wrong-type scalar in JSON (e.g. string for int) raises ValueError, not TypeError."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        data = {"context_size": "not_a_number"}
+        with open(settings_file, "w") as f:
+            json.dump(data, f)
+
+        with pytest.raises(ValueError, match="A setting has an invalid type"):
+            Settings.load()
+
+    def test_load_does_not_save_on_validation_failure(self, tmp_path, monkeypatch):
+        """Settings file on disk is NOT rewritten when validate() raises."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        # Write settings with an invalid value (too low)
+        data = {"context_size": 500}
+        with open(settings_file, "w") as f:
+            json.dump(data, f)
+        original_content = settings_file.read_text()
+
+        with pytest.raises(ValueError):
+            Settings.load()
+
+        # File should be unchanged after the failed load
+        assert settings_file.read_text() == original_content
+
     def test_load_caches_settings(self, tmp_path, monkeypatch):
         """Test load() returns cached instance on subsequent calls."""
         settings_file = tmp_path / "settings.json"
@@ -738,9 +768,65 @@ class TestSettingsSaveLoad:
 
         assert settings1 is not settings2
 
+    def test_load_with_old_agent_models_preserves_settings(self, tmp_path, monkeypatch):
+        """Loading settings with missing agent roles doesn't nuke everything."""
+        settings_file = tmp_path / "settings.json"
+        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
+        Settings.clear_cache()
+
+        # Write an old settings file missing "judge" and with extra "validator"
+        old_data = {
+            "log_level": "DEBUG",
+            "ollama_url": "http://custom:9999",
+            "agent_models": {
+                "interviewer": "auto",
+                "architect": "auto",
+                "writer": "my-writer:7b",
+                "editor": "auto",
+                "continuity": "auto",
+                "suggestion": "auto",
+                "validator": "auto",
+            },
+            "agent_temperatures": {
+                "interviewer": 0.7,
+                "architect": 0.85,
+                "writer": 0.9,
+                "editor": 0.6,
+                "continuity": 0.3,
+                "suggestion": 0.8,
+                "validator": 0.1,
+            },
+        }
+        with open(settings_file, "w") as f:
+            json.dump(old_data, f)
+
+        settings = Settings.load()
+
+        # User customizations preserved
+        assert settings.log_level == "DEBUG"
+        assert settings.ollama_url == "http://custom:9999"
+        assert settings.agent_models["writer"] == "my-writer:7b"
+        # Obsolete "validator" removed, new "judge" added
+        assert "validator" not in settings.agent_models
+        assert settings.agent_models["judge"] == "auto"
+        assert "validator" not in settings.agent_temperatures
+        assert settings.agent_temperatures["judge"] == 0.1
+
 
 class TestMergeWithDefaults:
     """Tests for the _merge_with_defaults function used during Settings.load()."""
+
+    def test_field_tuples_reference_real_settings_fields(self):
+        """_STRUCTURED_DICT_FIELDS and _NESTED_DICT_FIELDS reference real dict fields."""
+        from dataclasses import fields as dc_fields
+
+        from src.settings._settings import _NESTED_DICT_FIELDS, _STRUCTURED_DICT_FIELDS
+
+        known = {f.name for f in dc_fields(Settings)}
+        for name in _STRUCTURED_DICT_FIELDS + _NESTED_DICT_FIELDS:
+            assert name in known, f"{name} is not a field on Settings"
+            default_val = getattr(Settings(), name)
+            assert isinstance(default_val, dict), f"{name} default is not a dict"
 
     def test_adds_missing_top_level_fields(self):
         """Missing settings are added with their default values."""
@@ -926,49 +1012,98 @@ class TestMergeWithDefaults:
         assert isinstance(data["relationship_minimums"]["character"], dict)
         assert "protagonist" in data["relationship_minimums"]["character"]
 
-    def test_load_with_old_agent_models_preserves_settings(self, tmp_path, monkeypatch):
-        """Loading settings with missing agent roles doesn't nuke everything."""
-        settings_file = tmp_path / "settings.json"
-        monkeypatch.setattr("src.settings._settings.SETTINGS_FILE", settings_file)
-        Settings.clear_cache()
 
-        # Write an old settings file missing "judge" and with extra "validator"
-        old_data = {
-            "log_level": "DEBUG",
-            "ollama_url": "http://custom:9999",
-            "agent_models": {
-                "interviewer": "auto",
-                "architect": "auto",
-                "writer": "my-writer:7b",
-                "editor": "auto",
-                "continuity": "auto",
-                "suggestion": "auto",
-                "validator": "auto",
-            },
-            "agent_temperatures": {
-                "interviewer": 0.7,
-                "architect": 0.85,
-                "writer": 0.9,
-                "editor": 0.6,
-                "continuity": 0.3,
-                "suggestion": 0.8,
-                "validator": 0.1,
-            },
-        }
-        with open(settings_file, "w") as f:
-            json.dump(old_data, f)
+class TestDictStructureValidation:
+    """Tests for _validate_dict_structure in validate()."""
 
-        settings = Settings.load()
+    def test_rejects_unknown_key_in_agent_models(self):
+        """Unknown agent role in agent_models should raise ValueError."""
+        settings = Settings()
+        settings.agent_models["unknown_agent"] = "some-model:8b"
+        with pytest.raises(ValueError, match="Unknown keys in agent_models"):
+            settings.validate()
 
-        # User customizations preserved
-        assert settings.log_level == "DEBUG"
-        assert settings.ollama_url == "http://custom:9999"
-        assert settings.agent_models["writer"] == "my-writer:7b"
-        # Obsolete "validator" removed, new "judge" added
-        assert "validator" not in settings.agent_models
-        assert settings.agent_models["judge"] == "auto"
-        assert "validator" not in settings.agent_temperatures
-        assert settings.agent_temperatures["judge"] == 0.1
+    def test_rejects_missing_key_in_agent_models(self):
+        """Missing agent role in agent_models should raise ValueError."""
+        settings = Settings()
+        del settings.agent_models["judge"]
+        with pytest.raises(ValueError, match="Missing keys in agent_models"):
+            settings.validate()
+
+    def test_rejects_unknown_key_in_agent_temperatures(self):
+        """Unknown agent in agent_temperatures should raise ValueError."""
+        settings = Settings()
+        settings.agent_temperatures["unknown_agent"] = 0.5
+        with pytest.raises(ValueError, match="Unknown keys in agent_temperatures"):
+            settings.validate()
+
+    def test_rejects_unknown_entity_type_in_thresholds(self):
+        """Unknown entity type in world_quality_thresholds should raise ValueError."""
+        settings = Settings()
+        settings.world_quality_thresholds["alien"] = 5.0
+        with pytest.raises(ValueError, match="Unknown keys in world_quality_thresholds"):
+            settings.validate()
+
+    def test_rejects_unknown_outer_key_in_nested_dict(self):
+        """Unknown outer key in relationship_minimums should raise ValueError."""
+        settings = Settings()
+        settings.relationship_minimums["alien"] = {"warrior": 3}
+        with pytest.raises(ValueError, match="Unknown keys in relationship_minimums"):
+            settings.validate()
+
+    def test_rejects_unknown_inner_key_in_nested_dict(self):
+        """Unknown inner key in relationship_minimums should raise ValueError."""
+        settings = Settings()
+        settings.relationship_minimums["character"]["legendary"] = 99
+        with pytest.raises(ValueError, match=r"Unknown keys in relationship_minimums\[character\]"):
+            settings.validate()
+
+    def test_passes_for_valid_default_settings(self):
+        """Default settings should pass structural validation."""
+        settings = Settings()
+        settings.validate()  # Should not raise
+
+
+class TestAtomicWrite:
+    """Tests for _atomic_write_json function."""
+
+    def test_writes_json_to_file(self, tmp_path):
+        """Should write valid JSON to the target path."""
+        from src.settings._settings import _atomic_write_json
+
+        target = tmp_path / "test.json"
+        _atomic_write_json(target, {"key": "value"})
+
+        assert target.exists()
+        with open(target) as f:
+            data = json.load(f)
+        assert data == {"key": "value"}
+
+    def test_no_temp_file_left_on_success(self, tmp_path):
+        """No .tmp files should remain after successful write."""
+        from src.settings._settings import _atomic_write_json
+
+        target = tmp_path / "test.json"
+        _atomic_write_json(target, {"key": "value"})
+
+        tmp_files = list(tmp_path.glob("*.tmp"))
+        assert tmp_files == []
+
+    def test_no_partial_write_on_json_error(self, tmp_path):
+        """If JSON serialization fails, the target file is not created."""
+        from src.settings._settings import _atomic_write_json
+
+        target = tmp_path / "test.json"
+
+        class Unserializable:
+            pass
+
+        with pytest.raises(TypeError):
+            _atomic_write_json(target, {"bad": Unserializable()})
+
+        assert not target.exists()
+        tmp_files = list(tmp_path.glob("*.tmp"))
+        assert tmp_files == []
 
 
 class TestSettingsGetModelForAgent:

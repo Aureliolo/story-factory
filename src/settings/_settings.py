@@ -5,7 +5,9 @@ Settings are stored in settings.json and can be modified via the web UI.
 
 import json
 import logging
+import os
 import shutil
+import tempfile
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any, ClassVar
 
@@ -37,6 +39,8 @@ PER_ENTITY_QUALITY_DEFAULTS: dict[str, float] = {
 
 # Dict fields with fixed expected sub-keys — merged on load so that
 # new sub-keys get defaults and removed ones are cleaned up.
+# MAINTAINERS: Add any new Settings dict field with a fixed key set here.
+# Free-form user dicts (e.g. custom_model_tags) are intentionally excluded.
 _STRUCTURED_DICT_FIELDS = ("agent_models", "agent_temperatures", "world_quality_thresholds")
 _NESTED_DICT_FIELDS = ("relationship_minimums",)
 
@@ -150,6 +154,27 @@ def _merge_with_defaults(data: dict[str, Any], settings_cls: type) -> bool:
                         changed = True
 
     return changed
+
+
+def _atomic_write_json(path: Any, data: dict[str, Any]) -> None:
+    """Write JSON to *path* atomically via a temp file + rename.
+
+    Prevents partial writes from corrupting the settings file on disk
+    failure, power loss, or process kill.
+    """
+    parent = getattr(path, "parent", None)
+    dir_path = str(parent) if parent is not None else "."
+    fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp_path, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 @dataclass
@@ -464,8 +489,7 @@ class Settings:
         """Save settings to JSON file."""
         # Validate before saving
         self.validate()
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(asdict(self), f, indent=2)
+        _atomic_write_json(SETTINGS_FILE, asdict(self))
 
     def validate(self) -> bool:
         """Validate all settings fields. Delegates to _validation module.
@@ -519,19 +543,22 @@ class Settings:
         # Merge structure with defaults: add new fields, remove obsolete ones
         changed = _merge_with_defaults(data, cls)
 
-        # Construct settings from merged data
+        # Construct settings from merged data and validate value ranges.
+        # TypeError can occur if the JSON has wrong types for fields (e.g.
+        # "context_size": "not_a_number") — wrap as ValueError for clarity.
         try:
             settings = cls(**data)
+            # Validate value ranges (may auto-migrate some values).
+            # validate() must be on the LEFT of `or` so it always runs — if
+            # `changed` were on the left, a True from _merge_with_defaults
+            # would short-circuit and silently skip value migrations.
+            changed = settings.validate() or changed
         except TypeError as e:
             raise ValueError(f"A setting has an invalid type: {e}") from e
 
-        # Validate value ranges (may auto-migrate some values)
-        changed = settings.validate() or changed
-
         if changed:
             logger.info("Settings updated during load, saving to disk")
-            with open(SETTINGS_FILE, "w") as f:
-                json.dump(asdict(settings), f, indent=2)
+            _atomic_write_json(SETTINGS_FILE, asdict(settings))
 
         cls._cached_instance = settings
         return settings

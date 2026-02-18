@@ -31,6 +31,7 @@ def validate(settings: Settings) -> bool:
     _validate_interaction_mode(settings)
     _validate_vram_strategy(settings)
     _validate_temperatures(settings)
+    _validate_dict_structure(settings)
     _validate_task_temperatures(settings)
     _validate_learning_settings(settings)
     _validate_data_integrity(settings)
@@ -140,6 +141,83 @@ def _validate_temperatures(settings: Settings) -> None:
     for agent, temp in settings.agent_temperatures.items():
         if not 0.0 <= temp <= 2.0:
             raise ValueError(f"Temperature for {agent} must be between 0.0 and 2.0, got {temp}")
+
+
+def _validate_dict_structure(settings: Settings) -> None:
+    """Validate that fixed-key dict fields have exactly the expected keys.
+
+    The merge step in Settings.load() handles adding/removing keys gracefully,
+    but validate() is also called from save() and the UI.  This catch-all
+    rejects unknown or missing keys so programmatic mutations that bypass
+    load() can't silently persist invalid structure.
+
+    Raises:
+        ValueError: If any dict field has unknown or missing keys.
+    """
+    from src.settings._settings import (
+        _NESTED_DICT_FIELDS,
+        _STRUCTURED_DICT_FIELDS,
+    )
+    from src.settings._settings import (
+        Settings as _Settings,
+    )
+
+    default_instance = _Settings()
+
+    for field_name in _STRUCTURED_DICT_FIELDS:
+        current = getattr(settings, field_name)
+        if not isinstance(current, dict):
+            continue  # Type error caught by downstream validators
+        expected = set(getattr(default_instance, field_name))
+        actual = set(current)
+        unknown = actual - expected
+        if unknown:
+            raise ValueError(
+                f"Unknown keys in {field_name}: {sorted(unknown)}; "
+                f"expected only: {sorted(expected)}"
+            )
+        missing = expected - actual
+        if missing:
+            raise ValueError(
+                f"Missing keys in {field_name}: {sorted(missing)}; expected: {sorted(expected)}"
+            )
+
+    for field_name in _NESTED_DICT_FIELDS:
+        default_outer = getattr(default_instance, field_name)
+        current_outer = getattr(settings, field_name)
+        if not isinstance(current_outer, dict):
+            continue  # Type error caught by downstream validators
+        unknown_outer = set(current_outer) - set(default_outer)
+        if unknown_outer:
+            raise ValueError(
+                f"Unknown keys in {field_name}: {sorted(unknown_outer)}; "
+                f"expected only: {sorted(default_outer)}"
+            )
+        missing_outer = set(default_outer) - set(current_outer)
+        if missing_outer:
+            raise ValueError(
+                f"Missing keys in {field_name}: {sorted(missing_outer)}; "
+                f"expected: {sorted(default_outer)}"
+            )
+        for outer_key, default_inner in default_outer.items():
+            if isinstance(default_inner, dict) and outer_key in current_outer:
+                inner = current_outer[outer_key]
+                if not isinstance(inner, dict):
+                    raise ValueError(
+                        f"{field_name}[{outer_key}] must be a dict, got {type(inner).__name__}"
+                    )
+                unknown_inner = set(inner) - set(default_inner)
+                if unknown_inner:
+                    raise ValueError(
+                        f"Unknown keys in {field_name}[{outer_key}]: "
+                        f"{sorted(unknown_inner)}; expected only: {sorted(default_inner)}"
+                    )
+                missing_inner = set(default_inner) - set(inner)
+                if missing_inner:
+                    raise ValueError(
+                        f"Missing keys in {field_name}[{outer_key}]: "
+                        f"{sorted(missing_inner)}; expected: {sorted(default_inner)}"
+                    )
 
 
 def _validate_task_temperatures(settings: Settings) -> None:
