@@ -461,8 +461,11 @@ def quality_refinement_loop[T, S: BaseQualityScores](
                 scoring_rounds,
             )
 
-    # Fallback to last iteration
-    if entity is not None and not is_empty(entity) and scores is not None:
+    # Fallback to last iteration — defensive path: best_entity_data is expected
+    # to be set by the time we reach here (every successful judge call populates
+    # history.iterations). This branch guards against edge cases where
+    # get_best_entity() returns None despite having a valid entity/scores pair.
+    if entity is not None and not is_empty(entity) and scores is not None:  # pragma: no cover
         logger.warning(
             "%s '%s' did not meet quality threshold (%.1f < %.1f), returning anyway",
             entity_type.capitalize(),
