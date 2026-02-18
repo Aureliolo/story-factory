@@ -482,17 +482,27 @@ class TestShouldStopEarlyPlateau:
 class TestShouldStopEarlyNoPeak:
     """Test should_stop_early() when best_iteration is 0 (no peak established)."""
 
-    def test_returns_false_when_no_peak_even_with_enough_iterations(self):
-        """should_stop_early returns False when best_iteration is 0 (all zero scores)."""
+    def test_zero_scores_still_track_best_iteration(self):
+        """First iteration always becomes best, even with zero scores."""
         history = RefinementHistory(entity_type="character", entity_name="Test")
-        # All zero scores: best_iteration stays 0 because 0.0 is not > 0.0 (peak_score)
+        # All zero scores: first iteration sets best_iteration=1
         history.add_iteration(entity_data={"v": 1}, scores={"s": 0.0}, average_score=0.0)
         history.add_iteration(entity_data={"v": 2}, scores={"s": 0.0}, average_score=0.0)
         history.add_iteration(entity_data={"v": 3}, scores={"s": 0.0}, average_score=0.0)
 
-        assert history.best_iteration == 0
+        assert history.best_iteration == 1
         assert len(history.iterations) == 3
-        # Even with enough iterations and plateaus, returns False when no peak
+        # Plateau detected (2 consecutive), so early stop triggers
+        assert history.should_stop_early(patience=2, min_iterations=2) is True
+
+    def test_returns_false_when_best_iteration_manually_unset(self):
+        """Defensive guard: should_stop_early returns False when best_iteration is 0."""
+        history = RefinementHistory(entity_type="character", entity_name="Test")
+        history.add_iteration(entity_data={"v": 1}, scores={"s": 0.0}, average_score=0.0)
+        history.add_iteration(entity_data={"v": 2}, scores={"s": 0.0}, average_score=0.0)
+        history.add_iteration(entity_data={"v": 3}, scores={"s": 0.0}, average_score=0.0)
+        # Manually reset to test defensive guard
+        history.best_iteration = 0
         assert history.should_stop_early(patience=2, min_iterations=2) is False
 
 
