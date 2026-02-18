@@ -14,13 +14,14 @@ Tests cover:
 """
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.memory.world_quality import (
     CharacterQualityScores,
     RefinementConfig,
+    RefinementHistory,
 )
 from src.services.world_quality_service._quality_loop import quality_refinement_loop
 from src.utils.exceptions import WorldGenerationError
@@ -1876,3 +1877,39 @@ class TestScorePlateauEarlyStop:
         # All 3 iterations should run (0.2 difference > 0.1 tolerance)
         # +1 for hail-mary fresh creation judge call (threshold not met)
         assert scoring_rounds == 4
+
+
+class TestFallbackWhenBestEntityNotFound:
+    """Test defensive fallback when get_best_entity returns None."""
+
+    @patch.object(RefinementHistory, "get_best_entity", return_value=None)
+    def test_returns_last_entity_when_best_not_found(self, _mock_get_best, mock_svc):
+        """Fallback returns current entity/scores when best_entity_data is None."""
+        config = RefinementConfig(
+            quality_threshold=8.0,
+            quality_thresholds=_all_thresholds(8.0),
+            max_iterations=1,
+            early_stopping_patience=2,
+            early_stopping_min_iterations=2,
+        )
+        entity = {"name": "Hero"}
+        scores = _make_scores(5.0, feedback="Below threshold")
+
+        result, result_scores, scoring_rounds = quality_refinement_loop(
+            entity_type="character",
+            create_fn=lambda retries: entity,
+            judge_fn=lambda e: scores,
+            refine_fn=lambda e, s, i: e,
+            get_name=lambda e: e["name"],
+            serialize=lambda e: e.copy(),
+            is_empty=lambda e: not e.get("name"),
+            score_cls=CharacterQualityScores,
+            config=config,
+            svc=mock_svc,
+            story_id="test-story",
+        )
+
+        # Fallback returns the current entity since best was not found
+        assert result["name"] == "Hero"
+        assert result_scores.average == 5.0
+        assert scoring_rounds == 1
