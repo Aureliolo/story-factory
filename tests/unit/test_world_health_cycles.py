@@ -373,6 +373,10 @@ class TestSchemaV5ToV6Migration:
     def _create_v5_database(self, db_path):
         """Create a raw SQLite database with v5 schema (no accepted_cycles table).
 
+        This is a frozen snapshot of the v5 schema used only for migration tests.
+        Do NOT update this to match later schema versions — it must stay as-is to
+        verify that WorldDatabase correctly upgrades from v5 to v6.
+
         This manually creates all tables that existed before v6, setting the
         schema_version to 5. The WorldDatabase constructor should upgrade it to v6.
         """

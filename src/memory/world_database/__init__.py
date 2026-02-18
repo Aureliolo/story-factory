@@ -849,8 +849,6 @@ class WorldDatabase:
         Args:
             settings: WorldSettings instance to save.
         """
-        from datetime import datetime
-
         logger.debug(f"Saving world settings: id={settings.id}")
         calendar_json = json.dumps(settings.calendar.to_dict()) if settings.calendar else None
         now = datetime.now().isoformat()
