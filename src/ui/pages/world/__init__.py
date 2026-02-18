@@ -31,12 +31,13 @@ from nicegui.elements.input import Input
 from nicegui.elements.select import Select
 from nicegui.elements.textarea import Textarea
 
+from src.memory.world_health import CycleInfo
 from src.services import ServiceContainer
 from src.ui.components.graph import GraphComponent
 from src.ui.pages.world._analysis import (
     build_analysis_section,
     build_health_section,
-    handle_dismiss_circular,
+    handle_accept_circular,
     handle_fix_orphan,
     handle_improve_quality,
     handle_view_circular,
@@ -332,13 +333,13 @@ class WorldPage:
         """Handle fix orphan entity request."""
         await handle_fix_orphan(self, entity_id)
 
-    async def _handle_view_circular(self, cycle: dict) -> None:
+    async def _handle_view_circular(self, cycle: CycleInfo) -> None:
         """Handle view circular relationship chain request."""
         await handle_view_circular(self, cycle)
 
-    async def _handle_dismiss_circular(self, cycle: dict) -> None:
-        """Handle dismiss/accept circular relationship chain request."""
-        await handle_dismiss_circular(self, cycle)
+    async def _handle_accept_circular(self, cycle: CycleInfo) -> None:
+        """Handle accept circular relationship chain request."""
+        await handle_accept_circular(self, cycle)
 
     async def _handle_improve_quality(self, entity_id: str) -> None:
         """Handle improve entity quality request."""

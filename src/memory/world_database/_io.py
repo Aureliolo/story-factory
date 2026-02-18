@@ -118,14 +118,13 @@ def import_from_json(db, data: dict[str, Any]) -> None:
                 )
 
         # Import accepted cycles
+        from . import _cycles
+
         for cycle_hash in data.get("accepted_cycles", []):
-            if not cycle_hash or len(cycle_hash) != 16:
-                logger.warning("Skipping invalid accepted cycle hash on import: %r", cycle_hash)
-                continue
             try:
-                int(cycle_hash, 16)
+                _cycles.validate_cycle_hash(cycle_hash)
             except ValueError:
-                logger.warning("Skipping non-hex accepted cycle hash on import: %r", cycle_hash)
+                logger.warning("Skipping invalid accepted cycle hash on import: %r", cycle_hash)
                 continue
             cursor.execute(
                 "INSERT OR REPLACE INTO accepted_cycles (cycle_hash, accepted_at) VALUES (?, ?)",
