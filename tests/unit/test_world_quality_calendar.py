@@ -285,6 +285,37 @@ class TestRefineCalendar:
         ):
             _refine_calendar(mock_svc, sample_calendar_dict, scores, story_state, 0.7)
 
+    def test_preserves_era_name_warns_when_missing(self, mock_svc, story_state):
+        """Test refinement warns and falls back to 'Unknown' when original era name is missing."""
+        scores = CalendarQualityScores(
+            internal_consistency=6.0,
+            thematic_fit=6.0,
+            completeness=6.0,
+            uniqueness=5.0,
+            feedback="Needs improvement.",
+        )
+        # Calendar dict WITHOUT current_era_name
+        calendar_no_era = {
+            "era_abbreviation": "AL",
+            "current_story_year": 342,
+            "months": [{"name": "Frostmoon", "days": 30}],
+            "eras": [{"name": "Age of Legends", "start_year": 1}],
+        }
+        refined_data = GeneratedCalendarData(
+            era_name="Refined Era",
+            era_abbreviation="RE",
+            current_year=342,
+            months=[{"name": "Deepwinter", "days": 30}],
+            day_names=["Sunrest"],
+            historical_eras=[{"name": "Age of Legends", "start_year": 1}],
+        )
+        with patch(
+            "src.services.world_quality_service._calendar.generate_structured",
+            return_value=refined_data,
+        ):
+            result = _refine_calendar(mock_svc, calendar_no_era, scores, story_state, 0.7)
+        assert result["current_era_name"] == "Unknown"
+
 
 class TestGeneratedDataToWorldCalendar:
     """Tests for _generated_data_to_world_calendar helper."""
@@ -312,6 +343,20 @@ class TestGeneratedDataToWorldCalendar:
         calendar = _generated_data_to_world_calendar(data)
         assert calendar.months[0].name == "Month 1"
         assert calendar.eras[0].name == "Era 1"
+
+    def test_empty_eras_uses_fallback_start_year(self):
+        """Test that empty eras list results in fallback era_start_year=1."""
+        data = GeneratedCalendarData(
+            era_name="Lonely Era",
+            era_abbreviation="LE",
+            current_year=500,
+            months=[{"name": "Onlymonth", "days": 30}],
+            day_names=["Day1"],
+            historical_eras=[],  # No eras
+        )
+        calendar = _generated_data_to_world_calendar(data)
+        assert calendar.era_start_year == 1
+        assert calendar.eras == []
 
 
 class TestCalendarContext:
@@ -385,6 +430,17 @@ class TestCalendarContext:
         result = WorldQualityService.get_calendar_context(svc)
         assert "CALENDAR & TIMELINE:" in result
         assert "Age of Legends" in result
+
+    def test_set_calendar_context_warns_on_empty_dict(self):
+        """Test that set_calendar_context warns when dict produces no extractable context."""
+        from src.services.world_quality_service import WorldQualityService
+
+        svc = MagicMock(spec=WorldQualityService)
+        svc._calendar_context = None
+        svc._calendar_context_lock = threading.RLock()
+        # Empty dict with no usable fields
+        WorldQualityService.set_calendar_context(svc, {})
+        assert svc._calendar_context is None
 
 
 class TestServiceWrapperMethods:

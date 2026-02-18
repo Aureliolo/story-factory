@@ -1126,6 +1126,24 @@ class TestBuildWorld:
         # But other steps should have run
         assert counts["characters"] >= 2
 
+    def test_build_world_calendar_cancellation_propagates(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that GenerationCancelledError during calendar is not swallowed."""
+        from src.utils.exceptions import GenerationCancelledError
+
+        mock_services.world_quality.generate_calendar_with_quality.side_effect = (
+            GenerationCancelledError("User cancelled")
+        )
+
+        with pytest.raises(GenerationCancelledError):
+            world_service.build_world(
+                sample_story_state,
+                mock_world_db,
+                mock_services,
+                WorldBuildOptions.full(),
+            )
+
     def test_build_world_calendar_saves_to_existing_world_settings(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
