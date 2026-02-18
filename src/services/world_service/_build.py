@@ -27,6 +27,116 @@ logger = logging.getLogger(__name__)
 # Cap relationship count at this ratio of entity count to avoid excessive duplicates
 RELATIONSHIP_TO_ENTITY_RATIO_CAP = 1.5
 
+# Temporal attribute keys used for entity context building
+TEMPORAL_KEYS = (
+    "birth_year",
+    "founded_year",
+    "creation_year",
+    "origin_year",
+    "death_year",
+    "dissolved_year",
+    "destruction_year",
+)
+
+
+def build_event_entity_context(world_db: WorldDatabase) -> str:
+    """Build a text context of entities and relationships for event generation prompts.
+
+    Produces a formatted string with entity names/types, lifecycle temporal data,
+    and relationships suitable for inclusion in LLM prompts.
+
+    Args:
+        world_db: World database to read entities and relationships from.
+
+    Returns:
+        Formatted context string, or "No entities yet." if the database is empty.
+    """
+    all_entities = world_db.list_entities()
+    all_relationships = world_db.list_relationships()
+    entity_by_id = {e.id: e for e in all_entities}
+
+    context_parts: list[str] = []
+
+    if all_entities:
+        entity_lines: list[str] = []
+        for e in all_entities:
+            line = f"  - {e.name} ({e.type})"
+            attrs = e.attributes or {}
+            for temporal_key in TEMPORAL_KEYS:
+                val = attrs.get(temporal_key)
+                if val is not None:
+                    line += f", {temporal_key}={val}"
+            entity_lines.append(line)
+        context_parts.append("ENTITIES:\n" + "\n".join(entity_lines))
+
+    if all_relationships:
+        rel_lines: list[str] = []
+        for r in all_relationships:
+            source = entity_by_id.get(r.source_id)
+            target = entity_by_id.get(r.target_id)
+            if source and target:
+                rel_lines.append(f"  - {source.name} -[{r.relation_type}]-> {target.name}")
+        if rel_lines:
+            context_parts.append("RELATIONSHIPS:\n" + "\n".join(rel_lines))
+
+    return "\n\n".join(context_parts) if context_parts else "No entities yet."
+
+
+def build_event_timestamp(event: dict) -> str:
+    """Build a human-readable timestamp string from an event's temporal fields.
+
+    Args:
+        event: Event dict with optional 'year', 'month', and 'era_name' keys.
+
+    Returns:
+        Comma-separated timestamp string (e.g. "Year 1200, Month 3, Dark Age"),
+        or empty string if no temporal fields are present.
+    """
+    timestamp_parts: list[str] = []
+    year = event.get("year")
+    month = event.get("month")
+    era_name = event.get("era_name", "")
+    if year is not None:
+        timestamp_parts.append(f"Year {year}")
+    if month is not None:
+        timestamp_parts.append(f"Month {month}")
+    if era_name:
+        timestamp_parts.append(era_name)
+    return ", ".join(timestamp_parts)
+
+
+def resolve_event_participants(event: dict, all_entities: list) -> list[tuple[str, str]]:
+    """Resolve event participant names to entity IDs.
+
+    Each participant entry can be a dict with 'entity_name' and 'role',
+    or a plain string (treated as entity_name with role 'affected').
+
+    Args:
+        event: Event dict with an optional 'participants' list.
+        all_entities: List of entities to match names against.
+
+    Returns:
+        List of (entity_id, role) tuples for successfully resolved participants.
+    """
+    participants: list[tuple[str, str]] = []
+    for p in event.get("participants", []):
+        if isinstance(p, dict):
+            entity_name = p.get("entity_name", "")
+            role = p.get("role", "affected")
+        else:
+            entity_name = str(p)
+            role = "affected"
+        if entity_name:
+            matched = _find_entity_by_name(all_entities, entity_name)
+            if matched:
+                participants.append((matched.id, role))
+            else:
+                logger.debug(
+                    "Could not resolve event participant '%s' to an entity",
+                    entity_name,
+                )
+    return participants
+
 
 def build_world(
     svc: WorldService,
@@ -828,51 +938,23 @@ def _generate_events(
     Returns:
         Number of events successfully added to the world database.
     """
-    # Build entity context for event generation prompts
-    all_entities = world_db.list_entities()
-    all_relationships = world_db.list_relationships()
-    entity_by_id = {e.id: e for e in all_entities}
-
-    context_parts: list[str] = []
-
-    # Entities with types and lifecycle data
-    if all_entities:
-        entity_lines: list[str] = []
-        for e in all_entities:
-            line = f"  - {e.name} ({e.type})"
-            attrs = e.attributes or {}
-            # Include lifecycle temporal data if present
-            for temporal_key in ("birth_year", "founded_year", "creation_year", "origin_year"):
-                val = attrs.get(temporal_key)
-                if val is not None:
-                    line += f", {temporal_key}={val}"
-            for temporal_key in ("death_year", "dissolved_year", "destruction_year"):
-                val = attrs.get(temporal_key)
-                if val is not None:
-                    line += f", {temporal_key}={val}"
-            entity_lines.append(line)
-        context_parts.append("ENTITIES:\n" + "\n".join(entity_lines))
-
-    # Relationships
-    if all_relationships:
-        rel_lines: list[str] = []
-        for r in all_relationships:
-            source = entity_by_id.get(r.source_id)
-            target = entity_by_id.get(r.target_id)
-            if source and target:
-                rel_lines.append(f"  - {source.name} -[{r.relation_type}]-> {target.name}")
-        if rel_lines:
-            context_parts.append("RELATIONSHIPS:\n" + "\n".join(rel_lines))
-
-    entity_context = "\n\n".join(context_parts) if context_parts else "No entities yet."
+    entity_context = build_event_entity_context(world_db)
 
     # Get existing event descriptions for dedup
     existing_events = world_db.list_events()
     existing_descriptions = [e.description for e in existing_events]
 
     # Determine event count
-    event_min = state.target_events_min or svc.settings.world_gen_events_min
-    event_max = state.target_events_max or svc.settings.world_gen_events_max
+    event_min = (
+        state.target_events_min
+        if state.target_events_min is not None
+        else svc.settings.world_gen_events_min
+    )
+    event_max = (
+        state.target_events_max
+        if state.target_events_max is not None
+        else svc.settings.world_gen_events_max
+    )
     event_count = random.randint(event_min, event_max)
 
     event_results = services.world_quality.generate_events_with_quality(
@@ -894,37 +976,9 @@ def _generate_events(
             logger.warning("Skipping event with empty description: %s", event)
             continue
 
-        # Build timestamp_in_story from temporal fields
-        timestamp_parts: list[str] = []
-        era_name = event.get("era_name", "")
-        year = event.get("year")
-        month = event.get("month")
-        if year is not None:
-            timestamp_parts.append(f"Year {year}")
-        if month is not None:
-            timestamp_parts.append(f"Month {month}")
-        if era_name:
-            timestamp_parts.append(era_name)
-        timestamp_in_story = ", ".join(timestamp_parts)
-
-        # Resolve participant entity names to IDs
-        participants: list[tuple[str, str]] = []
-        for p in event.get("participants", []):
-            if isinstance(p, dict):
-                entity_name = p.get("entity_name", "")
-                role = p.get("role", "affected")
-            else:
-                entity_name = str(p)
-                role = "affected"
-            if entity_name:
-                matched = _find_entity_by_name(all_entities, entity_name)
-                if matched:
-                    participants.append((matched.id, role))
-                else:
-                    logger.debug(
-                        "Could not resolve event participant '%s' to an entity",
-                        entity_name,
-                    )
+        timestamp_in_story = build_event_timestamp(event)
+        all_entities = world_db.list_entities()
+        participants = resolve_event_participants(event, all_entities)
 
         consequences = event.get("consequences", [])
 

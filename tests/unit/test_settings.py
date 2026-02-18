@@ -2134,6 +2134,28 @@ class TestMissingValidationCoverage:
         with pytest.raises(ValueError, match="world_gen_locations_max must be between"):
             settings.validate()
 
+    def test_validate_raises_on_invalid_world_gen_events_min(self):
+        """Should raise ValueError for world_gen_events_min out of range."""
+        settings = Settings()
+        settings.world_gen_events_min = 25  # Above 20
+        with pytest.raises(ValueError, match="world_gen_events_min must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_invalid_world_gen_events_max(self):
+        """Should raise ValueError for world_gen_events_max out of range."""
+        settings = Settings()
+        settings.world_gen_events_max = 60  # Above 50
+        with pytest.raises(ValueError, match="world_gen_events_max must be between"):
+            settings.validate()
+
+    def test_validate_raises_on_world_gen_events_min_exceeds_max(self):
+        """Should raise ValueError when world_gen_events_min exceeds max."""
+        settings = Settings()
+        settings.world_gen_events_min = 10
+        settings.world_gen_events_max = 5
+        with pytest.raises(ValueError, match=r"world_gen_events_min.*cannot exceed"):
+            settings.validate()
+
     # --- Entity extraction limits validation (line 607) ---
 
     def test_validate_raises_on_invalid_entity_extract_locations_max(self):

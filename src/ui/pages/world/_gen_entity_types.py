@@ -407,39 +407,10 @@ async def _generate_events(
         ui.notify("Enable Quality Refinement to generate events", type="warning")
         return
 
-    # Build entity context (same logic as build pipeline)
-    all_entities = page.state.world_db.list_entities()
-    all_relationships = page.state.world_db.list_relationships()
-    entity_by_id = {e.id: e for e in all_entities}
+    # Build entity context using shared helper
+    from src.services.world_service._build import build_event_entity_context
 
-    context_parts: list[str] = []
-    if all_entities:
-        entity_lines: list[str] = []
-        for e in all_entities:
-            line = f"  - {e.name} ({e.type})"
-            attrs = e.attributes or {}
-            for temporal_key in ("birth_year", "founded_year", "creation_year", "origin_year"):
-                val = attrs.get(temporal_key)
-                if val is not None:
-                    line += f", {temporal_key}={val}"
-            for temporal_key in ("death_year", "dissolved_year", "destruction_year"):
-                val = attrs.get(temporal_key)
-                if val is not None:
-                    line += f", {temporal_key}={val}"
-            entity_lines.append(line)
-        context_parts.append("ENTITIES:\n" + "\n".join(entity_lines))
-
-    if all_relationships:
-        rel_lines: list[str] = []
-        for r in all_relationships:
-            source = entity_by_id.get(r.source_id)
-            target = entity_by_id.get(r.target_id)
-            if source and target:
-                rel_lines.append(f"  - {source.name} -[{r.relation_type}]-> {target.name}")
-        if rel_lines:
-            context_parts.append("RELATIONSHIPS:\n" + "\n".join(rel_lines))
-
-    entity_context = "\n\n".join(context_parts) if context_parts else "No entities yet."
+    entity_context = build_event_entity_context(page.state.world_db)
 
     # Get existing event descriptions for dedup
     existing_events = page.state.world_db.list_events()
@@ -476,41 +447,20 @@ async def _generate_events(
             ui.notify("No project loaded", type="negative")
             return
 
-        from src.services.world_service._name_matching import _find_entity_by_name
+        from src.services.world_service._build import (
+            build_event_timestamp,
+            resolve_event_participants,
+        )
 
+        all_entities = page.state.world_db.list_entities()
         added = 0
         for event, _scores in selected:
             description = event.get("description", "")
             if not description:
                 continue
 
-            # Build timestamp_in_story from temporal fields
-            timestamp_parts: list[str] = []
-            era_name = event.get("era_name", "")
-            year = event.get("year")
-            month = event.get("month")
-            if year is not None:
-                timestamp_parts.append(f"Year {year}")
-            if month is not None:
-                timestamp_parts.append(f"Month {month}")
-            if era_name:
-                timestamp_parts.append(era_name)
-            timestamp_in_story = ", ".join(timestamp_parts)
-
-            # Resolve participant names to entity IDs
-            participants: list[tuple[str, str]] = []
-            for p in event.get("participants", []):
-                if isinstance(p, dict):
-                    entity_name = p.get("entity_name", "")
-                    role = p.get("role", "affected")
-                else:
-                    entity_name = str(p)
-                    role = "affected"
-                if entity_name:
-                    matched = _find_entity_by_name(all_entities, entity_name)
-                    if matched:
-                        participants.append((matched.id, role))
-
+            timestamp_in_story = build_event_timestamp(event)
+            participants = resolve_event_participants(event, all_entities)
             consequences = event.get("consequences", [])
 
             page.state.world_db.add_event(

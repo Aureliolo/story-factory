@@ -35,10 +35,9 @@ def story_state():
 
 
 @pytest.fixture
-def mock_world_db(tmp_path):
-    """Create a real WorldDatabase for testing."""
-    db_path = tmp_path / "test_orphan_world.db"
-    db = WorldDatabase(str(db_path))
+def mock_world_db():
+    """Create an in-memory WorldDatabase for testing."""
+    db = WorldDatabase(":memory:")
     yield db
     db.close()
 

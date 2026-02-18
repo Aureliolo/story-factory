@@ -47,6 +47,7 @@ class WorldBuildOptions:
         generate_factions: Whether to generate faction entities.
         generate_items: Whether to generate item entities.
         generate_concepts: Whether to generate concept entities.
+        generate_events: Whether to generate world events.
         generate_relationships: Whether to generate relationships between entities.
         cancellation_event: Optional threading.Event to signal cancellation.
         world_template: Optional world template for genre-specific hints.

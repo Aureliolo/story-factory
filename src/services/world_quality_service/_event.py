@@ -47,21 +47,18 @@ def generate_event_with_quality(
 
     return quality_refinement_loop(
         entity_type="event",
-        create_fn=lambda retries: _create_event(
-            svc,
+        create_fn=lambda retries: svc._create_event(
             story_state,
             existing_descriptions,
             entity_context,
             retry_temperature(config, retries),
         ),
-        judge_fn=lambda evt: _judge_event_quality(
-            svc,
+        judge_fn=lambda evt: svc._judge_event_quality(
             evt,
             story_state,
             config.judge_temperature,
         ),
-        refine_fn=lambda evt, scores, iteration: _refine_event(
-            svc,
+        refine_fn=lambda evt, scores, iteration: svc._refine_event(
             evt,
             scores,
             story_state,
@@ -92,7 +89,8 @@ def _create_event(
     )
     brief = story_state.brief
     if not brief:
-        return {}
+        logger.error("_create_event called without story brief for story %s", story_state.id)
+        raise ValueError("Story must have a brief for event creation")
 
     # Format existing events for dedup
     existing_block = ""
@@ -310,7 +308,7 @@ CURRENT SCORES (need {threshold}+ in all areas):
 JUDGE'S FEEDBACK: {scores.feedback}
 
 SPECIFIC IMPROVEMENTS NEEDED:
-{chr(10).join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
+{"\n".join(f"- {imp}" for imp in improvement_focus) if improvement_focus else "- Enhance all areas"}
 
 REQUIREMENTS:
 1. Keep the core event concept but make SUBSTANTIAL improvements

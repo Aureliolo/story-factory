@@ -76,7 +76,7 @@ class RefinementHistory(BaseModel):
                 feedback=feedback,
             )
         )
-        if average_score > self.peak_score:
+        if average_score > self.peak_score or self.best_iteration == 0:
             self.peak_score = average_score
             self.best_iteration = iteration
             self.consecutive_degradations = 0  # Reset on new peak

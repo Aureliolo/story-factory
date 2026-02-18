@@ -3,7 +3,7 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -186,7 +186,7 @@ class EventParticipantEntry(BaseModel):
     """A participant reference in a generated world event."""
 
     entity_name: str
-    role: str = "affected"  # actor, location, affected, witness
+    role: Literal["actor", "location", "affected", "witness"] = "affected"
 
 
 class WorldEventCreation(BaseModel):
@@ -194,7 +194,7 @@ class WorldEventCreation(BaseModel):
 
     description: str
     year: int | None = None
-    month: int | None = None
+    month: int | None = Field(default=None, ge=1, le=12)
     era_name: str = ""
     participants: list[EventParticipantEntry] = Field(default_factory=list)
     consequences: list[str] = Field(default_factory=list)

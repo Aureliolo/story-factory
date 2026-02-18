@@ -134,15 +134,15 @@ class TestCreateEvent:
 
         assert result == {}
 
-    def test_create_event_no_brief_returns_empty(self, service):
-        """Test event creation returns empty dict without brief."""
+    def test_create_event_no_brief_raises_value_error(self, service):
+        """Test event creation raises ValueError without brief."""
         state = StoryState(id="test-id")
         state.brief = None
 
-        result = service._create_event(
-            state, existing_descriptions=[], entity_context="Test context", temperature=0.9
-        )
-        assert result == {}
+        with pytest.raises(ValueError, match="Story must have a brief for event creation"):
+            service._create_event(
+                state, existing_descriptions=[], entity_context="Test context", temperature=0.9
+            )
 
     @patch("src.services.world_quality_service._event.generate_structured")
     def test_create_event_llm_failure_raises_error(

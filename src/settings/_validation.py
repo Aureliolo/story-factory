@@ -462,11 +462,13 @@ def _validate_world_gen_counts(settings: Settings) -> None:
         ("factions", settings.world_gen_factions_min, settings.world_gen_factions_max),
         ("items", settings.world_gen_items_min, settings.world_gen_items_max),
         ("concepts", settings.world_gen_concepts_min, settings.world_gen_concepts_max),
+        ("events", settings.world_gen_events_min, settings.world_gen_events_max),
         (
             "relationships",
             settings.world_gen_relationships_min,
             settings.world_gen_relationships_max,
         ),
+        ("events", settings.world_gen_events_min, settings.world_gen_events_max),
     ]
     for entity_type, min_val, max_val in world_gen_ranges:
         if not 0 <= min_val <= 20:

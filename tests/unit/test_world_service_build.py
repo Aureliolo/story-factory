@@ -910,6 +910,13 @@ class TestGenerateEvents:
         events = mock_world_db.list_events()
         assert len(events) == 1
 
+        # Verify participant linkage was persisted
+        event_participants = mock_world_db.get_event_participants(events[0].id)
+        assert len(event_participants) == 1
+        hero_entity = mock_world_db.search_entities("Hero")[0]
+        assert event_participants[0].entity_id == hero_entity.id
+        assert event_participants[0].role == "actor"
+
     def test_builds_timestamp_from_temporal_fields(
         self, world_service, mock_world_db, sample_story_state, mock_services
     ):
@@ -956,9 +963,7 @@ class TestGenerateEvents:
         )
 
         call_kwargs = mock_services.world_quality.generate_events_with_quality.call_args
-        assert call_kwargs.kwargs.get("cancel_check") is my_cancel or (
-            len(call_kwargs.args) > 3 and call_kwargs.args[3] is not None
-        )
+        assert call_kwargs.kwargs["cancel_check"] is my_cancel
 
     def test_includes_temporal_attributes_in_context(
         self, world_service, mock_world_db, sample_story_state, mock_services
@@ -1073,37 +1078,6 @@ class TestGenerateEvents:
         assert count == 1
         assert "Could not resolve event participant" in caplog.text
         assert "NonExistentEntity" in caplog.text
-
-    def test_build_world_includes_events_count(
-        self, world_service, mock_world_db, sample_story_state, mock_services
-    ):
-        """Test build_world return dict includes events count."""
-        _mock_orphan_recovery_failure(mock_services)
-
-        mock_quality_scores = MagicMock()
-        mock_quality_scores.average = 8.0
-
-        mock_services.world_quality.generate_events_with_quality.return_value = [
-            (
-                {
-                    "description": "A significant event",
-                    "year": 100,
-                    "participants": [],
-                    "consequences": [],
-                },
-                mock_quality_scores,
-            ),
-        ]
-
-        counts = world_service.build_world(
-            sample_story_state,
-            mock_world_db,
-            mock_services,
-            WorldBuildOptions.full(),
-        )
-
-        assert "events" in counts
-        assert counts["events"] >= 1
 
 
 def _mock_orphan_recovery_failure(mock_services):
@@ -1490,6 +1464,59 @@ class TestBuildWorld:
         assert calls[0][0][0]["current_era_name"] == "Test Era"
         # Second call: clear context at end of build
         assert calls[1][0][0] is None
+
+    def test_build_world_includes_events_count(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test build_world return dict includes events count."""
+        _mock_orphan_recovery_failure(mock_services)
+
+        mock_quality_scores = MagicMock()
+        mock_quality_scores.average = 8.0
+
+        mock_services.world_quality.generate_events_with_quality.return_value = [
+            (
+                {
+                    "description": "A significant event",
+                    "year": 100,
+                    "participants": [],
+                    "consequences": [],
+                },
+                mock_quality_scores,
+            ),
+        ]
+
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            WorldBuildOptions.full(),
+        )
+
+        assert "events" in counts
+        assert counts["events"] >= 1
+
+    def test_build_world_skips_events_when_disabled(
+        self, world_service, mock_world_db, sample_story_state, mock_services
+    ):
+        """Test that event generation is skipped when generate_events=False."""
+        mock_services.world_quality.generate_locations_with_quality.return_value = []
+        mock_services.world_quality.generate_factions_with_quality.return_value = []
+        mock_services.world_quality.generate_items_with_quality.return_value = []
+        mock_services.world_quality.generate_concepts_with_quality.return_value = []
+        mock_services.world_quality.generate_relationships_with_quality.return_value = []
+        _mock_orphan_recovery_failure(mock_services)
+
+        options = WorldBuildOptions(generate_events=False)
+        counts = world_service.build_world(
+            sample_story_state,
+            mock_world_db,
+            mock_services,
+            options,
+        )
+
+        mock_services.world_quality.generate_events_with_quality.assert_not_called()
+        assert counts["events"] == 0
 
 
 class TestBuildWorldEmbedding:
