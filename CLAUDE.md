@@ -152,6 +152,7 @@ Note: These patterns also work with experimental free-threaded Python builds (no
 - **Type hints**: Encouraged but not enforced (gradual adoption)
 - **Imports**: Auto-sorted by Ruff
 - **Dependency parsing**: Use `packaging.requirements.Requirement` instead of regex - handles all version specifiers (`==`, `>=`, `~=`, etc.) correctly.
+- **File size limit**: Pre-commit enforces a 1000-line limit per file. When a file approaches this limit, split it into logical submodules (e.g., extract helper functions into a separate `_helpers.py`) rather than condensing log messages or removing documentation. Proper decomposition is always preferred over compressing existing code.
 
 ## Cross-Platform Gotchas
 
