@@ -45,7 +45,7 @@ _STRUCTURED_DICT_FIELDS = ("agent_models", "agent_temperatures", "world_quality_
 _NESTED_DICT_FIELDS = ("relationship_minimums",)
 
 
-def _merge_with_defaults(data: dict[str, Any], settings_cls: type) -> bool:
+def _merge_with_defaults(data: dict[str, Any], settings_cls: type[Settings]) -> bool:
     """Merge loaded JSON data with dataclass defaults.
 
     - Adds missing top-level keys with their default values

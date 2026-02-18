@@ -25,6 +25,7 @@ def validate(settings: Settings) -> bool:
     Raises:
         ValueError: If any field contains an invalid value.
     """
+    changed = False
     _validate_log_level(settings)
     _validate_url(settings)
     _validate_numeric_ranges(settings)
@@ -41,7 +42,7 @@ def validate(settings: Settings) -> bool:
     _validate_early_stopping(settings)
     _validate_circuit_breaker(settings)
     _validate_retry_strategy(settings)
-    changed = _validate_rag_context(settings)
+    changed = _validate_rag_context(settings) or changed
     changed = _validate_semantic_duplicate(settings) or changed
     _validate_temperature_decay_semantics(settings)
     _validate_judge_consistency(settings)
