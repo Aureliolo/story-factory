@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
+from src.memory.world_calendar import WorldCalendar
+from src.memory.world_settings import WorldSettings
+
 if TYPE_CHECKING:
     from src.ui.pages.world import WorldPage
 
@@ -103,7 +106,7 @@ def _get_world_calendar(page: WorldPage) -> Any:
         logger.debug("No calendar in world settings")
         return None
     except Exception as e:
-        logger.debug(f"Could not load world calendar: {e}")
+        logger.warning("Could not load world calendar: %s", e, exc_info=True)
         return None
 
 
@@ -164,9 +167,6 @@ async def _generate_calendar(page: WorldPage) -> None:
     """
     from nicegui import run
 
-    from src.memory.world_calendar import WorldCalendar
-    from src.memory.world_settings import WorldSettings
-
     logger.info("Generating calendar for world via quality loop")
 
     # Check if story state has a brief
@@ -199,6 +199,9 @@ async def _generate_calendar(page: WorldPage) -> None:
             world_settings = WorldSettings(calendar=calendar)
         page.state.world_db.save_world_settings(world_settings)
 
+        # Keep service context in sync so downstream entity generation uses the new calendar
+        page.services.world_quality.set_calendar_context(calendar_dict)
+
         logger.info(
             "Generated and saved calendar: %s (quality: %.1f, iterations: %d)",
             calendar.current_era_name,
@@ -217,7 +220,8 @@ async def _generate_calendar(page: WorldPage) -> None:
 
     except Exception as e:
         logger.exception("Failed to generate calendar")
-        ui.notify(f"Failed to generate calendar: {e}", type="negative")
+        user_msg = str(e)[:150] if str(e) else "Unknown error"
+        ui.notify(f"Failed to generate calendar: {user_msg}", type="negative")
 
     finally:
         page.state.end_background_task("generate_calendar")

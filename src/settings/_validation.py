@@ -502,6 +502,9 @@ def _validate_llm_token_limits(settings: Settings) -> None:
         ("llm_tokens_relationship_create", settings.llm_tokens_relationship_create),
         ("llm_tokens_relationship_judge", settings.llm_tokens_relationship_judge),
         ("llm_tokens_relationship_refine", settings.llm_tokens_relationship_refine),
+        ("llm_tokens_calendar_create", settings.llm_tokens_calendar_create),
+        ("llm_tokens_calendar_judge", settings.llm_tokens_calendar_judge),
+        ("llm_tokens_calendar_refine", settings.llm_tokens_calendar_refine),
         ("llm_tokens_mini_description", settings.llm_tokens_mini_description),
     ]
     for name, value in token_settings:

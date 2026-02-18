@@ -157,7 +157,8 @@ STORY PREMISE: {brief.premise}
 SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
-{calendar_context}=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{calendar_context}
+=== CRITICAL: UNIQUENESS REQUIREMENTS ===
 EXISTING FACTIONS (DO NOT DUPLICATE OR CREATE SIMILAR NAMES):
 {existing_names_formatted}
 

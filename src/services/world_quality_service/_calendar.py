@@ -91,12 +91,15 @@ def _create_calendar(
         temperature: Sampling temperature for the LLM call.
 
     Returns:
-        Calendar dict (via WorldCalendar.to_dict()), or empty dict on failure.
+        Calendar dict (via WorldCalendar.to_dict()).
+
+    Raises:
+        WorldGenerationError: If the LLM call fails or story has no brief.
     """
     logger.debug("Creating calendar for story %s", story_state.id)
     brief = story_state.brief
     if not brief:
-        return {}
+        raise WorldGenerationError("Cannot create calendar: story has no brief")
 
     prompt = f"""Design a fictional calendar system for a {brief.genre} story.
 
@@ -170,7 +173,7 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
     months = []
     for i, m in enumerate(result.months):
         name = m.get("name") or f"Month {i + 1}"
-        days = m.get("days") or 30
+        days = m.get("days", 30)
         description = m.get("description") or ""
         if name != m.get("name"):
             logger.debug("Month %d: using fallback name '%s'", i + 1, name)
@@ -179,7 +182,7 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
     eras = []
     for i, e in enumerate(result.historical_eras):
         name = e.get("name") or f"Era {i + 1}"
-        start_year = e.get("start_year") or 1
+        start_year = e.get("start_year", 1)
         end_year = e.get("end_year")  # None is valid for ongoing era
         description = e.get("description") or ""
         if name != e.get("name"):
@@ -194,10 +197,26 @@ def _generated_data_to_world_calendar(result: GeneratedCalendarData) -> WorldCal
             )
         )
 
+    # Match era_start_year to the era matching current_era_name for consistency
+    era_start_year = 1
+    if eras:
+        current_era_obj = next((era for era in eras if era.name == result.era_name), None)
+        if current_era_obj:
+            era_start_year = current_era_obj.start_year
+        else:
+            logger.warning(
+                "Current era '%s' not found in historical eras; "
+                "falling back to last era's start year.",
+                result.era_name,
+            )
+            era_start_year = eras[-1].start_year
+    else:
+        logger.warning("Calendar has no eras — using fallback era_start_year=1")
+
     return WorldCalendar(
         current_era_name=result.era_name,
         era_abbreviation=result.era_abbreviation,
-        era_start_year=eras[-1].start_year if eras else 1,
+        era_start_year=era_start_year,
         months=months,
         days_per_week=len(result.day_names),
         day_names=result.day_names,
@@ -404,7 +423,11 @@ Return ONLY the improved calendar."""
         refined_calendar = _generated_data_to_world_calendar(refined_data)
         result = refined_calendar.to_dict()
         # Preserve the original era name identity
-        result["current_era_name"] = calendar.get("current_era_name", "Unknown")
+        original_era = calendar.get("current_era_name")
+        if not original_era:
+            logger.warning("Original calendar dict missing 'current_era_name' — using 'Unknown'")
+            original_era = "Unknown"
+        result["current_era_name"] = original_era
         return result
     except Exception as e:
         summary = summarize_llm_error(e)

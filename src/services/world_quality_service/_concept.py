@@ -96,7 +96,8 @@ def _create_concept(
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
-{calendar_context}=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{calendar_context}
+=== CRITICAL: UNIQUENESS REQUIREMENTS ===
 {existing_names_formatted}
 
 STRICT RULES:

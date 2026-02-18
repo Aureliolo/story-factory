@@ -530,7 +530,8 @@ def _create_relationship(
 STORY PREMISE: {brief.premise}
 TONE: {brief.tone}
 THEMES: {", ".join(brief.themes)}
-{calendar_context}AVAILABLE ENTITIES: {", ".join(entity_names)}
+{calendar_context}
+AVAILABLE ENTITIES: {", ".join(entity_names)}
 
 FORBIDDEN ENTITY PAIRS (you MUST NOT use any of these pairs in either direction):
 {existing_pairs_block}{unused_pairs_block}

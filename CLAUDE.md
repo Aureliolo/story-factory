@@ -116,6 +116,7 @@ WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → 
 **World Build Pipeline:**
 
 `WorldService.build_world()` orchestrates world generation through `WorldQualityService` with a creator-judge-refine quality loop per entity type:
+
 ```text
 1. Clear existing (if rebuild)
 2. Generate calendar (non-fatal — build continues if this fails)
@@ -131,6 +132,7 @@ WorldDatabase (sqlite-vec) → EmbeddingService → ContextRetrievalService → 
 12. Orphan recovery
 13. Build complete
 ```
+
 Each quality loop entity type (locations, factions, items, concepts, relationships, calendar) follows the same pattern: `_create_fn` → `_judge_fn` → `_refine_fn` via `quality_refinement_loop()` in `src/services/world_quality_service/`. Calendar uses `CalendarQualityScores` (4 dimensions: internal_consistency, thematic_fit, completeness, uniqueness) and the `architect` creator role.
 
 ## Threading Model

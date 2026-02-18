@@ -96,7 +96,8 @@ def _create_location(
 STORY PREMISE: {brief.premise}
 SETTING: {brief.setting_place}, {brief.setting_time}
 TONE: {brief.tone}
-{calendar_context}=== CRITICAL: UNIQUENESS REQUIREMENTS ===
+{calendar_context}
+=== CRITICAL: UNIQUENESS REQUIREMENTS ===
 {existing_names_formatted}
 
 STRICT RULES:

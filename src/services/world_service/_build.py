@@ -74,8 +74,10 @@ def build_world(
         "implicit_relationships": 0,
     }
 
+    # Reconcile calendar option with settings gate before computing steps
+    effective_calendar = options.generate_calendar and svc.settings.generate_calendar_on_world_build
     # Calculate total steps for progress reporting
-    total_steps = _calculate_total_steps(options)
+    total_steps = _calculate_total_steps(options, generate_calendar=effective_calendar)
     current_step = 0
 
     def report_progress(message: str, entity_type: str | None = None, count: int = 0) -> None:
@@ -138,6 +140,8 @@ def build_world(
                 calendar_iterations,
                 calendar_scores.average,
             )
+        except GenerationCancelledError:
+            raise
         except Exception as e:
             logger.error("Calendar generation failed (non-fatal): %s", e)
             report_progress("Warning: Calendar generation failed. Continuing without calendar.")
@@ -328,12 +332,12 @@ def build_world(
     return counts
 
 
-def _calculate_total_steps(options: WorldBuildOptions) -> int:
+def _calculate_total_steps(options: WorldBuildOptions, *, generate_calendar: bool = False) -> int:
     """Calculate total number of steps for progress reporting."""
     steps = 3  # Character extraction + embedding + completion
     if options.clear_existing:
         steps += 1
-    if options.generate_calendar:
+    if generate_calendar:
         steps += 1
     if options.generate_structure:
         steps += 1

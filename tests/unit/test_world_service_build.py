@@ -239,7 +239,7 @@ class TestCalculateTotalSteps:
         # + calendar (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
         # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 14
-        assert world_service._calculate_total_steps(options) == 14
+        assert world_service._calculate_total_steps(options, generate_calendar=True) == 14
 
     def test_full_rebuild_options(self, world_service):
         """Test step count for full rebuild options."""
@@ -248,7 +248,7 @@ class TestCalculateTotalSteps:
         # + clear (1) + calendar (1) + structure (1) + quality review (3: characters, plot, chapters)
         # + locations (1) + factions (1)
         # + items (1) + concepts (1) + relationships (1) + orphan recovery (1) = 15
-        assert world_service._calculate_total_steps(options) == 15
+        assert world_service._calculate_total_steps(options, generate_calendar=True) == 15
 
     def test_custom_options(self, world_service):
         """Test step count for custom options."""
@@ -285,7 +285,7 @@ class TestCalculateTotalSteps:
             generate_concepts=False,
             generate_relationships=False,
         )
-        steps_with = world_service._calculate_total_steps(options_with)
+        steps_with = world_service._calculate_total_steps(options_with, generate_calendar=True)
         steps_without = world_service._calculate_total_steps(options_without)
         assert steps_with == steps_without + 1
 

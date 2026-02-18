@@ -7,6 +7,7 @@ Implements a generate-judge-refine loop using:
 """
 
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -241,6 +242,7 @@ class WorldQualityService:
         self._analytics_db: ModeDatabase | None = None
         self._model_cache = ModelResolutionCache(settings, mode_service)
         self._calendar_context: str | None = None
+        self._calendar_context_lock = threading.RLock()
         logger.debug("WorldQualityService initialized successfully")
 
     # ========== Calendar context for downstream entity generation ==========
@@ -250,56 +252,67 @@ class WorldQualityService:
 
         Called by the build pipeline after calendar generation so that
         subsequent entity creation prompts include temporal context.
+        Thread-safe: guarded by ``_calendar_context_lock`` so concurrent
+        builds on a singleton service cannot corrupt the context.
 
         Args:
             calendar_dict: Calendar dict from quality loop, or None to clear.
         """
-        if calendar_dict is None:
-            self._calendar_context = None
-            logger.debug("Cleared calendar context")
-            return
+        with self._calendar_context_lock:
+            if calendar_dict is None:
+                self._calendar_context = None
+                logger.debug("Cleared calendar context")
+                return
 
-        parts = []
-        era_name = calendar_dict.get("current_era_name", "")
-        era_abbr = calendar_dict.get("era_abbreviation", "")
-        story_year = calendar_dict.get("current_story_year")
-        if era_name:
-            parts.append(f"Current Era: {era_name} ({era_abbr})")
-        if story_year is not None:
-            parts.append(f"Current Story Year: {story_year} {era_abbr}")
+            parts = []
+            era_name = calendar_dict.get("current_era_name", "")
+            era_abbr = calendar_dict.get("era_abbreviation", "")
+            story_year = calendar_dict.get("current_story_year")
+            if era_name:
+                parts.append(f"Current Era: {era_name} ({era_abbr})")
+            if story_year is not None:
+                parts.append(f"Current Story Year: {story_year} {era_abbr}")
 
-        # Historical eras
-        eras = calendar_dict.get("eras", [])
-        if eras:
-            era_lines = []
-            for era in eras:
-                name = era.get("name", "Unknown")
-                start = era.get("start_year", "?")
-                end = era.get("end_year")
-                era_lines.append(f"  - {name}: {start} - {end or 'present'}")
-            parts.append("Historical Eras:\n" + "\n".join(era_lines))
+            # Historical eras
+            eras = calendar_dict.get("eras", [])
+            if eras:
+                era_lines = []
+                for era in eras:
+                    name = era.get("name", "Unknown")
+                    start = era.get("start_year", "?")
+                    end = era.get("end_year")
+                    era_lines.append(f"  - {name}: {start} - {end or 'present'}")
+                parts.append("Historical Eras:\n" + "\n".join(era_lines))
 
-        # Month names
-        months = calendar_dict.get("months", [])
-        if months:
-            month_names = [m.get("name", f"Month {i + 1}") for i, m in enumerate(months)]
-            parts.append(f"Months: {', '.join(month_names)}")
+            # Month names
+            months = calendar_dict.get("months", [])
+            if months:
+                month_names = [m.get("name", f"Month {i + 1}") for i, m in enumerate(months)]
+                parts.append(f"Months: {', '.join(month_names)}")
 
-        self._calendar_context = "\n".join(parts) if parts else None
-        logger.debug(
-            "Set calendar context for downstream prompts: %s",
-            self._calendar_context[:80] if self._calendar_context else "None",
-        )
+            self._calendar_context = "\n".join(parts) if parts else None
+            if calendar_dict is not None and self._calendar_context is None:
+                logger.warning(
+                    "Calendar dict provided but no context extracted — calendar may be malformed: %s",
+                    {k: type(v).__name__ for k, v in calendar_dict.items()},
+                )
+            logger.debug(
+                "Set calendar context for downstream prompts: %s",
+                self._calendar_context[:80] if self._calendar_context else "None",
+            )
 
     def get_calendar_context(self) -> str:
         """Get formatted calendar context block for entity generation prompts.
 
+        Thread-safe: guarded by ``_calendar_context_lock``.
+
         Returns:
             Calendar context block string, or empty string if no calendar available.
         """
-        if not self._calendar_context:
-            return ""
-        return f"\nCALENDAR & TIMELINE:\n{self._calendar_context}\n"
+        with self._calendar_context_lock:
+            if not self._calendar_context:
+                return ""
+            return f"\nCALENDAR & TIMELINE:\n{self._calendar_context}\n"
 
     @property
     def analytics_db(self) -> ModeDatabase:

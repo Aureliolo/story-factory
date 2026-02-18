@@ -508,9 +508,11 @@ class WorldService:
     # Delegation methods for internal build functions used by tests
 
     @staticmethod
-    def _calculate_total_steps(options: WorldBuildOptions) -> int:
+    def _calculate_total_steps(
+        options: WorldBuildOptions, *, generate_calendar: bool = False
+    ) -> int:
         """Calculate total number of steps for progress reporting."""
-        return _build._calculate_total_steps(options)
+        return _build._calculate_total_steps(options, generate_calendar=generate_calendar)
 
     @staticmethod
     def _clear_world_db(world_db: WorldDatabase) -> None:

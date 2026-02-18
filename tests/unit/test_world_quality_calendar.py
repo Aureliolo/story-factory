@@ -1,5 +1,6 @@
 """Tests for calendar quality loop functions."""
 
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -177,11 +178,13 @@ class TestCreateCalendar:
         assert len(result.get("months", [])) == 2
         assert result.get("current_story_year") == 342
 
-    def test_returns_empty_dict_without_brief(self, mock_svc):
-        """Test returns empty dict when no brief available."""
+    def test_raises_on_missing_brief(self, mock_svc):
+        """Test WorldGenerationError when no brief available."""
+        from src.utils.exceptions import WorldGenerationError
+
         state = StoryState(id="no-brief")
-        result = _create_calendar(mock_svc, state, 0.9)
-        assert result == {}
+        with pytest.raises(WorldGenerationError, match="no brief"):
+            _create_calendar(mock_svc, state, 0.9)
 
     def test_raises_world_generation_error_on_failure(self, mock_svc, story_state):
         """Test WorldGenerationError is raised on LLM failure."""
@@ -314,12 +317,13 @@ class TestGeneratedDataToWorldCalendar:
 class TestCalendarContext:
     """Tests for calendar context methods on WorldQualityService."""
 
-    def test_set_calendar_context_formats_era_and_year(self, mock_svc, sample_calendar_dict):
+    def test_set_calendar_context_formats_era_and_year(self, sample_calendar_dict):
         """Test that set_calendar_context formats era name, abbreviation, and story year."""
         from src.services.world_quality_service import WorldQualityService
 
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
+        svc._calendar_context_lock = threading.RLock()
         # Call the real method
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         ctx = svc._calendar_context
@@ -327,51 +331,56 @@ class TestCalendarContext:
         assert "AL" in ctx
         assert "342" in ctx
 
-    def test_set_calendar_context_includes_months(self, mock_svc, sample_calendar_dict):
+    def test_set_calendar_context_includes_months(self, sample_calendar_dict):
         """Test that set_calendar_context includes month names."""
         from src.services.world_quality_service import WorldQualityService
 
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
+        svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         ctx = svc._calendar_context
         assert "Frostmoon" in ctx
         assert "Sunpeak" in ctx
 
-    def test_set_calendar_context_includes_historical_eras(self, mock_svc, sample_calendar_dict):
+    def test_set_calendar_context_includes_historical_eras(self, sample_calendar_dict):
         """Test that set_calendar_context includes historical era ranges."""
         from src.services.world_quality_service import WorldQualityService
 
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
+        svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         ctx = svc._calendar_context
         assert "Age of Legends" in ctx
         assert "1" in ctx
         assert "present" in ctx
 
-    def test_set_calendar_context_none_clears(self, mock_svc):
+    def test_set_calendar_context_none_clears(self):
         """Test that set_calendar_context(None) clears the context."""
         from src.services.world_quality_service import WorldQualityService
 
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = "some existing context"
+        svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, None)
         assert svc._calendar_context is None
 
-    def test_get_calendar_context_returns_empty_when_none(self, mock_svc):
+    def test_get_calendar_context_returns_empty_when_none(self):
         """Test that get_calendar_context returns empty string when no context set."""
         from src.services.world_quality_service import WorldQualityService
 
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
+        svc._calendar_context_lock = threading.RLock()
         result = WorldQualityService.get_calendar_context(svc)
         assert result == ""
 
-    def test_get_calendar_context_returns_formatted_block(self, mock_svc, sample_calendar_dict):
+    def test_get_calendar_context_returns_formatted_block(self, sample_calendar_dict):
         """Test that get_calendar_context returns a formatted prompt block."""
         svc = MagicMock(spec=WorldQualityService)
         svc._calendar_context = None
+        svc._calendar_context_lock = threading.RLock()
         WorldQualityService.set_calendar_context(svc, sample_calendar_dict)
         result = WorldQualityService.get_calendar_context(svc)
         assert "CALENDAR & TIMELINE:" in result
