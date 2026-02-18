@@ -144,6 +144,17 @@ class TestBuildEntityLifecycle:
         result = build_entity_lifecycle(entity, "faction")
         assert result == {}
 
+    def test_faction_with_temporal_notes(self):
+        """Faction with temporal_notes includes them in lifecycle."""
+        entity = {
+            "name": "Temporal Faction",
+            "founding_year": 50,
+            "temporal_notes": "Founded during the great schism",
+        }
+        result = build_entity_lifecycle(entity, "faction")
+        assert "lifecycle" in result
+        assert result["lifecycle"]["temporal_notes"] == "Founded during the great schism"
+
     def test_item_with_data(self):
         """Item with temporal data produces lifecycle dict with birth."""
         entity = {
